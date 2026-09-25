@@ -23,6 +23,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1354 | Automations-owned canvas, graph model and scoped shape queries | Verified; Waiting for release |
 | RADD-1355 | Repository-wide discovery and inventory validation | Verified; Waiting for release |
 | RADD-1356 | Domain-independent schema and code controls | Verified; Waiting for release |
+| RADD-1357 | Owner-contributed option directories | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -41,7 +42,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | approvals | False | 2 | events, projects, auth, teams, workflow, items | Pending |
 | attachments | default | 0 | events, projects, auth, items, access, groups, teams | Pending |
 | audit | default | 0 | events, auth, projects, items | Pending |
-| auth | default | 1 | events, projects | Pending |
+| auth | default | 2 | events, projects | Option contributions verified (RADD-1357); remaining review pending |
 | automations | default | 11 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
 | avatars | default | 0 | auth, attachments | Pending |
 | backup | default | 0 | auth, events | Pending |
@@ -56,12 +57,12 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | events | default | 0 |  | Pending |
 | fields | default | 0 | projects, events, auth, teams, access | Pending |
 | forgejo | False | 0 | events, projects, auth, items, vcs, automations | Pending |
-| forms | default | 0 | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Pending |
+| forms | default | 2 | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Option contributions verified (RADD-1357); remaining review pending |
 | github | False | 0 | events, projects, auth, items, vcs, automations | Pending |
 | gitlab | False | 0 | events, projects, auth, items, vcs, automations | Pending |
-| groups | default | 0 | events, auth | Pending |
+| groups | default | 2 | events, auth | Option contributions verified (RADD-1357); remaining review pending |
 | items | default | 0 | projects, workflow, labels, fields, cycles, releases, auth, teams, events, access, itemtypes, linktypes, settings | Pending |
-| itemtypes | default | 0 | projects, events, auth | Pending |
+| itemtypes | default | 2 | projects, events, auth | Option contributions verified (RADD-1357); remaining review pending |
 | jiraimport | False | 0 | auth, projects, fields, items, workflow, comments, cycles, attachments, events, itemtypes, linktypes, notify, releases, timelogging, weblinks, teams | Pending |
 | labels | default | 0 | projects, events, auth | Pending |
 | ldap | False | 0 | events, projects, auth, settings, groups, teams | Pending |
@@ -72,12 +73,12 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | milestones | False | 2 | projects, auth, events | Pending |
 | monitoring | False | 4 | auth, events | Settings UI verified; backend review pending |
 | notify | default | 0 | events, projects, auth, items, comments, teams | Pending |
-| pages | False | 0 | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Pending |
+| pages | False | 2 | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Option contributions verified (RADD-1357); remaining review pending |
 | participants | False | 3 | events, projects, auth, teams, items, notify | Pending |
 | pluginmgr | default | 0 | auth, events | Pending |
 | projects | default | 0 | events | Pending |
 | realtime | default | 0 | events, auth | Pending |
-| releases | default | 0 | projects, auth, events, workflow | Pending |
+| releases | default | 2 | projects, auth, events, workflow | Option contributions verified (RADD-1357); remaining review pending |
 | reporting | default | 0 | events, projects, auth, workflow, cycles, items | Pending |
 | screens | default | 0 | projects, events, auth, fields, itemtypes | Pending |
 | scripts | False | 6 | auth, events, projects, items | Settings UI verified; backend review pending |
@@ -85,13 +86,13 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | settings | default | 0 | events, projects, auth | Pending |
 | slas | False | 0 | events, projects, auth, settings, workflow, items, comments, automations, reporting, teams | Pending |
 | sso | False | 0 | events, projects, auth, teams | Pending |
-| teams | default | 1 | events, projects, auth, groups | Pending |
+| teams | default | 2 | events, projects, auth, groups | Option contributions verified (RADD-1357); remaining review pending |
 | timelogging | default | 0 | events, projects, auth, teams, items, settings | Pending |
 | vcs | default | 0 | projects, auth, events, items, timelogging | Pending |
 | views | default | 0 | projects, workflow, items, fields, auth, events, access, groups, teams | Pending |
 | webhooks | default | 0 | projects, events, auth, fields, items | Pending |
 | weblinks | default | 0 | projects, auth, events, items | Pending |
-| workflow | default | 0 | projects, events, auth, settings, teams | Pending |
+| workflow | default | 2 | projects, events, auth, settings, teams | Option contributions verified (RADD-1357); remaining review pending |
 
 ## Confirmed findings still requiring remediation
 
@@ -237,3 +238,46 @@ integration selectors and VCS pages still need migration; Scripts' test mutation
 lifecycle is not certified by a proof that deliberately executes no scripts.
 The discovery ledger contains 2,586 artifacts and 4 retirement entries at this
 stage. Discovery and these focused checks do not certify the rest of the inventory.
+
+
+## RADD-1357 verification
+
+Twelve option directories are now contributed by Auth, Teams, Workflow, Itemtypes,
+Releases, Forms, Pages and Groups. Their owner bundles define endpoints, nouns,
+row presentation and entity cache metadata. SDK 1.6 supplies a generic slot contract
+and reference/text/multiple-value/modal controls. The host DirectoryChoices file is
+only an SDK re-export; the former query module retains transitional source-name
+aliases without transport, noun tables or cache tags. TeamChoices now uses the
+contributed ID directory and preserves its caller footer and clear option.
+
+Mounted provider controls own cancellation signals and zero-retention query caches.
+Withdrawal removes an internally opened modal and its queries; saved values stay in
+the caller. Reactivation resolves fresh data. An externally open modal retains a
+close control, unavailable explanation and caller footer. Free text/template tokens
+remain editable without a provider. Presets require no directory read. Scoped role
+lookup passes scope to both browse and resolve, and query keys distinguish scopes.
+The server continues to enforce all directory permissions.
+
+Evidence: host + all 19 remotes build; 53 frontend tests; 25 backend directory-option,
+people-option, capability, module-contract and kernel tests; targeted Python lint.
+The new actual-bundle browser proof passes 11 grouped checks: all twelve sources
+resolve, browse, withdraw and restore; paging/search reach row 125; role scope updates;
+presets with browsing forbidden; two observed in-flight cancellations (browse and
+saved-value lookup); failed bundle recovery; denied reads and retry; preserved
+multiple values with duplicate prevention; dismissible standalone fallback. It
+makes 83 mocked option requests using actual owner bundles. Existing Auth/Teams
+contribution (10), automation-canvas (15), and shared-control (13) browser checks
+also pass. Screenshots were inspected after waiting for modal animations to finish.
+The browser command now includes the new proof.
+
+The local backend was reloaded and the current build is served. An authenticated
+read-only probe confirms all eight remotes advertise SDK 1.6 and all twelve real
+option endpoints return their contracts, including saved-value resolution where
+rows exist. All plugin choices remain unchanged; Leave/GitHub/Forgejo stay disabled;
+the ephemeral token was removed. Core-plugin withdrawal in browser fixtures verifies
+frontend absence handling, not a new permission to disable required backend modules.
+
+The stage inventory contains 2,620 artifacts and 4 retirement entries. Remaining
+work includes host automation forms/integration selectors, project/cycle pickers,
+TeamSelect's independent saved-reference lookup, and all other unreviewed/partial
+inventory entries. The provider migration does not certify those consuming pages.

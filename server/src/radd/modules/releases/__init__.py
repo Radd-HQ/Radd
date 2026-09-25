@@ -1,3 +1,4 @@
+from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
@@ -13,6 +14,7 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="releases",
+    ui=PluginUiManifest(remote="/plugins/releases/remoteEntry.js", ui_api_version="1.6.0"),
     # No coarse verb of its own: the umbrella is project.manage directly.
     crud_resources=(CrudResourceSpec("release", "project", "releases", "project.manage"),),
     # RADD-892: `releases.project_id` carries no ON DELETE CASCADE. Order 30 —

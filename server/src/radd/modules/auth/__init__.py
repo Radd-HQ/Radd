@@ -18,7 +18,7 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="auth",
-    ui=PluginUiManifest(remote="/plugins/auth/remoteEntry.js", ui_api_version="1.4.0"),
+    ui=PluginUiManifest(remote="/plugins/auth/remoteEntry.js", ui_api_version="1.6.0"),
     description=(
         "People, sign-in sessions, API tokens and roles."
     ),

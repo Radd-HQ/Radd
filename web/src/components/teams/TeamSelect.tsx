@@ -1,15 +1,10 @@
+import { OptionChoices } from "@radd/plugin-sdk";
 import { useId, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { teamReferencesQuery } from "../../lib/queries/users";
-import { OptionResource, OPTIONS_PAGE_SIZE, optionsPageQuery } from "../../lib/queries/options";
-import { useDirectory } from "../../lib/useDirectory";
 import { Button } from "../Button";
-import { DirectoryPager } from "../DirectoryPager";
-import { Modal } from "../Modal";
 import { QueryError } from "../QueryError";
-import { Spinner } from "../Spinner";
-import { TextField } from "../TextField";
 
 /** ID-valued team relationships resolve the saved value without a catalog. */
 export function TeamSelect({ value, onChange, label, selectedLabel, placeholder, emptyLabel = "None", disabled, title, error, size = "md" }: {
@@ -35,16 +30,7 @@ export function TeamSelect({ value, onChange, label, selectedLabel, placeholder,
 export function TeamChoices({ selected = [], emptyLabel, onSelect, onClose, footer }: {
   selected?: string[]; emptyLabel?: string; onSelect: (id: string) => void; onClose: () => void; footer?: ReactNode;
 }) {
-  const directory = useDirectory("team-references", OPTIONS_PAGE_SIZE, (q, page) => optionsPageQuery(OptionResource.teamReference, q, page));
-  return <Modal title="Choose a team" onClose={onClose}>
-    <TextField type="search" label="Find teams" value={directory.filter} onChange={event => directory.setFilter(event.target.value)} />
-    {emptyLabel && <Button variant="ghost" className="mt-2" onClick={() => onSelect("")}>{emptyLabel}</Button>}
-    <div aria-busy={directory.busy} className="mt-2 max-h-[45dvh] overflow-y-auto">
-      {directory.isPending ? <Spinner label="Loading teams…" /> : directory.isError ? <div><QueryError label="team choices" error={directory.error} /><Button variant="secondary" onClick={() => void directory.refetch()}>Retry teams</Button></div>
-        : !directory.rows.length ? <p className="text-sm text-fg-muted">No matching teams available.</p>
-        : <ul aria-label="Team choices">{directory.rows.map(row => <li key={row.value}><Button variant="ghost" disabled={selected.includes(row.value)} className="w-full justify-start" onClick={() => onSelect(row.value)}><span className="truncate">{row.label}</span></Button></li>)}</ul>}
-    </div>
-    <DirectoryPager {...directory} onPage={directory.setPage} label="team choices" />
-    {footer}
-  </Modal>;
+  return <OptionChoices resource="teams/directory" title="Choose a team" selectedValues={selected}
+    presets={emptyLabel ? [{ value: "", label: emptyLabel, hint: "" }] : []}
+    onSelect={row => onSelect(row.value)} onClose={onClose} footer={footer} />;
 }

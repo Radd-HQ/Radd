@@ -1,3 +1,4 @@
+from radd.kernel import PluginUiManifest
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
@@ -8,6 +9,7 @@ from .types import TypeEvent
 
 plugin = RaddPlugin(
     name="itemtypes",
+    ui=PluginUiManifest(remote="/plugins/itemtypes/remoteEntry.js", ui_api_version="1.6.0"),
     crud_resources=(
         CrudResourceSpec("issue_type", "project", "issue types", "project.manage"),
     ),

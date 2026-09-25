@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from radd.kernel import PluginUiManifest
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, NavFactSpec, PermissionSpec, ProjectPurgeSpec
@@ -23,6 +24,7 @@ async def _form_validation_handler(request: Request, exc: FormValidationError) -
 
 plugin = RaddPlugin(
     name="forms",
+    ui=PluginUiManifest(remote="/plugins/forms/remoteEntry.js", ui_api_version="1.6.0"),
     permissions=(
         PermissionSpec(
             "form.manage", "project", "Create and manage the project's intake forms."

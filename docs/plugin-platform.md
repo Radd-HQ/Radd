@@ -516,6 +516,33 @@ feature dependencies. Actual Scripts/AI bundle tests cover absence, withdrawal,
 re-enable, failed remote recovery and draft preservation. This stage does not move
 the remaining host automation editor, inspectors or VCS integration selectors.
 
+### Owner-provided option directories (RADD-1357)
+
+SDK 1.6 exposes `optionContribution` for `directory.options` and generic
+`OptionChoices`, `OptionSelect`, `OptionTextField`, and `OptionNameValues`.
+The provider supplies an opaque source name, noun, optional row presentation,
+entity invalidation metadata, a paged fetch and saved-value resolution. Endpoint
+paths and authorization semantics remain in the owner bundle. Scope is forwarded
+to both fetch and resolve, so scoped role choices retain their project/space context.
+
+Auth, Teams, Workflow, Itemtypes, Releases, Forms, Pages and Groups declare the
+formerly host-owned option sources in their own UI manifests. There is no SDK
+resource-to-plugin or endpoint registry. The host's old OptionResource constants
+are migration aliases only; the old query factories and noun/cache maps are gone.
+
+Controls mount through the normal slot lifecycle. Each mounted control owns its
+query identity, passes cancellation signals, drops unused cache entries and gets
+fresh data after reactivation. Withdrawal closes an internally opened picker and
+preserves the caller's value. An externally controlled picker retains dismissible
+unavailable UI and caller footer. Text and token inputs remain editable when a
+provider is missing. Caller-supplied presets work without directory browsing.
+Disabled browsing does not authorize fetching; server permission checks remain
+necessary for every request. Query failures have explicit retry controls.
+
+This migrates option providers, not the host features that consume them. Project
+and cycle pickers, the independent TeamSelect reference lookup, automation forms
+and settings/access page ownership remain in the complete audit inventory.
+
 ### Original frontend design
 
 *(Built in specs 93/94: the SPA now has the federation seam and `GET /capabilities` exists —

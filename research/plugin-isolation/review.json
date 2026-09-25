@@ -506,11 +506,14 @@
     "issue": null
   },
   "docs/modules.md": {
-    "sha256": "9af3508e534f7f4a5b67a1c6adc9567f7e50b5dcdb59f4f0b7457bd9ef06ad3e",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "313812f05f9a47116d25fa70606006d950db848535887c6fca6363a731b14d5d",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "docs/performance-safety-audit.md": {
     "sha256": "103b850cbfe71ea293d998895fd8449ee03f8a4764199133d84bf080dcbda7d9",
@@ -548,14 +551,14 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "ed8faf9b013f5dc4f044e76aa27c043a9474bef0d82b728a1eb67ec69e4c3715",
+    "sha256": "70de3325f2fb7b4aa903cf774a5ff7bd3d40b4684c709b28e71130dd970a1407",
     "status": "partially_reviewed",
     "owner": "see scoped evidence",
     "evidence": [
-      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1357"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2049,7 +2052,7 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "8a2a33c83e21b6d9817a89e3fc838cc6aa7a93687dee5e1d79f155daa655e740",
+    "sha256": "7fae3f2c6b70ecb63d2392150aea5a330046a0cae15efcee93abf13f5cbe246f",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -4994,13 +4997,14 @@
     "issue": null
   },
   "server/src/radd/modules/auth/__init__.py": {
-    "sha256": "51c8cb6545d29259120b83d0c626b90721c7b4937a654056e86df272a30d0e48",
+    "sha256": "766854cd2161b07da135250ec2315ee79973e711f2a089fe6632097480f5c33c",
     "status": "partially_reviewed",
     "owner": "auth",
     "evidence": [
-      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/auth/account_directory.py": {
     "sha256": "0024bce13e5bf133db2af88d0c2df31307893244ee4109bc64b141adf92d37db",
@@ -5262,13 +5266,24 @@
     "issue": null
   },
   "server/src/radd/modules/auth/ui/src/index.tsx": {
-    "sha256": "c5d2e3e6794aa7d6a43c2cc78bcaa218e82166d7583cfa0b7427ea927cd0b202",
+    "sha256": "385565e1ea26479a622f207bd92f1bcc8ad6006e8dd780349b2a7d5a1d155bb7",
+    "status": "partially_reviewed",
+    "owner": "auth",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/auth/ui/src/options.ts": {
+    "sha256": "ccd81e022327a10709288659fdc7ad060249905b751fa8cf59b64caa11b33f46",
     "status": "reviewed",
     "owner": "auth",
     "evidence": [
-      "Directory provider/consumer contract reviewed; Auth and Teams own queries and candidate semantics; platform owns generic dialog/search/paging. 10 actual-bundle browser checks include both provider withdrawals and in-flight aborts, selected-value preservation, failure/recovery, permissions, pagination and host Audit adapter. SDK paged transport preserves totals and account cancellation."
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/auth/ui/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -6621,11 +6636,14 @@
     "issue": null
   },
   "server/src/radd/modules/forms/__init__.py": {
-    "sha256": "a239edaba5f8d8a7e3ed84b839af5afc1d998ae93f9939372e131558f26d5141",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "64caf4377da8b610d52e7c40579f9254d2cd7f99392de61fba0802239b9c1a38",
+    "status": "partially_reviewed",
+    "owner": "forms",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/forms/models.py": {
     "sha256": "e5541389275eb5a1e7d52954d964b19d90eeff0dccee52e4836496df09b5d68d",
@@ -6710,6 +6728,56 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/forms/ui/package.json": {
+    "sha256": "e0468b5ec98e25c89364fd96cf523b21409b7c1ab259f1f60e74f50988b3729b",
+    "status": "partially_reviewed",
+    "owner": "forms",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/forms/ui/src/index.tsx": {
+    "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+    "status": "reviewed",
+    "owner": "forms",
+    "evidence": [
+      "Registers only its local option contributions; no host imports. Actual remote loading, withdrawal and restore verified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/forms/ui/src/options.ts": {
+    "sha256": "441f5e889e6387b7785c7e598930a02334b2d320d19fbfe3f6d79c66ff5516a5",
+    "status": "reviewed",
+    "owner": "forms",
+    "evidence": [
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/forms/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "partially_reviewed",
+    "owner": "forms",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/forms/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "partially_reviewed",
+    "owner": "forms",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/forms/validation.py": {
     "sha256": "9f83e31641f77f0cb99f1e19c275c4fda82c7a8ce90776fd4a09890217f0385b",
@@ -6866,11 +6934,14 @@
     "issue": null
   },
   "server/src/radd/modules/groups/__init__.py": {
-    "sha256": "8f9b8f5d4b861e2ad9ed17a60d0128f63b52ba148827f3c5708ea9525e4fe6f1",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6adb3722357cb62a318de48b6143583633969200451e8166d599b834a1126f11",
+    "status": "partially_reviewed",
+    "owner": "groups",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/groups/models.py": {
     "sha256": "3549d9dbb0baa43de6ece5574686f62ca90749a408a4f5066a4685a56e420f71",
@@ -6920,6 +6991,56 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/groups/ui/package.json": {
+    "sha256": "8576d00232eac08003887fb12ae99585413f7f8e53ffe5155ee9422f15e9f913",
+    "status": "partially_reviewed",
+    "owner": "groups",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/groups/ui/src/index.tsx": {
+    "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+    "status": "reviewed",
+    "owner": "groups",
+    "evidence": [
+      "Registers only its local option contributions; no host imports. Actual remote loading, withdrawal and restore verified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/groups/ui/src/options.ts": {
+    "sha256": "ca0037b72b02edc6b6bbb22c5d45ad76e678558dab33e468481db93df3fafaf5",
+    "status": "reviewed",
+    "owner": "groups",
+    "evidence": [
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/groups/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "partially_reviewed",
+    "owner": "groups",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/groups/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "partially_reviewed",
+    "owner": "groups",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/items/__init__.py": {
     "sha256": "cb28fbe259eab5b0d734a3315c7333c403caabc3687676a2ddcac52b3a2375ad",
@@ -7293,11 +7414,14 @@
     "issue": null
   },
   "server/src/radd/modules/itemtypes/__init__.py": {
-    "sha256": "1c8d6f01830230581494b68c0b8f58207a69ddf0309a5f0a93d237cd37b44872",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "243e85475f65db1e19f0c1dfd28d1325ae8e95f96c896792efe733e1591a2cdc",
+    "status": "partially_reviewed",
+    "owner": "itemtypes",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/itemtypes/models.py": {
     "sha256": "20565f4038eedac504aed77573603b515a51f16dc42fff72ec984bd7ad3e63cf",
@@ -7347,6 +7471,56 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/itemtypes/ui/package.json": {
+    "sha256": "aaab47657e99d5409dc15747b9ce116c2f9fb19e0e8e276d45408226d092438d",
+    "status": "partially_reviewed",
+    "owner": "itemtypes",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/itemtypes/ui/src/index.tsx": {
+    "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+    "status": "reviewed",
+    "owner": "itemtypes",
+    "evidence": [
+      "Registers only its local option contributions; no host imports. Actual remote loading, withdrawal and restore verified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/itemtypes/ui/src/options.ts": {
+    "sha256": "4f60a91e66f4cf3cffda310844b0d1f79f4aba14c402c89991e813ed9414de60",
+    "status": "reviewed",
+    "owner": "itemtypes",
+    "evidence": [
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/itemtypes/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "partially_reviewed",
+    "owner": "itemtypes",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/itemtypes/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "partially_reviewed",
+    "owner": "itemtypes",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/jiraimport/__init__.py": {
     "sha256": "80e3152c25a1e5ff1d25ac905104c89aaa3065daf1e6337dca723e108408501a",
@@ -8568,11 +8742,14 @@
     "issue": null
   },
   "server/src/radd/modules/pages/__init__.py": {
-    "sha256": "185299cc212e0ed49607472830f00a505ebcbe2592ab184392719a4378365f9a",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "e9d4b418cbd3c937724e28f08f8c42ce350207ce2c9347cb175cb0f21452a8bd",
+    "status": "partially_reviewed",
+    "owner": "pages",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/pages/access.py": {
     "sha256": "c8e73af778425852ed30df2933502e5bb900be34e027c9f20f2e76aa957144f6",
@@ -8776,6 +8953,56 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/pages/ui/package.json": {
+    "sha256": "642ed20f8636cb078286a4db9637f1812cdbfa7f2a2ef86170b03f4d0335c924",
+    "status": "partially_reviewed",
+    "owner": "pages",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/pages/ui/src/index.tsx": {
+    "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+    "status": "reviewed",
+    "owner": "pages",
+    "evidence": [
+      "Registers only its local option contributions; no host imports. Actual remote loading, withdrawal and restore verified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/pages/ui/src/options.ts": {
+    "sha256": "bacbfb89fad290260fc63596102cc02ceff4d16dbabfc169886c3a108696c770",
+    "status": "reviewed",
+    "owner": "pages",
+    "evidence": [
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/pages/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "partially_reviewed",
+    "owner": "pages",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/pages/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "partially_reviewed",
+    "owner": "pages",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/pages/watchers.py": {
     "sha256": "69871a2b5e65d2102fad9daa2ce4afb1ffb0e78868ba553881a4c5edd058ef4b",
@@ -9044,11 +9271,14 @@
     "issue": null
   },
   "server/src/radd/modules/releases/__init__.py": {
-    "sha256": "f0a85a4a24d13c95cfc0d48e8c4345c7fb14531b35feb70fe43591ef597d9ffa",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "37fa5d2d83ae011447b6f1ce3cbbcf884376141f581a925ddf30e4dad0b8335a",
+    "status": "partially_reviewed",
+    "owner": "releases",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/releases/automation.py": {
     "sha256": "7722ca8faf5675201c8854f8a829b78820869d4733d20d50ba2f4f15901ee622",
@@ -9119,6 +9349,56 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/releases/ui/package.json": {
+    "sha256": "48b7de7c47352d46f42c723ad0baf1b61f9bb0279c912b5494ac5daf6a684dcc",
+    "status": "partially_reviewed",
+    "owner": "releases",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/releases/ui/src/index.tsx": {
+    "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+    "status": "reviewed",
+    "owner": "releases",
+    "evidence": [
+      "Registers only its local option contributions; no host imports. Actual remote loading, withdrawal and restore verified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/releases/ui/src/options.ts": {
+    "sha256": "dd46781f7db88fddcea25625c4346d2e1f1a7ace034b7349655f2b5976d170c2",
+    "status": "reviewed",
+    "owner": "releases",
+    "evidence": [
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/releases/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "partially_reviewed",
+    "owner": "releases",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/releases/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "partially_reviewed",
+    "owner": "releases",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/reporting/__init__.py": {
     "sha256": "94429091f2173258bb617d07a71b3e1087f20148083f6969d954be93e2c6f0fc",
@@ -9664,13 +9944,14 @@
     "issue": null
   },
   "server/src/radd/modules/teams/__init__.py": {
-    "sha256": "ea2284fb3582ed8d9c69f12a83f8cc2b4618050952b25e1b0856a3c999f57d00",
+    "sha256": "9f9450b19e5383ccce3a2058ab12e4a65da689ae148ac2172baf0280ba42f90a",
     "status": "partially_reviewed",
     "owner": "teams",
     "evidence": [
-      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/teams/models.py": {
     "sha256": "16c8daf7ea37dc45667f60c1535c6cd01f5a9ca67aa252512d702ba45794fca0",
@@ -9729,13 +10010,24 @@
     "issue": null
   },
   "server/src/radd/modules/teams/ui/src/index.tsx": {
-    "sha256": "e2083ae8cb4dcf7863f3f94260e96007d09b8e2677c264931e31fcb952c16157",
+    "sha256": "97ce9a8e021bcd230f7fbec4e6c3abbe6fc8cd58d11045290e8499412b27c192",
+    "status": "partially_reviewed",
+    "owner": "teams",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/teams/ui/src/options.ts": {
+    "sha256": "7de92333f0395dfd2af069edd5f5abd9ab35cdc1cc9ebb2e739d2df85fdf32a8",
     "status": "reviewed",
     "owner": "teams",
     "evidence": [
-      "Directory provider/consumer contract reviewed; Auth and Teams own queries and candidate semantics; platform owns generic dialog/search/paging. 10 actual-bundle browser checks include both provider withdrawals and in-flight aborts, selected-value preservation, failure/recovery, permissions, pagination and host Audit adapter. SDK paged transport preserves totals and account cancellation."
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/teams/ui/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -10167,11 +10459,14 @@
     "issue": null
   },
   "server/src/radd/modules/workflow/__init__.py": {
-    "sha256": "15386ecc136202de780ff971fe4060adc0e05527125f6ea56906607d48e96c9e",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "8acfd44657228a52fc98496814ecae178af819c28733a0f90c456e6d25c3c113",
+    "status": "partially_reviewed",
+    "owner": "workflow",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/modules/workflow/guards.py": {
     "sha256": "aa27b499c138e01e969b34768933af48e9f684d298d74981adc51b203507f77d",
@@ -10242,6 +10537,56 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/workflow/ui/package.json": {
+    "sha256": "8472e451264f69fd1d0f199989696a7c2fca997e92e045b1b881cf6a6178ccaf",
+    "status": "partially_reviewed",
+    "owner": "workflow",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/workflow/ui/src/index.tsx": {
+    "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+    "status": "reviewed",
+    "owner": "workflow",
+    "evidence": [
+      "Registers only its local option contributions; no host imports. Actual remote loading, withdrawal and restore verified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/workflow/ui/src/options.ts": {
+    "sha256": "a578925b671972ec65fe9fa8a0205585052451413736ca70deefc175481eb85f",
+    "status": "reviewed",
+    "owner": "workflow",
+    "evidence": [
+      "Owner-specific resource names, labels, presentation and API paths. Preserves name/email/ID contracts and existing invalidation entities; supplies signal and scope to fetch/resolve. All twelve resources exercised in real bundles and local endpoint probe.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/workflow/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "partially_reviewed",
+    "owner": "workflow",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "server/src/radd/modules/workflow/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "partially_reviewed",
+    "owner": "workflow",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "server/src/radd/plugin_cli.py": {
     "sha256": "6738e7bec7c384c4ee3f3cb7edba41e8e87067f77b7bc009541d52966e05829d",
@@ -12519,14 +12864,14 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "17d0eb51800bbb354a544e53c8e943a3d0ec269dead74a356ac3711ef5d324a5",
+    "sha256": "52f504b2c132564afc6f9624aad483048a83c342c9c4f5f377f6f7d9c1154ff5",
     "status": "partially_reviewed",
     "owner": "see scoped evidence",
     "evidence": [
-      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1357"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -12607,14 +12952,24 @@
     "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "4ede268c11fe4db498c142ab63711ac3953f3d0e21ea4f797471eacfc27e9ab2",
+    "sha256": "5dd8001e0b799acd2ed2153df2c67313785464f1bdc5743bce4784b50027a386",
     "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
+  "web/packages/plugin-sdk/src/options.tsx": {
+    "sha256": "4cbaf0efbf8426e9cd32b3b9875885a93abc0a59de84cca5887c0b7e06d12adc",
+    "status": "reviewed",
     "owner": "platform",
     "evidence": [
-      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "Domain-independent option rendering; source supplies vocabulary, transport and invalidation metadata. Query lifetime, preserved values, scoped resolution, failure/retry and fallback verified by actual-bundle browser proof.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1357"
   },
   "web/packages/plugin-sdk/src/plugin.ts": {
     "sha256": "96df02dce5161b51da511d0c266bc2ab740cf85bcc737a4644ec4bde09dd46e8",
@@ -12700,14 +13055,14 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "59ebc746119f48f21c60490e7225007b4d91e94550a0ea43882d98199f6e7c31",
-    "status": "reviewed",
-    "owner": "platform",
+    "sha256": "14f65d1a2eb6f937675be87a419e089cb88c10b6098a8747590523536b394de7",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
     "evidence": [
-      "Additive SDK 1.5; compatibility test rejects future patch/minor and other majors while accepting same-major older consumers.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1357"
   },
   "web/packages/plugin-sdk/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -12783,14 +13138,14 @@
     "issue": null
   },
   "web/public/shared/radd-plugin-sdk.js": {
-    "sha256": "d6386e5e2351e450a06285c98e381975b2e1202c6d6084b4050eee6eaccfc958",
+    "sha256": "9258623cc7652784633ff245c88befe89faf1fe324ab25491d941f262610c9fb",
     "status": "partially_reviewed",
     "owner": "see scoped evidence",
     "evidence": [
-      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1357"
   },
   "web/public/shared/react-dom-client.js": {
     "sha256": "7f77c7fcf2095f1ed7fd3c955b4531b8e8bb8fc97c907abd3b8019e0b0157892",
@@ -13086,6 +13441,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/scripts/browser-option-contributions.mjs": {
+    "sha256": "db1c288bae9d4042b3dab4bb0929be49fb58a7006f07999945e66a9e97e50db8",
+    "status": "reviewed",
+    "owner": "verification",
+    "evidence": [
+      "11 grouped checks using all eight actual owner bundles and all twelve sources. Controlled mock failures/cancellation, 83 requests and two observed aborts; screenshots inspected.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
+  },
   "web/scripts/browser-page-comments.mjs": {
     "sha256": "0f111aa904754447161bf86af9a6eae6416c176bd2a3785371b45ff44109649b",
     "status": "unreviewed",
@@ -13295,14 +13660,14 @@
     "issue": null
   },
   "web/scripts/gen-shared-shims.mjs": {
-    "sha256": "6186fc2f1eb987cb19d0af078f72553facab631a50cc6904d9c0051fac8c5fb9",
+    "sha256": "74e2a6243274024b34b06f5b42922b778f1dbb385203487f0ab510a0bdef1bd0",
     "status": "partially_reviewed",
     "owner": "see scoped evidence",
     "evidence": [
-      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1357"
   },
   "web/scripts/grouped-pagination-proof.mjs": {
     "sha256": "0019d9fd3dd43ea4cdcb117f450e1a1c9f4200d550fdac34fe5fe73c334ae93b",
@@ -13564,14 +13929,14 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "f4d304fa8034f6e319d6f4df8e91ad3772113976aaad6254c9dbbf3f63a21612",
+    "sha256": "b5d2121e8c1634ce3ad433c99b1d2854a6f7a953d8312310211475873c96de75",
     "status": "partially_reviewed",
     "owner": "see scoped evidence",
     "evidence": [
-      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1357"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -13974,11 +14339,14 @@
     "issue": null
   },
   "web/src/components/DirectoryChoices.tsx": {
-    "sha256": "ab5e30e8fc8aa29f78d32b5083c94769435d9f79a2b40cf8c69d7bbb01447d9b",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "4d356268c3ca4d34d9e0890669276b5776b447350119b9ef8abf17f430d11602",
+    "status": "reviewed",
+    "owner": "platform adapter",
+    "evidence": [
+      "SDK export aliases only; no feature implementation, endpoint or metadata. AST boundary check.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "web/src/components/DirectoryPager.tsx": {
     "sha256": "e1e0e3a56f9ef6ed100ccb1c5f95f5c39297c2e3a8563bae6b42afe527a1834b",
@@ -16515,11 +16883,14 @@
     "issue": null
   },
   "web/src/components/teams/TeamSelect.tsx": {
-    "sha256": "16a403136eca77963fcc211cbde64540b5adb6fa7913b270b8d27228ee17c9f9",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "9c5e807e1314c2bc7fda598a9da038dd1e299052adaa070270b3998d6dfca4e9",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "web/src/components/views/AddSharingGrantDialog.tsx": {
     "sha256": "cfa92d15089499feae1f3965c77a67881d75191e029c403faed75a8a19d1ec27",
@@ -17322,11 +17693,14 @@
     "issue": null
   },
   "web/src/lib/queries/options.ts": {
-    "sha256": "deae0891a9a117b6db47af86ea604313a53074bdb62ce3921e44ab7e92ce0159",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "91914e901e2960a97f5c83c22a3922ecd28992dcfe14d26c21fe0b810a212229",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+    ],
+    "issue": "RADD-1357"
   },
   "web/src/lib/queries/pages.ts": {
     "sha256": "47d8a402f6cf0c5dbade94a85273b38b36d0b112632bf7ec62cd4720e4871283",

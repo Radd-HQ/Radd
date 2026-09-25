@@ -1,3 +1,4 @@
+import { optionContributions } from "./options";
 import { definePlugin, DIRECTORY_SELECT_SLOT, PagedDirectorySelect, api, type DirectoryChoice, type DirectorySelectProps } from "@radd/plugin-sdk";
 
 function TeamSelect(props: DirectorySelectProps) {
@@ -21,7 +22,7 @@ function CandidateSelect(props: DirectorySelectProps) {
   })} />;
 }
 
-export default definePlugin({ contributions: [
+export default definePlugin({ contributions: [...optionContributions,
   { id: "team-select", slot: DIRECTORY_SELECT_SLOT, match: "teams.teams", toggleable: false, render: props => <TeamSelect {...(props as unknown as DirectorySelectProps)} /> },
   { id: "candidate-select", slot: DIRECTORY_SELECT_SLOT, match: "teams.candidates", toggleable: false, render: props => <CandidateSelect {...(props as unknown as DirectorySelectProps)} /> },
 ] });

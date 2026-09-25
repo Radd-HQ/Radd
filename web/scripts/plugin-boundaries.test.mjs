@@ -108,3 +108,24 @@ test('shared control implementations have no feature component dependencies',()=
     if(node.type==='ImportDeclaration')assert(!/automation|scripts|web\/src|\/modules\//.test(node.source.value));
   }
 });
+
+test('generic option controls have no feature endpoints or owner catalog',()=>{
+  const controls=nodes('web/packages/plugin-sdk/src/options.tsx');
+  assert(!controls.some(n=>n.type==='ImportDeclaration'&&n.importKind!=='type'&&/api|web\/src|modules/.test(n.source.value)));
+  assert(!controls.some(n=>n.type==='StringLiteral'&&/^\/(?:users|teams|roles|states|issue-types|releases|forms|page-spaces|groups)/.test(n.value)));
+  const adapter=nodes('web/src/components/DirectoryChoices.tsx');
+  assert(adapter.filter(n=>n.type==='ExportNamedDeclaration').every(n=>n.source?.value==='@radd/plugin-sdk'));
+  const legacy=nodes('web/src/lib/queries/options.ts');
+  assert(!legacy.some(n=>n.type==='CallExpression'||n.type==='FunctionDeclaration'||n.type==='ArrowFunctionExpression'));
+});
+
+test('all former option resources are declared only by their owning remote',()=>{
+  const owners={auth:['users','users/directory','roles','roles/assignable'],teams:['teams','teams/directory'],workflow:['states'],itemtypes:['issue-types'],releases:['releases'],forms:['forms'],pages:['page-spaces'],groups:['groups']};
+  for(const [owner,resources] of Object.entries(owners)){
+    const ast=nodes(`server/src/radd/modules/${owner}/ui/src/options.ts`);
+    const declared=ast.filter(n=>n.type==='ObjectProperty'&&n.key.name==='resource').map(n=>n.value.value);
+    assert.deepEqual(declared,resources);
+    const endpoints=ast.filter(n=>n.type==='StringLiteral'&&n.value.startsWith('/')).map(n=>n.value);
+    assert.deepEqual([...new Set(endpoints)],resources.map(r=>`/${r}/options`));
+  }
+});

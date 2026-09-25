@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from radd.kernel import PluginUiManifest
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec, ProjectPurgeSpec
@@ -28,6 +29,7 @@ async def _transition_handler(request: Request, exc: TransitionError) -> JSONRes
 
 plugin = RaddPlugin(
     name="workflow",
+    ui=PluginUiManifest(remote="/plugins/workflow/remoteEntry.js", ui_api_version="1.6.0"),
     permissions=(
         PermissionSpec(
             "state.manage",

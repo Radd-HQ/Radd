@@ -1,5 +1,15 @@
 # Module map
 
+RADD-1357: option-directory transport and vocabulary are contributed by their owners.
+Auth owns people/email/role/assignable-role options; Teams owns team names and ID
+references; Workflow states; Itemtypes issue types; Releases versions; Forms intake
+forms; Pages spaces; Groups directory groups. These eight remotes require UI SDK
+1.6 and register `directory.options` contributions. The SDK supplies only generic
+text/reference/multiple-value controls, paging and lifetime-scoped queries.
+Host option aliases remain transitional call-site names with no transport logic.
+Project/cycle pickers, the separate TeamSelect reference lookup and remaining
+feature pages are still tracked migration work. See `research/plugin-isolation/README.md`.
+
 RADD-1282: issue comments distinguish ordinary comments from resolvable threads
 (`comments.is_thread`). Workflow's `require_resolved_threads` check calls the
 comments service's audience-independent existence query. The existing project

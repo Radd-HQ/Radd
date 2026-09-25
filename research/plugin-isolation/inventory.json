@@ -211,7 +211,7 @@
       "manifest": "server/src/radd/modules/auth/__init__.py",
       "declarations": {
         "name": "auth",
-        "ui": "PluginUiManifest(remote='/plugins/auth/remoteEntry.js', ui_api_version='1.4.0')",
+        "ui": "PluginUiManifest(remote='/plugins/auth/remoteEntry.js', ui_api_version='1.6.0')",
         "description": "People, sign-in sessions, API tokens and roles.",
         "depends_on": [
           "events",
@@ -233,7 +233,8 @@
         "on_startup": "(subscribers.ensure_seeded,)"
       },
       "ui_sources": [
-        "server/src/radd/modules/auth/ui/src/index.tsx"
+        "server/src/radd/modules/auth/ui/src/index.tsx",
+        "server/src/radd/modules/auth/ui/src/options.ts"
       ]
     },
     "automations": {
@@ -580,6 +581,7 @@
       "manifest": "server/src/radd/modules/forms/__init__.py",
       "declarations": {
         "name": "forms",
+        "ui": "PluginUiManifest(remote='/plugins/forms/remoteEntry.js', ui_api_version='1.6.0')",
         "permissions": "(PermissionSpec('form.manage', 'project', \"Create and manage the project's intake forms.\"),)",
         "crud_resources": "(CrudResourceSpec('form', 'project', 'intake forms', 'form.manage'),)",
         "nav_facts": "(NavFactSpec(key='portal', resolve=portal.nav_portal_visible),)",
@@ -607,7 +609,10 @@
         "exception_handlers": "((FormValidationError, _form_validation_handler),)",
         "event_types": "(EventTypeSpec(FormEvent.CREATED, 'Intake form created', 'Admin', subjects=('project',)), EventTypeSpec(FormEvent.UPDATED, 'Intake form updated', 'Admin', has_changes=True, subjects=('project',)), EventTypeSpec(FormEvent.DELETED, 'Intake form deleted', 'Admin', trigger=False), EventTypeSpec(FormEvent.SUBMITTED, 'Intake form submitted', 'Intake', item_scoped=True, subjects=('item', 'project', 'user'), payload_schema={'type': 'object', 'properties': {'form': {'type': 'object', 'properties': {'id': {'type': 'string'}, 'name': {'type': 'string'}}}, 'channel': {'type': 'string', 'description': 'form | portal'}}}), EventTypeSpec(FormEvent.STAGING_DELETED, 'Unclaimed submission attachments reclaimed', 'Admin', trigger=False))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/forms/ui/src/index.tsx",
+        "server/src/radd/modules/forms/ui/src/options.ts"
+      ]
     },
     "github": {
       "manifest": "server/src/radd/modules/github/__init__.py",
@@ -657,6 +662,7 @@
       "manifest": "server/src/radd/modules/groups/__init__.py",
       "declarations": {
         "name": "groups",
+        "ui": "PluginUiManifest(remote='/plugins/groups/remoteEntry.js', ui_api_version='1.6.0')",
         "description": "Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups.",
         "depends_on": [
           "events",
@@ -668,7 +674,10 @@
         "routers": "(router,)",
         "event_types": "(EventTypeSpec(GroupEvent.SYNCED, 'Directory group synced', 'Admin'), EventTypeSpec(GroupEvent.MISSING, 'Directory group missing', 'Admin'), EventTypeSpec(GroupEvent.RESTORED, 'Directory group restored', 'Admin'))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/groups/ui/src/index.tsx",
+        "server/src/radd/modules/groups/ui/src/options.ts"
+      ]
     },
     "items": {
       "manifest": "server/src/radd/modules/items/__init__.py",
@@ -713,6 +722,7 @@
       "manifest": "server/src/radd/modules/itemtypes/__init__.py",
       "declarations": {
         "name": "itemtypes",
+        "ui": "PluginUiManifest(remote='/plugins/itemtypes/remoteEntry.js', ui_api_version='1.6.0')",
         "crud_resources": "(CrudResourceSpec('issue_type', 'project', 'issue types', 'project.manage'),)",
         "project_purges": "(ProjectPurgeSpec(name='itemtypes', tables=('issue_types',), order=75),)",
         "description": "Issue types (Bug, Task, Story\u2026) per project.",
@@ -724,7 +734,10 @@
         "routers": "(router,)",
         "event_types": "(EventTypeSpec(TypeEvent.CREATED, 'Issue type created', 'Admin', subjects=('project',)), EventTypeSpec(TypeEvent.UPDATED, 'Issue type updated', 'Admin', has_changes=True, subjects=('project',)), EventTypeSpec(TypeEvent.DELETED, 'Issue type deleted', 'Admin', trigger=False, subjects=('project',)))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/itemtypes/ui/src/index.tsx",
+        "server/src/radd/modules/itemtypes/ui/src/options.ts"
+      ]
     },
     "jiraimport": {
       "manifest": "server/src/radd/modules/jiraimport/__init__.py",
@@ -974,6 +987,7 @@
       "manifest": "server/src/radd/modules/pages/__init__.py",
       "declarations": {
         "name": "pages",
+        "ui": "PluginUiManifest(remote='/plugins/pages/remoteEntry.js', ui_api_version='1.6.0')",
         "automation_nodes": "(COMMENT_NODE, MOVE_NODE, SPACE_GATE)",
         "searchables": "(PAGE_SEARCHABLE,)",
         "token_providers": "(PAGE_TOKENS,)",
@@ -1008,7 +1022,10 @@
         "grant_scopes": "(SPACE_SCOPE,)",
         "mcp_tools": "mcptools.MCP_TOOLS"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/pages/ui/src/index.tsx",
+        "server/src/radd/modules/pages/ui/src/options.ts"
+      ]
     },
     "participants": {
       "manifest": "server/src/radd/modules/participants/__init__.py",
@@ -1098,6 +1115,7 @@
       "manifest": "server/src/radd/modules/releases/__init__.py",
       "declarations": {
         "name": "releases",
+        "ui": "PluginUiManifest(remote='/plugins/releases/remoteEntry.js', ui_api_version='1.6.0')",
         "crud_resources": "(CrudResourceSpec('release', 'project', 'releases', 'project.manage'),)",
         "project_purges": "(ProjectPurgeSpec(name='releases', tables=('releases',), order=30),)",
         "description": "Releases: versions of a project, and what shipped in each.",
@@ -1117,7 +1135,10 @@
         "entity_refs": "(EntityRefSpec('release', service.release_ref, label='Release'),)",
         "event_types": "(EventTypeSpec(ReleaseEvent.CREATED, 'Release created', 'Releases', subjects=('project', 'release')), EventTypeSpec(ReleaseEvent.UPDATED, 'Release updated', 'Releases', has_changes=True, subjects=('project', 'release')), EventTypeSpec(ReleaseEvent.DELETED, 'Release deleted', 'Releases', subjects=('project', 'release')))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/releases/ui/src/index.tsx",
+        "server/src/radd/modules/releases/ui/src/options.ts"
+      ]
     },
     "reporting": {
       "manifest": "server/src/radd/modules/reporting/__init__.py",
@@ -1280,7 +1301,7 @@
       "manifest": "server/src/radd/modules/teams/__init__.py",
       "declarations": {
         "name": "teams",
-        "ui": "PluginUiManifest(remote='/plugins/teams/remoteEntry.js', ui_api_version='1.4.0')",
+        "ui": "PluginUiManifest(remote='/plugins/teams/remoteEntry.js', ui_api_version='1.6.0')",
         "crud_resources": "(CrudResourceSpec('team', 'global', 'teams', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Teams: groups of people you can give access to projects.",
         "depends_on": [
@@ -1298,7 +1319,8 @@
         "event_types": "(EventTypeSpec(TeamEvent.CREATED, 'Team created', 'Admin', subjects=('team',)), EventTypeSpec(TeamEvent.UPDATED, 'Team updated', 'Admin', has_changes=True, subjects=('team',)), EventTypeSpec(TeamEvent.DELETED, 'Team deleted', 'Admin', trigger=False, subjects=('team',)))"
       },
       "ui_sources": [
-        "server/src/radd/modules/teams/ui/src/index.tsx"
+        "server/src/radd/modules/teams/ui/src/index.tsx",
+        "server/src/radd/modules/teams/ui/src/options.ts"
       ]
     },
     "timelogging": {
@@ -1418,6 +1440,7 @@
       "manifest": "server/src/radd/modules/workflow/__init__.py",
       "declarations": {
         "name": "workflow",
+        "ui": "PluginUiManifest(remote='/plugins/workflow/remoteEntry.js', ui_api_version='1.6.0')",
         "permissions": "(PermissionSpec('state.manage', 'project', \"Manage the project's workflow states.\", implied_by=('project.manage',)),)",
         "crud_resources": "(CrudResourceSpec('state', 'project', 'workflow states', 'state.manage'),)",
         "project_purges": "(ProjectPurgeSpec(name='workflow', tables=('workflow_transitions', 'states'), order=70),)",
@@ -1441,7 +1464,10 @@
         "exception_handlers": "((TransitionError, _transition_handler),)",
         "event_types": "(EventTypeSpec(StateEvent.CREATED, 'Workflow state created', 'Admin', subjects=('project',)), EventTypeSpec(StateEvent.UPDATED, 'Workflow state updated', 'Admin', has_changes=True, subjects=('project',)), EventTypeSpec(StateEvent.DELETED, 'Workflow state deleted', 'Admin', trigger=False, subjects=('project',)), EventTypeSpec(StateEvent.CATEGORY_UPDATED, 'State category updated', 'Admin', has_changes=True, trigger=False, entity_type='state_category'), EventTypeSpec(TransitionEvent.CREATED, 'Workflow transition created', 'Admin', subjects=('project',)), EventTypeSpec(TransitionEvent.UPDATED, 'Workflow transition updated', 'Admin', has_changes=True, subjects=('project',)), EventTypeSpec(TransitionEvent.DELETED, 'Workflow transition deleted', 'Admin', subjects=('project',)))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/workflow/ui/src/index.tsx",
+        "server/src/radd/modules/workflow/ui/src/options.ts"
+      ]
     }
   },
   "packages": {
@@ -1608,6 +1634,39 @@
         "build": "vite build"
       }
     },
+    "server/src/radd/modules/forms/ui/package.json": {
+      "name": "@radd-plugin-ui/forms",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
+    "server/src/radd/modules/groups/ui/package.json": {
+      "name": "@radd-plugin-ui/groups",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
+    "server/src/radd/modules/itemtypes/ui/package.json": {
+      "name": "@radd-plugin-ui/itemtypes",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
     "server/src/radd/modules/leave/ui/package.json": {
       "name": "@radd-plugin-ui/leave",
       "version": "1.0.0",
@@ -1652,8 +1711,30 @@
         "build": "vite build"
       }
     },
+    "server/src/radd/modules/pages/ui/package.json": {
+      "name": "@radd-plugin-ui/pages",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
     "server/src/radd/modules/participants/ui/package.json": {
       "name": "@radd-plugin-ui/participants",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
+    "server/src/radd/modules/releases/ui/package.json": {
+      "name": "@radd-plugin-ui/releases",
       "version": "1.0.0",
       "type": "module",
       "dependencies": {
@@ -1676,6 +1757,17 @@
     },
     "server/src/radd/modules/teams/ui/package.json": {
       "name": "@radd-plugin-ui/teams",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
+    "server/src/radd/modules/workflow/ui/package.json": {
+      "name": "@radd-plugin-ui/workflow",
       "version": "1.0.0",
       "type": "module",
       "dependencies": {
@@ -1735,7 +1827,7 @@
         "build": "tsc -b && vite build",
         "preview": "vite preview",
         "test": "cd .. && node --test web/scripts/*.test.mjs",
-        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs",
+        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs",
         "build:all": "node scripts/build-all.mjs",
         "check": "npm run test && npm run build:all && npm run test:browser"
       }
@@ -2185,7 +2277,7 @@
       "imports": []
     },
     "docs/modules.md": {
-      "sha256": "9af3508e534f7f4a5b67a1c6adc9567f7e50b5dcdb59f4f0b7457bd9ef06ad3e",
+      "sha256": "313812f05f9a47116d25fa70606006d950db848535887c6fca6363a731b14d5d",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -2221,7 +2313,7 @@
       "imports": []
     },
     "docs/plugin-platform.md": {
-      "sha256": "ed8faf9b013f5dc4f044e76aa27c043a9474bef0d82b728a1eb67ec69e4c3715",
+      "sha256": "70de3325f2fb7b4aa903cf774a5ff7bd3d40b4684c709b28e71130dd970a1407",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -3805,7 +3897,7 @@
       "imports": []
     },
     "research/plugin-isolation/README.md": {
-      "sha256": "8a2a33c83e21b6d9817a89e3fc838cc6aa7a93687dee5e1d79f155daa655e740",
+      "sha256": "7fae3f2c6b70ecb63d2392150aea5a330046a0cae15efcee93abf13f5cbe246f",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -19460,7 +19552,7 @@
       ]
     },
     "server/src/radd/modules/auth/__init__.py": {
-      "sha256": "51c8cb6545d29259120b83d0c626b90721c7b4937a654056e86df272a30d0e48",
+      "sha256": "766854cd2161b07da135250ec2315ee79973e711f2a089fe6632097480f5c33c",
       "module_directory": "auth",
       "role": "runtime_source",
       "imports": [
@@ -23047,7 +23139,22 @@
       "imports": []
     },
     "server/src/radd/modules/auth/ui/src/index.tsx": {
-      "sha256": "c5d2e3e6794aa7d6a43c2cc78bcaa218e82166d7583cfa0b7427ea927cd0b202",
+      "sha256": "385565e1ea26479a622f207bd92f1bcc8ad6006e8dd780349b2a7d5a1d155bb7",
+      "module_directory": "auth",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./options"
+        },
+        {
+          "line": 2,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/auth/ui/src/options.ts": {
+      "sha256": "ccd81e022327a10709288659fdc7ad060249905b751fa8cf59b64caa11b33f46",
       "module_directory": "auth",
       "role": "runtime_source",
       "imports": [
@@ -35975,7 +36082,7 @@
       ]
     },
     "server/src/radd/modules/forms/__init__.py": {
-      "sha256": "a239edaba5f8d8a7e3ed84b839af5afc1d998ae93f9939372e131558f26d5141",
+      "sha256": "64caf4377da8b610d52e7c40579f9254d2cd7f99392de61fba0802239b9c1a38",
       "module_directory": "forms",
       "role": "runtime_source",
       "imports": [
@@ -35997,18 +36104,25 @@
           "line": 4,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 5,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 6,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 7,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -36018,21 +36132,21 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".",
           "names": [
             "portal"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".",
           "names": [
             "staging"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".portal_router",
           "names": [
             "requests_router",
@@ -36040,28 +36154,28 @@
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".types",
           "names": [
             "FormEvent"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".validation",
           "names": [
             "FormValidationError"
@@ -37203,6 +37317,63 @@
           "names": [
             "StrEnum"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/forms/ui/package.json": {
+      "sha256": "e0468b5ec98e25c89364fd96cf523b21409b7c1ab259f1f60e74f50988b3729b",
+      "module_directory": "forms",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/forms/ui/src/index.tsx": {
+      "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+      "module_directory": "forms",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./options"
+        }
+      ]
+    },
+    "server/src/radd/modules/forms/ui/src/options.ts": {
+      "sha256": "441f5e889e6387b7785c7e598930a02334b2d320d19fbfe3f6d79c66ff5516a5",
+      "module_directory": "forms",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/forms/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "forms",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/forms/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "forms",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -38771,7 +38942,7 @@
       ]
     },
     "server/src/radd/modules/groups/__init__.py": {
-      "sha256": "8f9b8f5d4b861e2ad9ed17a60d0128f63b52ba148827f3c5708ea9525e4fe6f1",
+      "sha256": "6adb3722357cb62a318de48b6143583633969200451e8166d599b834a1126f11",
       "module_directory": "groups",
       "role": "runtime_source",
       "imports": [
@@ -38779,19 +38950,26 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "PluginUiManifest"
+          ]
+        },
+        {
+          "line": 2,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".types",
           "names": [
             "GroupEvent"
@@ -39180,6 +39358,63 @@
           "names": [
             "StrEnum"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/groups/ui/package.json": {
+      "sha256": "8576d00232eac08003887fb12ae99585413f7f8e53ffe5155ee9422f15e9f913",
+      "module_directory": "groups",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/groups/ui/src/index.tsx": {
+      "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+      "module_directory": "groups",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./options"
+        }
+      ]
+    },
+    "server/src/radd/modules/groups/ui/src/options.ts": {
+      "sha256": "ca0037b72b02edc6b6bbb22c5d45ad76e678558dab33e468481db93df3fafaf5",
+      "module_directory": "groups",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/groups/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "groups",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/groups/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "groups",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -44604,7 +44839,7 @@
       ]
     },
     "server/src/radd/modules/itemtypes/__init__.py": {
-      "sha256": "1c8d6f01830230581494b68c0b8f58207a69ddf0309a5f0a93d237cd37b44872",
+      "sha256": "243e85475f65db1e19f0c1dfd28d1325ae8e95f96c896792efe733e1591a2cdc",
       "module_directory": "itemtypes",
       "role": "runtime_source",
       "imports": [
@@ -44612,18 +44847,25 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 3,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -44631,21 +44873,21 @@
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".types",
           "names": [
             "TypeEvent"
@@ -45030,6 +45272,63 @@
           "names": [
             "StrEnum"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/itemtypes/ui/package.json": {
+      "sha256": "aaab47657e99d5409dc15747b9ce116c2f9fb19e0e8e276d45408226d092438d",
+      "module_directory": "itemtypes",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/itemtypes/ui/src/index.tsx": {
+      "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+      "module_directory": "itemtypes",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./options"
+        }
+      ]
+    },
+    "server/src/radd/modules/itemtypes/ui/src/options.ts": {
+      "sha256": "4f60a91e66f4cf3cffda310844b0d1f79f4aba14c402c89991e813ed9414de60",
+      "module_directory": "itemtypes",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/itemtypes/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "itemtypes",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/itemtypes/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "itemtypes",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -55341,7 +55640,7 @@
       ]
     },
     "server/src/radd/modules/pages/__init__.py": {
-      "sha256": "185299cc212e0ed49607472830f00a505ebcbe2592ab184392719a4378365f9a",
+      "sha256": "e9d4b418cbd3c937724e28f08f8c42ce350207ce2c9347cb175cb0f21452a8bd",
       "module_directory": "pages",
       "role": "runtime_source",
       "imports": [
@@ -55349,109 +55648,116 @@
           "line": 9,
           "module": "radd.kernel",
           "names": [
-            "EntityRefSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 10,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "EntityRefSpec"
           ]
         },
         {
           "line": 11,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 12,
           "module": "radd.kernel",
           "names": [
-            "PermissionSpec"
+            "RaddPlugin"
           ]
         },
         {
           "line": 13,
           "module": "radd.kernel",
           "names": [
+            "PermissionSpec"
+          ]
+        },
+        {
+          "line": 14,
+          "module": "radd.kernel",
+          "names": [
             "SettingSpec"
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": ".",
           "names": [
             "refs"
           ]
         },
         {
-          "line": 16,
+          "line": 17,
           "module": ".searchable",
           "names": [
             "PAGE_SEARCHABLE"
           ]
         },
         {
-          "line": 18,
+          "line": 19,
           "module": ".",
           "names": [
             "attachments_binding"
           ]
         },
         {
-          "line": 19,
+          "line": 20,
           "module": ".",
           "names": [
             "comments_binding"
           ]
         },
         {
-          "line": 20,
+          "line": 21,
           "module": ".extensions",
           "names": [
             "PAGE_EXTENSIONS"
           ]
         },
         {
-          "line": 21,
+          "line": 22,
           "module": ".grantscope",
           "names": [
             "SPACE_SCOPE"
           ]
         },
         {
-          "line": 22,
+          "line": 23,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 23,
+          "line": 24,
           "module": ".types",
           "names": [
             "PageEvent"
           ]
         },
         {
-          "line": 25,
+          "line": 26,
           "module": ".page_access",
           "names": [
             "_PAGE_SPEC"
           ]
         },
         {
-          "line": 28,
+          "line": 29,
           "module": ".",
           "names": [
             "mcptools"
           ]
         },
         {
-          "line": 29,
+          "line": 30,
           "module": ".automation",
           "names": [
             "COMMENT_NODE",
@@ -57751,6 +58057,63 @@
         }
       ]
     },
+    "server/src/radd/modules/pages/ui/package.json": {
+      "sha256": "642ed20f8636cb078286a4db9637f1812cdbfa7f2a2ef86170b03f4d0335c924",
+      "module_directory": "pages",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/pages/ui/src/index.tsx": {
+      "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+      "module_directory": "pages",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./options"
+        }
+      ]
+    },
+    "server/src/radd/modules/pages/ui/src/options.ts": {
+      "sha256": "bacbfb89fad290260fc63596102cc02ceff4d16dbabfc169886c3a108696c770",
+      "module_directory": "pages",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/pages/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "pages",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/pages/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "pages",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
+        }
+      ]
+    },
     "server/src/radd/modules/pages/watchers.py": {
       "sha256": "69871a2b5e65d2102fad9daa2ce4afb1ffb0e78868ba553881a4c5edd058ef4b",
       "module_directory": "pages",
@@ -59916,7 +60279,7 @@
       "imports": []
     },
     "server/src/radd/modules/releases/__init__.py": {
-      "sha256": "f0a85a4a24d13c95cfc0d48e8c4345c7fb14531b35feb70fe43591ef597d9ffa",
+      "sha256": "37fa5d2d83ae011447b6f1ce3cbbcf884376141f581a925ddf30e4dad0b8335a",
       "module_directory": "releases",
       "role": "runtime_source",
       "imports": [
@@ -59924,19 +60287,26 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "EntityRefSpec",
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EntityRefSpec",
+            "EventTypeSpec"
           ]
         },
         {
           "line": 3,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -59944,42 +60314,42 @@
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".automation",
           "names": [
             "PUBLISH_NODE"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".types",
           "names": [
             "ReleaseEvent"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".",
           "names": [
             "mcptools"
@@ -60749,6 +61119,63 @@
           "names": [
             "StrEnum"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/releases/ui/package.json": {
+      "sha256": "48b7de7c47352d46f42c723ad0baf1b61f9bb0279c912b5494ac5daf6a684dcc",
+      "module_directory": "releases",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/releases/ui/src/index.tsx": {
+      "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+      "module_directory": "releases",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./options"
+        }
+      ]
+    },
+    "server/src/radd/modules/releases/ui/src/options.ts": {
+      "sha256": "dd46781f7db88fddcea25625c4346d2e1f1a7ace034b7349655f2b5976d170c2",
+      "module_directory": "releases",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/releases/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "releases",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/releases/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "releases",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -65325,7 +65752,7 @@
       ]
     },
     "server/src/radd/modules/teams/__init__.py": {
-      "sha256": "ea2284fb3582ed8d9c69f12a83f8cc2b4618050952b25e1b0856a3c999f57d00",
+      "sha256": "9f9450b19e5383ccce3a2058ab12e4a65da689ae148ac2172baf0280ba42f90a",
       "module_directory": "teams",
       "role": "runtime_source",
       "imports": [
@@ -65943,7 +66370,22 @@
       "imports": []
     },
     "server/src/radd/modules/teams/ui/src/index.tsx": {
-      "sha256": "e2083ae8cb4dcf7863f3f94260e96007d09b8e2677c264931e31fcb952c16157",
+      "sha256": "97ce9a8e021bcd230f7fbec4e6c3abbe6fc8cd58d11045290e8499412b27c192",
+      "module_directory": "teams",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./options"
+        },
+        {
+          "line": 2,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/teams/ui/src/options.ts": {
+      "sha256": "7de92333f0395dfd2af069edd5f5abd9ab35cdc1cc9ebb2e739d2df85fdf32a8",
       "module_directory": "teams",
       "role": "runtime_source",
       "imports": [
@@ -70238,7 +70680,7 @@
       ]
     },
     "server/src/radd/modules/workflow/__init__.py": {
-      "sha256": "15386ecc136202de780ff971fe4060adc0e05527125f6ea56906607d48e96c9e",
+      "sha256": "8acfd44657228a52fc98496814ecae178af819c28733a0f90c456e6d25c3c113",
       "module_directory": "workflow",
       "role": "runtime_source",
       "imports": [
@@ -70260,18 +70702,25 @@
           "line": 4,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 5,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 6,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 7,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -70280,28 +70729,28 @@
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": "radd.kernel",
           "names": [
             "SettingSpec"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".guards",
           "names": [
             "TransitionError"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".router",
           "names": [
             "router",
@@ -70309,14 +70758,14 @@
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".transitions_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".types",
           "names": [
             "StateEvent",
@@ -71131,6 +71580,63 @@
           "names": [
             "FieldType"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/workflow/ui/package.json": {
+      "sha256": "8472e451264f69fd1d0f199989696a7c2fca997e92e045b1b881cf6a6178ccaf",
+      "module_directory": "workflow",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/workflow/ui/src/index.tsx": {
+      "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
+      "module_directory": "workflow",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./options"
+        }
+      ]
+    },
+    "server/src/radd/modules/workflow/ui/src/options.ts": {
+      "sha256": "a578925b671972ec65fe9fa8a0205585052451413736ca70deefc175481eb85f",
+      "module_directory": "workflow",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/workflow/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "workflow",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/workflow/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "workflow",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -108717,7 +109223,7 @@
       "imports": []
     },
     "web/package.json": {
-      "sha256": "17d0eb51800bbb354a544e53c8e943a3d0ec269dead74a356ac3711ef5d324a5",
+      "sha256": "52f504b2c132564afc6f9624aad483048a83c342c9c4f5f377f6f7d9c1154ff5",
       "module_directory": null,
       "role": "configuration",
       "imports": []
@@ -108846,7 +109352,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/index.ts": {
-      "sha256": "4ede268c11fe4db498c142ab63711ac3953f3d0e21ea4f797471eacfc27e9ab2",
+      "sha256": "5dd8001e0b799acd2ed2153df2c67313785464f1bdc5743bce4784b50027a386",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -108905,6 +109411,45 @@
         {
           "line": 103,
           "module": "./schema-defaults"
+        },
+        {
+          "line": 105,
+          "module": "./options"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/options.tsx": {
+      "sha256": "4cbaf0efbf8426e9cd32b3b9875885a93abc0a59de84cca5887c0b7e06d12adc",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "react"
+        },
+        {
+          "line": 3,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 4,
+          "module": "./slots"
+        },
+        {
+          "line": 5,
+          "module": "./primitives"
+        },
+        {
+          "line": 6,
+          "module": "./host"
+        },
+        {
+          "line": 7,
+          "module": "./api"
+        },
+        {
+          "line": 8,
+          "module": "./plugin"
         }
       ]
     },
@@ -109021,7 +109566,7 @@
       "imports": []
     },
     "web/packages/plugin-sdk/src/version.ts": {
-      "sha256": "59ebc746119f48f21c60490e7225007b4d91e94550a0ea43882d98199f6e7c31",
+      "sha256": "14f65d1a2eb6f937675be87a419e089cb88c10b6098a8747590523536b394de7",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
@@ -109116,7 +109661,7 @@
       "imports": []
     },
     "web/public/shared/radd-plugin-sdk.js": {
-      "sha256": "d6386e5e2351e450a06285c98e381975b2e1202c6d6084b4050eee6eaccfc958",
+      "sha256": "9258623cc7652784633ff245c88befe89faf1fe324ab25491d941f262610c9fb",
       "module_directory": null,
       "role": "generated_source",
       "imports": []
@@ -109900,6 +110445,45 @@
         }
       ]
     },
+    "web/scripts/browser-option-contributions.mjs": {
+      "sha256": "db1c288bae9d4042b3dab4bb0929be49fb58a7006f07999945e66a9e97e50db8",
+      "module_directory": null,
+      "role": "tooling_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:http"
+        },
+        {
+          "line": 4,
+          "module": "node:fs"
+        },
+        {
+          "line": 5,
+          "module": "node:fs/promises"
+        },
+        {
+          "line": 6,
+          "module": "node:path"
+        },
+        {
+          "line": 7,
+          "module": "./lib/cdp.mjs"
+        },
+        {
+          "line": 12,
+          "module": "react"
+        },
+        {
+          "line": 12,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
     "web/scripts/browser-page-comments.mjs": {
       "sha256": "0f111aa904754447161bf86af9a6eae6416c176bd2a3785371b45ff44109649b",
       "module_directory": null,
@@ -110583,7 +111167,7 @@
       ]
     },
     "web/scripts/gen-shared-shims.mjs": {
-      "sha256": "6186fc2f1eb987cb19d0af078f72553facab631a50cc6904d9c0051fac8c5fb9",
+      "sha256": "74e2a6243274024b34b06f5b42922b778f1dbb385203487f0ab510a0bdef1bd0",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -111393,7 +111977,7 @@
       ]
     },
     "web/scripts/plugin-boundaries.test.mjs": {
-      "sha256": "f4d304fa8034f6e319d6f4df8e91ad3772113976aaad6254c9dbbf3f63a21612",
+      "sha256": "b5d2121e8c1634ce3ad433c99b1d2854a6f7a953d8312310211475873c96de75",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -112529,57 +113113,13 @@
       ]
     },
     "web/src/components/DirectoryChoices.tsx": {
-      "sha256": "ab5e30e8fc8aa29f78d32b5083c94769435d9f79a2b40cf8c69d7bbb01447d9b",
+      "sha256": "4d356268c3ca4d34d9e0890669276b5776b447350119b9ef8abf17f430d11602",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
-          "line": 1,
-          "module": "react"
-        },
-        {
           "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "lucide-react"
-        },
-        {
-          "line": 4,
-          "module": "../lib/queries/options"
-        },
-        {
-          "line": 5,
-          "module": "../lib/useDirectory"
-        },
-        {
-          "line": 6,
-          "module": "./Button"
-        },
-        {
-          "line": 7,
-          "module": "./Modal"
-        },
-        {
-          "line": 8,
-          "module": "./DirectoryPager"
-        },
-        {
-          "line": 9,
-          "module": "./QueryError"
-        },
-        {
-          "line": 10,
-          "module": "./Spinner"
-        },
-        {
-          "line": 11,
-          "module": "./TextField"
-        },
-        {
-          "line": 12,
-          "module": "./TokenMultiSelect"
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -127015,57 +127555,37 @@
       ]
     },
     "web/src/components/teams/TeamSelect.tsx": {
-      "sha256": "16a403136eca77963fcc211cbde64540b5adb6fa7913b270b8d27228ee17c9f9",
+      "sha256": "9c5e807e1314c2bc7fda598a9da038dd1e299052adaa070270b3998d6dfca4e9",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "react"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 2,
-          "module": "@tanstack/react-query"
+          "module": "react"
         },
         {
           "line": 3,
-          "module": "lucide-react"
+          "module": "@tanstack/react-query"
         },
         {
           "line": 4,
-          "module": "../../lib/queries/users"
+          "module": "lucide-react"
         },
         {
           "line": 5,
-          "module": "../../lib/queries/options"
+          "module": "../../lib/queries/users"
         },
         {
           "line": 6,
-          "module": "../../lib/useDirectory"
-        },
-        {
-          "line": 7,
           "module": "../Button"
         },
         {
-          "line": 8,
-          "module": "../DirectoryPager"
-        },
-        {
-          "line": 9,
-          "module": "../Modal"
-        },
-        {
-          "line": 10,
+          "line": 7,
           "module": "../QueryError"
-        },
-        {
-          "line": 11,
-          "module": "../Spinner"
-        },
-        {
-          "line": 12,
-          "module": "../TextField"
         }
       ]
     },
@@ -129940,25 +130460,13 @@
       ]
     },
     "web/src/lib/queries/options.ts": {
-      "sha256": "deae0891a9a117b6db47af86ea604313a53074bdb62ce3921e44ab7e92ce0159",
+      "sha256": "91914e901e2960a97f5c83c22a3922ecd28992dcfe14d26c21fe0b810a212229",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
-          "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "../api"
-        },
-        {
           "line": 4,
-          "module": "../cache"
-        },
-        {
-          "line": 5,
-          "module": "./shared"
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
