@@ -909,6 +909,11 @@ function RichEditorInner({
               <EditorToolbar
                 snapshot={snapshot}
                 onAction={onToolbarAction}
+                onInsertSymbol={(text) => editorRef.current?.action((ctx) => {
+                  const view = ctx.get(editorViewCtx);
+                  view.dispatch(view.state.tr.insertText(text).scrollIntoView());
+                  view.focus();
+                })}
                 onHeading={onHeading}
                 images={Boolean(onUploadImage)}
                 tables

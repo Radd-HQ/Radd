@@ -12,6 +12,7 @@ import {
   Table as TableIcon,
   type LucideIcon,
 } from "lucide-react";
+import { SymbolPicker } from "./SymbolPicker";
 import { Select } from "../Select";
 import type { ToolbarSnapshot } from "./toolbar-state";
 
@@ -81,6 +82,7 @@ export function EditorToolbar({
   snapshot,
   onAction,
   onHeading,
+  onInsertSymbol,
   images,
   tables,
   extra,
@@ -90,6 +92,7 @@ export function EditorToolbar({
   /** 0 = paragraph, 1–3 = heading level. */
   onHeading: (level: number) => void;
   /** Image insertion is only offered where an upload handler exists. */
+  onInsertSymbol: (text: string) => void;
   images: boolean;
   tables: boolean;
   /** AI and extension buttons, which are per-surface. */
@@ -128,6 +131,7 @@ export function EditorToolbar({
       {insertItems.map((item) => (
         <ToolbarButton key={item.action} item={item} snapshot={snapshot} onAction={onAction} />
       ))}
+      <SymbolPicker onInsert={onInsertSymbol} />
       {extra}
     </div>
   );
