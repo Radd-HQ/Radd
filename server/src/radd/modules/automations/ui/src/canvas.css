@@ -1,0 +1,12 @@
+/* React Flow mechanics are bundled by the owner; its chrome follows SDK tokens. */
+.radd-automation-canvas .react-flow {
+  --xy-controls-button-background-color: var(--radd-panel);
+  --xy-controls-button-background-color-hover: var(--radd-elevated);
+  --xy-controls-button-color: var(--radd-text);
+  --xy-controls-button-color-hover: var(--radd-heading);
+  --xy-controls-button-border-color: var(--radd-border);
+  --xy-attribution-background-color: var(--radd-panel);
+}
+.radd-automation-canvas .react-flow__attribution a {
+  color: var(--radd-text-muted);
+}

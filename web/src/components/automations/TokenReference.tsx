@@ -25,7 +25,10 @@ import type {
 } from "../../lib/types";
 import { upstreamProducers } from "../../lib/automation-outputs";
 
+import type { NodeShapes } from "../../lib/node-shapes";
+
 interface TokenReferenceProps {
+  shapes?: NodeShapes;
   catalog: AutomationCatalog | undefined;
   /** Whether this run has a target item — item tokens are blank without one. */
   hasItem: boolean;
@@ -50,6 +53,7 @@ const REFERENCE_ONLY_NOTE =
   "Reference only — these are substituted in action parameters. This node's own fields are used exactly as written.";
 
 export function TokenReference({
+  shapes,
   catalog,
   hasItem,
   node,
@@ -59,7 +63,7 @@ export function TokenReference({
 }: TokenReferenceProps) {
   const [open, setOpen] = useState(false);
   const tokens = catalog?.tokens ?? [];
-  const producers = node ? upstreamProducers(node.id, nodes, edges, catalog) : [];
+  const producers = node ? upstreamProducers(node.id, nodes, edges, catalog, shapes) : [];
   const variableCount = producers.reduce((total, entry) => total + entry.outputs.length, 0);
   if (tokens.length === 0 && variableCount === 0) return null;
 

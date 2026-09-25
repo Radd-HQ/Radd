@@ -460,6 +460,36 @@ action, and a service-desk plugin all consume the same permission-scoped SDK.
 
 ## 8. The frontend — the genuinely hard half
 
+### Current ownership migration: automation graph surface (RADD-1354)
+
+Automations owns `ui/src/GraphCanvas.tsx`, the graph wire types, layout/catalog/output
+helpers, node visuals, and parameter-dependent shape queries. It registers
+`automation.graph.canvas`; callers pass graph data and edit callbacks using the
+owner's `canvas-contract.ts`. The renderer and React Flow load as an owner-controlled
+lazy chunk. Its styles mount with the canvas, and its controls use SDK theme tokens.
+
+Node shapes are explicit inputs to rendering and token lookup. Each mounted consumer
+owns cancelable queries with unused-cache collection; consumers share no mutable
+shape map. Catalog entries identify the registering plugin. Capability withdrawal
+immediately excludes that provider even while an older catalog remains cached.
+Unresolved nodes retain their saved wires with disabled handles; read-only previews
+cannot remove nodes through React Flow's keyboard shortcuts.
+
+This migration is incomplete. The host still owns RuleEditor, inspector forms,
+settings, and integration selectors. Temporary source barrels expose Automations'
+contracts/helpers to those callers; they are migration debt, not a pattern for new
+host features or proof that Automations is fully isolated. Follow the complete
+inventory in `research/plugin-isolation/README.md` (RADD-1347).
+
+Remote builds externalize shared dependencies through Rolldown's ESM external-require
+plugin and substitute `process.env.NODE_ENV` for production. This lets bundled CommonJS
+dependencies consume the host's React singleton without requiring Node globals in
+the browser. The external-require plugin alone owns the external list: a duplicate
+top-level external rule bypasses conversion. Actual bundle browser tests exercise
+this path; a successful type-check alone does not verify remote loading.
+
+### Original frontend design
+
 *(Built in specs 93/94: the SPA now has the federation seam and `GET /capabilities` exists —
 `modules/capabilities/`, `docs/plugin-ui.md`.)* The SPA had **no** plugin seam (hardcoded route
 tree, sidebar JSX, two `SETTINGS_NAV` arrays, no capabilities endpoint). Backend plugins are

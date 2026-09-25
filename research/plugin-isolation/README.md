@@ -4,7 +4,7 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 
 ## Evidence and coverage
 
-`inventory.json` records every backend, frontend, SDK and example source file, imports, module declarations and remote sources. Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownership decisions and evidence per file; edits invalidate earlier file reviews. All entries begin unreviewed. The inventory is intentionally broader than optional plugins.
+`inventory.json` records discovered backend, frontend, SDK and example source files, imports, module declarations and remote sources. Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownership decisions and evidence per file; edits invalidate earlier file reviews. All entries begin unreviewed. The inventory is intentionally broader than optional plugins.
 
 ## Work groups
 
@@ -16,7 +16,8 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 | RADD-1351 | Shared settings contracts and truthful page lifecycle | Verified; Waiting for release |
 | RADD-1352 | Scripts/Monitoring settings and AI/mail health contributions | Verified; Waiting for release |
 | RADD-1353 | Owner-contributed directory controls | Verified; Waiting for release |
-| RADD-1347 | Issue, automation and editor integrations | Pending |
+| RADD-1354 | Automations-owned canvas, graph model and scoped shape queries | Verified; Waiting for release |
+| RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
 | RADD-1350 | Full requirement-by-requirement verification and documentation | Pending |
@@ -34,7 +35,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | attachments | default | 0 | events, projects, auth, items, access, groups, teams | Pending |
 | audit | default | 0 | events, auth, projects, items | Pending |
 | auth | default | 1 | events, projects | Pending |
-| automations | default | 0 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
+| automations | default | 11 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
 | avatars | default | 0 | auth, attachments | Pending |
 | backup | default | 0 | auth, events | Pending |
 | canned | default | 0 | events, projects, auth, items | Pending |
@@ -87,6 +88,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 
 ## Confirmed findings still requiring remediation
 
+- The inventory currently scans application source roots and `.py/.ts/.tsx/.css`. RADD-1354 exposed omitted build helpers (`web/packages/plugin-sdk/vite.mjs`, `web/scripts/build-all.mjs`) and plugin package/config files. Their verification is recorded below, but RADD-1344 must expand discovery before the inventory can establish complete codebase coverage.
 - Host router directly imports optional settings pages and optional Pages/Dashboards/CSAT routes (`web/src/router.tsx`). Generic slot routes coexist with plugin-specific route components.
 - RADD-1351 unifies the SDK capability cache and makes discovery conservative. Other identity/query cache ownership remains under review.
 - RADD-1351 fixes generic plugin-page loading/failure/withdrawal and render boundaries. Other direct contribution render sites still need review.
@@ -123,3 +125,45 @@ The VCS dependency trace found its identity map imports a host-owned PeopleDirec
 Evidence: 44 frontend tests, 19 focused capabilities/kernel/module-contract backend tests, host + all 12 remotes type-check/build. `browser-directory-contributions.mjs` passes 10 checks using the actual Auth/Teams bundles: unavailable controls; paged totals/search/selection; team/member/manager/owner source semantics; withdrawal of each provider while a request is in flight; restored fresh data; failed bundle isolation/recovery; denied data with retry; modal focus/dismissal; and the existing host Audit page adapter updating its selected actor. Screenshot inspected. A local authenticated probe checks the two advertised/served remotes, actual paged directory endpoints, and all three team candidate purposes. No plugin choices were changed; ephemeral token discarded. Auth and Teams remain required core plugins, so browser withdrawal tests establish frontend behavior, not a new backend disable permission.
 
 Next dependency work: VCS's remaining host imports include IntegrationAutomations/RuleEditor, business-time formatting, entity cache metadata and shared form primitives. IntegrationAutomations also hardcodes the Email group and derives event prefixes from display labels; ownership of those selectors must be resolved in the automation migration. VCS's common form uses Forgejo-named wire types for all providers; the common contract belongs to VCS, while provider configuration belongs to each connector. The VCS host/provider page migration remains unfinished.
+
+
+## RADD-1354 verification
+
+Automations now contributes `automation.graph.canvas` from its own remote, including
+its lazy React Flow chunk and styles. Graph wire types, layout/catalog/output helpers,
+visuals and shape queries moved to the owner. Existing editor and version-preview
+callers use a slot adapter. Shapes are explicit graph inputs; the process-global shape
+cache and host shape endpoint helper are gone. Queries are scoped to a mounted
+consumer and live catalog, deduplicated for equivalent requests, canceled on withdrawal
+or obsolete params, and discarded when unused. Catalog nodes name their actual owner
+so retained catalogs cannot continue shape reads from a withdrawn provider.
+
+The renderer compares catalog content, read-only state and resolved shapes, rather
+than catalog lengths. Unresolved nodes preserve saved wires with nonconnectable
+handles. Read-only Delete no longer removes nodes inside React Flow. A contributed
+filter/source does not inherit the built-in SLQ summary merely by sharing its kind.
+Controls use SDK theme tokens. The remote build helper converts CommonJS requires of
+shared packages to ESM imports and substitutes the production environment; actual
+bundle tests exposed both Node-global failures during migration.
+
+Evidence: host and all 13 remotes type-check/build; 47 frontend tests; 24 focused
+node-shape/catalog/capability/kernel/module-contract backend tests. The actual bundle
+browser proof passes 15 checks, including separate graph consumers, parameter changes
+and late replies, three in-flight cancellations, provider withdrawal with a retained
+catalog, denied shapes, content-preserving recovery, same-sized catalog replacement,
+read-only and editable Delete, missing/failed remote recovery, and the existing host
+RuleEditor plus VersionsPanel using independent shapes. It also measures visible
+nodes/styles and verifies control contrast in dark/light themes. Screenshots inspected.
+Shared build changes additionally pass the 12 settings and 10 directory actual-remote
+browser regressions. The local backend advertises/serves the remote and lazy chunk,
+returns owner metadata for 50 catalog nodes, and answers actual AI/Scripts shape
+requests. Plugin choices are unchanged; the temporary local probe token is removed.
+
+Scope remains incomplete: RuleEditor/GraphEditor/GraphInspector/TokenReference,
+settings, integration selectors, form providers, generic schema defaults and remaining
+backend ownership still need review/migration under RADD-1347. Source barrels and the
+host's call to the owner shape hook are temporary migration dependencies, not a final
+host architecture. Automations remains a required core plugin: browser tests exercise
+frontend absence/withdrawal, not a new backend permission to disable it. The complete
+inventory contains 57 modules and 1497 source files; this stage does not certify the
+remaining inventory.

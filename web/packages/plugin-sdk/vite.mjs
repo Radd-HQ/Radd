@@ -15,6 +15,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
+import { esmExternalRequirePlugin } from "rolldown/plugins";
 
 /** The deps the host provides as singletons via its index.html import map. Keep in sync with it. */
 const SHARED = new Set([
@@ -34,11 +35,15 @@ const SHARED = new Set([
  */
 export function raddRemote(configDir, opts = {}) {
   return defineConfig({
-    plugins: [react()],
+    // This plugin must own externals; a duplicate rollupOptions.external rule
+    // bypasses its conversion of CommonJS requires into browser ESM imports.
+    plugins: [react(), esmExternalRequirePlugin({ external: [...SHARED] })],
+    // Library mode otherwise leaves this Node global in bundled dependencies
+    // (e.g. React Flow's external-store shim), crashing the browser remote.
+    define: { "process.env.NODE_ENV": JSON.stringify("production") },
     build: {
       lib: { entry: resolve(configDir, opts.entry ?? "src/index.tsx"), formats: ["es"] },
       rollupOptions: {
-        external: (id) => SHARED.has(id),
         output: {
           entryFileNames: "remoteEntry.js",
           chunkFileNames: "[name].js",

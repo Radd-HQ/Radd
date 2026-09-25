@@ -1158,13 +1158,14 @@
     "issue": "RADD-1353"
   },
   "server/src/radd/modules/automations/__init__.py": {
-    "sha256": "7051a0fb43d45ea1b88c1fdf8f27b4ce50b9b9bbdadf2406b28cdf75e7008768",
+    "sha256": "70c6743c3df095639e199a7c041874230ba8fd60b992f19fd87df670a3c133e4",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
-      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+      "Canvas manifest and registered node ownership metadata verified; full backend ownership/dependency review still pending.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
     ],
-    "issue": "RADD-1352"
+    "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/builtin_actions.py": {
     "sha256": "b0dc0a159b098e0498d48eddb7bb985915b02af94ae11a1ce4ed0aac549247ca",
@@ -1286,11 +1287,14 @@
     "issue": null
   },
   "server/src/radd/modules/automations/router.py": {
-    "sha256": "41e13fe35f9b98d264c22ab05a54e67e023c09d336a77078f14282f765e91dd2",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "0cff6365ab3bdc40e1aa030a5245ccaa8e869c290b0c6414993ad9c9266ef517",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Canvas manifest and registered node ownership metadata verified; full backend ownership/dependency review still pending.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/runs.py": {
     "sha256": "acefd0e438a5d5431384a1e26fc5e66ad0c64552f37eb685c448b97b4f5f111a",
@@ -1314,11 +1318,14 @@
     "issue": null
   },
   "server/src/radd/modules/automations/schemas.py": {
-    "sha256": "97bc7bcb1ded5908b37a85649547fe1f558c493302ee54ffed3b3d08d96f6851",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "246bdb005838b311120f8b573cf73fbf15c4c37213c094bfa0bf3e609194a1ca",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Canvas manifest and registered node ownership metadata verified; full backend ownership/dependency review still pending.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/search.py": {
     "sha256": "b6d03f339dfe40c5f506c73131f873e3369e48f1405d058a4aa9f26179fe4331",
@@ -1368,6 +1375,116 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/automations/ui/src/GraphCanvas.tsx": {
+    "sha256": "ad39f6b297db70fb27a196ef0adc0346800692047d62aaa59c2372fceef90ba4",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/automation-layout.ts": {
+    "sha256": "20fb04121ee9af6804f3df1af09f693f173fd366dedf644e3977f43f98022ac2",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/automation-nodes.ts": {
+    "sha256": "790955e6ff9f17df608c8d46bbf160b9f2e6cc4f327942ba495f968413c579e5",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Moved graph contracts/catalog helpers to owner. Full legacy wire, schema-default and palette semantics review remains in RADD-1347.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/automation-outputs.ts": {
+    "sha256": "4fe615008275bb09589ebba8b98cb6eccb1ec92975d54cc35a450d4d3f230278",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/canvas-contract.ts": {
+    "sha256": "ab9878ac359c71015f7fb687dd020b6359e5a71d152a45b476edb4fc01f29a99",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/canvas.css": {
+    "sha256": "b14ae401bae22cbc0db1558c2f39cea7273acdf48f8fd7519ed66f68a1d29208",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/index.tsx": {
+    "sha256": "d6ef3890621994652be23af1ccc4b7823ebb9acafa715505db38396434d43660",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/node-shapes.ts": {
+    "sha256": "7f11680996148efd0d4944af2b0dcc9f11e009e9701bc47802585833428f6abe",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/node-visuals.ts": {
+    "sha256": "ea6708ab7947d4e3d217b21e19e2291a74472420debb523aee15db20a81d8a0c",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/shape-contract.ts": {
+    "sha256": "848fbcb815fdaa5b0b4402ac37ea9e2e2bd436dd50738d89260a2f95be66d896",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/types.ts": {
+    "sha256": "24ba7a27983cee825edc6f64d9e7592484185f901f17890e837c3f0677825c94",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Moved graph contracts/catalog helpers to owner. Full legacy wire, schema-default and palette semantics review remains in RADD-1347.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/validation.py": {
     "sha256": "e98e313f843df53824c8afae0e08dac6608f075ba06b1493bfeaea74ecf81c41",
@@ -6180,33 +6297,35 @@
     "evidence": [],
     "issue": null
   },
-  "web/src/components/automations/GraphCanvas.tsx": {
-    "sha256": "c15da02266ccf28fa6234ea2000cb50b444ae44ddc0bfb6656854368ec9706ba",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
   "web/src/components/automations/GraphEditor.tsx": {
-    "sha256": "ee210a895dd312e75d566689ef5fe53f4eb9657bfa67a8e2ea752f2607b4bc91",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "46ef90bf3a9cfd8ac768396788640e4188e02303c43dae460c9e3cec197a8a6b",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Explicit shape propagation verified; host UI ownership and remaining dependencies still need migration in RADD-1347.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/components/automations/GraphInspector.tsx": {
-    "sha256": "fbfc3e43e8cd770b3a1df0496bafcf5bdadd8f0d7963569738900ec426a09948",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "3a3625f9d0a21b4f754f891d542aa14c98b8ed709ec18e97c455ab2126e1572e",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Explicit shape propagation verified; host UI ownership and remaining dependencies still need migration in RADD-1347.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/components/automations/LazyGraphCanvas.tsx": {
-    "sha256": "7ca1d09af1fab766b3217fe42f3b085b0a2ec1cf9bdc2a9af8298c0eb7594a5c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "7330ae9f0cb82943a13ae5b49378f608c1728dc59347a28bb94604e80c513a56",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/components/automations/NodePanel.tsx": {
     "sha256": "997a79ba655e6ca36b0fb2e389fa7c1f95d90405881216462f1ecd8e6391c946",
@@ -6258,11 +6377,14 @@
     "issue": null
   },
   "web/src/components/automations/TokenReference.tsx": {
-    "sha256": "daeaeca779fd18bf876b4f8067a4ef6960adbe59205da9f491817350d1a3524d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "773f726c7a57e73ed4143333f72449aca1c7488e565cee4448f1397e4b5086d5",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Explicit shape propagation verified; host UI ownership and remaining dependencies still need migration in RADD-1347.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/components/automations/ValidationFields.tsx": {
     "sha256": "b62b03f73dc50a17b3e0c44dcef20776cdf35c61ee192434b7f69b4143f22a04",
@@ -6279,11 +6401,14 @@
     "issue": null
   },
   "web/src/components/automations/node-visuals.ts": {
-    "sha256": "96ad37ebbced99ed86237c49e8c9e3ca6fef6f84ed141afca0dfebd6c78969c6",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "fcd2ce56eb0b80658af0ad36e03f4d7ede54f24249364f611b5f4461bdab95f1",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/components/automations/useTokenTarget.ts": {
     "sha256": "27de747ab88a24950f3d24e560c5195c5d25560b72d1dafce833bcfc0d50fa0b",
@@ -8752,25 +8877,34 @@
     "issue": null
   },
   "web/src/lib/automation-layout.ts": {
-    "sha256": "bffe457172b51e7152d3e08585e5b37cdb45eb5110b570d29c91c2b5b8974b19",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "b5bd398b7491abb97a10be2beecd76676ee7b21b4bf73144865c4903d6d43ad8",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/lib/automation-nodes.ts": {
-    "sha256": "73418081034a510ef832d9201cc31a2acb5dfc1383d59597846b3e0a520c35e3",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "c04b2b70584c0d58a04e3ff36d38ceec4f3111abeacdfd342b251f226b2febbb",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/lib/automation-outputs.ts": {
-    "sha256": "0f8b7659d71ebdeef13256b2b767e3b640943773d3122f93504b87660e7260cd",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ebf7918da6a82c97b68fe4719cea31203ba285181b3267abb892fbcaf51462d6",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/lib/axis-dnd.ts": {
     "sha256": "893758d7c5e96f1d5096fb947ae825b6c74316a130135b7d1568bf63bae6e3ec",
@@ -8843,11 +8977,14 @@
     "issue": null
   },
   "web/src/lib/constants/api-paths.ts": {
-    "sha256": "ba4e0fe948bffe76c95e72660dbf3ad2892682d8fcdeb768becac067ebc3ad48",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "3d81a5b27990e69f0013f131813f7b67a60049a033337a353c5eeb8b42bc404f",
+    "status": "partially_reviewed",
+    "owner": "mixed",
+    "evidence": [
+      "Obsolete automation shape endpoint helper removed; remaining feature constants require owner migration.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/lib/constants/api.ts": {
     "sha256": "49824d4ba44e4bcc8b8263986457beb772285b141f72fef41e43c162178c84a7",
@@ -9048,11 +9185,14 @@
     "issue": null
   },
   "web/src/lib/node-shapes.ts": {
-    "sha256": "67498745eea340ae5c2209f02e7bf9804047b382d5a514eac324498f13453fa1",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "abd51d8038bde3aef3401340628bed097a26b33ddb7e46966f4273430aa87dba",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/lib/notification-bursts.ts": {
     "sha256": "1d801a48538f893b5579498aa5b33a4e0987670c602e219340ecd017fa2328d4",
@@ -9465,11 +9605,14 @@
     "issue": null
   },
   "web/src/lib/types/automations.ts": {
-    "sha256": "6f7fb4b584bad7701c75678f0fe46284b1940440d93306998251cfdf57a889af",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "340a51c4aeb3440610932c9215ad211066074053be73e6a604b6b851c5ef7afc",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+    ],
+    "issue": "RADD-1354"
   },
   "web/src/lib/types/backups.ts": {
     "sha256": "834c20b7cf15e1991f75830419cee237caf551b768b85ed677a1932368a7a353",

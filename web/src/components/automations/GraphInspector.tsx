@@ -60,7 +60,10 @@ import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
 import { ScheduleEditor, defaultSchedule } from "../ScheduleEditor";
 
+import type { NodeShapes } from "../../lib/node-shapes";
+
 interface GraphInspectorProps {
+  shapes?: NodeShapes;
   node: AutomationNode | null;
   /** The whole graph, so the token picker can list only the producers this node
    * can be reached FROM and the name field can refuse a duplicate (spec 120). */
@@ -108,6 +111,7 @@ function hasCoreEditor(type: string): boolean {
 }
 
 export function GraphInspector({
+  shapes,
   node,
   nodes = [],
   edges = [],
@@ -176,7 +180,7 @@ export function GraphInspector({
   //: Whether naming this node would make anything addressable (spec 120). Asked
   //: of the type AND its params, because `ai.generate` produces `text` before a
   //: single field has been added.
-  const produces = isProducer(node, catalog);
+  const produces = isProducer(node, catalog, shapes);
   const nameError = nodeNameError(String(node.name ?? ""), node, nodes, catalog);
   //: Checks upstream that publish findings (RADD-1329) — what a verdict node
   //: may relay. Walked BACKWARDS from this node, so only a check that can
@@ -209,6 +213,7 @@ export function GraphInspector({
   //: offering to insert into it is not.
   const tokenPanel = (insertable: boolean) => (
     <TokenReference
+      shapes={shapes}
       catalog={catalog}
       hasItem={hasItem}
       node={node}
@@ -249,7 +254,7 @@ export function GraphInspector({
           hint={
             nameError
               ? undefined
-              : `Read downstream as ${outputsOfNode(node, catalog)
+              : `Read downstream as ${outputsOfNode(node, catalog, shapes)
                   .slice(0, 2)
                   .map((output) => `{{${node.name || "name"}.${output.name}}}`)
                   .join(", ")}`

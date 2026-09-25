@@ -194,6 +194,7 @@
       "manifest": "server/src/radd/modules/automations/__init__.py",
       "declarations": {
         "name": "automations",
+        "ui": "PluginUiManifest(remote='/plugins/automations/remoteEntry.js', ui_api_version='1.4.0')",
         "automation_nodes": "(*ROUTER_NODES, *ACTION_NODES, *VERDICT_NODES)",
         "trigger_kinds": "TRIGGER_KINDS",
         "automation_templates": "TEMPLATES",
@@ -228,7 +229,19 @@
         "on_startup": "(dispatcher.start, scheduler.start)",
         "on_shutdown": "(dispatcher.stop, scheduler.stop)"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/automations/ui/src/GraphCanvas.tsx",
+        "server/src/radd/modules/automations/ui/src/automation-layout.ts",
+        "server/src/radd/modules/automations/ui/src/automation-nodes.ts",
+        "server/src/radd/modules/automations/ui/src/automation-outputs.ts",
+        "server/src/radd/modules/automations/ui/src/canvas-contract.ts",
+        "server/src/radd/modules/automations/ui/src/canvas.css",
+        "server/src/radd/modules/automations/ui/src/index.tsx",
+        "server/src/radd/modules/automations/ui/src/node-shapes.ts",
+        "server/src/radd/modules/automations/ui/src/node-visuals.ts",
+        "server/src/radd/modules/automations/ui/src/shape-contract.ts",
+        "server/src/radd/modules/automations/ui/src/types.ts"
+      ]
     },
     "avatars": {
       "manifest": "server/src/radd/modules/avatars/__init__.py",
@@ -13445,7 +13458,7 @@
       ]
     },
     "server/src/radd/modules/automations/__init__.py": {
-      "sha256": "7051a0fb43d45ea1b88c1fdf8f27b4ce50b9b9bbdadf2406b28cdf75e7008768",
+      "sha256": "70c6743c3df095639e199a7c041874230ba8fd60b992f19fd87df670a3c133e4",
       "module_directory": "automations",
       "imports": [
         {
@@ -13475,7 +13488,8 @@
           "module": "radd.kernel",
           "names": [
             "EventTypeSpec",
-            "RaddPlugin"
+            "RaddPlugin",
+            "PluginUiManifest"
           ]
         },
         {
@@ -15297,7 +15311,7 @@
       ]
     },
     "server/src/radd/modules/automations/router.py": {
-      "sha256": "41e13fe35f9b98d264c22ab05a54e67e023c09d336a77078f14282f765e91dd2",
+      "sha256": "0cff6365ab3bdc40e1aa030a5245ccaa8e869c290b0c6414993ad9c9266ef517",
       "module_directory": "automations",
       "imports": [
         {
@@ -15470,35 +15484,35 @@
           ]
         },
         {
-          "line": 185,
+          "line": 191,
           "module": "radd.exceptions",
           "names": [
             "NotFoundError"
           ]
         },
         {
-          "line": 338,
+          "line": 344,
           "module": "sqlalchemy",
           "names": [
             "select"
           ]
         },
         {
-          "line": 346,
+          "line": 352,
           "module": "types",
           "names": [
             "SimpleNamespace"
           ]
         },
         {
-          "line": 489,
+          "line": 495,
           "module": "radd.kernel.registry",
           "names": [
             "registries"
           ]
         },
         {
-          "line": 491,
+          "line": 497,
           "module": ".types",
           "names": [
             "AutomationTrigger"
@@ -15714,7 +15728,7 @@
       ]
     },
     "server/src/radd/modules/automations/schemas.py": {
-      "sha256": "97bc7bcb1ded5908b37a85649547fe1f558c493302ee54ffed3b3d08d96f6851",
+      "sha256": "246bdb005838b311120f8b573cf73fbf15c4c37213c094bfa0bf3e609194a1ca",
       "module_directory": "automations",
       "imports": [
         {
@@ -16363,6 +16377,202 @@
           ]
         }
       ]
+    },
+    "server/src/radd/modules/automations/ui/src/GraphCanvas.tsx": {
+      "sha256": "ad39f6b297db70fb27a196ef0adc0346800692047d62aaa59c2372fceef90ba4",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 19,
+          "module": "./node-shapes"
+        },
+        {
+          "line": 20,
+          "module": "./canvas-contract"
+        },
+        {
+          "line": 21,
+          "module": "./shape-contract"
+        },
+        {
+          "line": 22,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 23,
+          "module": "react"
+        },
+        {
+          "line": 37,
+          "module": "@xyflow/react"
+        },
+        {
+          "line": 38,
+          "module": "@xyflow/react/dist/style.css?inline"
+        },
+        {
+          "line": 39,
+          "module": "./canvas.css?inline"
+        },
+        {
+          "line": 45,
+          "module": "./types"
+        },
+        {
+          "line": 46,
+          "module": "./automation-nodes"
+        },
+        {
+          "line": 56,
+          "module": "./node-visuals"
+        },
+        {
+          "line": 57,
+          "module": "./automation-layout"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/automation-layout.ts": {
+      "sha256": "20fb04121ee9af6804f3df1af09f693f173fd366dedf644e3977f43f98022ac2",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 15,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/automation-nodes.ts": {
+      "sha256": "790955e6ff9f17df608c8d46bbf160b9f2e6cc4f327942ba495f968413c579e5",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 19,
+          "module": "./types"
+        },
+        {
+          "line": 20,
+          "module": "./automation-outputs"
+        },
+        {
+          "line": 242,
+          "module": "./automation-outputs"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/automation-outputs.ts": {
+      "sha256": "4fe615008275bb09589ebba8b98cb6eccb1ec92975d54cc35a450d4d3f230278",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 4,
+          "module": "./shape-contract"
+        },
+        {
+          "line": 13,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/canvas-contract.ts": {
+      "sha256": "ab9878ac359c71015f7fb687dd020b6359e5a71d152a45b476edb4fc01f29a99",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./types"
+        },
+        {
+          "line": 2,
+          "module": "./shape-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/canvas.css": {
+      "sha256": "b14ae401bae22cbc0db1558c2f39cea7273acdf48f8fd7519ed66f68a1d29208",
+      "module_directory": "automations",
+      "imports": []
+    },
+    "server/src/radd/modules/automations/ui/src/index.tsx": {
+      "sha256": "d6ef3890621994652be23af1ccc4b7823ebb9acafa715505db38396434d43660",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 3,
+          "module": "./canvas-contract"
+        },
+        {
+          "line": 5,
+          "module": "./GraphCanvas"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/node-shapes.ts": {
+      "sha256": "7f11680996148efd0d4944af2b0dcc9f11e009e9701bc47802585833428f6abe",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 2,
+          "module": "react"
+        },
+        {
+          "line": 3,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 4,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 5,
+          "module": "./types"
+        },
+        {
+          "line": 6,
+          "module": "./shape-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/node-visuals.ts": {
+      "sha256": "ea6708ab7947d4e3d217b21e19e2291a74472420debb523aee15db20a81d8a0c",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 13,
+          "module": "lucide-react"
+        },
+        {
+          "line": 14,
+          "module": "./types"
+        },
+        {
+          "line": 15,
+          "module": "./shape-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/shape-contract.ts": {
+      "sha256": "848fbcb815fdaa5b0b4402ac37ea9e2e2bd436dd50738d89260a2f95be66d896",
+      "module_directory": "automations",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/automations/ui/src/types.ts": {
+      "sha256": "24ba7a27983cee825edc6f64d9e7592484185f901f17890e837c3f0677825c94",
+      "module_directory": "automations",
+      "imports": []
     },
     "server/src/radd/modules/automations/validation.py": {
       "sha256": "e98e313f843df53824c8afae0e08dac6608f075ba06b1493bfeaea74ecf81c41",
@@ -61706,46 +61916,8 @@
         }
       ]
     },
-    "web/src/components/automations/GraphCanvas.tsx": {
-      "sha256": "c15da02266ccf28fa6234ea2000cb50b444ae44ddc0bfb6656854368ec9706ba",
-      "module_directory": null,
-      "imports": [
-        {
-          "line": 19,
-          "module": "../../lib/node-shapes"
-        },
-        {
-          "line": 20,
-          "module": "react"
-        },
-        {
-          "line": 34,
-          "module": "@xyflow/react"
-        },
-        {
-          "line": 35,
-          "module": "@xyflow/react/dist/style.css"
-        },
-        {
-          "line": 43,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 44,
-          "module": "../../lib/automation-nodes"
-        },
-        {
-          "line": 54,
-          "module": "./node-visuals"
-        },
-        {
-          "line": 55,
-          "module": "../../lib/automation-layout"
-        }
-      ]
-    },
     "web/src/components/automations/GraphEditor.tsx": {
-      "sha256": "ee210a895dd312e75d566689ef5fe53f4eb9657bfa67a8e2ea752f2607b4bc91",
+      "sha256": "46ef90bf3a9cfd8ac768396788640e4188e02303c43dae460c9e3cec197a8a6b",
       "module_directory": null,
       "imports": [
         {
@@ -61811,7 +61983,7 @@
       ]
     },
     "web/src/components/automations/GraphInspector.tsx": {
-      "sha256": "fbfc3e43e8cd770b3a1df0496bafcf5bdadd8f0d7963569738900ec426a09948",
+      "sha256": "3a3625f9d0a21b4f754f891d542aa14c98b8ed709ec18e97c455ab2126e1572e",
       "module_directory": null,
       "imports": [
         {
@@ -61909,24 +62081,24 @@
         {
           "line": 61,
           "module": "../ScheduleEditor"
+        },
+        {
+          "line": 63,
+          "module": "../../lib/node-shapes"
         }
       ]
     },
     "web/src/components/automations/LazyGraphCanvas.tsx": {
-      "sha256": "7ca1d09af1fab766b3217fe42f3b085b0a2ec1cf9bdc2a9af8298c0eb7594a5c",
+      "sha256": "7330ae9f0cb82943a13ae5b49378f608c1728dc59347a28bb94604e80c513a56",
       "module_directory": null,
       "imports": [
         {
-          "line": 9,
-          "module": "react"
+          "line": 2,
+          "module": "@radd/plugin-sdk"
         },
         {
-          "line": 10,
-          "module": "react"
-        },
-        {
-          "line": 12,
-          "module": "./GraphCanvas"
+          "line": 3,
+          "module": "../../../../server/src/radd/modules/automations/ui/src/canvas-contract"
         }
       ]
     },
@@ -62189,7 +62361,7 @@
       ]
     },
     "web/src/components/automations/TokenReference.tsx": {
-      "sha256": "daeaeca779fd18bf876b4f8067a4ef6960adbe59205da9f491817350d1a3524d",
+      "sha256": "773f726c7a57e73ed4143333f72449aca1c7488e565cee4448f1397e4b5086d5",
       "module_directory": null,
       "imports": [
         {
@@ -62207,6 +62379,10 @@
         {
           "line": 26,
           "module": "../../lib/automation-outputs"
+        },
+        {
+          "line": 28,
+          "module": "../../lib/node-shapes"
         }
       ]
     },
@@ -62307,20 +62483,12 @@
       ]
     },
     "web/src/components/automations/node-visuals.ts": {
-      "sha256": "96ad37ebbced99ed86237c49e8c9e3ca6fef6f84ed141afca0dfebd6c78969c6",
+      "sha256": "fcd2ce56eb0b80658af0ad36e03f4d7ede54f24249364f611b5f4461bdab95f1",
       "module_directory": null,
       "imports": [
         {
-          "line": 13,
-          "module": "lucide-react"
-        },
-        {
-          "line": 14,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 15,
-          "module": "../../lib/node-shapes"
+          "line": 2,
+          "module": "../../../../server/src/radd/modules/automations/ui/src/node-visuals"
         }
       ]
     },
@@ -76699,44 +76867,32 @@
       ]
     },
     "web/src/lib/automation-layout.ts": {
-      "sha256": "bffe457172b51e7152d3e08585e5b37cdb45eb5110b570d29c91c2b5b8974b19",
+      "sha256": "b5bd398b7491abb97a10be2beecd76676ee7b21b4bf73144865c4903d6d43ad8",
       "module_directory": null,
       "imports": [
         {
-          "line": 15,
-          "module": "./types/automations"
+          "line": 2,
+          "module": "../../../server/src/radd/modules/automations/ui/src/automation-layout"
         }
       ]
     },
     "web/src/lib/automation-nodes.ts": {
-      "sha256": "73418081034a510ef832d9201cc31a2acb5dfc1383d59597846b3e0a520c35e3",
+      "sha256": "c04b2b70584c0d58a04e3ff36d38ceec4f3111abeacdfd342b251f226b2febbb",
       "module_directory": null,
       "imports": [
         {
-          "line": 19,
-          "module": "./types/automations"
-        },
-        {
-          "line": 20,
-          "module": "./automation-outputs"
-        },
-        {
-          "line": 242,
-          "module": "./automation-outputs"
+          "line": 2,
+          "module": "../../../server/src/radd/modules/automations/ui/src/automation-nodes"
         }
       ]
     },
     "web/src/lib/automation-outputs.ts": {
-      "sha256": "0f8b7659d71ebdeef13256b2b767e3b640943773d3122f93504b87660e7260cd",
+      "sha256": "ebf7918da6a82c97b68fe4719cea31203ba285181b3267abb892fbcaf51462d6",
       "module_directory": null,
       "imports": [
         {
-          "line": 17,
-          "module": "./node-shapes"
-        },
-        {
-          "line": 26,
-          "module": "./types/automations"
+          "line": 2,
+          "module": "../../../server/src/radd/modules/automations/ui/src/automation-outputs"
         }
       ]
     },
@@ -76896,7 +77052,7 @@
       ]
     },
     "web/src/lib/constants/api-paths.ts": {
-      "sha256": "ba4e0fe948bffe76c95e72660dbf3ad2892682d8fcdeb768becac067ebc3ad48",
+      "sha256": "3d81a5b27990e69f0013f131813f7b67a60049a033337a353c5eeb8b42bc404f",
       "module_directory": null,
       "imports": [
         {
@@ -77316,28 +77472,16 @@
       ]
     },
     "web/src/lib/node-shapes.ts": {
-      "sha256": "67498745eea340ae5c2209f02e7bf9804047b382d5a514eac324498f13453fa1",
+      "sha256": "abd51d8038bde3aef3401340628bed097a26b33ddb7e46966f4273430aa87dba",
       "module_directory": null,
       "imports": [
         {
-          "line": 13,
-          "module": "react"
+          "line": 2,
+          "module": "../../../server/src/radd/modules/automations/ui/src/node-shapes"
         },
         {
-          "line": 14,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 15,
-          "module": "./api"
-        },
-        {
-          "line": 16,
-          "module": "./constants"
-        },
-        {
-          "line": 17,
-          "module": "./types"
+          "line": 3,
+          "module": "../../../server/src/radd/modules/automations/ui/src/shape-contract"
         }
       ]
     },
@@ -78720,12 +78864,12 @@
       "imports": []
     },
     "web/src/lib/types/automations.ts": {
-      "sha256": "6f7fb4b584bad7701c75678f0fe46284b1940440d93306998251cfdf57a889af",
+      "sha256": "340a51c4aeb3440610932c9215ad211066074053be73e6a604b6b851c5ef7afc",
       "module_directory": null,
       "imports": [
         {
           "line": 2,
-          "module": "./items"
+          "module": "../../../../server/src/radd/modules/automations/ui/src/types"
         }
       ]
     },

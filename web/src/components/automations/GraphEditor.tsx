@@ -206,8 +206,8 @@ export function GraphEditor({
 
   const triggers = useMemo(() => nodes.filter((n) => n.kind === NodeKind.trigger), [nodes]);
   // RADD-1325: ask the server for the ports/outputs of every node whose shape
-  // depends on its params; the canvas and token picker read the cached answer.
-  useNodeShapes(nodes, catalog.data);
+  // depends on its params; the canvas and token picker receive this graph's resolved answers.
+  const shapes = useNodeShapes(nodes, catalog.data);
 
   /** Per VALIDATE trigger (RADD-1329): does anything it REACHES block? The
    * trigger's chip — "Can block" / "Advisory only" — is what makes the graph
@@ -320,6 +320,7 @@ export function GraphEditor({
         <NodePanel templates={templates} onAdd={addTemplate} />
         <div className="min-w-0 flex-1">
           <LazyGraphCanvas
+            shapes={shapes}
             nodes={nodes}
             edges={edges}
             orientation={orientation}
@@ -336,6 +337,7 @@ export function GraphEditor({
         </div>
         <div className="w-[380px] shrink-0">
           <GraphInspector
+            shapes={shapes}
             node={selected}
             nodes={nodes}
             edges={edges}

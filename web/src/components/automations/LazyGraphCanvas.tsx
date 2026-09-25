@@ -1,26 +1,10 @@
-/**
- * The canvas, code-split (spec 116 decision).
- *
- * React Flow has no business loading for someone editing a board — the SPA
- * bundle already warns past 500 kB, and the canvas is reachable from exactly one
- * settings page. `lazy` keeps it in its own chunk that arrives when the Graph
- * tab is opened.
- */
-import { Suspense, lazy } from "react";
-import type { ComponentProps } from "react";
+/** Transitional editor adapter. Automations contributes and owns the renderer. */
+import { Slot } from "@radd/plugin-sdk";
+import { GRAPH_CANVAS_SLOT, type GraphCanvasProps } from "../../../../server/src/radd/modules/automations/ui/src/canvas-contract";
 
-const GraphCanvas = lazy(() => import("./GraphCanvas"));
-
-export function LazyGraphCanvas(props: ComponentProps<typeof GraphCanvas>) {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex h-[620px] w-full items-center justify-center rounded-[10px] border border-subtle bg-base text-xs text-fg-muted">
-          Loading canvas…
-        </div>
-      }
-    >
-      <GraphCanvas {...props} />
-    </Suspense>
-  );
+export function LazyGraphCanvas(props: GraphCanvasProps) {
+  const unavailable = <div role="status" className="flex h-[620px] items-center justify-center rounded-[10px] border border-subtle bg-base text-sm text-fg-muted">
+    Automation canvas unavailable. Your graph is preserved.
+  </div>;
+  return <Slot id={GRAPH_CANVAS_SLOT} {...props} fallback={unavailable} errorFallback={unavailable} />;
 }

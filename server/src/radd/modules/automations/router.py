@@ -82,6 +82,11 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
     """The trigger/subject/operator catalog the rule builder renders from (spec 58).
     Static per build — but served, not baked into the SPA, so extensions listing
     it stay honest about what this server supports."""
+    node_owners = {
+        node.key: plugin.name
+        for plugin in registries.plugins.values()
+        for node in plugin.automation_nodes
+    }
     return CatalogRead(
         max_chain_depth=settings.automation_max_chain_depth,
         triggers=[
@@ -109,6 +114,7 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
         nodes=[
             NodeInfo(
                 key=spec.key,
+                plugin=node_owners[spec.key],
                 kind=spec.kind,
                 label=spec.label,
                 description=spec.description,

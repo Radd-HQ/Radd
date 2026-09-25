@@ -645,6 +645,7 @@ class NodeInfo(BaseModel):
     the AI module and miss anything a plugin adds."""
 
     key: str
+    plugin: str
     kind: str
     label: str
     description: str = ""

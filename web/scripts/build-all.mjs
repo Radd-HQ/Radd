@@ -54,6 +54,10 @@ function ensureNodeModules(uiDir) {
 
 console.log("== prepare federation ==");
 run(process.execPath, [resolve(here, "prepare-federation.mjs")]);
+// Public plugin contracts may be consumed during the staged host migration.
+// Resolve their package dependencies before either side is type-checked.
+const uiDirs = SCAN_ROOTS.flatMap((r) => findUiDirs(r)).sort();
+for (const uiDir of uiDirs) ensureNodeModules(uiDir);
 
 console.log("\n== build host ==");
 run(bin("tsc"), ["-b"]);
@@ -64,11 +68,9 @@ if (process.argv.includes("--host-only")) {
   process.exit(0);
 }
 
-const uiDirs = SCAN_ROOTS.flatMap((r) => findUiDirs(r)).sort();
 for (const uiDir of uiDirs) {
   const label = uiDir.replace(repoRoot + "/", "");
   console.log(`\n== build remote: ${label} ==`);
-  ensureNodeModules(uiDir);
   run(bin("tsc"), ["-p", resolve(uiDir, "tsconfig.json")]);
   run(bin("vite"), ["build"], uiDir);
 }

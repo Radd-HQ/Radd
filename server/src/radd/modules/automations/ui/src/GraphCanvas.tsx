@@ -16,7 +16,10 @@
  * `automation-layout.ts`, so every automation migrated by d116graphs opens tidy
  * without a data migration guessing positions for graphs nobody had opened.
  */
-import { useShapeVersion } from "../../lib/node-shapes";
+import { useNodeShapes } from "./node-shapes";
+import type { GraphCanvasProps, Orientation } from "./canvas-contract";
+import { shapeOf } from "./shape-contract";
+import { useCapabilities } from "@radd/plugin-sdk";
 import { useCallback, useEffect, useMemo } from "react";
 import {
   Background,
@@ -32,16 +35,15 @@ import {
   type NodeProps,
   type Connection,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import flowStyles from "@xyflow/react/dist/style.css?inline";
+import canvasStyles from "./canvas.css?inline";
 import {
   NodeKind,
-  type AutomationCatalog,
   type AutomationEdge,
   type AutomationNode,
   type NodeResult,
-  type RuleTestResult,
-} from "../../lib/types";
-import { arityOf, contributedPorts, effectiveArity, nodeTitle, titleIndex } from "../../lib/automation-nodes";
+} from "./types";
+import { arityOf, contributedPorts, effectiveArity, nodeTitle, titleIndex } from "./automation-nodes";
 import {
   GRID_TONE,
   INLET_TONE,
@@ -52,7 +54,7 @@ import {
   VERDICT_VISUAL,
   portsOfNode,
 } from "./node-visuals";
-import { layout, NODE_WIDTH } from "../../lib/automation-layout";
+import { layout, NODE_WIDTH } from "./automation-layout";
 
 interface NodeData extends Record<string, unknown> {
   node: AutomationNode;
@@ -68,6 +70,7 @@ interface NodeData extends Record<string, unknown> {
    * (RADD-1064) — a node deep inside React Flow's own tree cannot ask the
    * server what a contributed type emits. */
   ports: string[];
+  portsAvailable: boolean;
   /** This node's last dry run, when there has been one. */
   run?: NodeResult;
   /** On a VALIDATE trigger (RADD-1329): whether anything it reaches can refuse
@@ -79,7 +82,7 @@ interface NodeData extends Record<string, unknown> {
  * what it is configured to do — the canvas answers "what is the shape of this
  * automation", and the detail panel answers "what exactly does this node do". */
 function GraphNode({ data, selected }: NodeProps) {
-  const { node, title, subtitle, orientation, arity, ports, run, validation } = data as NodeData;
+  const { node, title, subtitle, orientation, arity, ports, portsAvailable, run, validation } = data as NodeData;
   // Flow enters the top and leaves the bottom when vertical; left/right when
   // horizontal. Getting this wrong draws every edge as a sideways loop.
   const inletSide = orientation === "vertical" ? Position.Top : Position.Left;
@@ -102,7 +105,7 @@ function GraphNode({ data, selected }: NodeProps) {
       data-node-id={node.id}
     >
       {node.kind !== NodeKind.trigger && (
-        <Handle type="target" position={inletSide} style={{ background: INLET_TONE }} />
+        <Handle type="target" isConnectable={portsAvailable} position={inletSide} style={{ background: INLET_TONE }} />
       )}
       <div className="flex items-center gap-1.5">
         <Icon size={13} className="shrink-0" style={{ color: tone }} aria-hidden />
@@ -157,6 +160,7 @@ function GraphNode({ data, selected }: NodeProps) {
         )}
       </div>
       {subtitle && <div className="mt-0.5 truncate text-[11px] text-fg-secondary">{subtitle}</div>}
+      {!portsAvailable && <div className="mt-1 text-[11px] text-fg-muted">Ports not resolved</div>}
       {run && (
         <div
           data-node-run={run.ran ? "ran" : "skipped"}
@@ -173,6 +177,7 @@ function GraphNode({ data, selected }: NodeProps) {
           key={port}
           id={port}
           type="source"
+          isConnectable={portsAvailable}
           position={outletSide}
           style={{
             ...(orientation === "vertical"
@@ -256,8 +261,8 @@ function summarise(node: AutomationNode): string {
     if (params.query) parts.push(String(params.query));
     return parts.filter(Boolean).join(" · ");
   }
-  if (node.kind === NodeKind.filter) return String(params.slq ?? "") || "matches everything";
-  if (node.kind === NodeKind.source) {
+  if (node.type === "filter.slq") return String(params.slq ?? "") || "matches everything";
+  if (node.type === "search.slq") {
     const where = params.project ? ` in ${params.project}` : "";
     const query = String(params.slq ?? "");
     return query ? `${query}${where}` : "no query — finds nothing";
@@ -309,39 +314,6 @@ function summarise(node: AutomationNode): string {
   return first ? `${first[0]}: ${String(first[1])}` : "";
 }
 
-export type Orientation = "vertical" | "horizontal";
-
-interface GraphCanvasProps {
-  nodes: AutomationNode[];
-  edges: AutomationEdge[];
-  onNodesChange?: (nodes: AutomationNode[]) => void;
-  onConnect?: (edge: AutomationEdge) => void;
-  onSelect?: (nodeId: string | null) => void;
-  /** Nodes removed by React Flow's own delete key. Separate from
-   * `onNodesChange` because a removal is not a move: it must also drop the
-   * edges that touched the node, which only the graph owner can do. */
-  onNodesDelete?: (nodeIds: string[]) => void;
-  /** Edges removed by the delete key. */
-  onEdgesDelete?: (edges: AutomationEdge[]) => void;
-  /** Which way the graph flows. Ports, layout and edge curves all follow it. */
-  orientation?: Orientation;
-  /** Right-click on empty canvas — the Nuke-style add menu hangs off this. */
-  onCanvasContextMenu?: (at: { x: number; y: number }) => void;
-  /** Only for the arity badge: which node types fan out. Optional so the
-   * read-only preview can render before the catalog resolves — a missing badge
-   * is a smaller lie than a guessed one. */
-  catalog?: AutomationCatalog;
-  /** The last dry run, so each node can say what reached it and each port what
-   * left. Null clears the annotations. */
-  run?: RuleTestResult | null;
-  /** No editing affordances — used for a branching automation until the full
-   * editor lands, so it can at least be SEEN rather than refused outright. */
-  readOnly?: boolean;
-  /** Per VALIDATE trigger id (RADD-1329): can anything it reaches refuse a
-   * submission ("blocks": a Block submission node) or does it only advise. */
-  validationChips?: Readonly<Record<string, "blocks" | "advises">>;
-}
-
 export default function GraphCanvas({
   nodes,
   edges,
@@ -356,7 +328,9 @@ export default function GraphCanvas({
   run,
   readOnly = false,
   validationChips,
+  shapes: suppliedShapes,
 }: GraphCanvasProps) {
+  const capabilities = useCapabilities();
   /**
    * React Flow's own node state, seeded from the graph.
    *
@@ -374,7 +348,14 @@ export default function GraphCanvas({
   const declaredPorts = useMemo(() => contributedPorts(catalog), [catalog]);
   //: Bumps when a node's server-computed shape arrives (RADD-1325), so the
   //: handles redraw from the server's answer.
-  const shapeVersion = useShapeVersion();
+  const resolvedShapes = useNodeShapes(nodes, catalog, suppliedShapes === undefined);
+  const shapes = suppliedShapes ?? resolvedShapes;
+  const portsAvailable = (node: AutomationNode) => {
+    if (node.kind === NodeKind.trigger) return true;
+    const spec = catalog?.nodes.find(entry => entry.key === node.type);
+    return Boolean(spec && (!spec.plugin || capabilities?.plugins.includes(spec.plugin))
+      && (!spec.dynamic_ports || shapeOf(node, shapes)));
+  };
   const titles = useMemo(() => titleIndex(catalog), [catalog]);
   const build = useCallback(
     (): FlowNode[] =>
@@ -394,13 +375,18 @@ export default function GraphCanvas({
             arityOf(catalog, placed.node.type).options.length > 1
               ? effectiveArity(catalog, placed.node)
               : "",
-          ports: portsOfNode(placed.node, declaredPorts),
+          // Preserve existing wires while a shape/provider is unavailable, but
+          // do not invent connectable handles from the node kind's defaults.
+          ports: portsAvailable(placed.node)
+            ? portsOfNode(placed.node, declaredPorts, shapes)
+            : [...new Set(edges.filter(edge => edge.source === placed.node.id).map(edge => edge.port))],
+          portsAvailable: portsAvailable(placed.node),
           validation: validationChips?.[placed.node.id],
           run: run?.nodes.find((entry) => entry.node_id === placed.node.id),
         } satisfies NodeData,
         draggable: !readOnly,
       })),
-    [nodes, edges, readOnly, orientation, catalog, declaredPorts, titles, run, validationChips],
+    [nodes, edges, readOnly, orientation, catalog, declaredPorts, titles, run, validationChips, shapes, capabilities],
   );
 
   const [flowNodes, setFlowNodes, onFlowNodesChange] = useNodesState<FlowNode>(build());
@@ -411,25 +397,20 @@ export default function GraphCanvas({
     () =>
       JSON.stringify([
         orientation,
-        // The catalog arrives AFTER the first render, and the arity badge is
-        // built from it — without this the badges would be missing until
-        // something else happened to change the graph. Same for a dry run,
-        // which lands long after the graph is drawn.
-        catalog?.node_arity?.length ?? 0,
-        // …and so are a contributed node's HANDLES (RADD-1064). Counted
-        // separately from the arity table because they answer different
-        // questions, and a node drawn with the kind's fallback ports until
-        // something else nudged the graph is exactly the bug being fixed.
-        catalog?.nodes?.length ?? 0,
-        shapeVersion,
-        run?.nodes.map((n) => [n.node_id, n.ran, n.incoming, n.ports]) ?? null,
+        // Content, not counts: plugin withdrawal or replacement can retain the
+        // same number of entries while changing labels, ports, or arity.
+        catalog,
+        capabilities?.plugins,
+        readOnly,
+        shapes,
+        run?.nodes ?? null,
         // The validate trigger's chip is a function of what it REACHES, which
         // is not in the node list (RADD-1329).
         validationChips ?? null,
         edges.map((e) => [e.source, e.port, e.target]),
         nodes.map((n) => [n.id, n.type, n.name, n.params, n.x, n.y]),
       ]),
-    [nodes, edges, orientation, catalog, run, validationChips, shapeVersion],
+    [nodes, edges, orientation, catalog, run, validationChips, shapes, readOnly, capabilities],
   );
   useEffect(() => {
     setFlowNodes(build());
@@ -491,7 +472,7 @@ export default function GraphCanvas({
         }),
       );
     },
-    [nodes, onNodesChange, onFlowNodesChange, readOnly],
+    [nodes, onNodesChange, onNodesDelete, onFlowNodesChange, readOnly],
   );
 
   const handleConnect = useCallback(
@@ -507,7 +488,8 @@ export default function GraphCanvas({
   );
 
   return (
-    <div className="h-[620px] w-full overflow-hidden rounded-[10px] border border-subtle bg-base">
+    <div className="radd-automation-canvas h-[620px] w-full overflow-hidden rounded-[10px] border border-subtle bg-base">
+      <style>{flowStyles + canvasStyles}</style>
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
@@ -542,6 +524,7 @@ export default function GraphCanvas({
           if (picked.length > 0) onSelect?.(picked[0].id);
         }}
         nodesConnectable={!readOnly}
+        deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
         elementsSelectable
         fitView
         proOptions={{ hideAttribution: false }}

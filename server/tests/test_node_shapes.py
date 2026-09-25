@@ -56,3 +56,21 @@ def test_the_catalog_flags_exactly_the_params_dependent_nodes():
     assert {"ai.classify", "ai.generate", "script.run", "script.decide"} <= dynamic
     # Fixed-shape and terminal nodes are not asked about.
     assert not ({"action.create_item", "gate.payload", "verdict.block"} & dynamic)
+
+
+async def test_catalog_names_actual_owners_and_withdraws_disabled_nodes(admin):
+    load_plugins(settings.modules)
+    result = await router.get_catalog(None, admin)
+    owners = {node.key: node.plugin for node in result.nodes}
+    assert owners["ai.classify"] == "ai"
+    assert owners["script.run"] == "scripts"
+    assert owners["verdict.block"] == "automations"
+    scripts = next(plugin for plugin in registries.plugins.values() if plugin.name == "scripts")
+    try:
+        registries.unregister_plugin(scripts)
+        withdrawn = await router.get_catalog(None, admin)
+        assert not any(node.plugin == "scripts" for node in withdrawn.nodes)
+    finally:
+        registries.register_plugin(scripts)
+    restored = await router.get_catalog(None, admin)
+    assert sum(node.key == "script.run" for node in restored.nodes) == 1

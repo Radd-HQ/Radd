@@ -119,9 +119,6 @@ export const apiFieldOptionsPath = (fieldId: string) =>
   `${ApiPath.fields}/${fieldId}/options`;
 /** Automation rule paths (spec 20). */
 export const apiAutomationPath = (ruleId: string) => `${ApiPath.automations}/${ruleId}`;
-/** RADD-1325: a node's ports + outputs for given params. */
-export const apiAutomationNodeShapePath = (nodeType: string) =>
-  `${ApiPath.automations}/nodes/${encodeURIComponent(nodeType)}/shape`;
 export const apiAutomationTestPath = (ruleId: string) =>
   `${ApiPath.automations}/${ruleId}/test`;
 export const apiAutomationRunsPath = (ruleId: string) =>

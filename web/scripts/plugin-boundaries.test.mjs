@@ -83,3 +83,15 @@ test('directory query providers belong to Auth or Teams, not the SDK control',()
   const sdk=readFileSync('web/packages/plugin-sdk/src/directory.tsx','utf8');
   assert(!/\/(?:users|teams)|auth\.people|teams\.candidates/.test(sdk));
 });
+
+test('automation canvas is contributed; graph queries and algorithms belong to Automations',()=>{
+  const adapter=nodes('web/src/components/automations/LazyGraphCanvas.tsx');
+  const imports=adapter.filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
+  assert.deepEqual(imports,['@radd/plugin-sdk','../../../../server/src/radd/modules/automations/ui/src/canvas-contract']);
+  for(const file of ['web/src/lib/node-shapes.ts','web/src/lib/automation-layout.ts','web/src/lib/automation-nodes.ts','web/src/lib/automation-outputs.ts','web/src/lib/types/automations.ts','web/src/components/automations/node-visuals.ts']){
+    assert(nodes(file).every(n=>n.type!=='ImportDeclaration'&&n.type!=='FunctionDeclaration'&&n.type!=='VariableDeclaration'),file+' must remain a transitional barrel only');
+  }
+  assert(!files('web/src').some(f=>f.endsWith('/GraphCanvas.tsx')));
+  const owner=nodes('server/src/radd/modules/automations/ui/src/node-shapes.ts');
+  assert(!owner.some(n=>n.type==='CallExpression'&&n.callee?.name==='useSyncExternalStore'),'shapes must not use a global mutable store');
+});
