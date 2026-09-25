@@ -328,6 +328,7 @@ class PortalRequestRead(BaseModel):
 
 
 class PortalRequestComment(BaseModel):
+    email_signature: str | None = None
     """One PUBLIC comment on a request, as a requester may see it."""
 
     id: uuid.UUID
@@ -338,6 +339,7 @@ class PortalRequestComment(BaseModel):
 
 
 class PortalRequestDetail(PortalRequestRead):
+    email_signature: str | None = None
     """One request opened (RADD-796): the row, plus what you came to read.
 
     Everything omitted is omitted deliberately — no labels, no custom fields, no

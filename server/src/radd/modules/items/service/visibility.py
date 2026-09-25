@@ -274,7 +274,7 @@ async def ensure_item_relation(
 # for non-granted principals. Only fields in READ_RESTRICTABLE_BUILTINS appear here
 # (title/state/priority are never restrictable — see fields.types).
 _BLANK_BUILTIN: dict[str, dict[str, Any]] = {
-    "description": {"description": ""},
+    "description": {"description": "", "email_signature": None},
     "assignee": {"assignee": None},
     "reporter": {"reporter": None},
     "team": {"team": None},

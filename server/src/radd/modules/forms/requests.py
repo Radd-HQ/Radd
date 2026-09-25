@@ -283,12 +283,14 @@ async def get_request(session: AsyncSession, actor: User, key: str) -> PortalReq
     return PortalRequestDetail(
         **row.model_dump(),
         description=item.description or "",
+        email_signature=item.email_signature,
         comments=[
             PortalRequestComment(
                 id=c.id,
                 author=authors.get(c.author_id, ""),
                 author_is_me=c.author_id == actor.id,
                 body=c.body,
+                email_signature=c.email_signature,
                 created_at=c.created_at,
             )
             for c in comments

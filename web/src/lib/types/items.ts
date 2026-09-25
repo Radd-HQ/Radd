@@ -106,6 +106,7 @@ export interface Item {
   capabilities?: ItemCapabilities | null;
   title: string;
   description: string;
+  email_signature?: string | null;
   state: StateRef;
   priority: PriorityValue;
   labels: string[];

@@ -46,6 +46,7 @@ export const AiFeature = {
   editorActions: "editor_actions",
   semanticSearch: "semantic_search",
   storageRouting: "storage_routing",
+  mailSignature: "mail_signature",
   mailRouting: "mail_routing",
   summarize: "summarize",
   nlSlq: "nl_slq",

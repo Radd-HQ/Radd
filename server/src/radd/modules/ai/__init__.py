@@ -147,6 +147,7 @@ plugin = RaddPlugin(
     # KeyError at its call site (RADD-989: `mail_routing` shipped that way and every
     # llm mail rule fell through silently for a release).
     settings_keys=(
+        SettingSpec(key="ai_mail_signature", section="ai", type="bool", scopes=("instance",), label="AI email signature detection", description="Identify trailing signatures when domain rules and built-in detection do not match. Uses the configured chat provider; email text is sent to that provider."),
         SettingSpec(
             key="ai_editor_actions",
             section="ai",

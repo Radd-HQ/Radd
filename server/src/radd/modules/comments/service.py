@@ -48,6 +48,7 @@ def _to_read(
             avatar_url=author.avatar_url,
         ) if author else None,
         body=comment.body,
+        email_signature=comment.email_signature,
         is_thread=comment.is_thread,
         visibility=CommentVisibility(comment.visibility),
         visible_to_teams=sorted(visible_to_teams or set()),
@@ -558,3 +559,20 @@ async def set_resolved(
     return _to_read(comment, author, stored_teams, actor if resolved else None).model_copy(
         update={"can_resolve": True}  # whoever just resolved it may unresolve it: same rule
     )
+
+
+async def annotate_email_signature(session: AsyncSession, comment_id: uuid.UUID, signature: str) -> None:
+    """Intake-only metadata on a comment it just created through normal authorization."""
+    row = await _get(session, comment_id)
+    if signature and signature in row.body:
+        row.email_signature = signature
+        await session.flush()
+
+
+async def restore_email_signature(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> None:
+    """Use the same read, author, audience, and manager gates as a body edit."""
+    await locate(session, comment_id, actor)
+    row = await _get(session, comment_id)
+    await update_comment(session, comment_id, CommentUpdate(body=row.body), actor)
+    row.email_signature = None
+    await session.flush()

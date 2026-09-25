@@ -322,6 +322,7 @@ class ItemRead(BaseModel):
     type: TypeRef | None = None  # spec 51 — the issue-type classification
     title: str
     description: str
+    email_signature: str | None = None
     state: StateRef
     priority: Priority
     parent: ParentRef | None

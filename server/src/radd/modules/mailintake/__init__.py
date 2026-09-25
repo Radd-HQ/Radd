@@ -3,6 +3,7 @@ from radd.kernel import RaddPlugin
 
 from . import dispatcher, registry, seeding
 from .config_router import router as config_router
+from .signature_router import router as signature_router
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .rules_router import router as rules_router
@@ -30,7 +31,7 @@ plugin = RaddPlugin(
     # to the next rule rather than cost a customer their email. Same edge
     # `attachments` declares for its own LLM storage rule.
     weak_depends=("ai",),
-    routers=(router, config_router, rules_router),
+    routers=(router, config_router, rules_router, signature_router),
     # RADD-1318: the receipt and the resolution notice, as opt-in automations.
     automation_templates=TEMPLATES,
     automation_nodes=(RESOLUTION_NODE,),

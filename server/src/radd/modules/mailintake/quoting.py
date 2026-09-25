@@ -45,7 +45,7 @@ SIGNATURE_RE = re.compile(r"^--\s*$")
 QUOTE_RE = re.compile(r"^\s*>")
 
 
-def strip_quotes(body: str) -> str:
+def strip_quotes(body: str, *, strip_signature: bool = True) -> str:
     """The reply, without the history under it.
 
     Cuts at the FIRST attribution line, separator block, or run of quoted lines,
@@ -56,7 +56,7 @@ def strip_quotes(body: str) -> str:
     if not body:
         return body
     lines = body.splitlines()
-    cut = _cut_index(lines)
+    cut = _cut_index(lines, strip_signature=strip_signature)
     if cut is None:
         return body.strip()
     kept = "\n".join(lines[:cut]).strip()
@@ -65,12 +65,12 @@ def strip_quotes(body: str) -> str:
     return kept or body.strip()
 
 
-def _cut_index(lines: list[str]) -> int | None:
+def _cut_index(lines: list[str], *, strip_signature: bool = True) -> int | None:
     quoted_run = 0
     for index, line in enumerate(lines):
         if ATTRIBUTION_RE.match(line) or SEPARATOR_RE.match(line):
             return index
-        if SIGNATURE_RE.match(line):
+        if strip_signature and SIGNATURE_RE.match(line):
             return index
         if QUOTE_RE.match(line):
             quoted_run += 1

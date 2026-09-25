@@ -1,4 +1,4 @@
-import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import { EmailBody } from "../editor/EmailBody";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useThreadExpansion } from "../comments/useThreadExpansion";
 import { useCallback, useState } from "react";
@@ -275,7 +275,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     />
                   ) : (
                     <div className="mt-0.5">
-                      <RichViewer
+                      <EmailBody signature={comment.email_signature} parent={{ kind: "comment", id: comment.id }} canRestore={!!comment.author && user?.id === comment.author.id || canManageProject}
                         text={comment.body}
                         onToggleTask={
                           (!!comment.author && user?.id === comment.author.id) || canManageProject

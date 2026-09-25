@@ -21,6 +21,8 @@ from .origin import creating_from
 from .scope import visible_ids_query
 
 from .core import (
+    annotate_email_signature,
+    restore_email_signature,
     create_item,
     delete_item,
     move_open_cycle_items,
@@ -69,6 +71,8 @@ from .visibility import (
 )
 
 __all__ = [
+    "annotate_email_signature",
+    "restore_email_signature",
     "creating_from",
     "visible_ids_query",
     "clone_item",

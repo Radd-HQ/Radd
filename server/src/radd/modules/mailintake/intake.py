@@ -390,7 +390,7 @@ async def _reply_comment(
     # Quoted history is stripped from the COMMENT only; the RAW message is
     # retained by the caller per `MAIL_RAW_RETENTION_DAYS` (RADD-1033), so an
     # over-eager strip is recoverable for the retention window.
-    body = quoting.strip_quotes(plan.body) or EMPTY_BODY_PLACEHOLDER
+    body = quoting.strip_quotes(plan.body, strip_signature=False) or EMPTY_BODY_PLACEHOLDER
     author = None if sender_auth.demoted else await _reply_author(session, plan)
     if author is not None:
         try:
@@ -443,6 +443,10 @@ async def _append(
     sender_auth: SenderAuth,
 ) -> Outcome:
     comment, actor = await _reply_comment(session, item_id, plan, sender_auth=sender_auth)
+    from .signatures import detect
+    signature, _ = await detect(session, quoting.strip_quotes(plan.body, strip_signature=False), plan.sender_email)
+    if signature:
+        await comments.annotate_email_signature(session, comment.id, signature)
     await _store_attachments(session, item_id, plan.attachments, actor_id=actor.id)
     await _note_dropped_attachments(session, item_id, plan)
     row = await threading.record(
@@ -525,6 +529,10 @@ async def _create(
             ),
             actor,
         )
+    from .signatures import detect
+    signature, _ = await detect(session, body, plan.sender_email)
+    if signature:
+        await items.annotate_email_signature(session, created.id, signature)
     await _store_attachments(session, created.id, plan.attachments, actor_id=actor.id)
     await _note_dropped_attachments(session, created.id, plan)
     row = await threading.record(

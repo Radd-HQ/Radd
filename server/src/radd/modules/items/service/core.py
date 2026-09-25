@@ -506,3 +506,20 @@ async def move_open_cycle_items(
     for item_id in item_ids:
         await update_item(session, item_id, ItemUpdate(cycle_id=target_cycle_id), actor=actor)
     return len(item_ids)
+
+
+async def annotate_email_signature(session: AsyncSession, item_id: uuid.UUID, signature: str) -> None:
+    """Intake-only annotation; preserve the body and all sender-authentication notes."""
+    item = await require_item(session, item_id)
+    if signature and signature in item.description:
+        item.email_signature = signature
+        await session.flush()
+
+
+async def restore_email_signature(session: AsyncSession, item_id: uuid.UUID, actor: User) -> None:
+    from .queries import require_readable_item
+    item, _, _ = await require_readable_item(session, item_id, actor)
+    # Reuse description write restrictions as well as the item update permission.
+    await update_item(session, item_id, ItemUpdate(description=item.description), actor)
+    item.email_signature = None
+    await session.flush()

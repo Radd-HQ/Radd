@@ -375,6 +375,10 @@ class Settings(BaseSettings):
     ai_editor_actions: bool = True
     ai_semantic_search: bool = True
     ai_storage_routing: bool = True
+    mail_signature_max_chars: int = 100_000
+    mail_signature_regex_timeout_seconds: float = 0.02
+    mail_signature_ai_timeout_seconds: float = 5
+    ai_mail_signature: bool = False
     ai_mail_routing: bool = True
     ai_summarize: bool = True
     ai_nl_slq: bool = True

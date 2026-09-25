@@ -253,3 +253,9 @@ class MailRule(Base, TimestampMixin):
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=True
     )
+
+
+class MailSignatureSettings(Base):
+    __tablename__ = "mail_signature_settings"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    rules: Mapped[list] = mapped_column(JSONB, default=list)

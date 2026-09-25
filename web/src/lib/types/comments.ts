@@ -26,6 +26,7 @@ export interface Comment {
   entity_id: string;
   author: UserRef | null;
   body: string;
+  email_signature?: string | null;
   is_thread?: boolean;
   visibility: CommentVisibilityValue;
   /** Spec 50: team ids an internal comment is narrowed to (empty = all readers). */

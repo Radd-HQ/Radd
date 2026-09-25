@@ -8,6 +8,7 @@ import { portalRequestDetailQuery, queryKeys } from "../../lib/queries";
 import type { PortalRequestComment } from "../../lib/types";
 import { Button } from "../Button";
 import { PageBody } from "../pages/PageBody";
+import { EmailBody } from "../editor/EmailBody";
 import { Spinner } from "../Spinner";
 import { ErrorText } from "../ErrorText";
 
@@ -77,7 +78,7 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
 
       {request.description && (
         <div className="mt-3 rounded-lg border border-subtle bg-surface px-3 py-2">
-          <PageBody text={request.description} />
+          {request.email_signature ? <EmailBody text={request.description} signature={request.email_signature} /> : <PageBody text={request.description} />}
         </div>
       )}
 
@@ -139,7 +140,7 @@ function CommentBubble({ comment }: { comment: PortalRequestComment }) {
           {relativeTime(comment.created_at)}
         </span>
       </div>
-      <PageBody text={comment.body} />
+      {comment.email_signature ? <EmailBody text={comment.body} signature={comment.email_signature} /> : <PageBody text={comment.body} />}
     </li>
   );
 }

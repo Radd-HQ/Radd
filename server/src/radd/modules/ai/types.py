@@ -39,6 +39,7 @@ class AiFeature(StrEnum):
     EDITOR_ACTIONS = "editor_actions"  # spec 103: /refine, /format, presets, freeform
     SEMANTIC_SEARCH = "semantic_search"  # spec 103: pgvector hybrid search
     STORAGE_ROUTING = "storage_routing"  # spec 102: LLM routing rules
+    MAIL_SIGNATURE = "mail_signature"
     MAIL_ROUTING = "mail_routing"  # RADD-961: pick a project from the email's content
     SUMMARIZE = "summarize"  # spec 46
     NL_SLQ = "nl_slq"  # spec 46

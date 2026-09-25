@@ -1,3 +1,4 @@
+import { EmailBody } from "../components/editor/EmailBody";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Slot, SlotId } from "@radd/plugin-sdk";
 import { Archive, ArchiveRestore, CopyPlus, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
@@ -24,7 +25,6 @@ import {
   type Item,
   type Project,
 } from "../lib/types";
-import { LazyRichViewer as RichViewer } from "../components/editor/LazyRichViewer";
 import type { AiRun } from "../components/editor/ai";
 import { AiReadMenu } from "../components/editor/AiReadMenu";
 import { Button } from "../components/Button";
@@ -446,7 +446,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               </div>
             ) : item.description ? (
               <div className="group/desc relative rounded-md border border-transparent px-1.5 py-1 hover:border-subtle">
-                <RichViewer
+                <EmailBody signature={item.email_signature} parent={{ kind: "item", id: item.id }} canRestore={canEditDescription}
                   text={item.description}
                   onToggleTask={
                     canEditDescription ? (toggle) => toggleDescriptionTask(item, toggle) : undefined

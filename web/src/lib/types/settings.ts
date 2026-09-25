@@ -110,6 +110,7 @@ export const SettingKey = {
   aiEditorActions: "ai_editor_actions",
   aiSemanticSearch: "ai_semantic_search",
   aiStorageRouting: "ai_storage_routing",
+  aiMailSignature: "ai_mail_signature",
   aiMailRouting: "ai_mail_routing",
   aiSummarize: "ai_summarize",
   aiNlSlq: "ai_nl_slq",

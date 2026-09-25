@@ -9,7 +9,7 @@ import { Entity, entityMeta, invalidateEntities } from "../../lib/cache";
 import { chronologicalComments, type CommentPage } from "../../lib/queries/comment-feed";
 import { relativeTime } from "../../lib/dates";
 import { CommentVisibility, type Comment } from "../../lib/types";
-import { LazyRichViewer } from "../editor/LazyRichViewer";
+import { EmailBody } from "../editor/EmailBody";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import type { QuickAction } from "../items/quick-actions";
 import { Button } from "../Button";
@@ -146,7 +146,7 @@ export function CommentReplies({
                 )}
                 {linkFor && <CopyCommentLink href={linkFor(reply.id)} className="ml-1.5 align-middle" />}
               </p>
-              <LazyRichViewer
+              <EmailBody signature={reply.email_signature} parent={{ kind: "comment", id: reply.id }} canRestore={me?.id === reply.author?.id}
                 text={reply.body}
                 // RADD-1296: a reply's author ticks its checklist in place.
                 onToggleTask={

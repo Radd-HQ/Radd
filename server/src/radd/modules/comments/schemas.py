@@ -62,6 +62,7 @@ class CommentRead(BaseModel):
     entity_id: uuid.UUID
     author: UserRef | None
     body: str
+    email_signature: str | None = None
     is_thread: bool = False
     visibility: CommentVisibility
     visible_to_teams: list[uuid.UUID] = Field(default_factory=list)  # spec 50

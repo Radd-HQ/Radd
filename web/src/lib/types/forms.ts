@@ -243,6 +243,7 @@ export interface PortalRequest {
 
 /** One public comment on a request (RADD-796). Internal notes never appear. */
 export interface PortalRequestComment {
+  email_signature?: string | null;
   id: string;
   author: string;
   author_is_me: boolean;
@@ -252,6 +253,7 @@ export interface PortalRequestComment {
 
 /** GET /portal/requests/{key} — the row plus what you opened it for. */
 export interface PortalRequestDetail extends PortalRequest {
+  email_signature?: string | null;
   description: string;
   comments: PortalRequestComment[];
 }

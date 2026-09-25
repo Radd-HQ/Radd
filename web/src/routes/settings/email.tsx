@@ -1,3 +1,4 @@
+import { SignaturesPanel } from "../../components/settings/email/SignaturesPanel";
 import { Inbox } from "lucide-react";
 import { usePermissions } from "../../lib/hooks";
 import { Permission } from "../../lib/types";
@@ -48,6 +49,7 @@ export function EmailSettingsPage() {
         <div className="flex flex-col gap-10">
           <SourcesPanel />
           <SendersPanel />
+          <SignaturesPanel />
           <AutomaticMessagesPanel />
         </div>
       )}

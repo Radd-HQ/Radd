@@ -27,6 +27,7 @@ FEATURE_ROLE: dict[AiFeature, AiRole] = {
     AiFeature.EDITOR_ACTIONS: AiRole.CHAT,
     AiFeature.SEMANTIC_SEARCH: AiRole.EMBEDDINGS,
     AiFeature.STORAGE_ROUTING: AiRole.VISION,
+    AiFeature.MAIL_SIGNATURE: AiRole.CHAT,
     AiFeature.MAIL_ROUTING: AiRole.CHAT,  # text classification, not an image
     AiFeature.SUMMARIZE: AiRole.CHAT,
     AiFeature.NL_SLQ: AiRole.CHAT,
@@ -39,6 +40,7 @@ FEATURE_SETTING: dict[AiFeature, SettingKey] = {
     AiFeature.EDITOR_ACTIONS: SettingKey.AI_EDITOR_ACTIONS,
     AiFeature.SEMANTIC_SEARCH: SettingKey.AI_SEMANTIC_SEARCH,
     AiFeature.STORAGE_ROUTING: SettingKey.AI_STORAGE_ROUTING,
+    AiFeature.MAIL_SIGNATURE: SettingKey.AI_MAIL_SIGNATURE,
     AiFeature.MAIL_ROUTING: SettingKey.AI_MAIL_ROUTING,
     AiFeature.SUMMARIZE: SettingKey.AI_SUMMARIZE,
     AiFeature.NL_SLQ: SettingKey.AI_NL_SLQ,

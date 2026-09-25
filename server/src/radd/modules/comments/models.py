@@ -30,6 +30,7 @@ class Comment(Base, TimestampMixin):
     )
     entity_id: Mapped[uuid.UUID] = mapped_column(index=True)
     author_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    email_signature: Mapped[str | None] = mapped_column(Text, nullable=True)
     body: Mapped[str] = mapped_column(Text)
     # Explicitly resolvable discussions; ordinary comments may still have replies.
     is_thread: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

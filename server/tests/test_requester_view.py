@@ -345,6 +345,7 @@ async def test_the_detail_view_carries_no_issue_internals(db, admin):
         "comment_count", "awaiting_requester", "created_at", "updated_at",
         # what opening it adds
         "description", "comments",
+        "email_signature",  # reversible annotation over already-visible description text
     }
 
 
