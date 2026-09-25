@@ -88,6 +88,7 @@ _LAZY: dict[str, tuple[str, str]] = {
     "set_offset": ("radd.modules.events.service", "set_offset"),
     "offset_exists": ("radd.modules.events.service", "offset_exists"),
     "run_consumer": ("radd.modules.events.runner", "run_head_seeded"),
+    "derived_from": ("radd.modules.events.service", "derived_from"),
     # access grants (register a grantable ResourceSpec)
     "register_access_resource": ("radd.modules.access.registry", "register_resource"),
 }

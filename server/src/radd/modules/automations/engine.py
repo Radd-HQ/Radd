@@ -491,10 +491,11 @@ async def run_graph(
     # Rows predating the column have no author and keep running as the system
     # actor — exactly what they did before.
     author = system_user
-    if getattr(rule, "created_by_id", None):
-        found = await session.get(User, rule.created_by_id)
-        if found is not None and found.active:
-            author = found
+    owner_id = getattr(rule, "created_by_id", None)
+    found = await session.get(User, owner_id) if owner_id else None
+    owner_error = found is None or not found.active
+    if not owner_error:
+        author = found
 
     trigger = next(
         (t for t in triggers if start_node_id is None or t.id == start_node_id), None
@@ -513,6 +514,8 @@ async def run_graph(
     # event was itself another automation's change.
     depth = (int(getattr(event, "automation_depth", 0) or 0) if getattr(event, "automated", False) else 0) + 1
     try:
+        if owner_error:
+            raise ValueError("The automation execution account is unavailable; explicitly assign an active owner")
         with events.run_cause(events.AutomationCause(rule_id=rule.id, depth=depth)):
             report = await executor.walk(
                 session,
@@ -570,8 +573,15 @@ async def run_graph(
             actor_id=author.id,
             status=runs.status_of(report),
             result=result,
+            error="; ".join(p.detail for p in report.plans if p.failed),
             item_keys=[keys[i] for i in initial.item_ids if i in keys],
         )
+        failures = [p.detail for p in report.plans if p.failed]
+        if failures:
+            await events.emit(session, event_type=AutomationEvent.RUN_FAILED,
+                entity_type=AutomationEntity.RULE, entity_id=rule.id, actor_id=SYSTEM_ACTOR_ID,
+                payload={"name": rule.name, "trigger_node_id": trigger.id, "error": "; ".join(failures)},
+                automated_cause=True)
     return report
 
 
@@ -701,12 +711,16 @@ async def preview(
     *,
     subject: str = "item",
     subject_id: uuid.UUID | None = None,
+    event_id: int | None = None,
+    event_payload: dict | None = None,
+    project_id: uuid.UUID | None = None,
 ) -> RuleTestResult:
     """Walk the graph with the appliers off, and report what each node did.
 
-    Nothing is special-cased for preview: the same nodes make the same decisions
-    and only `_apply_plan` is skipped, so this shows what a real run WOULD do
-    rather than a second implementation's opinion of it.
+    Preview uses the real planners without applying actions. Unsafe evaluators
+    are skipped explicitly, and branches needing created objects or action
+    outputs are reported as unavailable. Recorded events supply real facts;
+    subject values are read from the current database.
 
     The seed item is optional (RADD-921). A graph fed by a search node or a
     schedule trigger has no triggering item, and requiring one made exactly those
@@ -731,13 +745,25 @@ async def preview(
     if subject != graph.ITEM_SUBJECT and subject_id is not None:
         subjects = {subject: (subject_id,)}  # RADD-1323: a page's dry run
 
+    if trigger is None:
+        raise ValueError("Choose a trigger that exists in this graph")
+    facts = await _seeded_facts(session, subject, subject_id) if subject != graph.ITEM_SUBJECT and subject_id else _manual_facts()
+    if project_id is not None:
+        subjects["project"] = (project_id,)
+    if event_id is not None:
+        event = await session.get(Event, event_id)
+        if event is None or event.event_type != str(trigger.params.get("event")):
+            raise ValueError("Choose a recorded event matching this trigger")
+        facts, subjects = await _event_facts(session, event), _subjects_of(event)
+        target = await _resolve_target_item(session, event)
+        if target is not None:
+            subjects["item"] = (target.id,)
+    elif event_payload is not None:
+        facts = replace(facts, event_type=str(trigger.params.get("event") or "manual"), payload=event_payload)
     report = await run_graph(
         session,
         rule,
-        Packet.of(
-            await _seeded_facts(session, subject, subject_id) if subject != graph.ITEM_SUBJECT and subject_id else _manual_facts(),
-            **subjects,
-        ),
+        Packet.of(facts, **subjects),
         system_user,
         apply=False,
         start_node_id=trigger.id if trigger is not None else None,
@@ -769,6 +795,7 @@ async def _result_of(
                 params=planned.params,
                 resolves=planned.resolves,
                 refused=planned.refused,
+                failed=planned.failed,
                 detail=planned.detail,
                 node_id=planned.node_id,
                 item_key=keys.get(planned.item_id, "") if planned.item_id else "",

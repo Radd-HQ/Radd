@@ -33,6 +33,35 @@ from .types import (
 _TRUE_FALSE = (NodePort.TRUE.value, NodePort.FALSE.value)
 
 
+async def _state_categories(ctx: Any) -> dict[uuid.UUID, str]:
+    from sqlalchemy import select
+    from radd.modules.items.models import WorkItem
+    from radd.modules.workflow.models import State
+
+    rows = await ctx.session.execute(select(WorkItem.id, State.category)
+        .join(State, State.id == WorkItem.state_id).where(WorkItem.id.in_(ctx.packet.item_ids)))
+    wanted = set(ctx.node.params.get("categories") or [])
+    return {item_id: "true" if category in wanted else "false" for item_id, category in rows}
+
+
+async def _all_state_categories(ctx: Any) -> str:
+    answers = await _state_categories(ctx)
+    return NodePort.TRUE if ctx.packet.item_ids and all(answers.get(i) == NodePort.TRUE for i in ctx.packet.item_ids) else NodePort.FALSE
+
+
+async def _entered_category(ctx: Any) -> str:
+    from radd.modules.items import service as items
+    from radd.modules.workflow import service as workflow
+
+    raw = (ctx.packet.facts.payload.get("item") or {}).get("id")
+    if not raw:
+        return "false"
+    item = await items.require_item(ctx.session, uuid.UUID(str(raw)))
+    passed = await workflow.entered_categories(ctx.session, item.project_id, ctx.packet.facts.payload,
+                                              set(ctx.node.params.get("categories") or []))
+    return "true" if passed else "false"
+
+
 def _gate(
     key: str,
     label: str,
@@ -66,6 +95,14 @@ def _gate(
 
 
 GATE_NODES: tuple[AutomationNodeSpec, ...] = (
+    AutomationNodeSpec(
+        key="gate.entered_state_category", kind="gate", label="Entered state category", group="Gates",
+        description="The triggering change moved into a category from outside it. Moving between two Done states does not count as entering Done again.",
+        default_params={"categories": ["done"]},
+        params_schema={"type": "object", "required": ["categories"], "properties": {
+            "categories": {"type": "array", "title": "Categories", "items": {"type": "string"}, "minItems": 1}}},
+        ports=_TRUE_FALSE, arity=NodeArity.SET.value, needs_items=False, reads_event=True, plan=_entered_category,
+    ),
     # RADD-1265: the one open-ended gate — a dotted path, an operator, a value.
     _gate(
         TYPE_GATE_PAYLOAD, "Event value is", gates.payload_value_is,
@@ -94,11 +131,14 @@ GATE_NODES: tuple[AutomationNodeSpec, ...] = (
     ),
     # Not event-reading: a draft being validated has a state, and asking about
     # its category is a real question.
-    _gate(
-        TYPE_GATE_STATE_CATEGORY, "State category is", gates.state_category_is,
+    AutomationNodeSpec(
+        key=TYPE_GATE_STATE_CATEGORY, kind="gate", label="State category is", group="Gates",
         keywords="category done canceled progress todo backlog triage finished closed",
         default_params={"categories": []},
         reads_event=False,
+        ports=_TRUE_FALSE, arity=NodeArity.SET.value, needs_items=True,
+        description="All input issues are in the selected categories. Takes exactly one branch; an empty input takes false.",
+        plan=_all_state_categories,
     ),
 )
 

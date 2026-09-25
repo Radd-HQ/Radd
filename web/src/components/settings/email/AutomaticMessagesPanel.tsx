@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { RoutePath } from "../../../lib/constants";
+import { IntegrationAutomations } from "../IntegrationAutomations";
 
 /**
  * What the desk sends on its own (RADD-1318): only a person's public reply,
@@ -15,7 +16,7 @@ export function AutomaticMessagesPanel() {
         <h3 className="text-sm font-semibold text-heading">Automatic messages</h3>
       </div>
       <p className="text-[13px] text-fg-muted">
-        The desk emails a requester only when someone replies publicly on their issue. A receipt for new email
+        Public replies are relayed to the issue's external email contacts. A receipt for new email
         tickets and a notice when an issue is resolved are automations you switch on: start from the “Acknowledge
         new email tickets” or “Tell the requester when resolved” template in{" "}
         <Link to={RoutePath.settingsAutomations} className="text-accent-text hover:underline">
@@ -23,6 +24,7 @@ export function AutomaticMessagesPanel() {
         </Link>
         .
       </p>
+      <IntegrationAutomations group="Email" />
     </section>
   );
 }

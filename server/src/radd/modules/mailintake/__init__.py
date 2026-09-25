@@ -7,6 +7,7 @@ from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .rules_router import router as rules_router
 from .templates import TEMPLATES
+from .automation import RESOLUTION_NODE
 from .types import MailEvent, OUTBOUND_CONSUMER_NAME
 
 plugin = RaddPlugin(
@@ -22,7 +23,7 @@ plugin = RaddPlugin(
     # feature-detected call to `service.send_item_mail`.
     depends_on=(
         "projects", "auth", "items", "comments", "automations", "events",
-        "attachments",
+        "attachments", "settings", "workflow",
     ),
     # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
     # the module is optional and disableable, and a missing one must fall through
@@ -32,6 +33,7 @@ plugin = RaddPlugin(
     routers=(router, config_router, rules_router),
     # RADD-1318: the receipt and the resolution notice, as opt-in automations.
     automation_templates=TEMPLATES,
+    automation_nodes=(RESOLUTION_NODE,),
     # Seed rows from env BEFORE the poller starts, or the first tick finds
     # no sources on a fresh instance (RADD-958).
     on_startup=(seeding.seed_from_env, dispatcher.start),

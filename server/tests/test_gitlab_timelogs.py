@@ -126,7 +126,7 @@ async def test_reconcile_fetches_pages_looks_up_emails_and_mirrors(db, world):
     assert calls["users"] == ["7", "9"]  # one lookup per distinct user, publicEmail empty
     assert (report.created, report.pending, report.no_item) == (2, 1, 0)
     rows = await _worklogs(db, world["item"].id)
-    by_id = {r.external_id: r for r in rows}
+    by_id = {r.external_id.removeprefix(f"{world['connection'].id}:"): r for r in rows}
     # The negative row is GitLab's own bookkeeping for a removal — never mirrored.
     assert set(by_id) == {"gid://gitlab/Timelog/1", "gid://gitlab/Timelog/3"}
     # -1800 (entry 2) is GitLab's removal bookkeeping: it TRIMS the most recent
@@ -135,7 +135,7 @@ async def test_reconcile_fetches_pages_looks_up_emails_and_mirrors(db, world):
     assert by_id["gid://gitlab/Timelog/1"].worked_on == date(2026, 9, 18)
     assert by_id["gid://gitlab/Timelog/1"].note == f"Logged on !41 {world['key']} fix"
     assert by_id["gid://gitlab/Timelog/3"].note == "pairing"
-    assert all(r.author_id == admin.id and r.external_source == "gitlab" and r.external_scope == "pr:pipe/tools:41" for r in rows)
+    assert all(r.author_id == admin.id and r.external_source == "gitlab" and r.external_scope == f"{world['connection'].id}:pr:pipe/tools:41" for r in rows)
     dev = next(c for c in await categories.list_categories(db) if c.name == "Development")
     assert all(r.category_id == dev.id for r in rows)
     assert report.unmatched_authors == {"ghost"}
@@ -268,7 +268,7 @@ async def test_backfill_walks_merge_requests_and_imports_their_time_once(db, wor
         f"branch:pipe/tools:{key}-branch", "pr:pipe/tools:5", "pr:pipe/tools:6", "commit:pipe/tools:" + "c" * 40,
     ])
     rows = await _worklogs(db, world["item"].id)
-    assert len(rows) == 1 and rows[0].external_scope == "pr:pipe/tools:5" and rows[0].time_spent_seconds == 3600
+    assert len(rows) == 1 and rows[0].external_scope == f"{world['connection'].id}:pr:pipe/tools:5" and rows[0].time_spent_seconds == 3600
 
 
 def test_project_api_path_encodes_the_namespace():

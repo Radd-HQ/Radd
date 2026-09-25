@@ -262,6 +262,7 @@ SPEC = AutomationNodeSpec(
     # packet's bag has one slot per node, so the executor drops them rather than
     # letting one node name silently mean whichever item came last.
     outputs_for=outputs_for,
+    shape_params=("answers",),
     needs_items=False,  # "nothing matched — is that a problem?" is a fair question
     # Default SET: it is the cheap mode, and defaulting to one model call per
     # item would make dropping this node on a scheduled run over a broad query

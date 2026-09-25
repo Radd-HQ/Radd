@@ -312,7 +312,8 @@ def _walk_context(*, collecting: bool):
     from radd.modules.automations.graph import Node, Packet
     from radd.modules.automations.types import AutomationNodeKind
 
-    report = RunReport(collecting=collecting)
+    draft_id = uuid.uuid4()
+    report = RunReport(collecting=collecting, draft_id=draft_id)
     ctx = _context(
         report,
         session=None,
@@ -321,7 +322,7 @@ def _walk_context(*, collecting: bool):
         ),
         packet=Packet.of(
             EventFacts(event_type="validate", actor_id="", actor_email="", actor_name=""),
-            item=(uuid.uuid4(),),
+            item=(draft_id,),
         ),
         actor=None,
     )

@@ -44,6 +44,7 @@ from radd.kernel.specs import valid_output_name
 from . import graph
 from .nodes import arity_of, needs_items, output_name, ports_of, spec_for
 from .graph import Edge, Node, Packet
+from .templating import MissingTemplateOutput
 # Node-type keys live in `types.py` — the schemas and the arity table name them
 # too, and a type spelled differently in two places is a wire constant with no
 # compiler behind it. Imported (not redefined) so `executor.ACTION_TYPE_PREFIX`
@@ -144,6 +145,7 @@ class PlannedAction:
     #: (RADD-1266) — a skip with a different owner: the project's rules said no,
     #: not the planner. The run history ranks it above "applied".
     refused: bool = False
+    failed: bool = False
 
 
 @dataclass
@@ -194,6 +196,7 @@ class RunReport:
     #: `_NodeContext.publish_findings`.
     published: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     collecting: bool = False
+    draft_id: uuid.UUID | None = None
     #: `time.monotonic()` past which a check that costs real time (a model round
     #: trip) should give up and take its unavailable path. Set only by the
     #: intake path, where the walk runs inside a request holding a row lock.
@@ -247,6 +250,7 @@ async def walk(
     """
     report = RunReport(
         collecting=str(trigger.params.get("event") or "") == AutomationTrigger.VALIDATE.value,
+        draft_id=initial.item_ids[0] if len(initial.item_ids) == 1 else None,
         deadline=deadline,
     )
     order = graph.topological_order(nodes, edges)
@@ -309,7 +313,7 @@ async def walk(
         # "it ran and found nothing".
         report.untaken(node, [p for p in ports_of(node) if p not in outputs])
 
-    report.dropped = list(budget.dropped)
+    report.dropped.extend(budget.dropped)
     if report.dropped:
         logger.warning(
             "automations: %s hit a run budget; %s", automation_name, "; ".join(report.dropped)
@@ -332,6 +336,12 @@ async def _run_node(
     (RADD-918): what the node DOES (produce / route / act) and how it reads its
     packet (`NodeArity`). Filter-vs-gate and item-action-vs-universal-action were
     the same distinction written twice."""
+    spec = spec_for(node)
+    if not apply and spec is not None and not spec.preview_safe:
+        if report.collecting:
+            raise ValueError(f"{spec.label} cannot execute during submission validation")
+        report.dropped.append(f"{node.id}: {spec.label} was not executed in preview; its downstream branches cannot be simulated.")
+        return {}
     if node.kind is AutomationNodeKind.TRIGGER:
         return {NodePort.OUT.value: packet}
 
@@ -345,6 +355,7 @@ async def _run_node(
     if node.kind in (AutomationNodeKind.GATE, AutomationNodeKind.FILTER):
         return await _run_router(session, node, packet, system_user, report, automation_name)
 
+    planned_before = len(report.plans)
     created, produced = await _run_action(
         session,
         node=node,
@@ -359,6 +370,19 @@ async def _run_node(
     # work: filter -> label -> comment all act on the same set. What it MADE
     # leaves by a separate port, so "create a follow-up, then assign it" is a
     # wire rather than a special case.
+    invocations = report.plans[planned_before:]
+    unsuccessful = [p for p in invocations if not p.resolves]
+    if any(p.item_id is None for p in unsuccessful):
+        return {}
+    if unsuccessful:
+        failed_ids = {p.item_id for p in unsuccessful}
+        subject = (spec.subject if spec else "") or graph.ITEM_SUBJECT
+        packet = packet.with_subject(subject, [i for i in packet.ids_of(subject) if i not in failed_ids])
+        if not packet.ids_of(subject):
+            return {}
+    if not apply and spec is not None and (spec.outputs_at(node.params) or NodePort.CREATED.value in ports_of(node)) and any(p.resolves for p in invocations):
+        report.dropped.append(f"{node.id}: action outputs and created objects are unavailable in preview; dependent branches are not simulated.")
+        return {}
     passthrough = _stamp(node, packet, produced, report)
     outputs = {NodePort.OUT.value: passthrough}
     if NodePort.CREATED.value in ports_of(node):
@@ -628,6 +652,8 @@ class _NodeContext:
     #: any walk that is not collecting, which is what makes the seam a no-op
     #: rather than a second thing every contributed node has to check.
     findings: list[Finding] | None = None
+    draft_id: uuid.UUID | None = None
+    resolved: dict[str, str] = field(default_factory=dict)
     #: `time.monotonic()` past which an expensive check should stop asking.
     deadline: float | None = None
     #: Where `set_output` writes (spec 120). A plain dict on the context rather
@@ -652,12 +678,13 @@ class _NodeContext:
         provider's (`page`, `comment`, a plugin's), the variable bag, and
         `{{item.*}}` when the packet holds exactly one item. `line=True`
         collapses whitespace — for a value that NAMES something or becomes a
-        header, never for a body. Unresolvable tokens stay verbatim."""
+        header, never for a body. Missing named outputs refuse execution;
+        absent optional event fields remain verbatim."""
         from .planning import _item_ctx, load_item_facts
         from .templating import Renderer
 
         item_ctx = None
-        ids = self.packet.item_ids
+        ids = self.subject_ids if self.node.kind is AutomationNodeKind.ACTION and arity_of(self.node) is NodeArity.ITEM else self.packet.item_ids
         if len(ids) == 1:
             loaded = await _load(self.session, ids)
             if loaded:
@@ -665,7 +692,23 @@ class _NodeContext:
                 facts = (await load_item_facts(self.session, loaded)).get(item.id)
                 item_ctx = _item_ctx(item, project, facts)
         renderer = Renderer(self.packet.facts, item_ctx, None, self.packet.vars)
-        return renderer.line(text) if line else renderer(text)
+        result = renderer.line(text) if line else renderer(text)
+        self.resolved.update(renderer.resolved)
+        if renderer.misses:
+            raise MissingTemplateOutput("; ".join(renderer.misses))
+        return result
+
+    async def render_draft(self, text: str) -> str:
+        """Only the original draft's title may cross the submitter boundary.
+
+        Relationship names and administrative fields are deliberately excluded:
+        the automation actor's access is not the submitter's access.
+        """
+        from .templating import TOKEN_RE
+
+        draft = await self.session.get(WorkItem, self.draft_id) if self.draft_id else None
+        values = {"item.title": draft.title if draft is not None else ""}
+        return TOKEN_RE.sub(lambda match: values.get(match.group(1), ""), text)
 
     def add_created(self, subject: str, entity_id: uuid.UUID) -> None:
         """Say this invocation CREATED a row, so the node's `created` port carries
@@ -713,7 +756,13 @@ class _NodeContext:
         relay. Each is `{message, field, blocking}`. Kept on every walk — a dry
         run reports them — and read only by verdict nodes."""
         if self.published is not None:
-            self.published[self.node.id] = [dict(entry) for entry in found]
+            entries = [dict(entry) for entry in found]
+            if self.findings is not None and self.packet.item_ids != (self.draft_id,):
+                # A check over search results cannot quote those records to a
+                # submitter. Preserve its verdict, but not privileged content.
+                entries = [{"message": "This submission did not pass a related-record check.",
+                            "field": "", "blocking": entry.get("blocking", True)} for entry in entries]
+            self.published[self.node.id] = entries
 
     def published_by(self, node_id: str) -> list[dict[str, Any]]:
         """What an upstream check published, for a verdict node relaying it."""
@@ -766,6 +815,7 @@ def _context(
         actor=actor,
         subject_ids=subject_ids,
         findings=report.findings if report.collecting else None,
+        draft_id=report.draft_id,
         deadline=report.deadline,
         automation_name=automation_name,
         cache=cache if cache is not None else {},
@@ -774,26 +824,17 @@ def _context(
 
 
 async def _actor_for(session: AsyncSession, node: Node, default: User) -> User:
-    """Who this action runs as.
-
-    `act_as` on the node names a user by email; absent, the automation's author
-    (passed in as `default`). Falls back to the default when the named account no
-    longer resolves — an automation must not stop working because someone left,
-    and it must not silently escalate either, which is why it falls back to the
-    author rather than to the system actor.
-    """
+    """Resolve the configured account; never substitute a more privileged user."""
     email = str(node.params.get("act_as") or "").strip()
-    if not email:
+    account_id = node.params.get("act_as_id")
+    if not email and not account_id:
         return default
-    found = (
-        await session.execute(select(User).where(User.email == email, User.active.is_(True)))
-    ).scalar_one_or_none()
-    if found is None:
-        logger.warning(
-            "automations: node %s acts as %r, which no longer resolves — using the author",
-            node.id, email,
-        )
-        return default
+    if account_id:
+        found = await session.get(User, uuid.UUID(str(account_id)))
+    else:
+        found = await session.scalar(select(User).where(User.email == email))
+    if found is None or not found.active:
+        raise RuntimeError(f"Execution account {email or account_id!r} is unavailable; choose an active account")
     return found
 
 
@@ -832,11 +873,12 @@ async def _run_action(
         # An unknown action type halts THIS node loudly rather than being skipped
         # in silence — most often a plugin that has been uninstalled.
         logger.error("automations: %s: unknown action node type %r", automation_name, node.type)
-        budget.dropped.append(f"node {node.id!r} — unknown action type {node.type!r}")
+        report.plans.append(PlannedAction(node_id=node.id, action_type=node.type,
+            params=dict(node.params), item_id=None, resolves=False, failed=True,
+            detail=f"node {node.id!r} — unknown action type {node.type!r}"))
         return {}, {}
 
     ids = packet.ids_of(spec.subject or graph.ITEM_SUBJECT)
-    actor = await _actor_for(session, node, system_user)
     per_item = arity_of(node) is NodeArity.ITEM
     if per_item and not ids:
         logger.info(
@@ -858,10 +900,11 @@ async def _run_action(
     for batch in batches:
         recorded = len(report.plans)
         ctx = _context(
-            report, session=session, node=node, packet=packet, actor=actor,
+            report, session=session, node=node, packet=packet, actor=system_user,
             subject_ids=batch, automation_name=automation_name, cache=cache,
         )
         try:
+            ctx.actor = await _actor_for(session, node, system_user)
             async with session.begin_nested():
                 plan = await spec.plan(ctx)
                 if plan is None:
@@ -877,7 +920,7 @@ async def _run_action(
                         item_id=batch[0] if len(batch) == 1 else None,
                         resolves=resolves,
                         detail=str(getattr(plan, "detail", plan)),
-                        resolved=dict(getattr(plan, "resolved", None) or {}),
+                        resolved={**ctx.resolved, **dict(getattr(plan, "resolved", None) or {})},
                     )
                 )
                 if not resolves:
@@ -900,6 +943,12 @@ async def _run_action(
         # event, no history, no notification. Out here the savepoint has already
         # rolled back; `report.plans` is a plain list and survives, so the entry
         # is rewritten in place.
+        except MissingTemplateOutput as missing:
+            report.plans.append(PlannedAction(
+                node_id=node.id, action_type=node.type, params=dict(node.params),
+                item_id=batch[0] if len(batch) == 1 else None, resolves=False,
+                detail=f"{node.type}: skipped — {missing}", resolved=dict(ctx.resolved),
+            ))
         except TransitionError as refusal:
             # A WORKFLOW GUARD said no. Not an engine failure: the project's
             # transition rules apply to automations too, deliberately.
@@ -930,13 +979,13 @@ async def _run_action(
             if len(report.plans) > recorded:
                 planned = report.plans[-1]
                 report.plans[-1] = replace(
-                    planned, resolves=False, detail=f"{planned.detail} — failed: {exc}"
+                    planned, resolves=False, failed=True, detail=f"{planned.detail} — failed: {exc}"
                 )
             else:
                 report.plans.append(
                     PlannedAction(
                         node_id=node.id, action_type=node.type, params=dict(node.params),
-                        item_id=batch[0] if len(batch) == 1 else None, resolves=False,
+                        item_id=batch[0] if len(batch) == 1 else None, resolves=False, failed=True,
                         detail=f"{node.type}: failed before planning — {exc}",
                     )
                 )

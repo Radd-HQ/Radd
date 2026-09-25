@@ -199,6 +199,8 @@ class RefUpdate:
     ref: str = ""
     sha: str = ""
     environment: str = ""
+    run_id: int | None = None
+    updated_at: str = ""
 
 
 def _ref_ids(repo: str, ref: str, sha: str, *, is_tag: bool, mr_iid: object = None) -> tuple[str, ...]:
@@ -224,6 +226,12 @@ def plan_pipeline(payload: dict) -> RefUpdate | None:
     mr = payload.get("merge_request") or {}
     web_url = str((payload.get("project") or {}).get("web_url") or "")
     url = str(attributes.get("url") or (f"{web_url}/-/pipelines/{attributes.get('id')}" if web_url else ""))
+    try:
+        run_id = int(attributes.get("id"))
+        if not 0 < run_id < 2**63:
+            run_id = None
+    except (TypeError, ValueError):
+        run_id = None
     return RefUpdate(
         repo=repo,
         external_ids=_ref_ids(repo, ref, sha, is_tag=bool(attributes.get("tag")), mr_iid=mr.get("iid")),
@@ -231,6 +239,8 @@ def plan_pipeline(payload: dict) -> RefUpdate | None:
         url=url,
         ref=ref,
         sha=sha,
+        run_id=run_id,
+        updated_at=str(attributes.get("updated_at") or attributes.get("finished_at") or attributes.get("started_at") or ""),
     )
 
 
@@ -250,4 +260,3 @@ def plan_deployment(payload: dict) -> RefUpdate | None:
         sha=sha,
         environment=str(payload.get("environment") or ""),
     )
-

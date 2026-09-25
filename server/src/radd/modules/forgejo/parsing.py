@@ -105,7 +105,7 @@ def plan_pull_request(payload: dict) -> list[PlannedLink]:
             url=pull_request.get("html_url", ""),
             status=status.value,
         )
-        for key in extract_keys(head_branch, title, pull_request.get("body"))
+        for key in (extract_keys(head_branch, title, pull_request.get("body")) or [""])
     ]
 
 

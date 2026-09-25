@@ -48,6 +48,10 @@ class EntityHost(Protocol):
         """Narrow project-scoped rows to the ones this user may read."""
         ...
 
+    async def readable_project_ids(self, session: Any, user: Any, entity_key: str) -> list[Any]:
+        """Projects with potential read access, before search pagination."""
+        ...
+
     async def emit(
         self,
         session: Any,

@@ -579,6 +579,8 @@ class AutomationNodeSpec:
     #: trigger that has no event — a validation walk's synthetic facts or a
     #: schedule — because it could only ever answer with a constant.
     reads_event: bool = False
+    #: False for evaluators that execute arbitrary code or have side effects.
+    preview_safe: bool = True
     #: RADD-1329: a CHECK that publishes findings (`ctx.publish_findings`) for a
     #: "Block submission" / "Warn submitter" node downstream to relay. The
     #: editor's relay picker lists these.
@@ -602,6 +604,9 @@ class AutomationNodeSpec:
     #: Outputs for a given params dict, when they vary. `ai.generate`'s outputs
     #: ARE its params — the fields someone typed — which no static tuple can say.
     outputs_for: Callable[[Mapping[str, Any]], tuple[OutputField, ...]] = _default_outputs_for
+    #: Params used by ports_for/outputs_for. None means all params; a declared
+    #: subset avoids shape requests while unrelated prompts or code are edited.
+    shape_params: tuple[str, ...] | None = None
     #: False = runs even when nothing reached it (webhook, chat, "nothing matched").
     needs_items: bool = True
     #: How the node reads its packet — a `NodeArity` value, "set" or "item"

@@ -33,6 +33,8 @@ def status_of(report: RunReport) -> RunStatus:
     """How the run ended, from what the walk planned. Ranked: a refusal is what
     someone opens the row to learn about, so it wins over the actions that did
     apply beside it."""
+    if any(plan.failed for plan in report.plans):
+        return RunStatus.FAILED
     if any(plan.refused for plan in report.plans):
         return RunStatus.REFUSED
     if any(plan.resolves for plan in report.plans):

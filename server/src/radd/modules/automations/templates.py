@@ -37,18 +37,15 @@ NOTIFY_REPORTER_ON_DONE = AutomationTemplateSpec(
     description="When an issue moves into a done state, email its reporter.",
     group="Issues",
     nodes=(
-        {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.updated"}},
-        {"id": "moved", "kind": "gate", "type": "gate.field_changed",
-         "params": {"field": "state", "from_mode": "any", "from_values": [], "to_mode": "any", "to_values": []}},
-        {"id": "done", "kind": "gate", "type": "gate.state_category", "params": {"categories": ["done"]}},
+        {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.updated", "include_automated": True}},
+        {"id": "done", "kind": "gate", "type": "gate.entered_state_category", "params": {"categories": ["done"]}},
         {"id": "mail", "kind": "action", "type": "action.send_email",
          "params": {"to": "reporter", "arity": "item",
                     "subject": "{{item.key}} is done",
                     "body": "Your issue {{item.key}} — {{item.title}} — is now {{item.state}}.\n{{item.url}}"}},
     ),
     edges=(
-        {"source": "trg", "port": "out", "target": "moved"},
-        {"source": "moved", "port": "true", "target": "done"},
+        {"source": "trg", "port": "out", "target": "done"},
         {"source": "done", "port": "true", "target": "mail"},
     ),
 )

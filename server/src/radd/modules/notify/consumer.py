@@ -145,12 +145,17 @@ async def _bootstrap(session: AsyncSession) -> int:
 
 
 async def _handle(session: AsyncSession, event: Event, *, watch_only: bool) -> None:
+    with events.derived_from(event, silent=watch_only):
+        await _handle_derived(session, event, watch_only=watch_only)
+
+
+async def _handle_derived(session: AsyncSession, event: Event, *, watch_only: bool) -> None:
+    if not watch_only:
+        for spec in kinds.contributed_for(event.event_type):
+            await _handle_contributed(session, event, spec)
     if event.event_type not in _HANDLED:
         # RADD-1326: a plugin's kind answers this event. Never on the watch-only
         # bootstrap — a contributed kind notifies; it does not follow anything.
-        spec = kinds.contributed_for(event.event_type)
-        if spec is not None and not watch_only:
-            await _handle_contributed(session, event, spec)
         return
     if event.event_type == CommentEvent.CREATED.value:
         await _handle_comment_created(session, event, watch_only=watch_only)

@@ -16,6 +16,16 @@ from .schemas import StateCategoryCreate, StateCategoryUpdate, StateCreate, Stat
 from .types import DEFAULT_STATES, StateCategory, StateEntity, StateEvent
 
 
+async def entered_categories(session: AsyncSession, project_id: uuid.UUID, payload: dict, categories: set[str]) -> bool:
+    """Did this event enter the selected categories from outside them?"""
+    move = next((change for change in payload.get("changes", []) if change.get("field") == StateEntity.STATE.value), None)
+    state = (payload.get("item") or {}).get("state") or {}
+    if not move or state.get("category") not in categories:
+        return False
+    before = await session.scalar(select(State.category).where(State.project_id == project_id, State.name == str(move.get("from") or "")))
+    return before not in categories
+
+
 async def create_default_states(session: AsyncSession, project: Project) -> None:
     for position, default in enumerate(DEFAULT_STATES, start=1):
         state = State(

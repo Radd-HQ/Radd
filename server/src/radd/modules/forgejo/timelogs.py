@@ -149,7 +149,7 @@ async def reconcile_pull_request(
         scope=pr_external_id(full_name, index),
         ref_texts=[head_branch, title, body],
         entries=entries,
-        category_id=category_id,
+        category_id=category_id, repo=repo,
         # Forgejo records WHEN the entry was added, not when the work happened.
         note_prefix=f"Tracked on #{index} {title} (dated by when it was added)".strip()[:2000],
     )

@@ -110,8 +110,8 @@ async def test_reconcile_mirrors_tracked_times_and_parks_unknown_authors(db, wor
     assert (report.created, report.pending, report.unmatched_authors) == (1, 1, {"ghost"})
     assert sorted(calls["users"]) == ["dev", "ghost"]
     rows = await _worklogs(db, world["item"].id)
-    assert len(rows) == 1 and rows[0].external_id == "11" and rows[0].time_spent_seconds == 2700
-    assert rows[0].worked_on == date(2026, 9, 18) and rows[0].external_scope == "pr:acme/widgets:7"
+    assert len(rows) == 1 and rows[0].external_id == f"{world['connection'].id}:11" and rows[0].time_spent_seconds == 2700
+    assert rows[0].worked_on == date(2026, 9, 18) and rows[0].external_scope == f"{world['connection'].id}:pr:acme/widgets:7"
     assert rows[0].author_id == admin.id and "dated by when it was added" in rows[0].note
 
 
@@ -170,7 +170,7 @@ async def test_pull_request_delivery_triggers_the_reconcile(db, world, monkeypat
     assert result["linked"] == 1 and result["worklogs"]["created"] == 1
     assert calls["times"] == 1
     rows = await _worklogs(db, world["item"].id)
-    assert [r.external_scope for r in rows] == ["pr:acme/widgets:9"]
+    assert [r.external_scope for r in rows] == [f"{world['connection'].id}:pr:acme/widgets:9"]
 
 
 async def test_backfill_reconciles_each_pull_request_once(db, world):

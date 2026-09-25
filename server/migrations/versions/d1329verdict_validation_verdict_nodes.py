@@ -24,6 +24,7 @@ Revises: d1315chain
 
 import json
 import logging
+import copy
 from collections import deque
 
 import sqlalchemy as sa
@@ -56,10 +57,11 @@ def _reach(start: str, edges: list[dict]) -> set[str]:
     return seen
 
 
-def _fresh_id(wanted: str, taken: set[str]) -> str:
-    candidate, n = wanted, 2
+def _fresh_id(wanted: str, taken: set[str], limit: int | None = None) -> str:
+    candidate, n = wanted[:limit], 2
     while candidate in taken:
-        candidate, n = f"{wanted}{n}", n + 1
+        suffix = str(n)
+        candidate, n = f"{wanted[:limit - len(suffix)] if limit else wanted}{suffix}", n + 1
     taken.add(candidate)
     return candidate
 
@@ -84,6 +86,42 @@ def rewrite(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict
     """(nodes, edges, {validate trigger id: can block}) — pure, so it is tested."""
     nodes = [dict(n, params=dict(n.get("params") or {})) for n in nodes]
     edges = [dict(e) for e in edges]
+    # A shared legacy check inherits its ENTRY POINT's policy. Separate the
+    # advisory path before replacing checks with terminal verdict nodes.
+    triggers = [n for n in nodes if n.get("kind") == "trigger" and n["params"].get("event") == "validate"]
+    required_nodes = set().union(*(_reach(n["id"], edges) for n in triggers if n["params"].get("mode") == "required"))
+    taken_ids = {n["id"] for n in nodes}
+    taken_names = {n["name"] for n in nodes if n.get("name")}
+    for trigger in triggers:
+        if trigger["params"].get("mode", "advisory") == "required":
+            continue
+        reached = _reach(trigger["id"], edges) - {trigger["id"]}
+        if not reached & required_nodes:
+            continue
+        id_map = {node_id: _fresh_id(f"{node_id}_advisory", taken_ids) for node_id in sorted(reached)}
+        originals = [n for n in nodes if n["id"] in reached]
+        names = {n["name"]: _fresh_id(f"{n['name'][:20]}_advisory", taken_names, 30) for n in originals if n.get("name")}
+        import re
+        def rewrite_params(value):
+            if isinstance(value, str):
+                return re.sub(r"(\{\{\s*)([A-Za-z0-9_]+)(\.)", lambda m: m[1] + names.get(m[2], m[2]) + m[3], value)
+            if isinstance(value, list):
+                return [rewrite_params(v) for v in value]
+            if isinstance(value, dict):
+                return {k: rewrite_params(v) for k, v in value.items()}
+            return value
+        for original in originals:
+            clone = copy.deepcopy(original)
+            clone["id"] = id_map[original["id"]]
+            if clone.get("name"):
+                clone["name"] = names[clone["name"]]
+            clone["params"] = rewrite_params(clone["params"])
+            nodes.append(clone)
+        cloned_edges = [{**edge, "source": id_map[edge["source"]], "target": id_map[edge["target"]]}
+                        for edge in edges if edge["source"] in reached and edge["target"] in reached]
+        edges = [{**edge, "target": id_map.get(edge["target"], edge["target"])}
+                 if edge["source"] == trigger["id"] else edge for edge in edges]
+        edges.extend(cloned_edges)
     by_id = {n["id"]: n for n in nodes}
     taken = set(by_id)
 

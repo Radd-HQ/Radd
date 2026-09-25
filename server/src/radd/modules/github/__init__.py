@@ -31,6 +31,7 @@ plugin = RaddPlugin(
         *TRIGGERS.specs(),
     ),
     routers=(router, admin_router),
+    automation_templates=TRIGGERS.templates(),
     # RADD_GITHUB_WEBHOOK_SECRET seeds ONE connection row, once (the spec-101 rule).
     on_startup=(service.seed_from_env,),
     capabilities=(

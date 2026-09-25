@@ -80,10 +80,10 @@ async def test_known_project_is_verified_against_its_own_connection(db):
     assert second.active is True
 
 
-async def test_unknown_project_falls_back_to_any_active_connection(db):
+async def test_unknown_project_requires_registration(db):
     await _connection(db, f"host-{uuid.uuid4().hex[:6]}", "secret-one")
     resolved = await service.resolve_for_payload(db, _payload("nobody/knows"), "secret-one")
-    assert resolved is not None and resolved[1] is None
+    assert resolved is None
     assert await service.resolve_for_payload(db, _payload("nobody/knows"), "nope") is None
 
 
@@ -423,7 +423,7 @@ async def test_pipelines_stamp_ci_and_fire_and_deployments_fire_with_the_environ
     await db.refresh(link)
     assert link.ci_state == "failure" and link.ci_url.endswith("/pipelines/77")
     [ci] = await _events_after(db, head, GitlabTrigger.CI_COMPLETED.value)
-    assert ci.payload["ci"] == {"state": "failure", "url": "https://gl.example.com/acme/ci/-/pipelines/77"}
+    assert ci.payload["ci"] == {"state": "failure", "url": "https://gl.example.com/acme/ci/-/pipelines/77", "name": "pipeline", "sha": "c0ffee", "run_id": 77}
     assert ci.payload["item"]["id"] == str(item.id)
     [deployed] = await _events_after(db, head, GitlabTrigger.DEPLOYMENT_FINISHED.value)
     assert deployed.payload["environment"] == "production" and deployed.payload["status"] == "success"

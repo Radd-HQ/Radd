@@ -559,6 +559,7 @@ class RuleCreate(BaseModel):
 
 
 class RuleUpdate(BaseModel):
+    adopt_execution: bool = False
     name: str | None = Field(default=None, min_length=1, max_length=200)
     enabled: bool | None = None
     position: int | None = None
@@ -662,6 +663,7 @@ class NodeInfo(BaseModel):
     #: RADD-1329: no output ports at all.
     terminal: bool = False
     dynamic_outputs: bool = False
+    shape_params: list[str] | None = None
     #: The node's FIXED ports, when its outputs do not depend on its params
     #: (RADD-1064). Empty means they DO — the editor computes those itself as the
     #: form is edited, because an AI classifier's ports are the answers someone
@@ -799,6 +801,7 @@ class TriggerKindInfo(BaseModel):
 
 
 class CatalogRead(BaseModel):
+    max_chain_depth: int = 3
     triggers: list[TriggerInfo]
     operators: list[OperatorInfo]
     manual_trigger: str = AutomationTrigger.MANUAL.value
@@ -824,6 +827,12 @@ class CatalogRead(BaseModel):
 
 
 class RuleTestRequest(BaseModel):
+    name: str = Field(default="Preview", max_length=200)
+    nodes: list[NodeIn] | None = Field(default=None, min_length=1, max_length=MAX_GRAPH_NODES)
+    edges: list[EdgeIn] | None = Field(default=None, max_length=MAX_GRAPH_EDGES)
+    event_id: int | None = Field(default=None, gt=0)
+    event_payload: dict[str, Any] | None = None
+    project_id: uuid.UUID | None = None
     #: The item to run against. OPTIONAL since RADD-921: a graph whose items come
     #: from a search node or a schedule trigger has no seed, and demanding one
     #: made exactly those graphs — the ones with the most to check — the ones
@@ -895,6 +904,7 @@ class ActionPreview(BaseModel):
     detail: str
     #: A workflow guard or the field registry refused it (RADD-1266).
     refused: bool = False
+    failed: bool = False
     #: Which node planned it, and against which item. A graph runs the same
     #: action type from several nodes and, at per-item arity, once per item — a
     #: flat list of "would apply" could not say which was which.

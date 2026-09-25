@@ -237,6 +237,6 @@ async def reconcile_merge_request(
         scope=pr_external_id(project_path, iid),
         ref_texts=[source_branch, title, description],
         entries=entries,
-        category_id=category_id,
+        category_id=category_id, repo=repo,
         note_prefix=f"Logged on !{iid} {title}".strip()[:2000],
     )

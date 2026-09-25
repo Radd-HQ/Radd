@@ -356,7 +356,7 @@ export function GraphInspector({
                 Also run on changes made by other automations
                 <span className="block text-xs text-fg-secondary">
                   Off: only people and integrations start this automation. On: another automation's change
-                  starts it too — never this automation's own, and at most three automations deep.
+                  starts it too — never this automation's own, and at most {catalog?.max_chain_depth ?? 3} automations deep.
                 </span>
               </span>
             </label>
@@ -461,7 +461,7 @@ export function GraphInspector({
             <TextField
               label="Act as"
               value={String(node.params.act_as ?? "")}
-              onChange={(event) => setParams({ ...node.params, act_as: event.target.value })}
+              onChange={(event) => setParams({ ...node.params, act_as: event.target.value, act_as_id: undefined })}
               placeholder="Defaults to you (the automation's author)"
               hint="Email of the person this action runs as. Their permissions apply, and the change is attributed to them."
             />

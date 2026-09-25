@@ -1,6 +1,6 @@
 """The ONE spelling of a connector's external ids (RADD-1124).
 
-`item_vcs_links` is unique on (item, provider, external_id), and every path that
+`item_vcs_links` is unique on (item, provider, connection_id, external_id), and every path that
 touches a ref — a webhook, a backfill walk, a CI stamp — has to produce the same
 string for the same ref or the panel grows twins and CI lands on none of them.
 The Forgejo webhook once wrote a commit as its bare SHA while the backfill wrote

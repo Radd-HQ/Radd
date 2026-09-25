@@ -73,6 +73,11 @@ async def forgejo_webhook(
         raise ForbiddenError("bad forgejo webhook signature")
     connection, _repo = resolved
 
+    delivery = request.headers.get("x-forgejo-delivery") or request.headers.get("x-gitea-delivery") or request.headers.get("x-github-delivery", "")
+    if not await receiving.claim_delivery(session, provider=VcsProvider.FORGEJO, connection_id=connection.id,
+            delivery_id=delivery, event_type=x_forgejo_event or x_gitea_event, body=raw_body):
+        return dict(_NOTHING)
+
     kind = x_forgejo_event or x_gitea_event
     if kind == ForgejoEventKind.PUSH:
         planned = parsing.plan_push(payload)
@@ -81,7 +86,7 @@ async def forgejo_webhook(
     elif kind in (ForgejoEventKind.WORKFLOW_RUN, ForgejoEventKind.WORKFLOW_JOB):
         # Spec 111: CI state for a ref. Forgejo Actions is not on every host, so
         # a payload we cannot read is a no-op rather than an error.
-        return await _handle_workflow_run(session, payload)
+        return await _handle_workflow_run(session, payload, connection, _repo)
     elif kind == ForgejoEventKind.RELEASE:
         return await _handle_release(session, payload, _repo)
     else:
@@ -89,7 +94,8 @@ async def forgejo_webhook(
 
     repo_name = str((payload.get("repository") or {}).get("full_name") or "")
     links = await receiving.link_planned(
-        session, planned, provider=VcsProvider.FORGEJO, actor_id=SYSTEM_ACTOR_ID
+        session, planned, provider=VcsProvider.FORGEJO, actor_id=SYSTEM_ACTOR_ID,
+        connection_id=connection.id, repo=_repo
     )
     result: dict[str, Any] = {"linked": receiving.count(links), "triggered": 0}
     if kind == ForgejoEventKind.PUSH:
@@ -144,7 +150,7 @@ _CI_STATES = {
 }
 
 
-async def _handle_workflow_run(session: AsyncSession, payload: dict) -> dict[str, int]:
+async def _handle_workflow_run(session: AsyncSession, payload: dict, connection=None, repo=None) -> dict[str, int]:
     """Stamp the ref's CI badge; a FINISHED run also fires "Forgejo: CI finished"
     once per linked issue (a queued or running report only moves the badge)."""
     run = payload.get("workflow_run") or payload.get("workflow_job") or {}
@@ -162,17 +168,22 @@ async def _handle_workflow_run(session: AsyncSession, payload: dict) -> dict[str
         external_ids.append(commit_external_id(repository, sha))
     url = str(run.get("html_url") or "")
     stamped = await vcs.set_ci_state(
-        session,
+        session, connection_id=connection.id if connection else None, repo=repo,
         provider=VcsProvider.FORGEJO,
         external_ids=external_ids,
         ci_state=str(ci_state),
         ci_url=url,
+        run_id=run.get("id"), attempt=int(run.get("run_attempt") or 1),
+        head_sha=sha, report_key=f"{'workflow' if payload.get('workflow_run') else 'job'}:{run.get('workflow_id') or run.get('name') or 'default'}",
+        source_started_at=str(run.get("created_at") or run.get("started_at") or ""),
+        source_updated_at=str(run.get("updated_at") or run.get("completed_at") or ""),
     )
     fired = 0
-    if ci_state in tuple(triggers.CiOutcome):
+    if payload.get("workflow_run") and ci_state in tuple(triggers.CiOutcome):
         fired = await receiving.fire_ci(
             session, ForgejoTrigger.CI_COMPLETED, stamped,
             provider=VcsProvider.FORGEJO, repo=repository, state=str(ci_state), url=url,
+            name=str(run.get("name") or "workflow"), sha=sha, run_id=run.get("id"),
             actor_id=SYSTEM_ACTOR_ID,
         )
     return {"linked": len(stamped), "triggered": fired}
@@ -190,8 +201,8 @@ async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[st
         return dict(_NOTHING)
     repo_name = str((payload.get("repository") or {}).get("full_name") or "")
     await triggers.emit_release(
-        session,
-        TRIGGERS.release_published,
+        session, TRIGGERS.release_published,
+        connection_id=getattr(repo, "connection_id", None),
         entity_type=ForgejoEntity.REPO,
         entity_id=repo.id if repo is not None else repo_name,
         provider=VcsProvider.FORGEJO,

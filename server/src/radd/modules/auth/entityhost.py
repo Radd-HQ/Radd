@@ -70,6 +70,12 @@ def _warn_query_gated(entity_key: str, relations: frozenset[str]) -> None:
 
 
 class AuthEntityHost:
+    async def readable_project_ids(self, session, user, entity_key):
+        reach = await authz.readable_projects(session, user)
+        has_relations = bool(registries.relations_for(entity_key))
+        return [project_id for project_id, permissions in reach.items()
+                if has_relations or authz.RELATION_ANY in authz.relations_held(permissions, authz.Permission.ITEM_READ)]
+
     async def current_user(self, request: Any, session: AsyncSession) -> Any:
         user = await optional_user(request, session)
         if user is None:

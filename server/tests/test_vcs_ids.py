@@ -100,9 +100,11 @@ async def test_receiver_writes_one_row_per_commit_and_ci_finds_it(db):
     and the CI stamp spell it — so the workflow run lands on the webhook's row."""
     item = await _item(db)
     secret = "s3cret"
-    await forgejo_service.create_connection(
+    connection = await forgejo_service.create_connection(
         db, ConnectionCreate(name=f"c-{uuid.uuid4().hex[:6]}", base_url=HOST, webhook_secret=secret)
     )
+    from radd.modules.forgejo.schemas import RepoCreate
+    await forgejo_service.create_repo(db, RepoCreate(connection_id=connection.id, full_name=REPO))
     push = {
         "ref": "refs/heads/main",
         "repository": {"full_name": REPO, "html_url": f"{HOST}/{REPO}"},
@@ -138,11 +140,11 @@ async def test_a_lost_insert_race_becomes_the_update(db, monkeypatch):
     real_find = vcs._find_link
     misses = iter([True])
 
-    async def blind_once(session, item_id, provider, ext):
+    async def blind_once(session, item_id, provider, ext, connection_id=None):
         # The first lookup does not see the winner's row — the race, modelled.
         if next(misses, False):
             return None
-        return await real_find(session, item_id, provider, ext)
+        return await real_find(session, item_id, provider, ext, connection_id)
 
     monkeypatch.setattr(vcs, "_find_link", blind_once)
     second = await vcs.upsert_vcs_link(db, item.id, title="second", **kwargs)

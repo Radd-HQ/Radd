@@ -64,6 +64,8 @@ export interface VcsLink {
   /** Spec 111 — latest CI run for this ref ("" = never reported). */
   ci_state: string;
   ci_url: string;
+  connection_id?: string | null;
+  ci_reports?: Record<string, { state: string; url: string; sha: string }>;
 }
 
 export interface VcsLinkCreate {
@@ -89,6 +91,8 @@ export type ForgejoConnection = {
 };
 
 export type ForgejoRepo = {
+  enabled: boolean;
+  link_all_projects: boolean;
   id: string;
   connection_id: string;
   full_name: string;
@@ -122,6 +126,8 @@ export type ForgejoBackfillReport = {
   commits: number;
   linked: number;
   unknown_keys: string[];
+  worklogs?: Record<string, unknown>;
+  errors?: string[];
 };
 
 /** RADD-1258 — how a provider account was tied to a Radd user. */

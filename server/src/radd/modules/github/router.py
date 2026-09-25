@@ -68,6 +68,10 @@ async def github_webhook(
         raise ForbiddenError("bad github webhook signature")
     connection, repo = resolved
 
+    if not await receiving.claim_delivery(session, provider=VcsProvider.GITHUB, connection_id=connection.id,
+            delivery_id=x_github_delivery, event_type=x_github_event, body=raw_body):
+        return dict(_NOTHING)
+
     kind = x_github_event
     if kind in (
         GithubEventKind.ISSUE_COMMENT,
@@ -90,7 +94,7 @@ async def github_webhook(
     elif kind == GithubEventKind.PULL_REQUEST:
         planned = parsing.plan_pull_request(payload)
     elif kind in (GithubEventKind.CHECK_RUN, GithubEventKind.CHECK_SUITE, GithubEventKind.WORKFLOW_RUN):
-        return await _handle_ci(session, kind, payload)
+        return await _handle_ci(session, kind, payload, connection, repo)
     elif kind == GithubEventKind.RELEASE:
         return await _handle_release(session, payload, repo)
     else:
@@ -98,7 +102,8 @@ async def github_webhook(
 
     repo_name = str((payload.get("repository") or {}).get("full_name") or "")
     links = await receiving.link_planned(
-        session, planned, provider=VcsProvider.GITHUB, actor_id=SYSTEM_ACTOR_ID
+        session, planned, provider=VcsProvider.GITHUB, actor_id=SYSTEM_ACTOR_ID,
+        connection_id=connection.id, repo=repo
     )
     result = {"linked": receiving.count(links), "triggered": 0}
     if kind == GithubEventKind.PUSH:
@@ -165,24 +170,31 @@ async def _handle_comment(
     return result
 
 
-async def _handle_ci(session: AsyncSession, kind: str, payload: dict) -> dict[str, int]:
+async def _handle_ci(session: AsyncSession, kind: str, payload: dict, connection=None, repo=None) -> dict[str, int]:
     """Stamp the ref's CI badge; a FINISHED run also fires "GitHub: CI finished"
     once per linked issue (a queued or running report only moves the badge)."""
     update = parsing.plan_ci(kind, payload)
     if update is None:
         return dict(_NOTHING)
+    run = payload.get(kind) or {}
     stamped = await vcs.set_ci_state(
-        session,
+        session, connection_id=connection.id if connection else None, repo=repo,
         provider=VcsProvider.GITHUB,
         external_ids=list(update.external_ids),
         ci_state=update.state,
         ci_url=update.url,
+        run_id=run.get("id"), attempt=int(run.get("run_attempt") or 1),
+        head_sha=str(run.get("head_sha") or ""),
+        report_key=f"{kind}:{run.get('workflow_id') or run.get('name') or (run.get('app') or {}).get('id') or 'default'}",
+        source_started_at=str(run.get("created_at") or run.get("started_at") or ""),
+        source_updated_at=str(run.get("updated_at") or run.get("completed_at") or ""),
     )
     fired = 0
-    if update.state in tuple(triggers.CiOutcome):
+    if kind == GithubEventKind.WORKFLOW_RUN and update.state in tuple(triggers.CiOutcome):
         fired = await receiving.fire_ci(
             session, GithubTrigger.CI_COMPLETED, stamped,
             provider=VcsProvider.GITHUB, repo=update.repo, state=update.state, url=update.url,
+            name=str(run.get("name") or "workflow"), sha=str(run.get("head_sha") or ""), run_id=run.get("id"),
             actor_id=SYSTEM_ACTOR_ID,
         )
     return {"linked": len(stamped), "triggered": fired}
@@ -204,8 +216,8 @@ async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[st
         return dict(_NOTHING)
     repo_name = str((payload.get("repository") or {}).get("full_name") or "")
     await triggers.emit_release(
-        session,
-        TRIGGERS.release_published,
+        session, TRIGGERS.release_published,
+        connection_id=getattr(repo, "connection_id", None),
         entity_type=GithubEntity.REPO,
         entity_id=repo.id if repo is not None else repo_name,
         provider=VcsProvider.GITHUB,

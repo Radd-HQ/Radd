@@ -156,7 +156,7 @@
     "has_changes": true
   },
   "forgejo.ci.completed": {
-    "label": "Forgejo: CI finished",
+    "label": "Forgejo: workflow / pipeline finished",
     "group": "Forgejo",
     "item_scoped": true,
     "has_changes": false
@@ -216,7 +216,7 @@
     "has_changes": true
   },
   "github.ci.completed": {
-    "label": "GitHub: CI finished",
+    "label": "GitHub: workflow / pipeline finished",
     "group": "GitHub",
     "item_scoped": true,
     "has_changes": false
@@ -258,7 +258,7 @@
     "has_changes": false
   },
   "gitlab.ci.completed": {
-    "label": "GitLab: CI finished",
+    "label": "GitLab: workflow / pipeline finished",
     "group": "GitLab",
     "item_scoped": true,
     "has_changes": false

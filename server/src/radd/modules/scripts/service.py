@@ -9,7 +9,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from radd.clock import utcnow
 from radd.config import settings
@@ -76,36 +76,34 @@ async def run_body(
     label: str,
     python: str | None = None,
 ) -> runner.Outcome:
-    """Mint the run's key, run, discard the key — whatever happened."""
-    # RADD-1314: the key carries the run's causation, so what the script writes
-    # back over REST is automation-caused, exactly like a built-in action's
-    # writes — otherwise a script that updates its own item re-triggers its own
-    # automation.
-    token, raw = await service_tokens.mint_ephemeral_token(
-        session, actor, name=f"script run ({label})", ttl_seconds=int(timeout) + 60,
-        automation_cause={
-            **(events.current_cause() or events.AutomationCause()).as_json(),
-            "source": "script",
-        },
-    )
-    # The key must be VISIBLE to the request the child makes, which arrives on
-    # another connection: flush is not enough, the row has to be committed. A
-    # nested transaction does not help either, so this is the one place in the
-    # engine that commits mid-run — and it is why the mint is its own row
-    # rather than a claim on the caller's session.
-    await session.commit()
+    """Manage the subprocess credential in its own transaction, never the caller's."""
+    maker = async_sessionmaker(session.bind, expire_on_commit=False)
+    async with maker() as credentials:
+        persisted_actor = await credentials.get(User, actor.id)
+        if persisted_actor is None or not persisted_actor.active:
+            raise RuntimeError("The script's execution account is unavailable")
+        token, raw = await service_tokens.mint_ephemeral_token(
+            credentials, persisted_actor, name=f"script run ({label})", ttl_seconds=int(timeout) + 60,
+            automation_cause={
+                **(events.current_cause() or events.AutomationCause()).as_json(),
+                "source": "script",
+            },
+        )
+        await credentials.commit()
     try:
         return await runner.run(
             body,
             {**payload, "radd_url": settings.scripts_api_url or settings.app_base_url, "radd_token": raw},
-            timeout=timeout,
-            python=python,
+            timeout=timeout, python=python,
         )
     finally:
         try:
-            await service_tokens.discard_token(session, await session.get(token.__class__, token.id))
-            await session.commit()
-        except Exception:  # the expiry covers a key that outlives a failed discard
+            async with maker() as credentials:
+                found = await credentials.get(token.__class__, token.id)
+                if found is not None:
+                    await service_tokens.discard_token(credentials, found)
+                await credentials.commit()
+        except Exception:  # expiration limits a credential if cleanup is unavailable
             logger.warning("scripts: could not discard the run key for %s; it expires anyway", label)
 
 

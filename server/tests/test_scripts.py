@@ -250,6 +250,7 @@ async def test_decide_node_takes_the_named_port_or_unavailable(db, admin, monkey
 
 async def test_the_run_key_is_minted_for_the_actor_and_discarded(db, admin, monkeypatch):
     """The real `run_body`: the child sees a key, and the row is gone after."""
+    await db.commit()  # Execution accounts exist before a real request starts.
     seen = {}
 
     async def fake_run(body, payload, *, timeout, python=None):
@@ -266,7 +267,7 @@ async def test_the_run_key_is_minted_for_the_actor_and_discarded(db, admin, monk
     assert seen["rows_during"] == 1
     rows = (await db.execute(select(ApiToken).where(ApiToken.user_id == admin.id))).scalars().all()
     assert rows == []
-    # This test committed (run_body must); clean up the actor it made.
+    # This test persisted its actor; run_body must never commit the caller.
     await db.delete(admin)
     await db.commit()
 

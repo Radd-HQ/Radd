@@ -83,6 +83,7 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
     Static per build — but served, not baked into the SPA, so extensions listing
     it stay honest about what this server supports."""
     return CatalogRead(
+        max_chain_depth=settings.automation_max_chain_depth,
         triggers=[
             TriggerInfo(
                 event_type=spec.event_type,
@@ -120,6 +121,7 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 dynamic_ports=spec.dynamic_ports,
                 terminal=spec.terminal,
                 dynamic_outputs=spec.dynamic_outputs,
+                shape_params=list(spec.shape_params) if spec.shape_params is not None else None,
                 ports=list(spec.ports),
                 default_ports=list(spec.ports_at(spec.default_params or {})),
                 outputs=[_output_info(field) for field in spec.outputs],
@@ -311,7 +313,7 @@ async def event_samples(
         ],
         changed_fields=samples.changed_fields(payloads),
         example=payloads[0] if payloads else None,
-        declared_paths=await _declared_paths(session, spec) if not payloads else [],
+        declared_paths=await _declared_paths(session, spec),
     )
 
 
@@ -331,24 +333,44 @@ async def _declared_paths(session: AsyncSession, spec) -> list[PayloadPathInfo]:
     return sorted(found.values(), key=lambda info: info.path)
 
 
-@router.post("/{rule_id}/test", response_model=RuleTestResult)
-async def test_rule(
-    rule_id: uuid.UUID, data: RuleTestRequest, session: Session, user: CurrentUser
-) -> RuleTestResult:
-    """Dry-run the graph: per node, what arrived and what left by each port, plus
-    the actions it would have taken. No writes.
-
-    `item_id` is optional — a graph fed by a search node or a schedule trigger
-    has no triggering item, and demanding one made exactly those graphs the ones
-    that could not be checked."""
-    rule = await service.get_rule(session, rule_id)
+@router.get("/samples/records")
+async def recorded_samples(event_type: str, session: Session, user: CurrentUser) -> list[dict]:
+    from sqlalchemy import select
     await authz.require(session, user, _MANAGE)
+    rows = await session.scalars(select(events_service.Event).where(events_service.Event.event_type == event_type)
+                                .order_by(events_service.Event.id.desc()).limit(20))
+    return [{"id": row.id, "created_at": row.created_at, "payload": row.payload} for row in rows]
+
+
+async def _preview_draft(data: RuleTestRequest, session: Session, user: CurrentUser, rule=None):
+    from types import SimpleNamespace
+    await authz.require(session, user, _MANAGE)
+    if data.nodes is not None:
+        nodes = [n.model_dump(mode="json") for n in data.nodes]
+        edges = [e.model_dump(mode="json") for e in data.edges or []]
+        await service._validate_graph(session, nodes, edges, user.id)
+        rule = SimpleNamespace(id=rule.id if rule else uuid.uuid4(), name=data.name, nodes=nodes, edges=edges,
+                               created_by_id=rule.created_by_id if rule else user.id)
+    if rule is None:
+        raise ConflictError("automation", reason="Provide a graph to preview")
     if data.subject_id is not None and data.subject != graph.ITEM_SUBJECT:
         await _require_seedable(session, data.subject, data.subject_id)
-        return await engine.preview(
-            session, rule, None, data.trigger_node_id, subject=data.subject, subject_id=data.subject_id
-        )
-    return await engine.preview(session, rule, data.item_id or data.subject_id, data.trigger_node_id)
+    try:
+        return await engine.preview(session, rule, data.item_id or (data.subject_id if data.subject == graph.ITEM_SUBJECT else None),
+            data.trigger_node_id, subject=data.subject, subject_id=data.subject_id,
+            event_id=data.event_id, event_payload=data.event_payload, project_id=data.project_id)
+    except ValueError as exc:
+        raise ConflictError("automation", reason=str(exc)) from exc
+
+
+@router.post("/preview", response_model=RuleTestResult)
+async def preview_draft(data: RuleTestRequest, session: Session, user: CurrentUser) -> RuleTestResult:
+    return await _preview_draft(data, session, user)
+
+
+@router.post("/{rule_id}/test", response_model=RuleTestResult)
+async def test_rule(rule_id: uuid.UUID, data: RuleTestRequest, session: Session, user: CurrentUser) -> RuleTestResult:
+    return await _preview_draft(data, session, user, await service.get_rule(session, rule_id))
 
 
 @router.get("/{rule_id}/versions", response_model=list[VersionRead])

@@ -149,12 +149,10 @@ def spec_for(kind: str) -> NotificationKindSpec | None:
     return next((spec for spec in all_specs() if spec.key == key), None)
 
 
-def contributed_for(event_type: str) -> NotificationKindSpec | None:
-    """The contributed kind that answers this event, if any."""
-    for spec in registries.notification_kinds.values():
-        if event_type in spec.events and spec.recipients is not None:
-            return spec
-    return None
+def contributed_for(event_type: str) -> tuple[NotificationKindSpec, ...]:
+    """Every contributed kind answering an event, including core events."""
+    return tuple(spec for spec in registries.notification_kinds.values()
+                 if event_type in spec.events and spec.recipients is not None)
 
 
 def contributed_events() -> frozenset[str]:

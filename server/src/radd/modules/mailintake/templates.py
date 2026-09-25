@@ -46,31 +46,15 @@ TELL_REQUESTER_WHEN_RESOLVED = AutomationTemplateSpec(
     key="mailintake.tell_requester_when_resolved",
     name="Tell the requester when resolved",
     description=(
-        "When an issue moves into a done state, email the person whose mail opened it. "
-        "Skipped when the issue has no email contact."
+        "When a person or automation moves an issue into Done, email its external thread contacts. "
+        "Skips done-to-done moves, missing contacts, and projects where a satisfaction survey announces resolution."
     ),
     group=GROUP,
     nodes=(
-        {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.updated"}},
-        {"id": "moved", "kind": "gate", "type": "gate.field_changed",
-         "params": {"field": "state", "from_mode": "any", "from_values": [], "to_mode": "any", "to_values": []}},
-        {"id": "done", "kind": "gate", "type": "gate.state_category", "params": {"categories": ["done"]}},
-        {"id": "notice", "kind": "action", "type": "action.send_email",
-         "params": {
-             "to": "contact", "arity": "item", "thread": True,
-             "subject": "[{{item.key}}] Your request has been resolved",
-             "body": (
-                 "Your request {{item.key}} — {{item.title}} — has been marked {{item.state}}.\n"
-                 "\n"
-                 "If it isn't sorted, reply to this email and the ticket picks up where it left off."
-             ),
-         }},
+        {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.updated", "include_automated": True}},
+        {"id": "notice", "kind": "action", "type": "mailintake.notify_resolution", "params": {}},
     ),
-    edges=(
-        {"source": "trg", "port": "out", "target": "moved"},
-        {"source": "moved", "port": "true", "target": "done"},
-        {"source": "done", "port": "true", "target": "notice"},
-    ),
+    edges=({"source": "trg", "port": "out", "target": "notice"},),
 )
 
 TEMPLATES = (ACKNOWLEDGE_NEW_TICKETS, TELL_REQUESTER_WHEN_RESOLVED)

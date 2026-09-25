@@ -247,6 +247,7 @@ RUN_NODE = AutomationNodeSpec(
     group="Scripts",
     params_schema=RUN_SCHEMA,
     outputs_for=outputs_for,
+    shape_params=("outputs",),
     subject="item",
     arity="set",
     arity_options=("set", "item"),
@@ -260,15 +261,17 @@ RUN_NODE = AutomationNodeSpec(
 DECIDE_NODE = AutomationNodeSpec(
     key=NODE_DECIDE,
     kind="gate",
+    preview_safe=False,
     label="Decide with a script",
     description=(
         "Route the packet by what a Python script returns — the name of one of the "
         "ports you declare. A script that fails or answers something else takes "
-        "the unavailable port."
+        "the unavailable port. This executes code on live runs; previews skip it and intake validation cannot use it."
     ),
     group="Scripts",
     params_schema=DECIDE_SCHEMA,
     ports_for=ports_for,
+    shape_params=("ports",),
     subject="item",
     arity="set",
     needs_items=False,

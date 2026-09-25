@@ -183,12 +183,12 @@ async def test_known_repo_is_verified_against_its_own_connection_only(db):
     assert await service.resolve_for_payload(db, payload, body, _sign(body, "secret-two")) is None
 
 
-async def test_unknown_repo_falls_back_to_active_connections_only(db):
+async def test_unknown_repo_requires_registration(db):
     await _connection(db, f"host-{uuid.uuid4().hex[:6]}", "secret-one")
     await _connection(db, f"off-{uuid.uuid4().hex[:6]}", "secret-off", active=False)
     payload, body = _payload("nobody/knows-this")
     resolved = await service.resolve_for_payload(db, payload, body, _sign(body, "secret-one"))
-    assert resolved is not None and resolved[1] is None
+    assert resolved is None
     assert await service.resolve_for_payload(db, payload, body, _sign(body, "secret-off")) is None
     assert await service.resolve_for_payload(db, payload, body, "") is None
 

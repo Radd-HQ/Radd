@@ -14,6 +14,7 @@ import { SelectField } from "../../components/SelectField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
+import { IntegrationAutomations } from "../../components/settings/IntegrationAutomations";
 
 /**
  * Settings → Alertmanager (RADD-1317). Receivers used to be one env token and
@@ -92,10 +93,11 @@ export function AlertmanagerSettingsPage() {
   return (
     <SettingsPage
       title="Alertmanager"
-      description="Receivers turn firing Prometheus Alertmanager alerts into issues in a project, one issue per alert fingerprint."
+      description="Receivers turn firing Prometheus Alertmanager alerts into issues in a project, one issue per receiver and alert fingerprint."
       history={{ entities: ["alertmanager_receiver"] }}
     >
       {confirmDialog}
+      <IntegrationAutomations group="Alertmanager" />
       <p className="mb-4 text-[13px] text-fg-muted" data-alertmanager-note>
         A receiver creates the issue and changes nothing else. What a repeat or a resolution should do (comment, move
         the issue, label it) is an automation: start from an Alertmanager template in{" "}

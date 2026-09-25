@@ -413,6 +413,7 @@ SPEC = AutomationNodeSpec(
     params_schema=PARAMS_SCHEMA,
     ports=PORTS,
     outputs_for=outputs_for,
+    shape_params=("fields",),
     #: A generation about no item has nothing to describe.
     needs_items=True,
     # Fixed SET, unlike the classifier. Per item there would be one answer per

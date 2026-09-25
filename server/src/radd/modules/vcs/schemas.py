@@ -34,6 +34,8 @@ class VcsLinkRead(BaseModel):
     # Spec 111 — latest CI run for the ref ("" = never reported).
     ci_state: str = ""
     ci_url: str = ""
+    connection_id: uuid.UUID | None = None
+    ci_reports: dict = Field(default_factory=dict)
 
 
 # --- RADD-1258: the identity map + unmatched authors (Settings → Version control) ---

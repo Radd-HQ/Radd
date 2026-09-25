@@ -59,7 +59,8 @@ async def run_head_seeded[P](
         batch = await service.read_after(session, offset, batch_size)
         if not batch:
             return 0
-        plans: list[P] = []
+        deliveries: list[tuple[Event, list[P]]] = []
+        previous_cause = None
         for event in batch:
             # Every consumer on this scaffold DELIVERS somewhere external (a survey
             # email, a chat message, a requester reply), which is exactly what a
@@ -67,14 +68,20 @@ async def run_head_seeded[P](
             if event.silent:
                 continue
             try:
-                planned = await plan(session, event)
+                with service.derived_from(event):
+                    planned = await plan(session, event)
             except Exception:
                 logger.exception("%s: planning failed for event %s", consumer_name, event.id)
                 continue
             if planned is not None:
-                plans.append(planned)
+                cause = (event.automated, event.automation_rule_id, event.automation_depth, event.silent)
+                if cause != previous_cause:
+                    deliveries.append((event, []))
+                    previous_cause = cause
+                deliveries[-1][1].append(planned)
         await service.set_offset(session, consumer_name, batch[-1].id)
         await session.commit()  # planning writes + the cursor land BEFORE delivery
-    if plans:  # post-commit, post-cursor: at-most-once delivery
-        await deliver(plans)
+    for event, plans in deliveries:  # post-commit, post-cursor: at-most-once delivery
+        with service.derived_from(event):
+            await deliver(plans)
     return len(batch)

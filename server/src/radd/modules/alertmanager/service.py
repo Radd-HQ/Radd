@@ -62,7 +62,10 @@ async def receiver_for_token(session: AsyncSession, token: str) -> AlertReceiver
 async def process(session: AsyncSession, receiver: AlertReceiver, payload: dict) -> dict[str, int]:
     """Plan (pure) + apply one Alertmanager delivery for this receiver."""
     fingerprints = {alert.get("fingerprint", "") for alert in payload.get("alerts") or []} - {""}
-    known = await _known_items(session, fingerprints)
+    # Serialize deliveries for this receiver so concurrent repeats cannot both
+    # create an issue before either deduplication mapping is visible.
+    await session.execute(select(AlertReceiver.id).where(AlertReceiver.id == receiver.id).with_for_update())
+    known = await _known_items(session, receiver.id, fingerprints)
     plans = planner.plan_alerts(payload, existing=frozenset(known))
     if not plans:
         return {"created": 0, "triggered": 0}
@@ -97,11 +100,13 @@ async def process(session: AsyncSession, receiver: AlertReceiver, payload: dict)
     return {"created": created, "triggered": triggered}
 
 
-async def _known_items(session: AsyncSession, fingerprints: set[str]) -> dict[str, uuid.UUID]:
+async def _known_items(session: AsyncSession, receiver_id: uuid.UUID, fingerprints: set[str]) -> dict[str, uuid.UUID]:
     if not fingerprints:
         return {}
     result = await session.execute(
-        select(AlertItem.fingerprint, AlertItem.item_id).where(AlertItem.fingerprint.in_(fingerprints))
+        select(AlertItem.fingerprint, AlertItem.item_id).where(
+            AlertItem.receiver_id == receiver_id, AlertItem.fingerprint.in_(fingerprints)
+        )
     )
     return dict(result.all())
 
@@ -136,6 +141,7 @@ async def _emit(session, event_type, receiver: AlertReceiver, actor_id, diff=Non
 
 
 async def create_receiver(session: AsyncSession, data, *, actor_id: uuid.UUID | None = None) -> AlertReceiver:
+    await _claim_seed(session)
     if (await session.execute(select(AlertReceiver).where(AlertReceiver.name == data.name))).scalar_one_or_none():
         raise ConflictError(AlertEntity.RECEIVER, data.name)
     receiver = AlertReceiver(name=data.name, token=data.token, project_id=data.project_id, active=data.active)
@@ -200,7 +206,8 @@ async def seed_from_env() -> None:
     token = settings.alertmanager_token.strip()
     async with SessionLocal() as session:
         empty = int((await session.execute(select(func.count()).select_from(AlertReceiver))).scalar_one()) == 0
-        if token and empty:
+        claimed = await _claim_seed(session) if token or not empty else False
+        if token and empty and claimed:
             project_id = None
             key = settings.alertmanager_project_key.strip()
             if key:
@@ -209,6 +216,15 @@ async def seed_from_env() -> None:
                 except NotFoundError:
                     logger.warning("alertmanager: seed project %s does not exist; receiver has no project", key)
             session.add(AlertReceiver(name="Alertmanager", token=token, project_id=project_id, active=True))
-            await session.commit()
             logger.info("alertmanager: seeded one receiver from the environment")
+        await session.commit()
         await refresh_snapshot(session)
+
+
+async def _claim_seed(session: AsyncSession) -> bool:
+    from sqlalchemy.dialects.postgresql import insert
+    from .models import AlertSeed
+
+    claimed = await session.scalar(insert(AlertSeed).values(key="environment")
+                                   .on_conflict_do_nothing().returning(AlertSeed.key))
+    return claimed is not None

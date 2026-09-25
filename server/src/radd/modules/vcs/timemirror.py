@@ -23,7 +23,7 @@ import logging
 import re
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 
 from sqlalchemy import delete, func, select
@@ -318,6 +318,7 @@ async def reconcile(
     category_id: uuid.UUID | None,
     note_prefix: str,
     id_prefix: str | None = None,
+    repo=None,
 ) -> MirrorReport:
     """Mirror the CURRENT time entries of one ref.
 
@@ -328,6 +329,10 @@ async def reconcile(
     deletion to one comment's rows (GitHub, RADD-1261) — see
     `timelogging.external.reconcile_external_worklogs`.
     """
+    scope = f"{connection_id}:{scope}"
+    entries = [replace(entry, external_id=f"{connection_id}:{entry.external_id}") for entry in entries]
+    if id_prefix is not None:
+        id_prefix = f"{connection_id}:{id_prefix}"
     report = MirrorReport()
     default_item = await target_item_id(session, *ref_texts)
     resolved: list[timelog_external.ExternalEntry] = []
@@ -339,6 +344,11 @@ async def reconcile(
         if item_id is None:
             report.no_item += 1
             continue
+        if repo is not None and not repo.link_all_projects:
+            item = await items_service.require_item(session, item_id)
+            if item.project_id != repo.project_id:
+                report.no_item += 1
+                continue
         note = entry.note.strip() or note_prefix
         author_id = await resolve_author(
             session,
@@ -404,6 +414,7 @@ async def remove_author_entries(
 ) -> int:
     """GitHub's `/unspend`: forget this account's time on the ref — its mirrored
     rows (when the account is mapped) and its parked ones."""
+    scope = f"{connection_id}:{scope}"
     deleted = 0
     user_id = await resolve_author(session, provider=provider, connection_id=connection_id, username=username)
     if user_id is not None:

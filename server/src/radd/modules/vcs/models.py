@@ -1,7 +1,8 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import BigInteger, Date, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -22,12 +23,19 @@ class ItemVcsLink(Base, TimestampMixin):
             "uq_item_vcs_links_ref",
             "item_id",
             "provider",
+            "connection_id",
             "external_id",
             unique=True,
-            postgresql_where=text("external_id <> ''"),
+            postgresql_where=text("external_id <> '' AND connection_id IS NOT NULL"),
         ),
+        Index("uq_item_vcs_links_legacy_ref", "item_id", "provider", "external_id",
+              unique=True, postgresql_where=text("external_id <> '' AND connection_id IS NULL")),
     )
 
+    connection_id: Mapped[uuid.UUID | None] = mapped_column(index=True, default=None)
+    ci_reports: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    ci_head_started_at: Mapped[datetime | None] = mapped_column(default=None)
+    ci_head_sha: Mapped[str] = mapped_column(String(100), default="", server_default="")
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     item_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("work_items.id", ondelete="CASCADE"), index=True
@@ -38,14 +46,22 @@ class ItemVcsLink(Base, TimestampMixin):
     url: Mapped[str] = mapped_column(String(2000))
     status: Mapped[str] = mapped_column(String(40), default="")  # free-form: "open"/"merged"/"closed"
     external_id: Mapped[str] = mapped_column(String(200), default="")  # connector id for upsert dedup
-    # Spec 111 — the LATEST CI run for this ref, not a check-run history. The
-    # panel answers "is this green"; a branch with two workflows shows the last
-    # one to report.
+    # Aggregate of reported streams for the latest known commit.
     ci_state: Mapped[str] = mapped_column(String(20), default="")  # CiState ("" = unknown)
     ci_url: Mapped[str] = mapped_column(String(2000), default="")
     ci_updated_at: Mapped[datetime | None] = mapped_column(default=None)
+    ci_run_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    ci_source_updated_at: Mapped[datetime | None] = mapped_column(default=None)
     # Who linked it; None for connector/system. Plain UUID (no FK) — mirrors events.actor_id.
     created_by: Mapped[uuid.UUID | None]
+
+
+class VcsDelivery(Base):
+    """Authenticated webhook delivery claims, committed with their effects."""
+    __tablename__ = "vcs_deliveries"
+    provider: Mapped[str] = mapped_column(String(20), primary_key=True)
+    connection_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    digest: Mapped[str] = mapped_column(String(64), primary_key=True)
 
 
 class VcsUserLink(Base, TimestampMixin):
@@ -98,8 +114,8 @@ class VcsPendingWorklog(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     provider: Mapped[str] = mapped_column(String(20))
     connection_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    external_scope: Mapped[str] = mapped_column(String(200), index=True)
-    external_id: Mapped[str] = mapped_column(String(200))
+    external_scope: Mapped[str] = mapped_column(String(512), index=True)
+    external_id: Mapped[str] = mapped_column(String(512))
     external_username: Mapped[str] = mapped_column(String(200), index=True)  # lowercase
     external_email: Mapped[str] = mapped_column(String(320), default="")
     item_id: Mapped[uuid.UUID] = mapped_column(
@@ -112,3 +128,9 @@ class VcsPendingWorklog(Base, TimestampMixin):
     time_spent_seconds: Mapped[int] = mapped_column(Integer)
     note: Mapped[str] = mapped_column(Text, default="")
     last_seen_at: Mapped[datetime] = mapped_column()
+
+
+class VcsSeed(Base):
+    """Environment initialization is independent of deletable connection rows."""
+    __tablename__ = "vcs_seeds"
+    provider: Mapped[str] = mapped_column(String(20), primary_key=True)

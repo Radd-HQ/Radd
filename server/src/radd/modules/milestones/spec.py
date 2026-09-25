@@ -17,7 +17,7 @@ SPEC = EntitySpec(
     searchable=True,
     mentionable=True,
     # RADD-1327: the page its `#` mentions and audit entries link to.
-    url="/milestones",
+    url="/milestones#milestone-{id}",
     fields=(
         EntityFieldSpec("project_id", "uuid", nullable=False, index=True, fk="projects.id"),
         EntityFieldSpec("title", "str", nullable=False),

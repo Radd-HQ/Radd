@@ -106,11 +106,11 @@ function VcsRow({ link, canWrite }: { link: VcsLink; canWrite: boolean }) {
           href={link.ci_url || link.url}
           target="_blank"
           rel="noreferrer"
-          title={ci.label}
+          title={`Reported CI: ${ci.label}. ${Object.entries(link.ci_reports ?? {}).map(([name, report]) => `${name}: ${report.state}`).join("; ")} This summarizes received reports, not required-check approval.`}
           className={`flex shrink-0 items-center gap-1 rounded border px-1.5 py-px text-[11px] ${ci.className}`}
         >
           <CiIcon size={11} aria-hidden />
-          <span className="sr-only">{ci.label}</span>
+          <span>Reported CI</span>
         </a>
       )}
       {link.status && (

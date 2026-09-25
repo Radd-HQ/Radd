@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
@@ -46,6 +46,16 @@ export function MilestonesPage() {
     queryKey: listKey,
     queryFn: ({ signal }) => api.get<Milestone[]>("/milestones", { signal }),
   });
+  useEffect(() => {
+    const reveal = () => {
+      const target = document.getElementById(window.location.hash.slice(1));
+      target?.scrollIntoView({ block: "center" });
+      target?.focus({ preventScroll: true });
+    };
+    reveal();
+    window.addEventListener("hashchange", reveal);
+    return () => window.removeEventListener("hashchange", reveal);
+  }, [data]);
 
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState("");
@@ -151,6 +161,8 @@ export function MilestonesPage() {
             {(data ?? []).map((m) => (
               <li
                 key={m.id}
+                id={`milestone-${m.id}`}
+                tabIndex={-1}
                 style={{
                   display: "flex",
                   alignItems: "center",

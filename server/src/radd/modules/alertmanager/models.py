@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -24,15 +24,23 @@ class AlertReceiver(Base, TimestampMixin):
 
 
 class AlertItem(Base):
-    """Alert fingerprint → issue dedup map (spec 47): one issue per Alertmanager
-    fingerprint, instance-wide; repeats and resolutions are trigger events on it.
-    `receiver_id` records which receiver first saw it (RADD-1317)."""
+    """Deduplicate alerts within their receiver, never across monitoring sources."""
 
     __tablename__ = "alert_items"
 
-    fingerprint: Mapped[str] = mapped_column(Text, primary_key=True)
+    __table_args__ = (UniqueConstraint("receiver_id", "fingerprint", name="uq_alert_items_receiver_fingerprint"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    fingerprint: Mapped[str] = mapped_column(Text)
     item_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"))
     receiver_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("alertmanager_receivers.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class AlertSeed(Base):
+    """Durable ownership marker; deleting receivers must not reset initial setup."""
+
+    __tablename__ = "alertmanager_seed"
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)

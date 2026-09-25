@@ -306,6 +306,25 @@ class RaddPlugin:
 > | `entities` search wiring | `EntitySpec.searchable/mentionable/url` derive a `SearchableSpec`; `searchables=` for hand-written entities (RADD-1327) |
 > | — | `record_local_entities` — entity types the realtime hub may narrow to one item's refresh |
 
+Consumer callbacks passed to `run_consumer` inherit the source event's automation
+cause during both planning and delivery. Delivery may receive several consecutive
+batches when causes differ. The cursor still commits before delivery: failures
+are not retried by this runner. Hand-written consumers that emit derived events
+should wrap their work in `with radd.sdk.derived_from(event):`; historical
+bootstrap can additionally pass `silent=True`.
+
+Contributed automation nodes should render action text through `ctx.render`.
+Missing named outputs refuse the action and appear as a skipped plan; optional
+event fields keep their existing rendering behavior. Submitter-facing verdicts
+use the separate original-draft renderer, whose message token allowlist is
+`item.title`. Findings published about replacement search results retain their
+severity but get generic wording before being relayed to the submitter.
+
+Dynamic nodes can declare `shape_params=("answers",)` (for example) to name only
+the parameters their `ports_for` and `outputs_for` callbacks read. The editor
+sends those parameters to the shape endpoint, debounces shape changes, and keeps
+the last valid shape while loading. Omit `shape_params` when all parameters matter.
+
 Registries the kernel exposes (one per contribution kind): `entities`, `events`(produce),
 `consumers`, `triggers`, `actions`, `conditions`, `tasks`, `settings`, `permissions`,
 `crud_resources`, `access_resources`, `capabilities`, `integrations`, `ui`. Each is a dict populated

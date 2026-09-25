@@ -251,6 +251,10 @@ class Renderer:
         self.misses.append(f"{literal} — {root!r} produced {made}, not {name!r}")
 
 
+class MissingTemplateOutput(ValueError):
+    """A required named producer did not provide the value this action needs."""
+
+
 def render_template(
     text: str,
     facts: EventFacts,

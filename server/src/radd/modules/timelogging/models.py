@@ -116,5 +116,5 @@ class Worklog(Base, TimestampMixin):
     # provider's own entry id. A row with a source is read-only in Radd — it
     # is corrected where it was logged.
     external_source: Mapped[str] = mapped_column(String(20), default="", server_default="")
-    external_scope: Mapped[str] = mapped_column(String(200), default="", server_default="")
-    external_id: Mapped[str] = mapped_column(String(200), default="", server_default="")
+    external_scope: Mapped[str] = mapped_column(String(512), default="", server_default="")
+    external_id: Mapped[str] = mapped_column(String(512), default="", server_default="")

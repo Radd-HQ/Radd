@@ -226,7 +226,7 @@ function VerdictMessage({
         value={String(params.message ?? "")}
         onChange={(event) => onChange({ ...params, message: event.target.value })}
         placeholder="Add the steps to reproduce, and what you expected to happen."
-        hint="Write it as advice, not as an error code. Only the draft's own {{item.*}} tokens are allowed here."
+        hint="Write it as advice. {{item.title}} always means the original submitted draft, even after a search. Other field tokens are not allowed here."
       />
       <SelectField
         label="About which field"

@@ -12,12 +12,12 @@
  * was nothing, because the first thing a person met was a blank canvas. The
  * trigger's inspector is the question the editor should open on: fires on…
  */
-import { useState, type FormEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath, apiAutomationPath } from "../../lib/constants";
-import { queryKeys } from "../../lib/queries";
+import { automationCatalogQuery, queryKeys } from "../../lib/queries";
 import { slqErrorOf } from "../../lib/slq";
 import {
   type AutomationEdge,
@@ -49,9 +49,10 @@ interface RuleEditorProps {
 
 export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
   const queryClient = useQueryClient();
+  const canAdopt = useQuery(automationCatalogQuery).data?.can_act_as;
   const [persistedId, setPersistedId] = useState<string | null>(rule?.id ?? null);
   const [name, setName] = useState(rule?.name ?? draft?.name ?? "");
-  const [enabled, setEnabled] = useState(rule?.enabled ?? (draft ? false : true));
+  const [enabled, setEnabled] = useState(rule?.enabled ?? false);
   const [orientation, setOrientation] = useState<Orientation>(
     (rule?.orientation as Orientation) ?? "vertical",
   );
@@ -71,6 +72,14 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
     edges: rule?.edges ?? draft?.edges ?? [],
   });
 
+  const [adoptExecution, setAdoptExecution] = useState(false);
+  const content = JSON.stringify({ name, enabled, orientation, ...graph });
+  const [savedContent, setSavedContent] = useState(rule ? content : "");
+  const currentContent = useRef(content);
+  currentContent.current = content;
+  const dirty = content !== savedContent || adoptExecution;
+  useEffect(() => { setRun(null); }, [content]);
+
   // A graph with no nodes is not worth saving; one with no TRIGGER is, because
   // it is work in progress and the canvas already says it cannot run. A graph
   // with a HALF-CONFIGURED action is not (RADD-1104): saving it would only
@@ -80,7 +89,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
     name.trim() !== "" && graph.nodes.length > 0 && incompleteActions.length === 0;
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const payload = {
         name: name.trim(),
         enabled,
@@ -88,14 +97,22 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
         nodes: graph.nodes,
         edges: graph.edges,
         note: note.trim(),
+        ...(adoptExecution ? { adopt_execution: true } : {}),
       };
-      return persistedId
+      const saved = await (persistedId
         ? api.patch<Rule>(apiAutomationPath(persistedId), payload satisfies RuleUpdate)
-        : api.post<Rule>(ApiPath.automations, payload satisfies RuleCreate);
+        : api.post<Rule>(ApiPath.automations, payload satisfies RuleCreate));
+      return { saved, submitted: content };
     },
-    onSuccess: async (saved) => {
+    onSuccess: async ({ saved, submitted }) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.automations });
       setPersistedId(saved.id);
+      if (currentContent.current === submitted) {
+        setName(saved.name);
+        setGraph({ nodes: saved.nodes, edges: saved.edges });
+      }
+      setSavedContent(JSON.stringify({ name: saved.name, enabled: saved.enabled, orientation: saved.orientation, nodes: saved.nodes, edges: saved.edges }));
+      setAdoptExecution(false);
       setCurrent(saved.version);
       setNote("");
     },
@@ -119,7 +136,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
           <ArrowLeft size={13} aria-hidden />
           Back to automations
         </button>
-        {save.isSuccess && !save.isPending && (
+        {!dirty && persistedId && !save.isPending && (
           <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
             <Check size={13} aria-hidden />
             Saved
@@ -148,6 +165,8 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
         </label>
       </div>
 
+      {dirty && <p className="text-xs text-amber-400">Unsaved changes — dry run previews this draft.</p>}
+      {persistedId && canAdopt && <label className="text-xs text-fg-muted"><input type="checkbox" checked={adoptExecution} onChange={event => setAdoptExecution(event.target.checked)} /> Use my account for execution on save (requires act-as permission)</label>}
       <GraphEditor
         nodes={graph.nodes}
         edges={graph.edges}
@@ -178,7 +197,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
         {persistedId && <span className="pb-2 text-[11px] text-fg-muted">v{current}</span>}
       </div>
 
-      {persistedId ? (
+      {
         <div className="flex flex-col gap-2">
           {/* One report renderer, two sources (RADD-1266): what it WOULD do
               and what it DID. Tabs rather than two stacked panels because both
@@ -189,6 +208,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
                 key={tab}
                 type="button"
                 role="tab"
+                disabled={!persistedId && tab !== "dry-run"}
                 aria-selected={panel === tab}
                 onClick={() => { setPanel(tab); setRun(null); }}
                 className={`rounded-[6px] px-2.5 py-1 text-xs cursor-pointer ${
@@ -202,20 +222,24 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
           {panel === "dry-run" ? (
             <RuleTestPanel
               ruleId={persistedId}
-              triggers={rule?.triggers ?? []}
+              name={name}
+              edges={graph.edges}
+              triggers={graph.nodes.filter(node => node.kind === "trigger").map(node => ({ node_id: node.id, event_type: String(node.params.event ?? "manual") }))}
               nodes={graph.nodes}
               onResult={setRun}
             />
           ) : panel === "runs" ? (
-            <RunsPanel ruleId={persistedId} nodes={graph.nodes} onResult={setRun} />
+            <RunsPanel ruleId={persistedId!} nodes={graph.nodes} onResult={setRun} />
           ) : (
             <VersionsPanel
-              ruleId={persistedId}
+              ruleId={persistedId!}
               current={current}
               onRestored={(restored) => {
                 // The editor takes the restored content as its own working
                 // copy: what the canvas shows must be what is now current.
                 setName(restored.name);
+                setEnabled(restored.enabled);
+                setSavedContent(JSON.stringify({ name: restored.name, enabled: restored.enabled, orientation: restored.orientation, nodes: restored.nodes, edges: restored.edges }));
                 setOrientation(restored.orientation as Orientation);
                 setGraph({ nodes: restored.nodes, edges: restored.edges });
                 setCurrent(restored.version);
@@ -224,9 +248,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
             />
           )}
         </div>
-      ) : (
-        <p className="text-xs text-fg-muted">Save the automation to dry-run it.</p>
-      )}
+      }
       {persistedId && <ChangeHistoryPanel entityType="automation_rule" entityId={persistedId} />}
     </form>
   );

@@ -40,11 +40,10 @@ class Automation(Base, TimestampMixin):
     orientation: Mapped[str] = mapped_column(String(16), default="vertical")
     # Who wrote it. Every action runs as this person unless the action names
     # someone else, which needs `automation.act_as`. Nullable because rows
-    # predating spec 116 have no author to name — those keep running as the
-    # system actor, which is what they always did.
-    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
-    )
+    # predating spec 116 have no author to name. Those require an explicit
+    # account assignment before they can execute.
+    # Retain a departed owner's identity so execution fails closed.
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     #: The CURRENT version's number (RADD-1268). Every save that changes the
     #: graph, the name or the orientation writes an `AutomationVersion` row and
     #: moves this; a toggle of `enabled` does not.

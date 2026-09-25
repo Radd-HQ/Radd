@@ -47,14 +47,15 @@ class GithubRepo(Base, TimestampMixin):
     """A repository on a connection, and the project its releases belong to.
 
     `project_id` is the DEFAULT project — the one a published release creates a
-    version in (spec 112). It is deliberately NOT a filter on linking: project
-    keys are unique instance-wide, so `RADD-412` in any repository resolves to
-    the same item.
+    version in. When link_all_projects is false, it also bounds issue linking
+    and mirrored time; otherwise issue keys can link across projects.
     """
 
     __tablename__ = "github_repos"
     __table_args__ = (UniqueConstraint("connection_id", "full_name"),)
 
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    link_all_projects: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     connection_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("github_connections.id", ondelete="CASCADE"), index=True

@@ -87,11 +87,11 @@ def _entry(external_id: str, seconds: int, *, user: str, email: str = "", note: 
     )
 
 
-async def _mirrored(db, scope: str) -> dict[str, Worklog]:
+async def _mirrored(db, world, scope: str) -> dict[str, Worklog]:
     rows = await db.execute(
-        select(Worklog).where(Worklog.external_source == GITLAB.value, Worklog.external_scope == scope)
+        select(Worklog).where(Worklog.external_source == GITLAB.value, Worklog.external_scope == f"{world['connection']}:{scope}")
     )
-    return {row.external_id: row for row in rows.scalars()}
+    return {row.external_id.removeprefix(f"{world['connection']}:"): row for row in rows.scalars()}
 
 
 async def _reconcile(db, world, scope: str, entries, *, texts=None):
@@ -118,7 +118,7 @@ async def test_reconcile_creates_updates_deletes_and_is_idempotent(db, world):
         [_entry("gid://1", 3600, user="hjarrar", email=admin.email), _entry("gid://2", 1800, user="hjarrar", email=admin.email)],
     )
     assert (first.created, first.updated, first.deleted) == (2, 0, 0)
-    rows = await _mirrored(db, scope)
+    rows = await _mirrored(db, world, scope)
     assert {k: r.time_spent_seconds for k, r in rows.items()} == {"gid://1": 3600, "gid://2": 1800}
     assert all(r.author_id == admin.id and r.item_id == world["a"].id for r in rows.values())
     assert rows["gid://1"].note == "Logged on !41"
@@ -130,7 +130,7 @@ async def test_reconcile_creates_updates_deletes_and_is_idempotent(db, world):
         [_entry("gid://1", 3600, user="hjarrar", email=admin.email), _entry("gid://2", 1800, user="hjarrar", email=admin.email)],
     )
     assert (again.created, again.updated, again.deleted, again.unchanged) == (0, 0, 0, 2)
-    assert len(await _mirrored(db, scope)) == 2
+    assert len(await _mirrored(db, world, scope)) == 2
 
     # One changed at the source, one removed, one new.
     third = await _reconcile(
@@ -138,13 +138,13 @@ async def test_reconcile_creates_updates_deletes_and_is_idempotent(db, world):
         [_entry("gid://1", 7200, user="hjarrar", email=admin.email), _entry("gid://3", 600, user="hjarrar", email=admin.email)],
     )
     assert (third.created, third.updated, third.deleted) == (1, 1, 1)
-    rows = await _mirrored(db, scope)
+    rows = await _mirrored(db, world, scope)
     assert {k: r.time_spent_seconds for k, r in rows.items()} == {"gid://1": 7200, "gid://3": 600}
 
     # `/remove_time_spent`: the source has nothing left.
     gone = await _reconcile(db, world, scope, [])
     assert gone.deleted == 2
-    assert await _mirrored(db, scope) == {}
+    assert await _mirrored(db, world, scope) == {}
 
 
 async def test_deletion_is_scoped_to_the_ref_not_the_item(db, world):
@@ -154,8 +154,8 @@ async def test_deletion_is_scoped_to_the_ref_not_the_item(db, world):
     await _reconcile(db, world, "pr:group/repo:2", [_entry("gid://b", 60, user="hjarrar", email=admin.email)])
     report = await _reconcile(db, world, "pr:group/repo:1", [])
     assert report.deleted == 1
-    assert await _mirrored(db, "pr:group/repo:1") == {}
-    assert list(await _mirrored(db, "pr:group/repo:2")) == ["gid://b"]
+    assert await _mirrored(db, world, "pr:group/repo:1") == {}
+    assert list(await _mirrored(db, world, "pr:group/repo:2")) == ["gid://b"]
 
 
 async def test_backfill_after_webhook_lands_on_one_row(db, world):
@@ -197,7 +197,7 @@ async def test_target_is_the_first_key_in_order_and_the_note_overrides(db, world
         note_prefix="Logged on !9",
     )
     assert report.created == 2
-    rows = await _mirrored(db, "pr:group/repo:9")
+    rows = await _mirrored(db, world, "pr:group/repo:9")
     assert rows["gid://x"].item_id == b.id
     assert rows["gid://y"].item_id == a.id  # the entry's own key wins
     assert rows["gid://y"].note == f"{a_key} review"
@@ -211,7 +211,7 @@ async def test_no_known_key_anywhere_writes_nothing(db, world):
         texts=["no-key-branch", "ZZZZ-1 is not a project", ""],
     )
     assert report.no_item == 1 and report.created == 0
-    assert await _mirrored(db, "pr:group/repo:7") == {}
+    assert await _mirrored(db, world, "pr:group/repo:7") == {}
 
 
 # --- who ---
@@ -239,14 +239,14 @@ async def test_author_by_email_then_map_then_parked(db, world):
     # The unmatched author is derived from the parked rows; no worklog exists.
     unmatched = await timemirror.list_unmatched(db, provider=GITLAB, connection_id=connection)
     assert [(u.external_username, u.pending_entries, u.pending_seconds) for u in unmatched] == [("ghost", 1, 120)]
-    assert "gid://u" not in await _mirrored(db, scope)
+    assert "gid://u" not in await _mirrored(db, world, scope)
 
     # Map and replay: the parked entry becomes a real worklog, by external id.
     replayed = await timemirror.map_and_replay(
         db, provider=GITLAB, connection_id=connection, username="Ghost", user_id=other.id, actor_id=admin.id,
     )
     assert replayed == 1
-    rows = await _mirrored(db, scope)
+    rows = await _mirrored(db, world, scope)
     assert rows["gid://u"].author_id == other.id and rows["gid://u"].time_spent_seconds == 120
     assert await timemirror.list_unmatched(db, provider=GITLAB, connection_id=connection) == []
 
@@ -263,8 +263,8 @@ async def test_parked_entries_follow_the_source_too(db, world):
     scope = "pr:group/repo:5"
     await _reconcile(db, world, scope, [_entry("gid://p1", 60, user="ghost"), _entry("gid://p2", 60, user="ghost")])
     await _reconcile(db, world, scope, [_entry("gid://p1", 60, user="ghost")])
-    parked = await db.execute(select(VcsPendingWorklog.external_id).where(VcsPendingWorklog.external_scope == scope))
-    assert [row for (row,) in parked.all()] == ["gid://p1"]
+    parked = await db.execute(select(VcsPendingWorklog.external_id).where(VcsPendingWorklog.external_scope == f"{world['connection']}:{scope}"))
+    assert [row for (row,) in parked.all()] == [f"{connection}:gid://p1"]
     await timemirror.forget_connection(db, provider=GITLAB, connection_id=connection)
     left = await db.scalar(select(func.count()).select_from(VcsPendingWorklog).where(VcsPendingWorklog.connection_id == connection))
     assert left == 0
@@ -289,7 +289,7 @@ async def test_manual_map_beats_an_earlier_email_match(db, world):
 async def test_mirrored_rows_refuse_edit_and_delete_for_everyone(db, world):
     admin = world["admin"]
     await _reconcile(db, world, "pr:group/repo:2", [_entry("gid://ro", 60, user="hjarrar", email=admin.email)])
-    row = (await _mirrored(db, "pr:group/repo:2"))["gid://ro"]
+    row = (await _mirrored(db, world, "pr:group/repo:2"))["gid://ro"]
     with pytest.raises(ConflictError):
         await timelog.authorize_mutation(db, admin, row, others=authz.Permission.PROJECT_MANAGE)
     with pytest.raises(ConflictError):
@@ -307,7 +307,7 @@ async def test_project_with_time_logging_off_receives_nothing(db, world):
     await enablement.set_enabled(db, world["project"].id, False, actor_id=admin.id)
     report = await _reconcile(db, world, "pr:group/repo:8", [_entry("gid://off", 60, user="hjarrar", email=admin.email)])
     assert report.skipped_disabled == 1 and report.created == 0
-    assert await _mirrored(db, "pr:group/repo:8") == {}
+    assert await _mirrored(db, world, "pr:group/repo:8") == {}
 
 
 async def test_reads_carry_the_provenance(db, world):
@@ -315,7 +315,7 @@ async def test_reads_carry_the_provenance(db, world):
     await _reconcile(db, world, "pr:group/repo:4", [_entry("gid://rd", 60, user="hjarrar", email=admin.email)])
     summary = await timelog.item_summary(db, world["a"].id, world["project"])
     entry = next(e for e in summary.entries if e.external_source)
-    assert (entry.external_source, entry.external_scope) == (GITLAB.value, "pr:group/repo:4")
+    assert (entry.external_source, entry.external_scope) == (GITLAB.value, f"{world['connection']}:pr:group/repo:4")
 
 
 async def test_default_category_falls_back_to_development(db, world):
@@ -330,3 +330,17 @@ async def test_user_link_rows_are_per_connection_and_lowercased(db, world):
     await timemirror.set_user_link(db, provider=GITLAB, connection_id=world["connection"], username="  MixedCase ", user_id=admin.id, actor_id=admin.id)
     row = await db.scalar(select(VcsUserLink).where(VcsUserLink.connection_id == world["connection"]))
     assert row.external_username == "mixedcase"
+
+
+async def test_same_source_ids_on_two_hosts_do_not_overwrite_or_delete_each_other(db, world):
+    from dataclasses import replace
+    entry = _entry("gid://same", 60, user="author", email=world["admin"].email)
+    other = {**world, "connection": uuid.uuid4()}
+    scope = "pr:group/repo:41"
+    await _reconcile(db, world, scope, [entry])
+    await _reconcile(db, other, scope, [replace(entry, seconds=120)])
+    assert (await _mirrored(db, world, scope))[entry.external_id].time_spent_seconds == 60
+    assert (await _mirrored(db, other, scope))[entry.external_id].time_spent_seconds == 120
+    await _reconcile(db, other, scope, [])
+    assert len(await _mirrored(db, world, scope)) == 1
+    assert not await _mirrored(db, other, scope)

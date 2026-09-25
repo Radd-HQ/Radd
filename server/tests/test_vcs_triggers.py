@@ -199,7 +199,7 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
     [pushed] = await _events(db, head, trigger.PUSHED.value)
     assert pushed.payload["branch"] == branch
     [ci] = await _events(db, head, trigger.CI_COMPLETED.value)
-    assert ci.payload["ci"] == {"state": "failure", "url": "https://ci/1"}
+    assert ci.payload["ci"] == {"state": "failure", "url": "https://ci/1", "name": "workflow", "sha": "", "run_id": None}
     [published] = await _events(db, head, trigger.RELEASE_PUBLISHED.value)
     assert published.payload["version"] == "3.0.0" and published.payload["project"]["id"] == str(project.id)
     assert await _events(db, head, trigger.PR_CLOSED.value) == []

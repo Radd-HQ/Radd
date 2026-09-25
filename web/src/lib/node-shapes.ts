@@ -10,7 +10,7 @@
  * (`portsOfNode`, `outputsOfNode`) read the answer from this cache
  * synchronously, so none of their callers had to change shape.
  */
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { api } from "./api";
 import { apiAutomationNodeShapePath } from "./constants";
@@ -21,19 +21,32 @@ export interface NodeShape {
   outputs: OutputFieldInfo[];
 }
 
-type ShapeNode = Pick<AutomationNode, "type" | "params">;
+type ShapeNode = Pick<AutomationNode, "type" | "params"> & { id?: string };
 
 const cache = new Map<string, NodeShape>();
+const previousShapes = new WeakMap<object, NodeShape>();
+const shapeParams = new Map<string, string[] | null>();
+const CACHE_LIMIT = 256;
+function remember(map: Map<string, NodeShape>, key: string, value: NodeShape) {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > CACHE_LIMIT) map.delete(map.keys().next().value!);
+}
 const listeners = new Set<() => void>();
 let version = 0;
 
 function keyOf(node: ShapeNode): string {
-  return `${node.type}|${JSON.stringify(node.params ?? {})}`;
+  return `${node.type}|${JSON.stringify(paramsOf(node))}`;
+}
+
+function paramsOf(node: ShapeNode): Record<string, unknown> {
+  const keys = shapeParams.get(node.type);
+  return keys ? Object.fromEntries(keys.map((key) => [key, node.params?.[key]])) : node.params ?? {};
 }
 
 /** The server's answer for this node's CURRENT params, when it has arrived. */
 export function cachedShape(node: ShapeNode): NodeShape | undefined {
-  return cache.get(keyOf(node));
+  return cache.get(keyOf(node)) ?? previousShapes.get(node);
 }
 
 function isDynamic(node: ShapeNode, catalog: AutomationCatalog | undefined): boolean {
@@ -54,13 +67,26 @@ export function useShapeVersion(): number {
 
 /** Fetch the shapes of every dynamic node in the graph. */
 export function useNodeShapes(nodes: ShapeNode[], catalog: AutomationCatalog | undefined): number {
-  const dynamic = nodes.filter((node) => isDynamic(node, catalog));
+  const lastShapes = useRef(new Map<string, NodeShape>());
+  for (const spec of catalog?.nodes ?? []) shapeParams.set(spec.key, spec.shape_params ?? null);
+  for (const node of nodes) {
+    const previous = node.id ? lastShapes.current.get(`${node.type}|${node.id}`) : undefined;
+    if (previous) previousShapes.set(node, previous);
+  }
+  const requested = JSON.stringify(nodes.filter((node) => isDynamic(node, catalog)).map((node) => ({ id: node.id, type: node.type, params: paramsOf(node) })));
+  const [settled, setSettled] = useState(requested);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(requested), 200);
+    return () => clearTimeout(timer);
+  }, [requested]);
+  const dynamic = useMemo(() => JSON.parse(settled) as ShapeNode[], [settled]);
   const results = useQueries({
     queries: dynamic.map((node) => ({
       queryKey: ["automation-node-shape", node.type, JSON.stringify(node.params ?? {})],
       queryFn: () =>
         api.post<NodeShape>(apiAutomationNodeShapePath(node.type), { params: node.params ?? {} }),
       staleTime: Infinity,
+      gcTime: 60_000,
     })),
   });
   useEffect(() => {
@@ -69,8 +95,9 @@ export function useNodeShapes(nodes: ShapeNode[], catalog: AutomationCatalog | u
       const node = dynamic[index];
       if (!node || !result.data) return;
       const key = keyOf(node);
+      if (node.id) remember(lastShapes.current, `${node.type}|${node.id}`, result.data);
       if (cache.get(key) === result.data) return;
-      cache.set(key, result.data);
+      remember(cache, key, result.data);
       changed = true;
     });
     if (changed) {

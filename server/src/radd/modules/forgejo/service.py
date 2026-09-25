@@ -6,6 +6,7 @@ repository, so the answer is a lookup — with a fallback that keeps a hook work
 before anyone records its repository.
 """
 
+from radd.modules.vcs import setup as vcs_setup
 import hashlib
 import hmac
 import logging
@@ -86,6 +87,7 @@ async def _repo_snapshot(session: AsyncSession, repo: ForgejoRepo) -> dict:
         "default_branch": repo.default_branch,
         "time_category_id": str(repo.time_category_id) if repo.time_category_id else None,
         "mirror_time": repo.mirror_time,
+        "enabled": repo.enabled, "link_all_projects": repo.link_all_projects,
     }
 
 
@@ -116,6 +118,7 @@ async def create_connection(
     )
     if existing.scalar_one_or_none() is not None:
         raise ConflictError(ForgejoEntity.CONNECTION, data.name)
+    await vcs_setup.claim_seed(session, "forgejo")
     connection = ForgejoConnection(
         name=data.name,
         base_url=data.base_url.rstrip("/"),
@@ -124,6 +127,7 @@ async def create_connection(
         active=data.active,
         verify_ssl=data.verify_ssl,
     )
+    await vcs_setup.require_distinct_secret(session, ForgejoConnection, connection)
     session.add(connection)
     await session.flush()
     await refresh_connection_snapshot(session)
@@ -154,6 +158,7 @@ async def update_connection(
         connection.active = data.active
     if data.verify_ssl is not None:
         connection.verify_ssl = data.verify_ssl
+    await vcs_setup.require_distinct_secret(session, ForgejoConnection, connection)
     await session.flush()
     await refresh_connection_snapshot(session)
     await _emit_connection(
@@ -206,12 +211,13 @@ async def get_repo(session: AsyncSession, repo_id: uuid.UUID) -> ForgejoRepo:
     return repo
 
 
-async def find_repo(session: AsyncSession, full_name: str) -> ForgejoRepo | None:
+async def find_repo(session: AsyncSession, full_name: str, connection_id: uuid.UUID | None = None) -> ForgejoRepo | None:
     """By `owner/repo`, case-insensitively — Forgejo treats names that way."""
-    rows = await session.execute(
-        select(ForgejoRepo).where(func.lower(ForgejoRepo.full_name) == full_name.lower())
-    )
-    return rows.scalars().first()
+    query = select(ForgejoRepo).where(func.lower(ForgejoRepo.full_name) == full_name.lower())
+    if connection_id is not None:
+        query = query.where(ForgejoRepo.connection_id == connection_id)
+    return await session.scalar(query)
+
 
 
 async def create_repo(
@@ -251,6 +257,10 @@ async def update_repo(
         repo.time_category_id = data.time_category_id
     if data.mirror_time is not None:
         repo.mirror_time = data.mirror_time
+    if data.enabled is not None:
+        repo.enabled = data.enabled
+    if data.link_all_projects is not None:
+        repo.link_all_projects = data.link_all_projects
     await session.flush()
     diff = changes.diff(before, await _repo_snapshot(session, repo))
     await _emit_repo(session, ForgejoEvent.REPO_UPDATED, repo, actor_id, diff)
@@ -272,29 +282,19 @@ async def delete_repo(
 async def resolve_for_payload(
     session: AsyncSession, payload: dict, raw_body: bytes, signature: str
 ) -> tuple[ForgejoConnection, ForgejoRepo | None] | None:
-    """The connection that signed this body, and the repository row if we know it.
+    """Authenticate one active host, then require its repository to be enabled.
 
-    Order matters. A recorded repository names its connection, so its secret is
-    the only one tried — that is what makes two hosts with different secrets
-    unambiguous. An unrecorded repository falls back to trying every ACTIVE
-    connection, so a webhook registered before anyone added the repo row still
-    works. Returns None when nothing verifies, which the router turns into a 403.
+    Secrets shared by multiple hosts are ambiguous and therefore rejected.
     """
-    full_name = ((payload.get("repository") or {}).get("full_name") or "").strip()
-    if full_name:
-        repo = await find_repo(session, full_name)
-        if repo is not None:
-            connection = await session.get(ForgejoConnection, repo.connection_id)
-            if connection is None or not connection.active:
-                return None
-            if verify_signature(raw_body, signature, connection.webhook_secret):
-                return connection, repo
-            return None  # the repo's own host did not sign this — do not guess further
-
-    for connection in await list_connections(session):
-        if connection.active and verify_signature(raw_body, signature, connection.webhook_secret):
-            return connection, None
-    return None
+    full_name = str((payload.get("repository") or {}).get("full_name") or "").strip().strip("/")
+    verified = [c for c in await list_connections(session) if c.active and verify_signature(raw_body, signature, c.webhook_secret)]
+    if len(verified) != 1:
+        return None  # shared secrets cannot identify a host unambiguously
+    connection = verified[0]
+    repo = await find_repo(session, full_name, connection.id) if full_name else None
+    if full_name and (repo is None or not repo.enabled):
+        return None
+    return connection, repo
 
 
 # --- capability snapshot ------------------------------------------------------
@@ -344,7 +344,9 @@ async def seed_from_env() -> None:
     secret = settings.forgejo_webhook_secret.strip()
     async with SessionLocal() as session:
         rows = await session.execute(select(func.count()).select_from(ForgejoConnection))
-        if secret and int(rows.scalar_one()) == 0:
+        empty = int(rows.scalar_one()) == 0
+        claimed = await vcs_setup.claim_seed(session, "forgejo") if secret or not empty else False
+        if secret and empty and claimed:
             session.add(
                 ForgejoConnection(
                     name="Forgejo",
@@ -353,6 +355,6 @@ async def seed_from_env() -> None:
                     active=True,
                 )
             )
-            await session.commit()
             logger.info("forgejo: seeded one connection from RADD_FORGEJO_WEBHOOK_SECRET")
+        await session.commit()
         await refresh_connection_snapshot(session)

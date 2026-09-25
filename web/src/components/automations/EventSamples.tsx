@@ -36,8 +36,9 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
   if (!eventType || sample.isError) return null;
 
   const data = sample.data;
-  const declared = data && data.sampled === 0 ? (data.declared_paths ?? []) : [];
-  const count = (data?.paths.length ?? 0) || declared.length;
+  const observed = new Set(data?.paths.map((entry) => entry.path) ?? []);
+  const declared = (data?.declared_paths ?? []).filter((entry) => !observed.has(entry.path));
+  const count = observed.size + declared.length;
 
   const copy = async (path: string) => {
     const token = `{{payload.${path}}}`;
@@ -64,7 +65,7 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
         <Braces size={12} aria-hidden />
         What this event carries
         <span className="ml-auto text-fg-faint">
-          {sample.isLoading ? "…" : count > 0 ? (declared.length > 0 ? `${count} declared` : count) : "none yet"}
+          {sample.isLoading ? "…" : count > 0 ? count : "none yet"}
         </span>
       </button>
 

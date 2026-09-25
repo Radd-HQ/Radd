@@ -64,6 +64,8 @@ class GitlabRepo(Base, TimestampMixin):
     __tablename__ = "gitlab_repos"
     __table_args__ = (UniqueConstraint("connection_id", "full_name"),)
 
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    link_all_projects: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     connection_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("gitlab_connections.id", ondelete="CASCADE"), index=True

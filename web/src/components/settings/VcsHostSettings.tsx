@@ -23,6 +23,7 @@ import { QueryError } from "../QueryError";
 import { SelectField } from "../SelectField";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
+import { IntegrationAutomations } from "./IntegrationAutomations";
 import { VcsIdentityMap } from "./VcsIdentityMap";
 
 /**
@@ -76,6 +77,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
   const categories = useQuery(workCategoriesQuery());
   const queryClient = useQueryClient();
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const blank = { name: "", base_url: config.defaultBaseUrl ?? "", webhook_secret: "", api_token: "" };
   const [form, setForm] = useState(blank);
@@ -86,12 +88,27 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
   const refresh = () => invalidateEntities(queryClient, config.entities[0], config.entities[1]);
 
   const createConnection = useMutation({
-    mutationFn: () => api.post<ForgejoConnection>(config.paths.connections, form),
+    mutationFn: () => editingId
+      ? api.patch<ForgejoConnection>(config.paths.connection(editingId), {
+          name: form.name, base_url: form.base_url,
+          ...(form.api_token ? { api_token: form.api_token } : {}),
+          ...(form.webhook_secret ? { webhook_secret: form.webhook_secret } : {}),
+        })
+      : api.post<ForgejoConnection>(config.paths.connections, form),
     onSuccess: () => {
       setAdding(false);
+      setEditingId(null);
       setForm(blank);
       refresh();
     },
+  });
+  const updateConnection = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) => api.patch(config.paths.connection(id), { active }),
+    onSettled: refresh,
+  });
+  const updateRepo = useMutation({
+    mutationFn: ({ id, ...values }: { id: string; enabled?: boolean; link_all_projects?: boolean }) => api.patch(config.paths.repo(id), values),
+    onSettled: refresh,
   });
   const removeConnection = useMutation({
     mutationFn: (id: string) => api.delete<void>(config.paths.connection(id)),
@@ -145,15 +162,19 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
   return (
     <div>
       <p className="mb-2 text-[13px] text-fg-muted">{config.description}</p>
+      <IntegrationAutomations group={config.title} />
       {/* RADD-1309: the connector acts on nothing itself — say where behaviour lives. */}
       <p className="mb-4 text-[13px] text-fg-muted">
-        It changes nothing on its own. What a {config.triggerNoun} should do (move the issue, comment, record a version)
+        Enabled repositories link references to issues. What a {config.triggerNoun} should do (move the issue, comment, record a version)
         is an automation: pick a trigger from the “{config.title}” group in{" "}
         <Link to={RoutePath.settingsAutomations} className="text-accent-text hover:underline">
           Automations
         </Link>
         .
       </p>
+      <p className="mb-3 text-xs text-fg-muted">Only registered, enabled repositories accept webhooks. Pausing a host pauses all its repositories; removing a repository stops ingestion and keeps historical links. Use a different webhook secret for each host. “Default release project” chooses where versions are published; turn off “Link across projects” to also restrict issue links and mirrored time to that project.</p>
+      {[removeConnection, updateConnection, test, addRepo, mapRepo, setCategory, setMirror, updateRepo, removeRepo, backfill].filter(mutation => mutation.isError).map((mutation, index) => <p key={index} role="alert" className="mb-2 text-xs text-danger-text">{errorMessage(mutation.error)}</p>)}
+      {repos.isError && <QueryError label="repositories" error={repos.error} />}
       {connections.isPending ? (
         <TableSkeleton rows={2} />
       ) : connections.isError ? (
@@ -202,6 +223,8 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                     )}
                     {canManage && (
                       <>
+                        <Button size="sm" variant="ghost" onClick={() => { setEditingId(connection.id); setForm({ ...blank, name: connection.name, base_url: connection.base_url }); setAdding(true); }}>Edit</Button>
+                        <Button size="sm" variant="ghost" disabled={updateConnection.isPending} onClick={() => updateConnection.mutate({ id: connection.id, active: !connection.active })}>{connection.active ? "Pause" : "Resume"}</Button>
                         <Button size="sm" variant="ghost" onClick={() => test.mutate(connection.id)} disabled={test.isPending}>
                           Test
                         </Button>
@@ -240,12 +263,12 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                             </li>
                           )}
                           {search.filtered.map((repo) => (
-                            <li key={repo.id} className="flex items-center gap-3 px-4 py-2">
+                            <li key={repo.id} className="flex flex-wrap items-center gap-3 px-4 py-2">
                               <GitBranch size={13} className="text-fg-muted" aria-hidden />
                               <span className="flex-1 truncate font-mono text-[12px] text-fg">{repo.full_name}</span>
                               <SelectField
-                                label=""
-                                ariaLabel={`Project for ${repo.full_name}`}
+                                label="Default release project"
+                                ariaLabel={`Default release project for ${repo.full_name}`}
                                 value={repo.project_id ?? ""}
                                 onChange={(event) =>
                                   mapRepo.mutate({ id: repo.id, projectId: event.target.value || null })
@@ -277,6 +300,8 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                                     </option>
                                   ))}
                               </SelectField>
+                              <label className="text-xs text-fg-secondary"><input type="checkbox" checked={repo.enabled ?? true} disabled={!canManage || updateRepo.isPending} onChange={event => updateRepo.mutate({ id: repo.id, enabled: event.target.checked })} /> Ingest webhooks</label>
+                              <label className="text-xs text-fg-secondary"><input type="checkbox" checked={repo.link_all_projects ?? true} disabled={!canManage || updateRepo.isPending} onChange={event => updateRepo.mutate({ id: repo.id, link_all_projects: event.target.checked })} /> Link across projects</label>
                               <label
                                 className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] text-fg-secondary"
                                 title="Copy time logged on this repository's merge/pull requests into worklogs"
@@ -297,7 +322,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                                     size="sm"
                                     variant="ghost"
                                     onClick={() => backfill.mutate(repo.id)}
-                                    disabled={backfill.isPending || !connection.has_token}
+                                    disabled={backfill.isPending || !connection.has_token || !connection.active || repo.enabled === false}
                                     title={
                                       connection.has_token
                                         ? "Link branches, PRs and commits that predate the webhook"
@@ -317,10 +342,12 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                                 </>
                               )}
                               {reports[repo.id] && (
-                                <span className="text-[11px] text-fg-muted">
-                                  {reports[repo.id].linked} linked ({reports[repo.id].commits} commits,{" "}
-                                  {reports[repo.id].pull_requests} PRs)
-                                </span>
+                                <details className="w-full text-xs text-fg-muted" open>
+                                  <summary>{reports[repo.id].linked} linked · {reports[repo.id].branches} branches · {reports[repo.id].commits} commits · {reports[repo.id].pull_requests} PRs</summary>
+                                  {(reports[repo.id].unknown_keys ?? []).length > 0 && <p>Unknown issue keys: {reports[repo.id].unknown_keys.join(", ")}</p>}
+                                  {Object.entries(reports[repo.id].worklogs ?? {}).map(([key, value]) => <p key={key}>Time — {key.replaceAll("_", " ")}: {Array.isArray(value) ? value.join(", ") : String(value)}</p>)}
+                                  {(reports[repo.id].errors ?? []).map((error, i) => <p key={i} className="text-danger-text">{error}</p>)}
+                                </details>
                               )}
                             </li>
                           ))}
@@ -386,19 +413,21 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                   />
                   <TextField
                     label="Webhook secret"
-                    hint={config.secretHint}
+                    type="password"
+                    hint={editingId ? "Leave blank to keep the stored secret; enter a value to rotate it." : config.secretHint}
                     value={form.webhook_secret}
                     onChange={(event) => setForm({ ...form, webhook_secret: event.target.value })}
                   />
                   <TextField
                     label="API token (optional)"
-                    hint={config.tokenHint}
+                    type="password"
+                    hint={editingId ? "Leave blank to keep the stored token; enter a value to rotate it." : config.tokenHint}
                     value={form.api_token}
                     onChange={(event) => setForm({ ...form, api_token: event.target.value })}
                   />
                   <div className="flex gap-2">
                     <Button type="submit" disabled={createConnection.isPending}>
-                      New host
+                      {editingId ? "Save host" : "New host"}
                     </Button>
                     <Button type="button" variant="ghost" onClick={() => setAdding(false)}>
                       Cancel
@@ -409,7 +438,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                   )}
                 </form>
               ) : (
-                <Button variant="secondary" onClick={() => setAdding(true)}>
+                <Button variant="secondary" onClick={() => { setEditingId(null); setForm(blank); setAdding(true); }}>
                   <Plus size={14} aria-hidden /> Connect a host
                 </Button>
               )}

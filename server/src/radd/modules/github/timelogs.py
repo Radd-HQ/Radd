@@ -129,7 +129,7 @@ async def reconcile_comment(
         scope=pr_external_id(repo_name, number),
         ref_texts=[title, body],
         entries=entries,
-        category_id=category_id,
+        category_id=category_id, repo=repo,
         note_prefix=_note_prefix(number, title),
         id_prefix=spend.comment_prefix(repo_name, comment.get("id", "")),
     )
@@ -204,7 +204,7 @@ async def reconcile_pull_request(
         scope=pr_external_id(repo_name, number),
         ref_texts=[head_branch, title, body],
         entries=entries,
-        category_id=category_id,
+        category_id=category_id, repo=repo,
         note_prefix=_note_prefix(number, title),
     )
 

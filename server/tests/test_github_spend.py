@@ -145,17 +145,17 @@ async def test_comment_created_edited_deleted(db, world):
     assert created["worklogs"]["created"] == 2
     rows = await _worklogs(db, world["item"].id)
     assert [(r.external_id, r.time_spent_seconds, r.worked_on, r.note) for r in rows] == [
-        ("comment:acme/widgets:501:0", 5400, date(2026, 9, 19), "Logged on #5 the PR" if False else rows[0].note),
-        ("comment:acme/widgets:501:1", 2700, date(2026, 9, 18), "pairing"),
+        (f"{world['connection'].id}:comment:acme/widgets:501:0", 5400, date(2026, 9, 19), "Logged on #5 the PR" if False else rows[0].note),
+        (f"{world['connection'].id}:comment:acme/widgets:501:1", 2700, date(2026, 9, 18), "pairing"),
     ]
     assert rows[0].note.startswith("Logged on #5")
-    assert all(r.author_id == admin.id and r.external_scope == "pr:acme/widgets:5" for r in rows)
+    assert all(r.author_id == admin.id and r.external_scope == f"{world['connection'].id}:pr:acme/widgets:5" for r in rows)
 
     # Edited: one line removed, the other changed → same row id, updated; the second gone.
     edited = await _deliver(db, "issue_comment", _comment("edited", 501, "/spend 2h", number=5, title=f"{key} the PR", login="octo"))
     assert (edited["worklogs"]["updated"], edited["worklogs"]["deleted"]) == (1, 1)
     rows = await _worklogs(db, world["item"].id)
-    assert [(r.external_id, r.time_spent_seconds) for r in rows] == [("comment:acme/widgets:501:0", 7200)]
+    assert [(r.external_id, r.time_spent_seconds) for r in rows] == [(f"{world['connection'].id}:comment:acme/widgets:501:0", 7200)]
 
     # A second comment on the same PR must not disturb the first one's rows.
     await _deliver(db, "issue_comment", _comment("created", 502, "/spend 10m", number=5, title=f"{key} the PR", login="octo"))
@@ -164,7 +164,7 @@ async def test_comment_created_edited_deleted(db, world):
     # Deleted: only that comment's rows go.
     deleted = await _deliver(db, "issue_comment", _comment("deleted", 502, "/spend 10m", number=5, title=f"{key} the PR", login="octo"))
     assert deleted["worklogs"]["deleted"] == 1
-    assert [r.external_id for r in await _worklogs(db, world["item"].id)] == ["comment:acme/widgets:501:0"]
+    assert [r.external_id for r in await _worklogs(db, world["item"].id)] == [f"{world['connection'].id}:comment:acme/widgets:501:0"]
 
 
 async def test_key_override_and_unknown_login_parks(db, world):
@@ -179,7 +179,7 @@ async def test_key_override_and_unknown_login_parks(db, world):
     # An unmapped login parks the entry — nothing is guessed.
     result = await _deliver(db, "issue_comment", _comment("created", 602, "/spend 30m", number=6, title=f"{key} the PR", login="stranger"))
     assert result["worklogs"]["pending"] == 1
-    parked = await db.scalar(select(VcsPendingWorklog).where(VcsPendingWorklog.external_id == "comment:acme/widgets:602:0"))
+    parked = await db.scalar(select(VcsPendingWorklog).where(VcsPendingWorklog.external_id == f"{world['connection'].id}:comment:acme/widgets:602:0"))
     assert parked is not None and parked.external_username == "stranger"
 
 

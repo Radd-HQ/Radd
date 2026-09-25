@@ -31,11 +31,11 @@ from radd.kernel.specs import AutomationNodeSpec
 
 from .types import TYPE_VERDICT_BLOCK, TYPE_VERDICT_WARN, NodeArity
 
-#: The only token roots a verdict's own message may use: the draft's. Anything
+#: The only token a verdict's own message may use: the draft's submitted title. Anything
 #: else — a search node's output, another node's variables — was read with the
 #: automation's identity, usually wider than the submitter's, and the message is
 #: shown to whoever submitted (spec 119's leak rule, enforced on write).
-DRAFT_ROOTS = frozenset({"item"})
+DRAFT_TOKENS = frozenset({"item.title"})
 
 
 def _plan_for(blocking: bool):
@@ -54,7 +54,7 @@ def _plan_for(blocking: bool):
                     source=relay,
                 )
             return None
-        message = await ctx.render(str(ctx.node.params.get("message") or ""))
+        message = await ctx.render_draft(str(ctx.node.params.get("message") or ""))
         ctx.add_finding(message, str(ctx.node.params.get("field") or ""), blocking=blocking)
         return None
 
@@ -76,11 +76,10 @@ def _check(params: Mapping[str, Any]) -> None:
     if relay and message:
         raise ValueError("either relay a check's findings or write a message, not both")
     for token in TOKEN_RE.findall(message):
-        root = token.split(".", 1)[0]
-        if root not in DRAFT_ROOTS:
+        if token not in DRAFT_TOKENS:
             raise ValueError(
                 f"{{{{{token}}}}} is not about the draft — a message shown to the person submitting "
-                f"may only use {{{{item.*}}}}, since anything else was read with the automation's access"
+                f"may only use {{{{item.title}}}} from the original draft; other fields may be private"
             )
     target = str(params.get("field") or "").strip()
     if target and not (target.startswith(CUSTOM_FIELD_PREFIX) or target in set(BuiltinItemField)):
@@ -113,7 +112,7 @@ BLOCK_NODE = _spec(
     TYPE_VERDICT_BLOCK,
     "Block submission",
     True,
-    "Refuse the submission, and tell the person why. Only a Block node can refuse one.",
+    "Refuse the submission with a message. When relaying an AI check, blocking findings refuse it and minor findings remain advisory. Message tokens may use only the original draft's {{item.title}}.",
     "validation block refuse reject required stop intake verdict",
 )
 WARN_NODE = _spec(

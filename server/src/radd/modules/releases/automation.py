@@ -96,11 +96,20 @@ async def plan_publish(ctx: Any) -> _PublishPlan:
         return _PublishPlan(None, version, name, notes, f"release.publish: {reason}", False)
     if not version:
         return _PublishPlan(project.id, "", name, notes, "release.publish: no version — the event carries none and the node sets none", False)
-    if not await workflow.release_transitions(ctx.session, project.id):
+    transitions = await workflow.release_transitions(ctx.session, project.id)
+    if not transitions:
         # Recording the version is still worth doing; say what will not happen.
         moves = "nothing moves — the project has no transition that moves on release"
     else:
-        moves = "waiting work ships into it"
+        from sqlalchemy import select
+        from radd.modules.items.models import WorkItem
+        candidates = list((await ctx.session.scalars(select(WorkItem.number).where(
+            WorkItem.project_id == project.id,
+            WorkItem.state_id.in_({transition.from_state_id for transition in transitions}),
+        ).order_by(WorkItem.number))).all())
+        keys = ", ".join(f"{project.key}-{number}" for number in candidates[:20])
+        suffix = ", …" if len(candidates) > 20 else ""
+        moves = f"{len(candidates)} candidate issue(s) across the project" + (f": {keys}{suffix}" if keys else "")
     existing = await releases.resolve_release(ctx.session, project.id, version)
     verb = "re-sweep" if existing is not None else "publish"
     return _PublishPlan(project.id, version, name, notes, f"release.publish: {verb} {project.key} {version}; {moves}")
@@ -127,7 +136,7 @@ PUBLISH_NODE = AutomationNodeSpec(
     label="Publish version and sweep",
     description=(
         "Record the version as released in the project and move everything waiting for release "
-        "into it. Put it after a “release published” trigger; re-running it for the same version "
+        "into it, across the whole project, regardless of which commits the tag contains. Put it after a “release published” trigger; re-running it for the same version "
         "is harmless."
     ),
     group="Releases",

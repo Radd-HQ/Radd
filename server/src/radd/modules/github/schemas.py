@@ -54,6 +54,8 @@ class RepoCreate(BaseModel):
 
 
 class RepoUpdate(BaseModel):
+    enabled: bool | None = None
+    link_all_projects: bool | None = None
     # `project_id` uses the model_fields_set idiom: omitted = unchanged, explicit
     # null = clear the mapping.
     project_id: uuid.UUID | None = None
@@ -64,6 +66,8 @@ class RepoUpdate(BaseModel):
 
 
 class RepoRead(BaseModel):
+    enabled: bool = True
+    link_all_projects: bool = True
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID

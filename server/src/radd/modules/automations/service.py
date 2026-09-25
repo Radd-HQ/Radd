@@ -91,6 +91,22 @@ async def _validate_graph(
     caught here is a 422 on the form instead of a filter that silently matches
     nothing at 3am.
     """
+    # Bind an explicitly selected account to its stable identity on write.
+    for raw in nodes:
+        params = raw.get("params") or {}
+        email = str(params.get("act_as") or "").strip()
+        if not email:
+            params.pop("act_as_id", None)
+            continue
+        account_id = params.get("act_as_id")
+        try:
+            account = await session.get(User, uuid.UUID(str(account_id))) if account_id else await session.scalar(select(User).where(User.email == email))
+        except ValueError as exc:
+            raise ConflictError(AutomationEntity.RULE, reason="Invalid execution account identity") from exc
+        if account is None or not account.active:
+            raise ConflictError(AutomationEntity.RULE, reason=f"Execution account {email!r} is unavailable")
+        params["act_as_id"] = str(account.id)
+        params["act_as"] = account.email
     try:
         parsed_nodes, parsed_edges = graph.parse(nodes, edges)
         triggers = graph.validate(parsed_nodes, parsed_edges, nodes_registry.ports_of)
@@ -480,6 +496,8 @@ def _check_validate_reach(
     reachable = graph.is_reachable([trigger.id], nodes, edges)
     for node in nodes:
         spec = nodes_registry.spec_for(node)
+        if node.id in reachable and spec is not None and not spec.preview_safe:
+            raise ConflictError(AutomationEntity.RULE, reason=f"node {node.id!r} ({spec.label}) executes code and cannot run during submission validation")
         if node.id in reachable and spec is not None and spec.kind == AutomationNodeKind.ACTION and spec.apply is not None:
             raise ConflictError(
                 AutomationEntity.RULE,
@@ -714,7 +732,7 @@ async def create_rule(
         edges=edges,
         position=data.position,
         orientation=data.orientation,
-        created_by_id=actor_id,
+        created_by_id=actor_id or SYSTEM_ACTOR_ID,
     )
     session.add(rule)
     await session.flush()
@@ -733,6 +751,12 @@ async def update_rule(
 ) -> Automation:
     rule = await get_rule(session, rule_id)
     before = changes.snapshot(rule, RULE_FIELDS)
+    if data.adopt_execution:
+        actor = await session.get(User, actor_id) if actor_id else None
+        if actor is None or not actor.active:
+            raise ConflictError(AutomationEntity.RULE, reason="An active execution account is required")
+        await authz.require(session, actor, Permission.AUTOMATION_ACT_AS)
+        rule.created_by_id = actor.id
     content_before = versions.content_of(rule)
     if data.name is not None:
         rule.name = data.name
@@ -972,7 +996,7 @@ def _trigger_events(rule: Automation) -> set[str]:
 
 #: What a rule edit can touch. The graph (nodes + edges) records only that it
 #: changed — its JSON is the rule's design, not a value an auditor compares.
-RULE_FIELDS: tuple[str, ...] = ("name", "enabled", "position", "orientation", "nodes", "edges", "version")
+RULE_FIELDS: tuple[str, ...] = ("created_by_id", "name", "enabled", "position", "orientation", "nodes", "edges", "version")
 
 
 async def _emit(

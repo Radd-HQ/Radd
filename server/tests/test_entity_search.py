@@ -69,7 +69,7 @@ async def test_a_milestone_is_found_by_a_reader_and_not_by_an_outsider(db):
     [group] = found.groups
     assert group.entity_type == "milestone" and group.label == "Milestones"
     [hit] = group.hits
-    assert hit.id == str(milestone.id) and hit.title == f"{word} launch" and hit.url == "/milestones"
+    assert hit.id == str(milestone.id) and hit.title == f"{word} launch" and hit.url == f"/milestones#milestone-{milestone.id}"
 
     # The `#` picker lists it too — milestones are mentionable.
     assert [g.entity_type for g in (await _search(db, admin, word, mentionable=True)).groups] == ["milestone"]
@@ -83,4 +83,4 @@ def test_the_registry_holds_issues_pages_and_the_derived_milestone():
     assert {"item", "milestone"} <= set(searchables)
     assert searchables["milestone"].mentionable is True
     # The entity ref carries the url a mention and an audit entry link to.
-    assert registries.entity_refs["milestone"].url == "/milestones"
+    assert registries.entity_refs["milestone"].url == "/milestones#milestone-{id}"

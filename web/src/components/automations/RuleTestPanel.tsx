@@ -1,13 +1,14 @@
 import { ProjectSelect } from "../projects/ProjectSelect";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CircleSlash, FlaskConical } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { apiAutomationTestPath } from "../../lib/constants";
+import { ApiPath, apiAutomationTestPath } from "../../lib/constants";
 import { automationCatalogQuery, linkSearchQuery, firstProjectQuery, pageSearchQuery } from "../../lib/queries";
 import type {
   ActionPreview,
   AutomationNode,
+  AutomationEdge,
   NodeResult,
   RuleTestResult,
   RuleTrigger,
@@ -19,9 +20,11 @@ import { SelectField } from "../SelectField";
 import { PORT_TONE } from "./node-visuals";
 
 interface RuleTestPanelProps {
-  ruleId: string;
+  ruleId: string | null;
+  name?: string;
+  edges?: AutomationEdge[];
   /** The saved graph's triggers — a run starts at ONE of them. */
-  triggers?: RuleTrigger[];
+  triggers?: Pick<RuleTrigger, "node_id" | "event_type">[];
   /** The saved graph's nodes, for labelling results by type. */
   nodes?: AutomationNode[];
   /** Hand the result up so the canvas can label its ports with it. */
@@ -44,7 +47,7 @@ interface RuleTestPanelProps {
  * answers "did my filter narrow anything", a sample answers "did it keep the
  * right ones".
  */
-export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: RuleTestPanelProps) {
+export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers = [], nodes = [], onResult }: RuleTestPanelProps) {
   const firstProject = useQuery(firstProjectQuery());
   const [projectId, setProjectId] = useState("");
   const [itemId, setItemId] = useState("");
@@ -68,18 +71,41 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
   const pageQuery = useDebounced(pageSearch, 200);
   const pages = useQuery({ ...pageSearchQuery(pageQuery, 20), enabled: subject === "page" && pageQuery.trim().length > 0 });
 
-  const test = useMutation({
-    mutationFn: () =>
-      api.post<RuleTestResult>(
-        apiAutomationTestPath(ruleId),
-        subject === "page"
-          ? { subject: "page", subject_id: pageId || null, trigger_node_id: triggerId || null }
-          : { item_id: itemId || null, trigger_node_id: triggerId || null },
-      ),
-    onSuccess: (result) => onResult?.(result),
+  const selectedTrigger = triggers.find(trigger => trigger.node_id === triggerId) ?? triggers[0];
+  const eventType = selectedTrigger?.event_type ?? "manual";
+  const usesEvent = !["manual", "schedule", "validate"].includes(eventType) && !eventType.endsWith(".validate");
+  const [eventId, setEventId] = useState("");
+  const [payload, setPayload] = useState("{}");
+  const samples = useQuery({
+    queryKey: ["automation-preview-events", eventType],
+    queryFn: () => api.get<{ id: number; created_at: string; payload: Record<string, unknown> }[]>(`${ApiPath.automations}/samples/records?event_type=${encodeURIComponent(eventType)}`),
+    enabled: usesEvent,
   });
+  useEffect(() => { setEventId(""); setPayload("{}"); }, [eventType]);
+  const previewInput = JSON.stringify([name, nodes, edges, itemId, pageId, subject, triggerId, effectiveProjectId, eventId, payload]);
+  const currentInput = useRef(previewInput);
+  currentInput.current = previewInput;
+  const test = useMutation({
+    mutationFn: (_requestedInput: string) => {
+      let eventPayload;
+      if (usesEvent && !eventId) {
+        eventPayload = JSON.parse(payload);
+        if (!eventPayload || Array.isArray(eventPayload) || typeof eventPayload !== "object") throw new Error("Sample payload must be a JSON object");
+      }
+      return api.post<RuleTestResult>(
+        ruleId ? apiAutomationTestPath(ruleId) : `${ApiPath.automations}/preview`,
+        { name, nodes, edges, project_id: effectiveProjectId || null,
+          ...(subject === "page" ? { subject: "page", subject_id: pageId || null } : { item_id: itemId || null }),
+          trigger_node_id: triggerId || null,
+          ...(usesEvent ? eventId ? { event_id: Number(eventId) } : { event_payload: eventPayload } : {}),
+        },
+      );
+    },
+    onSuccess: (result, requestedInput) => { if (requestedInput === currentInput.current) onResult?.(result); },
+  });
+  useEffect(() => { test.reset(); onResult?.(null); }, [previewInput]);
 
-  const result = test.data;
+  const result = test.variables === previewInput ? test.data : undefined;
 
   return (
     <div className="flex flex-col gap-3 rounded-md border border-subtle bg-surface/40 p-3">
@@ -87,7 +113,7 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
         <FlaskConical size={14} className="text-accent-text" aria-hidden />
         <span className="text-xs font-medium text-fg">Dry run</span>
         <span className="text-[11px] text-fg-muted">
-          Runs every node with the appliers off — nothing is written.
+          Previews the current draft without applying actions. Scripts and branches needing newly created objects are reported as unavailable.
         </span>
       </div>
 
@@ -156,8 +182,19 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
         </SelectField>
       </div>
 
+      {usesEvent && <div className="space-y-2">
+        <SelectField label="Event data" value={eventId} onChange={event => setEventId(event.target.value)}>
+          <option value="">Custom sample payload (JSON)</option>
+          {(samples.data ?? []).map(sample => <option key={sample.id} value={sample.id}>#{sample.id} · {new Date(sample.created_at).toLocaleString()}</option>)}
+        </SelectField>
+        {samples.isError && <p className="text-xs text-red-400">{errorMessage(samples.error)}</p>}
+        {eventId ? <p className="text-xs text-fg-muted">Uses this recorded event’s payload and subjects with current database values.</p> : <label className="block text-xs text-fg-muted">Sample payload — include the repository, version, or other fields the gates and actions read.
+          <textarea aria-label="Sample event payload" className="mt-1 block w-full rounded border border-subtle bg-base p-2 font-mono" rows={5} value={payload} onChange={event => setPayload(event.target.value)} />
+        </label>}
+      </div>}
+
       <div className="flex items-center gap-3">
-        <Button onClick={() => test.mutate()} disabled={test.isPending}>
+        <Button onClick={() => test.mutate(previewInput)} disabled={test.isPending}>
           {test.isPending ? "Running…" : "Run"}
         </Button>
         {result && (
@@ -319,7 +356,7 @@ function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview
   const catalog = useQuery(automationCatalogQuery);
   const label = catalog.data?.nodes.find((node) => node.key === preview.type)?.label ?? preview.type;
   const resolved = Object.entries(preview.resolved ?? {});
-  const chip = preview.resolves
+  const chip = preview.failed ? "Failed" : preview.resolves
     ? applied ? "Applied" : "Would apply"
     : preview.refused ? "Refused" : "Skipped";
   return (
@@ -334,7 +371,7 @@ function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview
             "shrink-0 rounded px-1.5 py-px text-[10px] uppercase tracking-wide " +
             (preview.resolves
               ? "bg-emerald-500/15 text-emerald-300"
-              : preview.refused
+              : (preview.refused || preview.failed)
                 ? "bg-status-danger/15 text-status-danger"
                 : "bg-amber-500/15 text-amber-300")
           }

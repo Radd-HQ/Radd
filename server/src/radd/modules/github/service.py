@@ -7,6 +7,7 @@ every active connection so a webhook registered before its repository row
 still works.
 """
 
+from radd.modules.vcs import setup as vcs_setup
 import hashlib
 import hmac
 import logging
@@ -93,6 +94,7 @@ async def _repo_snapshot(session: AsyncSession, repo: GithubRepo) -> dict:
         "default_branch": repo.default_branch,
         "time_category_id": str(repo.time_category_id) if repo.time_category_id else None,
         "mirror_time": repo.mirror_time,
+        "enabled": repo.enabled, "link_all_projects": repo.link_all_projects,
     }
 
 
@@ -123,6 +125,7 @@ async def create_connection(
     )
     if existing.scalar_one_or_none() is not None:
         raise ConflictError(GithubEntity.CONNECTION, data.name)
+    await vcs_setup.claim_seed(session, "github")
     connection = GithubConnection(
         name=data.name,
         base_url=(data.base_url or GITHUB_COM).rstrip("/"),
@@ -131,6 +134,7 @@ async def create_connection(
         active=data.active,
         verify_ssl=data.verify_ssl,
     )
+    await vcs_setup.require_distinct_secret(session, GithubConnection, connection)
     session.add(connection)
     await session.flush()
     await refresh_connection_snapshot(session)
@@ -160,6 +164,7 @@ async def update_connection(
         connection.active = data.active
     if data.verify_ssl is not None:
         connection.verify_ssl = data.verify_ssl
+    await vcs_setup.require_distinct_secret(session, GithubConnection, connection)
     await session.flush()
     await refresh_connection_snapshot(session)
     await _emit_connection(
@@ -212,12 +217,13 @@ async def get_repo(session: AsyncSession, repo_id: uuid.UUID) -> GithubRepo:
     return repo
 
 
-async def find_repo(session: AsyncSession, full_name: str) -> GithubRepo | None:
+async def find_repo(session: AsyncSession, full_name: str, connection_id: uuid.UUID | None = None) -> GithubRepo | None:
     """By `owner/repo`, case-insensitively — GitHub treats names that way."""
-    rows = await session.execute(
-        select(GithubRepo).where(func.lower(GithubRepo.full_name) == full_name.lower())
-    )
-    return rows.scalars().first()
+    query = select(GithubRepo).where(func.lower(GithubRepo.full_name) == full_name.lower())
+    if connection_id is not None:
+        query = query.where(GithubRepo.connection_id == connection_id)
+    return await session.scalar(query)
+
 
 
 async def create_repo(
@@ -257,6 +263,10 @@ async def update_repo(
         repo.time_category_id = data.time_category_id
     if data.mirror_time is not None:
         repo.mirror_time = data.mirror_time
+    if data.enabled is not None:
+        repo.enabled = data.enabled
+    if data.link_all_projects is not None:
+        repo.link_all_projects = data.link_all_projects
     await session.flush()
     diff = changes.diff(before, await _repo_snapshot(session, repo))
     await _emit_repo(session, GithubEvent.REPO_UPDATED, repo, actor_id, diff)
@@ -278,28 +288,19 @@ async def delete_repo(
 async def resolve_for_payload(
     session: AsyncSession, payload: dict, raw_body: bytes, signature: str
 ) -> tuple[GithubConnection, GithubRepo | None] | None:
-    """The connection that signed this body, and the repository row if we know it.
+    """Authenticate one active host, then require its repository to be enabled.
 
-    A recorded repository is verified against its OWN connection and nothing
-    else — a second host's genuine secret must not authorise writes against the
-    first host's repositories. An unrecorded repository falls back to every
-    ACTIVE connection. None = nothing verified, which the router turns into 403.
+    Secrets shared by multiple hosts are ambiguous and therefore rejected.
     """
-    full_name = ((payload.get("repository") or {}).get("full_name") or "").strip()
-    if full_name:
-        repo = await find_repo(session, full_name)
-        if repo is not None:
-            connection = await session.get(GithubConnection, repo.connection_id)
-            if connection is None or not connection.active:
-                return None
-            if verify_signature(raw_body, signature, connection.webhook_secret):
-                return connection, repo
-            return None
-
-    for connection in await list_connections(session):
-        if connection.active and verify_signature(raw_body, signature, connection.webhook_secret):
-            return connection, None
-    return None
+    full_name = str((payload.get("repository") or {}).get("full_name") or "").strip().strip("/")
+    verified = [c for c in await list_connections(session) if c.active and verify_signature(raw_body, signature, c.webhook_secret)]
+    if len(verified) != 1:
+        return None  # shared secrets cannot identify a host unambiguously
+    connection = verified[0]
+    repo = await find_repo(session, full_name, connection.id) if full_name else None
+    if full_name and (repo is None or not repo.enabled):
+        return None
+    return connection, repo
 
 
 # --- capability snapshot (RADD-899 idiom) ---
@@ -340,7 +341,9 @@ async def seed_from_env() -> None:
     secret = settings.github_webhook_secret.strip()
     async with SessionLocal() as session:
         rows = await session.execute(select(func.count()).select_from(GithubConnection))
-        if secret and int(rows.scalar_one()) == 0:
+        empty = int(rows.scalar_one()) == 0
+        claimed = await vcs_setup.claim_seed(session, "github") if secret or not empty else False
+        if secret and empty and claimed:
             connection = GithubConnection(
                 name="GitHub",
                 base_url=(settings.github_base_url or GITHUB_COM).rstrip("/"),
@@ -353,6 +356,6 @@ async def seed_from_env() -> None:
             repo_name = settings.github_repo.strip().strip("/")
             if repo_name:
                 session.add(GithubRepo(connection_id=connection.id, full_name=repo_name))
-            await session.commit()
             logger.info("github: seeded one connection from RADD_GITHUB_WEBHOOK_SECRET")
+        await session.commit()
         await refresh_connection_snapshot(session)

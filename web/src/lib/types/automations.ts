@@ -119,6 +119,7 @@ export interface NodeInfo {
   /** RADD-1325: ports / outputs depend on params — the shape endpoint answers. */
   dynamic_ports: boolean;
   dynamic_outputs: boolean;
+  shape_params?: string[] | null;
   /** RADD-1329: no output ports at all. */
   terminal: boolean;
   /** The node's FIXED ports (RADD-1064). Empty means its outputs depend on its
@@ -174,6 +175,7 @@ export interface AutomationTemplate {
 
 /** GET /automations/catalog — everything the rule builder renders from. */
 export interface AutomationCatalog {
+  max_chain_depth: number;
   triggers: TriggerInfo[];
   operators: OperatorInfo[];
   manual_trigger: string;
@@ -412,6 +414,7 @@ export interface RuleCreate {
  * or not at all: sending nodes without edges keeps the stored edges, and the
  * pair is re-validated together. */
 export interface RuleUpdate {
+  adopt_execution?: boolean;
   name?: string;
   enabled?: boolean;
   position?: number;
@@ -422,6 +425,7 @@ export interface RuleUpdate {
 
 /** One action's dry-run outcome (POST /automations/{id}/test). */
 export interface ActionPreview {
+  failed?: boolean;
   /** A built-in action's name, or a contributed node's full key (`script.run`). */
   type: ActionTypeValue | string;
   params: Record<string, unknown>;

@@ -34,6 +34,7 @@ plugin = RaddPlugin(
         *TRIGGERS.specs(),
     ),
     routers=(router, admin_router),
+    automation_templates=TRIGGERS.templates(),
     # Spec 111: the env secret seeds ONE connection row, once (the spec-100/101 rule),
     # so an existing deployment keeps verifying webhooks across the upgrade.
     on_startup=(service.seed_from_env,),

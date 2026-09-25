@@ -86,6 +86,10 @@ async def gitlab_webhook(
         raise ForbiddenError("bad gitlab webhook token")
     connection, repo = resolved
 
+    if not await receiving.claim_delivery(session, provider=VcsProvider.GITLAB, connection_id=connection.id,
+            delivery_id=x_gitlab_event_uuid, event_type=_kind(payload, x_gitlab_event), body=raw_body):
+        return {"linked": 0, "triggered": 0}
+
     kind = _kind(payload, x_gitlab_event)
     repo_name = parsing.project_path(payload)
     result: dict[str, Any] = {"linked": 0, "triggered": 0}
@@ -93,9 +97,9 @@ async def gitlab_webhook(
         result["triggered"] = await _handle_release(session, payload, repo)
         return result
     if kind == GitlabEventKind.PIPELINE:
-        return await _handle_pipeline(session, payload, connection)
+        return await _handle_pipeline(session, payload, connection, repo)
     if kind == GitlabEventKind.DEPLOYMENT:
-        return await _handle_deployment(session, payload, connection)
+        return await _handle_deployment(session, payload, connection, repo)
     if kind == GitlabEventKind.PUSH:
         planned = parsing.plan_push(payload)
     elif kind == GitlabEventKind.MERGE_REQUEST:
@@ -105,7 +109,8 @@ async def gitlab_webhook(
         return result
 
     links = await receiving.link_planned(
-        session, planned, provider=VcsProvider.GITLAB, actor_id=SYSTEM_ACTOR_ID
+        session, planned, provider=VcsProvider.GITLAB, actor_id=SYSTEM_ACTOR_ID,
+        connection_id=connection.id, repo=repo
     )
     result["linked"] = receiving.count(links)
     if kind == GitlabEventKind.PUSH:
@@ -153,7 +158,7 @@ async def gitlab_webhook(
     return result
 
 
-async def _handle_pipeline(session: AsyncSession, payload: dict, connection) -> dict[str, Any]:
+async def _handle_pipeline(session: AsyncSession, payload: dict, connection, repo=None) -> dict[str, Any]:
     """RADD-1255: stamp the ref's CI badge (branch, commit and, for an MR
     pipeline, the MR — the latest run wins), and fire "GitLab: CI finished" once
     per linked issue when the run reached an outcome. A running report only moves
@@ -163,19 +168,22 @@ async def _handle_pipeline(session: AsyncSession, payload: dict, connection) -> 
         return {"linked": 0, "triggered": 0}
     state = PIPELINE_STATES.get(update.status, "unknown")
     stamped = await vcs.set_ci_state(
-        session, provider=VcsProvider.GITLAB, external_ids=update.external_ids, ci_state=state, ci_url=update.url,
+        session, connection_id=connection.id if connection else None, repo=repo, provider=VcsProvider.GITLAB, external_ids=update.external_ids, ci_state=state, ci_url=update.url,
+        run_id=update.run_id, source_updated_at=update.updated_at, head_sha=update.sha,
+        source_started_at=str((payload.get("object_attributes") or {}).get("created_at") or (payload.get("object_attributes") or {}).get("started_at") or ""),
     )
     fired = 0
     if state in tuple(triggers.CiOutcome):
         fired = await receiving.fire_ci(
             session, GitlabTrigger.CI_COMPLETED, stamped,
             provider=VcsProvider.GITLAB, repo=update.repo, state=state, url=update.url,
+            name="pipeline", sha=update.sha, run_id=update.run_id,
             actor_id=SYSTEM_ACTOR_ID,
         )
     return {"linked": len(stamped), "triggered": fired}
 
 
-async def _handle_deployment(session: AsyncSession, payload: dict, connection) -> dict[str, Any]:
+async def _handle_deployment(session: AsyncSession, payload: dict, connection, repo=None) -> dict[str, Any]:
     """RADD-1255: a deployment of a linked ref reached an outcome (success,
     failed, canceled) → "GitLab: deployment finished" once per linked issue,
     with the environment. What that means — Done when production succeeds, say —
@@ -183,7 +191,7 @@ async def _handle_deployment(session: AsyncSession, payload: dict, connection) -
     update = parsing.plan_deployment(payload)
     if update is None or update.status not in DEPLOYMENT_OUTCOMES:
         return {"linked": 0, "triggered": 0}
-    links = await vcs.links_for_refs(session, provider=VcsProvider.GITLAB, external_ids=update.external_ids)
+    links = await vcs.links_for_refs(session, provider=VcsProvider.GITLAB, external_ids=update.external_ids, connection_id=connection.id, repo=repo)
     by_item: dict = {}
     for link in links:
         by_item.setdefault(link.item_id, link)
@@ -216,8 +224,8 @@ async def _handle_release(session: AsyncSession, payload: dict, repo) -> int:
         return 0
     repo_name = parsing.project_path(payload)
     await triggers.emit_release(
-        session,
-        TRIGGERS.release_published,
+        session, TRIGGERS.release_published,
+        connection_id=getattr(repo, "connection_id", None),
         entity_type=GitlabEntity.REPO,
         entity_id=repo.id if repo is not None else repo_name,
         provider=VcsProvider.GITLAB,

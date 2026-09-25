@@ -75,12 +75,12 @@ async def test_known_repo_is_verified_against_its_own_connection(db):
     assert second.active is True  # ...and not because the second host was ignored
 
 
-async def test_unknown_repo_falls_back_to_any_active_connection(db):
+async def test_unknown_repo_requires_registration(db):
     await _connection(db, f"host-{uuid.uuid4().hex[:6]}", "secret-one")
     payload, body = _payload("nobody/knows-this")
 
     resolved = await service.resolve_for_payload(db, payload, body, _sign(body, "secret-one"))
-    assert resolved is not None and resolved[1] is None  # verified, but no repo row
+    assert resolved is None  # Valid credentials do not enable an unregistered repo.
     assert await service.resolve_for_payload(db, payload, body, _sign(body, "nope")) is None
 
 

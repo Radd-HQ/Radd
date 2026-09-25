@@ -20,7 +20,7 @@ from radd.modules.events import service as events
 from radd.config import settings
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.items import service as items_service
-from radd.modules.vcs import service as vcs
+from radd.modules.vcs import receiving
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
 from radd.modules.vcs.types import VcsProvider, VcsRefType
 
@@ -38,6 +38,7 @@ class BackfillReport:
     pull_requests: int = 0
     commits: int = 0
     linked: int = 0
+    errors: list[str] = field(default_factory=list)
     unknown_keys: list[str] = field(default_factory=list)
     #: RADD-1260: the tracked-time mirror totals across every PR walked.
     worklogs: dict[str, Any] = field(default_factory=dict)
@@ -48,6 +49,7 @@ class BackfillReport:
             "pull_requests": self.pull_requests,
             "commits": self.commits,
             "linked": self.linked,
+            "errors": self.errors,
             # Keys that look like items but are not: usually another tracker's
             # scheme in an old message. Reported rather than silently dropped, so
             # a surprising zero has an explanation.
@@ -108,6 +110,7 @@ async def _link(
     session: AsyncSession,
     report: BackfillReport,
     *,
+    connection_id, repo,
     texts: list[str | None],
     ref_type: VcsRefType,
     external_id: str,
@@ -115,23 +118,17 @@ async def _link(
     url: str,
     status: str = "",
 ) -> None:
-    for key in extract_keys(*texts):
-        item = await items_service.find_item_by_key(session, key)
-        if item is None:
+    from types import SimpleNamespace
+    keys = extract_keys(*texts)
+    for key in keys:
+        if await items_service.find_item_by_key(session, key) is None:
             report.unknown_keys.append(key)
-            continue
-        await vcs.upsert_vcs_link(
-            session,
-            item.id,
-            provider=VcsProvider.FORGEJO,
-            ref_type=ref_type,
-            external_id=external_id,
-            title=title,
-            url=url,
-            status=status,
-            actor_id=SYSTEM_ACTOR_ID,
-        )
-        report.linked += 1
+    plans = [SimpleNamespace(item_key=key, ref_type=ref_type, external_id=external_id,
+        title=title, url=url, status=status) for key in (keys or [""])]
+    links = await receiving.link_planned(session, plans, provider=VcsProvider.FORGEJO,
+        actor_id=SYSTEM_ACTOR_ID, connection_id=connection_id, repo=repo)
+    report.linked += receiving.count(links)
+
 
 
 async def run(
@@ -147,6 +144,9 @@ async def run(
     thing keeping that out of automations was the system actor. Quiet is the
     importers' answer (jiraimport, confluenceimport): history is recorded and
     indexed, and nothing reacts to it — no automation, webhook or notification."""
+    if not connection.active or not repo.enabled:
+        from radd.exceptions import ConflictError
+        raise ConflictError("repository", reason="Enable the connection and repository before importing history")
     with events.quiet():
         return await _run(session, connection, repo, max_commits=max_commits, transport=transport)
 
@@ -176,7 +176,7 @@ async def _run(
             name = str(branch.get("name") or "")
             await _link(
                 session,
-                report,
+                report, connection_id=connection.id, repo=repo,
                 texts=[name],
                 ref_type=VcsRefType.BRANCH,
                 external_id=branch_external_id(repo.full_name, name),
@@ -197,7 +197,7 @@ async def _run(
             head_ref = ((pull.get("head") or {}).get("ref")) or ""
             await _link(
                 session,
-                report,
+                report, connection_id=connection.id, repo=repo,
                 texts=[pull.get("title"), pull.get("body"), head_ref],
                 ref_type=VcsRefType.PULL_REQUEST,
                 external_id=pr_external_id(repo.full_name, number),
@@ -223,6 +223,7 @@ async def _run(
                         )
                     )
                 except Exception:
+                    report.errors.append("Time mirroring failed for a pull/merge request; see the server log.")
                     logger.exception("forgejo backfill %s: tracked-time mirror failed for #%s", repo.full_name, number)
 
         async for commit in client.paged(
@@ -233,7 +234,7 @@ async def _run(
             message = ((commit.get("commit") or {}).get("message")) or ""
             await _link(
                 session,
-                report,
+                report, connection_id=connection.id, repo=repo,
                 texts=[message],
                 ref_type=VcsRefType.COMMIT,
                 external_id=commit_external_id(repo.full_name, sha),

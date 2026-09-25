@@ -210,17 +210,28 @@ def _search_builder(spec: EntitySpec, model: type):
         stmt = (
             select(model)
             .where(or_(*(column.ilike(term) for column in columns)))
-            .order_by(getattr(model, label_field))
-            .limit(limit * SEARCH_SCAN_FACTOR)
+            .order_by(getattr(model, label_field), model.id)
         )
-        rows = list((await session.execute(stmt)).scalars())
+        rows = []
         if spec.project_scoped:
-            rows = await entity_host().visible_rows(session, actor, spec.key, rows)
+            project_ids = await entity_host().readable_project_ids(session, actor, spec.key)
+            stmt = stmt.where(model.project_id.in_(project_ids))
+            # Scan in bounded batches until enough authorized matches exist.
+            # Limiting candidates once makes private rows hide readable results.
+            batch_size = max(50, limit * SEARCH_SCAN_FACTOR)
+            offset = 0
+            while len(rows) < limit:
+                batch = list((await session.scalars(stmt.limit(batch_size).offset(offset))).all())
+                rows.extend(await entity_host().visible_rows(session, actor, spec.key, batch))
+                if len(batch) < batch_size:
+                    break
+                offset += batch_size
         else:
             try:
                 await entity_host().require(session, actor, authz_read_atom(), project_id=None)
             except Exception:  # noqa: BLE001 — no read = nothing found, never a 403 from search
                 return []
+            rows = list((await session.scalars(stmt.limit(limit))).all())
         return [
             {
                 "id": str(row.id),

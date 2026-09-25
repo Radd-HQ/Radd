@@ -1,4 +1,5 @@
 import uuid
+from contextlib import contextmanager
 from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
@@ -22,8 +23,20 @@ from .types import EventSource
 
 __all__ = [
     "Event", "quiet", "is_quiet", "automated", "is_automated",
-    "AutomationCause", "current_cause", "run_cause",
+    "AutomationCause", "current_cause", "run_cause", "derived_from",
 ]  # re-exported public seam (see above)
+
+
+@contextmanager
+def derived_from(event: Event, *, silent: bool = False):
+    """Restore provenance when a consumer emits consequences of an outbox event.
+
+    This is the same action continuing in another worker, not another automation
+    run, so the depth is preserved. Each scope restores the previous context.
+    """
+    cause = AutomationCause(event.automation_rule_id, event.automation_depth or 1)
+    with automated(bool(event.automated), cause=cause), quiet(silent or bool(event.silent)):
+        yield
 
 
 async def emit(
