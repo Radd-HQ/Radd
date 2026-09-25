@@ -54,7 +54,7 @@ from radd.modules.projects.models import Project
 from radd.modules.notify.types import NotificationType
 from radd.clock import utcnow
 
-from . import catalog, conditions, executor, round_robin, runs, service
+from . import catalog, conditions, executor, graph, round_robin, runs, service
 from .graph import GraphError, Packet
 from .models import Automation
 from .planning import (
@@ -306,6 +306,33 @@ def _subjects_of(event: Event) -> dict[str, tuple[uuid.UUID, ...]]:
 # --- per-event application (one transaction per event; the caller commits) ---
 
 
+def _matching_kind(event: Event, rules: list) -> list:
+    """An event-backed trigger KIND asks each automation whether it wants THIS
+    firing (RADD-1323): "webhook received" fires every automation bound to the
+    kind, and `matches(node params, payload)` keeps the ones configured for this
+    endpoint. A plain event type, or a kind with no matcher, keeps them all."""
+    from radd.kernel.registry import registries
+
+    kind = registries.trigger_kinds.get(event.event_type)
+    if kind is None or kind.matches is None:
+        return rules
+    payload = dict(event.payload or {})
+    kept = []
+    for rule, node_id in rules:
+        params = next(
+            (dict(node.get("params") or {}) for node in (rule.nodes or []) if str(node.get("id")) == node_id),
+            {},
+        )
+        try:
+            wanted = bool(kind.matches(params, payload))
+        except Exception:
+            logger.exception("automations: trigger kind %s could not match %s", kind.key, rule.name)
+            wanted = False
+        if wanted:
+            kept.append((rule, node_id))
+    return kept
+
+
 async def apply_event(session: AsyncSession, event: Event) -> None:
     """Run every matching rule's actions for one event, best-effort. Any catalog
     trigger is subscribable (spec 58): the rule's event conditions gate on the
@@ -324,6 +351,7 @@ async def apply_event(session: AsyncSession, event: Event) -> None:
     # that is a loop by construction, and the depth cap would only bound it.
     caused_by = getattr(event, "automation_rule_id", None)
     rules = [(rule, node_id) for rule, node_id in rules if caused_by is None or rule.id != caused_by]
+    rules = _matching_kind(event, rules)
     if not rules:
         return
     system_user = await session.get(User, SYSTEM_ACTOR_ID)
@@ -335,7 +363,8 @@ async def apply_event(session: AsyncSession, event: Event) -> None:
         )
         return
     item = await _resolve_target_item(session, event)
-    if item is None and catalog.TRIGGERS[event.event_type].item_scoped and not _parent_is_not_an_item(event):
+    trigger_spec = catalog.TRIGGERS.get(event.event_type)  # None for a trigger KIND's event
+    if item is None and trigger_spec is not None and trigger_spec.item_scoped and not _parent_is_not_an_item(event):
         return  # item vanished before the engine caught up
     facts = await _event_facts(session, event)
     subjects = _subjects_of(event)
@@ -551,6 +580,7 @@ async def run_manual(
     item_id: uuid.UUID,
     *,
     start_node_id: str | None = None,
+    subject: str = "item",
 ) -> bool:
     """Run a MANUAL rule on one item, on demand (the editor `/` quick-action seam,
     POST /automations/{id}/run). The graph's filters are still respected — returns
@@ -559,14 +589,16 @@ async def run_manual(
     `start_node_id` is the manual TRIGGER node. A graph may hold several entry
     points, and starting at whichever came first would run the Monday branch when
     somebody pressed a button."""
-    item = await items.require_item(session, item_id)
+    if subject == graph.ITEM_SUBJECT:
+        item_id = (await items.require_item(session, item_id)).id
     system_user = await session.get(User, SYSTEM_ACTOR_ID)
     if system_user is None:
         raise RuntimeError("automations: system actor missing — run the migration")
+    # RADD-1323: any subject the manual kind seeds — a page run carries the page.
     report = await run_graph(
         session,
         rule,
-        Packet.of(_manual_facts(), item=(item.id,)),
+        Packet.of(_manual_facts(), **{subject: (item_id,)}),
         system_user,
         start_node_id=start_node_id,
         source=RunSource.MANUAL,
@@ -577,8 +609,10 @@ async def run_manual(
     # no single condition, so the honest answer is whether any action node was
     # actually reached with this item — which is also what the caller shows the
     # person who pressed the button.
-    return any(counts.get("in", 0) > 0 for node_id, counts in report.per_node.items()
-               if node_id in _action_node_ids(rule))
+    # RADD-1323: asked of the plans, not of item counts — a run started from a
+    # page carries no items, and "did anything apply" is the same question.
+    actions = _action_node_ids(rule)
+    return any(plan.resolves for plan in report.plans if plan.node_id in actions)
 
 
 # --- poll iteration (mirrors webhooks.service.fanout_events; one txn per event) ---
@@ -615,6 +649,9 @@ async def preview(
     rule: Automation,
     item_id: uuid.UUID | None = None,
     trigger_node_id: str | None = None,
+    *,
+    subject: str = "item",
+    subject_id: uuid.UUID | None = None,
 ) -> RuleTestResult:
     """Walk the graph with the appliers off, and report what each node did.
 
@@ -641,11 +678,14 @@ async def preview(
     seed: tuple[uuid.UUID, ...] = ()
     if item_id is not None:
         seed = ((await items.require_item(session, item_id)).id,)
+    subjects = {"item": seed}
+    if subject != graph.ITEM_SUBJECT and subject_id is not None:
+        subjects = {subject: (subject_id,)}  # RADD-1323: a page's dry run
 
     report = await run_graph(
         session,
         rule,
-        Packet.of(_manual_facts(), item=seed),
+        Packet.of(_manual_facts(), **subjects),
         system_user,
         apply=False,
         start_node_id=trigger.id if trigger is not None else None,

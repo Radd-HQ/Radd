@@ -130,6 +130,20 @@ export interface NodeInfo {
   permission: string;
 }
 
+/** A trigger kind (RADD-1323). `has_event: false` = there is no event to read
+ * (a schedule, a manual run, a validation walk); `seeds` = the subjects a manual
+ * run or dry run may start from. */
+export interface TriggerKindInfo {
+  key: string;
+  label: string;
+  group: string;
+  description: string;
+  params_schema: Record<string, unknown>;
+  default_params: Record<string, unknown>;
+  has_event: boolean;
+  seeds: string[];
+}
+
 /** One value a node produces, addressable downstream as `{{<node>.<name>}}`. */
 export interface OutputFieldInfo {
   name: string;
@@ -150,6 +164,9 @@ export interface AutomationCatalog {
   schedule_kinds: { key: ScheduleKindValue; label: string }[];
   /** Every node type (RADD-1322). */
   nodes: NodeInfo[];
+  /** Every trigger KIND (RADD-1323): the button, the clock, the draft check,
+   * and any a plugin registers. */
+  trigger_kinds: TriggerKindInfo[];
   /** How each node type reads its packet, built-in and contributed alike. */
   node_arity: NodeArityInfo[];
   /** `{{token}}` substitutions available in action text fields. Served so the

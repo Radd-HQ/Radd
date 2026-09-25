@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { CircleSlash, FlaskConical } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiAutomationTestPath } from "../../lib/constants";
-import { automationCatalogQuery, linkSearchQuery, firstProjectQuery } from "../../lib/queries";
+import { automationCatalogQuery, linkSearchQuery, firstProjectQuery, pageSearchQuery } from "../../lib/queries";
 import type {
   ActionPreview,
   AutomationNode,
@@ -56,13 +56,26 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
     ...linkSearchQuery(effectiveProjectId, search),
     enabled: Boolean(effectiveProjectId),
   });
+  // RADD-1323: a dry run may start from a PAGE when the manual kind seeds one —
+  // which is what makes a page automation checkable before it runs.
+  const catalog = useQuery(automationCatalogQuery);
+  const pageSeedable = Boolean(
+    catalog.data?.trigger_kinds.find((kind) => kind.key === "manual")?.seeds.includes("page"),
+  );
+  const [subject, setSubject] = useState<"item" | "page">("item");
+  const [pageSearch, setPageSearch] = useState("");
+  const [pageId, setPageId] = useState("");
+  const pageQuery = useDebounced(pageSearch, 200);
+  const pages = useQuery({ ...pageSearchQuery(pageQuery, 20), enabled: subject === "page" && pageQuery.trim().length > 0 });
 
   const test = useMutation({
     mutationFn: () =>
-      api.post<RuleTestResult>(apiAutomationTestPath(ruleId), {
-        item_id: itemId || null,
-        trigger_node_id: triggerId || null,
-      }),
+      api.post<RuleTestResult>(
+        apiAutomationTestPath(ruleId),
+        subject === "page"
+          ? { subject: "page", subject_id: pageId || null, trigger_node_id: triggerId || null }
+          : { item_id: itemId || null, trigger_node_id: triggerId || null },
+      ),
     onSuccess: (result) => onResult?.(result),
   });
 
@@ -78,7 +91,36 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
         </span>
       </div>
 
+      {pageSeedable && (
+        <SelectField
+          label="Run it on"
+          value={subject}
+          onChange={(event) => setSubject(event.target.value === "page" ? "page" : "item")}
+        >
+          <option value="item">An issue</option>
+          <option value="page">A page</option>
+        </SelectField>
+      )}
+      {subject === "page" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <TextField
+            label="Find a page"
+            value={pageSearch}
+            onChange={(event) => { setPageSearch(event.target.value); setPageId(""); }}
+            placeholder="Search page titles…"
+          />
+          <SelectField label="As if it ran on" value={pageId} onChange={(event) => setPageId(event.target.value)}>
+            <option value="">Pick a page</option>
+            {(pages.data?.results ?? []).map((page) => (
+              <option key={page.page_id} value={page.page_id}>
+                {page.title}
+              </option>
+            ))}
+          </SelectField>
+        </div>
+      ) : (
       <TextField label="Find a seed issue" value={itemSearch} onChange={event => { setItemSearch(event.target.value); setItemId(""); }} placeholder="Search by key or title in the selected project…" />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
         <SelectField
           label="Start at"
@@ -98,6 +140,7 @@ export function RuleTestPanel({ ruleId, triggers = [], nodes = [], onResult }: R
         }} />
         <SelectField
           label="As if it fired for"
+          disabled={subject === "page"}
           value={itemId}
           onChange={(event) => setItemId(event.target.value)}
           // A search- or schedule-fed graph produces its OWN items, so no seed

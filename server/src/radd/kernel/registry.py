@@ -16,6 +16,7 @@ from pathlib import Path
 from .plugin import RaddPlugin
 from .specs import (
     AutomationNodeSpec,
+    TriggerKindSpec,
     RelationSpec,
     RowGuardSpec,
     CapabilitySpec,
@@ -106,6 +107,8 @@ class KernelRegistries:
     mcp_tools: dict[str, McpToolSpec] = field(default_factory=dict)  # plugin MCP tools (RADD-640)
     #: Automation graph node types (spec 116 phase 2), keyed by their spec key.
     automation_nodes: dict[str, AutomationNodeSpec] = field(default_factory=dict)
+    #: RADD-1323: trigger KINDS (manual/schedule/validate + any a plugin adds).
+    trigger_kinds: dict[str, TriggerKindSpec] = field(default_factory=dict)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
     #: Which plugin contributed each page extension (RADD-748). The registry is
     #: the only thing that knows — the spec is authored BY the plugin, so a
@@ -133,7 +136,7 @@ class KernelRegistries:
             self.capabilities, self.tasks, self.consumer_names,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
-            self.automation_nodes,
+            self.automation_nodes, self.trigger_kinds,
             self.page_extension_sources,
         ):
             f.clear()
@@ -186,6 +189,8 @@ class KernelRegistries:
             self.mcp_tools[mt.name] = mt
         for node in plugin.automation_nodes:
             self.automation_nodes[node.key] = node
+        for kind in plugin.trigger_kinds:
+            self.trigger_kinds[kind.key] = kind
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
             self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
@@ -251,6 +256,8 @@ class KernelRegistries:
             self.mcp_tools.pop(mt.name, None)
         for node in plugin.automation_nodes:
             self.automation_nodes.pop(node.key, None)
+        for kind in plugin.trigger_kinds:
+            self.trigger_kinds.pop(kind.key, None)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
             self.page_extension_sources.pop(px.name, None)

@@ -299,10 +299,37 @@ async def test_schedule_consistency_409s(db, admin):
                         "params": {"users": ["someone@example.com"], "negate": False},
                     }
                 ],
-                extra_edges=[{"source": "gate", "port": "true", "target": "a0"}],
+                extra_edges=[
+                    {"source": "trigger", "port": "out", "target": "gate"},
+                    {"source": "gate", "port": "true", "target": "a0"},
+                ],
             ),
             admin.id,
         )
+
+
+async def test_a_schedule_may_gate_on_the_items_but_not_on_the_event(db, admin):
+    """RADD-1323: the old rule refused EVERY gate after a schedule, which made
+    "schedule → find issues → classify" impossible. Only a node that READS THE
+    EVENT is refused now — by its own `reads_event` declaration."""
+    rule = await automations.create_rule(
+        db,
+        _graph(
+            trigger_params={
+                "event": AutomationTrigger.SCHEDULE.value,
+                "schedule": {"kind": "interval", "minutes": 30},
+            },
+            extra_nodes=[
+                {"id": "gate", "kind": "gate", "type": "gate.state_category", "params": {"categories": ["done"]}},
+            ],
+            extra_edges=[
+                {"source": "trigger", "port": "out", "target": "gate"},
+                {"source": "gate", "port": "true", "target": "a0"},
+            ],
+        ),
+        admin.id,
+    )
+    assert rule.id is not None
 
 
 # --- DB: the scheduled engine path ---

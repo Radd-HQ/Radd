@@ -24,6 +24,7 @@ import {
   type RuleAction,
   type RuleSchedule,
   type TriggerInfo,
+  type TriggerKindInfo,
 } from "../../lib/types";
 import {
   arityForcedReason,
@@ -111,6 +112,19 @@ export function GraphInspector({
     }
     return [...grouped.entries()];
   }, [catalog]);
+  // Trigger KINDS (RADD-1323), grouped the same way — served, so a plugin's
+  // kind appears here with no SPA change.
+  const groupedKinds = useMemo(() => {
+    const grouped = new Map<string, TriggerKindInfo[]>();
+    for (const kind of catalog?.trigger_kinds ?? []) {
+      grouped.set(kind.group, [...(grouped.get(kind.group) ?? []), kind]);
+    }
+    return [...grouped.entries()];
+  }, [catalog]);
+  const firedKind =
+    node?.kind === NodeKind.trigger
+      ? catalog?.trigger_kinds.find((kind) => kind.key === String(node.params.event ?? ""))
+      : undefined;
 
   // What the UPSTREAM trigger's real events carry — the field-changed picker
   // offers those first. ABOVE the early return: a hook after one runs
@@ -233,19 +247,16 @@ export function GraphInspector({
             value={String(node.params.event ?? "")}
             onChange={(event) => {
               const next = event.target.value;
-              // Switching to/from the schedule sentinel changes which params are
-              // legal — the server rejects a schedule on an event trigger and
-              // vice versa, so the shape is corrected here rather than 422ing.
+              // Switching kind changes which params are legal — the server
+              // rejects a schedule on an event trigger and vice versa — so the
+              // shape is rebuilt from the kind's own defaults (RADD-1323),
+              // keeping whatever this node already had for those keys.
               const params: Record<string, unknown> = { event: next };
-              if (next === SCHEDULE_TRIGGER) {
-                params.schedule = node.params.schedule ?? defaultSchedule("interval");
+              const nextKind = catalog?.trigger_kinds.find((entry) => entry.key === next);
+              for (const [key, fallback] of Object.entries(nextKind?.default_params ?? {})) {
+                params[key] = node.params[key] ?? fallback;
               }
-              // The validate sentinel carries its BINDING, and the server
-              // refuses a schedule on it — corrected here rather than 422ing.
-              if (next === VALIDATE_TRIGGER) {
-                params.targets = node.params.targets ?? [];
-                params.mode = node.params.mode ?? "advisory";
-              }
+              if (next === SCHEDULE_TRIGGER && !params.schedule) params.schedule = defaultSchedule("interval");
               onChange({ ...node, params });
             }}
             hint={
@@ -263,15 +274,15 @@ export function GraphInspector({
                 ))}
               </optgroup>
             ))}
-            <optgroup label="Scheduled">
-              <option value={SCHEDULE_TRIGGER}>On a schedule</option>
-            </optgroup>
-            <optgroup label="Intake">
-              <option value={VALIDATE_TRIGGER}>When someone submits (validate it)</option>
-            </optgroup>
-            <optgroup label="On demand">
-              <option value={MANUAL_TRIGGER}>Manual (editor / menu)</option>
-            </optgroup>
+            {groupedKinds.map(([group, entries]) => (
+              <optgroup key={`kind:${group}`} label={group}>
+                {entries.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
+                    {entry.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
           </SelectField>
 
           {/* What this event actually carries. Sampled from real events, so it
@@ -285,7 +296,17 @@ export function GraphInspector({
           {/* RADD-1315: automation chaining is opt-in, per trigger. Only an EVENT
               trigger reacts to changes, so the sentinels do not offer it (and the
               server refuses it on them). */}
-          {![SCHEDULE_TRIGGER, VALIDATE_TRIGGER, MANUAL_TRIGGER].includes(String(node.params.event ?? "")) && (
+          {/* A plugin's trigger kind renders its own params from its schema. */}
+          {firedKind && ![SCHEDULE_TRIGGER, VALIDATE_TRIGGER, MANUAL_TRIGGER].includes(firedKind.key) &&
+            Object.keys(firedKind.params_schema ?? {}).length > 0 && (
+              <SchemaFields
+                schema={firedKind.params_schema}
+                params={node.params}
+                onChange={(params) => setParams({ ...params, event: firedKind.key })}
+              />
+            )}
+
+          {(!firedKind || firedKind.has_event) && (
             <label className="flex cursor-pointer items-start gap-2 text-[13px] text-fg">
               <input
                 type="checkbox"

@@ -23,6 +23,7 @@ from typing import Any
 from radd.db import Base as Base, TimestampMixin as TimestampMixin, get_session as get_session
 from radd.kernel import (
     AutomationNodeSpec as AutomationNodeSpec,
+    TriggerKindSpec as TriggerKindSpec,
     KERNEL_API_VERSION,
     CapabilitySpec as CapabilitySpec,
     CrudResourceSpec as CrudResourceSpec,

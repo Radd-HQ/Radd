@@ -26,6 +26,7 @@ from . import changes
 from .specs import (
     OUTPUT_NAME_RE,
     AutomationNodeSpec,
+    TriggerKindSpec,
     CapabilitySpec,
     CascadeSpec,
     CrudResourceSpec,
@@ -84,6 +85,7 @@ __all__ = [
     "TaskSpec",
     "IntegrationSpec",
     "AutomationNodeSpec",
+    "TriggerKindSpec",
     "OutputField",
     "OutputKind",
     "OUTPUT_NAME_RE",

@@ -11,11 +11,8 @@
  * a module adds an event type.
  */
 import {
-  MANUAL_TRIGGER,
   NodeArity,
   NodeKind,
-  SCHEDULE_TRIGGER,
-  VALIDATE_TRIGGER,
   type AutomationCatalog,
   type AutomationNode,
   type NodeKindValue,
@@ -112,39 +109,19 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
       params: { event: trigger.event_type },
     });
   }
-  templates.push({
-    key: `trigger:${SCHEDULE_TRIGGER}`,
-    kind: NodeKind.trigger,
-    type: "trigger.event",
-    label: "On a schedule",
-    group: `${TRIGGER_GROUP} · Scheduled`,
-    keywords: "schedule cron daily weekly interval recurring every",
-    // A schedule has no event and produces no items of its own (RADD-1265): a
-    // Find issues node wired after it selects what each run acts on. With none,
-    // universal actions still run, which is how "post to chat every Monday" works.
-    params: { event: SCHEDULE_TRIGGER, schedule: { kind: "interval", minutes: 30 } },
-  });
-  templates.push({
-    key: `trigger:${VALIDATE_TRIGGER}`,
-    kind: NodeKind.trigger,
-    type: "trigger.event",
-    label: "When someone submits (validate it)",
-    group: `${TRIGGER_GROUP} · Intake`,
-    keywords: "validate validation intake check quality submit form required advisory gate",
-    // No targets and advisory by default: a trigger that governed something the
-    // moment it was dropped could refuse a real submission before its author
-    // had finished writing the graph.
-    params: { event: VALIDATE_TRIGGER, targets: [], mode: "advisory" },
-  });
-  templates.push({
-    key: `trigger:${MANUAL_TRIGGER}`,
-    kind: NodeKind.trigger,
-    type: "trigger.event",
-    label: "Manual (run from the / menu)",
-    group: `${TRIGGER_GROUP} · On demand`,
-    keywords: "manual on demand run button slash quick action",
-    params: { event: MANUAL_TRIGGER },
-  });
+  // Trigger KINDS (RADD-1323) — the button, the clock, the draft check and
+  // any a plugin registers — from the catalog, like the events above.
+  for (const kind of catalog?.trigger_kinds ?? []) {
+    templates.push({
+      key: `trigger:${kind.key}`,
+      kind: NodeKind.trigger,
+      type: "trigger.event",
+      label: kind.label,
+      group: `${TRIGGER_GROUP} · ${kind.group}`,
+      keywords: `${kind.key} ${kind.group} ${kind.description}`,
+      params: { event: kind.key, ...kind.default_params },
+    });
+  }
 
   // Every other node — built-in and contributed alike (RADD-1322) — from the
   // served catalog: its label, group, search words and starting params are the

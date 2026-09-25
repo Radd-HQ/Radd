@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request, Response
 from .specs import (
     EntityRefSpec,
     AutomationNodeSpec,
+    TriggerKindSpec,
     CapabilitySpec,
     CrudResourceSpec,
     EntitySpec,
@@ -117,6 +118,8 @@ class RaddPlugin:
     #: Automation graph node types (spec 116 phase 2) — what the canvas palette
     #: offers and what the executor knows how to run.
     automation_nodes: tuple[AutomationNodeSpec, ...] = ()
+    #: Trigger kinds (RADD-1323) — a button, a clock, a webhook endpoint.
+    trigger_kinds: tuple[TriggerKindSpec, ...] = ()
     page_extensions: tuple[PageExtensionSpec, ...] = ()  # page fenced blocks (RADD-709)
     #: Rows that die with a parent (RADD-745). A FACTORY, not a tuple: the set is
     #: derived from a binding registry that other modules populate at import

@@ -14,6 +14,7 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.items import slq
+from radd.kernel.registry import registries
 from radd.kernel.specs import valid_output_name
 from pydantic import ValidationError as PydanticValidationError
 
@@ -463,21 +464,22 @@ def _check_validate_trigger(trigger: graph.Node) -> None:
         )
 
 
-def _check_validate_gates(
-    trigger: graph.Node, nodes: list[graph.Node], edges: list[graph.Edge]
+def _check_eventless_reach(
+    trigger: graph.Node, kind, nodes: list[graph.Node], edges: list[graph.Edge]
 ) -> None:
-    """No EVENT gate downstream of a validate trigger (spec 119).
+    """No EVENT-reading node downstream of a trigger that has no event
+    (RADD-1323; spec 119 for `validate`, spec 69 for `schedule`).
 
-    There is no event: `validation.validate_facts` builds a synthetic packet
-    with the system actor, no diff and no changed fields, so
-    `gate.field_changed` and `gate.changed_by` each answer a constant — and the
-    branch behind the port they never take is a check that looks configured and
-    can never run. The same reasoning as the schedule rule above, which is where
-    the precedent comes from.
+    A schedule's run has no event, and a validation walk's facts are synthetic
+    (system actor, no diff) — so a node that reads the event (`reads_event`:
+    field changed, changed by, comment is, …) answers a constant, and the branch
+    behind the port it never takes looks configured and can never run.
 
-    Scoped to what this trigger can REACH rather than to the whole graph,
-    because a graph may hold a validate trigger and an event trigger side by
-    side — and on the event trigger's branch those gates are exactly right.
+    Scoped to what THIS trigger reaches, by the node's own declaration — the old
+    rule refused every GATE after a schedule, including gates that read the
+    ITEMS (an AI classifier after a search), which made "schedule → find issues
+    → classify" impossible to build. A graph may also hold an event trigger
+    beside this one, and on that branch the same gates are exactly right.
     """
     reachable = graph.is_reachable([trigger.id], nodes, edges)
     for node in nodes:
@@ -486,12 +488,11 @@ def _check_validate_gates(
             raise ConflictError(
                 AutomationEntity.RULE,
                 reason=(
-                    f"node {node.id!r} ({node.type}) asks about the event that triggered "
-                    f"the run, and a validation run has no event — it is a draft being "
-                    f"submitted. Use a filter on the draft's own fields instead."
+                    f"node {node.id!r} ({node.type}) asks about the event that triggered the run, "
+                    f"and a {kind.label!r} trigger has no event. Use a filter on the issues' own "
+                    f"fields instead."
                 ),
             )
-
 
 def _check_trigger(
     trigger: graph.Node, nodes: list[graph.Node], edges: list[graph.Edge] | None = None
@@ -500,9 +501,19 @@ def _check_trigger(
     event = str(trigger.params.get("event") or AutomationTrigger.MANUAL)
     schedule = trigger.params.get("schedule")
     scheduled = event == AutomationTrigger.SCHEDULE
+    kind = registries.trigger_kinds.get(event)
     if event == AutomationTrigger.VALIDATE:
         _check_validate_trigger(trigger)
-        _check_validate_gates(trigger, nodes, edges or [])
+    if kind is not None and kind.check is not None:
+        # A contributed kind's own refusal, in its own words (RADD-1323).
+        try:
+            kind.check(trigger.params)
+        except ValueError as exc:
+            raise ConflictError(
+                AutomationEntity.RULE, reason=f"trigger {trigger.id!r} ({kind.key}): {exc}"
+            ) from exc
+    if kind is not None and not kind.has_event:
+        _check_eventless_reach(trigger, kind, nodes, edges or [])
     if scheduled and not isinstance(schedule, dict):
         raise ConflictError(
             AutomationEntity.RULE,
@@ -514,7 +525,7 @@ def _check_trigger(
             AutomationEntity.RULE,
             reason=f"trigger {trigger.id!r}: include_automated is true or false",
         )
-    if include and event in (AutomationTrigger.MANUAL, AutomationTrigger.SCHEDULE, AutomationTrigger.VALIDATE):
+    if include and kind is not None and not kind.has_event:
         # Only an EVENT trigger reacts to changes; a button, a clock and a draft
         # being checked have no "other automation's change" to include.
         raise ConflictError(
@@ -539,14 +550,6 @@ def _check_trigger(
             raise ConflictError(
                 AutomationEntity.RULE, reason=f"trigger {trigger.id!r}: {exc}"
             ) from exc
-    if scheduled and any(n.kind is AutomationNodeKind.GATE for n in nodes):
-        # A gate reads the EVENT, and a schedule has none. The check stays
-        # graph-wide rather than per-branch because a gate anywhere downstream of
-        # a schedule trigger can only ever evaluate against nothing.
-        raise ConflictError(
-            AutomationEntity.RULE,
-            reason="a scheduled automation cannot gate on event conditions (there is no event)",
-        )
 
 
 async def _sync_triggers(

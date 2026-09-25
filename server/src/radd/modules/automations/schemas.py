@@ -491,7 +491,9 @@ def known_trigger(value: str) -> str:
     validator to the trigger node's `params.event`, which this envelope does not
     type — so the service calls this while validating the graph. Dropping the
     check would make a typo'd event a silently dead automation rather than a 422."""
-    if value not in set(AutomationTrigger) and value not in catalog.TRIGGERS:
+    from radd.kernel.registry import registries
+
+    if value not in registries.trigger_kinds and value not in catalog.TRIGGERS:
         raise ValueError(f"unknown trigger {value!r} — see GET /automations/catalog")
     return value
 
@@ -736,6 +738,21 @@ class EventSampleRead(BaseModel):
     declared_schema: dict[str, Any] = Field(default_factory=dict)
 
 
+class TriggerKindInfo(BaseModel):
+    """A trigger KIND (RADD-1323): a button, a clock, a draft check, or any a
+    plugin registers. The editor builds its "Fires on" menu from these beside
+    the event catalogue, and renders a kind's params from its schema."""
+
+    key: str
+    label: str
+    group: str = "Other"
+    description: str = ""
+    params_schema: dict[str, Any] = Field(default_factory=dict)
+    default_params: dict[str, Any] = Field(default_factory=dict)
+    has_event: bool = True
+    seeds: list[str] = Field(default_factory=list)
+
+
 class CatalogRead(BaseModel):
     triggers: list[TriggerInfo]
     operators: list[OperatorInfo]
@@ -745,6 +762,8 @@ class CatalogRead(BaseModel):
     schedule_kinds: list[ScheduleKindInfo] = []
     #: Every node type (RADD-1322) — the palette, the ports, the outputs.
     nodes: list[NodeInfo] = []
+    #: Every trigger kind (RADD-1323).
+    trigger_kinds: list[TriggerKindInfo] = []
     #: How each node type reads its packet, built-in and contributed alike —
     #: one table so the editor's default cannot disagree with the engine's.
     node_arity: list[NodeArityInfo] = []
@@ -765,6 +784,10 @@ class RuleTestRequest(BaseModel):
     #: made exactly those graphs — the ones with the most to check — the ones
     #: that could not be dry-run.
     item_id: uuid.UUID | None = None
+    #: RADD-1323: seed another SUBJECT instead — a page, for a page automation.
+    #: `subject` names the entity type; `subject_id` its id.
+    subject: str = Field(default="item", max_length=64)
+    subject_id: uuid.UUID | None = None
     #: Which trigger to start from. A graph may hold several entry points and
     #: they do different things; "the first one" is not a well-formed answer.
     trigger_node_id: str | None = Field(default=None, max_length=64)
@@ -878,13 +901,19 @@ class RunnableRuleRead(BaseModel):
 
 
 class RuleRunRequest(BaseModel):
-    item_id: uuid.UUID
+    #: The issue to run on — or (RADD-1323) any subject the manual kind seeds,
+    #: named by `subject` + `subject_id`.
+    item_id: uuid.UUID | None = None
+    subject: str = Field(default="item", max_length=64)
+    subject_id: uuid.UUID | None = None
 
 
 class RuleRunResult(BaseModel):
     rule_id: uuid.UUID
-    item_id: uuid.UUID
-    ran: bool  # False = the item didn't match the rule's SLQ condition
+    item_id: uuid.UUID | None = None
+    subject: str = "item"
+    subject_id: uuid.UUID | None = None
+    ran: bool  # False = nothing reached an action
 
 
 # --- run history (RADD-1266) ---

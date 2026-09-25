@@ -15,7 +15,7 @@ from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import catalog, engine, runs, samples, service, versions
+from . import catalog, engine, graph, runs, samples, service, versions
 from .types import AutomationEntity, AutomationTrigger
 from radd.kernel.registry import registries
 
@@ -23,6 +23,7 @@ from . import templating
 
 from .schemas import (
     NodeInfo,
+    TriggerKindInfo,
     OutputFieldInfo,
     EventSampleRead,
     NodeArityInfo,
@@ -119,6 +120,19 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 permission=spec.permission,
             )
             for spec in registries.automation_nodes.values()
+        ],
+        trigger_kinds=[
+            TriggerKindInfo(
+                key=kind.key,
+                label=kind.label,
+                group=kind.group,
+                description=kind.description,
+                params_schema=kind.params_schema,
+                default_params=dict(kind.default_params),
+                has_event=kind.has_event,
+                seeds=list(kind.seeds),
+            )
+            for kind in registries.trigger_kinds.values()
         ],
         node_arity=[
             NodeArityInfo(type=node_type, default=rule.default, options=list(rule.options))
@@ -269,7 +283,12 @@ async def test_rule(
     that could not be checked."""
     rule = await service.get_rule(session, rule_id)
     await authz.require(session, user, _MANAGE)
-    return await engine.preview(session, rule, data.item_id, data.trigger_node_id)
+    if data.subject_id is not None and data.subject != graph.ITEM_SUBJECT:
+        await _require_seedable(session, data.subject, data.subject_id)
+        return await engine.preview(
+            session, rule, None, data.trigger_node_id, subject=data.subject, subject_id=data.subject_id
+        )
+    return await engine.preview(session, rule, data.item_id or data.subject_id, data.trigger_node_id)
 
 
 @router.get("/{rule_id}/versions", response_model=list[VersionRead])
@@ -351,8 +370,47 @@ async def run_rule(
         )
     if not rule.enabled:
         raise ConflictError(AutomationEntity.RULE, reason="rule is disabled")
-    item = await items_service.require_item(session, data.item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
-    ran = await engine.run_manual(session, rule, data.item_id, start_node_id=node_id)
-    return RuleRunResult(rule_id=rule.id, item_id=data.item_id, ran=ran)
+    subject, subject_id = _seed_of(data.item_id, data.subject, data.subject_id)
+    if subject == graph.ITEM_SUBJECT:
+        item = await items_service.require_item(session, subject_id)
+        project = await projects_service.get_project(session, item.project_id)
+        await authz.require(session, user, authz.Permission.ITEM_UPDATE, project=project)
+    else:
+        # RADD-1323: another subject (a page). No generic per-entity write atom
+        # exists to check against, so this is the automation managers' button.
+        await _require_seedable(session, subject, subject_id)
+        await authz.require(session, user, authz.Permission.AUTOMATION_MANAGE)
+    ran = await engine.run_manual(session, rule, subject_id, start_node_id=node_id, subject=subject)
+    return RuleRunResult(
+        rule_id=rule.id,
+        item_id=subject_id if subject == graph.ITEM_SUBJECT else None,
+        subject=subject,
+        subject_id=subject_id,
+        ran=ran,
+    )
+
+
+def _seed_of(item_id, subject: str, subject_id) -> tuple[str, uuid.UUID]:
+    """The one subject a manual run or dry run starts from: `item_id` (the
+    original field) or `subject` + `subject_id` (RADD-1323)."""
+    if subject_id is None and item_id is not None:
+        return "item", item_id
+    if subject_id is None:
+        raise ConflictError(
+            AutomationEntity.RULE, reason="name what to run on: item_id, or subject and subject_id"
+        )
+    return subject, subject_id
+
+
+async def _require_seedable(session, subject: str, subject_id: uuid.UUID) -> None:
+    """The manual kind must offer this subject, and the id must resolve."""
+    from radd.kernel.registry import registries
+
+    from .types import AutomationTrigger
+
+    kind = registries.trigger_kinds.get(AutomationTrigger.MANUAL.value)
+    ref = registries.entity_refs.get(subject)
+    if kind is None or subject not in kind.seeds or ref is None:
+        raise ConflictError(AutomationEntity.RULE, reason=f"a manual run cannot start from a {subject!r}")
+    if await ref.ref(session, subject_id) is None:
+        raise ConflictError(AutomationEntity.RULE, reason=f"no {subject} {subject_id}")

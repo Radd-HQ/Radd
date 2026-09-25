@@ -83,6 +83,15 @@ def is_automation_caused(event: Event) -> bool:
     return bool(getattr(event, "automated", False))
 
 
+def _fires_a_kind(event_type: str) -> bool:
+    """An event-backed trigger KIND is fired by emitting an event of its key
+    (RADD-1323) — a plugin's "webhook received on endpoint X"."""
+    from radd.kernel.registry import registries
+
+    kind = registries.trigger_kinds.get(event_type)
+    return kind is not None and kind.has_event
+
+
 def should_process(event: Event) -> bool:
     """A subscribable event the engine should look at: a human/API/integration
     event, or (RADD-1315) another automation's change below the chain-depth cap —
@@ -100,7 +109,7 @@ def should_process(event: Event) -> bool:
         return False
     if event.event_type == AutomationEvent.SCHEDULED.value:
         return True
-    if event.event_type not in catalog.TRIGGERS:
+    if event.event_type not in catalog.TRIGGERS and not _fires_a_kind(event.event_type):
         return False
     if not is_automation_caused(event):
         return True

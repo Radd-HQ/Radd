@@ -369,6 +369,45 @@ class OutputField:
     description: str = ""
 
 
+# --- trigger kinds (RADD-1323) -------------------------------------------------
+@dataclass(frozen=True)
+class TriggerKindSpec:
+    """A KIND of trigger an automation can start from, contributed by a module.
+
+    Two families, one spec:
+
+    * **Event-less kinds** — a button (`manual`), a clock (`schedule`), a draft
+      being checked (`validate`). `has_event=False`: there is no event to read,
+      so nodes that read one (`reads_event`) are refused downstream on write.
+      Their firing is the owning module's business (the scheduler, intake).
+    * **Event-backed kinds** — `has_event=True`: the kind is FIRED by emitting an
+      event whose type is the kind's `key`. The engine consumes it like any
+      trigger and asks `matches(node params, event payload)` per automation, so
+      a plugin can offer "a webhook was received on endpoint X" — a trigger with
+      its own configuration — with no core edits: register the kind, emit the
+      event.
+
+    Plain event triggers (every `EventTypeSpec` marked `trigger`) are NOT kinds:
+    the event catalogue already describes them.
+    """
+
+    key: str  # stored as the trigger node's `params.event`
+    label: str
+    group: str = "Other"
+    description: str = ""
+    params_schema: dict[str, Any] = field(default_factory=dict)
+    default_params: dict[str, Any] = field(default_factory=dict)
+    has_event: bool = True
+    #: Subject types a MANUAL run or dry run of this kind may be seeded with.
+    seeds: tuple[str, ...] = ()
+    #: `check(params) -> None`, raising ValueError — the kind's own write-time
+    #: validation (a schedule's shape, a validation binding's targets).
+    check: Callable[[Mapping[str, Any]], None] | None = None
+    #: `matches(params, payload) -> bool` for an event-backed kind: does this
+    #: automation's trigger node want THIS firing? None = every firing.
+    matches: Callable[[Mapping[str, Any], Mapping[str, Any]], bool] | None = None
+
+
 # --- automation nodes (spec 116 phase 2: the canvas palette is contributed) ---
 @dataclass(frozen=True)
 class AutomationNodeSpec:
