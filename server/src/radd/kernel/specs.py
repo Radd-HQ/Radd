@@ -369,6 +369,41 @@ class OutputField:
     description: str = ""
 
 
+# --- notification kinds (RADD-1326) -------------------------------------------
+@dataclass(frozen=True)
+class NotificationKindSpec:
+    """One kind of notification: a row in everyone's preferences matrix, and —
+    for a CONTRIBUTED kind — the events that produce it.
+
+    The notify module registers its own kinds through this (their events are
+    handled by its built-in fan-out, so `events` is empty). A plugin's kind
+    names the `events` it answers and says who hears (`recipients`) and what the
+    row says (`render`); the notify consumer does the rest — the channel matrix,
+    the item read check, the inbox row, the email — with no edit to notify.
+
+    - `personal`: addressed AT the recipients by the event (the `own` column
+      only), as opposed to reaching people through how they are connected.
+    - `default_channel`: what an unset cell resolves to in the relationship
+      columns — "off" | "inbox" | "email" | "both". Subscriptions default off.
+    - `recipients(session, event) -> Iterable[uuid]`: who hears. The actor is
+      never told about their own action.
+    - `render(payload, actor_name) -> {"headline": str, "link": str | None}`:
+      stored on the notification, so the inbox and the mail render it without
+      the plugin's code.
+
+    `key` is at most 30 characters — it is stored as the notification's type.
+    """
+
+    key: str
+    label: str
+    description: str = ""
+    personal: bool = True
+    default_channel: str = "inbox"
+    events: tuple[str, ...] = ()
+    recipients: Callable[..., Any] | None = None
+    render: Callable[..., Any] | None = None
+
+
 # --- automation templates (RADD-1316) -----------------------------------------
 @dataclass(frozen=True)
 class AutomationTemplateSpec:

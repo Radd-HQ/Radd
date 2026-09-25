@@ -12,7 +12,7 @@ import {
   type ChannelValue,
   type NotificationPrefs,
   type NotificationRule,
-  type NotificationTypeValue,
+  type NotificationKindKey,
   type RuleScopeValue,
 } from "../../../lib/types";
 import { ChannelCell } from "./ChannelCell";
@@ -48,7 +48,7 @@ export function SubscriptionList({
   disabled: boolean;
   onCell: (
     rule: NotificationRule,
-    kind: NotificationTypeValue,
+    kind: NotificationKindKey,
     channel: ChannelValue | null,
   ) => void;
   onAdd: (scope: RuleScopeValue, scopeId: string, label: string) => void;
@@ -210,7 +210,7 @@ function AddSubscription({
  */
 export function seedChannels(
   scope: RuleScopeValue,
-): Partial<Record<NotificationTypeValue, ChannelValue>> {
+): Partial<Record<NotificationKindKey, ChannelValue>> {
   const arrival =
     scope === RuleScope.space ? NotificationType.pageCreated : NotificationType.created;
   return { [arrival]: Channel.inbox };

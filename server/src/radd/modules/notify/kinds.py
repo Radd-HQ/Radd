@@ -20,134 +20,159 @@ are frequently neither the assignee nor a watcher; resolving it through a
 relationship scope would have handed them `off` and silently ended approvals.
 """
 
-from dataclasses import dataclass
+from radd.kernel import NotificationKindSpec, registries
 
-from .types import NotificationType
-
-
-@dataclass(frozen=True)
-class NotificationKind:
-    """One row of the matrix — the wire value, how to name it, and how it resolves."""
-
-    kind: NotificationType
-    label: str
-    description: str
-    #: Addressed AT a person by the event itself: resolves through `own` only.
-    personal: bool
-
+from .types import Channel, NotificationType
 
 #: Every kind, in the order the settings page lists them: personally-directed
 #: first (the ones nobody should have to hunt for), then the ambient stream.
-NOTIFICATION_KINDS: tuple[NotificationKind, ...] = (
-    NotificationKind(
-        NotificationType.ASSIGNED,
+NOTIFICATION_KINDS: tuple[NotificationKindSpec, ...] = (
+    NotificationKindSpec(
+        NotificationType.ASSIGNED.value,
         "Assigned to me",
         "An issue was assigned to you.",
         personal=True,
+        default_channel=Channel.BOTH.value,
     ),
-    NotificationKind(
-        NotificationType.MENTIONED,
+    NotificationKindSpec(
+        NotificationType.MENTIONED.value,
         "Mentions",
         "Someone @-named you in a description or a comment.",
         personal=True,
+        default_channel=Channel.BOTH.value,
     ),
-    NotificationKind(
-        NotificationType.PARTICIPANT_ADDED,
+    NotificationKindSpec(
+        NotificationType.PARTICIPANT_ADDED.value,
         "Shared with me",
         "Someone added you to an issue as a participant.",
         personal=True,
+        default_channel=Channel.BOTH.value,
     ),
-    NotificationKind(
-        NotificationType.APPROVAL,
+    NotificationKindSpec(
+        NotificationType.APPROVAL.value,
         "Approvals",
         "An approval is waiting on you, or one you asked for was decided.",
         personal=True,
+        default_channel=Channel.BOTH.value,
     ),
-    NotificationKind(
-        NotificationType.AUTOMATION,
+    NotificationKindSpec(
+        NotificationType.AUTOMATION.value,
         "Automation messages",
         "An automation rule was written to tell you something.",
         personal=True,
+        default_channel=Channel.INBOX.value,
     ),
-    NotificationKind(
-        NotificationType.COMMENTED,
+    NotificationKindSpec(
+        NotificationType.COMMENTED.value,
         "Comments",
         "Someone commented on an issue or a page.",
         personal=False,
+        default_channel=Channel.BOTH.value,
     ),
-    NotificationKind(
-        NotificationType.STATE_CHANGED,
+    NotificationKindSpec(
+        NotificationType.STATE_CHANGED.value,
         "State changes",
         "An issue moved from one workflow state to another.",
         personal=False,
+        default_channel=Channel.INBOX.value,
     ),
-    NotificationKind(
-        NotificationType.UPDATED,
+    NotificationKindSpec(
+        NotificationType.UPDATED.value,
         "Any other edit",
         "A field changed — priority, labels, estimate, a custom field.",
         personal=False,
+        default_channel=Channel.OFF.value,
     ),
-    NotificationKind(
-        NotificationType.CREATED,
+    NotificationKindSpec(
+        NotificationType.CREATED.value,
         "New issues",
         "An issue was filed.",
         personal=False,
+        default_channel=Channel.OFF.value,
     ),
-    NotificationKind(
-        NotificationType.SLA_BREACH,
+    NotificationKindSpec(
+        NotificationType.SLA_BREACH.value,
         "SLA breaches",
         "An SLA clock ran out.",
         personal=False,
+        default_channel=Channel.INBOX.value,
     ),
-    NotificationKind(
-        NotificationType.SLA_DUE_SOON,
+    NotificationKindSpec(
+        NotificationType.SLA_DUE_SOON.value,
         "SLA warnings",
         "An SLA clock is about to run out.",
         personal=False,
+        default_channel=Channel.INBOX.value,
     ),
-    NotificationKind(
-        NotificationType.PAGE_CREATED,
+    NotificationKindSpec(
+        NotificationType.PAGE_CREATED.value,
         "New pages",
         "A page was created in a space.",
         personal=False,
+        default_channel=Channel.OFF.value,
     ),
-    NotificationKind(
-        NotificationType.PAGE_UPDATED,
+    NotificationKindSpec(
+        NotificationType.PAGE_UPDATED.value,
         "Page edits",
         "A wiki page's content was edited.",
         personal=False,
+        default_channel=Channel.INBOX.value,
     ),
 )
 
-#: Lookup by the enum member and by the wire string — a stored `channels` map is
-#: JSON, so its keys arrive as strings.
-KIND_SPECS: dict[NotificationType, NotificationKind] = {
-    spec.kind: spec for spec in NOTIFICATION_KINDS
-}
-
-#: Kinds that resolve through `own` alone (see the module docstring).
-PERSONAL_KINDS: frozenset[NotificationType] = frozenset(
-    spec.kind for spec in NOTIFICATION_KINDS if spec.personal
-)
+#: Core kinds that resolve through `own` alone (see the module docstring).
+PERSONAL_KINDS: frozenset[str] = frozenset(spec.key for spec in NOTIFICATION_KINDS if spec.personal)
 
 #: The kinds spec 118 ADDED. They exist for subscribers, so they are `off`
 #: everywhere by default — an instance that never opens the settings page must
 #: not start receiving a class of notification it has never had.
-SUBSCRIPTION_ONLY_KINDS: frozenset[NotificationType] = frozenset(
-    {NotificationType.CREATED, NotificationType.UPDATED, NotificationType.PAGE_CREATED}
+SUBSCRIPTION_ONLY_KINDS: frozenset[str] = frozenset(
+    {NotificationType.CREATED.value, NotificationType.UPDATED.value, NotificationType.PAGE_CREATED.value}
 )
 
 
-def is_personal(kind: NotificationType) -> bool:
+def all_specs() -> tuple[NotificationKindSpec, ...]:
+    """Every kind, core first, then what plugins contributed (RADD-1326).
+
+    Read from the kernel registry, so a plugin's kind has a matrix row, a label
+    and a default without an edit here. The core tuple is the floor: a caller
+    that runs before plugins load (a unit test, an import-time default) still
+    sees the kinds notify itself owns.
+    """
+    core = {spec.key: spec for spec in NOTIFICATION_KINDS}
+    extra = tuple(spec for key, spec in registries.notification_kinds.items() if key not in core)
+    return NOTIFICATION_KINDS + extra
+
+
+def spec_for(kind: str) -> NotificationKindSpec | None:
+    key = str(kind)
+    return next((spec for spec in all_specs() if spec.key == key), None)
+
+
+def contributed_for(event_type: str) -> NotificationKindSpec | None:
+    """The contributed kind that answers this event, if any."""
+    for spec in registries.notification_kinds.values():
+        if event_type in spec.events and spec.recipients is not None:
+            return spec
+    return None
+
+
+def contributed_events() -> frozenset[str]:
+    return frozenset(
+        event for spec in registries.notification_kinds.values() if spec.recipients is not None for event in spec.events
+    )
+
+
+def is_personal(kind: str) -> bool:
     """Unknown kinds count as personal — the conservative answer.
 
     A kind with no vocabulary entry is a programming error, and treating it as
     own-directed means it still reaches the person the producer addressed rather
     than vanishing into a relationship that was never computed.
     """
-    spec = KIND_SPECS.get(kind)
+    spec = spec_for(kind)
     return True if spec is None else spec.personal
 
 
-def every_kind() -> tuple[NotificationType, ...]:
-    return tuple(spec.kind for spec in NOTIFICATION_KINDS)
+def every_kind() -> tuple[str, ...]:
+    return tuple(spec.key for spec in all_specs())

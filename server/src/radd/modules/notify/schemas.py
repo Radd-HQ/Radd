@@ -1,9 +1,9 @@
 import uuid
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator, Field
 
-from .types import Channel, NotificationType, RuleScope
+from .types import Channel, RuleScope
 from radd.apitypes import UtcDatetime
 
 
@@ -14,7 +14,8 @@ class NotificationActor(BaseModel):
 
 class NotificationRead(BaseModel):
     id: uuid.UUID
-    type: NotificationType
+    #: A `NotificationType`, or a plugin's kind key (RADD-1326).
+    type: str
     item_id: uuid.UUID | None
     item_key: str | None
     item_title: str | None
@@ -53,7 +54,7 @@ class NotificationKindRead(BaseModel):
     `notify.kinds.NOTIFICATION_KINDS` now, in that order.
     """
 
-    kind: NotificationType
+    kind: str  # RADD-1326: a registry key — core or contributed
     label: str
     description: str
     #: Addressed at a person by the event itself — resolves through `own` only,
@@ -69,13 +70,25 @@ class NotificationRuleRead(BaseModel):
     #: Resolved name of the project/space/team — for display only, and None when
     #: the target has been deleted (the row is then dead but harmless).
     scope_label: str | None = None
-    channels: dict[NotificationType, Channel]
+    channels: dict[str, Channel]
 
 
 class NotificationRuleWrite(BaseModel):
     scope: RuleScope
     scope_id: uuid.UUID | None = None
-    channels: dict[NotificationType, Channel]
+    channels: dict[str, Channel]
+
+    @field_validator("channels")
+    @classmethod
+    def _known_kinds(cls, channels: dict[str, Channel]) -> dict[str, Channel]:
+        """A kind is a REGISTRY key since RADD-1326 (a plugin may add one), so
+        the enum can no longer be the validator — the registry is."""
+        from .kinds import every_kind
+
+        unknown = sorted(set(channels) - set(every_kind()))
+        if unknown:
+            raise ValueError(f"unknown notification kind(s): {', '.join(unknown)}")
+        return channels
 
 
 class NotificationPrefsRead(BaseModel):
@@ -91,7 +104,7 @@ class NotificationPrefsRead(BaseModel):
     #: The relationship columns, in display order (`own`, `participating`, `teams`).
     scopes: list[RuleScope]
     #: {scope: {kind: channel}} for the relationship columns — the inherited value.
-    defaults: dict[RuleScope, dict[NotificationType, Channel]]
+    defaults: dict[RuleScope, dict[str, Channel]]
     rules: list[NotificationRuleRead]
     email_digest: bool = True
 

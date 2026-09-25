@@ -44,6 +44,8 @@ export function InboxPage() {
     // RADD-1233: a page notification opens the page's permalink.
     const pageKey = notification.detail.page_number;
     if (pageKey) void navigate(pagePermalink(pageKey, notification.detail.comment_id));
+    // RADD-1326: a plugin's kind names its own (site-relative) link.
+    else if (notification.detail.link) window.location.assign(notification.detail.link);
   };
 
   return (

@@ -67,12 +67,11 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from .kinds import SUBSCRIPTION_ONLY_KINDS, every_kind, is_personal
+from .kinds import SUBSCRIPTION_ONLY_KINDS, every_kind, is_personal, spec_for
 from .types import (
     DEFAULT_EMAIL_TYPES,
     RELATIONSHIP_SCOPES,
     Channel,
-    NotificationType,
     RuleScope,
 )
 
@@ -156,46 +155,57 @@ class Verdict:
 SILENT = Verdict(Channel.OFF, None, inherited=True)
 
 
-def _relationship_default(kind: NotificationType) -> Channel:
-    """RADD-686's behaviour, stated as a cell value.
-
-    Inbox for everything that existed then; email as well for the
-    personally-directed set. The three kinds spec 118 added are off, because
-    they had no behaviour to reproduce.
-    """
+def _relationship_default(kind: str) -> Channel:
+    """RADD-686's behaviour, stated as a cell value — and since RADD-1326 read
+    off the kind's own spec (`default_channel`), so a plugin's kind carries its
+    default with it. Core: inbox for everything that existed then, email as
+    well for the personally-directed set, off for spec 118's ambient additions.
+    An undeclared kind degrades to the old rule."""
+    spec = spec_for(kind)
+    if spec is not None:
+        try:
+            return Channel(spec.default_channel)
+        except ValueError:
+            return Channel.INBOX
     if kind in SUBSCRIPTION_ONLY_KINDS:
         return Channel.OFF
     return Channel.BOTH if kind in DEFAULT_EMAIL_TYPES else Channel.INBOX
 
 
-def _all_off() -> dict[NotificationType, Channel]:
+def _all_off() -> dict[str, Channel]:
     return {kind: Channel.OFF for kind in every_kind()}
 
 
-#: Per-scope defaults for every kind — total, so the fall-through always lands.
-#:
-#: `own` and `participating` are identical, and that is not laziness: RADD-686's
-#: preference was per-TYPE with no notion of relation, so the mailer gave a
-#: watcher and an assignee the same answer. Splitting them here would change
-#: behaviour for people who never asked for anything, which is the one thing
-#: this rewrite promised not to do. The columns exist so they CAN be told apart
-#: from now on.
-#:
-#: `teams` is off: a member of the team an issue is filed against received
-#: nothing before, and migrating everyone into a live subscription to their
-#: whole team's traffic is a way to make a notification system hated in one
-#: deploy.
-DEFAULT_MATRIX: dict[RuleScope, dict[NotificationType, Channel]] = {
-    RuleScope.OWN: {kind: _relationship_default(kind) for kind in every_kind()},
-    RuleScope.PARTICIPATING: {kind: _relationship_default(kind) for kind in every_kind()},
-    RuleScope.TEAMS: _all_off(),
-    RuleScope.PROJECT: _all_off(),
-    RuleScope.SPACE: _all_off(),
-    RuleScope.TEAM: _all_off(),
-}
+def default_matrix() -> dict[RuleScope, dict[str, Channel]]:
+    """Per-scope defaults for every kind — total, so the fall-through always lands.
+
+    A FUNCTION since RADD-1326 (it was a module constant): the kinds come from
+    the registry, which plugins fill after this module is imported.
+
+    `own` and `participating` are identical, and that is not laziness: RADD-686's
+    preference was per-TYPE with no notion of relation, so the mailer gave a
+    watcher and an assignee the same answer. Splitting them here would change
+    behaviour for people who never asked for anything, which is the one thing
+    this rewrite promised not to do. The columns exist so they CAN be told apart
+    from now on.
+
+    `teams` is off: a member of the team an issue is filed against received
+    nothing before, and migrating everyone into a live subscription to their
+    whole team's traffic is a way to make a notification system hated in one
+    deploy.
+    """
+    relationship = {kind: _relationship_default(kind) for kind in every_kind()}
+    return {
+        RuleScope.OWN: dict(relationship),
+        RuleScope.PARTICIPATING: dict(relationship),
+        RuleScope.TEAMS: _all_off(),
+        RuleScope.PROJECT: _all_off(),
+        RuleScope.SPACE: _all_off(),
+        RuleScope.TEAM: _all_off(),
+    }
 
 
-def _default_for(scope: RuleScope, kind: NotificationType) -> Channel:
+def _default_for(scope: RuleScope, kind: str) -> Channel:
     """This scope's default for this kind, degrading for a kind nobody declared.
 
     `DEFAULT_MATRIX` is built from the vocabulary, so a `NotificationType` with
@@ -218,9 +228,9 @@ def _default_for(scope: RuleScope, kind: NotificationType) -> Channel:
     practice only `own` is reachable: `is_personal` routed the unknown kind
     there before the order was built.)
     """
-    known = DEFAULT_MATRIX[scope]
-    if kind in known:
-        return known[kind]
+    known = default_matrix()[scope]
+    if str(kind) in known:
+        return known[str(kind)]
     return _relationship_default(kind) if scope in RELATIONSHIP_SCOPES else Channel.OFF
 
 
@@ -272,7 +282,7 @@ def applicable_scopes(
 
 
 def resolve(
-    kind: NotificationType,
+    kind: str,
     rules: RuleSet = EMPTY,
     relation: Relation = OWN,
     subject: Subject = Subject(),
@@ -291,7 +301,7 @@ def resolve(
         row = rules.get(scope, scope_id)
         if row is None:
             continue
-        stored = row.channels.get(kind.value)
+        stored = row.channels.get(str(kind))
         if stored is None:
             continue
         try:

@@ -71,6 +71,9 @@ export function InboxPeek() {
     if (pageKey) {
       setOpen(false);
       void navigate(pagePermalink(pageKey, notification.detail.comment_id));
+    } else if (notification.detail.link) {
+      // RADD-1326: a plugin's kind names its own (site-relative) link.
+      window.location.assign(notification.detail.link);
     }
   };
 

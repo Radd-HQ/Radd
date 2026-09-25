@@ -34,7 +34,7 @@ from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import mentions, pageevents, planner, rules as notify_rules, service
+from . import kinds, mentions, pageevents, planner, rules as notify_rules, service
 from .audience import actor_name_of, item_audience, own_of, recipient_ids, subject_of
 from .audience import item_ref as _ref
 from .planner import Plan, PlannedNotification
@@ -116,7 +116,9 @@ async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
         # happened years ago in another system. The importer sets watchers from the
         # source data explicitly, so skipping these also keeps the watcher graph
         # out of the bootstrap's hands rather than half-derived from imported rows.
-        if event.silent or event.event_type not in _HANDLED:
+        if event.silent or (
+            event.event_type not in _HANDLED and event.event_type not in kinds.contributed_events()
+        ):
             continue
         try:
             async with session.begin_nested():
@@ -143,6 +145,13 @@ async def _bootstrap(session: AsyncSession) -> int:
 
 
 async def _handle(session: AsyncSession, event: Event, *, watch_only: bool) -> None:
+    if event.event_type not in _HANDLED:
+        # RADD-1326: a plugin's kind answers this event. Never on the watch-only
+        # bootstrap — a contributed kind notifies; it does not follow anything.
+        spec = kinds.contributed_for(event.event_type)
+        if spec is not None and not watch_only:
+            await _handle_contributed(session, event, spec)
+        return
     if event.event_type == CommentEvent.CREATED.value:
         await _handle_comment_created(session, event, watch_only=watch_only)
     elif event.event_type in _SLA_EVENT_TYPES:
@@ -363,6 +372,56 @@ async def _handle_participant_added(session: AsyncSession, event: Event) -> None
         item_title=_ref(payload).get("title", ""),
         item=item,
     )
+
+
+async def _handle_contributed(session: AsyncSession, event: Event, spec) -> None:
+    """A plugin's notification kind (RADD-1326), through the same choke points
+    as every core kind: the recipient's channel matrix, and — when the event is
+    about an issue — the per-row read check (`_allowed`). The plugin says WHO
+    (`recipients`) and WHAT the line says (`render`); it never writes a row.
+
+    Personal by default: the event chose the recipients, so the `own` column
+    decides. The actor is never told about their own action."""
+    payload = event.payload or {}
+    recipients = {uuid.UUID(str(uid)) for uid in (await spec.recipients(session, event) or ())}
+    if event.actor_id is not None:
+        recipients.discard(event.actor_id)
+    if not recipients:
+        return
+    actor_name = await actor_name_of(session, event)
+    text = (spec.render(payload, actor_name) if spec.render is not None else None) or {}
+    detail = {
+        "headline": str(text.get("headline") or spec.label),
+        "link": text.get("link"),
+        "subject": text.get("subject"),
+    }
+    ref = payload.get("item") if isinstance(payload.get("item"), dict) else None
+    if ref and ref.get("id"):
+        item_id = uuid.UUID(str(ref["id"]))
+        item = await session.get(WorkItem, item_id)
+        if item is None:
+            return
+        project = await projects_service.get_project(session, item.project_id)
+        plan = Plan()
+        for user_id in sorted(recipients, key=str):
+            plan.notifications.append(PlannedNotification(user_id, spec.key, detail))
+        await _apply(
+            session, plan, event=event, item_id=item_id, project=project,
+            item_key=str(ref.get("key") or ""), item_title=str(ref.get("title") or ""), item=item,
+        )
+        return
+    rules = await service.rules_by_user(session, recipients)
+    for user_id in sorted(recipients, key=str):
+        await service.create_notification(
+            session,
+            user_id=user_id,
+            type_=spec.key,
+            event_id=event.id,
+            item_id=None,
+            actor_id=event.actor_id,
+            payload={"actor_name": actor_name, **detail},
+            rules=rules.get(user_id, notify_rules.EMPTY),
+        )
 
 
 async def _allowed(

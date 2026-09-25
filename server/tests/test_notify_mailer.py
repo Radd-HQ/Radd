@@ -272,7 +272,7 @@ async def _channels(
     muted = set(muted_types or [])
     emailed = set(email_types)
     channels = {
-        kind.value: (
+        str(kind): (
             Channel.OFF.value
             if kind in muted
             else Channel.BOTH.value

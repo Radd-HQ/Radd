@@ -2,6 +2,7 @@ from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 
 from . import dispatcher
+from .kinds import NOTIFICATION_KINDS
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import NotifyEvent, CONSUMER_NAME
@@ -22,6 +23,9 @@ plugin = RaddPlugin(
     # failing to import.
     weak_depends=("participants", "mailintake", "pages"),
     routers=(router,),
+    # RADD-1326: notify's own kinds through the same registry a plugin uses —
+    # the preferences matrix and the inbox read the registry, not this module.
+    notification_kinds=NOTIFICATION_KINDS,
     on_startup=(dispatcher.start,),
     on_shutdown=(dispatcher.stop,),
     event_types=(

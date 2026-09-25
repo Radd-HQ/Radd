@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { RuleScope, type ChannelValue, type NotificationPrefs, type NotificationTypeValue, type RuleScopeValue } from "../../../lib/types";
+import { RuleScope, type ChannelValue, type NotificationPrefs, type NotificationKindKey, type RuleScopeValue } from "../../../lib/types";
 import { ChannelCell } from "./ChannelCell";
 import { PERSONAL_ONLY_REASON, SCOPE_HINTS, SCOPE_LABELS, resolveCell } from "./matrix";
 
@@ -26,7 +26,7 @@ export function NotificationMatrix({
   disabled: boolean;
   onCell: (
     scope: RuleScopeValue,
-    kind: NotificationTypeValue,
+    kind: NotificationKindKey,
     channel: ChannelValue | null,
   ) => void;
 }) {

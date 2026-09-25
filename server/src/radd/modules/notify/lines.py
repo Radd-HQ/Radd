@@ -37,9 +37,16 @@ MAIL_SUBJECT_TEMPLATE = "[{key}] {title}"
 MAIL_REASON_TEMPLATE = "You are receiving this because you follow {key} — reply to this email to comment."
 
 
-def headline(type_: NotificationType, actor: str, payload: dict) -> str:
+def headline(type_: NotificationType | str, actor: str, payload: dict) -> str:
     """The sentence for one notification. Every type gets its own — a shared
     fallback is how five of them ended up claiming someone commented."""
+    if not isinstance(type_, NotificationType):
+        try:
+            type_ = NotificationType(type_)
+        except ValueError:
+            # RADD-1326: a plugin's kind rendered its own line when it was
+            # written (`NotificationKindSpec.render`) — notify cannot know it.
+            return str(payload.get("headline") or f"{actor}: {str(type_).replace('_', ' ')}")
     if type_ is NotificationType.ASSIGNED:
         return f"{actor} assigned you"
     if type_ is NotificationType.MENTIONED:
@@ -113,9 +120,17 @@ def actor_name(notification: Notification, actor_names: dict[uuid.UUID, str]) ->
 def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mailrender.DigestEntry:
     """One notification as a renderable line: headline, subject, excerpt, link."""
     payload = notification.payload or {}
-    type_ = NotificationType(notification.type)
+    type_ = notification.type
     line = headline(type_, actor_name(notification, actor_names), payload)
     base = settings.app_base_url
+    if type_ not in NotificationType.__members__.values() and payload.get("link"):
+        # RADD-1326: a contributed kind names its own link (site-relative).
+        link = str(payload["link"])
+        return mailrender.DigestEntry(
+            headline=line,
+            subject=str(payload.get("subject") or ""),
+            url=link if link.startswith("http") else base.rstrip("/") + "/" + link.lstrip("/"),
+        )
     # RADD-1297: a notification about a comment links to the COMMENT.
     comment = payload.get("comment_id") or None
     if type_ in _PAGE_KINDS or (payload.get("page_number") and not payload.get("item_key")):

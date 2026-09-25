@@ -148,7 +148,7 @@ async def create_notification(
     session: AsyncSession,
     *,
     user_id: uuid.UUID,
-    type_: NotificationType,
+    type_: NotificationType | str,
     event_id: int | None,
     item_id: uuid.UUID | None,
     actor_id: uuid.UUID | None,
@@ -199,7 +199,7 @@ async def create_notification(
     notification = Notification(
         user_id=user_id,
         event_id=event_id,
-        type=type_.value,
+        type=str(type_),
         item_id=item_id,
         actor_id=actor_id,
         payload=payload,
@@ -225,7 +225,7 @@ async def create_notification(
         actor_id=actor_id,
         payload={
             "user_id": str(user_id),
-            "type": type_.value,
+            "type": str(type_),
             "item_id": str(item_id) if item_id else None,
             "inbox": verdict.inbox,
         },
@@ -328,8 +328,8 @@ async def set_digest(
 def _clean_channels(channels: dict[str, str]) -> dict[str, str]:
     """Keep only (kind, channel) pairs both enums recognise.
 
-    Not the API's validator — `NotificationRuleWrite.channels` is typed
-    `dict[NotificationType, Channel]`, so an unknown key or value is a 422 long
+    Not the API's validator — `NotificationRuleWrite.channels` validates its
+    keys against the kind registry, so an unknown key or value is a 422 long
     before this runs, and every HTTP caller sees the loud answer. This is the
     guard for the OTHER callers: `set_rules` is a service function, and a
     migration, a script or a future importer handing it a kind this version has
@@ -338,10 +338,15 @@ def _clean_channels(channels: dict[str, str]) -> dict[str, str]:
     """
     from .types import Channel  # local: the enum, not the policy
 
+    from .kinds import every_kind  # RADD-1326: core and contributed kinds
+
+    known = set(every_kind())
     cleaned: dict[str, str] = {}
     for kind, channel in channels.items():
+        if kind not in known:
+            continue
         try:
-            cleaned[NotificationType(kind).value] = Channel(channel).value
+            cleaned[kind] = Channel(channel).value
         except ValueError:
             continue
     return cleaned

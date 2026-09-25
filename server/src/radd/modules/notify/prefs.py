@@ -31,29 +31,29 @@ from radd.modules.projects.models import Project
 from radd.modules.teams import service as teams
 
 from . import rules as rules_policy, service, targets
-from .kinds import NOTIFICATION_KINDS
+from .kinds import all_specs, every_kind
 from .models import NotificationRule
 from .schemas import (
     NotificationKindRead,
     NotificationPrefsRead,
     NotificationRuleRead,
 )
-from .types import RELATIONSHIP_SCOPES, Channel, NotificationType, RuleScope
+from .types import RELATIONSHIP_SCOPES, Channel, RuleScope
 
 
 def _kind_reads() -> list[NotificationKindRead]:
     return [
         NotificationKindRead(
-            kind=spec.kind,
+            kind=spec.key,
             label=spec.label,
             description=spec.description,
             personal=spec.personal,
         )
-        for spec in NOTIFICATION_KINDS
+        for spec in all_specs()
     ]
 
 
-def _defaults() -> dict[RuleScope, dict[NotificationType, Channel]]:
+def _defaults() -> dict[RuleScope, dict[str, Channel]]:
     """What an unset cell resolves to, for EVERY scope — not just the columns.
 
     A subscription's unset cell needs one too, and it is not the `own` column's
@@ -68,8 +68,9 @@ def _defaults() -> dict[RuleScope, dict[NotificationType, Channel]]:
     `scopes` stays the three relationship columns: this is the inheritance
     lookup, not the list of columns to render.
     """
+    matrix = rules_policy.default_matrix()
     return {
-        scope: dict(rules_policy.DEFAULT_MATRIX[scope]) for scope in RuleScope
+        scope: dict(matrix[scope]) for scope in RuleScope
     }
 
 
@@ -148,10 +149,13 @@ def _rule_read(row: NotificationRule, labels: dict[uuid.UUID, str]) -> Notificat
         scope = RuleScope(row.scope)
     except ValueError:
         return None
-    channels: dict[NotificationType, Channel] = {}
+    channels: dict[str, Channel] = {}
+    known = set(every_kind())  # RADD-1326: core and contributed kinds alike
     for kind, channel in (row.channels or {}).items():
+        if kind not in known:
+            continue  # a kind whose plugin is gone; normalised out on the next save
         try:
-            channels[NotificationType(kind)] = Channel(channel)
+            channels[kind] = Channel(channel)
         except ValueError:
             continue  # normalised out on the next save; not worth failing a read
     return NotificationRuleRead(

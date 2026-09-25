@@ -17,7 +17,7 @@ import { formatDateTime, shortDate } from "../../lib/dates";
 import {
   NotificationType,
   type Notification,
-  type NotificationTypeValue,
+  type NotificationKindKey,
 } from "../../lib/types";
 
 /** One-line, human sentence for a notification row (actor + verb). */
@@ -64,12 +64,15 @@ export function notificationSummary(notification: Notification): string {
     }
     case NotificationType.pageCreated:
       return `${actor} created ${notification.detail.title ?? "a page"}`;
-    default:
+    case NotificationType.commented:
       return `${actor} commented`;
+    default:
+      // RADD-1326: a plugin's kind rendered its own line when it was written.
+      return notification.detail.headline ?? `${actor} commented`;
   }
 }
 
-const TYPE_ICONS: Partial<Record<NotificationTypeValue, LucideIcon>> = {
+const TYPE_ICONS: Partial<Record<NotificationKindKey, LucideIcon>> = {
   [NotificationType.assigned]: UserRoundPlus,
   [NotificationType.mentioned]: AtSign,
   [NotificationType.stateChanged]: CircleDot,

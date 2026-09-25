@@ -238,10 +238,9 @@ async def _send(
     # requester-facing mail in `mailintake` never carries either.
     preferences = preferences_url()
     entry = lines.entry(notification, actor_names)
-    type_ = NotificationType(notification.type)
     body = (
         await _comment_body(session, notification)
-        if type_ is NotificationType.COMMENTED
+        if notification.type == NotificationType.COMMENTED
         else None
     )
     if body:

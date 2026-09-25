@@ -20,6 +20,7 @@ from .specs import (
     TriggerKindSpec,
     TokenProviderSpec,
     AutomationTemplateSpec,
+    NotificationKindSpec,
     CapabilitySpec,
     CrudResourceSpec,
     EntitySpec,
@@ -126,6 +127,9 @@ class RaddPlugin:
     token_providers: tuple[TokenProviderSpec, ...] = ()
     #: Whole automations offered as starting points (RADD-1316).
     automation_templates: tuple[AutomationTemplateSpec, ...] = ()
+    #: Notification kinds (RADD-1326) — matrix rows, and for a plugin the events
+    #: that produce them.
+    notification_kinds: tuple[NotificationKindSpec, ...] = ()
     page_extensions: tuple[PageExtensionSpec, ...] = ()  # page fenced blocks (RADD-709)
     #: Rows that die with a parent (RADD-745). A FACTORY, not a tuple: the set is
     #: derived from a binding registry that other modules populate at import

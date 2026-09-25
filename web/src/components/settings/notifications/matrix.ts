@@ -10,7 +10,7 @@
  * down the wire so the SPA never carries that table.
  */
 
-import { Channel, RuleScope, type ChannelValue, type NotificationPrefs, type NotificationRule, type NotificationTypeValue, type RuleScopeValue } from "../../../lib/types";
+import { Channel, RuleScope, type ChannelValue, type NotificationPrefs, type NotificationRule, type NotificationKindKey, type RuleScopeValue } from "../../../lib/types";
 
 /** What one relationship column shows for one kind, and where it came from. */
 export interface ResolvedCell {
@@ -54,7 +54,7 @@ export function findRule(
 export function resolveCell(
   prefs: NotificationPrefs,
   scope: RuleScopeValue,
-  kind: NotificationTypeValue,
+  kind: NotificationKindKey,
 ): ResolvedCell {
   const saved = findRule(prefs.rules, scope)?.channels[kind];
   if (saved) return { channel: saved, inheritedFrom: null };
@@ -84,7 +84,7 @@ export function resolveCell(
 export function resolveSubscriptionCell(
   prefs: NotificationPrefs,
   rule: NotificationRule,
-  kind: NotificationTypeValue,
+  kind: NotificationKindKey,
 ): ResolvedCell {
   const saved = rule.channels[kind];
   if (saved) return { channel: saved, inheritedFrom: null };
@@ -99,7 +99,7 @@ export function withCell(
   rules: NotificationRule[],
   scope: RuleScopeValue,
   scopeId: string | null,
-  kind: NotificationTypeValue,
+  kind: NotificationKindKey,
   channel: ChannelValue | null,
 ): NotificationRule[] {
   const existing = findRule(rules, scope, scopeId);

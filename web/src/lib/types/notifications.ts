@@ -31,6 +31,9 @@ export const NotificationType = {
   pageCreated: "page_created",
 } as const;
 export type NotificationTypeValue = (typeof NotificationType)[keyof typeof NotificationType];
+/** RADD-1326: a kind is a REGISTRY key — the core ones above, or one a plugin
+ *  contributed (rendered from `detail.headline` / `detail.link`). */
+export type NotificationKindKey = NotificationTypeValue | (string & {});
 
 /**
  * How a person is connected to the thing an event is about (spec 118).
@@ -63,7 +66,7 @@ export type ChannelValue = (typeof Channel)[keyof typeof Channel];
  *  SPA no longer carries its own label map, which could disagree with the enum
  *  it was describing with nothing to catch it. */
 export interface NotificationKind {
-  kind: NotificationTypeValue;
+  kind: NotificationKindKey;
   label: string;
   description: string;
   /** Addressed at you by the event itself: resolves through `own` alone, so the
@@ -78,7 +81,7 @@ export interface NotificationRule {
   /** Resolved name of the project/space/team; null for a relationship scope (or
    *  when the target has been deleted). Display only. */
   scope_label: string | null;
-  channels: Partial<Record<NotificationTypeValue, ChannelValue>>;
+  channels: Partial<Record<NotificationKindKey, ChannelValue>>;
 }
 
 /**
@@ -93,26 +96,29 @@ export interface NotificationPrefs {
   kinds: NotificationKind[];
   scopes: RuleScopeValue[];
   /** {scope: {kind: channel}} for the relationship columns — the inherited value. */
-  defaults: Partial<Record<RuleScopeValue, Partial<Record<NotificationTypeValue, ChannelValue>>>>;
+  defaults: Partial<Record<RuleScopeValue, Partial<Record<NotificationKindKey, ChannelValue>>>>;
   rules: NotificationRule[];
   email_digest: boolean;
 }
 
 /** PUT body — `scope_label` is a read-only display value and is not sent back. */
 export interface NotificationPrefsUpdate {
-  rules: { scope: RuleScopeValue; scope_id: string | null; channels: Partial<Record<NotificationTypeValue, ChannelValue>> }[];
+  rules: { scope: RuleScopeValue; scope_id: string | null; channels: Partial<Record<NotificationKindKey, ChannelValue>> }[];
   email_digest: boolean;
 }
 
 export interface Notification {
   id: string;
-  type: NotificationTypeValue;
+  type: NotificationKindKey;
   item_id: string | null;
   item_key: string | null;
   item_title: string | null;
   actor: { id: string; name: string } | null;
   /** Type-specific extras: excerpt, from/to state names, source, visibility, SLA info. */
   detail: {
+    /** RADD-1326: a contributed kind's own line and link, rendered server-side. */
+    headline?: string;
+    link?: string | null;
     excerpt?: string;
     /** RADD-1297: the comment a commented/mentioned row is about — opens ON it. */
     comment_id?: string;

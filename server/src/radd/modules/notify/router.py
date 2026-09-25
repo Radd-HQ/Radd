@@ -23,7 +23,7 @@ from .schemas import (
     WatcherRef,
     WatchersRead,
 )
-from .types import NotificationType, RuleScope
+from .types import RuleScope
 from .options import subscription_options
 
 router = APIRouter(tags=["notify"])
@@ -40,7 +40,7 @@ def _to_read(notification: Notification) -> NotificationRead:
         actor = NotificationActor(id=notification.actor_id, name=payload["actor_name"])
     return NotificationRead(
         id=notification.id,
-        type=NotificationType(notification.type),
+        type=notification.type,
         item_id=notification.item_id,
         item_key=payload.get("item_key"),
         item_title=payload.get("item_title"),
@@ -112,7 +112,7 @@ async def put_preferences(
     await service.set_rules(
         session,
         user.id,
-        [(rule.scope, rule.scope_id, {k.value: c.value for k, c in rule.channels.items()})
+        [(rule.scope, rule.scope_id, {str(k): c.value for k, c in rule.channels.items()})
          for rule in data.rules
          if targets.permitted(readable, rule.scope, rule.scope_id)],
     )

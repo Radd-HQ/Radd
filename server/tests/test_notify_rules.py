@@ -83,8 +83,8 @@ def test_the_kind_vocabulary_covers_the_enum_exactly():
     would let a new member ship with no row at all — the two failures are
     different and only one of them is loud.
     """
-    assert {spec.kind for spec in NOTIFICATION_KINDS} == set(NotificationType)
-    assert len(NOTIFICATION_KINDS) == len(set(every_kind()))  # and each listed once
+    assert {spec.key for spec in NOTIFICATION_KINDS} == {t.value for t in NotificationType}
+    assert len(NOTIFICATION_KINDS) == len({spec.key for spec in NOTIFICATION_KINDS})  # and each listed once
 
 
 def test_a_kind_the_vocabulary_does_not_know_degrades_instead_of_raising():
@@ -109,7 +109,7 @@ def test_a_kind_the_vocabulary_does_not_know_degrades_instead_of_raising():
 # --- the defaults reproduce RADD-686 exactly ----------------------------------
 
 
-@pytest.mark.parametrize("kind", every_kind(), ids=lambda k: k.value)
+@pytest.mark.parametrize("kind", every_kind(), ids=str)
 def test_no_rules_reproduces_the_pre_spec_118_answer(kind: NotificationType):
     """Every kind, both relationships, against the constant that decided it before.
 
@@ -145,7 +145,7 @@ def test_the_my_teams_column_starts_silent():
     for spec in NOTIFICATION_KINDS:
         if spec.personal:
             continue  # personal kinds ignore relations entirely — see below
-        assert policy.resolve(spec.kind, policy.EMPTY, relation).channel is Channel.OFF
+        assert policy.resolve(spec.key, policy.EMPTY, relation).channel is Channel.OFF
 
 
 def test_a_personal_kind_ignores_the_relationship_entirely():

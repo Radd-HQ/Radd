@@ -6,7 +6,7 @@ import {
   type ChannelValue,
   type NotificationPrefs,
   type NotificationRule,
-  type NotificationTypeValue,
+  type NotificationKindKey,
   type RuleScopeValue,
 } from "../../lib/types";
 import { subscriptionOptionsKey } from "../../lib/queries/notifications";
@@ -88,7 +88,7 @@ function Editor({
   const setCell = (
     scope: RuleScopeValue,
     scopeId: string | null,
-    kind: NotificationTypeValue,
+    kind: NotificationKindKey,
     channel: ChannelValue | null,
   ) => onSave(withCell(prefs.rules, scope, scopeId, kind, channel), prefs.email_digest);
 
