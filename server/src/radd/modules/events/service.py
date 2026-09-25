@@ -180,6 +180,19 @@ async def read_after(session: AsyncSession, after: int, limit: int) -> list[Even
     return list(result.scalars())
 
 
+async def latest_ref(session: AsyncSession, entity_type: str) -> dict[str, Any] | None:
+    """The most recent subject REF of this entity type any event carried
+    (RADD-1331) — a real `{id, key, title, …}` to show which fields a ref of
+    that type has, without inventing one. None when no event ever named one."""
+    row = await session.scalar(
+        select(Event.payload[entity_type])
+        .where(Event.payload.has_key(entity_type))
+        .order_by(Event.id.desc())
+        .limit(1)
+    )
+    return row if isinstance(row, dict) and row.get("id") else None
+
+
 async def query_events(
     session: AsyncSession,
     *,

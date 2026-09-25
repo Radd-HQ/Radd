@@ -311,7 +311,24 @@ async def event_samples(
         ],
         changed_fields=samples.changed_fields(payloads),
         example=payloads[0] if payloads else None,
+        declared_paths=await _declared_paths(session, spec) if not payloads else [],
     )
+
+
+async def _declared_paths(session: AsyncSession, spec) -> list[PayloadPathInfo]:
+    """RADD-1331: the declared shape for an event that has not fired here yet —
+    the payload schema's paths, and each subject's ref fields taken from a REAL
+    ref of that type (its values become the examples). A subject never seen on
+    this instance still lists its own name."""
+    found: dict[str, PayloadPathInfo] = {}
+    for subject in spec.subjects:
+        ref = await events_service.latest_ref(session, subject)
+        entries = samples.payload_paths([{subject: ref}]) if ref else [samples.PayloadPath(path=f"{subject}.id")]
+        for entry in entries:
+            found.setdefault(entry.path, PayloadPathInfo(path=entry.path, examples=entry.examples, repeated=entry.repeated))
+    for entry in samples.schema_paths(dict(spec.payload_schema)):
+        found.setdefault(entry.path, PayloadPathInfo(path=entry.path, repeated=entry.repeated))
+    return sorted(found.values(), key=lambda info: info.path)
 
 
 @router.post("/{rule_id}/test", response_model=RuleTestResult)

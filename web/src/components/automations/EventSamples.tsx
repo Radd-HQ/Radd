@@ -36,7 +36,8 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
   if (!eventType || sample.isError) return null;
 
   const data = sample.data;
-  const count = data?.paths.length ?? 0;
+  const declared = data && data.sampled === 0 ? (data.declared_paths ?? []) : [];
+  const count = (data?.paths.length ?? 0) || declared.length;
 
   const copy = async (path: string) => {
     const token = `{{payload.${path}}}`;
@@ -63,7 +64,7 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
         <Braces size={12} aria-hidden />
         What this event carries
         <span className="ml-auto text-fg-faint">
-          {sample.isLoading ? "…" : count > 0 ? count : "none yet"}
+          {sample.isLoading ? "…" : count > 0 ? (declared.length > 0 ? `${count} declared` : count) : "none yet"}
         </span>
       </button>
 
@@ -97,6 +98,37 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
               No <code className="text-fg-secondary">{eventType}</code> events have been recorded on
               this instance yet, so there is nothing to sample. Real values appear once one fires.
             </p>
+          )}
+
+          {/* RADD-1331: what the event DECLARES, usable before it has ever fired.
+              Subject refs carry real values from a ref of that type seen here;
+              schema paths carry none — nothing is invented. */}
+          {declared.length > 0 && (
+            <>
+              <p className="text-[11px] text-fg-faint">Declared by the event — click a path to use it.</p>
+              <ul className="flex max-h-56 flex-col gap-0.5 overflow-y-auto" data-declared-paths>
+                {declared.map((entry) => (
+                  <li key={entry.path}>
+                    <button
+                      type="button"
+                      onClick={() => void copy(entry.path)}
+                      title={onInsert ? `Insert {{payload.${entry.path}}}` : "Copy the token"}
+                      className="flex w-full items-baseline gap-1.5 rounded-[4px] px-1.5 py-1 text-left hover:bg-elevated cursor-pointer"
+                    >
+                      <code className="shrink-0 text-[11px] text-accent-text">{entry.path}</code>
+                      <span className="truncate text-[11px] text-fg-faint">
+                        {entry.examples.length > 0 ? `e.g. ${entry.examples.join(" · ")}` : "declared"}
+                      </span>
+                      {feedback?.path === entry.path && (
+                        <span className="ml-auto shrink-0 text-[10px] text-fg-muted">
+                          {onInsert ? "inserted" : feedback.ok ? "copied" : "select it above"}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
 
           {data && data.sampled > 0 && (

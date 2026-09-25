@@ -111,3 +111,27 @@ def changed_fields(payloads: list[dict[str, Any]]) -> list[str]:
                 if str(name) not in names:
                     names.append(str(name))
     return sorted(names)
+
+
+def schema_paths(schema: dict[str, Any], prefix: str = "", depth: int = 0) -> list[PayloadPath]:
+    """The paths a DECLARED payload schema promises (RADD-1331) — `properties`
+    walked like a payload, arrays addressing their items. No examples: a
+    declared path has no seen value, and inventing one is what RADD-921 refused."""
+    if depth > MAX_DEPTH or not isinstance(schema, dict):
+        return []
+    found: list[PayloadPath] = []
+    for key, child in (schema.get("properties") or {}).items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        if not isinstance(child, dict):
+            found.append(PayloadPath(path=path))
+            continue
+        target, repeated = (child.get("items") or {}, True) if child.get("type") == "array" else (child, False)
+        nested = schema_paths(target, path, depth + 1) if isinstance(target, dict) else []
+        if nested:
+            for entry in nested:
+                entry.repeated = entry.repeated or repeated
+            found.extend(nested)
+        else:
+            found.append(PayloadPath(path=path, repeated=repeated))
+    return found
+

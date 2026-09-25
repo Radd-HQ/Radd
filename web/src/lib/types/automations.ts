@@ -571,6 +571,9 @@ export interface EventSample {
   /** The event's own DECLARED shape, beyond the refs. Present even when
    * `sampled` is 0 — sampling says what has happened, declaration what will. */
   declared_schema: Record<string, unknown>;
+  /** RADD-1331: the paths the event DECLARES (schema + each subject's real ref
+   *  fields) — served when nothing has been sampled yet. */
+  declared_paths: PayloadPathInfo[];
 }
 
 /** How a recorded run ended (mirror of the server's RunStatus, RADD-1266). */

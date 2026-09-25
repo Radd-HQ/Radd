@@ -732,6 +732,12 @@ class EventSampleRead(BaseModel):
     #: How many recent events the paths were derived from. 0 = this type has
     #: never fired here, which the UI says rather than inventing a shape.
     sampled: int
+    #: RADD-1331: what the event DECLARES — its `payload_schema` flattened, plus
+    #: each subject's ref fields read from a REAL ref of that type seen on this
+    #: instance (a subject never seen here contributes its name only). Shown
+    #: when nothing has been sampled, so a rule can be written before the first
+    #: event rather than after.
+    declared_paths: list[PayloadPathInfo] = Field(default_factory=list)
     paths: list[PayloadPathInfo] = Field(default_factory=list)
     #: Field names seen in `changes` diffs — what "field changed" can test. The
     #: picker otherwise offers every custom-field key, including ones the diff
