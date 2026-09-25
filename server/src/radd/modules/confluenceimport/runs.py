@@ -11,7 +11,6 @@ skip the import while search and history still consume it.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -653,7 +652,8 @@ async def start_run(
 
 
 def start(run_id: uuid.UUID) -> None:
-    asyncio.create_task(execute(run_id))
+    from radd.kernel.runtime import spawn
+    spawn(execute(run_id))
 
 
 async def mark_interrupted() -> None:

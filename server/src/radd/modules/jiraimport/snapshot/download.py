@@ -601,7 +601,8 @@ async def _fail(session: AsyncSession, snapshot_id: uuid.UUID, message: str) -> 
 
 def start(snapshot_id: uuid.UUID) -> None:
     """Fire the download as an in-process task; the snapshot row tracks it."""
-    asyncio.create_task(execute(snapshot_id))  # noqa: RUF006 — tracked by the row
+    from radd.kernel.runtime import spawn
+    spawn(execute(snapshot_id))  # noqa: RUF006 — tracked by the row
 
 
 async def mark_interrupted() -> None:

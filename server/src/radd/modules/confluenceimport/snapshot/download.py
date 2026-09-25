@@ -540,7 +540,8 @@ async def _fail(session: AsyncSession, snapshot_id: uuid.UUID, detail: str) -> N
 
 def start(snapshot_id: uuid.UUID) -> None:
     """Fire and forget. In-process, like every other job in this codebase."""
-    asyncio.create_task(execute(snapshot_id))
+    from radd.kernel.runtime import spawn
+    spawn(execute(snapshot_id))
 
 
 async def mark_interrupted() -> None:

@@ -11,7 +11,6 @@ the rest. Nothing here touches Jira — it all reads the cache.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -653,7 +652,8 @@ async def _fail(session: AsyncSession, run_id: uuid.UUID, message: str) -> None:
 
 
 def start(run_id: uuid.UUID) -> None:
-    asyncio.create_task(execute(run_id))  # noqa: RUF006 — tracked by the run row
+    from radd.kernel.runtime import spawn
+    spawn(execute(run_id))  # noqa: RUF006 — tracked by the run row
 
 
 async def mark_interrupted() -> None:

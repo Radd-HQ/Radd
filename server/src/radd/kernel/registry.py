@@ -146,7 +146,7 @@ class KernelRegistries:
             self.plugins, self.entities, self.event_types, self.entity_refs, self.permissions,
             self.settings, self.relations, self.relation_domains, self.access_resources,
             self.row_guards,
-            self.crud_resources, self.nav_facts, self.grant_scopes, self.project_purges,
+            self.crud_resources, self.nav_facts, self.grant_scopes, self.project_relations, self.project_purges,
             self.capabilities, self.tasks, self.consumer_names,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
@@ -242,6 +242,13 @@ class KernelRegistries:
         self.consumer_names.difference_update(set(plugin.consumer_names) - remaining_consumers)
         for e in plugin.entities:
             self.entities.pop(e.key, None)
+            self.crud_resources.pop(e.key, None)
+            self.entity_refs.pop(e.key, None)
+            from .entities import _event_types, _project_purge
+            for event in _event_types(e):
+                self.event_types.pop(event.event_type, None)
+            if e.project_scoped:
+                self.project_purges.pop(_project_purge(e).name, None)
             self.searchables.pop(e.key, None)  # RADD-1327: derived at register
         for et in plugin.event_types:
             self.event_types.pop(et.event_type, None)

@@ -68,6 +68,8 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
   const busy = removePackage.isPending || enable.isPending || disable.isPending || install.isPending || uninstall.isPending;
   const actionError = enable.error || disable.error || install.error || uninstall.error || removePackage.error;
   const enabled = plugin.state === "enabled";
+  const applying = plugin.runtime_state === "applying" || plugin.restart_required;
+  const failed = plugin.runtime_state === "error";
   // A plugin OPTS IN to instance-wide contribution toggles (spec 94) by contributing a
   // `pluginManagerSection` widget keyed by its registry name — the kernel forces nothing. If it did,
   // the row gets an expander revealing that plugin-owned admin UI (its GlobalContributionToggles).
@@ -96,9 +98,9 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           <div className="flex items-center gap-2">
             <span className="truncate text-[13px] font-medium text-heading">{plugin.id}</span>
             <span className="text-[11px] text-fg-muted">v{plugin.version}</span>
-            {plugin.restart_required ? (
+            {applying || failed ? (
               <span className="rounded-full bg-callout-warning-fill px-2 py-0.5 text-[11px] font-medium text-callout-warning-ink ring-1 ring-callout-warning-border/60">
-                {plugin.active ? "Disable pending" : "Enable pending"}
+                {failed ? "Apply failed" : "Applying…"}
               </span>
             ) : <StateBadge state={plugin.state} />}
             <span className="text-[11px] text-fg-muted">{plugin.origin === "package" ? "Package" : "Built in"}</span>
@@ -129,15 +131,12 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
             <p className="mt-0.5 truncate text-[12px] text-fg-muted">{plugin.description}</p>
           )}
           <p className="mt-1 text-[12px] text-fg-muted">
-            {plugin.active ? "Loaded on this server" : "Not loaded on this server"}
-            {plugin.restart_required && (plugin.live_supported ? " · Applying live change…" : " · Restart required to apply this change")}
-            {plugin.live_supported && " · Supports live activation"}
+            {applying ? `${enabled ? "Enabling" : "Disabling"} across running servers and workers…`
+              : failed ? "The change could not be applied to every process. It will be retried."
+              : plugin.active ? "Active" : "Inactive"}
+            {!!plugin.pending_processes && ` · ${plugin.pending_processes} process(es) pending`}
           </p>
-          {plugin.restart_required && !plugin.live_supported && <p className="mt-1 text-[12px] text-callout-warning-ink">
-            {plugin.active
-              ? "Still active: its integrations and automation nodes remain available until web and worker processes restart."
-              : "Not active yet: its integrations and automation nodes become available after web and worker processes restart."}
-          </p>}
+          {plugin.runtime_errors?.map(message => <p key={message} role="alert" className="mt-1 text-[12px] text-callout-warning-ink">{message}</p>)}
           {plugin.dependencies?.length > 0 && <p className="mt-1 text-[12px] text-fg-muted">
             Requires: {plugin.dependencies.join(", ")}
           </p>}
@@ -176,12 +175,12 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           </>
         ) : enabled ? (
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => disable.mutate()}>
-            {plugin.restart_required && !plugin.active ? "Cancel enable" : "Disable"}
+            {(applying || failed) ? "Cancel enable" : "Disable"}
           </Button>
         ) : (
           <>
             <Button size="sm" disabled={busy || (plugin.problems?.length ?? 0) > 0} onClick={() => enable.mutate()}>
-              {plugin.restart_required && plugin.active ? "Cancel disable" : "Enable"}
+              {(applying || failed) ? "Cancel disable" : "Enable"}
             </Button>
             {plugin.origin === "package" && <Button
               size="sm"
@@ -265,7 +264,7 @@ function PackageUpload() {
     {file && file.size > 32 * 1024 * 1024 && <p role="alert" className="mt-2">Package exceeds the 32 MiB limit.</p>}
     {upload.error && <p role="alert" className="mt-2">{upload.error.message}</p>}
     {upload.isSuccess && <p role="status" className="mt-2">Package installed. Find it below and enable it when ready.</p>}
-    <p className="mt-2">UI-only plugins apply live. Backend plugins require a restart of web and workers. Additional Python dependencies must already be available.</p>
+    <p className="mt-2">Installed plugins enable and disable live. Installing or upgrading plugin code may require a restart. Additional Python dependencies must already be available.</p>
     {dialog}
   </div>;
 }
@@ -278,7 +277,7 @@ export function PluginsSettingsPage() {
   const {data: peers} = useQuery({queryKey: ["plugin-processes"],
     queryFn: () => api.get<Array<{process: string; stale: boolean; error?: string}>>(`${ApiPath.plugins}/runtime`),
     refetchInterval: 5000});
-  const pendingRestart = (plugins ?? []).filter(plugin => plugin.restart_required && !plugin.live_supported);
+  const pendingChanges = (plugins ?? []).filter(plugin => plugin.runtime_state === "applying" || plugin.restart_required);
   const [search, setSearch] = useState("");
   const visible = (plugins ?? []).filter(plugin =>
     `${plugin.id} ${plugin.name} ${plugin.description}`.toLowerCase().includes(search.trim().toLowerCase()));
@@ -286,12 +285,12 @@ export function PluginsSettingsPage() {
   return (
     <SettingsPage history={{ entities: ["plugin"] }}
       title="Plugins"
-      description="Upload and manage extensions. Live-capable plugins apply automatically; backend changes show when a restart is needed."
+      description="Upload and manage extensions. Enable and disable installed plugins without restarting. Changes apply across servers and workers."
     >
-      {pendingRestart.length > 0 && <Callout kind="warning" role="status" className="mb-4 text-sm">
-        <strong>Plugin changes are waiting for a restart.</strong>
-        <p>Restart the web and worker processes to apply changes to {pendingRestart.map(plugin => plugin.name).join(", ")}.
-          Until then, currently loaded plugins keep running. Stored settings and data are retained.</p>
+      {pendingChanges.length > 0 && <Callout kind="info" role="status" className="mb-4 text-sm">
+        <strong>Applying plugin changes…</strong>
+        <p>Waiting for running work to finish and for every server and worker to acknowledge {pendingChanges.map(plugin => plugin.name).join(", ")}.
+          Stored settings and data are retained.</p>
       </Callout>}
       <PackageUpload />
       {peers?.some(peer => peer.stale || peer.error) && <p role="status" className="mb-4 text-[13px] text-fg">

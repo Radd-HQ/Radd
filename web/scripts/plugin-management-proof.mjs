@@ -1,4 +1,4 @@
-/** Built SPA proof: package management, pending restart and actionable failures. */
+/** Built SPA proof: package management, live application and actionable failures. */
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import { openBrowser } from './lib/cdp.mjs';
 const dist = new URL('../dist/', import.meta.url).pathname;
 const plugin = {id:'acme-tools',name:'acme-tools',version:'0.1.0',core:false,state:'installed',
-  description:'Company extension',can_toggle:true,capabilities:[],active:false,restart_required:false,
+  description:'Company extension',can_toggle:true,capabilities:[],active:false,restart_required:false,runtime_state:'disabled',live_supported:true,pending_processes:0,runtime_errors:[],
   origin:'package',dependencies:[],problems:[]};
 let failDisable = false;
 let uploaded = null;
@@ -23,10 +23,10 @@ const server = http.createServer(async (req,res) => {
       data={id:plugin.id};
     }
     else if(p.endsWith('/plugins/acme-tools/install')) data=[plugin];
-    else if(p.endsWith('/plugins/acme-tools/enable')) {plugin.state='enabled';plugin.restart_required=true;data=[plugin];}
+    else if(p.endsWith('/plugins/acme-tools/enable')) {plugin.state='enabled';plugin.runtime_state='applying';plugin.pending_processes=1;data=[plugin];}
     else if(p.endsWith('/plugins/acme-tools/disable')) {
       if(failDisable) {res.writeHead(409,{'content-type':'application/json'});res.end(JSON.stringify({detail:'Required by dependent-plugin'}));return;}
-      plugin.state='disabled';plugin.restart_required=false;data=[plugin];
+      plugin.state='disabled';plugin.runtime_state='disabled';plugin.pending_processes=0;data=[plugin];
     }
     else if(p.endsWith('/projects/summary')) data={total:0,related_count:0,permissions:[]};
     else if(p.endsWith('/page-spaces/summary')) data={total:0,permissions:[]};
@@ -66,7 +66,7 @@ try {
   await until('Package installed. Find it below and enable it when ready.');
   assert.equal(uploaded.type,'application/octet-stream');
   assert.equal(uploaded.body.toString(),'PK browser transport fixture');
-  await until('Not loaded on this server');
+  await until('Inactive');
   await s.click('input[placeholder="Search by name or description…"]');
   await s.send('Input.insertText',{text:'absent-plugin'});
   await until('No plugins match your search.');
@@ -74,7 +74,7 @@ try {
   await s.send('Input.insertText',{text:'acme'});
   await until('Company extension');
   await s.click('button',t=>t.trim()==='Enable');
-  await until('Restart required to apply this change');
+  await until('Applying plugin changes…');
   failDisable=true;
   await s.click('button',t=>t.trim()==='Cancel enable');
   await until('Required by dependent-plugin');

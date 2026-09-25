@@ -28,6 +28,9 @@ class PluginRead(BaseModel):
     problems: list[str] = []
     live_supported: bool = False
     managed: bool = False
+    runtime_state: str = "applying"
+    runtime_errors: list[str] = []
+    pending_processes: int = 0
 
 
 class ContributionSettings(BaseModel):

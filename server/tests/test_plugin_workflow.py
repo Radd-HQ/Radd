@@ -14,6 +14,11 @@ from radd.modules.pluginmgr import boot, discovery, service
 from radd.plugin_cli import CheckError, scaffold, check
 
 
+@pytest.fixture(autouse=True)
+def no_runtime_peers(monkeypatch):
+    monkeypatch.setattr('radd.modules.pluginmgr.live.cluster_reports', AsyncMock(return_value=[]))
+
+
 def test_scaffold_refuses_overwrite(tmp_path):
     root = tmp_path / 'plugin'
     scaffold(root, 'sample-plugin')
@@ -145,17 +150,20 @@ def test_external_package_cannot_replace_core_identity(monkeypatch):
 async def test_missing_package_is_visible_in_management(monkeypatch):
     monkeypatch.setattr(service, '_states', AsyncMock(return_value={
         'lost-package': SimpleNamespace(version='1.0.0', state='enabled')}))
+    monkeypatch.setattr('radd.modules.pluginmgr.live.cluster_reports', AsyncMock(return_value=[]))
     infos = {i.id: i for i in await service.list_plugins(AsyncMock())}
     assert infos['lost-package'].origin == 'missing'
     assert not infos['lost-package'].can_toggle
     assert 'Restore the package' in infos['lost-package'].problems[0]
 
 
-async def test_pending_activation_reports_restart_requirement(monkeypatch):
+async def test_pending_activation_reports_applying_without_restart(monkeypatch):
     plugin = RaddPlugin(name='pending-package', core=False)
     monkeypatch.setattr(discovery, 'installable_plugins', lambda: {plugin.id: (plugin, 'fixture')})
     monkeypatch.setattr(service, '_states', AsyncMock(return_value={
         plugin.id: SimpleNamespace(version='0.0.0', state='enabled')}))
+    monkeypatch.setattr('radd.modules.pluginmgr.live.cluster_reports', AsyncMock(return_value=[]))
     infos = {i.id: i for i in await service.list_plugins(AsyncMock())}
-    assert infos[plugin.id].restart_required
+    assert not infos[plugin.id].restart_required
+    assert infos[plugin.id].runtime_state == "applying"
     assert not infos[plugin.id].active

@@ -6,8 +6,8 @@ the RADD checkout supplies the SDK and development environment.
 ## Install a packaged plugin without rebuilding RADD
 
 Open **Settings → Plugins**, choose a built `.whl`, and click **Upload and install**.
-After registration, enable it. Compatible UI-only plugins apply live across web
-and workers; backend plugins show a restart requirement. The wheel must include
+After registration, enable it. Installed plugins apply live across web and
+workers; wait for Applying to finish. The wheel must include
 its built UI and use Python dependencies already available in RADD.
 
 The code is stored in `RADD_PLUGINS_DIR` (`/data/plugins` in containers). Mount the
@@ -16,14 +16,14 @@ separate plugin PVC, including when attachments use S3. Use ReadWriteMany storag
 for multi-node replicas; the filesystem must support locking and atomic rename.
 Back up this volume alongside the database.
 
-To remove an upload: **Disable → wait/restart → Forget → Remove files**. Business
+To remove an upload: **Disable → wait for acknowledgement → Forget → Remove files**. Business
 data remains. File removal waits for process acknowledgements. Stale reports
 require an operator to confirm that the recorded process has stopped before
 removing that report. Replacing the same Python module requires a restart after
 removal; live backend code replacement is not supported yet.
 
-See [spec 125](specs/125-managed-plugin-packages.md) for the live subset, cleanup
-rules and remaining work. The image-based recipe below remains available for
+See [spec 125](specs/125-managed-plugin-packages.md) for the original package workflow
+and the runtime activation section below for current lifecycle behavior. The image-based recipe below remains available for
 plugins that need additional dependencies or native libraries.
 
 ## Create and link
@@ -92,8 +92,8 @@ missing/incompatible Python dependencies fail the image build. If your plugin ad
 libraries, extend the recipe with reviewed, pinned dependencies. Do not let plugin
 installation silently replace RADD's runtime dependencies.
 
-Deploy the image, register/enable in Settings, then restart **all** processes to
-apply activation. No browser request runs pip or rewrites containers.
+Deploy the image, then register/enable in Settings and wait for activation
+across all processes. No browser request runs pip or rewrites containers.
 
 ## Update, disable and remove
 
@@ -101,7 +101,7 @@ Update by building a new versioned wheel/image and deploying it. Existing enable
 state persists. A UI-only edit at the same URL needs a browser refresh; release
 versions should change their artifact version.
 
-Disable in Settings and restart every web/worker process. Plugin data remains.
+Disable in Settings and wait for every web/worker to acknowledge. Plugin data remains.
 Once unloaded, **Forget** removes registration and plugin-specific grants, but
 keeps data and the Python package. Reinstallation requires reviewing permissions
 again. Remove the package from the next image when no longer needed.
@@ -167,3 +167,14 @@ uv's own message instead of waiting on a dropped connection.
 idea for code that lives OUTSIDE the instance and reacts to the event stream;
 scripts are for code that belongs to an automation and wants the packet the
 graph assembled. Both speak the same client.
+
+
+## Runtime activation (RADD-1341)
+
+Installed plugins enable and disable without restarting. Desired state is committed first; each running web/worker reconciles it. The manager shows Applying until every process with a live database lease acknowledges the desired state, or Apply failed with retry information. Leases last 30 seconds; a process that cannot renew stops admitting HTTP and periodic work before its acknowledgement expires. Core plugins remain required.
+
+The runtime closes admissions to a changing plugin, pauses new periodic ticks, and drains admitted HTTP requests and tracked jobs before replacing contributions. Other HTTP requests continue while draining. A request to a draining plugin receives 503 with Retry-After. Routes and generated CRUD are owned by the plugin and removed before the SPA fallback can expose them as APIs. Owned WebSockets close when disabled; lifecycle shutdown must flush their pending state. Startup failure cleans up routes, hooks and contributions; shutdown failure remains visible and retries. Existing data, connection configuration and saved automation graphs are preserved.
+
+Use manifest `tasks` or `PeriodicLoop` for recurring work, and `radd.kernel.runtime.spawn` for request-spawned jobs that must finish before disable. Pair background resources started by `on_startup` with idempotent `on_shutdown` cleanup. Lifecycle hooks must finish; do not await a periodic task from startup. Arbitrary detached asyncio tasks cannot be drained by the host. Transactional data-integrity hooks may remain registered to protect retained data; optional feature hooks must check that their owner is active, as the collaboration hooks do.
+
+This lifecycle does not hot-reload Python packages or dependencies. Installing/upgrading code is still a separate deployment operation. Migration `d1341liveplugin` must be applied before running this version.

@@ -1,5 +1,7 @@
 # RADD-1340 — Plugin disabling and dependent UI
 
+Follow-up: [RADD-1341](LIVE-PLUGINS.md) replaces the restart requirement described below with a shared live lifecycle for installed plugins. This document records the preceding diagnosis and fix.
+
 GitHub and Forgejo were saved as disabled in the local database but were still loaded in the running backend. Backend-bearing plugins intentionally require restarting web and worker processes: unloading their routes, tasks, and hooks safely is not supported by the current live reconciler. The UI showed the desired state as “Disabled” while runtime state remained active. Separately, Version Control deliberately retained every provider tab, and the automation catalog/templates were cached indefinitely.
 
 The Plugins page now distinguishes Enable pending / Disable pending from applied state, shows a visible restart notice, explains what remains active, and offers Cancel enable / Cancel disable for pending choices. This does not claim that backend plugins unload live. Version Control only lists loaded providers, falls back from a stale provider URL to an available one, and shows an empty state when none are loaded. It waits for the capability manifest before querying a provider. The shell invalidates automation metadata when the loaded plugin set changes, including inactive cached queries; lifecycle actions also invalidate it.

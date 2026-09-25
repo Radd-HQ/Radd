@@ -125,11 +125,11 @@ def test_stale_process_prevents_cleanup(plugin_store):
     assert info['distribution'] in store.catalog()
 
 
-def test_backend_hooks_and_tasks_are_not_live_capable():
+def test_backend_hooks_and_tasks_are_live_capable():
     from radd.kernel.specs import TaskSpec
     assert live.supported(RaddPlugin(name='ui', core=False))
-    assert not live.supported(RaddPlugin(name='hook', core=False, on_startup=(AsyncMock(),)))
-    assert not live.supported(RaddPlugin(name='task', core=False, tasks=(TaskSpec(name='job', run=AsyncMock()),)))
+    assert live.supported(RaddPlugin(name='hook', core=False, on_startup=(AsyncMock(),)))
+    assert live.supported(RaddPlugin(name='task', core=False, tasks=(TaskSpec(name='job', run=AsyncMock()),)))
     assert not live.supported(RaddPlugin(name='core'))
 
 

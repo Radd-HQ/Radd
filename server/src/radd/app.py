@@ -13,7 +13,6 @@ from radd.exceptions import ConflictError, ForbiddenError, NotFoundError, Unauth
 from radd.kernel import entities as kentities
 from radd.kernel import registries
 from radd.kernel import import_models, load_plugins
-from radd.kernel.sockets import Socket, provider as socket_provider
 from radd.clientip import ClientIpMiddleware
 from radd.maintenance import MaintenanceMiddleware
 from radd.middleware import CommitBeforeSendMiddleware
@@ -64,21 +63,23 @@ def create_app() -> FastAPI:
         # a backup system that silently cannot back up is worse than one that
         # refuses to start (RADD_BACKUP_TOOLS_OPTIONAL downgrades this to a warning).
         await backup_postgres.preflight()
-        for plugin in plugins:
-            for hook in plugin.on_startup:
-                await hook()
-        # RADD-872: kernel-registered TaskSpecs start after every plugin's own
-        # startup (their run functions may touch tables plugins just ensured).
-        task_backend = socket_provider(Socket.TASK_BACKEND, settings.task_backend)
-        task_loops = _schedule_registered_tasks(task_backend) if task_backend else []
-        for loop in task_loops:
-            await loop.start()
-        yield
-        for loop in reversed(task_loops):
-            await loop.stop()
-        for plugin in reversed(plugins):
-            for hook in plugin.on_shutdown:
-                await hook()
+        from radd.modules.pluginmgr import live
+        live.bind(runtime)
+        from radd.kernel.runtime import gate
+        gate.changing = True
+        gate.wake.clear()
+        try:
+            for plugin in plugins:
+                await runtime.start_plugin(plugin)
+            gate.changing = False
+            gate.wake.set()
+            await live.start()
+            yield
+        finally:
+            gate.changing = False
+            gate.wake.set()
+            await live.stop()
+            await runtime.shutdown()
 
     # orjson for every route response (RADD-1067): serialization is the slowest
     # pure-Python step left on the hot read paths, and the encoder in front of it
@@ -123,19 +124,17 @@ def create_app() -> FastAPI:
     async def forbidden_handler(request: Request, exc: ForbiddenError) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(exc)})
 
+    from radd.kernel.runtime import PluginRuntime, RuntimeMiddleware
+    runtime = PluginRuntime(app)
+    app.state.plugin_runtime = runtime
+    app.add_middleware(RuntimeMiddleware)
     for plugin in plugins:
-        for exc_type, handler in plugin.exception_handlers:
-            app.add_exception_handler(exc_type, handler)
-        for router in plugin.routers:
-            app.include_router(router, prefix=settings.api_prefix)
-    # Auto-generated CRUD routers for plugin-declared entities (kernel.entities).
-    for router in registries.entity_routers:
-        app.include_router(router, prefix=settings.api_prefix)
+        runtime.mount(plugin)
 
     def openapi_with_augmentors() -> dict[str, Any]:
         # Rebuilt per call so registry-driven schema (custom fields) is always live.
         schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
-        for plugin in plugins:
+        for plugin in list(registries.plugins.values()):
             for augment in plugin.openapi_augmentors:
                 augment(schema)
         return schema

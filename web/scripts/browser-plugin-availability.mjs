@@ -1,4 +1,4 @@
-/** RADD-1340: pending backend changes, inactive tabs, and cached automation metadata. */
+/** RADD-1340: live backend changes, inactive tabs, and cached automation metadata. */
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {readFileSync, existsSync, statSync} from 'node:fs';
@@ -6,7 +6,7 @@ import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {openBrowser} from './lib/cdp.mjs';
 const dist = new URL('../dist/', import.meta.url).pathname;
-const plugins = ['github','forgejo','gitlab'].map(name => ({id:name,name,version:'1',core:false,state:'enabled',active:true,restart_required:false,live_supported:false,can_toggle:true,capabilities:[],origin:'builtin',dependencies:[],problems:[],description:`${name} connector`}));
+const plugins = ['github','forgejo','gitlab'].map(name => ({id:name,name,version:'1',core:false,state:'enabled',active:true,restart_required:false,live_supported:true,runtime_state:"enabled",pending_processes:0,runtime_errors:[],can_toggle:true,capabilities:[],origin:'builtin',dependencies:[],problems:[],description:`${name} connector`}));
 let catalogReads=0, templateReads=0;
 const connectorReads=[];
 const titles={github:'GitHub',forgejo:'Forgejo',gitlab:'GitLab'};
@@ -18,7 +18,7 @@ const server=http.createServer(async(req,res)=>{
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',global_role:'admin',instance_role:'admin',permissions:['*'],timezone:'UTC'};
   else if(p==='/api/v1/plugins')data=plugins;
   else if(p.match(/\/plugins\/[^/]+\/disable$/)){
-   const row=plugins.find(x=>p.includes(`/${x.id}/`));row.state='disabled';row.restart_required=row.active;data=plugins;
+   const row=plugins.find(x=>p.includes(`/${x.id}/`));row.state='disabled';row.runtime_state='applying';row.pending_processes=1;data=plugins;
   }
   else if(p.includes('capabilities'))data={capabilities:[],nav:[],plugins:active().map(x=>x.name),remotes:[],widget_types:[],view_types:[]};
   else if(p==='/api/v1/automations/catalog'){
@@ -59,15 +59,15 @@ try{
  for(const name of ['github','forgejo']){
   await s.eval(`Array.from(document.querySelectorAll('li')).find(li=>li.innerText.includes('${name} connector')).querySelector('button:last-child').click()`);
  }
- await until(()=>text('Disable pending'),'pending status');
- assert(await text('Plugin changes are waiting for a restart.'));
+ await until(()=>text('Applying…'),'pending status');
+ assert(await text('Applying plugin changes…'));
  assert(await text('Cancel disable'));
- assert(await text('Still active: its integrations and automation nodes remain available'));
+ assert(await text('Disabling across running servers and workers'));
  await s.screenshot('/tmp/radd-plugin-availability-pending.png');
  await go('/settings/vcs');
  await until(()=>s.eval('document.querySelectorAll("[role=tab]").length===3'),'pending providers stay honest');
  const initialTemplateReads=templateReads;
- for(const p of plugins.filter(x=>x.name!=='gitlab')){p.active=false;p.restart_required=false;}
+ for(const p of plugins.filter(x=>x.name!=='gitlab')){p.active=false;p.runtime_state='disabled';p.pending_processes=0;}
  await until(()=>s.eval('document.querySelectorAll("[role=tab]").length===1 && document.querySelector("[role=tab]").innerText.includes("GitLab")'),'inactive provider tabs removed');
  assert(await s.eval('location.search.includes("host=gitlab")'));
  await until(()=>templateReads>initialTemplateReads,'template cache refreshed');
@@ -83,5 +83,5 @@ try{
  await until(()=>text('No version control connectors are enabled.'),'all inactive empty state');
  assert(await s.eval('document.querySelectorAll("[role=tab]").length===0'));
  await s.screenshot('/tmp/radd-plugin-availability-empty.png');
- console.log(JSON.stringify({passed:true,checks:['pending disable is explicit','loaded tabs remain until restart','inactive tabs removed','old provider URL falls back','catalog and templates refresh without reload','disabled nodes absent','all inactive empty state'],catalogReads,templateReads}));
+ console.log(JSON.stringify({passed:true,checks:['pending disable is explicit','loaded tabs remain until acknowledgement','inactive tabs removed','old provider URL falls back','catalog and templates refresh without reload','disabled nodes absent','all inactive empty state'],catalogReads,templateReads}));
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}

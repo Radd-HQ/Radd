@@ -68,6 +68,9 @@ export interface Plugin {
   can_toggle: boolean;
   active: boolean;
   restart_required: boolean;
+  runtime_state?: "enabled" | "disabled" | "applying" | "error";
+  runtime_errors?: string[];
+  pending_processes?: number;
   origin: string;
   dependencies: string[];
   problems: string[];

@@ -30,6 +30,8 @@ def _read(info: service.PluginInfo) -> PluginRead:
         active=info.active, restart_required=info.restart_required,
         origin=info.origin, dependencies=list(info.dependencies), problems=list(info.problems),
         live_supported=info.live_supported, managed=info.managed,
+        runtime_state=info.runtime_state, runtime_errors=list(info.runtime_errors),
+        pending_processes=info.pending_processes,
     )
 
 
@@ -58,9 +60,9 @@ async def upload_package(request: Request, session: Session, user: CurrentUser) 
 
 
 @router.get("/runtime")
-async def runtime_status(user: CurrentUser) -> list[dict]:
+async def runtime_status(session: Session, user: CurrentUser) -> list[dict]:
     _require_admin(user)
-    return live.reports()
+    return await live.cluster_reports(session)
 
 
 @router.delete("/{plugin_id}/package")

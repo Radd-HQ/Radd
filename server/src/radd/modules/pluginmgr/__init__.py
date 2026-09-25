@@ -1,9 +1,8 @@
-"""Plugin state, managed package storage and per-process live UI reconciliation."""
+"""Plugin state, managed package storage and per-process runtime reconciliation."""
 
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
-from . import live
 from .types import PluginEvent
 
 plugin = RaddPlugin(
@@ -12,8 +11,6 @@ plugin = RaddPlugin(
     depends_on=("auth", "events"),
     weak_depends=("access",),
     routers=(router,),
-    on_startup=(live.start,),
-    on_shutdown=(live.stop,),
     # Admin lifecycle events — registered for audit/webhooks but NOT automation
     # triggers (trigger=False), so they don't clutter the rule builder.
     event_types=(

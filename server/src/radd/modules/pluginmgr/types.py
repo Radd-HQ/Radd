@@ -13,12 +13,12 @@ class PluginOrigin(StrEnum):
 class PluginState(StrEnum):
     """The lifecycle states (docs/plugin-platform.md §10). Core plugins are always
     ENABLED and locked. Non-core: DISCOVERED → INSTALLED → ENABLED ⇄ DISABLED.
-    These are desired states, applied on process restart. Forgetting preserves data."""
+    These are desired states, applied by each process at runtime. Forgetting preserves data."""
 
     DISCOVERED = "discovered"  # known to the manager, not installed
     INSTALLED = "installed"  # registered, not requested active
-    ENABLED = "enabled"  # requested active on restart
-    DISABLED = "disabled"  # requested inactive on restart
+    ENABLED = "enabled"  # requested active
+    DISABLED = "disabled"  # requested inactive
     ERRORED = "errored"  # quarantined: load/startup threw (boot survives)
 
 

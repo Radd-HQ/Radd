@@ -34,7 +34,8 @@ class LocalLoopBackend:
         return loop
 
     def enqueue(self, name, run):
-        return asyncio.create_task(run(), name=name)
+        from radd.kernel.runtime import spawn
+        return spawn(run(), name=name)
 
     async def run_workers(self) -> None:
         for loop in self._loops:
@@ -81,7 +82,9 @@ class PeriodicLoop:
                 await asyncio.sleep(self._interval())
             worked = False
             try:
-                worked = bool(await self._run_once())
+                from radd.kernel.runtime import gate
+                async with gate.work(background=True):
+                    worked = bool(await self._run_once())
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -93,7 +96,7 @@ class PeriodicLoop:
                 await asyncio.sleep(self._interval())
 
     async def start(self) -> None:
-        if not self._enabled():
+        if self._task is not None or not self._enabled():
             return
         self._task = asyncio.create_task(self._run(), name=self._name)
 

@@ -1,12 +1,5 @@
-"""Conservative live reconciliation: only manifests containing UI declarations.
-
-Runs in EVERY web/worker process, reading committed desired state. Backend
-hooks, tasks, entities and routes require restart until ownership/draining is
-implemented. Filesystem acknowledgements prevent cleanup while peers use code.
-"""
+"""Reconcile committed plugin state in every web/worker, with leased acknowledgements."""
 import asyncio
-from dataclasses import fields
-import importlib
 import json
 import logging
 import os
@@ -20,21 +13,75 @@ from radd.kernel.loader import plugin_problems
 
 from . import discovery, store
 from .types import PluginState
+from datetime import datetime, UTC, timedelta
+from sqlalchemy import select, delete
+from sqlalchemy.dialects.postgresql import insert
+from .models import PluginProcess
+from radd.kernel.runtime import gate
+
 
 logger = logging.getLogger(__name__)
 _task: asyncio.Task | None = None
 _process = f'{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}'
 _error: str | None = None
 _last_state: tuple | None = None
-_ALLOWED = {'id', 'name', 'version', 'api_version', 'description', 'core', 'depends_on', 'weak_depends', 'ui'}
+_runtime = None
+_errors: dict[str, str] = {}
+_pending: set[str] = set()
+_observed: set[str] = set()
+_versions: dict[str, str] = {}
+_heartbeat_lock = asyncio.Lock()
+_lock = asyncio.Lock()
+
+
+def bind(runtime):
+    global _runtime
+    _runtime = runtime
 
 
 def supported(plugin: RaddPlugin) -> bool:
-    baseline = RaddPlugin(name=plugin.name)
-    return not plugin.core and all(
-        f.name in _ALLOWED or getattr(plugin, f.name) == getattr(baseline, f.name)
-        for f in fields(plugin)
-    )
+    return not plugin.core
+
+
+async def cluster_reports(session):
+    now = datetime.now(UTC).replace(tzinfo=None)
+    rows = (await session.execute(select(PluginProcess))).scalars()
+    return [{**row.report, 'stale': now - row.updated_at > timedelta(seconds=30)} for row in rows]
+
+
+def state_version(row):
+    return f"{row.state}:{getattr(row, 'updated_at', '')}" if row is not None else 'bootstrap'
+
+
+async def heartbeat():
+    async with _heartbeat_lock:
+        await _write_heartbeat()
+
+
+async def _write_heartbeat():
+    started = time.monotonic()
+    record = {'process': _process, 'active': list(registries.plugins),
+              'observed': sorted(_observed), 'versions': dict(_versions), 'pending': sorted(_pending),
+              'errors': dict(_errors), 'error': _error, 'updated_at': time.time()}
+    now = datetime.now(UTC).replace(tzinfo=None)
+    async with SessionLocal() as session:
+        statement = insert(PluginProcess).values(process_id=_process, report=record, updated_at=now)
+        await session.execute(statement.on_conflict_do_update(
+            index_elements=['process_id'], set_={'report': record, 'updated_at': now}))
+        await session.execute(delete(PluginProcess).where(PluginProcess.updated_at < now - timedelta(days=1)))
+        await session.commit()
+    gate.lease_until = started + 25
+
+
+async def _heartbeats():
+    while True:
+        try:
+            await heartbeat()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception('Plugin heartbeat failed; admissions stop when lease expires')
+        await asyncio.sleep(5)
 
 
 def reports() -> list[dict]:
@@ -71,38 +118,80 @@ def ensure_unused(plugin_id: str) -> None:
 
 
 async def reconcile() -> None:
-    global _last_state
+    global _last_state, _observed, _versions
     from .service import _states
 
-    # Serializes against publication/removal of managed files across processes.
-    # No await while holding the shared filesystem lock.
-    async with SessionLocal() as session:
-        rows = await _states(session)
-    desired = {key for key, row in rows.items() if row.state == PluginState.ENABLED}
-    catalog_file = store.root() / 'catalog.json'
-    fingerprint = (str(store.root()), tuple(sorted(desired)), tuple(sorted(registries.plugins)),
-                   catalog_file.stat().st_mtime_ns if catalog_file.exists() else None)
-    if fingerprint == _last_state:
-        acknowledge()
-        return
-    with store.locked(blocking=False):
-        known = discovery.installable_plugins()
-        for plugin_id, (plugin, path) in known.items():
-            if not supported(plugin):
+    async with _lock:
+        async with SessionLocal() as session:
+            rows = await _states(session)
+        with store.locked(blocking=False):
+            builtins = discovery.core_plugins()
+            known = {**builtins, **discovery.installable_plugins()}
+        desired = {pid for pid, (p, _) in known.items() if p.core or (
+            rows[pid].state == PluginState.ENABLED if pid in rows
+            else pid in builtins and p.enabled_by_default)}
+        _observed = desired
+        _versions = {pid: state_version(row) for pid, row in rows.items()}
+        # Dependents stop first; dependencies start first. No desired state is
+        # applied until its transaction committed, and no registry is torn down
+        # underneath an admitted request or a worker tick.
+        for pid in reversed(list(registries.plugins)):
+            if pid in desired or registries.plugins[pid].core:
                 continue
-            active = registries.plugins.get(plugin_id)
-            if plugin_id in desired and active is None:
-                if plugin_problems(plugin, {p.name for p in registries.plugins.values()}):
-                    continue
-                registries.register_plugin(plugin)
-                registries.register_plugin_ui_dir(plugin, importlib.import_module(path))
-            elif plugin_id not in desired and active is not None:
-                if any(plugin.name in p.depends_on for p in registries.plugins.values() if p.id != plugin_id):
-                    continue
-                registries.unregister_plugin(plugin)
+            plugin = registries.plugins[pid]
+            dependents = [p.name for p in registries.plugins.values() if plugin.name in p.depends_on]
+            if dependents:
+                _errors[pid] = 'Still required by: ' + ', '.join(dependents)
+                continue
+            _pending.add(pid)
+            try:
+                if _runtime is not None:
+                    await _runtime.disable(plugin)
+                else:
+                    # Isolated tooling/tests can reconcile declarations without
+                    # an ASGI application. Never pretend backend hooks ran.
+                    if plugin.routers or plugin.on_startup or plugin.tasks or plugin.entities:
+                        raise RuntimeError('Runtime application is not bound')
+                    registries.unregister_plugin(plugin)
+                _errors.pop(pid, None)
+            except Exception as exc:
+                _errors[pid] = f'{type(exc).__name__}: disable failed; will retry'
+                logger.exception('Disabling plugin %s failed', pid)
+            finally:
+                _pending.discard(pid)
+        waiting = desired - set(registries.plugins)
+        while waiting:
+            ready = [pid for pid in waiting if not plugin_problems(
+                known[pid][0], {p.name for p in registries.plugins.values()})]
+            if not ready:
+                for pid in waiting:
+                    _errors[pid] = '; '.join(plugin_problems(
+                        known[pid][0], {p.name for p in registries.plugins.values()}))
+                break
+            for pid in ready:
+                plugin, path = known[pid]
+                _pending.add(pid)
+                try:
+                    if _runtime is not None:
+                        await _runtime.enable(plugin, path)
+                    else:
+                        if plugin.routers or plugin.on_startup or plugin.tasks or plugin.entities:
+                            raise RuntimeError('Runtime application is not bound')
+                        import importlib
+                        registries.register_plugin(plugin)
+                        registries.register_plugin_ui_dir(plugin, importlib.import_module(path))
+                    _errors.pop(pid, None)
+                except Exception as exc:
+                    _errors[pid] = f'{type(exc).__name__}: enable failed; will retry'
+                    logger.exception('Enabling plugin %s failed', pid)
+                finally:
+                    _pending.discard(pid)
+                    waiting.remove(pid)
+        # A cancelled request (enable followed by disable) clears its old error.
+        for pid in list(_errors):
+            if (pid in registries.plugins) == (pid in desired) and pid not in _pending:
+                _errors.pop(pid, None)
         acknowledge()
-        _last_state = fingerprint
-
 
 async def _run() -> None:
     global _error
@@ -110,6 +199,7 @@ async def _run() -> None:
         try:
             _error = None
             await reconcile()
+            await heartbeat()
         except BlockingIOError:
             pass  # installer owns the store; never block the API event loop
         except asyncio.CancelledError:
@@ -124,17 +214,32 @@ async def _run() -> None:
         await asyncio.sleep(2)
 
 
+_heartbeat_task: asyncio.Task | None = None
+
+
 async def start() -> None:
-    global _task
+    global _task, _heartbeat_task, _observed, _process, _versions
     if _task is None:
+        # Assigned after worker forks, never inherited from a preloaded parent.
+        _process = f'{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}'
+        _versions = {}
+        _observed = set(registries.plugins)
+        await heartbeat()
         acknowledge()
+        _heartbeat_task = asyncio.create_task(_heartbeats(), name='plugin-heartbeats')
         _task = asyncio.create_task(_run(), name='plugin-reconciliation')
 
 
 async def stop() -> None:
-    global _task
-    if _task is not None:
-        _task.cancel()
-        await asyncio.gather(_task, return_exceptions=True)
-        _task = None
+    global _task, _heartbeat_task, _runtime
+    tasks = [t for t in (_task, _heartbeat_task) if t is not None]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    _task = _heartbeat_task = None
+    gate.lease_until = None
+    async with SessionLocal() as session:
+        await session.execute(delete(PluginProcess).where(PluginProcess.process_id == _process))
+        await session.commit()
     (store.root() / 'runtime' / f'{_process}.json').unlink(missing_ok=True)
+    _runtime = None
