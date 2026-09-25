@@ -53,4 +53,32 @@ NOTIFY_REPORTER_ON_DONE = AutomationTemplateSpec(
     ),
 )
 
-TEMPLATES: tuple[AutomationTemplateSpec, ...] = (NOTIFY_REPORTER_ON_DONE,)
+#: RADD-1319: what the retired `googlechat` plugin did from the environment —
+#: post new issues and SLA breaches to one chat space — as a rule someone
+#: switches on, pointed at a webhook they paste. Google Chat and Slack-style
+#: incoming webhooks both take the `{"text": …}` Post to chat sends.
+POST_TO_CHAT = AutomationTemplateSpec(
+    key="automations.post_to_chat",
+    name="Post new issues and SLA breaches to chat",
+    description=(
+        "Posts to a Google Chat (or Slack-style) incoming webhook when an issue is created "
+        "or misses an SLA. Paste the space's webhook URL into both actions before enabling."
+    ),
+    group="Chat",
+    nodes=(
+        {"id": "created", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.created"}},
+        {"id": "breached", "kind": "trigger", "type": "trigger.event", "params": {"event": "sla.breached"}},
+        {"id": "post_new", "kind": "action", "type": "action.post_chat",
+         "params": {"webhook_url": "https://chat.googleapis.com/v1/spaces/…",
+                    "message": "New issue {{item.key}}: {{item.title}}\n{{item.url}}"}},
+        {"id": "post_sla", "kind": "action", "type": "action.post_chat",
+         "params": {"webhook_url": "https://chat.googleapis.com/v1/spaces/…",
+                    "message": "SLA breached ({{payload.kind}}) on {{item.key}} — {{payload.policy_name}}\n{{item.url}}"}},
+    ),
+    edges=(
+        {"source": "created", "port": "out", "target": "post_new"},
+        {"source": "breached", "port": "out", "target": "post_sla"},
+    ),
+)
+
+TEMPLATES: tuple[AutomationTemplateSpec, ...] = (NOTIFY_REPORTER_ON_DONE, POST_TO_CHAT)

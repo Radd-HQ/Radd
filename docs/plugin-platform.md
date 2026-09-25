@@ -300,7 +300,7 @@ These are named "sockets": a plugin declares it *provides* or *consumes* a socke
   = a plugin providing a `StorageBackend`. Selected via settings.
 - **AttachmentFilter** — a pipeline hook every upload passes through (virus scan, type allowlist,
   size/quarantine). "Attachment filtering" = a plugin registering a filter into the upload pipeline.
-- **Notifier** — Google Chat / email / Slack (the `googlechat` notifier shape, generalized).
+- **Notifier** — Google Chat / email / Slack. (The env-driven `googlechat` notifier was retired in RADD-1319; chat is the Post to chat automation action.)
 - **Connector** — inbound webhook parsers (GitLab/Forgejo/Alertmanager already this shape).
 - **AIProvider**, **VcsProvider** — already interfaces; formalize as sockets.
 - **TaskBackend** — the Celery ask (§6): a plugin *provides* a queue backend the kernel *consumes*.

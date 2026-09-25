@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     snapshot_ttl_seconds: float = 30.0
 
     # Worker split (spec 48): false = this process serves web only; the
-    # background loops (webhooks/automations/notify/search/sla/googlechat/mail)
+    # background loops (webhooks/automations/notify/search/sla/mail)
     # stay dormant. Realtime + storage init always run (they serve the web tier).
     run_workers: bool = True
     # Which task_backend socket provider runs kernel-registered TaskSpecs
@@ -465,11 +465,6 @@ class Settings(BaseSettings):
     # import instead of forking a second account for the same person.
     confluence_placeholder_email_domain: str = ""
 
-    # Google Chat notifier (see radd/modules/googlechat). Empty URL = disabled.
-    googlechat_webhook_url: str = ""
-    googlechat_event_types: str = "item.created,sla.breached,page.created"
-    googlechat_poll_interval: float = 2.0
-    googlechat_batch: int = 100  # events read per consumer iteration
 
     # Alertmanager intake (RADD-1317): SEED-ONLY — the token + project key become
     # one receiver row, once, when the table is empty. Receivers are rows after.
@@ -620,7 +615,6 @@ class Settings(BaseSettings):
         "radd.modules.mcp",
         "radd.modules.forgejo",
         "radd.modules.github",
-        "radd.modules.googlechat",
         "radd.modules.alertmanager",
         "radd.modules.mailintake",
         "radd.modules.csat",

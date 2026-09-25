@@ -446,7 +446,7 @@ Every setting lives in `server/src/radd/config.py` (env prefix `RADD_`,
 | `RADD_AI_*` | disabled | AI layer (spec 46) |
 | `RADD_MCP_ENABLED` | `true` | MCP server at `POST /api/v1/mcp` (spec 45) |
 | `RADD_GITLAB_*` / `RADD_FORGEJO_*` / `RADD_GITHUB_*` | disabled | VCS connectors (GitHub: `_WEBHOOK_SECRET` seeds one connection once; `_API_TOKEN`, `_BASE_URL`, `_REPO` optional) |
-| `RADD_GOOGLECHAT_*` / `RADD_ALERTMANAGER_*` / `RADD_MAIL_*` | disabled | notifier / alert / email intake (spec 47) |
+| `RADD_ALERTMANAGER_*` / `RADD_MAIL_*` | disabled | seed ONE Alertmanager receiver / mail source row, once (RADD-1317, RADD-958) — both are configured in Settings after. `RADD_GOOGLECHAT_*` is gone (RADD-1319): posting to chat is an automation |
 | `RADD_WORK_WEEK_DAYS` | mon–fri | business-day SLAs + timesheet |
 
 ## MFA (TOTP)

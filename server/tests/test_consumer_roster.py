@@ -31,7 +31,7 @@ def test_every_live_consumer_name_is_registered():
     load_plugins(settings.modules)
     expected = {
         "ai.embedder", "automations.engine", "csat.sender", "events.cascade",
-        "googlechat.notifier", "mailintake.outbound", "notify.consumer",
+        "mailintake.outbound", "notify.consumer",
         "search.indexer", "webhooks.dispatcher",
     }
     assert expected <= registries.consumer_names

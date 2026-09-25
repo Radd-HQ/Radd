@@ -17,7 +17,7 @@ def test_all_expected_capabilities_registered():
     keys = set(_map())
     assert {
         "sso", "ldap", "ai", "storage", "smtp", "workers",
-        "gitlab", "forgejo", "google_chat", "alertmanager", "email_intake",
+        "gitlab", "forgejo", "alertmanager", "email_intake",
     } <= keys
 
 
@@ -70,13 +70,12 @@ def test_connectors_derive_generically_from_the_connector_category():
     # The five the old instance_status hardcoded plus github (RADD-1129) — now
     # derived, so a new connector plugin appears here with no edit to projects.
     assert set(connectors) == {
-        "gitlab", "forgejo", "github", "google_chat", "alertmanager", "email_intake",
+        "gitlab", "forgejo", "github", "alertmanager", "email_intake",
     }
     # gitlab is row-backed since RADD-1253, like forgejo (asserted in the snapshot test above).
     from radd.modules.gitlab import service as gitlab_service
 
     assert connectors["gitlab"] == (gitlab_service.active_connection_count() > 0)
-    assert connectors["google_chat"] == bool(settings.googlechat_webhook_url)
     # alertmanager is row-backed since RADD-1317 (receivers).
     from radd.modules.alertmanager import service as alertmanager_service
 

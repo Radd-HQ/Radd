@@ -35,7 +35,7 @@ class InstanceStatusRead(BaseModel):
     ai_provider: str  # "" = AI off
     attachment_storage: str  # "filesystem" | "s3"
     workers_enabled: bool
-    connectors: dict[str, bool]  # {gitlab, forgejo, google_chat, alertmanager, email_intake}
+    connectors: dict[str, bool]  # {gitlab, forgejo, github, alertmanager, email_intake}
 
 
 class ProjectCreate(BaseModel):

@@ -1,4 +1,5 @@
-"""Connector wave core (spec 47): forgejo, googlechat, alertmanager, mailintake.
+"""Connector wave core (spec 47): forgejo, alertmanager, mailintake. (googlechat
+was retired in RADD-1319 — posting to chat is the Post to chat action.)
 
 Pure tests of the pieces correctness hangs on — webhook payload → plan parsing,
 message formatting, alert dedup planning, raw-email parsing — plus the forgejo
@@ -24,7 +25,6 @@ from radd.modules.alertmanager.router import router as alertmanager_router
 from radd.modules.alertmanager.types import AlertAction
 from radd.modules.forgejo import parsing as forgejo_parsing, service as forgejo_service
 from radd.modules.forgejo.router import router as forgejo_router, verify_signature
-from radd.modules.googlechat.formatter import format_message
 from radd.modules.mailintake.parsing import extract_reply_key, parse_email
 from radd.modules.mailintake.types import BODY_MAX_CHARS
 from radd.modules.vcs.triggers import RefAction
@@ -244,72 +244,6 @@ async def test_forgejo_endpoint_ignores_unhandled_event_kinds(monkeypatch):
         )
     assert response.status_code == 200
     assert response.json() == {"linked": 0, "triggered": 0}
-
-
-# --- googlechat: pure message formatting ---
-
-SELECTED = frozenset({"item.created", "sla.breached", "page.created"})
-
-
-def _event(event_type: str, payload: dict) -> SimpleNamespace:
-    return SimpleNamespace(event_type=event_type, payload=payload)
-
-
-def test_googlechat_formats_item_created():
-    text = format_message(
-        _event("item.created", {"item": {"key": "TD-12", "title": "Farm down"}}),
-        selected=SELECTED,
-        base_url="https://radd.example.com",
-    )
-    assert text == "New item TD-12: Farm down\nhttps://radd.example.com/issues/TD-12"
-
-
-def test_googlechat_formats_sla_breached():
-    text = format_message(
-        _event(
-            "sla.breached",
-            {"item": {"key": "TD-12"}, "policy_name": "Support", "kind": "response"},
-        ),
-        selected=SELECTED,
-        base_url="https://radd.example.com",
-    )
-    assert text is not None
-    assert "SLA breached (response) on TD-12" in text
-    assert "https://radd.example.com/issues/TD-12" in text
-
-
-def test_googlechat_formats_page_created():
-    text = format_message(
-        _event("page.created", {"title": "Render farm runbook"}),
-        selected=SELECTED,
-        base_url="https://radd.example.com",
-    )
-    assert text == "New page: Render farm runbook\nhttps://radd.example.com"
-
-
-def test_googlechat_returns_none_for_unselected_or_unknown():
-    # A type outside the selected set is never posted, even if formattable.
-    assert (
-        format_message(
-            _event("item.created", {"key": "TD-1", "title": "x"}),
-            selected=frozenset({"sla.breached"}),
-            base_url="https://radd.example.com",
-        )
-        is None
-    )
-    # A selected type with no formatter (or unusable payload) is skipped too.
-    assert (
-        format_message(
-            _event("comment.created", {}),
-            selected=frozenset({"comment.created"}),
-            base_url="https://radd.example.com",
-        )
-        is None
-    )
-    assert (
-        format_message(_event("item.created", {}), selected=SELECTED, base_url="https://x")
-        is None
-    )
 
 
 # --- alertmanager: pure alert planning (firing new / dup / resolved) ---
