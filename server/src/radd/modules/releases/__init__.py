@@ -2,6 +2,7 @@ from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
 
+from .automation import PUBLISH_NODE
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import ReleaseEvent
@@ -24,6 +25,9 @@ plugin = RaddPlugin(
     routers=(router,),
     # RADD-889: the release tools of the spec-114 MCP catalog live with their owner.
     mcp_tools=mcptools.MCP_TOOLS,
+    # RADD-1310: "Publish version and sweep" — what a connector's release trigger
+    # leads to, now that no connector publishes anything on its own (RADD-1309).
+    automation_nodes=(PUBLISH_NODE,),
     event_types=(
         EventTypeSpec(ReleaseEvent.CREATED, "Release created", "Releases", subjects=("project",)),
         EventTypeSpec(

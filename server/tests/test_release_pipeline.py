@@ -346,3 +346,83 @@ async def test_marking_released_over_mcp_sweeps(db, project, admin):
         {"project_key": project.key, "version": "6.0.0", "status": ReleaseStatus.RELEASED.value},
     )
     assert shipped["status"] == ReleaseStatus.RELEASED.value and shipped["items_shipped"] == 1
+
+
+# --- the release loop as an automation (RADD-1310) ---
+
+
+async def test_the_release_loop_is_an_automation_someone_switched_on(db, project, admin):
+    """RADD-1309 took the sweep out of the GitHub/Forgejo receivers; this is what
+    replaces it: "GitHub: release published" → "Publish version and sweep". A dry
+    run of the same graph reports the publish and writes nothing."""
+    from sqlalchemy import select
+
+    from radd.modules.automations import engine, service as automations
+    from radd.modules.automations.graph import Packet
+    from radd.modules.automations.schemas import RuleCreate
+    from radd.modules.automations.types import SYSTEM_ACTOR_ID
+    from radd.modules.events.models import Event
+    from radd.modules.github.types import GithubEntity, GithubTrigger
+    from radd.modules.vcs import triggers
+
+    await _configure(db, project)
+    item = await _item_in_waiting(db, project, admin)
+    rule = await automations.create_rule(db, RuleCreate.model_validate({
+        "name": "ship on release",
+        "nodes": [
+            {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": GithubTrigger.RELEASE_PUBLISHED.value}},
+            {"id": "pub", "kind": "action", "type": "release.publish", "params": {}},
+        ],
+        "edges": [{"source": "trg", "port": "out", "target": "pub"}],
+    }), admin.id)
+    await triggers.emit_release(
+        db, GithubTrigger.RELEASE_PUBLISHED,
+        entity_type=GithubEntity.REPO, entity_id="acme/app", provider="github", repo="acme/app",
+        project_id=project.id, actor_id=SYSTEM_ACTOR_ID,
+        version="4.2.0", tag="v4.2.0", name="Four two", notes="the notes", url="",
+    )
+    await db.flush()
+    event = (await db.execute(
+        select(Event).where(Event.event_type == GithubTrigger.RELEASE_PUBLISHED.value).order_by(Event.id.desc()).limit(1)
+    )).scalar_one()
+
+    system = await db.get(User, SYSTEM_ACTOR_ID)
+    facts = await engine._event_facts(db, event)
+    dry = await engine.run_graph(
+        db, rule, Packet(facts=facts, subjects={"project": (project.id,)}), system, apply=False
+    )
+    [planned] = [p for p in dry.plans if p.node_id == "pub"]
+    assert planned.resolves and f"publish {project.key} 4.2.0" in planned.detail
+    assert await releases_service.resolve_release(db, project.id, "4.2.0") is None
+
+    await engine.apply_event(db, event)
+    release = await releases_service.resolve_release(db, project.id, "4.2.0")
+    assert release is not None and release.name == "Four two" and release.description == "the notes"
+    shipped = await items_service.get_item(db, item.id, admin)
+    assert shipped.release.version == "4.2.0" and shipped.state.name == SHIPPED
+
+
+async def test_publish_says_why_it_cannot_run(db, project, admin):
+    """No project on the event and none named, or no version: the plan refuses
+    with a reason instead of guessing."""
+    from types import SimpleNamespace
+
+    from radd.modules.releases.automation import plan_publish
+
+    def ctx(params, payload, subject_ids=()):
+        return SimpleNamespace(
+            session=db, node=SimpleNamespace(params=params),
+            packet=SimpleNamespace(facts=SimpleNamespace(payload=payload)), subject_ids=subject_ids,
+        )
+
+    no_project = await plan_publish(ctx({}, {"version": "1.0.0"}))
+    assert not no_project.resolves and "names no project" in no_project.detail
+    unknown = await plan_publish(ctx({"project": "NOPE9"}, {"version": "1.0.0"}))
+    assert not unknown.resolves and "'NOPE9'" in unknown.detail
+    no_version = await plan_publish(ctx({}, {}, (project.id,)))
+    assert not no_version.resolves and "no version" in no_version.detail
+    # A named version overrides the event's, and takes neither its name nor notes.
+    override = await plan_publish(
+        ctx({"version": "9.9.9"}, {"version": "1.0.0", "name": "One", "notes": "n"}, (project.id,))
+    )
+    assert override.resolves and (override.version, override.name, override.notes) == ("9.9.9", "9.9.9", "")
