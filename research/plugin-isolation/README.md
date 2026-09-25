@@ -26,6 +26,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1357 | Owner-contributed option directories | Verified; Waiting for release |
 | RADD-1358 | Owner-contributed project/cycle pickers | Verified; Waiting for release |
 | RADD-1359 | Owner-contributed team relationships/audiences | Verified; Waiting for release |
+| RADD-1360 | Fields-owned controls and generic input primitives | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -57,7 +58,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | cycles | default | 7 | projects, auth, events, settings, teams | Picker contributions verified (RADD-1358); remaining review pending |
 | dashboards | False | 0 | events, projects, auth, teams, items, cycles, views, reporting, access, groups | Pending |
 | events | default | 0 |  | Pending |
-| fields | default | 0 | projects, events, auth, teams, access | Pending |
+| fields | default | 4 | projects, events, auth, teams, access | Form/control contributions verified (RADD-1360); remaining review pending |
 | forgejo | False | 0 | events, projects, auth, items, vcs, automations | Pending |
 | forms | default | 2 | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Option contributions verified (RADD-1357); remaining review pending |
 | github | False | 0 | events, projects, auth, items, vcs, automations | Pending |
@@ -362,3 +363,47 @@ The new comment preview file is correctly identified as Comments-owned but still
 host-located; it is partial, not approved final architecture. Teams settings,
 rosters, automation forms, navigation and all other partial/unreviewed artifacts
 remain in the complete goal.
+
+## RADD-1360 verification
+
+Fields now owns CustomFieldsForm/CustomFieldControl and public definitions/value
+types. Host controls render owner slots; type files retain compatibility exports.
+SDK 1.8 owns generic TokenMultiSelect and ErrorText. No field registry lookup was
+added to these supplied-definition controls. Unknown types display a read-only
+saved value, and removed select options remain visible until deliberately replaced.
+Zero, false and null retain their distinct meanings. Field locks explicitly disable
+controls and close open token suggestions. The boolean thumb is positioned within
+its track. Token choices now handle focused-button keyboard activation, clamp a
+highlight when options change, and use semantic error-hover color.
+
+Evidence: host + 22 remotes typecheck/build; final Fields bundle typecheck/build;
+56 frontend tests; 38 focused backend field-default/option/writability, capability,
+module-contract and kernel tests; targeted Python lint. Boundary checks enforce
+owner form adapters and domain-independent SDK primitives. The actual-bundle
+browser proof passes 13 grouped checks: all nine field types, removed/unknown
+values, keyed changes, numeric/boolean/null semantics, available select replacement,
+125-option search/render cap, orphaned multi-select values, live locks, withdrawal
+with an open popup, reactivation/failed bundle recovery, standalone field callbacks,
+generic tokens without Fields, keyboard activation/create/remove, changed-option
+highlight validity, and nested Escape dismissal. Screenshot inspection found and
+confirmed the boolean thumb fix; a bounding-box assertion now covers it.
+Existing shared-control (13) and option-directory (11) regression groups pass.
+The new proof is included in `test:browser`.
+
+The browser observed zero field-registry reads from the supplied-definition
+controls, but two `/fields/settings-summary` reads from the existing host settings
+sidebar (`routes/settings/layout.tsx`). This is a confirmed remaining dependency,
+not suppressed evidence or an approved exception. Browser core-module withdrawal
+exercises frontend absence/recovery and does not permit disabling required backend
+modules.
+
+The backend was reloaded to register the new remote. A read-only authenticated
+local probe verified its SDK 1.8 manifest and both served contracts, plus the wire
+shape of 319 authorized field definitions. Plugin choices were unchanged;
+Leave/GitHub/Forgejo stayed disabled; the ephemeral token was discarded. Nothing
+was pushed or deployed externally.
+
+Remaining work includes field registry queries, settings/navigation, display-cell
+presentation, automation picker data and inspectors, host-located consuming feature
+pages, and all other partial/unreviewed artifacts. This stage does not claim those
+features have achieved full ownership or lifecycle isolation.

@@ -155,3 +155,16 @@ test('team relationship adapters own no reference queries, selection state or fe
     assert(!readFileSync(file,'utf8').includes('internal notes'),file+' must not own comment policy copy');
   }
 });
+
+test('Fields owns registry form rendering and the SDK token/error primitives are domain-independent',()=>{
+  const adapter=nodes('web/src/components/items/CustomFieldsForm.tsx');
+  assert(adapter.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='@radd/plugin-sdk'||n.source.value.endsWith('/control-contract')));
+  assert(!adapter.some(n=>n.type==='SwitchStatement'||n.type==='CallExpression'&&['useQuery','useState'].includes(n.callee?.name)));
+  for(const file of ['web/src/components/TokenMultiSelect.tsx','web/src/components/ErrorText.tsx']){
+    assert(nodes(file).filter(n=>n.type==='ExportNamedDeclaration').every(n=>n.source?.value==='@radd/plugin-sdk'));
+    assert(!nodes(file).some(n=>n.type==='FunctionDeclaration'));
+  }
+  for(const file of ['web/packages/plugin-sdk/src/token-multi-select.tsx','web/packages/plugin-sdk/src/error-text.tsx']){
+    assert(!nodes(file).some(n=>n.type==='ImportDeclaration'&&/modules|web\/src|components\//.test(n.source.value)));
+  }
+});

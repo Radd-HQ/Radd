@@ -583,6 +583,31 @@ needed: Teams continues to use the SDK 1.6 contribution and option contracts.
 The query compatibility export and comment-list batching remain transitional;
 this stage does not certify all comment, Teams settings or roster ownership.
 
+### Fields-owned form controls (RADD-1360)
+
+Fields contributes `fields.form` and `fields.control`. Its public contracts own
+field definitions and nullable typed values. Callers supply definitions, values,
+errors, lock rules and change callbacks; these controls make no registry requests.
+The owner implements each field type, retaining zero/false/null distinctions,
+required labels, duration minutes and all current options. Removed single-select
+values receive an explicit unavailable option; unsupported types display a disabled
+saved value instead of disappearing. Write locks reach each control explicitly,
+closing token suggestions even when a lock changes while the editor is open.
+
+SDK 1.8 supplies generic `TokenMultiSelect` and `ErrorText`. Token choices retain
+free-text values, grouping, icons/hints, filtering and a 50-row display cap. Both
+mouse and keyboard activation work; option changes clamp the active keyboard row,
+and Escape dismisses suggestions before their enclosing modal. Neither primitive
+imports Fields or another feature. The host's previous component paths re-export
+these shared implementations.
+
+Withdrawing Fields removes its controls and open suggestions while the consuming
+feature retains values. Failed bundles use unavailable fallbacks and reactivation
+restores the same draft. These UI contracts do not certify host registry queries,
+field settings/navigation, display cells or automation inspector ownership. In
+particular, the settings sidebar still queries `/fields/settings-summary`; that
+remaining dependency is recorded in the audit.
+
 ### Original frontend design
 
 *(Built in specs 93/94: the SPA now has the federation seam and `GET /capabilities` exists —

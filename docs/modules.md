@@ -1,5 +1,14 @@
 # Module map
 
+RADD-1360: Fields owns its custom-field form/control rendering and public registry
+value/definition types. The UI remote contributes `fields.form` and `fields.control`
+using SDK 1.8; host issue components are transitional adapters. The SDK now owns
+generic TokenMultiSelect and ErrorText, with compatibility exports at old host paths.
+Removed select options and unknown field types remain visible without changing
+saved values. Controls honor live write locks; token choices support keyboard
+activation and changing option sets. Registry queries, field settings, display cells
+and automation inspector composition still require owner migration.
+
 RADD-1359: Teams contributes ID-valued relationship selection, standalone choices
 and the paged audience editor. It owns saved-reference transport and optional
 member counts; the controls cancel requests on withdrawal and resolve fresh names

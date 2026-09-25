@@ -506,14 +506,14 @@
     "issue": null
   },
   "docs/modules.md": {
-    "sha256": "2e8457d48b93de478d0106df206dcccc074d030440902de3299cea715aa4e965",
+    "sha256": "eb21ab77c5021f5dc87988c5f95337137ba0eb0c7184694a33815f0a78638c9f",
     "status": "partially_reviewed",
     "owner": "mixed/transitional",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1359-verification",
-      "Team relationship scope verified; broader ownership and remaining consumers still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1359"
+    "issue": "RADD-1360"
   },
   "docs/performance-safety-audit.md": {
     "sha256": "103b850cbfe71ea293d998895fd8449ee03f8a4764199133d84bf080dcbda7d9",
@@ -551,14 +551,14 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "2788cc8cd8c7cb4396330f4c2a8224b6a6f5ee2e7e0ab2e42daeb5177c47987e",
+    "sha256": "86e5a0f37b10426e67eedc1dbbd3e94347a0f6d8ff97abad9663fbf12a156f78",
     "status": "partially_reviewed",
     "owner": "mixed/transitional",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1359-verification",
-      "Team relationship scope verified; broader ownership and remaining consumers still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1359"
+    "issue": "RADD-1360"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2052,14 +2052,14 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "5c6972974b715d8c4e75d62bd7a40b3b5840bbac6bf660a0386ca76a499d6758",
+    "sha256": "25eae1203c9ddb009481a5828b95f2e094f1fefc9533bd3da2a06f524c8b17d2",
     "status": "partially_reviewed",
     "owner": "mixed/transitional",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1359-verification",
-      "Team relationship scope verified; broader ownership and remaining consumers still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1359"
+    "issue": "RADD-1360"
   },
   "research/review-2026-09-25/FIXES.md": {
     "sha256": "247e2f0759a2a12cb87c1e1d28fd6baefb175deb7f2d58bff79200f4d80925c2",
@@ -6595,11 +6595,14 @@
     "issue": null
   },
   "server/src/radd/modules/fields/__init__.py": {
-    "sha256": "ab95e5dd8d001b3cc00a5530f9c833bc9a693e62419cff492e48136ab8bfd5a4",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "59007181c3d4c415cb5c3fe7a7264ac887781c930f71407cf49008937e95dfa6",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
+    ],
+    "issue": "RADD-1360"
   },
   "server/src/radd/modules/fields/directory.py": {
     "sha256": "b70005598bcd37a22161288fc861a572ba3146ff7c57d26f2fa3846924d773a6",
@@ -6663,6 +6666,76 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/fields/ui/package.json": {
+    "sha256": "f8fd393b00ec39a7ecc9d2b4474f35575b200b924ce13c9e66c142084b33619d",
+    "status": "reviewed",
+    "owner": "fields",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
+  "server/src/radd/modules/fields/ui/src/CustomFieldsForm.tsx": {
+    "sha256": "7e44d667051be49301d367c1e9f27ca96b095d2ba3eb8e074c67f7cd631a95e3",
+    "status": "reviewed",
+    "owner": "fields",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
+  "server/src/radd/modules/fields/ui/src/control-contract.ts": {
+    "sha256": "fbf5c72752a55253c90b2f4f700e3109e37251d7ba1632a7b710383f6bec2a6f",
+    "status": "reviewed",
+    "owner": "fields",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
+  "server/src/radd/modules/fields/ui/src/index.tsx": {
+    "sha256": "fa7fbf5a9c18f1a9864603f59c6b5e829584cdfd301706a6e1af063d08111ceb",
+    "status": "reviewed",
+    "owner": "fields",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
+  "server/src/radd/modules/fields/ui/src/types.ts": {
+    "sha256": "a5ef4f957a67e5f86922c12defc903713f76881c84af31d252266d38faa12f76",
+    "status": "reviewed",
+    "owner": "fields",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
+  "server/src/radd/modules/fields/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "reviewed",
+    "owner": "fields",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
+  "server/src/radd/modules/fields/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "reviewed",
+    "owner": "fields",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
   },
   "server/src/radd/modules/fields/validation.py": {
     "sha256": "7e5c180f8f42bc037ba5b1bb4c3d574a6dfa8100c90581a8fa38320dd9f752e1",
@@ -13113,14 +13186,14 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "5d9bb3c95861758f020ab488ab0ae4564f8cecfdba1b9fe056990184d053776b",
+    "sha256": "2fce3e253f828a6e306167166a7608d8210ba6fbc5a47d9e99ab2e13b1d5da22",
     "status": "partially_reviewed",
     "owner": "mixed/transitional",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1359-verification",
-      "Team relationship scope verified; broader ownership and remaining consumers still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1359"
+    "issue": "RADD-1360"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -13171,6 +13244,16 @@
     ],
     "issue": "RADD-1353"
   },
+  "web/packages/plugin-sdk/src/error-text.tsx": {
+    "sha256": "c308fcf0df0b3e223bc51f2fc2efcde25e52faf04c08239fc779d45eabc69d1c",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
   "web/packages/plugin-sdk/src/hooks.ts": {
     "sha256": "856b819d052f8225ae89a867bbbe0b76bdb1e42c6da87802da3d9115199b22da",
     "status": "partially_reviewed",
@@ -13201,14 +13284,14 @@
     "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "d25443da1a4dc82ec7418e26629d20d33eb03e675354dbae2365187e8ec9f3ec",
+    "sha256": "b7bb28ed3f5cccdd6005539267c1aff31cae1616129dad4605ea8103f2a52cf8",
     "status": "partially_reviewed",
     "owner": "platform",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1360"
   },
   "web/packages/plugin-sdk/src/options.tsx": {
     "sha256": "4cbaf0efbf8426e9cd32b3b9875885a93abc0a59de84cca5887c0b7e06d12adc",
@@ -13309,6 +13392,16 @@
     ],
     "issue": "RADD-1358"
   },
+  "web/packages/plugin-sdk/src/token-multi-select.tsx": {
+    "sha256": "6d3eb08a8cc92195acf5b5eb3a0652120e80d888e615125ac2990bc828eaa341",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
   "web/packages/plugin-sdk/src/tokens.ts": {
     "sha256": "d88ba990383dde338b922f62f528a7f88bd5ce12ffac1f0d43801445f74bc85c",
     "status": "unreviewed",
@@ -13324,14 +13417,14 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "97d8046f9d8c4ce98708e5c6faad2fb3beb8f5315202de6d39a88de1813be3b7",
+    "sha256": "9efa61938e7d42d551a65a2578353278c649013ef31a29a87431482ba7900707",
     "status": "partially_reviewed",
     "owner": "platform",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1360"
   },
   "web/packages/plugin-sdk/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -13407,14 +13500,14 @@
     "issue": null
   },
   "web/public/shared/radd-plugin-sdk.js": {
-    "sha256": "f407c16dd389af73d8d59c396829265c90257d0c019cc52aac9665b1c22ec9e8",
+    "sha256": "549b3d8973bf254d5b64b096d3855b3dd5cdf3d29eebe4947a3cf6eb535c1c7d",
     "status": "partially_reviewed",
     "owner": "mixed/transitional",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1360"
   },
   "web/public/shared/react-dom-client.js": {
     "sha256": "7f77c7fcf2095f1ed7fd3c955b4531b8e8bb8fc97c907abd3b8019e0b0157892",
@@ -13685,6 +13778,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/scripts/browser-field-contributions.mjs": {
+    "sha256": "896da60f520fbd935fd33e0163e3518e268946f4049faf0a42fc36716b765c37",
+    "status": "reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
+  },
   "web/scripts/browser-issue-features.mjs": {
     "sha256": "c1039e6e565fa053cae521d69e20de44bc559160ab1b4df3c447a728dca6dd51",
     "status": "unreviewed",
@@ -13952,14 +14055,14 @@
     "issue": null
   },
   "web/scripts/gen-shared-shims.mjs": {
-    "sha256": "823917586a20d8685bc288da424efdcce9d816af4ea303682cb0ccf557652282",
+    "sha256": "63100b1faa8ca8b1082c21165faf43678e4d0d080d201c8c346944167d06493e",
     "status": "partially_reviewed",
     "owner": "mixed/transitional",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1360"
   },
   "web/scripts/grouped-pagination-proof.mjs": {
     "sha256": "0019d9fd3dd43ea4cdcb117f450e1a1c9f4200d550fdac34fe5fe73c334ae93b",
@@ -14221,14 +14324,14 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "d72a17f65dd5ba46196e1da25989064d008e50514300d5361bbc8b6db04b9b3f",
+    "sha256": "27d878bb06f52886b9a4ac29377df9e03f5b8f74619907795747cd0130fe31fb",
     "status": "partially_reviewed",
-    "owner": "platform verification",
+    "owner": "mixed/transitional",
     "evidence": [
-      "research/plugin-isolation/README.md#radd-1359-verification",
-      "Team relationship scope verified; broader ownership and remaining consumers still require review."
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
     ],
-    "issue": "RADD-1359"
+    "issue": "RADD-1360"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -14665,11 +14768,14 @@
     "issue": null
   },
   "web/src/components/ErrorText.tsx": {
-    "sha256": "cc5a2591d36fac6b45bb9362a6f58de0a72537d3730d376b3cd85b74fc642574",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "f3e78c17ac5ce5d11b896a84ba53d23b7ff61a076eb12153900dcf9f25a62921",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
   },
   "web/src/components/IconButton.tsx": {
     "sha256": "b37e062e0c4da2fb4c7abbc0f5549cab287184ad51a05cb746d0ea670b8bc77d",
@@ -14827,11 +14933,14 @@
     "issue": null
   },
   "web/src/components/TokenMultiSelect.tsx": {
-    "sha256": "7b98b90664225a5431e10ab0a600d50cf4d195838a5b82e0eccf30b36ca62f33",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "bfc8630ae157fcd3b17ad96fbb70879af4f35bd6a673675b3c5a618648663582",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+    ],
+    "issue": "RADD-1360"
   },
   "web/src/components/attachments/StorageChoiceProvider.tsx": {
     "sha256": "66cd3cfb0b83c4285762ae4201d287b5b669f3200306df0ec8eda0d0223e4718",
@@ -15689,11 +15798,14 @@
     "issue": null
   },
   "web/src/components/items/CustomFieldsForm.tsx": {
-    "sha256": "d97b301cf8ac106aa5912cb0d42ca2e6b5114d270520e3fa256e4474797cc49c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ebfd2bb1f00dd0ce31b9a1141fb5e2d99a085639e62d755c70e596a3a4a05f17",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
+    ],
+    "issue": "RADD-1360"
   },
   "web/src/components/items/DeflectionPanel.tsx": {
     "sha256": "9c89288c15845dcaefdf1b9391af586750baf32dd65077e5175592d7aec9e895",
@@ -18299,11 +18411,14 @@
     "issue": null
   },
   "web/src/lib/types/fields.ts": {
-    "sha256": "42925e5c3977e4cc6b89d735740188149aaa97e2bcc961fc103961a3598d6755",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "870a445e3c8c0a806c96fb6c4475abb4051fb167de17967ffe283ee429d6fc43",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
+    ],
+    "issue": "RADD-1360"
   },
   "web/src/lib/types/forms.ts": {
     "sha256": "aa4819db578e50eae90cb4984ffc9a34c1dbb87214e9aee941c6897b560fcf57",
@@ -18341,11 +18456,14 @@
     "issue": null
   },
   "web/src/lib/types/items.ts": {
-    "sha256": "bb18d244dbd34114dec17004be62d7b7f3c02a7d44783cb401d3a90f25827a49",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "0b41f1e3cc915901fed4275f1922ed0e77f6a735a9636ff3801c48adedec186d",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1360-verification",
+      "Fields control scope verified; remaining feature ownership/consumers and unrelated artifact behavior need review."
+    ],
+    "issue": "RADD-1360"
   },
   "web/src/lib/types/jira-import.ts": {
     "sha256": "08ea45ae9a64ec9c63103519a28bb70354437003c377ff6470aba3802bdcc346",

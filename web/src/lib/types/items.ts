@@ -65,8 +65,8 @@ export const ItemKind = {
 export type ItemKindValue = (typeof ItemKind)[keyof typeof ItemKind];
 
 /** A custom-field value as validated by the fields registry; null clears. */
-export type CustomFieldValue = string | number | boolean | string[] | null;
-export type CustomFields = Record<string, CustomFieldValue>;
+import type { CustomFields } from "../../../../server/src/radd/modules/fields/ui/src/types";
+export type { CustomFieldValue, CustomFields } from "../../../../server/src/radd/modules/fields/ui/src/types";
 
 export interface ItemParentRef {
   id: string;
