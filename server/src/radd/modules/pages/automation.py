@@ -23,6 +23,7 @@ from typing import Any
 
 from radd.sdk import AutomationNodeSpec
 
+SPACE_GATE_KEY = "gate.page_space"
 COMMENT_NODE_KEY = "page.comment"
 MOVE_NODE_KEY = "page.move"
 
@@ -170,4 +171,44 @@ MOVE_NODE = AutomationNodeSpec(
     permission="page.write",
     plan=plan_move,
     apply=apply_move,
+)
+
+
+# --- "Page is in space" (RADD-1248), owned by pages since RADD-1322 ---------
+
+
+def page_space_is(payload: dict[str, Any], params: dict[str, Any]) -> bool:
+    """Is the page this event is about in one of these spaces?
+
+    A page event carries a top-level `page_space` ref; a page comment carries
+    the space inside its `page` ref. Either is the answer; an event about no
+    page answers False. Slugs, because that is what people read in the bar.
+    """
+    wanted = {str(v).strip().lower() for v in (params.get("spaces") or []) if str(v).strip()}
+    if not wanted:
+        return False
+    space = payload.get("page_space")
+    if not isinstance(space, dict):
+        page = payload.get("page")
+        space = page.get("space") if isinstance(page, dict) else None
+    slug = space.get("slug") if isinstance(space, dict) else None
+    hit = bool(slug) and str(slug).lower() in wanted
+    return not hit if params.get("negate") else hit
+
+
+async def _plan_space(ctx: Any) -> str:
+    return "true" if page_space_is(dict(ctx.packet.facts.payload or {}), dict(ctx.node.params)) else "false"
+
+
+SPACE_GATE = AutomationNodeSpec(
+    key=SPACE_GATE_KEY,
+    kind="gate",
+    label="Page is in space",
+    group="Gates",
+    keywords="page wiki space docs runbook in space",
+    default_params={"spaces": [], "negate": False},
+    ports=("true", "false"),
+    needs_items=False,
+    reads_event=True,
+    plan=_plan_space,
 )

@@ -16,14 +16,13 @@ from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
 from . import catalog, engine, runs, samples, service, versions
-from .types import BUILTIN_OUTPUTS, AutomationEntity, AutomationTrigger
+from .types import AutomationEntity, AutomationTrigger
 from radd.kernel.registry import registries
 
 from . import templating
 
 from .schemas import (
-    ContributedNodeInfo,
-    NodeOutputsInfo,
+    NodeInfo,
     OutputFieldInfo,
     EventSampleRead,
     NodeArityInfo,
@@ -102,16 +101,19 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
         schedule_kinds=[
             ScheduleKindInfo(key=kind, label=label) for kind, label in catalog.SCHEDULE_KINDS
         ],
-        contributed_nodes=[
-            ContributedNodeInfo(
+        nodes=[
+            NodeInfo(
                 key=spec.key,
                 kind=spec.kind,
                 label=spec.label,
                 description=spec.description,
                 group=spec.group,
                 params_schema=spec.params_schema,
+                keywords=spec.keywords,
+                default_params=dict(spec.default_params),
+                reads_event=spec.reads_event,
                 ports=list(spec.ports),
-                default_ports=list(spec.ports_at({})),
+                default_ports=list(spec.ports_at(spec.default_params or {})),
                 outputs=[_output_info(field) for field in spec.outputs],
                 needs_items=spec.needs_items,
                 permission=spec.permission,
@@ -121,10 +123,6 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
         node_arity=[
             NodeArityInfo(type=node_type, default=rule.default, options=list(rule.options))
             for node_type, rule in catalog.node_arities().items()
-        ],
-        node_outputs=[
-            NodeOutputsInfo(type=node_type, outputs=[_output_info(f) for f in fields])
-            for node_type, fields in BUILTIN_OUTPUTS.items()
         ],
         can_act_as=await authz.holds(session, user, authz.Permission.AUTOMATION_ACT_AS),
         tokens=[

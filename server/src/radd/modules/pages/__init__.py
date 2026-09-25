@@ -25,11 +25,11 @@ from .page_access import _PAGE_SPEC
 
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
 from . import mcptools
-from .automation import COMMENT_NODE, MOVE_NODE  # RADD-1267: page actions for automations
+from .automation import COMMENT_NODE, MOVE_NODE, SPACE_GATE  # RADD-1267/1322: page nodes for automations
 
 plugin = RaddPlugin(
     name="pages",
-    automation_nodes=(COMMENT_NODE, MOVE_NODE),
+    automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
     # RADD-791: SPACE-scoped. They were global because a page had no scope to be
     # checked against, which made per-space access inexpressible.
     permissions=(

@@ -6,6 +6,8 @@ from radd.kernel import EventTypeSpec, RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
 from . import dispatcher, scheduler
+from .builtin_actions import ACTION_NODES
+from .builtin_routers import ROUTER_NODES
 from . import subscribers  # noqa: F401 — registers the spec-119 item.creating hook
 from .intake import ValidationBlocked
 from .intake_router import router as intake_router
@@ -59,6 +61,8 @@ async def _validation_unavailable_handler(
 
 plugin = RaddPlugin(
     name="automations",
+    # RADD-1322: the built-in nodes are registered exactly as a plugin's are.
+    automation_nodes=(*ROUTER_NODES, *ACTION_NODES),
     # RADD-1168: emitted since spec 12 and never registered. Not triggers — a
     # rule that fires on rules being edited is the loop guard's nightmare.
     event_types=(

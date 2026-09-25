@@ -34,7 +34,6 @@ import {
   type ItemVisibilityValue,
 } from "./types";
 import {
-  ActionType,
   MANUAL_TRIGGER,
   SCHEDULE_TRIGGER,
   CommentVisibility,
@@ -48,7 +47,6 @@ import {
   ReportInterval,
   StateCategory,
   ViewAxis,
-  type ActionTypeValue,
   type BuiltinRuleField,
   type CommentVisibilityValue,
   type CycleStatusValue,
@@ -443,68 +441,6 @@ export function triggerLabel(
   return catalog?.triggers.find((t) => t.event_type === trigger)?.label ?? trigger;
 }
 
-/** Action-type labels for the rule builder's action-type select. */
-export const ACTION_TYPE_LABELS: Record<ActionTypeValue, string> = {
-  [ActionType.setState]: "Set state",
-  [ActionType.setPriority]: "Set priority",
-  [ActionType.setAssignee]: "Set assignee",
-  [ActionType.assignRoundRobin]: "Assign next from team",
-  [ActionType.setTeam]: "Set team",
-  [ActionType.addLabel]: "Add label",
-  [ActionType.removeLabel]: "Remove label",
-  [ActionType.setCycle]: "Set cycle",
-  [ActionType.setRelease]: "Set release",
-  [ActionType.setCustomField]: "Set custom field",
-  [ActionType.addComment]: "Add comment",
-  [ActionType.setParent]: "Set parent",
-  [ActionType.setType]: "Set issue type",
-  [ActionType.setReporter]: "Set reporter",
-  [ActionType.setDates]: "Set dates",
-  [ActionType.setEstimate]: "Set estimate",
-  [ActionType.setFlag]: "Flag / unflag",
-  [ActionType.setVisibility]: "Set visibility",
-  [ActionType.linkItem]: "Link to issue",
-  [ActionType.archiveItem]: "Archive / restore",
-  [ActionType.addWatcher]: "Add watcher",
-  [ActionType.addParticipant]: "Add participant",
-  [ActionType.moveToProject]: "Move to project",
-  [ActionType.createItem]: "Create issue",
-  [ActionType.sendWebhook]: "Send webhook",
-  [ActionType.postChat]: "Post to chat",
-  [ActionType.notifyUser]: "Notify user",
-  [ActionType.sendEmail]: "Send email",
-};
-
-export const ACTION_TYPE_ORDER: readonly ActionTypeValue[] = [
-  ActionType.setState,
-  ActionType.setPriority,
-  ActionType.setAssignee,
-  ActionType.assignRoundRobin,
-  ActionType.setTeam,
-  ActionType.addLabel,
-  ActionType.removeLabel,
-  ActionType.setCycle,
-  ActionType.setRelease,
-  ActionType.setCustomField,
-  ActionType.addComment,
-  ActionType.setParent,
-  ActionType.setType,
-  ActionType.setReporter,
-  ActionType.setDates,
-  ActionType.setEstimate,
-  ActionType.setFlag,
-  ActionType.setVisibility,
-  ActionType.linkItem,
-  ActionType.archiveItem,
-  ActionType.addWatcher,
-  ActionType.addParticipant,
-  ActionType.moveToProject,
-  ActionType.createItem,
-  ActionType.sendWebhook,
-  ActionType.postChat,
-  ActionType.notifyUser,
-  ActionType.sendEmail,
-];
 
 /** Comment-visibility labels (add_comment action + form submit is public). */
 export const COMMENT_VISIBILITY_LABELS: Record<CommentVisibilityValue, string> = {

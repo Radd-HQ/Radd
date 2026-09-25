@@ -1123,7 +1123,7 @@ async def test_the_catalog_serves_the_checks_own_ports(db, admin):
     from radd.modules.automations.router import get_catalog
 
     catalog = await get_catalog(db, admin)
-    by_key = {node.key: node for node in catalog.contributed_nodes}
+    by_key = {node.key: node for node in catalog.nodes}
 
     assert by_key["ai.validate"].ports == ["pass", "fail", "unavailable"]
     assert by_key["ai.classify"].ports == []

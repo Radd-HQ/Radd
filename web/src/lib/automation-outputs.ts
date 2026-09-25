@@ -41,8 +41,8 @@ const field = (
  * `ai.generate`'s outputs ARE its params — the fields someone is still typing —
  * and `ai.classify`'s enum choices are the answers being typed, so both are
  * computed locally. Everything else comes from the served catalog, which covers
- * built-in producers (`node_outputs`) and contributed ones with fixed outputs
- * (`contributed_nodes[].outputs`) in one ranking.
+ * every node's fixed outputs (`nodes[].outputs`, RADD-1322: built-in and
+ * contributed alike) in one ranking.
  */
 export function outputsOfNode(
   node: Pick<AutomationNode, "type" | "params">,
@@ -73,9 +73,7 @@ export function outputsOfNode(
     ].slice(0, 20);
     return names.map((name) => field(name, `\`${name}\` from the dict the script returns.`));
   }
-  const contributed = catalog?.contributed_nodes?.find((entry) => entry.key === node.type);
-  if (contributed?.outputs?.length) return contributed.outputs;
-  return catalog?.node_outputs?.find((entry) => entry.type === node.type)?.outputs ?? [];
+  return catalog?.nodes?.find((entry) => entry.key === node.type)?.outputs ?? [];
 }
 
 /** One declared field of an `ai.generate` node, as the form stores it. */
@@ -164,7 +162,7 @@ export function portCarriesOutputs(
   port: string,
   catalog: AutomationCatalog | undefined,
 ): boolean {
-  const contributed = catalog?.contributed_nodes?.find((entry) => entry.key === node.type);
+  const contributed = catalog?.nodes?.find((entry) => entry.key === node.type);
   if (!contributed) return true;
   const ports = contributed.ports?.length
     ? contributed.ports

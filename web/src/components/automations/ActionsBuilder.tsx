@@ -1,7 +1,4 @@
-import { useId } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
-import { ACTION_TYPE_LABELS, ACTION_TYPE_ORDER } from "../../lib/meta";
 import { usePermissions } from "../../lib/hooks";
 import {
   fieldsQuery,
@@ -9,19 +6,11 @@ import {
 } from "../../lib/queries";
 import {
   ActionType,
-  CommentVisibility,
-  Priority,
   Permission,
-  type ActionTypeValue,
   type CustomFieldValue,
   type FieldDef,
   type RuleAction,
 } from "../../lib/types";
-import { useKeyedRows } from "../../lib/keyed-rows";
-import { Button } from "../Button";
-import { SelectField } from "../SelectField";
-import { ActionParams } from "./ActionParams";
-import { IconButton } from "../IconButton";
 
 /** Picker options gathered once for every action row (spec 20 actions builder). */
 export interface PickerData {
@@ -44,68 +33,6 @@ export function usePickerData(): PickerData {
   };
 }
 
-/** Fresh params for a freshly-picked action type. */
-function defaultParams(type: ActionTypeValue): Record<string, CustomFieldValue> {
-  switch (type) {
-    case ActionType.setState:
-      return { state: "" };
-    case ActionType.setPriority:
-      return { priority: Priority.normal };
-    case ActionType.setAssignee:
-      return { assignee: "" };
-    case ActionType.assignRoundRobin:
-      return { team: "" };
-    case ActionType.setTeam:
-      return { team: "" };
-    case ActionType.addLabel:
-    case ActionType.removeLabel:
-      return { label: "" };
-    case ActionType.setCycle:
-      return { cycle: "" };
-    case ActionType.setRelease:
-      return { release: "" };
-    case ActionType.setCustomField:
-      return { key: "", value: null };
-    case ActionType.addComment:
-      return { body: "", visibility: CommentVisibility.public };
-    case ActionType.createItem:
-      return { project: "", title: "", description: "" };
-    case ActionType.sendWebhook:
-      return { url: "", secret: "" };
-    case ActionType.postChat:
-      return { webhook_url: "", message: "" };
-    case ActionType.notifyUser:
-      return { user: "", message: "" };
-    case ActionType.sendEmail:
-      return { to: "", subject: "", body: "" };
-    // RADD-1267. Kept in step with `blankActionParams` in automation-nodes.ts,
-    // which is what the canvas palette drops.
-    case ActionType.setParent:
-      return { parent: "" };
-    case ActionType.setType:
-      return { type: "" };
-    case ActionType.setReporter:
-      return { reporter: "" };
-    case ActionType.setDates:
-      return { start: "", target: "" };
-    case ActionType.setEstimate:
-      return { points: "" };
-    case ActionType.setFlag:
-      return { flagged: true };
-    case ActionType.setVisibility:
-      return { visibility: "public" };
-    case ActionType.linkItem:
-      return { target: "", link_type: "relates" };
-    case ActionType.archiveItem:
-      return { archived: true };
-    case ActionType.addWatcher:
-      return { user: "assignee" };
-    case ActionType.addParticipant:
-      return { user: "" };
-    case ActionType.moveToProject:
-      return { project: "" };
-  }
-}
 
 /** A non-empty string param, trimmed. */
 const filled = (value: CustomFieldValue): boolean =>
@@ -189,111 +116,4 @@ export function isActionValid(action: RuleAction): boolean {
     default:
       return false;
   }
-}
-
-interface ActionsBuilderProps {
-  value: RuleAction[];
-  onChange: (actions: RuleAction[]) => void;
-}
-
-/** Ordered list of action rows — the "what a rule does" builder (spec 20). */
-export function ActionsBuilder({ value, onChange }: ActionsBuilderProps) {
-  const pickers = usePickerData();
-  const listId = useId();
-
-  // Stable per-row keys (RADD-901): rows are full of selects and param inputs,
-  // and keying by index re-keyed everything below a removal.
-  const rows = useKeyedRows(value, onChange);
-  const update = (index: number, next: RuleAction) =>
-    onChange(value.map((action, i) => (i === index ? next : action)));
-  const move = (index: number, delta: number) => rows.swap(index, index + delta);
-  const add = () =>
-    rows.add({ type: ActionType.setState, params: defaultParams(ActionType.setState) });
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-fg-secondary">Actions</span>
-        <span className="text-[11px] text-fg-faint">Applied in order to every matching issue</span>
-      </div>
-
-      {/* Shared suggestion lists for the free-text name/version fields. */}
-      <datalist id={`${listId}-labels`}>
-        {pickers.labelNames.map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
-
-      {value.length === 0 && (
-        <p className="rounded-md border border-dashed border-subtle px-3 py-4 text-center text-xs text-fg-faint">
-          No actions yet — a rule needs at least one.
-        </p>
-      )}
-
-      <ul className="flex flex-col gap-2">
-        {value.map((action, index) => (
-          <li
-            key={rows.keys[index]}
-            className="flex items-start gap-2 rounded-md border border-subtle bg-surface/40 p-2.5"
-          >
-            <div className="flex flex-col gap-0.5 pt-5">
-              <button
-                type="button"
-                onClick={() => move(index, -1)}
-                disabled={index === 0}
-                aria-label="Move action up"
-                className="rounded p-0.5 text-fg-faint hover:bg-elevated hover:text-fg disabled:opacity-30 cursor-pointer disabled:cursor-default"
-              >
-                <ChevronUp size={13} />
-              </button>
-              <button
-                type="button"
-                onClick={() => move(index, 1)}
-                disabled={index === value.length - 1}
-                aria-label="Move action down"
-                className="rounded p-0.5 text-fg-faint hover:bg-elevated hover:text-fg disabled:opacity-30 cursor-pointer disabled:cursor-default"
-              >
-                <ChevronDown size={13} />
-              </button>
-            </div>
-            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2.5">
-              <SelectField
-                label={`Action ${index + 1}`}
-                value={action.type}
-                onChange={(event) => {
-                  const type = event.target.value as ActionTypeValue;
-                  update(index, { type, params: defaultParams(type) });
-                }}
-              >
-                {ACTION_TYPE_ORDER.map((type) => (
-                  <option key={type} value={type}>
-                    {ACTION_TYPE_LABELS[type]}
-                  </option>
-                ))}
-              </SelectField>
-              <ActionParams
-                action={action}
-                pickers={pickers}
-                listId={listId}
-                onParams={(params) => update(index, { ...action, params })}
-              />
-            </div>
-            <IconButton
-              danger
-              onClick={() => rows.removeAt(index)}
-              aria-label={`Remove action ${index + 1}`}
-              className="mt-6"
-            >
-              <Trash2 size={14} />
-            </IconButton>
-          </li>
-        ))}
-      </ul>
-
-      <Button variant="secondary" size="sm" className="w-fit" onClick={add}>
-        <Plus size={13} aria-hidden />
-        Add action
-      </Button>
-    </div>
-  );
 }

@@ -413,6 +413,17 @@ class AutomationNodeSpec:
     description: str = ""
     group: str = "Other"  # palette section
     params_schema: dict[str, Any] = field(default_factory=dict)
+    #: RADD-1322: extra words the palette search matches (synonyms, the wire key).
+    keywords: str = ""
+    #: RADD-1322: the params a freshly dropped node starts with — valid enough to
+    #: save. Empty means "the schema's own defaults", which is what a generated
+    #: form fills in anyway.
+    default_params: dict[str, Any] = field(default_factory=dict)
+    #: RADD-1322: whether the node reads the triggering EVENT (its diff, its
+    #: actor, its comment) rather than the items. Such a node is refused under a
+    #: trigger that has no event — a validation walk's synthetic facts or a
+    #: schedule — because it could only ever answer with a constant.
+    reads_event: bool = False
     #: FIXED outputs, for a node whose ports do not depend on its params. Set
     #: this OR `ports_for`, never both — declaring it is what lets a client draw
     #: the node's handles from the served catalog instead of guessing by kind.
@@ -474,6 +485,10 @@ class AutomationNodeSpec:
     #: shallow reader can see, and all of which are silently truncated at run
     #: time if nobody says so on write.
     check: Callable[[Mapping[str, Any]], None] | None = None
+    #: `check_async(session, params) -> None`, raising `ValueError` — write-time
+    #: validation that needs the database (RADD-1322): an SLQ query that must
+    #: compile against the live field registry. Same contract as `check`.
+    check_async: Callable[..., Awaitable[None]] | None = None
     #: `plan_items(ctx) -> {item_id: port name}`, used at ITEM arity, where the
     #: node PARTITIONS its input across its ports. Optional: without it the
     #: executor falls back to calling `plan` once per single-item packet, which

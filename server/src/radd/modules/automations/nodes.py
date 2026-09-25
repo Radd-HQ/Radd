@@ -20,30 +20,19 @@ from radd.kernel.registry import registries
 from radd.kernel.specs import OutputField, valid_output_name
 
 from . import graph
-from .types import (
-    ARITY_PARAM,
-    BUILTIN_ARITY,
-    BUILTIN_OUTPUTS,
-    BUILTIN_PORTS,
-    ArityRule,
-    NodeArity,
-)
+from .types import ARITY_PARAM, ArityRule, NodeArity
 
 
 def ports_of(node: graph.Node) -> tuple[str, ...]:
-    """A node's outputs: its TYPE's answer when one is registered or tabled,
-    else the kind's fixed set.
+    """A node's outputs: its TYPE's spec's answer (RADD-1322: built-ins are
+    registered too), else the kind's fixed set.
 
-    The fallback matters — most core types predate the registry and are still
-    resolved by kind, so a graph mixing contributed and built-in nodes validates
-    the same way.
+    The fallback is for a type nothing registers — a node from a plugin that has
+    since been uninstalled — so the stored graph still loads and validates.
     """
     spec = registries.automation_nodes.get(node.type)
     if spec is not None:
         return spec.ports_at(node.params)
-    builtin = BUILTIN_PORTS.get(node.type)
-    if builtin is not None:
-        return tuple(port.value for port in builtin)
     return graph.default_ports(node)
 
 
@@ -60,7 +49,7 @@ def outputs_of(node: graph.Node) -> tuple[OutputField, ...]:
     spec = registries.automation_nodes.get(node.type)
     if spec is not None:
         return tuple(spec.outputs_at(node.params))
-    return BUILTIN_OUTPUTS.get(node.type, ())
+    return ()
 
 
 def output_name(node: graph.Node) -> str:
@@ -76,7 +65,8 @@ def output_name(node: graph.Node) -> str:
 
 
 def spec_for(node: graph.Node):
-    """The registered spec for a node, or None for a built-in type."""
+    """The registered spec for a node, or None for a type nothing registers (an
+    uninstalled plugin's). Built-ins are registered since RADD-1322."""
     return registries.automation_nodes.get(node.type)
 
 
@@ -92,7 +82,7 @@ def arity_rule(node_type: str) -> ArityRule:
         default = _coerce(spec.arity, NodeArity.SET)
         options = tuple(dict.fromkeys(_coerce(value, default) for value in spec.arity_options))
         return ArityRule(default, options or (default,))
-    return BUILTIN_ARITY.get(node_type) or ArityRule(NodeArity.SET, (NodeArity.SET,))
+    return ArityRule(NodeArity.SET, (NodeArity.SET,))
 
 
 def arity_of(node: graph.Node) -> NodeArity:
@@ -111,16 +101,12 @@ def arity_of(node: graph.Node) -> NodeArity:
 
 
 def needs_items(node: graph.Node) -> bool:
-    """Whether an EMPTY packet should stop this node running.
-
-    A contributed spec says so directly. Built-ins answer from arity, which is
-    the same question asked once: an ITEM node has nothing to do with no items,
-    a SET node ("post to chat every Monday", "nothing matched — tell me") has.
-    """
+    """Whether an EMPTY packet should stop this node running — its spec says so
+    directly. An unknown type answers yes: it has nothing to run anyway."""
     spec = registries.automation_nodes.get(node.type)
     if spec is not None:
         return spec.needs_items
-    return arity_of(node) is NodeArity.ITEM
+    return True
 
 
 def _coerce(value: Any, fallback: NodeArity) -> NodeArity:

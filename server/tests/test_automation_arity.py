@@ -184,6 +184,17 @@ def test_an_empty_set_renders_empty_rather_than_verbatim():
 # --- the executor's fan-out ---------------------------------------------------
 
 
+class _FakeSession:
+    """Just enough session for a walk whose planners are stood in for: the
+    action path opens a SAVEPOINT per invocation (RADD-1322 — one path for
+    every action), which here is a no-op."""
+
+    def begin_nested(self):
+        import contextlib
+
+        return contextlib.nullcontext()
+
+
 class _Item:
     def __init__(self, item_id: uuid.UUID):
         self.id = item_id
@@ -191,7 +202,7 @@ class _Item:
 
 @pytest.fixture
 def spy(monkeypatch):
-    """Record every `_one` call, and serve items without a database."""
+    """Record every built-in action invocation, and serve items without a database."""
     calls: list[dict] = []
 
     async def fake_load(_session, item_ids):
@@ -200,30 +211,38 @@ def spy(monkeypatch):
     async def fake_facts(_session, _rows):
         return {}
 
-    async def fake_one(
-        _session, node, stored, item, _project, _actor, _packet, scope, _name, _apply, _report,
-        _facts=None,
-    ):
+    from types import SimpleNamespace
+
+    from radd.modules.automations import builtin_actions
+
+    async def fake_plan(ctx):
+        # What the built-in planner is handed per invocation (RADD-1322): the
+        # whole packet at SET arity, one item at ITEM arity.
+        ids = list(ctx.subject_ids)
         calls.append(
             {
-                "node": node.id,
-                "action": stored["type"],
-                "item": item.id if item is not None else None,
-                "scope": [i.id for i, _ in scope],
+                "node": ctx.node.id,
+                "action": builtin_actions.action_of(ctx.node.type).value,
+                "item": ids[0] if len(ids) == 1 else None,
+                "scope": ids,
             }
         )
-        # `_one` returns an `_Outcome` since spec 120 — the id of anything it
-        # created AND the values it made addressable, because the id alone
-        # cannot say `TD-42`.
-        if stored["type"] != ActionType.CREATE_ITEM.value:
-            return executor._Outcome()
+        return SimpleNamespace(resolves=True, detail="planned", resolved={})
+
+    async def fake_apply(ctx, _plan):
+        # `create_item` reports what it MADE (the `created` port) and the values
+        # it made addressable — the id alone cannot say `TD-42`.
+        if ctx.node.type != f"action.{ActionType.CREATE_ITEM.value}":
+            return
         made = uuid.uuid4()
-        return executor._Outcome(
-            created_id=made, produced={"id": str(made), "key": "TD-9", "url": ""}
-        )
+        ctx.add_created("item", made)
+        ctx.set_output("id", str(made))
+        ctx.set_output("key", "TD-9")
+        ctx.set_output("url", "")
 
     monkeypatch.setattr(executor, "_load", fake_load)
-    monkeypatch.setattr(executor, "_one", fake_one)
+    monkeypatch.setattr(builtin_actions, "plan_action", fake_plan)
+    monkeypatch.setattr(builtin_actions, "apply_action", fake_apply)
     monkeypatch.setattr(planning, "load_item_facts", fake_facts)
     return calls
 
@@ -231,7 +250,7 @@ def spy(monkeypatch):
 async def _walk(nodes, edges, item_ids=()):
     trigger = next(n for n in nodes if n.kind is AutomationNodeKind.TRIGGER)
     return await executor.walk(
-        None,
+        _FakeSession(),
         nodes=nodes,
         edges=edges,
         trigger=trigger,
@@ -273,7 +292,7 @@ async def test_a_gate_does_not_emit_the_branch_it_did_not_take(spy):
         Edge("g", NodePort.FALSE.value, "no"),
     ]
     report = await executor.walk(
-        None,
+        _FakeSession(),
         nodes=nodes,
         edges=edges,
         trigger=TRIGGER,

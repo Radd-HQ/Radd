@@ -628,8 +628,9 @@ class ScheduleKindInfo(BaseModel):
     label: str
 
 
-class ContributedNodeInfo(BaseModel):
-    """A node type from the kernel registry (spec 116 phase 2).
+class NodeInfo(BaseModel):
+    """A node type from the kernel registry (spec 116 phase 2) — EVERY node type
+    since RADD-1322, built-in and contributed alike.
 
     Served rather than baked into the SPA for the same reason the trigger
     catalogue is: what nodes exist is a function of which plugins are INSTALLED,
@@ -642,6 +643,11 @@ class ContributedNodeInfo(BaseModel):
     description: str = ""
     group: str = "Other"
     params_schema: dict[str, Any] = Field(default_factory=dict)
+    #: RADD-1322: palette search words, and the params a fresh node starts with.
+    keywords: str = ""
+    default_params: dict[str, Any] = Field(default_factory=dict)
+    #: RADD-1322: reads the triggering event — refused under a trigger with none.
+    reads_event: bool = False
     #: The node's FIXED ports, when its outputs do not depend on its params
     #: (RADD-1064). Empty means they DO — the editor computes those itself as the
     #: form is edited, because an AI classifier's ports are the answers someone
@@ -672,18 +678,6 @@ class OutputFieldInfo(BaseModel):
     #: write path measures a comparison against.
     choices: list[str] = Field(default_factory=list)
     description: str = ""
-
-
-class NodeOutputsInfo(BaseModel):
-    """What one BUILT-IN node type produces (spec 120).
-
-    A table beside `node_arity` rather than a field on the node, for the same
-    reason that one exists: the editor must answer "what tokens may I offer for
-    this node" for built-in and contributed types alike, and a second copy of
-    `action.create_item → key, id, url` in TypeScript is a copy that drifts."""
-
-    type: str
-    outputs: list[OutputFieldInfo] = Field(default_factory=list)
 
 
 class NodeArityInfo(BaseModel):
@@ -749,15 +743,11 @@ class CatalogRead(BaseModel):
     # Spec 69: the "On a schedule" sentinel + the schedule kinds the builder offers.
     schedule_trigger: str = AutomationTrigger.SCHEDULE.value
     schedule_kinds: list[ScheduleKindInfo] = []
-    #: Node types contributed through the kernel registry.
-    contributed_nodes: list[ContributedNodeInfo] = []
+    #: Every node type (RADD-1322) — the palette, the ports, the outputs.
+    nodes: list[NodeInfo] = []
     #: How each node type reads its packet, built-in and contributed alike —
     #: one table so the editor's default cannot disagree with the engine's.
     node_arity: list[NodeArityInfo] = []
-    #: What each BUILT-IN node type produces (spec 120). Contributed types carry
-    #: theirs on `contributed_nodes[].outputs`, static-or-dynamic exactly as
-    #: their ports are.
-    node_outputs: list[NodeOutputsInfo] = []
     #: Whether the CALLER may make an action run as someone else. The editor
     #: hides the field entirely when false — an affordance that is refused on
     #: save is worse than one that is absent.

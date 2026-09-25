@@ -16,12 +16,10 @@ import {
   NodeKind,
   SCHEDULE_TRIGGER,
   VALIDATE_TRIGGER,
-  VALIDATION_FAIL_TYPE,
   type AutomationCatalog,
   type AutomationNode,
   type NodeKindValue,
 } from "./types/automations";
-import { ACTION_TYPE_LABELS, ACTION_TYPE_ORDER } from "./meta";
 import { isProducer, suggestNodeName } from "./automation-outputs";
 
 export interface NodeTemplate {
@@ -42,42 +40,6 @@ export interface NodeTemplate {
   produces?: boolean;
 }
 
-/** Params a fresh node needs to be valid enough to save. The action union
- * validates these server-side, so an empty object would 422 on the first save
- * rather than when the field is finally filled in. */
-function blankActionParams(actionType: string): Record<string, unknown> {
-  switch (actionType) {
-    case "set_state": return { state: "" };
-    case "set_priority": return { priority: "normal" };
-    case "set_assignee": return { assignee: "" };
-    case "assign_round_robin": return { team: "" };
-    case "set_team": return { team: "" };
-    case "add_label":
-    case "remove_label": return { label: "" };
-    case "set_cycle": return { cycle: "" };
-    case "set_release": return { release: "" };
-    case "add_comment": return { body: "", visibility: "public" };
-    case "set_custom_field": return { key: "", value: "" };
-    case "set_parent": return { parent: "" };
-    case "set_type": return { type: "" };
-    case "set_reporter": return { reporter: "" };
-    case "set_dates": return { start: "", target: "" };
-    case "set_estimate": return { points: "" };
-    case "set_flag": return { flagged: true };
-    case "set_visibility": return { visibility: "public" };
-    case "link_item": return { target: "", link_type: "relates" };
-    case "archive_item": return { archived: true };
-    case "add_watcher": return { user: "assignee" };
-    case "add_participant": return { user: "" };
-    case "move_to_project": return { project: "" };
-    case "create_item": return { project: "", title: "" };
-    case "send_webhook": return { url: "https://" };
-    case "post_chat": return { webhook_url: "https://", message: "" };
-    case "notify_user": return { user: "", message: "" };
-    case "send_email": return { to: "reporter", subject: "", body: "" };
-    default: return {};
-  }
-}
 
 const TRIGGER_GROUP = "Triggers";
 
@@ -129,7 +91,7 @@ export function contributedPorts(
   catalog: AutomationCatalog | undefined,
 ): Record<string, string[]> {
   const map: Record<string, string[]> = {};
-  for (const node of catalog?.contributed_nodes ?? []) {
+  for (const node of catalog?.nodes ?? []) {
     if (node.ports?.length) map[node.key] = node.ports;
   }
   return map;
@@ -184,150 +146,25 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     params: { event: MANUAL_TRIGGER },
   });
 
-  templates.push({
-    key: "search.slq",
-    kind: NodeKind.source,
-    type: "search.slq",
-    label: "Find issues (SLQ)",
-    group: "Sources",
-    keywords: "search find query slq lookup fetch produce items source others related",
-    // REPLACE by default: the common case reaches somewhere else entirely, and a
-    // silent union would make the result depend on whatever the trigger carried.
-    params: { slq: "", project: "", mode: "replace" },
-  });
-
-  templates.push({
-    key: "filter.slq",
-    kind: NodeKind.filter,
-    type: "filter.slq",
-    label: "Filter issues (SLQ)",
-    group: "Filters",
-    keywords: "slq query where narrow matched unmatched branch condition if",
-    params: { slq: "" },
-  });
-
-  // Named single tests, not one abstract condition tree. The GRAPH already
-  // composes booleans — chaining gates is AND, fanning out and merging is OR,
-  // the `false` port is NOT — so each node can be one plain question. The old
-  // `gate.event` still executes for stored graphs but is no longer offered:
-  // a node called "event conditions" taught nobody what it tested.
-  // RADD-1265: the one open-ended gate. A dotted path, an operator, a value —
-  // the escape hatch for whatever a named gate does not ask, and the only way
-  // to narrow a non-item event (a release, a cycle, a page) by what it carries.
-  templates.push({
-    key: "gate.payload",
-    kind: NodeKind.gate,
-    type: "gate.payload",
-    label: "Event value is",
-    group: "Gates",
-    keywords: "payload path value equals contains regex matches project release status any custom condition",
-    params: { path: "", operator: "eq", value: "", negate: false },
-  });
-  // RADD-1267: the only way to narrow a non-item event (a release, a form, a
-  // cycle) by project — a filter can only see items.
-  templates.push({
-    key: "gate.project",
-    kind: NodeKind.gate,
-    type: "gate.project",
-    label: "Project is",
-    group: "Gates",
-    keywords: "project key in scope which project release cycle form",
-    params: { projects: [], negate: false },
-  });
-  templates.push({
-    key: "gate.field_changed",
-    kind: NodeKind.gate,
-    type: "gate.field_changed",
-    label: "Field changed",
-    group: "Gates",
-    keywords: "field changed from to transition state priority assignee custom moved became",
-    params: {
-      field: "state",
-      from_mode: "any",
-      from_values: [],
-      to_mode: "any",
-      to_values: [],
-    },
-  });
-  templates.push({
-    key: "gate.changed_by",
-    kind: NodeKind.gate,
-    type: "gate.changed_by",
-    label: "Changed by",
-    group: "Gates",
-    keywords: "who actor person user did it made the change author",
-    params: { users: [], negate: false },
-  });
-  // RADD-1248: the two questions a page or thread automation asks first.
-  templates.push({
-    key: "gate.comment",
-    kind: NodeKind.gate,
-    type: "gate.comment",
-    label: "Comment is",
-    group: "Gates",
-    keywords: "comment reply root thread internal public discussion annotation",
-    params: { thread: "any", visibility: "any" },
-  });
-  templates.push({
-    key: "gate.page_space",
-    kind: NodeKind.gate,
-    type: "gate.page_space",
-    label: "Page is in space",
-    group: "Gates",
-    keywords: "page wiki space docs runbook in space",
-    params: { spaces: [], negate: false },
-  });
-  templates.push({
-    key: "gate.state_category",
-    kind: NodeKind.gate,
-    type: "gate.state_category",
-    label: "State category is",
-    group: "Gates",
-    keywords: "category done canceled progress todo backlog triage finished closed",
-    params: { categories: [] },
-  });
-
-  // Contributed nodes (spec 116 phase 2) — the AI classifier and anything a
-  // plugin adds. Their default params come from the schema's own defaults so a
-  // freshly dropped node is valid enough to save.
-  for (const node of catalog?.contributed_nodes ?? []) {
-    const params = defaultsFromSchema(node.params_schema);
+  // Every other node — built-in and contributed alike (RADD-1322) — from the
+  // served catalog: its label, group, search words and starting params are the
+  // spec's own, so the palette cannot offer a node the server does not run.
+  // Triggers come from the trigger catalogue above, not from here.
+  for (const node of catalog?.nodes ?? []) {
+    if (node.kind === NodeKind.trigger) continue;
+    const params =
+      node.default_params && Object.keys(node.default_params).length
+        ? { ...node.default_params }
+        : defaultsFromSchema(node.params_schema);
     templates.push({
       key: node.key,
       kind: node.kind,
       type: node.key,
       label: node.label,
       group: node.group,
-      keywords: `${node.key} ${node.description}`,
+      keywords: `${node.key} ${node.keywords ?? ""} ${node.description}`,
       params,
       produces: isProducer({ type: node.key, params }, catalog),
-    });
-  }
-
-  // The spec-119 check. An ACTION kind on the server (its ports are an action's
-  // single `out`), so it belongs here rather than among the gates — it does not
-  // route, it says something and passes the packet on.
-  templates.push({
-    key: VALIDATION_FAIL_TYPE,
-    kind: NodeKind.action,
-    type: VALIDATION_FAIL_TYPE,
-    label: "Report a problem",
-    group: "Actions",
-    keywords: "validation fail finding reject refuse check problem intake quality require",
-    params: { message: "", field: "" },
-  });
-
-  for (const actionType of ACTION_TYPE_ORDER) {
-    const params = blankActionParams(actionType);
-    templates.push({
-      key: `action.${actionType}`,
-      kind: NodeKind.action,
-      type: `action.${actionType}`,
-      label: ACTION_TYPE_LABELS[actionType],
-      group: "Actions",
-      keywords: `${actionType} do apply`,
-      params,
-      produces: isProducer({ type: `action.${actionType}`, params }, catalog),
     });
   }
 

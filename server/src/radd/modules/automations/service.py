@@ -13,9 +13,9 @@ from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
 from radd.modules.fields.models import FieldDefinition
-from radd.modules.fields.types import BuiltinItemField
 from radd.modules.items import slq
 from radd.kernel.specs import valid_output_name
+from pydantic import ValidationError as PydanticValidationError
 
 from radd import schedule as schedule_math
 from radd.clock import utcnow
@@ -24,28 +24,21 @@ from . import nodes as nodes_registry
 from . import versions
 from . import templating
 from .models import Automation, AutomationScheduleState, TriggerBinding, ValidationBinding
-from .executor import ACTION_TYPE_PREFIX
 from .schemas import (
-    ActionAdapter,
     RuleCreate,
     RuleRead,
     RuleUpdate,
     TriggerRead,
     known_trigger,
 )
-from .email_action import is_role
 from .types import (
     ARITY_PARAM,
-    EVENT_GATE_TYPES,
     MAX_VALIDATION_TARGETS,
     SYSTEM_ACTOR_ID,
-    TYPE_VALIDATION_FAIL,
-    ActionType,
     AutomationNodeKind,
     AutomationEntity,
     AutomationEvent,
     AutomationTrigger,
-    NodeArity,
     ValidationMode,
     ValidationTargetKind,
 )
@@ -136,29 +129,30 @@ async def _validate_graph(
         # that saves cleanly, sits on the canvas looking configured, and takes
         # its fallback port forever. Same rule as `act_as`: a check that only
         # bites at 3am is not a check.
+        # RADD-1322: EVERY node type is a registered spec — a built-in is
+        # checked exactly as a plugin's is: its own schema, its own `check` /
+        # `check_async`, its own atom. A type nothing registers (an uninstalled
+        # plugin's) cannot be SAVED, though a stored one still loads.
         spec = nodes_registry.spec_for(node)
-        if spec is not None:
-            _check_node_schema(node, spec)
-            await _require_node_permission(session, spec, actor_id)
-            continue
-        if node.kind in (AutomationNodeKind.FILTER, AutomationNodeKind.SOURCE):
-            # A source's query is compiled on write for the same reason a
-            # filter's is: a query that does not compile is an automation that
-            # finds nothing at 3am, and the form is where that is fixable.
-            await _validate_condition(session, str(node.params.get("slq") or ""))
-        elif node.kind is AutomationNodeKind.ACTION:
-            if node.type == TYPE_VALIDATION_FAIL:
-                # Not in the action union and never will be: it applies nothing,
-                # so it has no target service and no params the union describes.
-                _check_validation_fail(node)
-                continue
-            # Params are an untyped envelope on the wire; the action union is
-            # what type-checks them, exactly as it did when they were a rule
-            # column. A ValidationError here is a 422 on the form.
-            ActionAdapter.validate_python(
-                {"type": node.type.removeprefix(ACTION_TYPE_PREFIX), "params": node.params}
+        if spec is None:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=f"node {node.id!r}: {node.type!r} is not a node type this server offers",
             )
-            _check_recipient_arity(node)
+        if spec.kind != node.kind.value:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=f"node {node.id!r}: {node.type!r} is a {spec.kind}, not a {node.kind.value}",
+            )
+        _check_node_schema(node, spec)
+        if spec.check_async is not None:
+            try:
+                await spec.check_async(session, node.params)
+            except ValueError as exc:
+                raise ConflictError(
+                    AutomationEntity.RULE, reason=f"node {node.id!r} ({spec.key}): {exc}"
+                ) from exc
+        await _require_node_permission(session, spec, actor_id)
 
     _check_names(parsed_nodes)
     _check_token_references(parsed_nodes)
@@ -363,6 +357,10 @@ def _check_node_schema(node: graph.Node, spec) -> None:
         return
     try:
         spec.check(node.params)
+    except PydanticValidationError:
+        # A params union's own refusal (a built-in action's) is the 422 on the
+        # form it always was — not re-worded into a 409.
+        raise
     except ValueError as exc:
         # A plugin's own refusal, in its own words, as a 409 on the form — the
         # same shape every other write-time check here takes.
@@ -401,31 +399,6 @@ def _check_arity(node: graph.Node) -> None:
             reason=(
                 f"node {node.id!r} ({node.type}) cannot run {str(raw)!r} — "
                 f"it supports {', '.join(option.value for option in rule.options)}"
-            ),
-        )
-
-
-def _check_recipient_arity(node: graph.Node) -> None:
-    """A ROLE recipient names a property of one item, so the action must run per
-    item to have one.
-
-    Caught on write rather than at run time because the failure is invisible
-    otherwise: `send_email` addressed to `reporter` at set arity resolves no
-    recipient and skip-logs, which is exactly what "email each reporter" did on
-    every scheduled run before RADD-918 — a configured, saved, enabled
-    automation that had never once sent a message.
-    """
-    action = node.type.removeprefix(ACTION_TYPE_PREFIX)
-    if action not in (ActionType.SEND_EMAIL.value, ActionType.NOTIFY_USER.value):
-        return
-    target = str(node.params.get("to") or node.params.get("user") or "")
-    if is_role(target) and nodes_registry.arity_of(node) is not NodeArity.ITEM:
-        raise ConflictError(
-            AutomationEntity.RULE,
-            reason=(
-                f"node {node.id!r}: {target!r} is a property of one issue, so this "
-                f"action must run once per item — it would resolve no recipient "
-                f"otherwise. Name an address instead, or switch it to per item."
             ),
         )
 
@@ -490,37 +463,6 @@ def _check_validate_trigger(trigger: graph.Node) -> None:
         )
 
 
-def _check_validation_fail(node: graph.Node) -> None:
-    """A `validation.fail` node's own params (spec 119).
-
-    `field` is checked loosely and only against SHAPE — a builtin name or
-    `cf.<key>` — never against the live registry. A graph written when a custom
-    field existed must keep producing readable advice after someone deletes it;
-    it simply stops highlighting a control. Same philosophy as a card layout's
-    departed attribute.
-    """
-    if not str(node.params.get("message") or "").strip():
-        raise ConflictError(
-            AutomationEntity.RULE,
-            reason=(
-                f"node {node.id!r}: a validation check needs a message — it is what the "
-                f"person submitting reads"
-            ),
-        )
-    target = str(node.params.get("field") or "").strip()
-    if target and not (
-        target.startswith(CUSTOM_FIELD_PREFIX) or target in set(BuiltinItemField)
-    ):
-        raise ConflictError(
-            AutomationEntity.RULE,
-            reason=(
-                f"node {node.id!r}: {target!r} is not a field — use a builtin name "
-                f"({', '.join(sorted(f.value for f in BuiltinItemField))}) or "
-                f"{CUSTOM_FIELD_PREFIX}<key>"
-            ),
-        )
-
-
 def _check_validate_gates(
     trigger: graph.Node, nodes: list[graph.Node], edges: list[graph.Edge]
 ) -> None:
@@ -539,7 +481,8 @@ def _check_validate_gates(
     """
     reachable = graph.is_reachable([trigger.id], nodes, edges)
     for node in nodes:
-        if node.id in reachable and node.type in EVENT_GATE_TYPES:
+        spec = nodes_registry.spec_for(node)
+        if node.id in reachable and spec is not None and spec.reads_event:
             raise ConflictError(
                 AutomationEntity.RULE,
                 reason=(

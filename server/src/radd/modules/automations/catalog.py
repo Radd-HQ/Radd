@@ -21,7 +21,7 @@ from radd.kernel import registries
 from radd.kernel.specs import EventTypeSpec
 
 from .nodes import arity_rule
-from .types import BUILTIN_ARITY, ArityRule, ConditionOperator, ScheduleKind
+from .types import ArityRule, ConditionOperator, ScheduleKind
 
 
 def triggers() -> dict[str, EventTypeSpec]:
@@ -50,10 +50,7 @@ def node_arities() -> dict[str, ArityRule]:
     in TypeScript, and a default that disagrees with the server is invisible: the
     editor shows one thing, the run does another, and nothing fails to compile.
     """
-    return {
-        **{node_type: rule for node_type, rule in BUILTIN_ARITY.items()},
-        **{key: arity_rule(key) for key in registries.automation_nodes},
-    }
+    return {key: arity_rule(key) for key in registries.automation_nodes}
 
 
 # --- builder metadata (served by GET /automations/catalog for the UI) ---

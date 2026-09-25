@@ -99,6 +99,17 @@ FACTS = EventFacts(
 TRIGGER = Node(id="t", kind=AutomationNodeKind.TRIGGER, type="trigger.event", params={})
 
 
+class _FakeSession:
+    """Just enough session for a walk whose planners are stood in for: the
+    action path opens a SAVEPOINT per invocation (RADD-1322 — one path for
+    every action), which here is a no-op."""
+
+    def begin_nested(self):
+        import contextlib
+
+        return contextlib.nullcontext()
+
+
 class _Item:
     def __init__(self, item_id: uuid.UUID):
         self.id = item_id
@@ -109,16 +120,18 @@ def stub_load(monkeypatch):
     async def fake_load(_session, item_ids):
         return [(_Item(i), object()) for i in item_ids]
 
-    async def fake_one(*_args, **_kwargs):
+    async def fake_plan(_ctx):
         return None
 
+    from radd.modules.automations import builtin_actions
+
     monkeypatch.setattr(executor, "_load", fake_load)
-    monkeypatch.setattr(executor, "_one", fake_one)
+    monkeypatch.setattr(builtin_actions, "plan_action", fake_plan)
 
 
 async def _walk(nodes, edges, item_ids):
     return await executor.walk(
-        None,
+        _FakeSession(),
         nodes=nodes,
         edges=edges,
         trigger=TRIGGER,

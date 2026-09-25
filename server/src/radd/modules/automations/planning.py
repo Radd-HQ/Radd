@@ -212,6 +212,14 @@ class _Plan:
     #: return sites each remembering to carry it is exactly how one of them
     #: would not.
     resolved: dict[str, str] = field(default_factory=dict)
+    #: The item this invocation is about, set by the built-in action spec's
+    #: planner so its applier acts on the same one (RADD-1322).
+    target: Any = None
+
+    @property
+    def resolves(self) -> bool:
+        """What the executor records: will this invocation do anything."""
+        return self.kind is not PlanKind.SKIP
 
 
 def _manual_facts() -> conditions.EventFacts:

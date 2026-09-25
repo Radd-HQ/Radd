@@ -18,7 +18,6 @@ import {
   SCHEDULE_TRIGGER,
   VALIDATE_TRIGGER,
   VALIDATION_FAIL_TYPE,
-  type ActionTypeValue,
   type AutomationCatalog,
   type AutomationEdge,
   type AutomationNode,
@@ -26,7 +25,6 @@ import {
   type RuleSchedule,
   type TriggerInfo,
 } from "../../lib/types";
-import { ACTION_TYPE_LABELS } from "../../lib/meta";
 import {
   arityForcedReason,
   arityOf,
@@ -139,7 +137,7 @@ export function GraphInspector({
   const arityRule = arityOf(catalog, node.type);
   //: The registered spec, when this node came from a plugin rather than the
   //: built-in palette. Its params are its own business — never the action union.
-  const contributed = catalog?.contributed_nodes?.find((entry) => entry.key === node.type);
+  const contributed = catalog?.nodes?.find((entry) => entry.key === node.type);
   const forcedReason = arityForcedReason(node);
   //: Whether naming this node would make anything addressable (spec 120). Asked
   //: of the type AND its params, because `ai.generate` produces `text` before a
@@ -421,7 +419,7 @@ export function GraphInspector({
             />
           )}
           <div className="text-xs text-fg-secondary">
-            {ACTION_TYPE_LABELS[node.type.slice(ACTION_TYPE_PREFIX.length) as ActionTypeValue] ?? node.type}
+            {catalog?.nodes.find((entry) => entry.key === node.type)?.label ?? node.type}
           </div>
           {node.type === "action.create_item" ? (
             <CreateItemFields params={node.params} pickers={pickers} onChange={setActionParams} />

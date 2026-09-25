@@ -8,7 +8,6 @@ the operator cases live here beside it.
 
 from radd.modules.automations.conditions import EventFacts, _change_name, compare, _payload_path
 from radd.modules.automations.gates import (
-    GATE_EVALUATORS,
     changed_by,
     field_changed,
     payload_value_is,
@@ -57,7 +56,13 @@ def gate(path, operator, value=None, negate=False):
 
 
 def test_the_payload_gate_is_registered_under_its_type():
-    assert GATE_EVALUATORS[TYPE_GATE_PAYLOAD] is payload_value_is
+    # RADD-1322: registered as a node spec like any plugin's gate.
+    from radd.config import settings
+    from radd.kernel import load_plugins, registries
+
+    load_plugins(settings.modules)
+    spec = registries.automation_nodes[TYPE_GATE_PAYLOAD]
+    assert spec.kind == "gate" and spec.ports == ("true", "false") and spec.reads_event
 
 
 def test_payload_path_with_list_fanout():

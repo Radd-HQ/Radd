@@ -89,7 +89,6 @@ from .types import (
     SYSTEM_ACTOR_EMAIL,
     SYSTEM_ACTOR_ID,
     SYSTEM_ACTOR_NAME,
-    ActionType,
     AutomationEntity,
     AutomationEvent,
     AutomationNodeKind,
@@ -179,7 +178,7 @@ async def _apply_plan(
     if plan.kind is PlanKind.ITEM_UPDATE and plan.item_update is not None and item is not None:
         await items.update_item(session, item.id, plan.item_update, actor=system_user)
         # assign_round_robin advances its team's rotation ONLY on a successful
-        # assignment, inside the same SAVEPOINT (`_one`/`_run_contributed_action`
+        # assignment, inside the same SAVEPOINT (`executor._run_action`
         # wrap this call) — so a rolled-back apply does not move the cursor, and
         # the next item in a per-item run sees the advance.
         if plan.cursor_advance is not None:
@@ -670,15 +669,11 @@ async def _result_of(
     keys = await _keys_for(session, report)
     previews: list[ActionPreview] = []
     for planned in report.plans:
-        # A built-in's bare name, or a contributed node's full key — both are
-        # actions someone planned, and the report lists all of them.
-        try:
-            action_type = ActionType(planned.action_type).value
-        except ValueError:
-            action_type = planned.action_type
+        # The node TYPE (RADD-1322: `action.set_state`, `page.comment`) — one
+        # vocabulary for built-in and contributed actions alike.
         previews.append(
             ActionPreview(
-                type=action_type,
+                type=planned.action_type,
                 params=planned.params,
                 resolves=planned.resolves,
                 refused=planned.refused,

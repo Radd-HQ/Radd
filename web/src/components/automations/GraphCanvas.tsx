@@ -429,7 +429,7 @@ export default function GraphCanvas({
         // separately from the arity table because they answer different
         // questions, and a node drawn with the kind's fallback ports until
         // something else nudged the graph is exactly the bug being fixed.
-        catalog?.contributed_nodes?.length ?? 0,
+        catalog?.nodes?.length ?? 0,
         run?.nodes.map((n) => [n.node_id, n.ran, n.incoming, n.ports]) ?? null,
         // The feedback badges are a function of which nodes a validate trigger
         // REACHES and of which ports are wired, neither of which is in the node

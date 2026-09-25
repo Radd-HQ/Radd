@@ -25,14 +25,7 @@ from typing import Any, Mapping
 
 from .conditions import EventFacts, _payload_path, compare
 from .types import (
-    TYPE_GATE_PAYLOAD,
-    TYPE_GATE_PROJECT,
     ConditionOperator,
-    TYPE_GATE_CHANGED_BY,
-    TYPE_GATE_COMMENT,
-    TYPE_GATE_FIELD_CHANGED,
-    TYPE_GATE_PAGE_SPACE,
-    TYPE_GATE_STATE_CATEGORY,
 )
 
 #: `from`/`to` accept either "any value" or an explicit set. Kept as an explicit
@@ -117,52 +110,6 @@ def state_category_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
     return str(actual).lower() in wanted if actual is not None else False
 
 
-THREAD_ANY, THREAD_ROOT, THREAD_REPLY = "any", "root", "reply"
-VISIBILITY_ANY = "any"
-
-
-def comment_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
-    """Is the comment a root or a reply, and public or internal? (RADD-1248)
-
-    Reads the comment event's own data: `parent_comment_id` (null on a root)
-    and `visibility`. On an event that is not about a comment it answers False —
-    a gate that can only be asked of a comment.
-    """
-    payload = facts.payload
-    if "visibility" not in payload and "parent_comment_id" not in payload:
-        return False
-    thread = str(params.get("thread") or THREAD_ANY)
-    is_reply = bool(payload.get("parent_comment_id"))
-    if thread == THREAD_REPLY and not is_reply:
-        return False
-    if thread == THREAD_ROOT and is_reply:
-        return False
-    visibility = str(params.get("visibility") or VISIBILITY_ANY)
-    if visibility != VISIBILITY_ANY and str(payload.get("visibility")) != visibility:
-        return False
-    return True
-
-
-def page_space_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
-    """Is the page this event is about in one of these spaces? (RADD-1248)
-
-    A page event carries a top-level `page_space` ref; a page comment carries
-    the space inside its `page` ref. Either is the answer; an event about no
-    page answers False. Slugs, because that is what people read in the bar.
-    """
-    wanted = {str(v).strip().lower() for v in (params.get("spaces") or []) if str(v).strip()}
-    if not wanted:
-        return False
-    payload = facts.payload
-    space = payload.get("page_space")
-    if not isinstance(space, dict):
-        page = payload.get("page")
-        space = page.get("space") if isinstance(page, dict) else None
-    slug = space.get("slug") if isinstance(space, dict) else None
-    hit = bool(slug) and str(slug).lower() in wanted
-    return not hit if params.get("negate") else hit
-
-
 #: Operators that take no value; the form hides the value box for them.
 VALUELESS_OPERATORS = frozenset({ConditionOperator.IS_SET, ConditionOperator.NOT_SET})
 #: Operators whose value is a LIST.
@@ -214,16 +161,3 @@ def project_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
     key = ref.get("key") if isinstance(ref, dict) else None
     hit = bool(key) and str(key).casefold() in wanted
     return not hit if params.get("negate") else hit
-
-
-#: node type -> evaluator. The executor dispatches through this rather than an
-#: `if node.type == …` ladder, so a new gate is one entry plus its spec.
-GATE_EVALUATORS = {
-    TYPE_GATE_PAYLOAD: payload_value_is,
-    TYPE_GATE_PROJECT: project_is,
-    TYPE_GATE_FIELD_CHANGED: field_changed,
-    TYPE_GATE_CHANGED_BY: changed_by,
-    TYPE_GATE_STATE_CATEGORY: state_category_is,
-    TYPE_GATE_COMMENT: comment_is,
-    TYPE_GATE_PAGE_SPACE: page_space_is,
-}

@@ -4,11 +4,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { CircleSlash, FlaskConical } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiAutomationTestPath } from "../../lib/constants";
-import { ACTION_TYPE_LABELS } from "../../lib/meta";
-import { linkSearchQuery, firstProjectQuery } from "../../lib/queries";
+import { automationCatalogQuery, linkSearchQuery, firstProjectQuery } from "../../lib/queries";
 import type {
   ActionPreview,
-  ActionTypeValue,
   AutomationNode,
   NodeResult,
   RuleTestResult,
@@ -273,6 +271,10 @@ function NodeRow({ node, type }: { node: NodeResult; type?: string }) {
 }
 
 function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview; applied?: boolean }) {
+  // The node's own label, from the served catalog (RADD-1322: every action,
+  // built-in or contributed, is named by its spec).
+  const catalog = useQuery(automationCatalogQuery);
+  const label = catalog.data?.nodes.find((node) => node.key === preview.type)?.label ?? preview.type;
   const resolved = Object.entries(preview.resolved ?? {});
   const chip = preview.resolves
     ? applied ? "Applied" : "Would apply"
@@ -297,7 +299,7 @@ function ActionPreviewRow({ preview, applied = false }: { preview: ActionPreview
           {chip}
         </span>
         <span className="shrink-0 font-medium text-fg">
-          {ACTION_TYPE_LABELS[preview.type as ActionTypeValue] ?? preview.type}
+          {label}
         </span>
         {/* Which node, against which item — a graph runs the same action type
             from several nodes and, per item, once each. */}

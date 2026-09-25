@@ -26,7 +26,7 @@ from sqlalchemy import select
 
 from radd.kernel.registry import registries
 from radd.kernel.specs import AutomationNodeSpec, OutputField, OutputKind, valid_output_name
-from radd.modules.automations import planning, executor, nodes as nodes_registry, templating
+from radd.modules.automations import builtin_actions, planning, executor, nodes as nodes_registry, templating
 from radd.modules.automations.conditions import EventFacts
 from radd.modules.automations.graph import Edge, Node, Packet
 from radd.modules.automations.types import AutomationNodeKind
@@ -43,6 +43,31 @@ async def _no_facts(_session, _rows):
     """The fake items below have no state or people; the executor's facts loader
     (RADD-1265) would query for them."""
     return {}
+
+
+async def _invoke(db, admin, report, action, params, item_id, name, *, node_id="a", variables=None):
+    """One built-in action over one item through the executor's ONE action path
+    (RADD-1322) — the seam the per-invocation tests used to call `_one` for."""
+    packet = Packet.of(FACTS, item=(item_id,))
+    for var_name, values in (variables or {}).items():
+        packet = packet.with_vars(var_name, values)
+    node = Node(id=node_id, kind=AutomationNodeKind.ACTION, type=f"action.{action}", params=params)
+    created, _produced = await executor._run_action(
+        db, node=node, packet=packet, system_user=admin, automation_name=name,
+        budget=executor.new_budget(), apply=True, report=report,
+    )
+    return created
+
+
+class _FakeSession:
+    """Just enough session for a walk whose planners are stood in for: the
+    action path opens a SAVEPOINT per invocation (RADD-1322 — one path for
+    every action), which here is a no-op."""
+
+    def begin_nested(self):
+        import contextlib
+
+        return contextlib.nullcontext()
 
 
 class _Item:
@@ -134,7 +159,7 @@ def registered():
 
 async def _walk(nodes, edges, item_ids=(), apply=True):
     return await executor.walk(
-        None,
+        _FakeSession(),
         nodes=nodes,
         edges=edges,
         trigger=TRIGGER,
@@ -165,16 +190,13 @@ async def test_a_named_producer_stamps_the_bag_and_an_action_reads_it(registered
     async def fake_load(_session, item_ids):
         return [(_Item(i), object()) for i in item_ids]
 
-    async def fake_one(
-        _session, node, stored, item, _project, _actor, packet, _scope, _name, _apply, _report,
-        _facts=None,
-    ):
-        seen.append({"node": node.id, "vars": dict(packet.vars)})
-        return executor._Outcome()
+    async def fake_one(ctx):
+        seen.append({"node": ctx.node.id, "vars": dict(ctx.packet.vars)})
+        return None
 
     monkeypatch.setattr(executor, "_load", fake_load)
     monkeypatch.setattr(planning, "load_item_facts", _no_facts)
-    monkeypatch.setattr(executor, "_one", fake_one)
+    monkeypatch.setattr(builtin_actions, "plan_action", fake_one)
 
     item = uuid.uuid4()
     report = await _walk(
@@ -243,16 +265,13 @@ async def test_the_bag_does_not_leak_onto_a_branch_that_never_ran(registered, mo
     async def fake_load(_session, item_ids):
         return [(_Item(i), object()) for i in item_ids]
 
-    async def fake_one(
-        _session, node, _stored, _item, _project, _actor, packet, _scope, _name, _apply, _report,
-        _facts=None,
-    ):
-        seen[node.id] = dict(packet.vars)
-        return executor._Outcome()
+    async def fake_one(ctx):
+        seen[ctx.node.id] = dict(ctx.packet.vars)
+        return None
 
     monkeypatch.setattr(executor, "_load", fake_load)
     monkeypatch.setattr(planning, "load_item_facts", _no_facts)
-    monkeypatch.setattr(executor, "_one", fake_one)
+    monkeypatch.setattr(builtin_actions, "plan_action", fake_one)
 
     await _walk(
         [TRIGGER, router, took, missed],
@@ -284,16 +303,13 @@ async def test_fan_in_merges_feeders_in_topological_order(registered, monkeypatc
     async def fake_load(_session, item_ids):
         return [(_Item(i), object()) for i in item_ids]
 
-    async def fake_one(
-        _session, _node, _stored, _item, _project, _actor, packet, _scope, _name, _apply, _report,
-        _facts=None,
-    ):
-        seen.append(dict(packet.vars))
-        return executor._Outcome()
+    async def fake_one(ctx):
+        seen.append(dict(ctx.packet.vars))
+        return None
 
     monkeypatch.setattr(executor, "_load", fake_load)
     monkeypatch.setattr(planning, "load_item_facts", _no_facts)
-    monkeypatch.setattr(executor, "_one", fake_one)
+    monkeypatch.setattr(builtin_actions, "plan_action", fake_one)
 
     await _walk(
         [TRIGGER, first, second, sink],
@@ -787,22 +803,9 @@ async def test_a_workflow_guard_refusal_leaves_the_item_where_it_was(db, admin):
     item_id = item.id
 
     report = executor.RunReport()
-    node = Node(id="a", kind=AutomationNodeKind.ACTION, type="action.set_state", params={})
-    outcome = await executor._one(
-        db,
-        node,
-        {"type": "set_state", "params": {"state": target.name}},
-        item,
-        project,
-        admin,
-        Packet.of(FACTS, item=(item_id,)),
-        [(item, project)],
-        "guarded",
-        True,
-        report,
-    )
+    created = await _invoke(db, admin, report, "set_state", {"state": target.name}, item_id, "guarded")
 
-    assert outcome.created_id is None
+    assert created == {}
     assert len(report.plans) == 1, "one record per invocation, not two that contradict"
     assert report.plans[0].resolves is False
     assert "refused by the workflow: an assignee is required" in report.plans[0].detail
@@ -826,22 +829,9 @@ async def test_a_refused_transition_does_not_take_the_branch_down(db, admin):
     report = executor.RunReport()
 
     async def run(action, params):
-        # Re-fetched per invocation, exactly as `executor._load` does per node —
-        # the refused action's savepoint rollback expires the row it touched.
-        fresh = await db.get(WorkItem, item_id)
-        return await executor._one(
-            db,
-            Node(id=action, kind=AutomationNodeKind.ACTION, type=f"action.{action}", params={}),
-            {"type": action, "params": params},
-            fresh,
-            project,
-            admin,
-            Packet.of(FACTS, item=(item_id,)),
-            [(fresh, project)],
-            "guarded",
-            True,
-            report,
-        )
+        # The executor loads the item per node, exactly as a walk does — the
+        # refused action's savepoint rollback expires the row it touched.
+        return await _invoke(db, admin, report, action, params, item_id, "guarded", node_id=action)
 
     await run("set_state", {"state": target.name})
     await run("set_priority", {"priority": "high"})
@@ -1086,19 +1076,9 @@ async def test_a_rendered_custom_field_value_the_registry_refuses_is_a_skip(db, 
     item_id = item.id
 
     report = executor.RunReport()
-    node = Node(id="cf", kind=AutomationNodeKind.ACTION, type="action.set_custom_field", params={})
-    await executor._one(
-        db,
-        node,
-        {"type": "set_custom_field", "params": {"key": definition.key, "value": "{{triage.sev}}"}},
-        item,
-        project,
-        admin,
-        Packet.of(FACTS, item=(item_id,)).with_vars("triage", {"sev": "catastrophic"}),
-        [(item, project)],
-        "cf",
-        True,
-        report,
+    await _invoke(
+        db, admin, report, "set_custom_field", {"key": definition.key, "value": "{{triage.sev}}"},
+        item_id, "cf", node_id="cf", variables={"triage": {"sev": "catastrophic"}},
     )
 
     assert len(report.plans) == 1
@@ -1120,19 +1100,9 @@ async def test_a_rendered_custom_field_value_the_registry_refuses_is_a_skip(db, 
     # A value the registry DOES take still applies, so this is a refusal and not
     # a blanket disabling of tokenized custom fields.
     ok_report = executor.RunReport()
-    fresh = await db.get(WorkItem, item_id)
-    await executor._one(
-        db,
-        node,
-        {"type": "set_custom_field", "params": {"key": definition.key, "value": "{{triage.sev}}"}},
-        fresh,
-        project,
-        admin,
-        Packet.of(FACTS, item=(item_id,)).with_vars("triage", {"sev": "major"}),
-        [(fresh, project)],
-        "cf",
-        True,
-        ok_report,
+    await _invoke(
+        db, admin, ok_report, "set_custom_field", {"key": definition.key, "value": "{{triage.sev}}"},
+        item_id, "cf", node_id="cf", variables={"triage": {"sev": "major"}},
     )
     assert ok_report.plans[0].resolves is True
 

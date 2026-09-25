@@ -103,26 +103,32 @@ def _facts(**payload) -> EventFacts:
 
 
 def test_gate_comment_tells_a_reply_from_a_root_and_public_from_internal():
-    root = _facts(parent_comment_id=None, visibility="public", excerpt="hi")
-    reply = _facts(parent_comment_id=str(uuid.uuid4()), visibility="internal", excerpt="hi")
-    assert gates.comment_is(root, {"thread": "root"}) and not gates.comment_is(root, {"thread": "reply"})
-    assert gates.comment_is(reply, {"thread": "reply"}) and not gates.comment_is(reply, {"thread": "root"})
-    assert gates.comment_is(reply, {"thread": "any", "visibility": "internal"})
-    assert not gates.comment_is(root, {"visibility": "internal"})
+    # RADD-1322: "Comment is" belongs to the comments module now.
+    from radd.modules.comments.automation import comment_is
+
+    root = _facts(parent_comment_id=None, visibility="public", excerpt="hi").payload
+    reply = _facts(parent_comment_id=str(uuid.uuid4()), visibility="internal", excerpt="hi").payload
+    assert comment_is(root, {"thread": "root"}) and not comment_is(root, {"thread": "reply"})
+    assert comment_is(reply, {"thread": "reply"}) and not comment_is(reply, {"thread": "root"})
+    assert comment_is(reply, {"thread": "any", "visibility": "internal"})
+    assert not comment_is(root, {"visibility": "internal"})
     # Not a comment event at all: the gate cannot be asked.
-    assert not gates.comment_is(_facts(item={"id": "x"}), {"thread": "any"})
+    assert not comment_is(_facts(item={"id": "x"}).payload, {"thread": "any"})
 
 
 def test_gate_page_space_reads_either_ref_shape():
-    page_event = _facts(page={"id": "p"}, page_space={"slug": "Runbooks"})
-    page_comment = _facts(page={"id": "p", "space": {"slug": "runbooks"}})
-    item_comment = _facts(item={"id": "i"}, page=None)
-    assert gates.page_space_is(page_event, {"spaces": ["runbooks"]})
-    assert gates.page_space_is(page_comment, {"spaces": ["RUNBOOKS", "other"]})
-    assert not gates.page_space_is(page_comment, {"spaces": ["other"]})
-    assert gates.page_space_is(page_comment, {"spaces": ["other"], "negate": True})
-    assert not gates.page_space_is(item_comment, {"spaces": ["runbooks"]})
-    assert not gates.page_space_is(page_comment, {"spaces": []})
+    # RADD-1322: "Page is in space" belongs to the pages module now.
+    from radd.modules.pages.automation import page_space_is
+
+    page_event = _facts(page={"id": "p"}, page_space={"slug": "Runbooks"}).payload
+    page_comment = _facts(page={"id": "p", "space": {"slug": "runbooks"}}).payload
+    item_comment = _facts(item={"id": "i"}, page=None).payload
+    assert page_space_is(page_event, {"spaces": ["runbooks"]})
+    assert page_space_is(page_comment, {"spaces": ["RUNBOOKS", "other"]})
+    assert not page_space_is(page_comment, {"spaces": ["other"]})
+    assert page_space_is(page_comment, {"spaces": ["other"], "negate": True})
+    assert not page_space_is(item_comment, {"spaces": ["runbooks"]})
+    assert not page_space_is(page_comment, {"spaces": []})
 
 
 def test_page_and_comment_tokens_render_from_the_refs():

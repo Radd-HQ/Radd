@@ -2,7 +2,6 @@ import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
-from radd.kernel.specs import OutputField
 from radd.schedule import ScheduleKind
 
 # A rule's trigger is an EVENT TYPE string from the workspace event stream
@@ -177,7 +176,6 @@ class ArityRule:
         return len(self.options) > 1
 
 
-_BOTH = (NodeArity.SET, NodeArity.ITEM)
 
 
 #: Every action's DEFAULT arity. This table replaces the `ITEM_ACTIONS` frozenset
@@ -191,7 +189,7 @@ ACTION_ARITY_DEFAULT: dict[ActionType, NodeArity] = {
     ActionType.SET_PRIORITY: NodeArity.ITEM,
     ActionType.SET_ASSIGNEE: NodeArity.ITEM,
     # Fixed ITEM and NOT in ACTION_ARITY_CONFIGURABLE — there is no legitimate
-    # set reading of a round-robin assign, so `_action_arity` gives it
+    # set reading of a round-robin assign, so its spec offers only
     # options=(ITEM,) and `_check_arity` refuses a hand-edited `arity=set` row.
     # This is the STRONGER of the two per-item forcings: unlike the send_email
     # role (which is set-capable and only forced to item when a role is chosen),
@@ -285,8 +283,8 @@ class AutomationNodeKind(StrEnum):
 
 class NodePort(StrEnum):
     """Named outputs. A node's kind fixes which of these it has by default
-    (PORTS_BY_KIND); a TYPE may name its own (BUILTIN_PORTS, or a contributed
-    spec's `ports_for`). An edge naming a port the source cannot emit is
+    (PORTS_BY_KIND); a TYPE names its own through its spec's `ports` or
+    `ports_for` (RADD-1322: built-ins included). An edge naming a port the source cannot emit is
     rejected on write."""
 
     OUT = "out"
@@ -329,25 +327,9 @@ TYPE_GATE_PROJECT = "gate.project"
 TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
 TYPE_GATE_CHANGED_BY = "gate.changed_by"
 TYPE_GATE_STATE_CATEGORY = "gate.state_category"
-#: RADD-1248: "Comment is…" (root/reply, public/internal) and "Page is in
-#: space…" — the two questions a page or thread automation asks first.
-TYPE_GATE_COMMENT = "gate.comment"
-TYPE_GATE_PAGE_SPACE = "gate.page_space"
 TYPE_FILTER_SLQ = "filter.slq"
 TYPE_SEARCH_SLQ = "search.slq"
 ACTION_TYPE_PREFIX = "action."
-
-#: Gates that read the triggering EVENT — its diff, its actor, its condition
-#: tree. A validation run has no event: `validate_facts` builds a synthetic
-#: packet with a system actor and no changes, so each of these evaluates against
-#: something that never happened and answers with a constant. Refused on write
-#: under a validate trigger for the reason the schedule check exists: a gate
-#: that can only ever be false is a branch nobody's graph will take, and it
-#: looks configured. `gate.state_category` is NOT here — the draft has a state,
-#: and asking about it is a real question.
-EVENT_GATE_TYPES: frozenset[str] = frozenset(
-    {TYPE_GATE_FIELD_CHANGED, TYPE_GATE_CHANGED_BY, TYPE_GATE_COMMENT, TYPE_GATE_PAGE_SPACE, TYPE_GATE_PROJECT}
-)
 
 #: Spec 119: reaching this node records a FINDING against the draft being
 #: validated, and passes the packet on unchanged so several checks can chain off
@@ -364,64 +346,11 @@ EVENT_GATE_TYPES: frozenset[str] = frozenset(
 TYPE_VALIDATION_FAIL = "validation.fail"
 
 
-#: Ports a built-in node TYPE emits, when they are not just its kind's. Only
-#: `create_item` needs an entry today; the table exists because `ports_of` has
-#: to consult one place whether the type is built-in or contributed.
-BUILTIN_PORTS: dict[str, tuple[NodePort, ...]] = {
-    f"{ACTION_TYPE_PREFIX}{ActionType.CREATE_ITEM.value}": (NodePort.OUT, NodePort.CREATED),
-}
-
-
-#: Named values a built-in node TYPE produces (spec 120), mirroring
-#: `BUILTIN_PORTS` — one table `nodes.outputs_of` consults whether the type is
-#: built-in or contributed.
-#:
-#: `create_item` is the only built-in producer, and it is the one that makes
-#: "file a follow-up, then say so on the original" expressible: before this the
-#: new issue's key existed only inside the engine, so a comment on the item that
-#: caused it could not name what had just been filed.
-#:
-#: The TRIGGER deliberately produces nothing. The event it carries is already
-#: the `{{event_type}}`/`{{actor.*}}`/`{{payload.*}}` root vocabulary, and
-#: giving it a bag entry too would be a second way to say the same thing — with
-#: the second one silently unavailable on the manual and schedule triggers.
-BUILTIN_OUTPUTS: dict[str, tuple[OutputField, ...]] = {
-    f"{ACTION_TYPE_PREFIX}{ActionType.CREATE_ITEM.value}": (
-        OutputField(name="key", label="Key", description="The new issue's key, e.g. TD-42."),
-        OutputField(name="id", label="Id", description="Its uuid."),
-        OutputField(name="url", label="URL", description="A link to it."),
-    ),
-}
-
-
-def _action_arity(action: ActionType) -> ArityRule:
-    default = ACTION_ARITY_DEFAULT[action]
-    return ArityRule(default, _BOTH if action in ACTION_ARITY_CONFIGURABLE else (default,))
-
-
-#: Arity per built-in node type. Gates read the EVENT (`EventFacts`), never the
-#: items, so per-item would be N identical answers — they are fixed at SET. A
-#: filter is the original per-item partition and is fixed at ITEM. A source
-#: produces the set rather than reading it, so it runs once.
-BUILTIN_ARITY: dict[str, ArityRule] = {
-    TYPE_FILTER_SLQ: ArityRule(NodeArity.ITEM, (NodeArity.ITEM,)),
-    # Fixed SET: one check, one finding. A validation walk carries exactly one
-    # draft, so ITEM would say the same thing with a loop around it — and would
-    # invite a per-item reading of a node whose subject is the submission. It
-    # still refuses to fire on an EMPTY packet (see `executor._run_action`),
-    # which is what makes `filter → matched → check` mean "only when this
-    # applies" rather than "always".
-    TYPE_VALIDATION_FAIL: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_SEARCH_SLQ: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_PAYLOAD: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_PROJECT: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_FIELD_CHANGED: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_CHANGED_BY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_STATE_CATEGORY: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_COMMENT: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    TYPE_GATE_PAGE_SPACE: ArityRule(NodeArity.SET, (NodeArity.SET,)),
-    **{f"{ACTION_TYPE_PREFIX}{action.value}": _action_arity(action) for action in ActionType},
-}
+#: RADD-1322: the ports, outputs and arity of every built-in node type used to
+#: live in side tables here (BUILTIN_PORTS / BUILTIN_OUTPUTS / BUILTIN_ARITY).
+#: They are fields of each node's `AutomationNodeSpec` now —
+#: `builtin_actions.py` and `builtin_routers.py` — so a built-in and a
+#: contributed node are described, validated and run the same way.
 
 
 class SearchMode(StrEnum):

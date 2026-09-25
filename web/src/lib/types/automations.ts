@@ -97,17 +97,23 @@ export interface OperatorInfo {
   list_value: boolean;
 }
 
-/** A node type contributed through the kernel registry (spec 116 phase 2).
- * Served rather than hardcoded: which nodes exist depends on which plugins are
- * installed, so a baked-in palette would offer the AI classifier on an instance
- * without the AI module. */
-export interface ContributedNodeInfo {
+/** A node type from the kernel registry (spec 116 phase 2) — EVERY node type
+ * since RADD-1322, built-in and contributed alike. Served rather than
+ * hardcoded: which nodes exist depends on which plugins are installed, and the
+ * built-ins are described by the same specs that run them. */
+export interface NodeInfo {
   key: string;
   kind: NodeKindValue;
   label: string;
   description: string;
   group: string;
   params_schema: Record<string, unknown>;
+  /** Extra words the palette search matches. */
+  keywords: string;
+  /** The params a fresh node starts with. Empty = the schema's own defaults. */
+  default_params: Record<string, unknown>;
+  /** Reads the triggering event — refused under a trigger that has none. */
+  reads_event: boolean;
   /** The node's FIXED ports (RADD-1064). Empty means its outputs depend on its
    * params — an AI classifier's ports are the answers being typed — and the
    * editor computes those locally instead. Without this the canvas could only
@@ -134,14 +140,6 @@ export interface OutputFieldInfo {
   description: string;
 }
 
-/** What one BUILT-IN node type produces. Served beside `node_arity` and for the
- * same reason: a second copy of `action.create_item -> key, id, url` in
- * TypeScript is a copy that drifts. */
-export interface NodeOutputsInfo {
-  type: string;
-  outputs: OutputFieldInfo[];
-}
-
 /** GET /automations/catalog — everything the rule builder renders from. */
 export interface AutomationCatalog {
   triggers: TriggerInfo[];
@@ -150,12 +148,10 @@ export interface AutomationCatalog {
   /** Spec 69: the "On a schedule" sentinel + the schedule kinds it offers. */
   schedule_trigger: string;
   schedule_kinds: { key: ScheduleKindValue; label: string }[];
-  contributed_nodes: ContributedNodeInfo[];
+  /** Every node type (RADD-1322). */
+  nodes: NodeInfo[];
   /** How each node type reads its packet, built-in and contributed alike. */
   node_arity: NodeArityInfo[];
-  /** What each BUILT-IN node type produces (spec 120). Contributed types carry
-   * theirs on `contributed_nodes[].outputs`. */
-  node_outputs: NodeOutputsInfo[];
   /** `{{token}}` substitutions available in action text fields. Served so the
    * editor can SHOW what is supported instead of leaving people guessing. */
   tokens: { token: string; description: string; needs_item: boolean }[];
