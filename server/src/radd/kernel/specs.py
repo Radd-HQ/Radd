@@ -135,6 +135,31 @@ class EntityRefSpec:
     ref: Callable[..., Any]
     #: Human label for the catalog/dev tooling.
     label: str = ""
+    #: RADD-1327: where one of these lives in the SPA, `{id}` substituted — what
+    #: a `#` mention of it links to and what the audit log links an entry to.
+    #: Empty = no page of its own.
+    url: str = ""
+
+
+# --- search + mentions (RADD-1327) --------------------------------------------
+@dataclass(frozen=True)
+class SearchableSpec:
+    """An entity type Cmd-K search (and, when `mentionable`, the editor's `#`
+    picker) can find.
+
+    The OWNER answers the query, so its ACL stays where it already lives:
+    `search(session, actor, q, limit) -> list[{"id", "title", "subtitle"?,
+    "url", "snippet"?}]` returns only rows `actor` may read. Items and pages
+    register their tuned searches through this; a declared `EntitySpec` with
+    `searchable=True` gets one derived from its own table and read gate.
+    """
+
+    entity_type: str
+    label: str
+    search: Callable[..., Any]
+    mentionable: bool = False
+    #: Lower sorts first in the palette's sections.
+    order: int = 100
 
 
 # --- capabilities (§3 chokepoint 2: /capabilities aggregator) ---
@@ -302,10 +327,14 @@ class EntitySpec:
     fields: tuple[EntityFieldSpec, ...] = ()
     model: type | None = None  # escape hatch: a code-defined mapped class
     project_scoped: bool = True
+    #: RADD-1327: Cmd-K finds it (a `SearchableSpec` is derived from the table
+    #: and the entity's read gate); `mentionable` adds it to the `#` picker.
     searchable: bool = False
     mentionable: bool = False
     activity: bool = True
     plural: str = ""
+    #: Where one lives in the SPA (`{id}` substituted) — mentions and audit links.
+    url: str = ""
 
 
 # --- background work (§6: TaskBackend socket) ---

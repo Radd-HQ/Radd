@@ -42,3 +42,24 @@ export interface SemanticResponse {
   items: SemanticItem[];
   docs: SemanticDoc[];
 }
+
+/** RADD-1327: one hit from any registered searchable type (a plugin's too). */
+export interface EntityHit {
+  entity_type: string;
+  id: string;
+  title: string;
+  subtitle: string | null;
+  /** Site-relative — where the owner says this entity lives. */
+  url: string;
+  snippet: string | null;
+}
+
+export interface EntitySearchGroup {
+  entity_type: string;
+  label: string;
+  hits: EntityHit[];
+}
+
+export interface EntitySearchResponse {
+  groups: EntitySearchGroup[];
+}

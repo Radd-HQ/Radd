@@ -110,8 +110,15 @@ class AuthEntityHost:
             perms = await authz.effective_permissions(session, user, project=project)
             if not authz.holds_base(perms, authz.Permission.ITEM_READ):
                 continue
+            relations = authz.relations_held(perms, authz.Permission.ITEM_READ)
+            if authz.RELATION_ANY not in relations and not entity_relations:
+                # RADD-1327: a NARROWED read (`item.read@own` — the Baseline every
+                # signed-in account holds) grants a row only through a relation
+                # the entity defines. An entity that defines none can satisfy no
+                # narrowed read: `holds_base` alone let every member list every
+                # project's milestones, and search would have inherited that.
+                continue
             if entity_relations:
-                relations = authz.relations_held(perms, authz.Permission.ITEM_READ)
                 if authz.RELATION_ANY not in relations:
                     if relation_actor is None:
                         relation_actor = await authz.relation_actor(session, user)

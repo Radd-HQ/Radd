@@ -115,6 +115,8 @@ export const ApiPath = {
   notificationPrefs: "/notifications/preferences",
   // Full-text + key search (spec 28).
   search: "/search",
+  // RADD-1327: every registered searchable type, answered by its owner.
+  searchEntities: "/search/entities",
   // KB deflection for the new-issue flow (spec 66).
   searchDeflect: "/search/deflect",
   // Semantic "Ask" search for the palette (spec 103).

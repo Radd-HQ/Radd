@@ -13,6 +13,7 @@ from radd.kernel import PermissionSpec
 from radd.kernel import SettingSpec
 
 from . import refs
+from .searchable import PAGE_SEARCHABLE
 
 from . import attachments_binding as attachments_binding  # registers the page parent (spec 102)
 from . import comments_binding as comments_binding  # registers the page comment parent (RADD-717)
@@ -30,6 +31,7 @@ from .automation import COMMENT_NODE, MOVE_NODE, PAGE_TOKENS, SPACE_GATE  # RADD
 plugin = RaddPlugin(
     name="pages",
     automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
+    searchables=(PAGE_SEARCHABLE,),  # RADD-1327
     token_providers=(PAGE_TOKENS,),
     # RADD-791: SPACE-scoped. They were global because a page had no scope to be
     # checked against, which made per-space access inexpressible.

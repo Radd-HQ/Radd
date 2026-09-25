@@ -27,6 +27,7 @@ from radd.kernel import (
     TokenProviderSpec as TokenProviderSpec,
     AutomationTemplateSpec as AutomationTemplateSpec,
     NotificationKindSpec as NotificationKindSpec,
+    SearchableSpec as SearchableSpec,
     KERNEL_API_VERSION,
     CapabilitySpec as CapabilitySpec,
     CrudResourceSpec as CrudResourceSpec,

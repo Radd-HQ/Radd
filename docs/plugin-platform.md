@@ -214,6 +214,13 @@ appears as an automation trigger, a settings page, a capability-gated nav item, 
 mentionable entity, a webhook event, and an RBAC-governed resource, **without editing any other
 plugin or the kernel.** Today that fails at three hardcoded chokepoints (§3).
 
+> **Searchable / mentionable is real since RADD-1327.** `EntitySpec.searchable` derives a kernel
+> `SearchableSpec` (a match on the entity's naming + text fields, filtered through the host's
+> row-visibility gate); `mentionable` puts it in the editor's `#` picker, and `EntitySpec.url` is
+> where the mention and the audit log link to. Cmd-K reads `GET /search/entities`, which asks every
+> registered searchable — issues and pages register theirs through the same seam. A hand-written
+> plugin entity registers a `SearchableSpec` directly (`searchables=` on its manifest).
+
 ---
 
 ## 2. What already works (don't rebuild it)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -28,11 +28,13 @@ import {
   projectsQuery,
   searchQuery,
   semanticSearchQuery,
+  entitySearchQuery,
   projectByKeyQuery,
 } from "../lib/queries";
 import {
   AiFeature,
   Permission,
+  type EntityHit,
   type PageSearchResult,
   type Project,
   type SearchResult,
@@ -76,6 +78,8 @@ interface GotoEntry {
 type PaletteEntry =
   | { kind: "issue"; result: SearchResult }
   | { kind: "doc"; result: PageSearchResult }
+  /** RADD-1327: a hit from any other registered searchable (a plugin's entity). */
+  | { kind: "entity"; hit: EntityHit; group: string }
   | { kind: "goto"; entry: GotoEntry }
   | { kind: "action"; label: string; project: Project }
   | { kind: "ask" }
@@ -145,6 +149,15 @@ export function CommandPalette() {
   // Doc results merged in (spec 43) — a second query, section-headed "Pages".
   const { data: docsData } = useQuery(
     pageSearchQuery(open && mode === PaletteMode.search ? debounced : "", PALETTE_SEARCH_LIMIT),
+  );
+  // RADD-1327: every other registered searchable type (a plugin's entities),
+  // each answered and ACL-filtered by its owner. Issues and pages keep their
+  // dedicated queries above, so they are excluded here.
+  const { data: entityData } = useQuery(
+    entitySearchQuery(open && mode === PaletteMode.search ? debounced : "", {
+      exclude: "item,page",
+      limit: PALETTE_SEARCH_LIMIT,
+    }),
   );
   // Ask mode (spec 103): the affordance gates on the semantic_search feature
   // flag; the response's own `enabled` catches it going dormant mid-session.
@@ -241,6 +254,9 @@ export function CommandPalette() {
     kind: "doc",
     result,
   }));
+  const entityEntries: PaletteEntry[] = (entityData?.groups ?? []).flatMap((group) =>
+    group.hits.map((hit) => ({ kind: "entity" as const, hit, group: group.label })),
+  );
   // Quick actions (spec 37): "New issue in <PROJECT>" for creatable projects.
   const needle = query.trim().toLowerCase();
   // RADD-1294: with nothing typed, only the project you are in (the palette used
@@ -276,7 +292,7 @@ export function CommandPalette() {
   const entries: PaletteEntry[] =
     mode === PaletteMode.ask
       ? [...semanticItemEntries, ...semanticDocEntries]
-      : [...recentEntries, ...issueEntries, ...docEntries, ...actionEntries, ...gotoEntries, ...askEntries];
+      : [...recentEntries, ...issueEntries, ...docEntries, ...entityEntries, ...actionEntries, ...gotoEntries, ...askEntries];
   const clamped = Math.min(selected, Math.max(entries.length - 1, 0));
 
   const choose = (entry: PaletteEntry) => {
@@ -296,6 +312,10 @@ export function CommandPalette() {
       void navigate(pagePermalink(entry.result.page_id));
     } else if (entry.kind === "semantic-doc") {
       void navigate(pagePermalink(entry.result.page_id));
+    } else if (entry.kind === "entity") {
+      // The owner's own site-relative address — a plugin route the host
+      // router may not know by name, so it is followed as a URL.
+      if (entry.hit.url) window.location.assign(entry.hit.url);
     } else if (entry.kind === "action") {
       setNewItemProject(entry.project);
     } else {
@@ -487,9 +507,33 @@ export function CommandPalette() {
             );
           })}
 
+          {entityEntries.map((entry, index) => {
+            const flatIndex = issueEntries.length + docEntries.length + index;
+            if (entry.kind !== "entity") return null;
+            const first = index === 0 || (entityEntries[index - 1] as { group?: string }).group !== entry.group;
+            return (
+              <Fragment key={`${entry.hit.entity_type}:${entry.hit.id}`}>
+                {first && <SectionLabel>{entry.group}</SectionLabel>}
+                <PaletteRow
+                  active={flatIndex === clamped}
+                  onClick={() => choose(entry)}
+                  onHover={() => setSelected(flatIndex)}
+                >
+                  <Layers size={14} className="shrink-0 text-fg-muted" aria-hidden />
+                  <span className="min-w-0 flex-1" data-entity-hit={entry.hit.entity_type}>
+                    <span className="block truncate text-[13px] text-fg">{entry.hit.title}</span>
+                    {entry.hit.subtitle && (
+                      <span className="block truncate text-xs text-fg-muted">{entry.hit.subtitle}</span>
+                    )}
+                  </span>
+                </PaletteRow>
+              </Fragment>
+            );
+          })}
+
           {actionEntries.length > 0 && <SectionLabel>Actions</SectionLabel>}
           {actionEntries.map((entry, index) => {
-            const flatIndex = issueEntries.length + docEntries.length + index;
+            const flatIndex = issueEntries.length + docEntries.length + entityEntries.length + index;
             return (
               <PaletteRow
                 key={entry.kind === "action" ? entry.label : flatIndex}
@@ -508,7 +552,7 @@ export function CommandPalette() {
           {gotoEntries.length > 0 && <SectionLabel>Go to</SectionLabel>}
           {gotoEntries.map((entry, index) => {
             const flatIndex =
-              issueEntries.length + docEntries.length + actionEntries.length + index;
+              issueEntries.length + docEntries.length + entityEntries.length + actionEntries.length + index;
             const Icon = entry.kind === "goto" ? entry.entry.icon : Layers;
             return (
               <PaletteRow
@@ -528,7 +572,7 @@ export function CommandPalette() {
           {/* Ask mode entry point (spec 103) — trails the list so keyword hits stay first. */}
           {askEntries.map((entry) => {
             const flatIndex =
-              issueEntries.length + docEntries.length + actionEntries.length + gotoEntries.length;
+              issueEntries.length + docEntries.length + entityEntries.length + actionEntries.length + gotoEntries.length;
             return (
               <PaletteRow
                 key="ask"

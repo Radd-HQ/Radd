@@ -38,7 +38,7 @@ import { useQuery } from "@tanstack/react-query";
 import { aiErrorText, isAiGone } from "../../lib/ai";
 import { jiraToMarkdown } from "../../lib/jira-markup";
 import { MarkdownSourceCtx } from "../../lib/markdown";
-import { searchQuery, usersQuery } from "../../lib/queries";
+import { entitySearchQuery, searchQuery, usersQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
 import { useEditorAi, type AiRun } from "./ai";
 import { AiActionPicker } from "./AiActionPicker";
@@ -504,6 +504,13 @@ function RichEditorInner({
     ...searchQuery(mention?.query ?? "", MENTION_LIMIT),
     enabled: mention?.type === "#" && Boolean(mention?.query),
   });
+  // RADD-1327: `#` also names any other MENTIONABLE registered type (a plugin's
+  // entity), each hit filtered by its owner's read gate. The token is
+  // `#[Title](<the entity's own url>)`, which the reader renders as a chip.
+  const entities = useQuery({
+    ...entitySearchQuery(mention?.query ?? "", { exclude: "item", mentionable: true, limit: MENTION_LIMIT }),
+    enabled: mention?.type === "#" && Boolean(mention?.query),
+  });
 
   const candidates = useMemo<Candidate[]>(() => {
     if (mention?.type === "@") {
@@ -517,9 +524,11 @@ function RichEditorInner({
         .map((user) => ({ label: user.name, href: user.id, sub: "" }));
     }
     if (mention?.type === "#") {
-      return (issues.data?.results ?? [])
-        .slice(0, MENTION_LIMIT)
-        .map((hit) => ({ label: hit.key, href: hit.key, sub: hit.title }));
+      const issueHits = (issues.data?.results ?? []).map((hit) => ({ label: hit.key, href: hit.key, sub: hit.title }));
+      const entityHits = (entities.data?.groups ?? []).flatMap((group) =>
+        group.hits.filter((hit) => hit.url).map((hit) => ({ label: hit.title, href: hit.url, sub: group.label })),
+      );
+      return [...issueHits, ...entityHits].slice(0, MENTION_LIMIT);
     }
     if (mention?.type === "/" && quickActions) {
       // Every typed token must match label+keywords: "/assign hus", "/add lab foo"…
@@ -533,7 +542,7 @@ function RichEditorInner({
         .map((action) => ({ label: action.label, href: action.id, sub: action.hint ?? "" }));
     }
     return [];
-  }, [mention, users.data, issues.data, quickActions]);
+  }, [mention, users.data, issues.data, entities.data, quickActions]);
 
   const safeIndex = candidates.length ? Math.min(index, candidates.length - 1) : 0;
 

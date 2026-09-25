@@ -29,6 +29,8 @@ import {
 const UUID_RE = /^[0-9a-fA-F-]{36}$/;
 const ISSUE_KEY_RE = /^[A-Za-z][A-Za-z0-9]{0,9}-\d+$/;
 const BR_RE = /^<br\s*\/?>$/i;
+/** A site-relative path (not a protocol-relative `//host`). */
+const SITE_PATH_RE = /^\/(?!\/)/;
 
 /**
  * Turn `@[Name](uuid)` / `#[KEY](KEY)` (a text `@`/`#` + a link in the mdast) into
@@ -60,6 +62,11 @@ function remarkRaddTokens() {
           prev.value = prevText.slice(0, -1);
           link.data = { hProperties: { className: ["radd-issue-ref"] } };
           link.url = `/issues/${link.url}`;
+        } else if (SITE_PATH_RE.test(link.url) && prevText?.endsWith("#")) {
+          // RADD-1327: `#[Title](/milestones)` — a mention of another registered
+          // entity, addressed by the owner's own url. Same chip, no rewrite.
+          prev.value = prevText.slice(0, -1);
+          link.data = { hProperties: { className: ["radd-issue-ref", "radd-entity-ref"] } };
         }
       }
     });

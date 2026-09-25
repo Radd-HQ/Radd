@@ -9,6 +9,9 @@ import type { EditorState } from "@milkdown/kit/prose/state";
 const UUID_RE = /^[0-9a-fA-F-]{36}$/;
 const ISSUE_KEY_RE = /^[A-Za-z][A-Za-z0-9]{0,9}-\d+$/;
 const EXTERNAL_RE = /^(?:https?:|mailto:)/i;
+/** RADD-1327: `#[Title](/milestones)` — another registered entity, addressed by
+ *  its owner's own site-relative url (never a protocol-relative `//host`). */
+const SITE_PATH_RE = /^\/(?!\/)/;
 /**
  * An issue addressed by URL rather than by the `#KEY` token — `/issues/TD-1`,
  * or an absolute link to THIS instance (RADD-711 follow-up). Content written
@@ -52,9 +55,16 @@ function chipDecorations(state: EditorState): DecorationSet {
         ? "issue"
         : urlKey && node.text === urlKey
           ? "issue-url"
-          : null;
+          : SITE_PATH_RE.test(href)
+            ? "entity"
+            : null;
     if (!kind) return;
-    const cls = kind === "mention" ? "radd-chip radd-chip-mention" : "radd-chip radd-chip-issue";
+    const cls =
+      kind === "mention"
+        ? "radd-chip radd-chip-mention"
+        : kind === "entity"
+          ? "radd-chip radd-chip-issue radd-entity-ref"
+          : "radd-chip radd-chip-issue";
     // An issue addressed by URL carries no `#` trigger — it was written outside
     // the editor (the generated release notes, a pasted link). Chip the link
     // itself; there is no trigger char to absorb.

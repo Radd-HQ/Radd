@@ -103,6 +103,7 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/reports/sla"),
         ("GET", "/api/v1/search"),
         ("GET", "/api/v1/search/deflect"),
+        ("GET", "/api/v1/search/entities"),  # RADD-1327: each owner applies its own read gate
         ("GET", "/api/v1/search/semantic"),
     }
 )

@@ -120,6 +120,7 @@ export const queryKeys = {
   backupRun: (runId: string) => ["backupRun", { runId }] as const,
   notifications: (unread: boolean, page = 1) => ["notifications", { unread, page }] as const,
   search: (q: string, limit?: number) => ["search", { q, limit }] as const,
+  searchEntities: (q: string, opts: Record<string, string>) => ["search", "entities", { q, ...opts }] as const,
   attachments: (entityType: string, entityId: string) =>
     ["attachments", { entityType, entityId }] as const,
   cannedResponses: ["cannedResponses"] as const,

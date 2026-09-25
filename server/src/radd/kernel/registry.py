@@ -20,6 +20,7 @@ from .specs import (
     TokenProviderSpec,
     AutomationTemplateSpec,
     NotificationKindSpec,
+    SearchableSpec,
     RelationSpec,
     RowGuardSpec,
     CapabilitySpec,
@@ -118,6 +119,8 @@ class KernelRegistries:
     automation_templates: dict[str, AutomationTemplateSpec] = field(default_factory=dict)
     #: RADD-1326: notification kinds, in registration order (notify's first).
     notification_kinds: dict[str, NotificationKindSpec] = field(default_factory=dict)
+    #: RADD-1327: what Cmd-K and `#` mentions can find, by entity type.
+    searchables: dict[str, SearchableSpec] = field(default_factory=dict)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
     #: Which plugin contributed each page extension (RADD-748). The registry is
     #: the only thing that knows — the spec is authored BY the plugin, so a
@@ -146,7 +149,7 @@ class KernelRegistries:
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
             self.automation_nodes, self.trigger_kinds, self.token_providers, self.automation_templates,
-            self.notification_kinds,
+            self.notification_kinds, self.searchables,
             self.page_extension_sources,
         ):
             f.clear()
@@ -207,6 +210,8 @@ class KernelRegistries:
             self.automation_templates[template.key] = template
         for kind in plugin.notification_kinds:
             self.notification_kinds[kind.key] = kind
+        for searchable in plugin.searchables:
+            self.searchables[searchable.entity_type] = searchable
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
             self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
@@ -234,6 +239,7 @@ class KernelRegistries:
         self.consumer_names.difference_update(set(plugin.consumer_names) - remaining_consumers)
         for e in plugin.entities:
             self.entities.pop(e.key, None)
+            self.searchables.pop(e.key, None)  # RADD-1327: derived at register
         for et in plugin.event_types:
             self.event_types.pop(et.event_type, None)
         for er in plugin.entity_refs:
@@ -280,6 +286,8 @@ class KernelRegistries:
             self.automation_templates.pop(template.key, None)
         for kind in plugin.notification_kinds:
             self.notification_kinds.pop(kind.key, None)
+        for searchable in plugin.searchables:
+            self.searchables.pop(searchable.entity_type, None)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
             self.page_extension_sources.pop(px.name, None)

@@ -14,6 +14,7 @@ import type {
   AiStatus,
   DeflectResponse,
   SearchResponse,
+  EntitySearchResponse,
   SemanticResponse,
   SimilarResponse,
 } from "../types";
@@ -87,6 +88,20 @@ export const deflectQuery = (q: string, projectId: string) =>
   });
 
 /** Palette search-as-you-type (spec 28) — key prefix + full text, RBAC-scoped. */
+/** RADD-1327: every registered searchable type, grouped; `exclude` leaves out
+ *  the types a caller already queries on its own (the palette's issues/pages). */
+export const entitySearchQuery = (q: string, opts: { exclude?: string; mentionable?: boolean; limit?: number }) => {
+  const query: Record<string, string> = { q, limit: String(opts.limit ?? 5) };
+  if (opts.exclude) query.exclude = opts.exclude;
+  if (opts.mentionable) query.mentionable = "true";
+  return queryOptions({
+    queryKey: queryKeys.searchEntities(q, query),
+    queryFn: ({ signal }) => api.get<EntitySearchResponse>(ApiPath.searchEntities, { signal, query }),
+    placeholderData: keepPreviousData,
+    enabled: q.trim().length > 0,
+  });
+};
+
 export const searchQuery = (q: string, limit: number) =>
   queryOptions({
     queryKey: queryKeys.search(q, limit),

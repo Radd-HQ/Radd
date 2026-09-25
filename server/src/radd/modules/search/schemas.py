@@ -16,6 +16,28 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
 
 
+# --- GET /search/entities (RADD-1327): every registered searchable type ---
+
+
+class EntityHit(BaseModel):
+    entity_type: str
+    id: str
+    title: str
+    subtitle: str | None = None
+    url: str = ""
+    snippet: str | None = None
+
+
+class EntitySearchGroup(BaseModel):
+    entity_type: str
+    label: str
+    hits: list[EntityHit]
+
+
+class EntitySearchResponse(BaseModel):
+    groups: list[EntitySearchGroup]
+
+
 # --- GET /search/deflect (spec 66): KB deflection under the new-issue title ---
 
 

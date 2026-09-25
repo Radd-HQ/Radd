@@ -130,7 +130,11 @@ export function auditEntityLink(entry: AuditEntry): AuditLink | null {
     return { to: projectPage, params: { projectKey: entry.project.key } };
   }
   const settingsPage = SETTINGS_BY_ENTITY[entry.entity_type];
-  return settingsPage ? { to: settingsPage } : null;
+  if (settingsPage) return { to: settingsPage };
+  // RADD-1327: a plugin entity's ref carries the url its owner declared
+  // (`EntitySpec.url`) — the SPA needs no table entry for a type it never heard of.
+  const own = (refs as Record<string, { url?: unknown } | undefined>)[entry.entity_type];
+  return typeof own?.url === "string" && own.url.startsWith("/") ? { to: own.url } : null;
 }
 
 /** "Hussein · Role updated · Contributor" — the row's sentence, in three parts. */

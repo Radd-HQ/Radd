@@ -38,6 +38,7 @@ from sqlalchemy import (
     Text,
     Uuid,
     func,
+    or_,
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +55,7 @@ from .specs import (
     EntitySpec,
     EventTypeSpec,
     ProjectPurgeSpec,
+    SearchableSpec,
 )
 
 # EntityFieldSpec.type → (SQLAlchemy column type, python type for pydantic)
@@ -165,6 +167,9 @@ def _ref_builder(spec: EntitySpec, model: type):
         if row is None:
             return None
         out = {"id": str(row.id), "entity_type": spec.key}
+        if spec.url:
+            # RADD-1327: where it lives — the audit log's link for a plugin entity.
+            out["url"] = spec.url.replace("{id}", str(row.id))
         if label_field:
             out["title"] = getattr(row, label_field, None)
         if spec.project_scoped and getattr(row, "project_id", None) is not None:
@@ -181,6 +186,53 @@ def _ref_builder(spec: EntitySpec, model: type):
     return ref
 
 
+#: How many candidate rows a derived search reads before the read gate trims
+#: them — the gate runs per row, so the scan is bounded, not the result.
+SEARCH_SCAN_FACTOR = 5
+
+
+def _search_builder(spec: EntitySpec, model: type):
+    """A `SearchableSpec.search` for a declared entity (RADD-1327): a
+    case-insensitive match on the naming field and any text field, filtered
+    through the host's row-visibility gate — the same one the CRUD list uses —
+    so a reader only ever finds what they could have listed."""
+    label_field = next((f.name for f in spec.fields if f.name in ("title", "name", "label")), None)
+    # Free text only: a `str` column is usually an enum-ish status ("open"),
+    # and matching it would return every row for the commonest words.
+    text_fields = [f.name for f in spec.fields if f.type == "text" and f.name != label_field]
+
+    async def search(session, actor, q: str, limit: int = 10) -> list[dict]:
+        needle = q.strip()
+        if not needle or label_field is None:
+            return []
+        term = f"%{needle}%"
+        columns = [getattr(model, label_field), *(getattr(model, name) for name in text_fields)]
+        stmt = (
+            select(model)
+            .where(or_(*(column.ilike(term) for column in columns)))
+            .order_by(getattr(model, label_field))
+            .limit(limit * SEARCH_SCAN_FACTOR)
+        )
+        rows = list((await session.execute(stmt)).scalars())
+        if spec.project_scoped:
+            rows = await entity_host().visible_rows(session, actor, spec.key, rows)
+        else:
+            try:
+                await entity_host().require(session, actor, authz_read_atom(), project_id=None)
+            except Exception:  # noqa: BLE001 — no read = nothing found, never a 403 from search
+                return []
+        return [
+            {
+                "id": str(row.id),
+                "title": str(getattr(row, label_field) or ""),
+                "url": spec.url.replace("{id}", str(row.id)) if spec.url else "",
+            }
+            for row in rows[:limit]
+        ]
+
+    return search
+
+
 def register_entity(spec: EntitySpec) -> type:
     """Auto-wire an entity: build the model + register its CRUD-resource RBAC atoms,
     created/updated/deleted event types, and the payload ref those events carry
@@ -188,8 +240,16 @@ def register_entity(spec: EntitySpec) -> type:
     model = build_model(spec)
     registries.crud_resources.setdefault(spec.key, _crud_resource(spec))
     registries.entity_refs.setdefault(
-        spec.key, EntityRefSpec(spec.key, _ref_builder(spec, model), label=spec.label)
+        spec.key, EntityRefSpec(spec.key, _ref_builder(spec, model), label=spec.label, url=spec.url)
     )
+    if spec.searchable:
+        registries.searchables.setdefault(
+            spec.key,
+            SearchableSpec(
+                spec.key, spec.plural.capitalize() or spec.label, _search_builder(spec, model),
+                mentionable=spec.mentionable,
+            ),
+        )
     for et in _event_types(spec):
         registries.event_types.setdefault(et.event_type, et)
     if spec.project_scoped:
@@ -314,6 +374,12 @@ def crud_router(spec: EntitySpec) -> APIRouter:
     async def get_one(obj_id: uuid.UUID, session: Session, user: User):  # type: ignore[valid-type]
         obj = await _get(session, obj_id)
         await _require(session, user, obj, authz_read_atom())
+        # RADD-1327: the row gate too, exactly as the list applies it — a
+        # narrowed read that no relation of this entity satisfies sees nothing.
+        if project_scoped and not await entity_host().visible_rows(session, user, key, [obj]):
+            from radd.exceptions import NotFoundError
+
+            raise NotFoundError(key, obj_id)
         return Read.model_validate(obj)
 
     @router.patch("/{obj_id}", response_model=Read)
