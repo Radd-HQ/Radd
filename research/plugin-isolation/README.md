@@ -4,7 +4,11 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 
 ## Evidence and coverage
 
-`inventory.json` records discovered backend, frontend, SDK and example source files, imports, module declarations and remote sources. Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownership decisions and evidence per file; edits invalidate earlier file reviews. All entries begin unreviewed. The inventory is intentionally broader than optional plugins.
+`inventory.json` accounts for every existing tracked repository artifact, independent of file extension, plus nonignored new implementation/configuration files in the application, SDK, examples, scripts, deployment and CI roots. It records artifact roles, hashes, import hints, builtin and example manifests, colocated UI files, and package dependencies. Untracked documents/screenshots and gitignored local state are outside discovery; stage a new non-code artifact to include it. The only tracked-file exclusions are the three generated audit ledgers, whose own hashes would be circular.
+
+Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownership decisions and evidence per artifact; changed bytes reset that entry to unreviewed. Removed entries remain in `retired.json` for explicit disposition. Documentation, assets, generated files and tests have distinct roles, but no role automatically grants ownership approval. The module table below remains a manual review ledger.
+
+`python scripts/plugin_inventory.py --check` checks coverage/freshness and review schema without rewriting the ledgers; CI runs it alongside isolated discovery tests. `--require-reviewed` additionally refuses unreviewed/partial current or retired entries and exceptions without a reason. This is a record-completeness gate, not proof that a claimed review or test result is valid. The final audit must inspect the cited evidence and actual runtime behavior. Static imports/declarations are discovery hints and cannot establish dynamic registration or semantic ownership by themselves.
 
 ## Work groups
 
@@ -17,6 +21,7 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 | RADD-1352 | Scripts/Monitoring settings and AI/mail health contributions | Verified; Waiting for release |
 | RADD-1353 | Owner-contributed directory controls | Verified; Waiting for release |
 | RADD-1354 | Automations-owned canvas, graph model and scoped shape queries | Verified; Waiting for release |
+| RADD-1355 | Repository-wide discovery and inventory validation | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -24,10 +29,11 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 
 ## Module review ledger
 
-Declared core status is recorded, not accepted as an exemption. Every module must be reviewed.
+Declared core status is recorded, not accepted as an exemption. Every module must be reviewed. The 57 builtin declarations and the external example are all included.
 
 | Module | Core declaration | Remote sources | Dependencies | Review |
 |---|---|---|---|---|
+| acme-notes (external example) | False | 11 | projects, auth, events, items | Pending |
 | access | default | 0 | projects, events, auth, teams, groups | Pending |
 | ai | False | 3 | auth, projects, items, fields, workflow, comments, search, settings, events, pages, timelogging, attachments | Pending |
 | alertmanager | False | 0 | projects, auth, items, events, automations | Pending |
@@ -88,7 +94,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 
 ## Confirmed findings still requiring remediation
 
-- The inventory currently scans application source roots and `.py/.ts/.tsx/.css`. RADD-1354 exposed omitted build helpers (`web/packages/plugin-sdk/vite.mjs`, `web/scripts/build-all.mjs`) and plugin package/config files. Their verification is recorded below, but RADD-1344 must expand discovery before the inventory can establish complete codebase coverage.
+- RADD-1355 closes the source-root/file-extension discovery gap exposed by RADD-1354. Newly discovered migrations, SDK/package/build files, tools, deployment configuration, tests and reference artifacts are explicitly unreviewed. RADD-1344 remains open for their ownership/evidence audit.
 - Host router directly imports optional settings pages and optional Pages/Dashboards/CSAT routes (`web/src/router.tsx`). Generic slot routes coexist with plugin-specific route components.
 - RADD-1351 unifies the SDK capability cache and makes discovery conservative. Other identity/query cache ownership remains under review.
 - RADD-1351 fixes generic plugin-page loading/failure/withdrawal and render boundaries. Other direct contribution render sites still need review.
@@ -164,6 +170,31 @@ settings, integration selectors, form providers, generic schema defaults and rem
 backend ownership still need review/migration under RADD-1347. Source barrels and the
 host's call to the owner shape hook are temporary migration dependencies, not a final
 host architecture. Automations remains a required core plugin: browser tests exercise
-frontend absence/withdrawal, not a new backend permission to disable it. The complete
-inventory contains 57 modules and 1497 source files; this stage does not certify the
-remaining inventory.
+frontend absence/withdrawal, not a new backend permission to disable it. The then-current
+scan contained 57 builtin manifests and 1497 files; RADD-1355 expands that scope. This
+stage does not certify the remaining inventory.
+
+
+## RADD-1355 verification
+
+Discovery now accounts for 2,581 artifacts across the repository: 58 plugin manifests
+(57 builtin and one external example), 18 package manifests, and 214 migration files
+are included. These counts describe discovery, not completed review. The old filesystem
+scan had included two gitignored virtualenv bootstrap files; their retirement records
+explain that exclusion without deleting the environment. Four old `partially-reviewed`
+status spellings were normalized to `partially_reviewed` with evidence and issue links
+preserved. No ownership decisions were promoted merely by expanding the scan.
+
+Nine isolated-git tests cover unknown tracked file types, source/config roots, new
+unstaged sources, ignored/local artifacts, review invalidation and preservation,
+non-mutating freshness checks, deletion/staging/restoration, builtin/external manifests,
+colocated example UI, package dependencies, parse failures, external symlinks, required
+evidence and explicit exceptions, and generated-ledger exclusions. Local freshness and
+lint checks pass. The strict review-completeness gate correctly fails on the remaining
+unreviewed entries. A CI job now runs the discovery tests and freshness check; no remote
+CI run or deployment is claimed. Application behavior and plugin choices are unchanged.
+
+The actual ownership review remains in RADD-1344/1346–1350. Complete discovery does not
+justify marking those tasks complete. Newly visible package metadata also makes build
+and packaging dependencies available for that review instead of assuming the shared
+local toolchain proves isolated plugin packaging.

@@ -19,6 +19,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  isolation-inventory:
+    name: isolation inventory (coverage and freshness)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test discovery invariants
+        run: python -m unittest discover -s scripts/tests -v
+      - name: Check inventory freshness
+        run: python scripts/plugin_inventory.py --check
+
   backend:
     name: backend (ruff, pytest)
     runs-on: ubuntu-latest

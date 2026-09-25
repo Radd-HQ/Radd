@@ -1,0 +1,38 @@
+{
+  "examples/acme-notes/.venv/bin/activate_this.py": {
+    "last_sha256": "8a8d0a6de7fa1a25c1777bfd7f246b79ac7a5a92fad05ee3b3d884da0f58340c",
+    "previous_review": {
+      "sha256": "8a8d0a6de7fa1a25c1777bfd7f246b79ac7a5a92fad05ee3b3d884da0f58340c",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "exception",
+    "owner": "local development environment",
+    "issue": "RADD-1355",
+    "evidence": [
+      "git check-ignore confirms this path is ignored; git ls-files confirms it is untracked.",
+      "scripts/tests/test_plugin_inventory.py verifies ignored local dependencies stay outside discovery."
+    ],
+    "reason": "Gitignored third-party virtualenv bootstrap code was incorrectly included by the former filesystem scan. It is not repository application source; the environment and its packages are not deleted."
+  },
+  "examples/acme-notes/.venv/lib/python3.13/site-packages/_virtualenv.py": {
+    "last_sha256": "cfb3db86aaa53bb62b5ff764970bec2d71c9228590a0ebec57f6ec926cc0bf1a",
+    "previous_review": {
+      "sha256": "cfb3db86aaa53bb62b5ff764970bec2d71c9228590a0ebec57f6ec926cc0bf1a",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "exception",
+    "owner": "local development environment",
+    "issue": "RADD-1355",
+    "evidence": [
+      "git check-ignore confirms this path is ignored; git ls-files confirms it is untracked.",
+      "scripts/tests/test_plugin_inventory.py verifies ignored local dependencies stay outside discovery."
+    ],
+    "reason": "Gitignored third-party virtualenv bootstrap code was incorrectly included by the former filesystem scan. It is not repository application source; the environment and its packages are not deleted."
+  }
+}
