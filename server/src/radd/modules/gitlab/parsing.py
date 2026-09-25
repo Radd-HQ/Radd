@@ -16,9 +16,10 @@ import re
 from dataclasses import dataclass
 
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
+from radd.modules.vcs.triggers import RefAction
 from radd.modules.vcs.types import VcsRefType
 
-from .types import MrStatus
+from .types import MrAction, MrStatus
 
 # An item key referenced in text: TD-123 (project keys are 1-10 alnum starting
 # with a letter). Word-bounded so sha1-2abc doesn't match.
@@ -97,7 +98,7 @@ def mr_status(attributes: dict) -> MrStatus:
     """`opened`/`locked` → open, `merged` → merged, `closed` → closed."""
     # GitLab's `state` values `merged`/`closed` spell the same as our statuses.
     state = str(attributes.get("state") or "")
-    if state == MrStatus.MERGED or attributes.get("action") == "merge":
+    if state == MrStatus.MERGED or attributes.get("action") == MrAction.MERGE:
         return MrStatus.MERGED
     if state == MrStatus.CLOSED:
         return MrStatus.CLOSED
@@ -110,14 +111,14 @@ def mr_title(attributes: dict) -> str:
     return f"{title[:280]} (!{iid})".strip() if title else f"!{iid}"
 
 
-def plan_merge_request(payload: dict) -> tuple[list[PlannedLink], bool]:
-    """(links, merged?) from a merge_request event. Keys come from the source
-    branch, title and description; re-deliveries update in place via the stable
-    external id `pr:<project>:<iid>`."""
+def plan_merge_request(payload: dict) -> list[PlannedLink]:
+    """Links from a merge_request event. Keys come from the source branch, title
+    and description; re-deliveries update in place via the stable external id
+    `pr:<project>:<iid>`."""
     attributes = payload.get("object_attributes") or {}
     repo = project_path(payload)
     status = mr_status(attributes)
-    links = [
+    return [
         PlannedLink(
             item_key=key,
             ref_type=VcsRefType.MERGE_REQUEST,
@@ -130,7 +131,32 @@ def plan_merge_request(payload: dict) -> tuple[list[PlannedLink], bool]:
             attributes.get("source_branch"), attributes.get("title"), attributes.get("description")
         )
     ]
-    return links, status is MrStatus.MERGED
+
+
+_MR_ACTIONS = {
+    MrAction.OPEN: RefAction.OPENED,
+    MrAction.REOPEN: RefAction.OPENED,
+    MrAction.MERGE: RefAction.MERGED,
+    MrAction.CLOSE: RefAction.CLOSED,
+}
+
+
+def mr_action(payload: dict) -> RefAction | None:
+    """What this delivery DID to the merge request, by its `action` — never by
+    its state, which every later edit of a merged MR repeats (RADD-1309). None =
+    an edit, an approval, a time change: no trigger."""
+    action = str((payload.get("object_attributes") or {}).get("action") or "")
+    return _MR_ACTIONS.get(action)
+
+
+def mr_ref_extra(payload: dict) -> dict[str, object]:
+    """The `ref` fields a trigger carries that the link row does not store."""
+    attributes = payload.get("object_attributes") or {}
+    return {
+        "number": attributes.get("iid"),
+        "source_branch": attributes.get("source_branch"),
+        "target_branch": attributes.get("target_branch"),
+    }
 
 
 def time_spent_changed(payload: dict) -> bool:
@@ -142,10 +168,3 @@ def time_spent_changed(payload: dict) -> bool:
     if "total_time_spent" in changes or "time_change" in changes:
         return True
     return bool((payload.get("object_attributes") or {}).get("time_change"))
-
-
-def version_from_tag(tag: str) -> str:
-    """`v0.6.1` -> `0.6.1` (RADD-707): tags are `vX.Y.Z` by convention while
-    every release recorded in the tracker is bare."""
-    tag = tag.strip()
-    return tag[1:] if len(tag) > 1 and tag[0] in "vV" and tag[1].isdigit() else tag

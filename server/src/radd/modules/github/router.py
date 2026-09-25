@@ -15,17 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
-from radd.modules.auth import service as auth
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.items import service as items
-from radd.modules.items.schemas import ItemUpdate
-from radd.modules.projects import service as projects_service
-from radd.modules.releases import pipeline
+from radd.modules.vcs import receiving, triggers
 from radd.modules.vcs import service as vcs
 from radd.modules.vcs.types import VcsProvider
 
 from . import parsing, service, spend, timelogs
-from .types import CommentAction, GithubEventKind
+from .types import CommentAction, GithubEntity, GithubEventKind, GithubTrigger, ReleaseAction
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +30,21 @@ router = APIRouter(tags=["github"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 verify_signature = service.verify_signature
+
+#: GitHub's trigger vocabulary (RADD-1309) — registered by the plugin, fired here.
+TRIGGERS = triggers.ConnectorTriggers(
+    host="GitHub",
+    change="pull request",
+    opened=GithubTrigger.PR_OPENED,
+    merged=GithubTrigger.PR_MERGED,
+    closed=GithubTrigger.PR_CLOSED,
+    pushed=GithubTrigger.PUSHED,
+    release_published=GithubTrigger.RELEASE_PUBLISHED,
+    ci_completed=GithubTrigger.CI_COMPLETED,
+)
+
+#: Nothing linked, nothing fired — the answer to a delivery this receiver ignores.
+_NOTHING: dict[str, int] = {"linked": 0, "triggered": 0}
 
 
 @router.post("/integrations/github")
@@ -57,7 +68,6 @@ async def github_webhook(
     connection, repo = resolved
 
     kind = x_github_event
-    merged = False
     if kind in (
         GithubEventKind.ISSUE_COMMENT,
         GithubEventKind.PULL_REQUEST_REVIEW_COMMENT,
@@ -67,7 +77,7 @@ async def github_webhook(
     if kind == GithubEventKind.PING:
         # GitHub sends one when the hook is created; answering 200 is what makes
         # the "recent deliveries" panel show a green tick.
-        return {"linked": 0, "transitioned": 0}
+        return dict(_NOTHING)
     if kind == GithubEventKind.PUSH:
         planned = parsing.plan_push(payload)
         # RADD-1261: commit-author emails are the one place GitHub pairs an
@@ -77,41 +87,34 @@ async def github_webhook(
         except Exception:
             logger.exception("github: commit-author mapping failed")
     elif kind == GithubEventKind.PULL_REQUEST:
-        planned, merged = parsing.plan_pull_request(payload)
+        planned = parsing.plan_pull_request(payload)
     elif kind in (GithubEventKind.CHECK_RUN, GithubEventKind.CHECK_SUITE, GithubEventKind.WORKFLOW_RUN):
         return await _handle_ci(session, kind, payload)
     elif kind == GithubEventKind.RELEASE:
         return await _handle_release(session, payload, repo)
     else:
-        return {"linked": 0, "transitioned": 0}
+        return dict(_NOTHING)
 
-    linked = 0
-    referenced: dict[str, Any] = {}  # key -> WorkItem (for the merge transition)
-    for plan in planned:
-        item = referenced.get(plan.item_key)
-        if item is None:
-            item = await items.find_item_by_key(session, plan.item_key)
-            if item is None:
-                continue  # references an unknown key — skip silently
-            referenced[plan.item_key] = item
-        await vcs.upsert_vcs_link(
-            session,
-            item.id,
-            provider=VcsProvider.GITHUB,
-            ref_type=plan.ref_type,
-            external_id=plan.external_id,
-            title=plan.title,
-            url=plan.url,
-            status=plan.status,
+    repo_name = str((payload.get("repository") or {}).get("full_name") or "")
+    links = await receiving.link_planned(
+        session, planned, provider=VcsProvider.GITHUB, actor_id=SYSTEM_ACTOR_ID
+    )
+    result = {"linked": receiving.count(links), "triggered": 0}
+    if kind == GithubEventKind.PUSH:
+        result["triggered"] = await receiving.fire_push(
+            session, TRIGGERS.pushed, links,
+            provider=VcsProvider.GITHUB, repo=repo_name,
+            branch=str(payload.get("ref") or "").removeprefix("refs/heads/"),
             actor_id=SYSTEM_ACTOR_ID,
         )
-        linked += 1
-
-    transitioned = 0
-    if merged and referenced:
-        transitioned = await _transition_merged(session, list(referenced.values()))
-    logger.debug("github delivery %s: %s linked, %s transitioned", x_github_delivery, linked, transitioned)
-    return {"linked": linked, "transitioned": transitioned}
+    elif (action := parsing.pr_action(payload)) is not None:
+        result["triggered"] = await receiving.fire_ref_action(
+            session, TRIGGERS.for_action(action), links,
+            provider=VcsProvider.GITHUB, repo=repo_name, action=action,
+            ref_extra=parsing.pr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
+        )
+    logger.debug("github delivery %s: %s", x_github_delivery, result)
+    return result
 
 
 async def _handle_comment(
@@ -119,7 +122,7 @@ async def _handle_comment(
 ) -> dict[str, Any]:
     """RADD-1261: a PR comment or review carrying `/spend` lines (or `/unspend`).
     Comments on plain issues are ignored — the convention is for pull requests."""
-    result: dict[str, Any] = {"linked": 0, "transitioned": 0}
+    result: dict[str, Any] = dict(_NOTHING)
     repo_name = str((payload.get("repository") or {}).get("full_name") or "")
     action = str(payload.get("action") or "")
     if kind == GithubEventKind.ISSUE_COMMENT:
@@ -157,9 +160,11 @@ async def _handle_comment(
 
 
 async def _handle_ci(session: AsyncSession, kind: str, payload: dict) -> dict[str, int]:
+    """Stamp the ref's CI badge; a FINISHED run also fires "GitHub: CI finished"
+    once per linked issue (a queued or running report only moves the badge)."""
     update = parsing.plan_ci(kind, payload)
     if update is None:
-        return {"linked": 0, "transitioned": 0}
+        return dict(_NOTHING)
     stamped = await vcs.set_ci_state(
         session,
         provider=VcsProvider.GITHUB,
@@ -167,48 +172,44 @@ async def _handle_ci(session: AsyncSession, kind: str, payload: dict) -> dict[st
         ci_state=update.state,
         ci_url=update.url,
     )
-    return {"linked": stamped, "transitioned": 0}
+    fired = 0
+    if update.state in tuple(triggers.CiOutcome):
+        fired = await receiving.fire_ci(
+            session, GithubTrigger.CI_COMPLETED, stamped,
+            provider=VcsProvider.GITHUB, repo=update.repo, state=update.state, url=update.url,
+            actor_id=SYSTEM_ACTOR_ID,
+        )
+    return {"linked": len(stamped), "triggered": fired}
 
 
 async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[str, int]:
-    """`release` webhook (spec 112). Only `published` ships anything — a draft,
-    an edit or a deletion must not close work. A repository with no project
-    has nowhere to create the version, so it is a no-op."""
-    action = str(payload.get("action") or "")
+    """`release` webhook. Only `published` fires "GitHub: release published" — a
+    draft, an edit or a deletion must not. Whether a version is recorded and
+    waiting work swept is the automation's call (RADD-1309/1310); the receiver
+    used to do it unasked for any repository with a default project."""
     release_payload = payload.get("release") or {}
-    version = parsing.version_from_tag(str(release_payload.get("tag_name") or ""))
+    tag = str(release_payload.get("tag_name") or "")
+    version = triggers.version_from_tag(tag)
     if (
-        action != "published"
+        str(payload.get("action") or "") != ReleaseAction.PUBLISHED
         or not version
         or release_payload.get("draft")
-        or repo is None
-        or repo.project_id is None
     ):
-        return {"linked": 0, "transitioned": 0}
-    project = await projects_service.get_project(session, repo.project_id)
-    _release, moved = await pipeline.on_release_published(
+        return dict(_NOTHING)
+    repo_name = str((payload.get("repository") or {}).get("full_name") or "")
+    await triggers.emit_release(
         session,
-        project,
+        TRIGGERS.release_published,
+        entity_type=GithubEntity.REPO,
+        entity_id=repo.id if repo is not None else repo_name,
+        provider=VcsProvider.GITHUB,
+        repo=repo_name,
+        project_id=getattr(repo, "project_id", None),
+        actor_id=SYSTEM_ACTOR_ID,
         version=version,
-        name=str(release_payload.get("name") or version),
+        tag=tag,
+        name=str(release_payload.get("name") or ""),
         notes=str(release_payload.get("body") or ""),
+        url=str(release_payload.get("html_url") or ""),
     )
-    return {"linked": 0, "transitioned": moved}
-
-
-async def _transition_merged(session: AsyncSession, merged_items: list[Any]) -> int:
-    """Move each referenced item to its project's WAITING-for-release state
-    (spec 112): a merged PR means the work is done, not that it has shipped."""
-    actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    count = 0
-    for item in merged_items:
-        project = await projects_service.get_project(session, item.project_id)
-        target_id = await pipeline.waiting_state_id(session, project)
-        if target_id is None or item.state_id == target_id:
-            continue
-        try:
-            await items.update_item(session, item.id, ItemUpdate(state_id=target_id), actor)
-            count += 1
-        except Exception:
-            logger.exception("github: merge transition failed for item %s", item.id)
-    return count
+    return {"linked": 0, "triggered": 1}

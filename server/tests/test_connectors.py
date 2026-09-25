@@ -27,6 +27,7 @@ from radd.modules.forgejo.router import router as forgejo_router, verify_signatu
 from radd.modules.googlechat.formatter import format_message
 from radd.modules.mailintake.parsing import extract_reply_key, parse_email
 from radd.modules.mailintake.types import BODY_MAX_CHARS
+from radd.modules.vcs.triggers import RefAction
 from radd.modules.vcs.types import VcsRefType
 
 # --- forgejo: key extraction + push/pull_request planning (pure) ---
@@ -111,10 +112,9 @@ def _forgejo_pr_payload(*, state: str, merged: bool, action: str) -> dict:
 
 
 def test_forgejo_plan_pull_request_open():
-    links, merged = forgejo_parsing.plan_pull_request(
-        _forgejo_pr_payload(state="open", merged=False, action="opened")
-    )
-    assert merged is False
+    payload = _forgejo_pr_payload(state="open", merged=False, action="opened")
+    links = forgejo_parsing.plan_pull_request(payload)
+    assert forgejo_parsing.pr_action(payload) is RefAction.OPENED
     assert [link.item_key for link in links] == ["TD-7", "DEV-3"]
     assert all(link.ref_type is VcsRefType.MERGE_REQUEST for link in links)
     assert links[0].external_id == "pr:pipe/tools:12"
@@ -122,18 +122,18 @@ def test_forgejo_plan_pull_request_open():
 
 
 def test_forgejo_plan_pull_request_merged():
-    links, merged = forgejo_parsing.plan_pull_request(
-        _forgejo_pr_payload(state="closed", merged=True, action="closed")
-    )
-    assert merged is True
+    payload = _forgejo_pr_payload(state="closed", merged=True, action="closed")
+    links = forgejo_parsing.plan_pull_request(payload)
+    assert forgejo_parsing.pr_action(payload) is RefAction.MERGED
     assert links[0].status == "merged"
 
 
 def test_forgejo_plan_pull_request_closed_unmerged():
-    links, merged = forgejo_parsing.plan_pull_request(
-        _forgejo_pr_payload(state="closed", merged=False, action="closed")
-    )
-    assert merged is False
+    payload = _forgejo_pr_payload(state="closed", merged=False, action="closed")
+    links = forgejo_parsing.plan_pull_request(payload)
+    assert forgejo_parsing.pr_action(payload) is RefAction.CLOSED
+    # An edit of a closed PR fires nothing (RADD-1309).
+    assert forgejo_parsing.pr_action({**payload, "action": "edited"}) is None
     assert links[0].status == "closed"
 
 
@@ -230,7 +230,7 @@ async def test_forgejo_endpoint_accepts_either_signature_header(monkeypatch, hea
             headers={header: _sign(KEYLESS_PUSH, "s3cret"), "X-Forgejo-Event": "push"},
         )
     assert response.status_code == 200
-    assert response.json() == {"linked": 0, "transitioned": 0}
+    assert response.json() == {"linked": 0, "triggered": 0}
 
 
 async def test_forgejo_endpoint_ignores_unhandled_event_kinds(monkeypatch):
@@ -243,7 +243,7 @@ async def test_forgejo_endpoint_ignores_unhandled_event_kinds(monkeypatch):
             headers={"X-Gitea-Signature": _sign(body, "s3cret"), "X-Gitea-Event": "issues"},
         )
     assert response.status_code == 200
-    assert response.json() == {"linked": 0, "transitioned": 0}
+    assert response.json() == {"linked": 0, "triggered": 0}
 
 
 # --- googlechat: pure message formatting ---

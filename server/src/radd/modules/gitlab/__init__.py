@@ -3,7 +3,7 @@ from radd.kernel import CapabilitySpec, EventTypeSpec, RaddPlugin
 from . import service
 from .admin_router import router as admin_router
 from .models import GitlabConnection, GitlabRepo  # noqa: F401 — Alembic autogenerate
-from .router import router
+from .router import TRIGGERS, router
 from .types import GitlabEvent
 
 
@@ -18,8 +18,8 @@ def _admin_event(event_type: GitlabEvent, label: str, entity: str) -> EventTypeS
 plugin = RaddPlugin(
     name="gitlab",
     core=False,  # optional plugin — disableable via the plugin manager
-    description="GitLab integration: links branches, commits and merge requests to issues and mirrors time spent on them.",
-    depends_on=("events", "projects", "auth", "workflow", "items", "vcs", "automations", "releases"),
+    description="GitLab integration: links branches, commits and merge requests to issues, mirrors time spent on them, and offers merges and releases as automation triggers.",
+    depends_on=("events", "projects", "auth", "items", "vcs", "automations"),
     event_types=(
         _admin_event(GitlabEvent.CONNECTION_CREATED, "GitLab connection created", "gitlab_connection"),
         _admin_event(GitlabEvent.CONNECTION_UPDATED, "GitLab connection updated", "gitlab_connection"),
@@ -27,6 +27,8 @@ plugin = RaddPlugin(
         _admin_event(GitlabEvent.REPO_CREATED, "GitLab project added", "gitlab_repo"),
         _admin_event(GitlabEvent.REPO_UPDATED, "GitLab project updated", "gitlab_repo"),
         _admin_event(GitlabEvent.REPO_DELETED, "GitLab project removed", "gitlab_repo"),
+        # RADD-1309: GitLab's own automation triggers — the connector acts on nothing itself.
+        *TRIGGERS.specs(),
     ),
     routers=(router, admin_router),
     # RADD_GITLAB_WEBHOOK_SECRET seeds ONE connection row, once (the spec-101 rule).

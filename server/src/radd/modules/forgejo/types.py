@@ -12,7 +12,7 @@ class ForgejoEventKind(StrEnum):
 
     PUSH = "push"
     PULL_REQUEST = "pull_request"
-    # Spec 111 — consumed by the release pipeline (spec 112).
+    # `published` fires the release-published trigger (RADD-1309).
     RELEASE = "release"
     # Branch/tag lifecycle: a deleted branch's link is marked stale rather than
     # left pointing at a ref that no longer exists.
@@ -40,6 +40,34 @@ class CiState(StrEnum):
     RUNNING = "running"
     CANCELLED = "cancelled"
     UNKNOWN = "unknown"
+
+
+class ForgejoTrigger(StrEnum):
+    """RADD-1309: Forgejo's OWN automation triggers. The connector links refs and
+    does nothing else; what a merge or a published release should cause is an
+    automation. Registered by this plugin, so disabling Forgejo removes them."""
+
+    PR_OPENED = "forgejo.pull_request.opened"
+    PR_MERGED = "forgejo.pull_request.merged"
+    PR_CLOSED = "forgejo.pull_request.closed"
+    PUSHED = "forgejo.push"
+    CI_COMPLETED = "forgejo.ci.completed"
+    RELEASE_PUBLISHED = "forgejo.release.published"
+
+
+class PrAction(StrEnum):
+    """`action` values of a pull_request delivery that fire a trigger. Forgejo
+    reports a merge as `closed` with `pull_request.merged: true`."""
+
+    OPENED = "opened"
+    REOPENED = "reopened"
+    CLOSED = "closed"
+
+
+class ReleaseAction(StrEnum):
+    """Only `published` publishes — a draft or a deletion must not."""
+
+    PUBLISHED = "published"
 
 
 class ForgejoEvent(StrEnum):

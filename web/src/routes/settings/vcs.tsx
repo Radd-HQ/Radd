@@ -35,7 +35,7 @@ export function VcsSettingsPage() {
   return (
     <SettingsPage
       title="Version control"
-      description="Hosts whose branches, commits, merge and pull requests link themselves to issues by key, ship work through releases, and mirror the time logged on them."
+      description="Hosts whose branches, commits, merge and pull requests link themselves to issues by key and mirror the time logged on them. Merges, pushes, CI results and releases are automation triggers."
       history={{ entities: config.historyEntities }}
     >
       <div role="tablist" aria-label="Version control hosts" className="mb-5 flex flex-wrap gap-1 border-b border-subtle">

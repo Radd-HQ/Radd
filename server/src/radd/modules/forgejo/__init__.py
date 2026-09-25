@@ -5,7 +5,7 @@ from radd.kernel import RaddPlugin
 from . import service
 from .admin_router import router as admin_router
 from .models import ForgejoConnection, ForgejoRepo  # noqa: F401 — Alembic autogenerate
-from .router import router
+from .router import TRIGGERS, router
 from .types import ForgejoEvent
 
 
@@ -21,8 +21,8 @@ plugin = RaddPlugin(
     # Spec 111 declared the `vcsconn.*` atoms here; RADD-1258 moved them to `vcs`
     # (always loaded), since GitHub and GitLab gate on them too.
     core=False,  # optional plugin — disableable via the plugin manager
-    description="Forgejo and Gitea integration: links branches, commits and pull requests to issues and ships releases.",
-    depends_on=("events", "projects", "auth", "workflow", "items", "vcs", "automations", "releases"),
+    description="Forgejo and Gitea integration: links branches, commits and pull requests to issues, and offers merges, CI results and releases as automation triggers.",
+    depends_on=("events", "projects", "auth", "items", "vcs", "automations"),
     event_types=(
         _admin_event(ForgejoEvent.CONNECTION_CREATED, "Forgejo connection created", "forgejo_connection"),
         _admin_event(ForgejoEvent.CONNECTION_UPDATED, "Forgejo connection updated", "forgejo_connection"),
@@ -30,6 +30,8 @@ plugin = RaddPlugin(
         _admin_event(ForgejoEvent.REPO_CREATED, "Forgejo repository added", "forgejo_repo"),
         _admin_event(ForgejoEvent.REPO_UPDATED, "Forgejo repository updated", "forgejo_repo"),
         _admin_event(ForgejoEvent.REPO_DELETED, "Forgejo repository removed", "forgejo_repo"),
+        # RADD-1309: Forgejo's own automation triggers — the connector acts on nothing itself.
+        *TRIGGERS.specs(),
     ),
     routers=(router, admin_router),
     # Spec 111: the env secret seeds ONE connection row, once (the spec-100/101 rule),

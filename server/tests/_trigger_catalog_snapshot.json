@@ -137,6 +137,42 @@
     "item_scoped": false,
     "has_changes": true
   },
+  "forgejo.ci.completed": {
+    "label": "Forgejo: CI finished",
+    "group": "Forgejo",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "forgejo.pull_request.closed": {
+    "label": "Forgejo: pull request closed without merging",
+    "group": "Forgejo",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "forgejo.pull_request.merged": {
+    "label": "Forgejo: pull request merged",
+    "group": "Forgejo",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "forgejo.pull_request.opened": {
+    "label": "Forgejo: pull request opened",
+    "group": "Forgejo",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "forgejo.push": {
+    "label": "Forgejo: branch or commit pushed",
+    "group": "Forgejo",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "forgejo.release.published": {
+    "label": "Forgejo: release published",
+    "group": "Forgejo",
+    "item_scoped": false,
+    "has_changes": false
+  },
   "form.created": {
     "label": "Intake form created",
     "group": "Admin",
@@ -148,6 +184,72 @@
     "group": "Admin",
     "item_scoped": false,
     "has_changes": true
+  },
+  "github.ci.completed": {
+    "label": "GitHub: CI finished",
+    "group": "GitHub",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "github.pull_request.closed": {
+    "label": "GitHub: pull request closed without merging",
+    "group": "GitHub",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "github.pull_request.merged": {
+    "label": "GitHub: pull request merged",
+    "group": "GitHub",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "github.pull_request.opened": {
+    "label": "GitHub: pull request opened",
+    "group": "GitHub",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "github.push": {
+    "label": "GitHub: branch or commit pushed",
+    "group": "GitHub",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "github.release.published": {
+    "label": "GitHub: release published",
+    "group": "GitHub",
+    "item_scoped": false,
+    "has_changes": false
+  },
+  "gitlab.merge_request.closed": {
+    "label": "GitLab: merge request closed without merging",
+    "group": "GitLab",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "gitlab.merge_request.merged": {
+    "label": "GitLab: merge request merged",
+    "group": "GitLab",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "gitlab.merge_request.opened": {
+    "label": "GitLab: merge request opened",
+    "group": "GitLab",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "gitlab.push": {
+    "label": "GitLab: branch or commit pushed",
+    "group": "GitLab",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "gitlab.release.published": {
+    "label": "GitLab: release published",
+    "group": "GitLab",
+    "item_scoped": false,
+    "has_changes": false
   },
   "group.missing": {
     "label": "Directory group missing",

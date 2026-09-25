@@ -1,7 +1,9 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { CheckCircle2, GitBranch, History, Plus, Server, Trash2, XCircle } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
+import { RoutePath } from "../../lib/constants";
 import { invalidateEntities, type Entity } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
@@ -40,6 +42,8 @@ export type VcsHostConfig = {
   historyEntities: string[];
   title: string;
   description: string;
+  /** What the triggers are about, for the "changes nothing on its own" line (RADD-1309). */
+  triggerNoun: string;
   /** Where to register the webhook on the host, shown in the empty state. */
   webhookPath: string;
   namePlaceholder: string;
@@ -134,7 +138,16 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
 
   return (
     <div>
-      <p className="mb-4 text-[13px] text-fg-muted">{config.description}</p>
+      <p className="mb-2 text-[13px] text-fg-muted">{config.description}</p>
+      {/* RADD-1309: the connector acts on nothing itself — say where behaviour lives. */}
+      <p className="mb-4 text-[13px] text-fg-muted">
+        It changes nothing on its own. What a {config.triggerNoun} should do (move the issue, comment, record a version)
+        is an automation: pick a trigger from the “{config.title}” group in{" "}
+        <Link to={RoutePath.settingsAutomations} className="text-accent-text hover:underline">
+          Automations
+        </Link>
+        .
+      </p>
       {connections.isPending ? (
         <TableSkeleton rows={2} />
       ) : connections.isError ? (

@@ -184,7 +184,7 @@ async def test_duplicate_names_and_repos_conflict(db):
 def test_release_version_strips_only_a_leading_v():
     """Tags here are `vX.Y.Z`; releases are bare. Taking the tag verbatim minted
     a duplicate `v0.6.1` beside `0.6.1` and swept waiting work into it."""
-    from radd.modules.forgejo.router import _version_from_tag
+    from radd.modules.vcs.triggers import version_from_tag as _version_from_tag
 
     assert _version_from_tag("v0.6.1") == "0.6.1"
     assert _version_from_tag("V1.0.0") == "1.0.0"

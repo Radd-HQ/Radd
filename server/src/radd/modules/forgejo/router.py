@@ -7,18 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
-from radd.modules.auth import service as auth
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.items import service as items
-from radd.modules.items.schemas import ItemUpdate
-from radd.modules.projects import service as projects_service
-from radd.modules.releases import pipeline
+from radd.modules.vcs import receiving, triggers
 from radd.modules.vcs import service as vcs
 from radd.modules.vcs.ids import branch_external_id, commit_external_id
 from radd.modules.vcs.types import VcsProvider
 
 from . import parsing, service, timelogs
-from .types import CiState, ForgejoEventKind
+from .types import CiState, ForgejoEntity, ForgejoEventKind, ForgejoTrigger, ReleaseAction
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +28,21 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 # connection, so the check belongs next to that lookup. Re-exported because
 # tests/test_connectors.py imports it from here.
 verify_signature = service.verify_signature
+
+#: Forgejo's trigger vocabulary (RADD-1309) — registered by the plugin, fired here.
+TRIGGERS = triggers.ConnectorTriggers(
+    host="Forgejo",
+    change="pull request",
+    opened=ForgejoTrigger.PR_OPENED,
+    merged=ForgejoTrigger.PR_MERGED,
+    closed=ForgejoTrigger.PR_CLOSED,
+    pushed=ForgejoTrigger.PUSHED,
+    release_published=ForgejoTrigger.RELEASE_PUBLISHED,
+    ci_completed=ForgejoTrigger.CI_COMPLETED,
+)
+
+#: Nothing linked, nothing fired — the answer to a delivery this receiver ignores.
+_NOTHING: dict[str, int] = {"linked": 0, "triggered": 0}
 
 
 @router.post("/integrations/forgejo")
@@ -62,49 +73,37 @@ async def forgejo_webhook(
     connection, _repo = resolved
 
     kind = x_forgejo_event or x_gitea_event
-    merged = False
     if kind == ForgejoEventKind.PUSH:
         planned = parsing.plan_push(payload)
     elif kind == ForgejoEventKind.PULL_REQUEST:
-        planned, merged = parsing.plan_pull_request(payload)
+        planned = parsing.plan_pull_request(payload)
     elif kind in (ForgejoEventKind.WORKFLOW_RUN, ForgejoEventKind.WORKFLOW_JOB):
         # Spec 111: CI state for a ref. Forgejo Actions is not on every host, so
         # a payload we cannot read is a no-op rather than an error.
         return await _handle_workflow_run(session, payload)
     elif kind == ForgejoEventKind.RELEASE:
-        # Spec 112: a published version records the release and ships everything
-        # waiting for it. Needs the repository's project — a tag in an unmapped
-        # repository has no project to create a version in, so it is a no-op.
         return await _handle_release(session, payload, _repo)
     else:
-        return {"linked": 0, "transitioned": 0}
+        return dict(_NOTHING)
 
-    linked = 0
-    referenced: dict[str, Any] = {}  # key -> WorkItem (for the merge transition)
-    for plan in planned:
-        item = referenced.get(plan.item_key)
-        if item is None:
-            item = await items.find_item_by_key(session, plan.item_key)
-            if item is None:
-                continue  # references an unknown key — skip silently
-            referenced[plan.item_key] = item
-        await vcs.upsert_vcs_link(
-            session,
-            item.id,
-            provider=VcsProvider.FORGEJO,
-            ref_type=plan.ref_type,
-            external_id=plan.external_id,
-            title=plan.title,
-            url=plan.url,
-            status=plan.status,
+    repo_name = str((payload.get("repository") or {}).get("full_name") or "")
+    links = await receiving.link_planned(
+        session, planned, provider=VcsProvider.FORGEJO, actor_id=SYSTEM_ACTOR_ID
+    )
+    result: dict[str, Any] = {"linked": receiving.count(links), "triggered": 0}
+    if kind == ForgejoEventKind.PUSH:
+        result["triggered"] = await receiving.fire_push(
+            session, TRIGGERS.pushed, links,
+            provider=VcsProvider.FORGEJO, repo=repo_name,
+            branch=str(payload.get("ref") or "").removeprefix("refs/heads/"),
             actor_id=SYSTEM_ACTOR_ID,
         )
-        linked += 1
-
-    transitioned = 0
-    if merged and referenced:
-        transitioned = await _transition_merged(session, list(referenced.values()))
-    result: dict[str, Any] = {"linked": linked, "transitioned": transitioned}
+    elif (action := parsing.pr_action(payload)) is not None:
+        result["triggered"] = await receiving.fire_ref_action(
+            session, TRIGGERS.for_action(action), links,
+            provider=VcsProvider.FORGEJO, repo=repo_name, action=action,
+            ref_extra=parsing.pr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
+        )
 
     # RADD-1260: Forgejo has no tracked-time webhook, so EVERY pull_request
     # delivery reconciles that PR's time. Needs a token; best-effort — the link
@@ -141,82 +140,63 @@ _CI_STATES = {
 
 
 async def _handle_workflow_run(session: AsyncSession, payload: dict) -> dict[str, int]:
+    """Stamp the ref's CI badge; a FINISHED run also fires "Forgejo: CI finished"
+    once per linked issue (a queued or running report only moves the badge)."""
     run = payload.get("workflow_run") or payload.get("workflow_job") or {}
     repository = (payload.get("repository") or {}).get("full_name") or ""
     branch = str(run.get("head_branch") or "")
     sha = str(run.get("head_sha") or "")
     status = str(run.get("conclusion") or run.get("status") or "")
     if not repository or not (branch or sha):
-        return {"linked": 0, "transitioned": 0}
+        return dict(_NOTHING)
     ci_state = _CI_STATES.get(status, CiState.UNKNOWN)
     external_ids = []
     if branch:
         external_ids.append(branch_external_id(repository, branch))
     if sha:
         external_ids.append(commit_external_id(repository, sha))
+    url = str(run.get("html_url") or "")
     stamped = await vcs.set_ci_state(
         session,
         provider=VcsProvider.FORGEJO,
         external_ids=external_ids,
         ci_state=str(ci_state),
-        ci_url=str(run.get("html_url") or ""),
+        ci_url=url,
     )
-    return {"linked": stamped, "transitioned": 0}
+    fired = 0
+    if ci_state in tuple(triggers.CiOutcome):
+        fired = await receiving.fire_ci(
+            session, ForgejoTrigger.CI_COMPLETED, stamped,
+            provider=VcsProvider.FORGEJO, repo=repository, state=str(ci_state), url=url,
+            actor_id=SYSTEM_ACTOR_ID,
+        )
+    return {"linked": len(stamped), "triggered": fired}
 
 
-def _version_from_tag(tag: str) -> str:
-    """`v0.6.1` -> `0.6.1` (RADD-707).
-
-    A git tag and a release VERSION are not the same string: tags here are
-    `vX.Y.Z` by convention, while every release recorded in the tracker is bare.
-    `on_release_published` find-or-creates by exact version, so taking the tag verbatim
-    minted a second `v0.6.1` release beside `0.6.1` and swept waiting work into
-    it. Only a leading `v` is stripped — a tag that is genuinely named something
-    else is left alone rather than guessed at.
-    """
-    tag = tag.strip()
-    return tag[1:] if len(tag) > 1 and tag[0] in "vV" and tag[1].isdigit() else tag
-
-
-async def _handle_release(
-    session: AsyncSession, payload: dict, repo
-) -> dict[str, int]:
-    """`release` webhook (spec 112). Only the `published` action ships anything —
-    a draft or a deletion must not close work."""
-    action = str(payload.get("action") or "")
+async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[str, int]:
+    """`release` webhook. Only `published` fires "Forgejo: release published" — a
+    draft or a deletion must not. Whether a version is recorded and waiting work
+    swept is the automation's call (RADD-1309/1310); the receiver used to do it
+    unasked for any repository with a default project."""
     release_payload = payload.get("release") or {}
-    version = _version_from_tag(str(release_payload.get("tag_name") or ""))
-    if action != "published" or not version or repo is None or repo.project_id is None:
-        return {"linked": 0, "transitioned": 0}
-    project = await projects_service.get_project(session, repo.project_id)
-    _release, moved = await pipeline.on_release_published(
+    tag = str(release_payload.get("tag_name") or "")
+    version = triggers.version_from_tag(tag)
+    if str(payload.get("action") or "") != ReleaseAction.PUBLISHED or not version:
+        return dict(_NOTHING)
+    repo_name = str((payload.get("repository") or {}).get("full_name") or "")
+    await triggers.emit_release(
         session,
-        project,
+        TRIGGERS.release_published,
+        entity_type=ForgejoEntity.REPO,
+        entity_id=repo.id if repo is not None else repo_name,
+        provider=VcsProvider.FORGEJO,
+        repo=repo_name,
+        project_id=getattr(repo, "project_id", None),
+        actor_id=SYSTEM_ACTOR_ID,
         version=version,
-        name=str(release_payload.get("name") or version),
+        tag=tag,
+        name=str(release_payload.get("name") or ""),
         notes=str(release_payload.get("body") or ""),
+        url=str(release_payload.get("html_url") or ""),
     )
-    return {"linked": 0, "transitioned": moved}
-
-
-async def _transition_merged(session: AsyncSession, merged_items: list[Any]) -> int:
-    """Move each referenced item to the project's WAITING-for-release state (spec
-    112): a merged PR means the work is done, not that it has shipped.
-
-    A project that has not configured the release pipeline has no waiting state,
-    so its merged PRs simply do not auto-transition — set the pipeline states in
-    Settings → Releases to turn this on.
-    """
-    actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    count = 0
-    for item in merged_items:
-        project = await projects_service.get_project(session, item.project_id)
-        target_id = await pipeline.waiting_state_id(session, project)
-        if target_id is None or item.state_id == target_id:
-            continue
-        try:
-            await items.update_item(session, item.id, ItemUpdate(state_id=target_id), actor)
-            count += 1
-        except Exception:
-            logger.exception("forgejo: merge transition failed for item %s", item.id)
-    return count
+    return {"linked": 0, "triggered": 1}

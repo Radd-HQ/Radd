@@ -24,12 +24,13 @@ from radd.modules.github import backfill, parsing, service
 from radd.modules.github.models import GithubConnection
 from radd.modules.github.router import router as github_router
 from radd.modules.github.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
-from radd.modules.github.types import GITHUB_COM, GITHUB_COM_API
+from radd.modules.github.types import GITHUB_COM, GITHUB_COM_API, GithubTrigger
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.vcs.models import ItemVcsLink
+from radd.modules.vcs.triggers import RefAction
 from radd.modules.vcs.types import VcsRefType
 
 
@@ -91,17 +92,28 @@ def _pr(*, state: str, merged: bool, merged_at: str | None = None) -> dict:
 
 
 def test_plan_pull_request_status_and_keys():
-    links, merged = parsing.plan_pull_request(_pr(state="closed", merged=True))
-    assert merged and {link.item_key for link in links} == {"TD-5", "DEV-3"}
+    links = parsing.plan_pull_request(_pr(state="closed", merged=True))
+    assert {link.item_key for link in links} == {"TD-5", "DEV-3"}
     assert all(link.external_id == "pr:radd-hq/radd:7" and link.status == "merged" for link in links)
     assert links[0].ref_type is VcsRefType.PULL_REQUEST
-    _, merged = parsing.plan_pull_request(_pr(state="closed", merged=False))
-    assert merged is False
-    links, _ = parsing.plan_pull_request(_pr(state="open", merged=False))
+    links = parsing.plan_pull_request(_pr(state="open", merged=False))
     assert links[0].status == "open"
+
+
+def test_pr_action_reads_the_action_never_the_state():
+    """RADD-1309: a merge is `closed` + merged; an edit of a merged PR still says
+    merged and must fire nothing."""
+    def action(name, **pr):
+        return parsing.pr_action({**_pr(**pr), "action": name})
+
+    assert action("closed", state="closed", merged=True) is RefAction.MERGED
     # GitHub sometimes omits `merged` on re-deliveries but always carries merged_at.
-    links, merged = parsing.plan_pull_request(_pr(state="closed", merged=False, merged_at="2026-09-11T10:00:00Z"))
-    assert merged
+    assert action("closed", state="closed", merged=False, merged_at="2026-09-11T10:00:00Z") is RefAction.MERGED
+    assert action("closed", state="closed", merged=False) is RefAction.CLOSED
+    assert action("opened", state="open", merged=False) is RefAction.OPENED
+    assert action("reopened", state="open", merged=False) is RefAction.OPENED
+    assert action("edited", state="closed", merged=True) is None
+    assert action("synchronize", state="open", merged=False) is None
 
 
 def test_plan_ci_covers_the_three_shapes():
@@ -114,12 +126,6 @@ def test_plan_ci_covers_the_three_shapes():
     check = parsing.plan_ci("check_run", {"repository": repo, "check_run": {"head_sha": "e" * 40, "conclusion": "timed_out", "details_url": "d", "check_suite": {"head_branch": "fix"}}})
     assert check is not None and check.state == "failure" and check.url == "d" and "branch:radd-hq/radd:fix" in check.external_ids
     assert parsing.plan_ci("check_run", {"repository": repo, "check_run": {}}) is None
-
-
-def test_version_from_tag_strips_only_a_leading_v():
-    assert parsing.version_from_tag("v0.36.0") == "0.36.0"
-    assert parsing.version_from_tag("0.36.0") == "0.36.0"
-    assert parsing.version_from_tag("valentine") == "valentine"
 
 
 def test_signature_accepts_prefixed_and_bare_hex():
@@ -239,32 +245,40 @@ async def test_receiver_answers_ping_and_keyless_push(monkeypatch):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_app(monkeypatch, "s3cret")), base_url="http://t") as client:
         for event in ("ping", "push", "create"):
             response = await client.post(f"{settings.api_prefix}/integrations/github", content=KEYLESS, headers={"X-Hub-Signature-256": _sign(KEYLESS, "s3cret"), "X-GitHub-Event": event})
-            assert response.status_code == 200 and response.json() == {"linked": 0, "transitioned": 0}
+            assert response.status_code == 200 and response.json() == {"linked": 0, "triggered": 0}
 
 
-async def test_release_guard_ships_only_published_non_draft(monkeypatch):
+async def test_release_guard_fires_only_for_published_non_draft(monkeypatch):
+    """RADD-1309: a published release fires "GitHub: release published" and
+    ships NOTHING itself — whether a version is recorded is an automation's
+    call. A draft, an edit, a tagless release fire nothing."""
     import importlib
 
     github_router_module = importlib.import_module("radd.modules.github.router")
 
-    calls: list[str] = []
+    fired: list[dict] = []
 
-    async def fake_published(session, project, *, version, name="", notes=""):
-        calls.append(version)
-        return object(), 3
+    async def fake_emit(session, event_type, **kwargs):
+        fired.append({"event_type": event_type, **kwargs})
 
-    async def fake_project(session, project_id):
-        return object()
-
-    monkeypatch.setattr(github_router_module.pipeline, "on_release_published", fake_published)
-    monkeypatch.setattr(github_router_module.projects_service, "get_project", fake_project)
-    repo = SimpleNamespace(project_id=uuid.uuid4())
-    base = {"release": {"tag_name": "v0.36.0", "name": "Radd 0.36.0", "body": "notes", "draft": False}}
-    assert await github_router_module._handle_release(None, {**base, "action": "published"}, repo) == {"linked": 0, "transitioned": 3}
-    assert await github_router_module._handle_release(None, {**base, "action": "edited"}, repo) == {"linked": 0, "transitioned": 0}
-    assert await github_router_module._handle_release(None, {"action": "published", "release": {**base["release"], "draft": True}}, repo) == {"linked": 0, "transitioned": 0}
-    assert await github_router_module._handle_release(None, {**base, "action": "published"}, SimpleNamespace(project_id=None)) == {"linked": 0, "transitioned": 0}
-    assert calls == ["0.36.0"]
+    monkeypatch.setattr(github_router_module.triggers, "emit_release", fake_emit)
+    project_id = uuid.uuid4()
+    repo = SimpleNamespace(id=uuid.uuid4(), project_id=project_id)
+    base = {
+        "release": {"tag_name": "v0.36.0", "name": "Radd 0.36.0", "body": "notes", "draft": False},
+        "repository": {"full_name": "radd-hq/radd"},
+    }
+    handle = github_router_module._handle_release
+    assert await handle(None, {**base, "action": "published"}, repo) == {"linked": 0, "triggered": 1}
+    assert await handle(None, {**base, "action": "edited"}, repo) == {"linked": 0, "triggered": 0}
+    draft = {**base, "action": "published", "release": {**base["release"], "draft": True}}
+    assert await handle(None, draft, repo) == {"linked": 0, "triggered": 0}
+    # An unrecorded repository still fires — with no project subject.
+    assert await handle(None, {**base, "action": "published"}, None) == {"linked": 0, "triggered": 1}
+    assert [(f["version"], f["tag"], f["project_id"]) for f in fired] == [
+        ("0.36.0", "v0.36.0", project_id), ("0.36.0", "v0.36.0", None)
+    ]
+    assert fired[0]["event_type"] == GithubTrigger.RELEASE_PUBLISHED
 
 
 # --- backfill against a fake GitHub API, twice ---

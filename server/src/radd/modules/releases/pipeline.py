@@ -33,22 +33,14 @@ from .types import ReleaseStatus
 logger = logging.getLogger(__name__)
 
 
-async def waiting_state_id(session: AsyncSession, project: Project) -> uuid.UUID | None:
-    """Where finished-but-unshipped work waits: the from-state of the project's
-    first on-release transition. The VCS connectors move a merged pull request's
-    items here."""
-    rows = await workflow_service.release_transitions(session, project.id)
-    return rows[0].from_state_id if rows else None
-
-
 async def create_release(
     session: AsyncSession, data: ReleaseCreate, actor_id: uuid.UUID | None = None
 ) -> tuple[Release, int]:
     """Record a version; one born `released` ships what is waiting (RADD-1007).
 
-    Every write path — REST, MCP, the connectors' publish webhooks — comes
+    Every write path — REST, MCP, a release automation (RADD-1309) — comes
     through here or `update_release`, so "a version that becomes released
-    sweeps" is one rule with one home rather than a property of the webhook.
+    sweeps" is one rule with one home rather than a property of any one caller.
     Returns the release and how many items it shipped.
     """
     release = await releases_service.create_release(session, data, actor_id=actor_id)
@@ -126,7 +118,9 @@ async def _ship_item(session, item_id, state_id, release_id, actor):
 async def on_release_published(
     session: AsyncSession, project: Project, *, version: str, name: str = "", notes: str = ""
 ) -> tuple[Release, int]:
-    """A published version from a connector: record it, then sweep.
+    """A published version: record it, then sweep. Called by an automation on a
+    connector's "release published" trigger — never by a receiver on its own
+    (RADD-1309).
 
     Webhook delivery is at-least-once, so a repeat of the same tag reuses the
     row and re-runs the (idempotent) sweep rather than creating a second version.

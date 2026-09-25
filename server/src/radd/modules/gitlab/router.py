@@ -5,6 +5,11 @@ constant-time against the secret of the CONNECTION this payload's project
 belongs to. The write path is the vcs connector seam, attributed to the system
 actor. Mirrors the Forgejo (specs 47/111) and GitHub (RADD-1129) receivers with
 GitLab's event names and payload shapes.
+
+RADD-1309: the receiver links refs, mirrors MR time, and fires GitLab's own
+triggers (`GitlabTrigger`). It changes nothing else — a merged MR used to move
+every issue it named to waiting-for-release with no switch; that is now an
+automation someone builds on "GitLab: merge request merged".
 """
 
 import json
@@ -16,23 +21,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
-from radd.modules.auth import service as auth
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.items import service as items
-from radd.modules.items.schemas import ItemUpdate
-from radd.modules.projects import service as projects_service
-from radd.modules.releases import pipeline
-from radd.modules.vcs import service as vcs
+from radd.modules.vcs import receiving, triggers
 from radd.modules.vcs.types import VcsProvider
 
 from . import parsing, service, timelogs
-from .types import GitlabEventKind
+from .types import GitlabEntity, GitlabEventKind, GitlabTrigger, ReleaseAction
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["gitlab"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+#: GitLab's trigger vocabulary — registered by the plugin, fired here.
+TRIGGERS = triggers.ConnectorTriggers(
+    host="GitLab",
+    change="merge request",
+    opened=GitlabTrigger.MR_OPENED,
+    merged=GitlabTrigger.MR_MERGED,
+    closed=GitlabTrigger.MR_CLOSED,
+    pushed=GitlabTrigger.PUSHED,
+    release_published=GitlabTrigger.RELEASE_PUBLISHED,
+)
 
 
 def _kind(payload: dict, header: str) -> str:
@@ -67,39 +78,36 @@ async def gitlab_webhook(
     connection, repo = resolved
 
     kind = _kind(payload, x_gitlab_event)
-    result: dict[str, Any] = {"linked": 0, "transitioned": 0}
-    merged = False
+    repo_name = parsing.project_path(payload)
+    result: dict[str, Any] = {"linked": 0, "triggered": 0}
+    if kind == GitlabEventKind.RELEASE:
+        result["triggered"] = await _handle_release(session, payload, repo)
+        return result
     if kind == GitlabEventKind.PUSH:
         planned = parsing.plan_push(payload)
     elif kind == GitlabEventKind.MERGE_REQUEST:
-        planned, merged = parsing.plan_merge_request(payload)
+        planned = parsing.plan_merge_request(payload)
     else:
-        # tag_push / pipeline / deployment / release: RADD-1255 and RADD-1256.
+        # tag_push / pipeline / deployment: RADD-1255.
         return result
 
-    referenced: dict[str, Any] = {}  # key -> WorkItem (for the merge transition)
-    for plan in planned:
-        item = referenced.get(plan.item_key)
-        if item is None:
-            item = await items.find_item_by_key(session, plan.item_key)
-            if item is None:
-                continue  # references an unknown key — skip silently
-            referenced[plan.item_key] = item
-        await vcs.upsert_vcs_link(
-            session,
-            item.id,
-            provider=VcsProvider.GITLAB,
-            ref_type=plan.ref_type,
-            external_id=plan.external_id,
-            title=plan.title,
-            url=plan.url,
-            status=plan.status,
+    links = await receiving.link_planned(
+        session, planned, provider=VcsProvider.GITLAB, actor_id=SYSTEM_ACTOR_ID
+    )
+    result["linked"] = receiving.count(links)
+    if kind == GitlabEventKind.PUSH:
+        result["triggered"] = await receiving.fire_push(
+            session, TRIGGERS.pushed, links,
+            provider=VcsProvider.GITLAB, repo=repo_name,
+            branch=str(payload.get("ref") or "").removeprefix("refs/heads/"),
             actor_id=SYSTEM_ACTOR_ID,
         )
-        result["linked"] += 1
-
-    if merged and referenced:
-        result["transitioned"] = await _transition_merged(session, list(referenced.values()))
+    elif (action := parsing.mr_action(payload)) is not None:
+        result["triggered"] = await receiving.fire_ref_action(
+            session, TRIGGERS.for_action(action), links,
+            provider=VcsProvider.GITLAB, repo=repo_name, action=action,
+            ref_extra=parsing.mr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
+        )
 
     # RADD-1259: time added or removed on the MR → fetch the entries and mirror
     # them. Needs a token; a hook-only connection simply reports nothing.
@@ -125,20 +133,30 @@ async def gitlab_webhook(
     return result
 
 
-async def _transition_merged(session: AsyncSession, merged_items: list[Any]) -> int:
-    """Move each referenced item to its project's WAITING-for-release state
-    (spec 112): a merged MR means the work is done, not that it has shipped. A
-    project without the pipeline configured has no waiting state — a logged skip."""
-    actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    count = 0
-    for item in merged_items:
-        project = await projects_service.get_project(session, item.project_id)
-        target_id = await pipeline.waiting_state_id(session, project)
-        if target_id is None or item.state_id == target_id:
-            continue
-        try:
-            await items.update_item(session, item.id, ItemUpdate(state_id=target_id), actor)
-            count += 1
-        except Exception:
-            logger.exception("gitlab: merge transition failed for item %s", item.id)
-    return count
+async def _handle_release(session: AsyncSession, payload: dict, repo) -> int:
+    """A release CREATED on GitLab fires "GitLab: release published" — whether a
+    version is recorded and waiting work swept is the automation's call
+    (RADD-1309/1310). An update or deletion fires nothing."""
+    if str(payload.get("action") or "") != ReleaseAction.CREATE:
+        return 0
+    tag = str(payload.get("tag") or "")
+    version = triggers.version_from_tag(tag)
+    if not version:
+        return 0
+    repo_name = parsing.project_path(payload)
+    await triggers.emit_release(
+        session,
+        TRIGGERS.release_published,
+        entity_type=GitlabEntity.REPO,
+        entity_id=repo.id if repo is not None else repo_name,
+        provider=VcsProvider.GITLAB,
+        repo=repo_name,
+        project_id=repo.project_id if repo is not None else None,
+        actor_id=SYSTEM_ACTOR_ID,
+        version=version,
+        tag=tag,
+        name=str(payload.get("name") or ""),
+        notes=str(payload.get("description") or ""),
+        url=str(payload.get("url") or ""),
+    )
+    return 1

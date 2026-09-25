@@ -13,7 +13,7 @@ class GithubEventKind(StrEnum):
     PING = "ping"
     PUSH = "push"
     PULL_REQUEST = "pull_request"
-    # Consumed by the release pipeline (spec 112): `published` ships work.
+    # `published` fires the release-published trigger (RADD-1309).
     RELEASE = "release"
     # CI state for a ref, from any of the three shapes GitHub emits.
     CHECK_RUN = "check_run"
@@ -55,6 +55,34 @@ class CiState(StrEnum):
     RUNNING = "running"
     CANCELLED = "cancelled"
     UNKNOWN = "unknown"
+
+
+class GithubTrigger(StrEnum):
+    """RADD-1309: GitHub's OWN automation triggers. The connector links refs and
+    does nothing else; what a merge or a published release should cause is an
+    automation. Registered by this plugin, so disabling GitHub removes them."""
+
+    PR_OPENED = "github.pull_request.opened"
+    PR_MERGED = "github.pull_request.merged"
+    PR_CLOSED = "github.pull_request.closed"
+    PUSHED = "github.push"
+    CI_COMPLETED = "github.ci.completed"
+    RELEASE_PUBLISHED = "github.release.published"
+
+
+class PrAction(StrEnum):
+    """`action` values of a pull_request delivery that fire a trigger. A merge
+    arrives as `closed` with `merged: true`; `edited`/`synchronize` fire nothing."""
+
+    OPENED = "opened"
+    REOPENED = "reopened"
+    CLOSED = "closed"
+
+
+class ReleaseAction(StrEnum):
+    """Only `published` publishes — a draft, an edit or a deletion must not."""
+
+    PUBLISHED = "published"
 
 
 class GithubEvent(StrEnum):

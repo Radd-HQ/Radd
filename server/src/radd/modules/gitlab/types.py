@@ -14,7 +14,7 @@ class GitlabEventKind(StrEnum):
     # RADD-1255 will read these for CI state and deployment markers.
     PIPELINE = "pipeline"
     DEPLOYMENT = "deployment"
-    # RADD-1256 will read these for the release trigger.
+    # RADD-1309: `create` fires the release-published trigger.
     RELEASE = "release"
     NOTE = "note"
     BUILD = "build"
@@ -26,6 +26,34 @@ class MrStatus(StrEnum):
     OPEN = "open"
     MERGED = "merged"
     CLOSED = "closed"
+
+
+class GitlabTrigger(StrEnum):
+    """RADD-1309: GitLab's OWN automation triggers. The connector links refs and
+    does nothing else; what a merge or a release should cause is an automation.
+    Registered by this plugin, so disabling GitLab removes them from the palette."""
+
+    MR_OPENED = "gitlab.merge_request.opened"
+    MR_MERGED = "gitlab.merge_request.merged"
+    MR_CLOSED = "gitlab.merge_request.closed"
+    PUSHED = "gitlab.push"
+    RELEASE_PUBLISHED = "gitlab.release.published"
+
+
+class MrAction(StrEnum):
+    """`object_attributes.action` values of a merge_request delivery that fire a
+    trigger. `update`, `approved` and the rest are edits and fire nothing."""
+
+    OPEN = "open"
+    REOPEN = "reopen"
+    MERGE = "merge"
+    CLOSE = "close"
+
+
+class ReleaseAction(StrEnum):
+    """`action` of a release delivery; only `create` publishes."""
+
+    CREATE = "create"
 
 
 class GitlabEvent(StrEnum):

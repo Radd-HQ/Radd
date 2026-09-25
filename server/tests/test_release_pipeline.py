@@ -174,7 +174,6 @@ async def test_renaming_the_waiting_state_keeps_the_pipeline(db, project, admin)
     item = await _item_in_waiting(db, project, admin)
     waiting = next(s for s in await workflow.list_states(db, project.id) if s.name == WAITING)
     await workflow.update_state(db, waiting.id, StateUpdate(name="Merged, not shipped"))
-    assert await pipeline.waiting_state_id(db, project) == waiting.id
     release, moved = await pipeline.on_release_published(db, project, version="7.0.0")
     assert moved == 1
     assert (await items_service.get_item(db, item.id, admin)).release.version == "7.0.0"

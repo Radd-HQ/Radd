@@ -200,14 +200,15 @@ def test_real_delivery_fixture_reads_as_a_time_change():
     from pathlib import Path
 
     from radd.modules.gitlab import parsing
+    from radd.modules.vcs.triggers import RefAction
 
     payload = json.loads((Path(__file__).parent / "fixtures" / "gitlab_mr_time_change.json").read_text())
     assert payload["object_kind"] == "merge_request"
     assert parsing.time_spent_changed(payload)
     assert payload["changes"]["total_time_spent"] == {"previous": 0, "current": 5400}
     assert payload["changes"]["time_change"]["current"] == 5400
-    links, merged = parsing.plan_merge_request(payload)
-    assert merged is False and links and links[0].external_id.startswith("pr:")
+    links = parsing.plan_merge_request(payload)
+    assert parsing.mr_action(payload) is not RefAction.MERGED and links and links[0].external_id.startswith("pr:")
     assert parsing.project_path(payload) == payload["project"]["path_with_namespace"]
 
 

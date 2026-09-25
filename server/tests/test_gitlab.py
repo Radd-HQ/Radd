@@ -3,19 +3,20 @@
 Pure tests of key extraction and event → planned-link mapping — the piece the
 connector's correctness hangs on. Since RADD-1254 every external id is the
 canonical `vcs/ids.py` spelling, so a backfill after a webhook lands on the same
-row. The endpoint (token check, upsert, merge transition) is exercised live in
+row. The endpoint (token check, upsert, triggers) is exercised live in
 test_gitlab_connections.py.
 """
 
 from radd.modules.gitlab.parsing import (
     extract_keys,
+    mr_action,
     mr_status,
     plan_merge_request,
     plan_push,
     time_spent_changed,
-    version_from_tag,
 )
 from radd.modules.gitlab.types import MrStatus
+from radd.modules.vcs.triggers import RefAction, version_from_tag
 from radd.modules.vcs.types import VcsRefType
 
 
@@ -54,7 +55,7 @@ def test_plan_push_ignores_tag_refs():
     assert plan_push({**PUSH, "ref": "refs/tags/v1.2.3"}) == []
 
 
-def test_plan_merge_request_links_and_merge_flag():
+def test_plan_merge_request_links_a_merged_request():
     payload = {
         "object_kind": "merge_request",
         "project": {"path_with_namespace": "pipe/tools"},
@@ -68,8 +69,8 @@ def test_plan_merge_request_links_and_merge_flag():
             "url": "https://git/pipe/tools/-/merge_requests/41",
         },
     }
-    links, merged = plan_merge_request(payload)
-    assert merged is True
+    links = plan_merge_request(payload)
+    assert mr_action(payload) is RefAction.MERGED
     assert [link.item_key for link in links] == ["TD-7", "DEV-3"]
     assert all(link.ref_type is VcsRefType.MERGE_REQUEST for link in links)
     # The other hosts' pull requests spell `pr:`; the ref TYPE says it is an MR.
@@ -83,8 +84,23 @@ def test_plan_merge_request_open_is_not_merged():
         "object_attributes": {"iid": 2, "title": "TD-1 wip", "state": "opened", "action": "open"},
         "project": {},
     }
-    links, merged = plan_merge_request(payload)
-    assert merged is False and len(links) == 1 and links[0].status == "open"
+    links = plan_merge_request(payload)
+    assert mr_action(payload) is RefAction.OPENED and len(links) == 1 and links[0].status == "open"
+
+
+def test_mr_action_reads_the_action_never_the_state():
+    """RADD-1309: every later edit of a merged MR still says `state: merged`; only
+    the delivery whose ACTION is `merge` may fire "merge request merged"."""
+
+    def action(**attributes):
+        return mr_action({"object_attributes": attributes})
+
+    assert action(state="merged", action="merge") is RefAction.MERGED
+    assert action(state="merged", action="update") is None
+    assert action(state="opened", action="reopen") is RefAction.OPENED
+    assert action(state="closed", action="close") is RefAction.CLOSED
+    assert action(state="opened", action="approved") is None
+    assert action(state="opened") is None
 
 
 def test_mr_status_maps_gitlab_states():

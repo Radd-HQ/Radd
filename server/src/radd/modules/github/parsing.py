@@ -15,9 +15,10 @@ import re
 from dataclasses import dataclass
 
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
+from radd.modules.vcs.triggers import RefAction
 from radd.modules.vcs.types import VcsRefType
 
-from .types import PrStatus
+from .types import PrAction, PrStatus
 
 # An item key referenced in text: TD-123 (project keys are 1-10 alnum starting
 # with a letter). Word-bounded so sha1-2abc doesn't match.
@@ -93,10 +94,10 @@ def pr_status(pull_request: dict) -> PrStatus:
     return PrStatus.OPEN
 
 
-def plan_pull_request(payload: dict) -> tuple[list[PlannedLink], bool]:
-    """(links, merged?) from a GitHub pull_request event. Keys come from the head
-    branch, title, and body; re-deliveries update in place via the stable
-    external id `pr:<repo>:<number>`."""
+def plan_pull_request(payload: dict) -> list[PlannedLink]:
+    """Links from a GitHub pull_request event. Keys come from the head branch,
+    title, and body; re-deliveries update in place via the stable external id
+    `pr:<repo>:<number>`."""
     pull_request = payload.get("pull_request") or {}
     repository = payload.get("repository") or {}
     repo_name = repository.get("full_name", "")
@@ -104,7 +105,7 @@ def plan_pull_request(payload: dict) -> tuple[list[PlannedLink], bool]:
     title = pull_request.get("title") or ""
     head_branch = (pull_request.get("head") or {}).get("ref")
     status = pr_status(pull_request)
-    links = [
+    return [
         PlannedLink(
             item_key=key,
             ref_type=VcsRefType.PULL_REQUEST,
@@ -115,11 +116,33 @@ def plan_pull_request(payload: dict) -> tuple[list[PlannedLink], bool]:
         )
         for key in extract_keys(head_branch, title, pull_request.get("body"))
     ]
-    return links, status is PrStatus.MERGED
+
+
+def pr_action(payload: dict) -> RefAction | None:
+    """What this delivery DID to the pull request (RADD-1309) — by its `action`,
+    never its state, which every later edit of a merged PR repeats."""
+    action = str(payload.get("action") or "")
+    if action in (PrAction.OPENED, PrAction.REOPENED):
+        return RefAction.OPENED
+    if action == PrAction.CLOSED:
+        merged = pr_status(payload.get("pull_request") or {}) is PrStatus.MERGED
+        return RefAction.MERGED if merged else RefAction.CLOSED
+    return None
+
+
+def pr_ref_extra(payload: dict) -> dict[str, object]:
+    """The `ref` fields a trigger carries that the link row does not store."""
+    pull_request = payload.get("pull_request") or {}
+    return {
+        "number": pull_request.get("number"),
+        "source_branch": (pull_request.get("head") or {}).get("ref"),
+        "target_branch": (pull_request.get("base") or {}).get("ref"),
+    }
 
 
 @dataclass(frozen=True)
 class CiUpdate:
+    repo: str
     external_ids: tuple[str, ...]
     state: str
     url: str
@@ -159,12 +182,4 @@ def plan_ci(kind: str, payload: dict) -> CiUpdate | None:
     if sha:
         external_ids.append(commit_external_id(repository, sha))
     url = str(run.get("html_url") or run.get("details_url") or "")
-    return CiUpdate(tuple(external_ids), _CI_STATES.get(status, "unknown"), url)
-
-
-def version_from_tag(tag: str) -> str:
-    """`v0.6.1` -> `0.6.1` (RADD-707): tags are `vX.Y.Z` by convention while
-    every release recorded in the tracker is bare. Only a leading `v` before a
-    digit is stripped."""
-    tag = tag.strip()
-    return tag[1:] if len(tag) > 1 and tag[0] in "vV" and tag[1].isdigit() else tag
+    return CiUpdate(repository, tuple(external_ids), _CI_STATES.get(status, "unknown"), url)

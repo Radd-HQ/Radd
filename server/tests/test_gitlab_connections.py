@@ -4,8 +4,9 @@ GitLab sends the hook's secret token back verbatim (`X-Gitlab-Token`), so the
 interesting invariant is the spec-111 one: a payload from a KNOWN project is
 verified against that project's own connection and nothing else — a second
 host's genuine token must not authorise writes against the first host's
-projects. Plus the receiver end to end (link, merge → waiting state) against
-live Postgres inside a rolled-back transaction.
+projects. Plus the receiver end to end (link, and RADD-1309's triggers — a
+merge fires "GitLab: merge request merged" and moves nothing by itself)
+against live Postgres inside a rolled-back transaction.
 """
 
 import json
@@ -234,10 +235,114 @@ async def test_receiver_refuses_a_bad_token_and_links_with_a_good_one(db):
         assert again.status_code == 200 and again.json()["linked"] == 1
         # An unknown kind is a 200 no-op, never a 500.
         other = await client.post("/integrations/gitlab", content=json.dumps({**payload, "object_kind": "pipeline"}).encode(), headers={"X-Gitlab-Token": "hook-secret", "Content-Type": "application/json"})
-        assert other.status_code == 200 and other.json() == {"linked": 0, "transitioned": 0}
+        assert other.status_code == 200 and other.json() == {"linked": 0, "triggered": 0}
 
     rows = list((await db.execute(select(ItemVcsLink).where(ItemVcsLink.item_id == item.id))).scalars())
     assert [(r.provider, r.ref_type, r.external_id, r.status) for r in rows] == [
         ("gitlab", "merge_request", "pr:acme/rx:7", "open")
     ]
     assert rows[0].title == f"{key} do the thing (!7)"
+
+
+async def _events_after(db, head: int, event_type: str) -> list:
+    from radd.modules.events import service as events
+
+    return [e for e in await events.read_after(db, head, 500) if e.event_type == event_type]
+
+
+async def _head(db) -> int:
+    from radd.modules.events.models import Event
+
+    return (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
+
+
+async def test_a_merge_fires_the_trigger_and_changes_nothing_else(db):
+    """RADD-1309. The receiver used to move every issue a merged MR named to the
+    project's waiting-for-release state, unasked. The project here HAS that
+    state and an on-release transition — the precondition under which the old
+    code moved the issue — so "state unchanged" is not vacuous. With an
+    automation on the trigger, the issue moves where the automation says."""
+    import httpx
+
+    from radd.modules.auth.models import User
+    from radd.modules.automations import engine, service as automations
+    from radd.modules.automations.schemas import RuleCreate
+    from radd.modules.gitlab.types import GitlabTrigger
+    from radd.modules.items.enums import ItemEvent
+    from radd.modules.releases.models import Release
+    from radd.modules.workflow import service as workflow, transitions
+    from radd.modules.workflow.schemas import StateCreate, TransitionCreate
+    from radd.modules.workflow.types import StateCategory
+
+    connection = await _connection(db, f"tr-{uuid.uuid4().hex[:6]}", "hook-secret")
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"TR{uuid.uuid4().hex[:4].upper()}", name="Triggers")
+    )
+    await service.create_repo(
+        db, RepoCreate(connection_id=connection.id, full_name="acme/tr", project_id=project.id)
+    )
+    states = await workflow.list_states(db, project.id)
+    waiting = await workflow.create_state(
+        db, StateCreate(project_id=project.id, name="Waiting for release", category=StateCategory.DONE, position=len(states) + 1)
+    )
+    done = next(s for s in states if s.name == "Done")
+    await transitions.create_transition(
+        db, TransitionCreate(project_id=project.id, from_state_id=waiting.id, to_state_id=done.id, on_release=True)
+    )
+    owner = User(name="Owner", email=f"{uuid.uuid4()}@test.invalid", instance_role="admin")
+    db.add(owner)
+    await db.flush()
+    item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="merge me"), actor=owner)
+    before = item.state.id
+
+    def mr(action: str, state: str) -> bytes:
+        return json.dumps({
+            "object_kind": "merge_request",
+            "project": {"path_with_namespace": "acme/tr"},
+            "object_attributes": {
+                "iid": 9, "title": f"{item.key} ship it", "source_branch": "feat", "target_branch": "main",
+                "state": state, "action": action, "url": "https://tr.example.com/acme/tr/-/merge_requests/9",
+            },
+        }).encode()
+
+    headers = {"X-Gitlab-Token": "hook-secret", "Content-Type": "application/json"}
+    transport = httpx.ASGITransport(app=_app(db))
+    head = await _head(db)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        merged = await client.post("/integrations/gitlab", content=mr("merge", "merged"), headers=headers)
+        assert merged.json() == {"linked": 1, "triggered": 1}
+        # A later edit of the merged MR repeats `state: merged` and fires nothing.
+        edited = await client.post("/integrations/gitlab", content=mr("update", "merged"), headers=headers)
+        assert edited.json() == {"linked": 1, "triggered": 0}
+        release = await client.post("/integrations/gitlab", content=json.dumps({
+            "object_kind": "release", "action": "create", "tag": "v2.1.0", "name": "Two one",
+            "description": "notes", "url": "https://tr.example.com/acme/tr/-/releases/v2.1.0",
+            "project": {"path_with_namespace": "acme/tr"},
+        }).encode(), headers=headers)
+        assert release.json() == {"linked": 0, "triggered": 1}
+
+    assert (await items_service.require_item(db, item.id)).state_id == before
+    assert await _events_after(db, head, ItemEvent.UPDATED.value) == []
+    assert (await db.scalar(select(Release).where(Release.project_id == project.id))) is None
+
+    fired = await _events_after(db, head, GitlabTrigger.MR_MERGED.value)
+    assert len(fired) == 1
+    event = fired[0]
+    assert event.payload["item"]["id"] == str(item.id)
+    assert event.payload["action"] == "merged" and event.payload["repo"] == "acme/tr"
+    assert event.payload["ref"]["number"] == "9" and event.payload["ref"]["target_branch"] == "main"
+    [published] = await _events_after(db, head, GitlabTrigger.RELEASE_PUBLISHED.value)
+    assert published.payload["version"] == "2.1.0" and published.payload["tag"] == "v2.1.0"
+    assert published.payload["project"]["id"] == str(project.id)
+
+    # The behaviour the receiver used to hard-code, as an automation someone built.
+    await automations.create_rule(db, RuleCreate.model_validate({
+        "name": "merged → waiting",
+        "nodes": [
+            {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": GitlabTrigger.MR_MERGED.value}},
+            {"id": "act", "kind": "action", "type": "action.set_state", "params": {"state": waiting.name}},
+        ],
+        "edges": [{"source": "trg", "port": "out", "target": "act"}],
+    }), owner.id)
+    await engine.apply_event(db, event)  # a SYSTEM-actor event: RADD-1308 is what lets it through
+    assert (await items_service.require_item(db, item.id)).state_id == waiting.id

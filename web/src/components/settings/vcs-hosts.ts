@@ -54,7 +54,8 @@ const FORGEJO: VcsHostConfig = {
   title: "Forgejo",
   historyEntities: ["forgejo_connection", "forgejo_repo", "vcs_user_link"],
   description:
-    "Hosts whose pushes, branches and pull requests link themselves to issues by key. Map a repository to a project so its published releases create versions there. Time tracked on a pull request is mirrored into the linked issue, dated by when it was added.",
+    "Hosts whose pushes, branches and pull requests link themselves to issues by key. Map a repository to a project to make it the project its release triggers name. Time tracked on a pull request is mirrored into the linked issue, dated by when it was added.",
+  triggerNoun: "merge, push, finished CI run or published release",
   webhookPath: "/api/v1/integrations/forgejo",
   namePlaceholder: "Forgejo",
   baseUrlPlaceholder: "https://git.example.com",
@@ -79,7 +80,8 @@ const GITHUB: VcsHostConfig = {
   title: "GitHub",
   historyEntities: ["github_connection", "github_repo", "vcs_user_link"],
   description:
-    "Repositories whose pushes, branches, pull requests and check runs link themselves to issues by key. Map a repository to a project so its published releases create versions there and ship the work waiting for them. GitHub has no time tracking, so a pull-request comment carries it: “/spend 1h30”, “/spend 45m 2026-09-18 note”, “/spend 1h KEY-12” to log to another issue, “/unspend” to forget yours on that PR — mirrored into the linked issue by the mapped account.",
+    "Repositories whose pushes, branches, pull requests and check runs link themselves to issues by key. Map a repository to a project to make it the project its release triggers name. GitHub has no time tracking, so a pull-request comment carries it: “/spend 1h30”, “/spend 45m 2026-09-18 note”, “/spend 1h KEY-12” to log to another issue, “/unspend” to forget yours on that PR — mirrored into the linked issue by the mapped account.",
+  triggerNoun: "merge, push, finished CI run or published release",
   webhookPath:
     "/api/v1/integrations/github (content type application/json, events: push, pull requests, releases, check suites, workflow runs)",
   namePlaceholder: "GitHub",
@@ -108,8 +110,9 @@ const GITLAB: VcsHostConfig = {
   historyEntities: ["gitlab_connection", "gitlab_repo", "vcs_user_link"],
   description:
     "Hosts whose pushes, branches and merge requests link themselves to issues by key (the key in a branch name, a commit message or a merge request title). Time logged on a merge request with /spend is mirrored into the linked issue's worklogs, and the backfill imports history — including its time — once.",
+  triggerNoun: "merge, push or published release",
   webhookPath:
-    "/api/v1/integrations/gitlab (project or group hook; triggers: push, merge request; paste the same secret token here)",
+    "/api/v1/integrations/gitlab (project or group hook; triggers: push, merge request, releases; paste the same secret token here)",
   namePlaceholder: "GitLab",
   baseUrlPlaceholder: "https://gitlab.example.com",
   defaultBaseUrl: "https://gitlab.com",

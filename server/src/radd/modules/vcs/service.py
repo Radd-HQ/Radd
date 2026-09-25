@@ -186,15 +186,17 @@ async def set_ci_state(
     external_ids: Sequence[str],
     ci_state: str,
     ci_url: str = "",
-) -> int:
-    """Stamp the latest CI result onto every link for these refs (spec 111).
+) -> list[ItemVcsLink]:
+    """Stamp the latest CI result onto every link for these refs (spec 111), and
+    return them — the connector fires its `ci.completed` trigger per linked issue
+    (RADD-1309).
 
     Keyed by (provider, external_id) rather than by item: one workflow run
     concerns a ref, and that ref may be linked from several items — all of them
     want the same answer.
     """
     if not external_ids:
-        return 0
+        return []
     rows = await session.execute(
         select(ItemVcsLink).where(
             ItemVcsLink.provider == provider, ItemVcsLink.external_id.in_(list(external_ids))
@@ -206,4 +208,4 @@ async def set_ci_state(
         link.ci_url = ci_url
         link.ci_updated_at = utcnow()
     await session.flush()
-    return len(links)
+    return links
