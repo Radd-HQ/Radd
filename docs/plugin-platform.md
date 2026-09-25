@@ -539,9 +539,30 @@ provider is missing. Caller-supplied presets work without directory browsing.
 Disabled browsing does not authorize fetching; server permission checks remain
 necessary for every request. Query failures have explicit retry controls.
 
-This migrates option providers, not the host features that consume them. Project
-and cycle pickers, the independent TeamSelect reference lookup, automation forms
-and settings/access page ownership remain in the complete audit inventory.
+This migrates option providers, not the host features that consume them. The
+independent TeamSelect reference lookup, automation forms and settings/access
+page ownership remain in the complete audit inventory.
+
+### Owner-provided project and cycle pickers (RADD-1358)
+
+Projects registers `projects.select` and `projects.picker`; Cycles registers
+`cycles.select` and `cycles.choices`. Public owner contracts preserve full-row
+callbacks, project ID/key modes, cycle ID/name modes, permission filters, custom
+empty values and cycle scope/date/completion filters. The host adapters render
+slots and dismissible or disabled unavailable fallbacks, without directory logic.
+
+SDK 1.7 supplies `usePagedDirectory` and `Switch`. Owners supply query factories,
+transport, metadata and presentation. Each mounted picker scopes its own cache,
+passes abort signals and retains no unused results. Withdrawing its owner removes
+internally opened modals and cancels reads; reactivation resolves saved values
+fresh. Failed reads offer retry. Changing project context resets an open cycle
+picker to that project's scope. Saved values remain in the consuming feature.
+
+Core-module absence is exercised through browser manifests; this does not change
+backend core-module requirements. Remaining host navigation and page queries,
+query/type re-exports and directory hooks are transitional migration debt, not
+approved final architecture. Tests distinguish picker queries from those existing
+host navigation consumers rather than claiming all feature requests have stopped.
 
 ### Original frontend design
 

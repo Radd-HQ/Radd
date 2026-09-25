@@ -455,6 +455,7 @@
       "manifest": "server/src/radd/modules/cycles/__init__.py",
       "declarations": {
         "name": "cycles",
+        "ui": "PluginUiManifest(remote='/plugins/cycles/remoteEntry.js', ui_api_version='1.7.0')",
         "crud_resources": "(CrudResourceSpec('cycle', 'global', 'cycles', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Cycles (sprints) with dates and optional recurring series.",
         "depends_on": [
@@ -472,7 +473,15 @@
         "entity_refs": "(EntityRefSpec('cycle', service.cycle_ref, label='Cycle'),)",
         "event_types": "(EventTypeSpec(CycleEvent.CREATED, 'Cycle created', 'Cycles', subjects=('cycle',)), EventTypeSpec(CycleEvent.UPDATED, 'Cycle updated', 'Cycles', has_changes=True, subjects=('cycle',)), EventTypeSpec(CycleEvent.COMPLETED, 'Cycle completed', 'Cycles', subjects=('cycle',)), EventTypeSpec(CycleEvent.DELETED, 'Cycle deleted', 'Cycles', subjects=('cycle',)), EventTypeSpec(SeriesEvent.CREATED, 'Cycle series created', 'Cycles'), EventTypeSpec(SeriesEvent.UPDATED, 'Cycle series updated', 'Cycles', has_changes=True), EventTypeSpec(SeriesEvent.DELETED, 'Cycle series deleted', 'Cycles'))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/cycles/ui/src/CycleSelect.tsx",
+        "server/src/radd/modules/cycles/ui/src/directory-queries.ts",
+        "server/src/radd/modules/cycles/ui/src/index.tsx",
+        "server/src/radd/modules/cycles/ui/src/picker-contract.ts",
+        "server/src/radd/modules/cycles/ui/src/query-keys.ts",
+        "server/src/radd/modules/cycles/ui/src/status.ts",
+        "server/src/radd/modules/cycles/ui/src/types.ts"
+      ]
     },
     "dashboards": {
       "manifest": "server/src/radd/modules/dashboards/__init__.py",
@@ -1077,6 +1086,7 @@
       "manifest": "server/src/radd/modules/projects/__init__.py",
       "declarations": {
         "name": "projects",
+        "ui": "PluginUiManifest(remote='/plugins/projects/remoteEntry.js', ui_api_version='1.7.0')",
         "description": "Projects: the containers issues live in.",
         "depends_on": [
           "events"
@@ -1091,7 +1101,15 @@
         "event_types": "(EventTypeSpec(ProjectEvent.PROJECT_CREATED, 'Project created', 'Admin', subjects=('project',)), EventTypeSpec(ProjectEvent.PROJECT_UPDATED, 'Project updated', 'Admin', has_changes=True, subjects=('project',)), EventTypeSpec(ProjectEvent.PROJECT_DELETED, 'Project deleted', 'Admin'))",
         "grant_scopes": "(GrantScopeSpec(key='project', labels=service.project_keys, exists=service.project_exists),)"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/projects/ui/src/ProjectPicker.tsx",
+        "server/src/radd/modules/projects/ui/src/ProjectSelect.tsx",
+        "server/src/radd/modules/projects/ui/src/directory-queries.ts",
+        "server/src/radd/modules/projects/ui/src/index.tsx",
+        "server/src/radd/modules/projects/ui/src/picker-contract.ts",
+        "server/src/radd/modules/projects/ui/src/query-keys.ts",
+        "server/src/radd/modules/projects/ui/src/types.ts"
+      ]
     },
     "realtime": {
       "manifest": "server/src/radd/modules/realtime/__init__.py",
@@ -1634,6 +1652,17 @@
         "build": "vite build"
       }
     },
+    "server/src/radd/modules/cycles/ui/package.json": {
+      "name": "@radd-plugin-ui/cycles",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
     "server/src/radd/modules/forms/ui/package.json": {
       "name": "@radd-plugin-ui/forms",
       "version": "1.0.0",
@@ -1724,6 +1753,17 @@
     },
     "server/src/radd/modules/participants/ui/package.json": {
       "name": "@radd-plugin-ui/participants",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
+    "server/src/radd/modules/projects/ui/package.json": {
+      "name": "@radd-plugin-ui/projects",
       "version": "1.0.0",
       "type": "module",
       "dependencies": {
@@ -1827,7 +1867,7 @@
         "build": "tsc -b && vite build",
         "preview": "vite preview",
         "test": "cd .. && node --test web/scripts/*.test.mjs",
-        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs",
+        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs",
         "build:all": "node scripts/build-all.mjs",
         "check": "npm run test && npm run build:all && npm run test:browser"
       }
@@ -2277,7 +2317,7 @@
       "imports": []
     },
     "docs/modules.md": {
-      "sha256": "313812f05f9a47116d25fa70606006d950db848535887c6fca6363a731b14d5d",
+      "sha256": "a9d3ef36e91353910fc09fb2fa93e8b00fc425d869c9397ef097199e6c9f2cd5",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -2313,7 +2353,7 @@
       "imports": []
     },
     "docs/plugin-platform.md": {
-      "sha256": "70de3325f2fb7b4aa903cf774a5ff7bd3d40b4684c709b28e71130dd970a1407",
+      "sha256": "803d421a8f147b01f162d4fb7e192f1d7244df21d6625ca4a49ee2822fd8bdd1",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -3897,7 +3937,7 @@
       "imports": []
     },
     "research/plugin-isolation/README.md": {
-      "sha256": "7fae3f2c6b70ecb63d2392150aea5a330046a0cae15efcee93abf13f5cbe246f",
+      "sha256": "102dbb6ca540aeb5912a7fed9ec1cd402c1570ab01f716c5545d1d652deab199",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -32278,7 +32318,7 @@
       ]
     },
     "server/src/radd/modules/cycles/__init__.py": {
-      "sha256": "d20e583c38ab9f5e6d19ebc326ed561eac56030c3be19646b648238ae135c765",
+      "sha256": "70a2857aaabedb0e713382993fc4debaa1df00e3906635ca18744520d5de8e72",
       "module_directory": "cycles",
       "role": "runtime_source",
       "imports": [
@@ -32286,33 +32326,40 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "EntityRefSpec",
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EntityRefSpec",
+            "EventTypeSpec"
           ]
         },
         {
           "line": 3,
           "module": "radd.kernel",
           "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 4,
+          "module": "radd.kernel",
+          "names": [
             "CrudResourceSpec"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "router",
@@ -32320,7 +32367,7 @@
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".types",
           "names": [
             "CycleEvent",
@@ -32951,6 +32998,149 @@
           "names": [
             "StrEnum"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/cycles/ui/package.json": {
+      "sha256": "bc791ac13e96cb574566164deb704ce233cc5f7f202b50e5498e6b97898309bd",
+      "module_directory": "cycles",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/cycles/ui/src/CycleSelect.tsx": {
+      "sha256": "ffe7e0103adabd5e9afc3a9ae5cd7cb4aea21e3e3945b2f51c8048fa8f91e551",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "lucide-react"
+        },
+        {
+          "line": 4,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 5,
+          "module": "./directory-queries"
+        },
+        {
+          "line": 6,
+          "module": "./status"
+        },
+        {
+          "line": 7,
+          "module": "./picker-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/cycles/ui/src/directory-queries.ts": {
+      "sha256": "84d2ab5a813a263dbdfac2c3a63745bdc9f67e7f568d8c1d2387118bd77c0f43",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./types"
+        },
+        {
+          "line": 3,
+          "module": "./query-keys"
+        }
+      ]
+    },
+    "server/src/radd/modules/cycles/ui/src/index.tsx": {
+      "sha256": "3f0f8f51a4008fa040d6b2b655dac8941326ad11767a665b655d77e150401ad3",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./CycleSelect"
+        },
+        {
+          "line": 3,
+          "module": "./picker-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/cycles/ui/src/picker-contract.ts": {
+      "sha256": "7eeae76fdbb070082952444d35079e7c5230230db59443e6ef66c2b6b860f9ab",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/cycles/ui/src/query-keys.ts": {
+      "sha256": "b9468ec461fd4da9ee78a52612ec97c4d2cfc56c391a4f889d637e1e9b5a530d",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/cycles/ui/src/status.ts": {
+      "sha256": "c4b5a2922d169a8f16bfb7df020893cf8cb83b9ab03babe0a1eca7e98f85a195",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/cycles/ui/src/types.ts": {
+      "sha256": "b693b1dac0c423b31083f8c52bee9ea9ecc9c60a3f896dd7fc7bd6abfc622ca8",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": []
+    },
+    "server/src/radd/modules/cycles/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "cycles",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/cycles/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "cycles",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -59432,12 +59622,19 @@
       ]
     },
     "server/src/radd/modules/projects/__init__.py": {
-      "sha256": "ddc91ba2024437353d4dccc1504b13f7d85052d4dc57561728a68429a2412742",
+      "sha256": "6dc00faea8a69a69cc37bff5342c250503203275884ea1a88190d0c5b0cdc003",
       "module_directory": "projects",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "PluginUiManifest"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "EntityRefSpec",
@@ -59446,21 +59643,21 @@
           ]
         },
         {
-          "line": 2,
+          "line": 3,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".router",
           "names": [
             "instance_router",
@@ -59468,14 +59665,14 @@
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".types",
           "names": [
             "ProjectEvent"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".",
           "names": [
             "mcptools"
@@ -60049,6 +60246,168 @@
           "names": [
             "Project"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/projects/ui/package.json": {
+      "sha256": "1da57fd0df560a0647412fecd36d844af5525c87d3433ac258dcd36a868f4c74",
+      "module_directory": "projects",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/projects/ui/src/ProjectPicker.tsx": {
+      "sha256": "ddca37c20f38a631860161f3786a34c88663e0b86e9172d991b923028ac1032b",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "lucide-react"
+        },
+        {
+          "line": 4,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 5,
+          "module": "./directory-queries"
+        },
+        {
+          "line": 6,
+          "module": "./picker-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/projects/ui/src/ProjectSelect.tsx": {
+      "sha256": "b71048ecb0608405a7230c45d97158b282f8f9e9f63495c0adfa132d44735394",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "lucide-react"
+        },
+        {
+          "line": 4,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 5,
+          "module": "./directory-queries"
+        },
+        {
+          "line": 6,
+          "module": "./ProjectPicker"
+        },
+        {
+          "line": 7,
+          "module": "./picker-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/projects/ui/src/directory-queries.ts": {
+      "sha256": "8119b0d26c71b4d1023ff275f0e471e23081339e075e72712606c65fff1c6595",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./types"
+        },
+        {
+          "line": 3,
+          "module": "./query-keys"
+        }
+      ]
+    },
+    "server/src/radd/modules/projects/ui/src/index.tsx": {
+      "sha256": "630a85eec32a9506a9ca14352b0ee207a5360b9a4f3eb59738f07378d563a79b",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./ProjectSelect"
+        },
+        {
+          "line": 3,
+          "module": "./ProjectPicker"
+        },
+        {
+          "line": 4,
+          "module": "./picker-contract"
+        }
+      ]
+    },
+    "server/src/radd/modules/projects/ui/src/picker-contract.ts": {
+      "sha256": "0288d9d36b8e7f199036bc1fe6d04c4c6e6e9a0fc656e71ae2117f7b1c47c4cb",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/projects/ui/src/query-keys.ts": {
+      "sha256": "cb31a10765650355e5f473ab251d83b6db7da7b04ba99a3999b25893eb2f6381",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": []
+    },
+    "server/src/radd/modules/projects/ui/src/types.ts": {
+      "sha256": "5be412681d2ceae00adf5982ea138c94e1625cad81c400ad103fc472053a4ff0",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": []
+    },
+    "server/src/radd/modules/projects/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "projects",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/projects/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "projects",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -109223,7 +109582,7 @@
       "imports": []
     },
     "web/package.json": {
-      "sha256": "52f504b2c132564afc6f9624aad483048a83c342c9c4f5f377f6f7d9c1154ff5",
+      "sha256": "a319755351eb5730b32a796e186038bda4d21cf2c7ea68176c5f813091f70101",
       "module_directory": null,
       "role": "configuration",
       "imports": []
@@ -109352,7 +109711,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/index.ts": {
-      "sha256": "5dd8001e0b799acd2ed2153df2c67313785464f1bdc5743bce4784b50027a386",
+      "sha256": "d25443da1a4dc82ec7418e26629d20d33eb03e675354dbae2365187e8ec9f3ec",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -109415,6 +109774,14 @@
         {
           "line": 105,
           "module": "./options"
+        },
+        {
+          "line": 107,
+          "module": "./switch"
+        },
+        {
+          "line": 108,
+          "module": "./paged-directory"
         }
       ]
     },
@@ -109450,6 +109817,25 @@
         {
           "line": 8,
           "module": "./plugin"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/paged-directory.ts": {
+      "sha256": "55785f6b76dd8b31d3f28f21ad9c7dbb52e7e5b2888a6ad48b9d2b29b2105566",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "./api"
         }
       ]
     },
@@ -109553,6 +109939,12 @@
       "role": "runtime_source",
       "imports": []
     },
+    "web/packages/plugin-sdk/src/switch.tsx": {
+      "sha256": "f93028f4f367261379171da0895f84587d0d9870e18c7423764ffd8616ea1ab5",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": []
+    },
     "web/packages/plugin-sdk/src/tokens.ts": {
       "sha256": "d88ba990383dde338b922f62f528a7f88bd5ce12ffac1f0d43801445f74bc85c",
       "module_directory": null,
@@ -109566,7 +109958,7 @@
       "imports": []
     },
     "web/packages/plugin-sdk/src/version.ts": {
-      "sha256": "14f65d1a2eb6f937675be87a419e089cb88c10b6098a8747590523536b394de7",
+      "sha256": "97d8046f9d8c4ce98708e5c6faad2fb3beb8f5315202de6d39a88de1813be3b7",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
@@ -109661,7 +110053,7 @@
       "imports": []
     },
     "web/public/shared/radd-plugin-sdk.js": {
-      "sha256": "9258623cc7652784633ff245c88befe89faf1fe324ab25491d941f262610c9fb",
+      "sha256": "f407c16dd389af73d8d59c396829265c90257d0c019cc52aac9665b1c22ec9e8",
       "module_directory": null,
       "role": "generated_source",
       "imports": []
@@ -109898,7 +110290,7 @@
       ]
     },
     "web/scripts/audit-regressions.test.mjs": {
-      "sha256": "bc3d4e0220418d381276ddb57b2bc7e7297a30f42c33669562868f64b0fd2392",
+      "sha256": "5323cab2f596f2fd0ac7a0416053193ae8430781b76b51267d8226a704844027",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -110516,6 +110908,45 @@
         {
           "line": 8,
           "module": "./lib/cdp.mjs"
+        }
+      ]
+    },
+    "web/scripts/browser-picker-contributions.mjs": {
+      "sha256": "703d0925fa787d8a7183bad1d5be022f7d953c67661ef705f42cfb37d0ecfc61",
+      "module_directory": null,
+      "role": "tooling_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:http"
+        },
+        {
+          "line": 4,
+          "module": "node:fs"
+        },
+        {
+          "line": 5,
+          "module": "node:fs/promises"
+        },
+        {
+          "line": 6,
+          "module": "node:path"
+        },
+        {
+          "line": 7,
+          "module": "./lib/cdp.mjs"
+        },
+        {
+          "line": 13,
+          "module": "react"
+        },
+        {
+          "line": 13,
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -111167,7 +111598,7 @@
       ]
     },
     "web/scripts/gen-shared-shims.mjs": {
-      "sha256": "74e2a6243274024b34b06f5b42922b778f1dbb385203487f0ab510a0bdef1bd0",
+      "sha256": "823917586a20d8685bc288da424efdcce9d816af4ea303682cb0ccf557652282",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -111977,7 +112408,7 @@
       ]
     },
     "web/scripts/plugin-boundaries.test.mjs": {
-      "sha256": "b5d2121e8c1634ce3ad433c99b1d2854a6f7a953d8312310211475873c96de75",
+      "sha256": "7dffd066441e54f410ae9b73ecfa77b07577bfa10f87b46014b59b75872a17e2",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -112179,7 +112610,7 @@
       ]
     },
     "web/scripts/query-cancellation.test.mjs": {
-      "sha256": "ea74156687f39131291223be886499c40c18d387aca7b6e265ddcf02bca947ba",
+      "sha256": "1db930dad92618fde6d5309d68dfd57e65c8b59abcf0f13d77f07eb1a6cdc010",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -113455,10 +113886,15 @@
       ]
     },
     "web/src/components/Switch.tsx": {
-      "sha256": "f93028f4f367261379171da0895f84587d0d9870e18c7423764ffd8616ea1ab5",
+      "sha256": "6d7ab839829da3fcd5504379abbbd335dd40d81a1fa8007e6f9322180b7a00b5",
       "module_directory": null,
       "role": "runtime_source",
-      "imports": []
+      "imports": [
+        {
+          "line": 2,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
     },
     "web/src/components/Table.tsx": {
       "sha256": "032e063363432255416c23bde5a947b691c4995f6970b23850b2a43b21840547",
@@ -114840,65 +115276,17 @@
       ]
     },
     "web/src/components/cycles/CycleSelect.tsx": {
-      "sha256": "84114a2ab70711f3209784f0e4180043121c5346d7d0cbb59432295e5c494743",
+      "sha256": "7f392ddfb2629a2aa85fd939ba1222687b3babd8efd94646a64b7c14d6efea7c",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "react"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "lucide-react"
-        },
-        {
-          "line": 4,
-          "module": "../../lib/queries/cycles"
-        },
-        {
-          "line": 5,
-          "module": "../../lib/useCycleDirectory"
-        },
-        {
-          "line": 6,
-          "module": "../../lib/meta"
-        },
-        {
-          "line": 7,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 8,
-          "module": "../Button"
-        },
-        {
-          "line": 9,
-          "module": "../Modal"
-        },
-        {
-          "line": 10,
-          "module": "../ListSearchInput"
-        },
-        {
-          "line": 11,
-          "module": "../DirectoryPager"
-        },
-        {
-          "line": 12,
-          "module": "../QueryError"
-        },
-        {
-          "line": 13,
-          "module": "../Spinner"
-        },
-        {
-          "line": 14,
-          "module": "../Switch"
+          "module": "../../../../server/src/radd/modules/cycles/ui/src/picker-contract"
         }
       ]
     },
@@ -120364,80 +120752,32 @@
       ]
     },
     "web/src/components/projects/ProjectPicker.tsx": {
-      "sha256": "11e97c97683f741eb4fbec160f97289e094c11eb83b0819fa63345fae44d097f",
+      "sha256": "73b6af5444a908459fd323cb7f8f3919fe00a4ad2fc2ae8dad24f8c4b14bb34a",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "../Modal"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 2,
-          "module": "../Button"
-        },
-        {
-          "line": 3,
-          "module": "../ListSearchInput"
-        },
-        {
-          "line": 4,
-          "module": "../DirectoryPager"
-        },
-        {
-          "line": 5,
-          "module": "../QueryError"
-        },
-        {
-          "line": 6,
-          "module": "../Spinner"
-        },
-        {
-          "line": 7,
-          "module": "lucide-react"
-        },
-        {
-          "line": 8,
-          "module": "../../lib/useProjectDirectory"
-        },
-        {
-          "line": 9,
-          "module": "../../lib/types"
+          "module": "../../../../server/src/radd/modules/projects/ui/src/picker-contract"
         }
       ]
     },
     "web/src/components/projects/ProjectSelect.tsx": {
-      "sha256": "2d541aa370485638acab8ebfdb21f5e5231ac585b791fce79698154965839b13",
+      "sha256": "7033758370693399c109bf40b7cc1606b4c197975ccdb7464409826e3163b310",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "react"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "lucide-react"
-        },
-        {
-          "line": 4,
-          "module": "../../lib/queries/projects"
-        },
-        {
-          "line": 5,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 6,
-          "module": "../Button"
-        },
-        {
-          "line": 7,
-          "module": "./ProjectPicker"
+          "module": "../../../../server/src/radd/modules/projects/ui/src/picker-contract"
         }
       ]
     },
@@ -129605,7 +129945,7 @@
       ]
     },
     "web/src/lib/meta.ts": {
-      "sha256": "c472c9fe492e991e7dfee57ac2a8327e8d82c272f27de8384c59afbfccecff9d",
+      "sha256": "37df2c19298697918a0d7f7b5b492d0ba17e3d985c029380c3b89fdced39f07e",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -129624,6 +129964,10 @@
         {
           "line": 62,
           "module": "./types"
+        },
+        {
+          "line": 330,
+          "module": "../../../server/src/radd/modules/cycles/ui/src/status"
         }
       ]
     },
@@ -130054,7 +130398,7 @@
       ]
     },
     "web/src/lib/queries/cycles.ts": {
-      "sha256": "23f45efb387a2ccddc2799869b75ea4d202cdc3fdddd351651f3efecbe6b26e5",
+      "sha256": "9d32ef3ac3932e70b52a4f35d6d07df199d44b7ae751b4dbab61d53029d664de",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -130071,16 +130415,24 @@
           "module": "../cache"
         },
         {
-          "line": 10,
+          "line": 9,
           "module": "../constants"
         },
         {
-          "line": 11,
+          "line": 10,
           "module": "./shared"
         },
         {
-          "line": 19,
+          "line": 18,
           "module": "../types"
+        },
+        {
+          "line": 30,
+          "module": "../../../../server/src/radd/modules/cycles/ui/src/directory-queries"
+        },
+        {
+          "line": 31,
+          "module": "../../../../server/src/radd/modules/cycles/ui/src/directory-queries"
         }
       ]
     },
@@ -130510,7 +130862,7 @@
       ]
     },
     "web/src/lib/queries/projects.ts": {
-      "sha256": "d5f2abf9271a2d5f8860f58bb1664832963279bcef12dfeda6b7405d9cce5d3d",
+      "sha256": "c41c0cd15f1321387c931d0b1c63c1e7491f364930f4e9ab319c86d9e5e362e0",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -130535,8 +130887,12 @@
           "module": "./shared"
         },
         {
-          "line": 26,
+          "line": 23,
           "module": "../types"
+        },
+        {
+          "line": 25,
+          "module": "../../../../server/src/radd/modules/projects/ui/src/directory-queries"
         }
       ]
     },
@@ -130680,12 +131036,20 @@
       ]
     },
     "web/src/lib/queries/shared.ts": {
-      "sha256": "c477fa5c041f6265658e199eacd765c12046d07fff924d9adf091fe7985e3d71",
+      "sha256": "3d7227de1919833eb2d5f63e3fbee5611bd8be7f37aff42c0db03d90b8968d96",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
-          "line": 3,
+          "line": 1,
+          "module": "../../../../server/src/radd/modules/cycles/ui/src/query-keys"
+        },
+        {
+          "line": 2,
+          "module": "../../../../server/src/radd/modules/projects/ui/src/query-keys"
+        },
+        {
+          "line": 5,
           "module": "../types"
         }
       ]
@@ -131138,13 +131502,21 @@
       "imports": []
     },
     "web/src/lib/types/cycles.ts": {
-      "sha256": "c61e3fb8701cf978e08d20a512ab1d99e7c8ada5e6ca459f5c8e75545806a4d5",
+      "sha256": "55cc1b6bba682d6b280ace4ddf351b21fe058adcda5ee257d236bc1ddbb5c52c",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 2,
           "module": "./workflow"
+        },
+        {
+          "line": 7,
+          "module": "../../../../server/src/radd/modules/cycles/ui/src/types"
+        },
+        {
+          "line": 8,
+          "module": "../../../../server/src/radd/modules/cycles/ui/src/types"
         }
       ]
     },
@@ -131511,7 +131883,7 @@
       ]
     },
     "web/src/lib/types/users.ts": {
-      "sha256": "dd7adf576120acda3c772216fac36754eb079a63785fe31ff46c36e17adec009",
+      "sha256": "970594557f98e35317e37a81f33c8ef8a7ef303de8546f132dbbabf6875995a0",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -131522,6 +131894,14 @@
         {
           "line": 3,
           "module": "./settings"
+        },
+        {
+          "line": 73,
+          "module": "../../../../server/src/radd/modules/projects/ui/src/types"
+        },
+        {
+          "line": 107,
+          "module": "../../../../server/src/radd/modules/projects/ui/src/types"
         }
       ]
     },

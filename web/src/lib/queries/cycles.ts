@@ -5,7 +5,6 @@ import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
 import {
   ApiPath,
-  apiCyclePath,
   apiCycleStatsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
@@ -28,18 +27,8 @@ export const cyclesQuery = (status?: CycleStatusValue, projectId?: string) =>
     queryFn: ({ signal }) => api.get<Cycle[]>(ApiPath.cycles, { signal, query: { status, project_id: projectId } }),
   });
 
-export const CYCLES_PAGE_SIZE = 50;
-export const cyclesPageQuery = (
-  q = "", page = 0, status?: CycleStatusValue, includeCompleted = true, excludeId = "", datedOnly = false, projectId = "",
-) => queryOptions({
-  queryKey: queryKeys.cyclesPage(q.trim(), page, status, includeCompleted, excludeId, datedOnly, projectId),
-  meta: entityMeta(Entity.cycle, Entity.team, Entity.role),
-  queryFn: ({ signal }) => api.getPaged<Cycle>(ApiPath.cycles, { signal, query: {
-    q: q.trim(), limit: String(CYCLES_PAGE_SIZE), offset: String(page * CYCLES_PAGE_SIZE),
-    status, include_completed: String(includeCompleted), exclude_id: excludeId || undefined,
-    dated_only: String(datedOnly), project_id: projectId || undefined,
-  } }),
-});
+export { CYCLES_PAGE_SIZE, cyclesPageQuery, cycleQuery } from "../../../../server/src/radd/modules/cycles/ui/src/directory-queries";
+import { CYCLES_PAGE_SIZE } from "../../../../server/src/radd/modules/cycles/ui/src/directory-queries";
 
 /** Prefer an active dated cycle, then the most recent dated cycle. The server
  * chooses from the whole visible catalog before limiting the result. */
@@ -57,14 +46,6 @@ export const cycleSummaryQuery = (q = "") => queryOptions({
     signal, query: { q: q.trim() },
   }),
 });
-
-/** A single cycle (spec 18) — the cycle items page reads its dates/goal here. */
-export const cycleQuery = (cycleId: string) =>
-  queryOptions({
-    queryKey: queryKeys.cycle(cycleId),
-    meta: entityMeta(Entity.cycle),
-    queryFn: ({ signal }) => api.get<Cycle>(apiCyclePath(cycleId), { signal }),
-  });
 
 export const CYCLE_ITEMS_PAGE_SIZE = 50;
 

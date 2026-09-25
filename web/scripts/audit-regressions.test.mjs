@@ -5,9 +5,13 @@ import { QueryClient, QueryObserver } from "../node_modules/@tanstack/react-quer
 
 const source = path => readFileSync(new URL(`../src/lib/${path}`, import.meta.url), "utf8");
 function evaluate(code, imports, exports) {
-  const js = stripTypeScriptTypes(code).replace(/^import[\s\S]*?from ["'][^"']+["'];\n/gm, "").replaceAll("export ", "");
+  const js = stripTypeScriptTypes(code).replace(/^import[\s\S]*?from ["'][^"']+["'];\n/gm, "").replace(/^export \{[^}]+\} from ["\'][^"\']+["\'];\n/gm, "").replaceAll("export ", "");
   return Function(...Object.keys(imports), `${js}; return {${exports.join(",")}}`)(...Object.values(imports));
 }
+const ownerKeys = Object.assign({}, ...['projects','cycles'].map(owner => {
+  const name=owner==='projects'?'projectQueryKeys':'cycleDirectoryKeys';
+  return evaluate(readFileSync(new URL('../../server/src/radd/modules/'+owner+'/ui/src/query-keys.ts',import.meta.url),'utf8'),{},[name]);
+}));
 let factories = source("queries/shared.ts");
 for (const [file, names] of [
   ["items", ["commentsQuery"]], ["activity", ["linkSearchQuery"]],
@@ -21,7 +25,7 @@ for (const [file, names] of [
 }
 const { Entity, entityMeta, invalidateEntities } = evaluate(source("cache.ts"), {}, ["Entity", "entityMeta", "invalidateEntities"]);
 const names = ["commentsQuery", "linkSearchQuery", "searchQuery", "similarToTextQuery", "pageSearchQuery"];
-const queries = evaluate(factories, { queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined }, names);
+const queries = evaluate(factories, { ...ownerKeys, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined }, names);
 for (const [name, a, b] of [
   ["linkSearchQuery", ["p", "q", "a", 20], ["p", "q", "b", 20]],
   ["searchQuery", ["q", 5], ["q", 20]],
@@ -111,8 +115,9 @@ assert.deepEqual(calls, {A: 2, B: 1}, "project A's event must not refetch projec
 stop();
 unobserve.forEach(fn => fn());
 client.clear();
+const { CYCLES_PAGE_SIZE } = evaluate(readFileSync(new URL('../../server/src/radd/modules/cycles/ui/src/directory-queries.ts',import.meta.url),'utf8'),{},['CYCLES_PAGE_SIZE']);
 const cycleFactories = evaluate(source("queries/shared.ts") + "\n" + source("queries/cycles.ts"), {
-  queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined,
+  ...ownerKeys, CYCLES_PAGE_SIZE, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined,
 }, ["cycleSeriesPageQuery"]);
 let seriesReads = 0;
 const seriesObserver = new QueryObserver(client, {
@@ -131,7 +136,7 @@ stopSeries();
 unobserveSeries();
 client.clear();
 const wikiFactories = evaluate(source("queries/shared.ts") + "\n" + source("queries/pages.ts"), {
-  queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined,
+  ...ownerKeys, CYCLES_PAGE_SIZE, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined,
 }, ["pageSpaceSummaryQuery", "pageSpacesPageQuery", "pageSpaceByIdentityQuery"]);
 const wikiCalls = [0, 0, 0];
 const wikiObservers = [wikiFactories.pageSpaceSummaryQuery(), wikiFactories.pageSpacesPageQuery("later", 2), wikiFactories.pageSpaceByIdentityQuery("later-space")]
@@ -154,7 +159,7 @@ stopWiki();
 stopWikiObservers.forEach(stop => stop());
 client.clear();
 const accessFactories = evaluate(source("queries/shared.ts") + "\n" + source("queries/roles.ts"), {
-  queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta,
+  ...ownerKeys, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta,
 }, ["spaceGrantsPageQuery", "projectGrantsPageQuery"]);
 const accessCalls = [0, 0, 0, 0, 0];
 const accessObservers = [accessFactories.spaceGrantsPageQuery("space-a", "", 0), accessFactories.spaceGrantsPageQuery("space-a", "later", 0), accessFactories.spaceGrantsPageQuery("space-a", "later", 1), accessFactories.spaceGrantsPageQuery("space-b", "later", 1), accessFactories.projectGrantsPageQuery("space-a", "later", 1)]
@@ -177,7 +182,7 @@ const inspectorCode = source("queries/users.ts");
 const inspectorStart = inspectorCode.indexOf("export const userPermissionsQuery =");
 const inspectorEnd = inspectorCode.indexOf("\n};", inspectorStart) + 3;
 const selectorQueries = evaluate(source("queries/shared.ts") + "\n" + source("queries/notifications.ts") + "\n" + inspectorCode.slice(inspectorStart, inspectorEnd), {
-  queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined, NOTIFICATIONS_POLL_MS: 1000,
+  ...ownerKeys, CYCLES_PAGE_SIZE, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined, NOTIFICATIONS_POLL_MS: 1000,
 }, ["subscriptionOptionsQuery", "notificationPrefsQuery", "userPermissionsQuery"]);
 const selectorCalls = [0, 0, 0, 0, 0, 0];
 const selectorSpecs = [selectorQueries.subscriptionOptionsQuery("project", "", 0), selectorQueries.subscriptionOptionsQuery("space", "later", 0), selectorQueries.subscriptionOptionsQuery("team", "later", 1), selectorQueries.userPermissionsQuery("person", { projectId: "p" }), selectorQueries.userPermissionsQuery("person", { spaceId: "s" }), selectorQueries.notificationPrefsQuery()];
@@ -194,7 +199,7 @@ for (const entity of ["role", "team", "project", "page_space", "group", "user"])
 assert.deepEqual(selectorCalls, [7, 7, 7, 7, 7, 7], "scope authority and name frames refresh inspectors, candidates and saved subscription labels");
 stopSelectors();stopSelectorObservers.forEach(stop => stop());client.clear();
 const { provisioningReferencesQuery } = evaluate(source("queries/provisioning.ts"), {
-  queryOptions: x => x, api: {}, Entity, entityMeta,
+  ...ownerKeys, queryOptions: x => x, api: {}, Entity, entityMeta,
 }, ["provisioningReferencesQuery"]);
 assert.deepEqual(provisioningReferencesQuery(["b", "a", "a"], [], []).queryKey,
   provisioningReferencesQuery(["a", "b"], [], []).queryKey, "reference order and duplicate IDs do not fragment cache identity");
@@ -213,7 +218,7 @@ for (const entity of ["role", "project", "team"]) {
 assert.deepEqual(referenceCalls, [4, 4], "name changes refresh both visible provisioning reference windows");
 stopReferences(); stopReferenceObservers.forEach(stop => stop()); client.clear();
 const { resourceGrantsPageQuery } = evaluate(source("queries/shared.ts") + "\n" + source("queries/fields.ts"), {
-  queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta,
+  ...ownerKeys, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta,
 }, ["resourceGrantsPageQuery"]);
 const builtinScopeKeys = [undefined, null, "project-a", "project-b"].map(scope => resourceGrantsPageQuery("builtin_field", "assignee", "", 0, scope));
 assert.equal(new Set(builtinScopeKeys.map(options => JSON.stringify(options.queryKey))).size, 4,
@@ -235,12 +240,12 @@ for (const entity of ["access_grant", "role", "user", "team", "group", "project"
 assert.deepEqual(resourceCalls, [7, 7, 7], "resource grants and permitted names refresh each distinct active window");
 stopResources(); stopResourceObservers.forEach(stop => stop()); client.clear();
 const fieldSettings = evaluate(source("queries/shared.ts") + "\n" + source("queries/field-settings.ts"), {
-  queryOptions: x => x, api: {}, Entity, entityMeta,
+  ...ownerKeys, queryOptions: x => x, api: {}, Entity, entityMeta,
 }, ["fieldDirectoryQuery", "managedFieldQuery", "fieldProjectChoicesQuery", "fieldProjectReferencesQuery", "fieldSettingsSummaryQuery", "fieldOptionsQuery"]);
 assert.deepEqual(fieldSettings.fieldProjectReferencesQuery(["b", "a", "a"]).queryKey,
   fieldSettings.fieldProjectReferencesQuery(["a", "b"]).queryKey);
 const serviceAccounts = evaluate(source("queries/shared.ts") + "\n" + source("queries/integrations.ts"), {
-  queryOptions: x => x, api: {}, Entity, entityMeta,
+  ...ownerKeys, queryOptions: x => x, api: {}, Entity, entityMeta,
 }, ["serviceAccountDirectoryQuery", "serviceAccountQuery", "serviceKeyDirectoryQuery"]);
 const accountOptions = [serviceAccounts.serviceAccountDirectoryQuery("", 0), serviceAccounts.serviceAccountDirectoryQuery("later", 1),
   serviceAccounts.serviceAccountQuery("one"), serviceAccounts.serviceAccountQuery("two"),
@@ -260,7 +265,7 @@ for (const entity of ["user", "role", "team", "group"]) {
 assert.deepEqual(accountCalls, accountOptions.map(() => 5), "account and key directories refresh on identity/authority frames");
 stopAccountLive(); stopAccounts.forEach(stop => stop()); client.clear();
 const teamRefs = evaluate(source("queries/shared.ts") + "\n" + source("queries/users.ts"), {
-  queryOptions: x => x, api: {}, Entity, entityMeta, keepPreviousData: undefined,
+  ...ownerKeys, queryOptions: x => x, api: {}, Entity, entityMeta, keepPreviousData: undefined,
 }, ["teamReferencesQuery"]);
 assert.deepEqual(teamRefs.teamReferencesQuery(["b", "a", "a"]).queryKey, teamRefs.teamReferencesQuery(["a", "b"]).queryKey);
 assert.notDeepEqual(teamRefs.teamReferencesQuery(["a"]).queryKey, teamRefs.teamReferencesQuery(["a"], true).queryKey);
@@ -279,7 +284,7 @@ assert.deepEqual(audienceReferenceCalls, [5, 5], "audience names/counts refresh 
 stopAudienceLive(); audienceReferenceStops.forEach(stop => stop()); client.clear();
 
 const portalSharing = evaluate(source("queries/shared.ts") + "\n" + source("queries/forms.ts"), {
-  queryOptions: x => x, api: {}, Entity, entityMeta, apiFormPath: id => "/forms/"+id,
+  ...ownerKeys, queryOptions: x => x, api: {}, Entity, entityMeta, apiFormPath: id => "/forms/"+id,
 }, ["formSharingQuery", "formShareCandidatesQuery"]);
 const portalOptions = [portalSharing.formSharingQuery("one"), portalSharing.formSharingQuery("two"),
   portalSharing.formSharingQuery("one", "later", 1), portalSharing.formShareCandidatesQuery("one", "user"),

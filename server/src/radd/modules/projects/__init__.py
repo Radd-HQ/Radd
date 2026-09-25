@@ -1,3 +1,4 @@
+from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec, EventTypeSpec, GrantScopeSpec
 from radd.kernel import RaddPlugin
 
@@ -10,6 +11,7 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="projects",
+    ui=PluginUiManifest(remote="/plugins/projects/remoteEntry.js", ui_api_version="1.7.0"),
     description="Projects: the containers issues live in.",
     depends_on=("events",),
     weak_depends=("auth", "settings"),

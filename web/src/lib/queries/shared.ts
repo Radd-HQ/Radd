@@ -1,3 +1,5 @@
+import { cycleDirectoryKeys } from "../../../../server/src/radd/modules/cycles/ui/src/query-keys";
+import { projectQueryKeys } from "../../../../server/src/radd/modules/projects/ui/src/query-keys";
 /** Query keys — the single source of truth; never inline key arrays elsewhere. */
 
 import type { CycleStatusValue } from "../types";
@@ -7,13 +9,7 @@ export const queryKeys = {
   optionsPage: (resource: string, q: string, page: number) => ["directory-options", resource, { q, page }] as const,
   optionByValue: (resource: string, value: string) => ["directory-options", resource, "value", value] as const,
   authState: ["auth", "me"] as const,
-  projects: ["projects"] as const,
-  firstProject: ["projects", "first"] as const,
-  projectSummary: ["projects", "summary"] as const,
-  projectById: (id: string) => ["projects", "id", id] as const,
-  projectByKey: (key: string) => ["projects", "key", key.toUpperCase()] as const,
-  projectsPage: (q: string, page: number, hideRelated: boolean, permission: string) =>
-    ["projects", "page", { q, page, hideRelated, permission }] as const,
+  ...projectQueryKeys,
   states: (projectId: string) => ["states", { projectId }] as const,
   stateCategories: ["state-categories"] as const,
   allStates: ["states", "all"] as const,
@@ -72,10 +68,8 @@ export const queryKeys = {
   roles: ["roles"] as const,
   roleGlobalGrants: (roleId: string) => ["roles", roleId, "global-grants"] as const,
   cycles: (status?: CycleStatusValue, projectId?: string) => ["cycles", { status: status ?? null, projectId: projectId ?? null }] as const,
-  cyclesPage: (q: string, page: number, status: CycleStatusValue | undefined, includeCompleted: boolean, excludeId: string, datedOnly: boolean, projectId = "") =>
-    ["cycles", "page", { q, page, status, includeCompleted, excludeId, datedOnly, projectId }] as const,
+  ...cycleDirectoryKeys,
   cycleSummary: (q: string) => ["cycles", "summary", q] as const,
-  cycle: (cycleId: string) => ["cycle", { cycleId }] as const,
   cycleSeriesPage: (q: string, page: number) => ["cycle-series", "page", { q, page }] as const,
   releases: (projectId: string) => ["releases", { projectId }] as const,
   reportThroughput: (projectId: string, start: string, end: string, interval: string, q?: string) =>

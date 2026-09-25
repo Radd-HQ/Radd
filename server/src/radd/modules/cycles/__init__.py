@@ -1,3 +1,4 @@
+from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
@@ -8,6 +9,7 @@ from .types import CycleEvent, SeriesEvent
 
 plugin = RaddPlugin(
     name="cycles",
+    ui=PluginUiManifest(remote="/plugins/cycles/remoteEntry.js", ui_api_version="1.7.0"),
     crud_resources=(
         CrudResourceSpec(
             "cycle", "global", "cycles", "global.manage",

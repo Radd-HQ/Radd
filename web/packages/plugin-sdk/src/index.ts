@@ -103,3 +103,6 @@ export { SchemaForm } from "./schema-form";
 export { defaultsFromSchema } from "./schema-defaults";
 
 export { OptionChoices, OptionSelect, OptionTextField, OptionNameValues, optionContribution, OPTION_CONTROL_SLOT, type DirectoryOption, type OptionSource, type OptionChoicesProps, type OptionSelectProps, type OptionTextFieldProps, type OptionNameValuesProps } from "./options";
+
+export { Switch } from "./switch";
+export { usePagedDirectory, type PagedDirectoryQuery } from "./paged-directory";

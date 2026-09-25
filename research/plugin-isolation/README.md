@@ -24,6 +24,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1355 | Repository-wide discovery and inventory validation | Verified; Waiting for release |
 | RADD-1356 | Domain-independent schema and code controls | Verified; Waiting for release |
 | RADD-1357 | Owner-contributed option directories | Verified; Waiting for release |
+| RADD-1358 | Owner-contributed project/cycle pickers | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -52,7 +53,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | comments | default | 0 | items, auth, projects, events, teams, itemtypes | Pending |
 | confluenceimport | False | 0 | auth, events, pages, attachments, comments, labels, access, groups, teams, items, projects | Pending |
 | csat | False | 2 | projects, auth, items, settings, events, mailintake, workflow | Pending |
-| cycles | default | 0 | projects, auth, events, settings, teams | Pending |
+| cycles | default | 7 | projects, auth, events, settings, teams | Picker contributions verified (RADD-1358); remaining review pending |
 | dashboards | False | 0 | events, projects, auth, teams, items, cycles, views, reporting, access, groups | Pending |
 | events | default | 0 |  | Pending |
 | fields | default | 0 | projects, events, auth, teams, access | Pending |
@@ -76,7 +77,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | pages | False | 2 | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Option contributions verified (RADD-1357); remaining review pending |
 | participants | False | 3 | events, projects, auth, teams, items, notify | Pending |
 | pluginmgr | default | 0 | auth, events | Pending |
-| projects | default | 0 | events | Pending |
+| projects | default | 7 | events | Picker contributions verified (RADD-1358); remaining review pending |
 | realtime | default | 0 | events, auth | Pending |
 | releases | default | 2 | projects, auth, events, workflow | Option contributions verified (RADD-1357); remaining review pending |
 | reporting | default | 0 | events, projects, auth, workflow, cycles, items | Pending |
@@ -281,3 +282,39 @@ The stage inventory contains 2,620 artifacts and 4 retirement entries. Remaining
 work includes host automation forms/integration selectors, project/cycle pickers,
 TeamSelect's independent saved-reference lookup, and all other unreviewed/partial
 inventory entries. The provider migration does not certify those consuming pages.
+
+## RADD-1358 verification
+
+Projects owns both project picker controls, directory transport, saved ID/key
+resolution and public contracts. Cycles owns both cycle controls, ID/name modes,
+status presentation, project/all scope and date/completion filtering. SDK 1.7 owns
+only generic paging/lifetime behavior and the shared Switch. Host adapters have
+no feature queries or state; query/type re-exports preserve existing consumers.
+An open cycle picker now resets its scope when the caller changes project.
+
+Evidence: host + 21 remotes typecheck/build; 54 frontend tests; 27 focused backend
+project/cycle directory, capability, module-contract and kernel tests; targeted
+Python lint. The actual-bundle picker proof passes 14 grouped checks (34 requests,
+3 observed aborts): initially absent owners, saved IDs/keys/names, full callbacks,
+permission filters, 125-row paging/search, custom empty values, scoped cycles,
+preloaded labels, accessibility props, withdrawal during browsing or resolution,
+fresh reactivation, missing references, denied-read retry, failed bundle recovery,
+and standalone dismissal. Existing option-directory (11) and automation-canvas
+(15) grouped checks pass. The picker proof is included in `test:browser` and the
+rendered cycle picker screenshot was inspected.
+
+The local backend was reloaded and serves the new build. An authenticated,
+read-only probe verified both SDK 1.7 manifests/assets, permission-filtered projects,
+summary, existing project ID/key resolution, and cycle filtering/project scope.
+The local cycle results were empty, so real saved-cycle resolution is covered by
+the populated browser fixture, not claimed for the local data. Plugin choices
+were unchanged; Leave/GitHub/Forgejo remain disabled. The temporary token was
+removed after the probe.
+
+This does not certify the remaining host navigation, project/cycle pages,
+`useProjectDirectory`/`useCycleDirectory`, or their query/type compatibility barrels.
+Browser fixtures still observe independent host navigation directory requests;
+absence assertions target picker-owned queries explicitly. Core-plugin withdrawal
+in fixtures proves frontend lifecycle handling, not backend disable permission.
+Automation forms, TeamSelect's saved-reference query and all other partial or
+unreviewed inventory entries remain work under the full goal.

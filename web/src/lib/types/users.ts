@@ -70,27 +70,7 @@ export interface TotpSetup {
   otpauth_uri: string;
 }
 
-export interface Project {
-  id: string;
-  key: string;
-  name: string;
-  /** RADD-1009: plain text, "" when never described. */
-  description: string;
-  created_at: string;
-  /** The CURRENT user's effective permissions in this project (spec 06). */
-  permissions: PermissionValue[];
-  /** RADD-1041 — why this row appears in a `GET /projects` listing: "entitled"
-   * (held by grant) or "related" (their own work made it visible, e.g. a
-   * ticket they filed). `null` on `POST /projects`'s response. Presentation
-   * only — never used to decide access, only to decide what the sidebar's
-   * "related projects" preference hides from the rail. */
-  via?: "entitled" | "related" | null;
-  /** Spec 121: the Public role is granted to Anyone on this project — its
-   * public issues are readable without signing in. Derived from the grant. */
-  public?: boolean;
-  /** Spec 121: the Contributor role is granted to Signed-in users here. */
-  contributions?: boolean;
-}
+export type { Project } from "../../../../server/src/radd/modules/projects/ui/src/types";
 
 /** PATCH /projects/{id} (RADD-1009). Omitted = unchanged. The KEY is not
  *  editable — item keys derive from it — so it is not a field here. */
@@ -124,11 +104,7 @@ export interface PublicAccessUpdate {
 }
 
 /** Aggregate visible-project authority, independent of a directory page. */
-export interface ProjectSummary {
-  total: number;
-  related_count: number;
-  permissions: PermissionValue[];
-}
+export type { ProjectSummary } from "../../../../server/src/radd/modules/projects/ui/src/types";
 
 export interface ProjectCreate {
   key: string;

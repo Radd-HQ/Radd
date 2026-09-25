@@ -129,3 +129,17 @@ test('all former option resources are declared only by their owning remote',()=>
     assert.deepEqual([...new Set(endpoints)],resources.map(r=>`/${r}/options`));
   }
 });
+
+test('project and cycle picker host paths contain only contribution adapters',()=>{
+  const filesToCheck=['web/src/components/projects/ProjectSelect.tsx','web/src/components/projects/ProjectPicker.tsx','web/src/components/cycles/CycleSelect.tsx'];
+  for(const file of filesToCheck){
+    const ast=nodes(file);
+    const imports=ast.filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
+    assert(imports.every(s=>s==='@radd/plugin-sdk'||s.endsWith('/picker-contract')),file);
+    assert(!ast.some(n=>n.type==='CallExpression'&&['useQuery','useMutation','useState'].includes(n.callee?.name)),file);
+  }
+  for(const file of ['web/packages/plugin-sdk/src/paged-directory.ts','web/packages/plugin-sdk/src/switch.tsx']){
+    assert(!nodes(file).some(n=>n.type==='ImportDeclaration'&&/modules|web\/src/.test(n.source.value)));
+    assert(!nodes(file).some(n=>n.type==='StringLiteral'&&/^\/(?:projects|cycles)/.test(n.value)));
+  }
+});

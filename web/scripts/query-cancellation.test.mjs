@@ -8,7 +8,11 @@ function evaluate(code,imports,names){
   const js=stripTypeScriptTypes(code).replace(/^import[\s\S]*?from ["'][^"']+["'];\n/gm,'').replaceAll('export ','');
   return Function(...Object.keys(imports),js+';return {'+names.join(',')+'}')( ...Object.values(imports));
 }
-const {queryKeys}=evaluate(source('queries/shared.ts'),{},['queryKeys']);
+const ownerKeys = Object.assign({}, ...['projects','cycles'].map(owner => {
+  const name=owner==='projects'?'projectQueryKeys':'cycleDirectoryKeys';
+  return evaluate(readFileSync(new URL('../../server/src/radd/modules/'+owner+'/ui/src/query-keys.ts',import.meta.url),'utf8'),{},[name]);
+}));
+const {queryKeys}=evaluate(source('queries/shared.ts'),ownerKeys,['queryKeys']);
 const {Entity,entityMeta,projectEntityMeta}=evaluate(source('cache.ts'),{},['Entity','entityMeta','projectEntityMeta']);
 globalThis.window={location:{origin:'http://test',pathname:'/projects'}};
 const pending=[];

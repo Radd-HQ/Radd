@@ -506,14 +506,14 @@
     "issue": null
   },
   "docs/modules.md": {
-    "sha256": "313812f05f9a47116d25fa70606006d950db848535887c6fca6363a731b14d5d",
+    "sha256": "a9d3ef36e91353910fc09fb2fa93e8b00fc425d869c9397ef097199e6c9f2cd5",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "mixed/transitional",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "docs/performance-safety-audit.md": {
     "sha256": "103b850cbfe71ea293d998895fd8449ee03f8a4764199133d84bf080dcbda7d9",
@@ -551,14 +551,14 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "70de3325f2fb7b4aa903cf774a5ff7bd3d40b4684c709b28e71130dd970a1407",
+    "sha256": "803d421a8f147b01f162d4fb7e192f1d7244df21d6625ca4a49ee2822fd8bdd1",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "mixed/transitional",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2052,11 +2052,14 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "7fae3f2c6b70ecb63d2392150aea5a330046a0cae15efcee93abf13f5cbe246f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "102dbb6ca540aeb5912a7fed9ec1cd402c1570ab01f716c5545d1d652deab199",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "research/review-2026-09-25/FIXES.md": {
     "sha256": "247e2f0759a2a12cb87c1e1d28fd6baefb175deb7f2d58bff79200f4d80925c2",
@@ -6282,11 +6285,14 @@
     "issue": null
   },
   "server/src/radd/modules/cycles/__init__.py": {
-    "sha256": "d20e583c38ab9f5e6d19ebc326ed561eac56030c3be19646b648238ae135c765",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "70a2857aaabedb0e713382993fc4debaa1df00e3906635ca18744520d5de8e72",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "server/src/radd/modules/cycles/directory.py": {
     "sha256": "3dd30be206a0c7aff7035b53778257d1b267bc80056ae3e49bb61e0102cc5e36",
@@ -6336,6 +6342,106 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/cycles/ui/package.json": {
+    "sha256": "bc791ac13e96cb574566164deb704ce233cc5f7f202b50e5498e6b97898309bd",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/src/CycleSelect.tsx": {
+    "sha256": "ffe7e0103adabd5e9afc3a9ae5cd7cb4aea21e3e3945b2f51c8048fa8f91e551",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/src/directory-queries.ts": {
+    "sha256": "84d2ab5a813a263dbdfac2c3a63745bdc9f67e7f568d8c1d2387118bd77c0f43",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/src/index.tsx": {
+    "sha256": "3f0f8f51a4008fa040d6b2b655dac8941326ad11767a665b655d77e150401ad3",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/src/picker-contract.ts": {
+    "sha256": "7eeae76fdbb070082952444d35079e7c5230230db59443e6ef66c2b6b860f9ab",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/src/query-keys.ts": {
+    "sha256": "b9468ec461fd4da9ee78a52612ec97c4d2cfc56c391a4f889d637e1e9b5a530d",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/src/status.ts": {
+    "sha256": "c4b5a2922d169a8f16bfb7df020893cf8cb83b9ab03babe0a1eca7e98f85a195",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/src/types.ts": {
+    "sha256": "b693b1dac0c423b31083f8c52bee9ea9ecc9c60a3f896dd7fc7bd6abfc622ca8",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/cycles/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "reviewed",
+    "owner": "cycles",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
   },
   "server/src/radd/modules/dashboards/__init__.py": {
     "sha256": "965583ff78f011fd19d92d6967e692d6a94b9673548dba77d45b754d8cea45a2",
@@ -9180,11 +9286,14 @@
     "issue": null
   },
   "server/src/radd/modules/projects/__init__.py": {
-    "sha256": "ddc91ba2024437353d4dccc1504b13f7d85052d4dc57561728a68429a2412742",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6dc00faea8a69a69cc37bff5342c250503203275884ea1a88190d0c5b0cdc003",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "server/src/radd/modules/projects/directory.py": {
     "sha256": "f5cc336cc007bcd7b5f2bf3f03c44ec1063bc9ecf74c140521d7821781b09be6",
@@ -9234,6 +9343,106 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/projects/ui/package.json": {
+    "sha256": "1da57fd0df560a0647412fecd36d844af5525c87d3433ac258dcd36a868f4c74",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/src/ProjectPicker.tsx": {
+    "sha256": "ddca37c20f38a631860161f3786a34c88663e0b86e9172d991b923028ac1032b",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/src/ProjectSelect.tsx": {
+    "sha256": "b71048ecb0608405a7230c45d97158b282f8f9e9f63495c0adfa132d44735394",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/src/directory-queries.ts": {
+    "sha256": "8119b0d26c71b4d1023ff275f0e471e23081339e075e72712606c65fff1c6595",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/src/index.tsx": {
+    "sha256": "630a85eec32a9506a9ca14352b0ee207a5360b9a4f3eb59738f07378d563a79b",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/src/picker-contract.ts": {
+    "sha256": "0288d9d36b8e7f199036bc1fe6d04c4c6e6e9a0fc656e71ae2117f7b1c47c4cb",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/src/query-keys.ts": {
+    "sha256": "cb31a10765650355e5f473ab251d83b6db7da7b04ba99a3999b25893eb2f6381",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/src/types.ts": {
+    "sha256": "5be412681d2ceae00adf5982ea138c94e1625cad81c400ad103fc472053a4ff0",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
+  "server/src/radd/modules/projects/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
   },
   "server/src/radd/modules/realtime/__init__.py": {
     "sha256": "d2903dd3fd11d424d952504692798fc026b0013525f52157e9a62172d2913ba0",
@@ -12864,14 +13073,14 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "52f504b2c132564afc6f9624aad483048a83c342c9c4f5f377f6f7d9c1154ff5",
+    "sha256": "a319755351eb5730b32a796e186038bda4d21cf2c7ea68176c5f813091f70101",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "mixed/transitional",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -12952,14 +13161,14 @@
     "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "5dd8001e0b799acd2ed2153df2c67313785464f1bdc5743bce4784b50027a386",
+    "sha256": "d25443da1a4dc82ec7418e26629d20d33eb03e675354dbae2365187e8ec9f3ec",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "platform",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "web/packages/plugin-sdk/src/options.tsx": {
     "sha256": "4cbaf0efbf8426e9cd32b3b9875885a93abc0a59de84cca5887c0b7e06d12adc",
@@ -12970,6 +13179,16 @@
       "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
     ],
     "issue": "RADD-1357"
+  },
+  "web/packages/plugin-sdk/src/paged-directory.ts": {
+    "sha256": "55785f6b76dd8b31d3f28f21ad9c7dbb52e7e5b2888a6ad48b9d2b29b2105566",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
   },
   "web/packages/plugin-sdk/src/plugin.ts": {
     "sha256": "96df02dce5161b51da511d0c266bc2ab740cf85bcc737a4644ec4bde09dd46e8",
@@ -13040,6 +13259,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/packages/plugin-sdk/src/switch.tsx": {
+    "sha256": "f93028f4f367261379171da0895f84587d0d9870e18c7423764ffd8616ea1ab5",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
+  },
   "web/packages/plugin-sdk/src/tokens.ts": {
     "sha256": "d88ba990383dde338b922f62f528a7f88bd5ce12ffac1f0d43801445f74bc85c",
     "status": "unreviewed",
@@ -13055,14 +13284,14 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "14f65d1a2eb6f937675be87a419e089cb88c10b6098a8747590523536b394de7",
+    "sha256": "97d8046f9d8c4ce98708e5c6faad2fb3beb8f5315202de6d39a88de1813be3b7",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "platform",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "web/packages/plugin-sdk/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -13138,14 +13367,14 @@
     "issue": null
   },
   "web/public/shared/radd-plugin-sdk.js": {
-    "sha256": "9258623cc7652784633ff245c88befe89faf1fe324ab25491d941f262610c9fb",
+    "sha256": "f407c16dd389af73d8d59c396829265c90257d0c019cc52aac9665b1c22ec9e8",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "mixed/transitional",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "web/public/shared/react-dom-client.js": {
     "sha256": "7f77c7fcf2095f1ed7fd3c955b4531b8e8bb8fc97c907abd3b8019e0b0157892",
@@ -13274,11 +13503,14 @@
     "issue": null
   },
   "web/scripts/audit-regressions.test.mjs": {
-    "sha256": "bc3d4e0220418d381276ddb57b2bc7e7297a30f42c33669562868f64b0fd2392",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "5323cab2f596f2fd0ac7a0416053193ae8430781b76b51267d8226a704844027",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/scripts/automation-model.test.mjs": {
     "sha256": "bddf0febce6953b25f9df637ece41b85686913ff0560103351688020abc99a30",
@@ -13457,6 +13689,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/scripts/browser-picker-contributions.mjs": {
+    "sha256": "703d0925fa787d8a7183bad1d5be022f7d953c67661ef705f42cfb37d0ecfc61",
+    "status": "reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
   },
   "web/scripts/browser-plugin-availability.mjs": {
     "sha256": "d34b76be9fe4e1cda4cab12c06d1936da72585f954d4968f9feca197675379a3",
@@ -13660,14 +13902,14 @@
     "issue": null
   },
   "web/scripts/gen-shared-shims.mjs": {
-    "sha256": "74e2a6243274024b34b06f5b42922b778f1dbb385203487f0ab510a0bdef1bd0",
+    "sha256": "823917586a20d8685bc288da424efdcce9d816af4ea303682cb0ccf557652282",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "mixed/transitional",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "web/scripts/grouped-pagination-proof.mjs": {
     "sha256": "0019d9fd3dd43ea4cdcb117f450e1a1c9f4200d550fdac34fe5fe73c334ae93b",
@@ -13929,14 +14171,14 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "b5d2121e8c1634ce3ad433c99b1d2854a6f7a953d8312310211475873c96de75",
+    "sha256": "7dffd066441e54f410ae9b73ecfa77b07577bfa10f87b46014b59b75872a17e2",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "mixed/transitional",
     "evidence": [
-      "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1358"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -14005,11 +14247,14 @@
     "issue": null
   },
   "web/scripts/query-cancellation.test.mjs": {
-    "sha256": "ea74156687f39131291223be886499c40c18d387aca7b6e265ddcf02bca947ba",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "1db930dad92618fde6d5309d68dfd57e65c8b59abcf0f13d77f07eb1a6cdc010",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/scripts/reader-zone.test.mjs": {
     "sha256": "c6de2e139cfe7e6f1e82944e8b552a963e334280659f465240c6ebe49401fc1b",
@@ -14494,11 +14739,14 @@
     "issue": null
   },
   "web/src/components/Switch.tsx": {
-    "sha256": "f93028f4f367261379171da0895f84587d0d9870e18c7423764ffd8616ea1ab5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6d7ab839829da3fcd5504379abbbd335dd40d81a1fa8007e6f9322180b7a00b5",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/components/Table.tsx": {
     "sha256": "032e063363432255416c23bde5a947b691c4995f6970b23850b2a43b21840547",
@@ -14817,11 +15065,14 @@
     "issue": null
   },
   "web/src/components/cycles/CycleSelect.tsx": {
-    "sha256": "84114a2ab70711f3209784f0e4180043121c5346d7d0cbb59432295e5c494743",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "7f392ddfb2629a2aa85fd939ba1222687b3babd8efd94646a64b7c14d6efea7c",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/components/cycles/SeriesSection.tsx": {
     "sha256": "2394ad7c01f726c851fc85ae71bd401e90b91422d4e3935c7bbd60f729c48601",
@@ -15753,18 +16004,24 @@
     "issue": null
   },
   "web/src/components/projects/ProjectPicker.tsx": {
-    "sha256": "11e97c97683f741eb4fbec160f97289e094c11eb83b0819fa63345fae44d097f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "73b6af5444a908459fd323cb7f8f3919fe00a4ad2fc2ae8dad24f8c4b14bb34a",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/components/projects/ProjectSelect.tsx": {
-    "sha256": "2d541aa370485638acab8ebfdb21f5e5231ac585b791fce79698154965839b13",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "7033758370693399c109bf40b7cc1606b4c197975ccdb7464409826e3163b310",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/components/reports/BurnupCard.tsx": {
     "sha256": "64eb545c186c5ecd84b5e39c681abd50d9f0e7bc27508e05d9e453dba79dc34d",
@@ -17471,11 +17728,14 @@
     "issue": null
   },
   "web/src/lib/meta.ts": {
-    "sha256": "c472c9fe492e991e7dfee57ac2a8327e8d82c272f27de8384c59afbfccecff9d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "37df2c19298697918a0d7f7b5b492d0ba17e3d985c029380c3b89fdced39f07e",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/lib/nav-facts.ts": {
     "sha256": "e4478bafbc944163fc331b152f0f0b3385de5114bdeb683d705e32e94fba3b32",
@@ -17623,11 +17883,14 @@
     "issue": null
   },
   "web/src/lib/queries/cycles.ts": {
-    "sha256": "23f45efb387a2ccddc2799869b75ea4d202cdc3fdddd351651f3efecbe6b26e5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "9d32ef3ac3932e70b52a4f35d6d07df199d44b7ae751b4dbab61d53029d664de",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/lib/queries/field-settings.ts": {
     "sha256": "912b5b137e07f7c7803762d47de971dd8503a025b088039943f8028f833d0b07",
@@ -17710,11 +17973,14 @@
     "issue": null
   },
   "web/src/lib/queries/projects.ts": {
-    "sha256": "d5f2abf9271a2d5f8860f58bb1664832963279bcef12dfeda6b7405d9cce5d3d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "c41c0cd15f1321387c931d0b1c63c1e7491f364930f4e9ab319c86d9e5e362e0",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/lib/queries/provisioning.ts": {
     "sha256": "4d456c8e27c4268ca06b49c3bd4eb1138577159d0b92d6b255bcb8be0276563b",
@@ -17752,11 +18018,14 @@
     "issue": null
   },
   "web/src/lib/queries/shared.ts": {
-    "sha256": "c477fa5c041f6265658e199eacd765c12046d07fff924d9adf091fe7985e3d71",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "3d7227de1919833eb2d5f63e3fbee5611bd8be7f37aff42c0db03d90b8968d96",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/lib/queries/sso-admin.ts": {
     "sha256": "de0903328acce8101e5062719aa238ed6b9ce918cca8a95defd0e4285866299c",
@@ -17946,11 +18215,14 @@
     "issue": null
   },
   "web/src/lib/types/cycles.ts": {
-    "sha256": "c61e3fb8701cf978e08d20a512ab1d99e7c8ada5e6ca459f5c8e75545806a4d5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "55cc1b6bba682d6b280ace4ddf351b21fe058adcda5ee257d236bc1ddbb5c52c",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/lib/types/dashboards.ts": {
     "sha256": "1016f8a5cdd57fb8841f369590fbcd7dc1095fa3a36ba34b4db0101dbd9aef54",
@@ -18114,11 +18386,14 @@
     "issue": null
   },
   "web/src/lib/types/users.ts": {
-    "sha256": "dd7adf576120acda3c772216fac36754eb079a63785fe31ff46c36e17adec009",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "970594557f98e35317e37a81f33c8ef8a7ef303de8546f132dbbabf6875995a0",
+    "status": "partially_reviewed",
+    "owner": "mixed/transitional",
+    "evidence": [
+      "research/plugin-isolation/README.md#radd-1358-verification",
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+    ],
+    "issue": "RADD-1358"
   },
   "web/src/lib/types/views.ts": {
     "sha256": "1d8b09fb33e017299ad8f118894b3859d07e1216140e2b6f55bdf503e4c4f804",
