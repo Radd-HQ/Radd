@@ -459,6 +459,7 @@ async def run_graph(
             entity_id=rule.id,
             actor_id=SYSTEM_ACTOR_ID,
             payload={"name": rule.name, "trigger_node_id": trigger.id, "error": error},
+            automated_cause=True,  # the engine's own report, whatever raised
         )
         return None
     if apply:

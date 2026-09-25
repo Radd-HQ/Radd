@@ -33,27 +33,40 @@ from radd.modules.items.enums import ItemEvent, Priority
 class StubEvent:
     """Duck-types events.models.Event for the classification predicates."""
 
-    def __init__(self, event_type: str, actor_id: uuid.UUID | None, silent: bool = False):
+    def __init__(
+        self, event_type: str, actor_id: uuid.UUID | None, silent: bool = False, automated: bool = False
+    ):
         self.event_type = event_type
         self.actor_id = actor_id
         self.silent = silent
+        self.automated = automated
 
 
 # --- loop guard (the critical invariant) ---
 
 
-def test_automation_caused_is_the_system_actor():
-    assert is_automation_caused(StubEvent(ItemEvent.UPDATED.value, SYSTEM_ACTOR_ID)) is True
+def test_automation_caused_is_the_marker_not_the_actor():
+    # RADD-1308: causation is the event's `automated` marker. The system actor is
+    # an IDENTITY every integration writes as, not a cause.
+    assert is_automation_caused(StubEvent(ItemEvent.UPDATED.value, uuid.uuid4(), automated=True)) is True
+    assert is_automation_caused(StubEvent(ItemEvent.UPDATED.value, SYSTEM_ACTOR_ID)) is False
     assert is_automation_caused(StubEvent(ItemEvent.UPDATED.value, uuid.uuid4())) is False
     assert is_automation_caused(StubEvent(ItemEvent.UPDATED.value, None)) is False
 
 
 def test_should_process_skips_automation_caused_events():
-    # A human update is processed; the engine's own item.updated (system actor) is NOT —
+    # A human update is processed; the engine's own item.updated (marked) is NOT —
     # this is what stops a rule keyed on its own effect from spinning.
     assert should_process(StubEvent(ItemEvent.UPDATED.value, uuid.uuid4())) is True
     assert should_process(StubEvent(ItemEvent.CREATED.value, uuid.uuid4())) is True
-    assert should_process(StubEvent(ItemEvent.UPDATED.value, SYSTEM_ACTOR_ID)) is False
+    assert should_process(StubEvent(ItemEvent.UPDATED.value, SYSTEM_ACTOR_ID, automated=True)) is False
+
+
+def test_should_process_admits_integration_writes():
+    # RADD-1308: a connector's link, a form-portal submission, a mail-intake ticket
+    # all write as the system user WITHOUT the marker — automations must see them.
+    assert should_process(StubEvent("vcs.updated", SYSTEM_ACTOR_ID)) is True
+    assert should_process(StubEvent(ItemEvent.CREATED.value, SYSTEM_ACTOR_ID)) is True
 
 
 def test_should_process_skips_silent_bulk_import_events():

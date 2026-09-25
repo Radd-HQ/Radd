@@ -70,23 +70,25 @@ from .types import (
 def is_automation_caused(event: Event) -> bool:
     """True if this event was emitted by an engine-applied mutation (the loop guard).
 
-    Reads the event's own `automated` marker, not its actor. Since spec 116 an
-    action may run AS a real person, so "the actor is the system user" no longer
-    answers "did an automation cause this" — and inferring it from identity would
-    let any act-as automation re-trigger itself forever.
+    Reads the event's own `automated` marker, never its actor. Since spec 116 an
+    action may run AS a real person, so identity cannot answer "did an automation
+    cause this" — causation lives on the event (`events.automated()`).
 
-    The actor check stays as a second arm: the scheduler and older rows predate
-    the marker, and an event with the system actor is automation-caused either
-    way."""
-    return bool(getattr(event, "automated", False)) or event.actor_id == SYSTEM_ACTOR_ID
+    RADD-1308: this used to be `automated OR actor == SYSTEM`. Every integration
+    writes as the system user — the VCS connectors, the form portal, mail intake,
+    Alertmanager — so that second arm hid every one of their events from every
+    automation: a `vcs.updated` trigger only ever fired for a link a person added
+    by hand. The engine's own writes are all marked, so the arm protected nothing
+    the marker does not."""
+    return bool(getattr(event, "automated", False))
 
 
 def should_process(event: Event) -> bool:
     """A human/API event on a subscribable type — never an automation-caused one.
     EXCEPTION (spec 69): the scheduler's synthetic `automation.scheduled` event is
-    system-emitted by design, so it bypasses the loop-guard skip — loop safety
-    holds because the item events a scheduled run emits carry the system actor,
-    which this predicate still rejects on the EVENT-rule path.
+    system-emitted by design and not a catalog trigger, so it is admitted by name
+    — loop safety holds because the item events a scheduled run emits are marked
+    `automated`, which this predicate rejects on the EVENT-rule path.
 
     `silent` events (a bulk import, `events.quiet()`) never match: a rule that
     assigns on create or transitions on a field change would otherwise fire once
