@@ -471,10 +471,10 @@ class Settings(BaseSettings):
     googlechat_poll_interval: float = 2.0
     googlechat_batch: int = 100  # events read per consumer iteration
 
-    # Alertmanager intake (see radd/modules/alertmanager). Empty token = disabled.
+    # Alertmanager intake (RADD-1317): SEED-ONLY — the token + project key become
+    # one receiver row, once, when the table is empty. Receivers are rows after.
     alertmanager_token: str = ""
     alertmanager_project_key: str = ""
-    alertmanager_resolve_state: str = ""  # state NAME on alert resolve ("" = none)
 
     # Email-to-issue intake (see radd/modules/mailintake). Empty host = disabled.
     mail_imap_host: str = ""

@@ -11,6 +11,24 @@
     "item_scoped": false,
     "has_changes": false
   },
+  "alertmanager.alert.firing": {
+    "label": "Alertmanager: alert firing (new issue)",
+    "group": "Alertmanager",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "alertmanager.alert.repeated": {
+    "label": "Alertmanager: alert firing again",
+    "group": "Alertmanager",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "alertmanager.alert.resolved": {
+    "label": "Alertmanager: alert resolved",
+    "group": "Alertmanager",
+    "item_scoped": true,
+    "has_changes": false
+  },
   "approval.approved": {
     "label": "Approval granted",
     "group": "Service desk",

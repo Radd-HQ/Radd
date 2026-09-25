@@ -975,12 +975,16 @@ async def test_a_monitoring_webhook_is_not_asked_for_repro_steps(
     round trip, so this is the one that stands for both.
     """
     from radd.modules.alertmanager import service as alertmanager_service
+    from radd.modules.alertmanager.models import AlertReceiver
 
     await _required_graph(db, admin, project)
     project_id = project.id
-    monkeypatch.setattr(app_settings, "alertmanager_project_key", project.key)
+    receiver = AlertReceiver(name=f"rcv-{uuid.uuid4().hex[:6]}", token=uuid.uuid4().hex, project_id=project_id)
+    db.add(receiver)
+    await db.flush()
     counts = await alertmanager_service.process(
         db,
+        receiver,
         {
             "alerts": [
                 {

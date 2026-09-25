@@ -5,6 +5,7 @@ import { useDisabledNavPaths } from "@radd/plugin-sdk";
 import {
   Activity,
   Bell,
+  BellRing,
   Blocks,
   BookOpen,
   Bot,
@@ -281,6 +282,14 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsWebhooks,
         label: "Webhooks",
         icon: Webhook,
+        show: (g) => g.instanceAdmin,
+      },
+      {
+        // RADD-1317: Alertmanager receivers as rows — the env token seeds one, once.
+        to: RoutePath.settingsAlertmanager,
+        label: "Alertmanager",
+        icon: BellRing,
+        plugin: "alertmanager",
         show: (g) => g.instanceAdmin,
       },
       {

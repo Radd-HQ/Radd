@@ -1,11 +1,13 @@
-"""Pure Alertmanager webhook → planned actions (spec 47) — tested in
-tests/test_connectors.py. No I/O: `existing` carries the known fingerprints
-(the alert_items dedup table) so the firing-new / firing-dup / resolved
-decision stays a pure function; lookups and writes happen in service.py."""
+"""Pure Alertmanager webhook → planned actions (spec 47). No I/O: `existing`
+carries the known fingerprints so the firing-new / firing-again / resolved
+decision stays a pure function. Since RADD-1317 a plan carries the alert itself
+— its facts are what the trigger events carry — and no comment text: what a
+repeat or a resolution does to the issue is an automation's business."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
-from .types import AlertAction, AlertStatus, RESOLVED_COMMENT, STILL_FIRING_TEMPLATE, TITLE_MAX_CHARS
+from .types import AlertAction, AlertStatus, TITLE_MAX_CHARS
 
 # Well-known Alertmanager payload fields.
 _ALERTNAME_LABEL = "alertname"
@@ -16,9 +18,10 @@ _SUMMARY_ANNOTATION = "summary"
 class AlertPlan:
     action: AlertAction
     fingerprint: str
+    alert: dict[str, Any] = field(default_factory=dict)
+    firing_count: int = 0
     title: str = ""  # CREATE only
     description: str = ""  # CREATE only
-    comment: str = ""  # STILL_FIRING / RESOLVED only
 
 
 def _title(alert: dict) -> str:
@@ -40,12 +43,32 @@ def _description(alert: dict) -> str:
     return "\n".join(lines)
 
 
+def facts_of(plan: AlertPlan, receiver: str) -> dict[str, Any]:
+    """What a trigger event carries about one alert."""
+    alert = plan.alert
+    labels = dict(alert.get("labels") or {})
+    annotations = dict(alert.get("annotations") or {})
+    return {
+        "receiver": receiver,
+        "fingerprint": plan.fingerprint,
+        "status": str(alert.get("status") or ""),
+        "alertname": str(labels.get(_ALERTNAME_LABEL, "")),
+        "summary": str(annotations.get(_SUMMARY_ANNOTATION, "")),
+        "labels": labels,
+        "annotations": annotations,
+        "generator_url": str(alert.get("generatorURL") or ""),
+        "starts_at": str(alert.get("startsAt") or ""),
+        "ends_at": str(alert.get("endsAt") or ""),
+        "firing_count": plan.firing_count,
+    }
+
+
 def plan_alerts(payload: dict, existing: frozenset[str] = frozenset()) -> list[AlertPlan]:
     """One plan per alert with a usable fingerprint:
 
     - firing + unknown fingerprint → CREATE (title/description built here)
-    - firing + known fingerprint → STILL_FIRING comment
-    - resolved + known fingerprint → RESOLVED comment
+    - firing + known fingerprint → STILL_FIRING
+    - resolved + known fingerprint → RESOLVED
     - resolved + unknown fingerprint, or no fingerprint → skipped
     """
     alerts = payload.get("alerts") or []
@@ -59,29 +82,15 @@ def plan_alerts(payload: dict, existing: frozenset[str] = frozenset()) -> list[A
         status = alert.get("status", "")
         if status == AlertStatus.FIRING:
             if fingerprint in known:
-                plans.append(
-                    AlertPlan(
-                        action=AlertAction.STILL_FIRING,
-                        fingerprint=fingerprint,
-                        comment=STILL_FIRING_TEMPLATE.format(count=firing_count),
-                    )
-                )
+                plans.append(AlertPlan(AlertAction.STILL_FIRING, fingerprint, alert, firing_count))
             else:
-                known.add(fingerprint)  # a repeat in the same payload is a dup, not a 2nd item
+                known.add(fingerprint)  # a repeat in the same payload is a dup, not a 2nd issue
                 plans.append(
                     AlertPlan(
-                        action=AlertAction.CREATE,
-                        fingerprint=fingerprint,
-                        title=_title(alert),
-                        description=_description(alert),
+                        AlertAction.CREATE, fingerprint, alert, firing_count,
+                        title=_title(alert), description=_description(alert),
                     )
                 )
         elif status == AlertStatus.RESOLVED and fingerprint in known:
-            plans.append(
-                AlertPlan(
-                    action=AlertAction.RESOLVED,
-                    fingerprint=fingerprint,
-                    comment=RESOLVED_COMMENT,
-                )
-            )
+            plans.append(AlertPlan(AlertAction.RESOLVED, fingerprint, alert, firing_count))
     return plans

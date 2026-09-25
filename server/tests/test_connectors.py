@@ -350,7 +350,7 @@ def test_alertmanager_plans_comment_for_known_firing_fingerprint():
         (AlertAction.STILL_FIRING, "fp1"),
         (AlertAction.CREATE, "fp2"),
     ]
-    assert "2 firing alert(s)" in plans[0].comment
+    assert plans[0].firing_count == 2
 
 
 def test_alertmanager_plans_resolved_only_for_known_fingerprints():
@@ -359,7 +359,8 @@ def test_alertmanager_plans_resolved_only_for_known_fingerprints():
         existing=frozenset({"fp1"}),
     )
     assert [(p.action, p.fingerprint) for p in plans] == [(AlertAction.RESOLVED, "fp1")]
-    assert plans[0].comment
+    facts = planner.facts_of(plans[0], "prod")
+    assert facts["alertname"] == "HighCPU" and facts["receiver"] == "prod" and facts["status"] == "resolved"
 
 
 def test_alertmanager_skips_alerts_without_fingerprint_and_dedupes_in_batch():
@@ -370,14 +371,25 @@ def test_alertmanager_skips_alerts_without_fingerprint_and_dedupes_in_batch():
     assert [p.action for p in plans] == [AlertAction.CREATE, AlertAction.STILL_FIRING]
 
 
-# --- alertmanager: endpoint token check (service layer mocked — the alert_items
-# migration is applied by the supervisor, so no DB writes here) ---
+# --- alertmanager: endpoint token check (RADD-1317: a receiver ROW's token; the
+# lookup is stubbed so these stay DB-free) ---
 
 AM_PAYLOAD = {"version": "4", "status": "firing", "alerts": []}
 
 
-async def test_alertmanager_endpoint_disabled_without_token(monkeypatch):
-    monkeypatch.setattr(settings, "alertmanager_token", "")
+def _receivers(monkeypatch, token: str | None):
+    """A stubbed `receiver_for_token` holding one active receiver (or none)."""
+    receiver = SimpleNamespace(name="prod", token=token, project_id=None, id=None)
+
+    async def lookup(session, supplied):
+        return receiver if token and supplied == token else None
+
+    monkeypatch.setattr(alert_service, "receiver_for_token", lookup)
+    return receiver
+
+
+async def test_alertmanager_endpoint_refuses_when_no_receiver_exists(monkeypatch):
+    _receivers(monkeypatch, None)
     async with _client() as client:
         response = await client.post(
             f"{settings.api_prefix}/integrations/alertmanager?token=whatever", json=AM_PAYLOAD
@@ -386,7 +398,7 @@ async def test_alertmanager_endpoint_disabled_without_token(monkeypatch):
 
 
 async def test_alertmanager_endpoint_rejects_bad_token(monkeypatch):
-    monkeypatch.setattr(settings, "alertmanager_token", "t0ken")
+    _receivers(monkeypatch, "t0ken-long")
     async with _client() as client:
         response = await client.post(
             f"{settings.api_prefix}/integrations/alertmanager?token=nope", json=AM_PAYLOAD
@@ -395,24 +407,24 @@ async def test_alertmanager_endpoint_rejects_bad_token(monkeypatch):
 
 
 async def test_alertmanager_endpoint_accepts_query_token_and_bearer(monkeypatch):
-    monkeypatch.setattr(settings, "alertmanager_token", "t0ken")
+    receiver = _receivers(monkeypatch, "t0ken-long")
 
-    async def fake_process(session, payload):
-        assert payload == AM_PAYLOAD
-        return {"created": 1, "commented": 0, "transitioned": 0}
+    async def fake_process(session, got, payload):
+        assert got is receiver and payload == AM_PAYLOAD
+        return {"created": 1, "triggered": 1}
 
     monkeypatch.setattr(alert_service, "process", fake_process)
     async with _client() as client:
         by_query = await client.post(
-            f"{settings.api_prefix}/integrations/alertmanager?token=t0ken", json=AM_PAYLOAD
+            f"{settings.api_prefix}/integrations/alertmanager?token=t0ken-long", json=AM_PAYLOAD
         )
         by_bearer = await client.post(
             f"{settings.api_prefix}/integrations/alertmanager",
             json=AM_PAYLOAD,
-            headers={"Authorization": "Bearer t0ken"},
+            headers={"Authorization": "Bearer t0ken-long"},
         )
     assert by_query.status_code == 200
-    assert by_query.json() == {"created": 1, "commented": 0, "transitioned": 0}
+    assert by_query.json() == {"created": 1, "triggered": 1}
     assert by_bearer.status_code == 200
 
 

@@ -180,6 +180,8 @@ export const ApiPath = {
   // AI layer (spec 46) — the status gate + natural-language → SLQ.
   pagesReindex: "/pages/reindex",
   webhooks: "/webhooks",
+  // Alertmanager receivers (RADD-1317) — admin.
+  alertmanagerReceivers: "/alertmanager/receivers",
   aiStatus: "/ai/status",
   aiLocalEmbed: "/ai/local-embed",
   // Similar issues for a TEXT seed (read-mode AI menu on comments).

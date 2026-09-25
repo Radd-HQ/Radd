@@ -36,7 +36,7 @@ def test_trigger_registry_reproduces_the_catalog_exactly():
         assert current[et] == expected, f"{et}: {current[et]} != {expected}"
 
 
-def test_trigger_count_is_102():
+def test_trigger_count_is_105():
     # RADD-829 added the three group.* events (synced/missing/restored).
     # RADD-960 added the four mail.* events — the mail channel became something
     # a rule can see, rather than only the item/comment it happened to produce.
@@ -46,4 +46,6 @@ def test_trigger_count_is_102():
     # access grants, a space's public-access flip and the SLA policies.
     # RADD-1309 added each VCS connector's own triggers: GitLab five (opened/
     # merged/closed, push, release), GitHub and Forgejo six (the same plus CI).
-    assert len(_current_triggers()) == 102
+    # RADD-1317 added Alertmanager's three (firing/repeated/resolved) — the
+    # receiver stopped commenting and transitioning and fires these instead.
+    assert len(_current_triggers()) == 105

@@ -77,7 +77,10 @@ def test_connectors_derive_generically_from_the_connector_category():
 
     assert connectors["gitlab"] == (gitlab_service.active_connection_count() > 0)
     assert connectors["google_chat"] == bool(settings.googlechat_webhook_url)
-    assert connectors["alertmanager"] == bool(settings.alertmanager_token)
+    # alertmanager is row-backed since RADD-1317 (receivers).
+    from radd.modules.alertmanager import service as alertmanager_service
+
+    assert connectors["alertmanager"] == (alertmanager_service.active_receiver_count() > 0)
     # email_intake is row-backed since RADD-958 — asserted against rows below.
 
 

@@ -177,6 +177,11 @@ class Permission(StrEnum):
     VCSCONN_CREATE = "vcsconn.create"
     VCSCONN_UPDATE = "vcsconn.update"
     VCSCONN_DELETE = "vcsconn.delete"
+    # RADD-1317 — Alertmanager receivers (rows since the env token became seed-only).
+    ALERT_RECEIVER_CREATE = "alertreceiver.create"
+    ALERT_RECEIVER_READ = "alertreceiver.read"
+    ALERT_RECEIVER_UPDATE = "alertreceiver.update"
+    ALERT_RECEIVER_DELETE = "alertreceiver.delete"
     AUTOMATION_CREATE = "automation.create"
     AUTOMATION_UPDATE = "automation.update"
     AUTOMATION_DELETE = "automation.delete"
