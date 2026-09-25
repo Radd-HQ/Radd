@@ -63,22 +63,28 @@ export function useLinkedComment(entityId: string): CommentLocation | null {
 export function useLandOnComment(target: string | null | undefined): boolean {
   const [landed, setLanded] = useState<string | null>(null);
   useEffect(() => {
-    if (!target || landed === target) return;
+    if (!target) return;
     let tries = 0;
+    let row: HTMLElement | null = null;
+    let highlightTimer: number | undefined;
     const timer = window.setInterval(() => {
-      const row = document.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(target)}"]`);
+      row = document.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(target)}"]`);
       if (row) {
         window.clearInterval(timer);
         row.scrollIntoView({ block: "center" });
         row.setAttribute("data-comment-linked", "");
-        window.setTimeout(() => row.removeAttribute("data-comment-linked"), 4000);
+        highlightTimer = window.setTimeout(() => row?.removeAttribute("data-comment-linked"), 10_000);
         setLanded(target);
-      } else if (++tries > 40) {
-        window.clearInterval(timer); // ~10s: it is not coming (deleted meanwhile)
+      } else if (++tries > 120) {
+        window.clearInterval(timer);
       }
     }, 250);
-    return () => window.clearInterval(timer);
-  }, [target, landed]);
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(highlightTimer);
+      row?.removeAttribute("data-comment-linked");
+    };
+  }, [target]);
   return landed === target;
 }
 
