@@ -37,7 +37,7 @@ import { isProducer, nodeNameError, outputsOfNode } from "../../lib/automation-o
 import { ActionParams } from "./ActionParams";
 import { ArityField } from "./ArityField";
 import { CreateItemFields } from "./CreateItemFields";
-import { SchemaFields } from "./SchemaFields";
+import { SchemaForm } from "@radd/plugin-sdk";
 import { Slot, SlotId } from "@radd/plugin-sdk";
 import { useTokenTarget } from "./useTokenTarget";
 import { EventSamples } from "./EventSamples";
@@ -336,7 +336,7 @@ export function GraphInspector({
           {/* A plugin's trigger kind renders its own params from its schema. */}
           {firedKind && ![SCHEDULE_TRIGGER, VALIDATE_TRIGGER, MANUAL_TRIGGER].includes(firedKind.key) &&
             Object.keys(firedKind.params_schema ?? {}).length > 0 && (
-              <SchemaFields
+              <SchemaForm
                 schema={firedKind.params_schema}
                 params={node.params}
                 onChange={(params) => setParams({ ...params, event: firedKind.key })}
@@ -440,7 +440,7 @@ export function GraphInspector({
             schema={contributed.params_schema}
             onChange={setParams}
             fallback={
-              <SchemaFields schema={contributed.params_schema} params={node.params} onChange={setParams} />
+              <SchemaForm schema={contributed.params_schema} params={node.params} onChange={setParams} />
             }
           />
           {tokenPanel(false)}

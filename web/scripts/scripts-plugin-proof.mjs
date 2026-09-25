@@ -133,7 +133,7 @@ await session.eval(`(()=>{const b=document.querySelector(".react-flow__controls-
 await sleep(600);
 await session.click('[data-node-type="script.run"]', () => true);
 await sleep(1500);
-const editorShown = await session.eval(`Boolean(document.querySelector("[data-script-node] [data-python-editor] .cm-editor"))`);
+const editorShown = await session.eval(`Boolean(document.querySelector("[data-script-node] [data-code-editor] .cm-editor"))`);
 const editorText = await session.eval(`(document.querySelector("[data-script-node] .cm-content")||{innerText:""}).innerText.includes("add_comment")`);
 const testBoxShown = await session.eval(`Boolean(document.querySelector("[data-script-node] [data-script-test]"))`);
 

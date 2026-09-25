@@ -131,5 +131,5 @@ test('SDK version gate rejects remotes requiring newer APIs', async () => {
   const js = stripTypeScriptTypes(readFileSync('web/packages/plugin-sdk/src/version.ts','utf8'));
   const sdk = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
   for (const version of ['1.0.0','1.1.0','1.2.0','1.3.0',sdk.UI_API_VERSION]) assert(sdk.isUiApiCompatible(version));
-  for (const version of ['2.0.0','1.999.0','1.4.999','','1.garbage.0']) assert(!sdk.isUiApiCompatible(version));
+  for (const version of ['2.0.0','1.999.0',sdk.UI_API_VERSION.replace(/\d+$/, n => String(Number(n) + 1)),'','1.garbage.0']) assert(!sdk.isUiApiCompatible(version));
 });

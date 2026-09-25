@@ -63,6 +63,7 @@ export const provideHostComponents = M["provideHostComponents"];
 export const CodeEditor = M["CodeEditor"];
 export const TokenList = M["TokenList"];
 export const SchemaForm = M["SchemaForm"];
+export const defaultsFromSchema = M["defaultsFromSchema"];
 export const api = M["api"];
 export const ApiError = M["ApiError"];
 export const API_BASE = M["API_BASE"];

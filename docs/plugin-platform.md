@@ -488,6 +488,34 @@ the browser. The external-require plugin alone owns the external list: a duplica
 top-level external rule bypasses conversion. Actual bundle browser tests exercise
 this path; a successful type-check alone does not verify remote loading.
 
+### Shared schema and code controls (RADD-1356)
+
+SDK 1.5 owns the generic `SchemaForm` and `defaultsFromSchema`. Automations supplies
+schemas and uses the same helper when creating node parameters; AI supplies its
+schema and retains its own richer output-field editor. The default SDK renderer no
+longer delegates to an Automations component. Its previous optional host override
+remains supported.
+
+The form covers scalar values, typed enums and groups of booleans. It preserves
+unknown saved enum values, unnamed fields and unsupported structured values.
+Unsupported structures display their saved JSON and require an owner-contributed
+editor; this helper is not a complete JSON-schema editor or validator. Required
+fields and schema constraints remain subject to the owner's server validation.
+
+The host provides a generic, lazy CodeMirror control. Scripts chooses Python and
+owns script parameters, testing and execution. Shared language resolution and syntax
+colors have no Markdown or Scripts imports; Markdown code blocks consume these
+same utilities. Controlled edits use the latest callback, external value changes
+do not echo back as user edits, and obsolete grammar loads cannot update a replaced
+or unmounted editor. Language, read-only state and accessibility labels update live.
+Neither shared control fetches feature data or runs background work.
+
+These are platform primitives because their inputs and behavior are domain-neutral,
+not because the host happened to contain them. Boundary tests forbid their former
+feature dependencies. Actual Scripts/AI bundle tests cover absence, withdrawal,
+re-enable, failed remote recovery and draft preservation. This stage does not move
+the remaining host automation editor, inspectors or VCS integration selectors.
+
 ### Original frontend design
 
 *(Built in specs 93/94: the SPA now has the federation seam and `GET /capabilities` exists —

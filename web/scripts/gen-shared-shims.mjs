@@ -44,7 +44,7 @@ const SDK_EXPORTS = [
   "Button", "TextField", "TextArea", "Select", "Chip", "Card", "Spinner", "EmptyState", "Modal",
   "Avatar",
   "tokens",
-  "provideHostComponents", "CodeEditor", "TokenList", "SchemaForm",
+  "provideHostComponents", "CodeEditor", "TokenList", "SchemaForm", "defaultsFromSchema",
   "api", "ApiError", "API_BASE", "provideApiTransport", "DirectoryPager", "ListSearchInput", "DirectorySelect", "PagedDirectorySelect", "DIRECTORY_SELECT_SLOT", "errorMessage",
   "useCurrentUser", "usePermissions", "useCapabilities", "useHasPlugin",
   "useItemsQuery", "useItemQuery", "useProjectsQuery", "useApiQueryClient",

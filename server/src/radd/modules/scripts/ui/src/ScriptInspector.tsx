@@ -45,6 +45,7 @@ export function ScriptInspector({
       <span style={heading}>Script</span>
       <CodeEditor
         language="python"
+        ariaLabel="Script body"
         value={String(params.body ?? "")}
         onChange={(body) => onChange({ ...params, body })}
         minHeight={220}

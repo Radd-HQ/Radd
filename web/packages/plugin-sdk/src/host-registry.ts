@@ -5,6 +5,8 @@ export interface CodeEditorProps {
   onChange: (value: string) => void;
   /** e.g. "python". */
   language?: string;
+  ariaLabel?: string;
+  readOnly?: boolean;
   minHeight?: number;
 }
 

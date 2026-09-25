@@ -61,7 +61,6 @@ export {
   SettingsPage, SelectField, Callout, CalloutKind, QueryError,
   CodeEditor,
   TokenList,
-  SchemaForm,
   type HostComponents,
   type CodeEditorProps,
   type TokenListProps,
@@ -99,3 +98,6 @@ export { registerDataSource, unregisterDataSources, usePluginData, invalidatePlu
 export * from "./dates";
 
 export { DirectorySelect, PagedDirectorySelect, DIRECTORY_SELECT_SLOT, type DirectoryChoice, type DirectorySelectProps, type DirectoryQuery } from "./directory";
+
+export { SchemaForm } from "./schema-form";
+export { defaultsFromSchema } from "./schema-defaults";

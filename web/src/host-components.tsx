@@ -1,22 +1,21 @@
 /**
  * The host's rich controls, handed to the plugin SDK (RADD-1325) so a plugin's
- * UI bundle renders the same code editor, token list and schema form as core
+ * UI bundle renders the same generic code editor and token list as host
  * forms do — without bundling CodeMirror into every remote. CodeMirror stays
  * lazy: it loads when an editor first renders, not with the app shell.
  */
 import { Suspense, lazy } from "react";
 import { provideHostComponents } from "@radd/plugin-sdk";
 import { TokenMultiSelect } from "./components/TokenMultiSelect";
-import { SchemaFields } from "./components/automations/SchemaFields";
 
-const PythonEditor = lazy(() =>
-  import("./components/scripts/PythonEditor").then((module) => ({ default: module.PythonEditor })),
+const CodeEditor = lazy(() =>
+  import("./components/CodeEditor").then((module) => ({ default: module.CodeEditor })),
 );
 
 provideHostComponents({
-  CodeEditor: ({ value, onChange, minHeight }) => (
-    <Suspense fallback={<div style={{ minHeight: minHeight ?? 160 }} />}>
-      <PythonEditor value={value} onChange={onChange} minHeight={minHeight} />
+  CodeEditor: props => (
+    <Suspense fallback={<div style={{ minHeight: props.minHeight ?? 160 }} />}>
+      <CodeEditor {...props} />
     </Suspense>
   ),
   TokenList: ({ value, onChange, placeholder, ariaLabel }) => (
@@ -28,9 +27,6 @@ provideHostComponents({
       ariaLabel={ariaLabel ?? "Values"}
       allowCreate
     />
-  ),
-  SchemaForm: ({ schema, params, onChange }) => (
-    <SchemaFields schema={schema} params={params} onChange={onChange} />
   ),
 });
 

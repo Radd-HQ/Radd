@@ -64,7 +64,7 @@ async def _validation_unavailable_handler(
 
 plugin = RaddPlugin(
     name="automations",
-    ui=PluginUiManifest(remote="/plugins/automations/remoteEntry.js", ui_api_version="1.4.0"),
+    ui=PluginUiManifest(remote="/plugins/automations/remoteEntry.js", ui_api_version="1.5.0"),
     # RADD-1322: the built-in nodes are registered exactly as a plugin's are.
     automation_nodes=(*ROUTER_NODES, *ACTION_NODES, *VERDICT_NODES),
     # RADD-1323: the button, the clock and the draft check, as registered kinds.

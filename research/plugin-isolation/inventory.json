@@ -240,7 +240,7 @@
       "manifest": "server/src/radd/modules/automations/__init__.py",
       "declarations": {
         "name": "automations",
-        "ui": "PluginUiManifest(remote='/plugins/automations/remoteEntry.js', ui_api_version='1.4.0')",
+        "ui": "PluginUiManifest(remote='/plugins/automations/remoteEntry.js', ui_api_version='1.5.0')",
         "automation_nodes": "(*ROUTER_NODES, *ACTION_NODES, *VERDICT_NODES)",
         "trigger_kinds": "TRIGGER_KINDS",
         "automation_templates": "TEMPLATES",
@@ -1160,7 +1160,7 @@
     "scripts": {
       "manifest": "server/src/radd/modules/scripts/__init__.py",
       "declarations": {
-        "ui": "PluginUiManifest(remote='/plugins/scripts/remoteEntry.js', ui_api_version='1.3.0', nav=(NavItemSpec(key='scripts', label='Scripts', path='/settings/scripts', section='settings', group='Server', icon='Terminal', order=95, requires=(PERM_MANAGE,)),))",
+        "ui": "PluginUiManifest(remote='/plugins/scripts/remoteEntry.js', ui_api_version='1.5.0', nav=(NavItemSpec(key='scripts', label='Scripts', path='/settings/scripts', section='settings', group='Server', icon='Terminal', order=95, requires=(PERM_MANAGE,)),))",
         "name": "scripts",
         "id": "radd.scripts",
         "version": "1.0.0",
@@ -1735,7 +1735,7 @@
         "build": "tsc -b && vite build",
         "preview": "vite preview",
         "test": "cd .. && node --test web/scripts/*.test.mjs",
-        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs",
+        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs",
         "build:all": "node scripts/build-all.mjs",
         "check": "npm run test && npm run build:all && npm run test:browser"
       }
@@ -2221,7 +2221,7 @@
       "imports": []
     },
     "docs/plugin-platform.md": {
-      "sha256": "98ba3eff924582118583c6c4391a933c55b6ad872b37e1455f3ac143c5bdad7a",
+      "sha256": "ed8faf9b013f5dc4f044e76aa27c043a9474bef0d82b728a1eb67ec69e4c3715",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -3805,7 +3805,7 @@
       "imports": []
     },
     "research/plugin-isolation/README.md": {
-      "sha256": "96661b3602e2d0ce3117a63966790d6800fe2f8fd31e6195dd182452a0aa0e2a",
+      "sha256": "8a2a33c83e21b6d9817a89e3fc838cc6aa7a93687dee5e1d79f155daa655e740",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -23083,7 +23083,7 @@
       ]
     },
     "server/src/radd/modules/automations/__init__.py": {
-      "sha256": "70c6743c3df095639e199a7c041874230ba8fd60b992f19fd87df670a3c133e4",
+      "sha256": "3c9419422d3b6e568d37ab3e008d6f92c9ecdc5e4c6d2369d664634d5880d360",
       "module_directory": "automations",
       "role": "runtime_source",
       "imports": [
@@ -26106,20 +26106,24 @@
       ]
     },
     "server/src/radd/modules/automations/ui/src/automation-nodes.ts": {
-      "sha256": "790955e6ff9f17df608c8d46bbf160b9f2e6cc4f327942ba495f968413c579e5",
+      "sha256": "b3f3bd48d535b2f91dd96351b9aa33f8c994af5424e8fc5b01deb9cf8426963e",
       "module_directory": "automations",
       "role": "runtime_source",
       "imports": [
         {
-          "line": 19,
-          "module": "./types"
+          "line": 1,
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 20,
+          "module": "./types"
+        },
+        {
+          "line": 21,
           "module": "./automation-outputs"
         },
         {
-          "line": 242,
+          "line": 203,
           "module": "./automation-outputs"
         }
       ]
@@ -61455,7 +61459,7 @@
       ]
     },
     "server/src/radd/modules/scripts/__init__.py": {
-      "sha256": "901c4bf070260b587107f3f19d01e823ea29bcca3ede372526a57e6a58595d31",
+      "sha256": "b2d016f57f18c94f7975c96323cc07f75f89c8155b07cdfd9e7ca23021a29777",
       "module_directory": "scripts",
       "role": "runtime_source",
       "imports": [
@@ -62104,7 +62108,7 @@
       ]
     },
     "server/src/radd/modules/scripts/ui/src/ScriptInspector.tsx": {
-      "sha256": "3f47a8f1daeb823da40c297974eebf214854347a4e1c2cdd33da9a6e843b6c00",
+      "sha256": "083834b7fa7825c9abe503c35750bab4f31f62396e35198bc69c089f2ce912eb",
       "module_directory": "scripts",
       "role": "runtime_source",
       "imports": [
@@ -108713,7 +108717,7 @@
       "imports": []
     },
     "web/package.json": {
-      "sha256": "d11b67500358679f7337f559052e874e57e52f56f91c81d294b0504f00110ff5",
+      "sha256": "17d0eb51800bbb354a544e53c8e943a3d0ec269dead74a356ac3711ef5d324a5",
       "module_directory": null,
       "role": "configuration",
       "imports": []
@@ -108808,7 +108812,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/host-registry.ts": {
-      "sha256": "69d027e400bb78025176700c69c48932b4e83f97d18752d92dc048e743274a24",
+      "sha256": "85179b8948f8f09dcfd1d1aa2b675ed38756d572de24286b4e768d4f25228fcf",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -108819,7 +108823,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/host.tsx": {
-      "sha256": "24819f8bc01741a3c43af8210cb0a0de30cc9d71721115241c59042ec71c1919",
+      "sha256": "c57bcd5138c2a73ce9319cefefbc87e7895279fa5fa029724e3e0b7987f73fc5",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -108842,7 +108846,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/index.ts": {
-      "sha256": "7683b1ce706b9ced1d7c74874f4832863512957706b0193cefb4552dadf011b5",
+      "sha256": "4ede268c11fe4db498c142ab63711ac3953f3d0e21ea4f797471eacfc27e9ab2",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -108867,32 +108871,40 @@
           "module": "./tokens"
         },
         {
-          "line": 69,
+          "line": 68,
           "module": "./host"
         },
         {
-          "line": 71,
+          "line": 70,
           "module": "./api"
         },
         {
-          "line": 82,
+          "line": 81,
           "module": "./hooks"
         },
         {
-          "line": 95,
+          "line": 94,
           "module": "./types"
         },
         {
-          "line": 97,
+          "line": 96,
           "module": "./data"
         },
         {
-          "line": 99,
+          "line": 98,
           "module": "./dates"
         },
         {
-          "line": 101,
+          "line": 100,
           "module": "./directory"
+        },
+        {
+          "line": 102,
+          "module": "./schema-form"
+        },
+        {
+          "line": 103,
+          "module": "./schema-defaults"
         }
       ]
     },
@@ -108923,6 +108935,35 @@
         {
           "line": 9,
           "module": "react"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/schema-defaults.ts": {
+      "sha256": "c26a4e338405235afe1cfe1b28ff53441aee17e4467ad8933e4e15560c2d18e0",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": []
+    },
+    "web/packages/plugin-sdk/src/schema-form.tsx": {
+      "sha256": "5d6545d4080c108fbc43925ad24e98b6d0c42aa50b1d9618dc18116ba2ac6bc7",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "./primitives"
+        },
+        {
+          "line": 3,
+          "module": "./host"
+        },
+        {
+          "line": 4,
+          "module": "./host-registry"
+        },
+        {
+          "line": 5,
+          "module": "./schema-defaults"
         }
       ]
     },
@@ -108980,7 +109021,7 @@
       "imports": []
     },
     "web/packages/plugin-sdk/src/version.ts": {
-      "sha256": "7ee73f3878ea9cb21b5dedc17c540328d7e6ad3a368ce901b6d139d9db26eed0",
+      "sha256": "59ebc746119f48f21c60490e7225007b4d91e94550a0ea43882d98199f6e7c31",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
@@ -109075,7 +109116,7 @@
       "imports": []
     },
     "web/public/shared/radd-plugin-sdk.js": {
-      "sha256": "a0dbde9c1cd25b0c4b8941bfed29db6824a8f65af88f4c5f82d3dd8c1e2f4474",
+      "sha256": "d6386e5e2351e450a06285c98e381975b2e1202c6d6084b4050eee6eaccfc958",
       "module_directory": null,
       "role": "generated_source",
       "imports": []
@@ -110108,6 +110149,45 @@
         }
       ]
     },
+    "web/scripts/browser-shared-controls.mjs": {
+      "sha256": "d73b9c2bef56cb0b2375411aec80cbb6389bc9874d20291c725d834d2f41ce27",
+      "module_directory": null,
+      "role": "tooling_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:http"
+        },
+        {
+          "line": 4,
+          "module": "node:fs"
+        },
+        {
+          "line": 5,
+          "module": "node:fs/promises"
+        },
+        {
+          "line": 6,
+          "module": "node:path"
+        },
+        {
+          "line": 7,
+          "module": "./lib/cdp.mjs"
+        },
+        {
+          "line": 16,
+          "module": "react"
+        },
+        {
+          "line": 16,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
     "web/scripts/browser-smoke.mjs": {
       "sha256": "d7b596916de26d0332a6807add4e697e9739039df031f1113e22d82c7d532745",
       "module_directory": null,
@@ -110503,7 +110583,7 @@
       ]
     },
     "web/scripts/gen-shared-shims.mjs": {
-      "sha256": "800abc2d712f2f637695e658e622b7066b0343c7c7ffcdbbaf22e4e1d125a7ac",
+      "sha256": "6186fc2f1eb987cb19d0af078f72553facab631a50cc6904d9c0051fac8c5fb9",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -111313,7 +111393,7 @@
       ]
     },
     "web/scripts/plugin-boundaries.test.mjs": {
-      "sha256": "aa1ebda54a2c6e7bd1fd828ff6871ae216be0fb6b026d09a242539ef4c42d0bc",
+      "sha256": "f4d304fa8034f6e319d6f4df8e91ad3772113976aaad6254c9dbbf3f63a21612",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -111355,7 +111435,7 @@
       ]
     },
     "web/scripts/plugin-loader.test.mjs": {
-      "sha256": "f2300a5365554cb3e3e79d41ca75793f251120e088fdbf370fc53a4de1439f1a",
+      "sha256": "578c36a62851e76b30914a634a49e01738060a233d39a9efd4df1de8be8476bf",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -111765,6 +111845,33 @@
         }
       ]
     },
+    "web/scripts/schema-defaults.test.mjs": {
+      "sha256": "e10686ffdc0104f6fd7a6f66b9088d6a00f4763fd30882898ef1a675bc6bad2c",
+      "module_directory": null,
+      "role": "test",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:test"
+        },
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:fs"
+        },
+        {
+          "line": 4,
+          "module": "node:os"
+        },
+        {
+          "line": 5,
+          "module": "node:path"
+        }
+      ]
+    },
     "web/scripts/scoped-member-proof.mjs": {
       "sha256": "7a1d912760c05a0df11eca45b13f8b0c2579ef5c86fee1bb8f8403158f300f02",
       "module_directory": null,
@@ -111781,7 +111888,7 @@
       ]
     },
     "web/scripts/scripts-plugin-proof.mjs": {
-      "sha256": "45145880b1b3d426b1265dd520782cdfe4baf0229009e07c2f8b2c397e23661d",
+      "sha256": "1ae213feaaae7c0d680561e1538001303158f8512f850cd9fa0b4179e96633ec",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -112256,6 +112363,45 @@
         {
           "line": 2,
           "module": "lucide-react"
+        }
+      ]
+    },
+    "web/src/components/CodeEditor.tsx": {
+      "sha256": "adc79d785e74ce419992d45763c1b99468407269cd3307d5fb15291cff8782ab",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "react"
+        },
+        {
+          "line": 3,
+          "module": "@codemirror/state"
+        },
+        {
+          "line": 4,
+          "module": "@codemirror/view"
+        },
+        {
+          "line": 5,
+          "module": "@codemirror/commands"
+        },
+        {
+          "line": 6,
+          "module": "@codemirror/language"
+        },
+        {
+          "line": 7,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 8,
+          "module": "../lib/code-highlight"
+        },
+        {
+          "line": 9,
+          "module": "../lib/code-languages"
         }
       ]
     },
@@ -113137,7 +113283,7 @@
       ]
     },
     "web/src/components/automations/GraphInspector.tsx": {
-      "sha256": "3a3625f9d0a21b4f754f891d542aa14c98b8ed709ec18e97c455ab2126e1572e",
+      "sha256": "d8fc43dc9747f610da538e7be7ebcb00d46a673d88f628abc00efac67c45db5c",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -113187,7 +113333,7 @@
         },
         {
           "line": 40,
-          "module": "./SchemaFields"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 41,
@@ -113478,25 +113624,6 @@
         {
           "line": 17,
           "module": "./RuleTestPanel"
-        }
-      ]
-    },
-    "web/src/components/automations/SchemaFields.tsx": {
-      "sha256": "b8dd2e66c5e4a068cc19bde0399dcba64f544d54d80fa20144ececd60858c417",
-      "module_directory": null,
-      "role": "runtime_source",
-      "imports": [
-        {
-          "line": 19,
-          "module": "../../lib/automation-nodes"
-        },
-        {
-          "line": 20,
-          "module": "../SelectField"
-        },
-        {
-          "line": 21,
-          "module": "../TextField"
         }
       ]
     },
@@ -115619,7 +115746,7 @@
       ]
     },
     "web/src/components/editor/code-block.ts": {
-      "sha256": "87e5a339dc39a2c87455398b2298f3a18a62806632b86e119af93614fac2ce38",
+      "sha256": "07ab9e69d4d4ff937998e41f49d773953256819be91680a025efda7d247d389b",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -115640,31 +115767,35 @@
           "module": "@codemirror/commands"
         },
         {
-          "line": 14,
+          "line": 12,
           "module": "@codemirror/language"
         },
         {
+          "line": 13,
+          "module": "../../lib/code-languages"
+        },
+        {
+          "line": 14,
+          "module": "../../lib/code-languages"
+        },
+        {
           "line": 15,
-          "module": "@codemirror/language-data"
+          "module": "../../lib/code-highlight"
         },
         {
           "line": 16,
-          "module": "@lezer/highlight"
-        },
-        {
-          "line": 17,
           "module": "@milkdown/kit/prose/commands"
         },
         {
-          "line": 18,
+          "line": 17,
           "module": "@milkdown/kit/prose/state"
         },
         {
-          "line": 19,
+          "line": 18,
           "module": "@milkdown/kit/prose/model"
         },
         {
-          "line": 20,
+          "line": 19,
           "module": "@milkdown/kit/prose/view"
         }
       ]
@@ -120939,37 +121070,6 @@
         {
           "line": 20,
           "module": "../../lib/constants"
-        }
-      ]
-    },
-    "web/src/components/scripts/PythonEditor.tsx": {
-      "sha256": "a4e07c8289404ed67e5d2a52a4a68e3fe187436cd3a84c6329ef0362ad501cd1",
-      "module_directory": null,
-      "role": "tooling_source",
-      "imports": [
-        {
-          "line": 11,
-          "module": "react"
-        },
-        {
-          "line": 12,
-          "module": "@codemirror/state"
-        },
-        {
-          "line": 13,
-          "module": "@codemirror/view"
-        },
-        {
-          "line": 14,
-          "module": "@codemirror/commands"
-        },
-        {
-          "line": 15,
-          "module": "@codemirror/language"
-        },
-        {
-          "line": 16,
-          "module": "../editor/code-block"
         }
       ]
     },
@@ -128151,7 +128251,7 @@
       ]
     },
     "web/src/host-components.tsx": {
-      "sha256": "8a8971c7bbf381fe370642be3c9f54706f704cc20b006b6352cd0d112684e0af",
+      "sha256": "a04083bdf998b0ed691996284218fc025539225f6583291e306ab1b4c2af85a3",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -128168,47 +128268,43 @@
           "module": "./components/TokenMultiSelect"
         },
         {
-          "line": 10,
-          "module": "./components/automations/SchemaFields"
+          "line": 12,
+          "module": "./components/CodeEditor"
         },
         {
-          "line": 13,
-          "module": "./components/scripts/PythonEditor"
-        },
-        {
-          "line": 37,
+          "line": 33,
           "module": "./components/DirectoryPager"
         },
         {
-          "line": 38,
+          "line": 34,
           "module": "./components/ListSearchInput"
         },
         {
-          "line": 39,
+          "line": 35,
           "module": "./components/Modal"
         },
         {
-          "line": 42,
+          "line": 38,
           "module": "./components/settings/SettingsPage"
         },
         {
-          "line": 43,
+          "line": 39,
           "module": "./components/Button"
         },
         {
-          "line": 44,
+          "line": 40,
           "module": "./components/TextField"
         },
         {
-          "line": 45,
+          "line": 41,
           "module": "./components/SelectField"
         },
         {
-          "line": 46,
+          "line": 42,
           "module": "./components/Callout"
         },
         {
-          "line": 47,
+          "line": 43,
           "module": "./components/QueryError"
         }
       ]
@@ -128508,6 +128604,36 @@
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
+    },
+    "web/src/lib/code-highlight.ts": {
+      "sha256": "6f27322dbd88e19f28d33515c613fc228c1c962049fe6229132da7a7ae0cc117",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@codemirror/language"
+        },
+        {
+          "line": 2,
+          "module": "@lezer/highlight"
+        }
+      ]
+    },
+    "web/src/lib/code-languages.ts": {
+      "sha256": "1cda4468e0e291cae32c9db72b7f70e96b339f6365901e7783e8847735217023",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@codemirror/language"
+        },
+        {
+          "line": 2,
+          "module": "@codemirror/language-data"
+        }
+      ]
     },
     "web/src/lib/columns.ts": {
       "sha256": "a3640aca672c660463e4b61ccc9e46db57e31dccd870a3afd0cb9b98923a5e9c",

@@ -34,5 +34,39 @@
       "scripts/tests/test_plugin_inventory.py verifies ignored local dependencies stay outside discovery."
     ],
     "reason": "Gitignored third-party virtualenv bootstrap code was incorrectly included by the former filesystem scan. It is not repository application source; the environment and its packages are not deleted."
+  },
+  "web/src/components/automations/SchemaFields.tsx": {
+    "last_sha256": "b8dd2e66c5e4a068cc19bde0399dcba64f544d54d80fa20144ececd60858c417",
+    "previous_review": {
+      "sha256": "b8dd2e66c5e4a068cc19bde0399dcba64f544d54d80fa20144ececd60858c417",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "platform shared controls",
+    "issue": "RADD-1356",
+    "evidence": [
+      "Removed former feature-located generic implementation; successor: web/packages/plugin-sdk/src/schema-form.tsx and schema-defaults.ts.",
+      "AST boundary check refuses restoration at old locations. Actual Scripts/AI inspectors and automation canvas use the new controls; RADD-1356 browser evidence."
+    ]
+  },
+  "web/src/components/scripts/PythonEditor.tsx": {
+    "last_sha256": "a4e07c8289404ed67e5d2a52a4a68e3fe187436cd3a84c6329ef0362ad501cd1",
+    "previous_review": {
+      "sha256": "a4e07c8289404ed67e5d2a52a4a68e3fe187436cd3a84c6329ef0362ad501cd1",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "platform shared controls",
+    "issue": "RADD-1356",
+    "evidence": [
+      "Removed former feature-located generic implementation; successor: web/src/components/CodeEditor.tsx and generic language/highlight utilities.",
+      "AST boundary check refuses restoration at old locations. Actual Scripts/AI inspectors and automation canvas use the new controls; RADD-1356 browser evidence."
+    ]
   }
 }

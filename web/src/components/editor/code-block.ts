@@ -8,12 +8,11 @@ import {
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import {
-  HighlightStyle,
-  LanguageDescription,
   syntaxHighlighting,
 } from "@codemirror/language";
-import { languages } from "@codemirror/language-data";
-import { tags } from "@lezer/highlight";
+import { describeLanguage } from "../../lib/code-languages";
+export { describeLanguage, languageOptions } from "../../lib/code-languages";
+import { codeHighlight } from "../../lib/code-highlight";
 import { exitCode } from "@milkdown/kit/prose/commands";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
@@ -40,19 +39,6 @@ import type { EditorView as PmView } from "@milkdown/kit/prose/view";
  * page before the swap passed and the same one failed after.
  */
 
-/** Theme-following highlight. The app's palette, not one-dark's opinion. */
-const HIGHLIGHT = HighlightStyle.define([
-  { tag: [tags.keyword, tags.modifier, tags.controlKeyword], color: "var(--code-keyword)" },
-  { tag: [tags.string, tags.special(tags.string)], color: "var(--code-string)" },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: "var(--code-comment)", fontStyle: "italic" },
-  { tag: [tags.number, tags.bool, tags.null], color: "var(--code-number)" },
-  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: "var(--code-function)" },
-  { tag: [tags.typeName, tags.className, tags.namespace], color: "var(--code-type)" },
-  { tag: [tags.propertyName, tags.attributeName], color: "var(--code-property)" },
-  { tag: [tags.operator, tags.punctuation, tags.bracket], color: "var(--code-punct)" },
-  { tag: [tags.invalid], color: "var(--code-invalid)" },
-]);
-
 /** Layout only — colours come from the stylesheet so both themes follow. */
 const BASE_THEME = CmView.theme({
   "&": { fontSize: "12.5px", backgroundColor: "transparent" },
@@ -62,58 +48,6 @@ const BASE_THEME = CmView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": { fontFamily: "var(--radd-code-font)", lineHeight: "1.55" },
 });
-
-/**
- * Languages CodeMirror can load, keyed by the token a FENCE should carry.
- *
- * Not `alias[0]`, which is what this did first and got wrong in a way that only
- * shows up outside Radd: JavaScript's alias list begins `ecmascript`, so picking
- * "JavaScript" wrote ```` ```ecmascript ````. Valid, resolvable here, and a
- * fence nobody writes — GitHub and every other renderer of this markdown would
- * fail to highlight it. The lowercased NAME is what people type, so it wins
- * whenever it is a single token; a multi-word name ("Web IDL") falls back to the
- * first whitespace-free alias, since a fence's info string ends at the space.
- */
-export function languageOptions(): { value: string; label: string }[] {
-  const seen = new Set<string>();
-  const out: { value: string; label: string }[] = [];
-  for (const description of languages) {
-    const value = fenceTokenFor(description);
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    out.push({ value, label: description.name });
-  }
-  return out.sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function fenceTokenFor(description: LanguageDescription): string {
-  const name = description.name.toLowerCase();
-  if (!/\s/.test(name)) return name;
-  return description.alias.find((alias) => !/\s/.test(alias)) ?? "";
-}
-
-/**
- * The `LanguageDescription` a fence's info string names, if any.
- *
- * Two lookups, because people write fences with FILE EXTENSIONS and
- * `matchLanguageName` only knows names and aliases. ```` ```py ```` is the
- * obvious case: `py` is listed under Python's `extensions`, not its `alias`, so
- * the name lookup returned null and the block rendered with no highlighting at
- * all — while ```` ```python ```` worked, which makes it look like highlighting
- * is broken at random. Confluence writes `py` too, so every imported Python
- * block arrived unhighlighted.
- *
- * `matchFilename` is CodeMirror's own answer to that: give it a filename and it
- * consults the extension lists. A bare token becomes `x.<token>`.
- */
-export const describeLanguage = (name: string): LanguageDescription | null => {
-  const token = name.trim().toLowerCase();
-  if (!token) return null;
-  return (
-    LanguageDescription.matchLanguageName(languages, token, true) ??
-    LanguageDescription.matchFilename(languages, `x.${token}`)
-  );
-};
 
 export interface CodeMirrorHost {
   view: CmView;
@@ -153,7 +87,7 @@ export function mountCodeMirror(options: {
         lineNumbers(),
         highlightActiveLine(),
         history(),
-        syntaxHighlighting(HIGHLIGHT),
+        syntaxHighlighting(codeHighlight),
         BASE_THEME,
         keymap.of([...escapeKeymap(), ...defaultKeymap, ...historyKeymap, indentWithTab]),
         language.of([]),

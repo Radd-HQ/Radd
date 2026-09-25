@@ -20,7 +20,7 @@ plugin = RaddPlugin(
     # RADD-1325: this plugin's automation-node inspectors ship in its own UI
     # remote (./ui), registered through `automation.node.inspector`.
     ui=PluginUiManifest(
-        remote="/plugins/scripts/remoteEntry.js", ui_api_version="1.3.0",
+        remote="/plugins/scripts/remoteEntry.js", ui_api_version="1.5.0",
         nav=(NavItemSpec(key="scripts", label="Scripts", path="/settings/scripts",
                          section="settings", group="Server", icon="Terminal", order=95,
                          requires=(PERM_MANAGE,)),),

@@ -22,6 +22,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1353 | Owner-contributed directory controls | Verified; Waiting for release |
 | RADD-1354 | Automations-owned canvas, graph model and scoped shape queries | Verified; Waiting for release |
 | RADD-1355 | Repository-wide discovery and inventory validation | Verified; Waiting for release |
+| RADD-1356 | Domain-independent schema and code controls | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -198,3 +199,41 @@ The actual ownership review remains in RADD-1344/1346–1350. Complete discovery
 justify marking those tasks complete. Newly visible package metadata also makes build
 and packaging dependencies available for that review instead of assuming the shared
 local toolchain proves isolated plugin packaging.
+
+
+## RADD-1356 verification
+
+The SDK schema form/default helper no longer depends on Automations. Typed enum
+members and cloned defaults retain their types; blank numeric inputs remove the
+value; unknown enum members and unsupported/unlisted structured values remain
+intact. Boolean groups normalize only on user edit. This is a small generic form,
+not a full schema validator; richer data needs an owner-contributed editor.
+
+The host CodeEditor no longer imports Scripts or Markdown UI. Scripts explicitly
+chooses Python; other callers can choose a supported language or plain text.
+Language lookup and syntax colors are shared generic utilities. The controlled
+editor uses the current callback, does not echo external values as edits, ignores
+obsolete grammar loads and responds to read-only/label changes. Browser inspection
+also exposed default CodeMirror gutter colors overriding theme utilities; editor
+theme rules now use the app's semantic colors directly. The former SchemaFields
+and PythonEditor files are removed with explicit retirement records. SDK 1.5 gates
+Automations' new helper import and Scripts' updated control contract.
+
+Evidence: host + 13 plugin remotes build; all 51 frontend tests pass; 19 backend
+capability/kernel/module-contract tests pass. The new actual-bundle browser proof
+passes 13 checks covering typed/unknown values, safe clearing, retained data,
+JavaScript/Python grammars, current callbacks, controlled updates, live read-only
+state, delayed Rust grammar rejection, measured height and dark/light gutter colors,
+Scripts/AI absence and withdrawal/re-enable, Scripts failed-bundle recovery, retained
+drafts and no unintended script execution. The automation canvas actual-bundle
+regression passes all 15 checks after extraction. Screenshots were inspected; the
+local backend and built frontend were refreshed. An authenticated local probe
+confirms Automations/Scripts advertise SDK 1.5, the shared shim exports the helper,
+the remote/lazy canvas assets and actual shape endpoints work, and plugin choices
+are unchanged. The temporary token was removed.
+
+Remaining ownership work is unchanged: the automation editor, inspector forms,
+integration selectors and VCS pages still need migration; Scripts' test mutation
+lifecycle is not certified by a proof that deliberately executes no scripts.
+The discovery ledger contains 2,586 artifacts and 4 retirement entries at this
+stage. Discovery and these focused checks do not certify the rest of the inventory.

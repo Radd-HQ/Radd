@@ -4,7 +4,7 @@ import { TextArea, Select } from "./primitives";
  * Host-provided components (RADD-1325).
  *
  * Some controls are too heavy to reimplement in the SDK and too host-specific to bundle into every
- * remote — a CodeMirror editor, the house token-list input, the form generated from a JSON Schema.
+ * remote — a CodeMirror editor or the house token-list input.
  * The HOST provides its own at startup (`provideHostComponents`), and a remote renders them through
  * the wrappers below, which fall back to a plain control when a host provides none. So a plugin's
  * automation-node inspector looks and behaves like the host's own forms without shipping CodeMirror.
@@ -12,13 +12,15 @@ import { TextArea, Select } from "./primitives";
 
 export { provideHostComponents } from "./host-registry";
 export type { HostComponents, CodeEditorProps, TokenListProps, SchemaFormProps, SettingsPageProps, SelectFieldProps } from "./host-registry";
-import { useProvided, type CodeEditorProps, type TokenListProps, type SchemaFormProps, type SettingsPageProps, type SelectFieldProps, type CalloutProps, type DirectoryPagerProps, type ListSearchInputProps } from "./host-registry";
+import { useProvided, type CodeEditorProps, type TokenListProps, type SettingsPageProps, type SelectFieldProps, type CalloutProps, type DirectoryPagerProps, type ListSearchInputProps } from "./host-registry";
 /** A code editor — the host's CodeMirror, else a monospace text area. */
 export function CodeEditor(props: CodeEditorProps) {
   const { CodeEditor: Host } = useProvided();
   if (Host) return <Host {...props} />;
   return (
     <TextArea
+      aria-label={props.ariaLabel ?? "Code"}
+      readOnly={props.readOnly}
       value={props.value}
       onChange={(event) => props.onChange(event.target.value)}
       style={{ fontFamily: "monospace", minHeight: props.minHeight ?? 160 }}
@@ -41,14 +43,6 @@ export function TokenList(props: TokenListProps) {
     />
   );
 }
-
-/** The form generated from a JSON Schema — the same one the host renders for a node with no
- *  editor of its own. Renders nothing when no host provides it. */
-export function SchemaForm(props: SchemaFormProps) {
-  const { SchemaForm: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
-
 
 /** Shared page chrome and controls; these contracts carry no feature implementation. */
 export function SettingsPage(props: SettingsPageProps) {

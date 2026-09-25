@@ -548,11 +548,14 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "98ba3eff924582118583c6c4391a933c55b6ad872b37e1455f3ac143c5bdad7a",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ed8faf9b013f5dc4f044e76aa27c043a9474bef0d82b728a1eb67ec69e4c3715",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2046,7 +2049,7 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "96661b3602e2d0ce3117a63966790d6800fe2f8fd31e6195dd182452a0aa0e2a",
+    "sha256": "8a2a33c83e21b6d9817a89e3fc838cc6aa7a93687dee5e1d79f155daa655e740",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -5282,14 +5285,14 @@
     "issue": null
   },
   "server/src/radd/modules/automations/__init__.py": {
-    "sha256": "70c6743c3df095639e199a7c041874230ba8fd60b992f19fd87df670a3c133e4",
+    "sha256": "3c9419422d3b6e568d37ab3e008d6f92c9ecdc5e4c6d2369d664634d5880d360",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
-      "Canvas manifest and registered node ownership metadata verified; full backend ownership/dependency review still pending.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1356"
   },
   "server/src/radd/modules/automations/builtin_actions.py": {
     "sha256": "b0dc0a159b098e0498d48eddb7bb985915b02af94ae11a1ce4ed0aac549247ca",
@@ -5528,14 +5531,14 @@
     "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/ui/src/automation-nodes.ts": {
-    "sha256": "790955e6ff9f17df608c8d46bbf160b9f2e6cc4f327942ba495f968413c579e5",
+    "sha256": "b3f3bd48d535b2f91dd96351b9aa33f8c994af5424e8fc5b01deb9cf8426963e",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
-      "Moved graph contracts/catalog helpers to owner. Full legacy wire, schema-default and palette semantics review remains in RADD-1347.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1356"
   },
   "server/src/radd/modules/automations/ui/src/automation-outputs.ts": {
     "sha256": "4fe615008275bb09589ebba8b98cb6eccb1ec92975d54cc35a450d4d3f230278",
@@ -9202,13 +9205,14 @@
     "issue": null
   },
   "server/src/radd/modules/scripts/__init__.py": {
-    "sha256": "901c4bf070260b587107f3f19d01e823ea29bcca3ede372526a57e6a58595d31",
+    "sha256": "b2d016f57f18c94f7975c96323cc07f75f89c8155b07cdfd9e7ca23021a29777",
     "status": "partially_reviewed",
     "owner": "scripts",
     "evidence": [
-      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1352"
+    "issue": "RADD-1356"
   },
   "server/src/radd/modules/scripts/harness.py": {
     "sha256": "05fd0db5140358f9326cec1e7857c32a3f9c95a13ec45d338a0c866055e63088",
@@ -9290,13 +9294,14 @@
     "issue": "RADD-1352"
   },
   "server/src/radd/modules/scripts/ui/src/ScriptInspector.tsx": {
-    "sha256": "3f47a8f1daeb823da40c297974eebf214854347a4e1c2cdd33da9a6e843b6c00",
+    "sha256": "083834b7fa7825c9abe503c35750bab4f31f62396e35198bc69c089f2ce912eb",
     "status": "partially_reviewed",
     "owner": "scripts",
     "evidence": [
-      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1352"
+    "issue": "RADD-1356"
   },
   "server/src/radd/modules/scripts/ui/src/SettingsPage.tsx": {
     "sha256": "7f9f53c94514cf029ec96be4baa5492898286986f2ea3d0d1e879392b415d40e",
@@ -12514,11 +12519,14 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "d11b67500358679f7337f559052e874e57e52f56f91c81d294b0504f00110ff5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "17d0eb51800bbb354a544e53c8e943a3d0ec269dead74a356ac3711ef5d324a5",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -12579,29 +12587,34 @@
     "issue": "RADD-1351"
   },
   "web/packages/plugin-sdk/src/host-registry.ts": {
-    "sha256": "69d027e400bb78025176700c69c48932b4e83f97d18752d92dc048e743274a24",
-    "status": "reviewed",
+    "sha256": "85179b8948f8f09dcfd1d1aa2b675ed38756d572de24286b4e768d4f25228fcf",
+    "status": "partially_reviewed",
     "owner": "platform",
     "evidence": [
-      "Shared generic control registration, modal/paging/search adapters and SDK minimum version contract. 44 frontend tests, all host/remotes type-check/build, 10 browser checks."
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/host.tsx": {
-    "sha256": "24819f8bc01741a3c43af8210cb0a0de30cc9d71721115241c59042ec71c1919",
-    "status": "reviewed",
+    "sha256": "c57bcd5138c2a73ce9319cefefbc87e7895279fa5fa029724e3e0b7987f73fc5",
+    "status": "partially_reviewed",
     "owner": "platform",
     "evidence": [
-      "Shared generic control registration, modal/paging/search adapters and SDK minimum version contract. 44 frontend tests, all host/remotes type-check/build, 10 browser checks."
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "7683b1ce706b9ced1d7c74874f4832863512957706b0193cefb4552dadf011b5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "4ede268c11fe4db498c142ab63711ac3953f3d0e21ea4f797471eacfc27e9ab2",
+    "status": "partially_reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/plugin.ts": {
     "sha256": "96df02dce5161b51da511d0c266bc2ab740cf85bcc737a4644ec4bde09dd46e8",
@@ -12621,6 +12634,26 @@
       "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
     ],
     "issue": "RADD-1353"
+  },
+  "web/packages/plugin-sdk/src/schema-defaults.ts": {
+    "sha256": "c26a4e338405235afe1cfe1b28ff53441aee17e4467ad8933e4e15560c2d18e0",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "SDK generic schema starting values; no domain imports. Typed, cloned and nested defaults verified by schema-defaults.test.mjs.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
+  },
+  "web/packages/plugin-sdk/src/schema-form.tsx": {
+    "sha256": "5d6545d4080c108fbc43925ad24e98b6d0c42aa50b1d9618dc18116ba2ac6bc7",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "SDK generic schema renderer and legacy generic override; no feature endpoints. Actual bundle proof verifies typed enums, blank numbers, unknown/unsupported values and boolean groups.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/slots.tsx": {
     "sha256": "9c21989edb3df158672ca647847c767df996ec66baeb7e6713c8aea1e3fadb73",
@@ -12667,13 +12700,14 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "7ee73f3878ea9cb21b5dedc17c540328d7e6ad3a368ce901b6d139d9db26eed0",
+    "sha256": "59ebc746119f48f21c60490e7225007b4d91e94550a0ea43882d98199f6e7c31",
     "status": "reviewed",
     "owner": "platform",
     "evidence": [
-      "Shared generic control registration, modal/paging/search adapters and SDK minimum version contract. 44 frontend tests, all host/remotes type-check/build, 10 browser checks."
+      "Additive SDK 1.5; compatibility test rejects future patch/minor and other majors while accepting same-major older consumers.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -12749,11 +12783,14 @@
     "issue": null
   },
   "web/public/shared/radd-plugin-sdk.js": {
-    "sha256": "a0dbde9c1cd25b0c4b8941bfed29db6824a8f65af88f4c5f82d3dd8c1e2f4474",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d6386e5e2351e450a06285c98e381975b2e1202c6d6084b4050eee6eaccfc958",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/public/shared/react-dom-client.js": {
     "sha256": "7f77c7fcf2095f1ed7fd3c955b4531b8e8bb8fc97c907abd3b8019e0b0157892",
@@ -13098,6 +13135,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/scripts/browser-shared-controls.mjs": {
+    "sha256": "d73b9c2bef56cb0b2375411aec80cbb6389bc9874d20291c725d834d2f41ce27",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "13 actual built-host/Scripts/AI bundle checks with mocked transport; no real script execution. Failure/recovery and disabled/open/re-enabled states verified.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
+  },
   "web/scripts/browser-smoke.mjs": {
     "sha256": "d7b596916de26d0332a6807add4e697e9739039df031f1113e22d82c7d532745",
     "status": "unreviewed",
@@ -13248,11 +13295,14 @@
     "issue": null
   },
   "web/scripts/gen-shared-shims.mjs": {
-    "sha256": "800abc2d712f2f637695e658e622b7066b0343c7c7ffcdbbaf22e4e1d125a7ac",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6186fc2f1eb987cb19d0af078f72553facab631a50cc6904d9c0051fac8c5fb9",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/scripts/grouped-pagination-proof.mjs": {
     "sha256": "0019d9fd3dd43ea4cdcb117f450e1a1c9f4200d550fdac34fe5fe73c334ae93b",
@@ -13514,11 +13564,14 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "aa1ebda54a2c6e7bd1fd828ff6871ae216be0fb6b026d09a242539ef4c42d0bc",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "f4d304fa8034f6e319d6f4df8e91ad3772113976aaad6254c9dbbf3f63a21612",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -13528,11 +13581,14 @@
     "issue": null
   },
   "web/scripts/plugin-loader.test.mjs": {
-    "sha256": "f2300a5365554cb3e3e79d41ca75793f251120e088fdbf370fc53a4de1439f1a",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "578c36a62851e76b30914a634a49e01738060a233d39a9efd4df1de8be8476bf",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/scripts/plugin-management-proof.mjs": {
     "sha256": "d0514e28557b12d11a8031bb5bc575a47ab895c96be261fe4f29f9b6d2cdc3bf",
@@ -13674,6 +13730,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/scripts/schema-defaults.test.mjs": {
+    "sha256": "e10686ffdc0104f6fd7a6f66b9088d6a00f4763fd30882898ef1a675bc6bad2c",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Three pure behavior tests cover typed nested defaults, independent mutable state and root overrides.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
+  },
   "web/scripts/scoped-member-proof.mjs": {
     "sha256": "7a1d912760c05a0df11eca45b13f8b0c2579ef5c86fee1bb8f8403158f300f02",
     "status": "unreviewed",
@@ -13682,11 +13748,14 @@
     "issue": null
   },
   "web/scripts/scripts-plugin-proof.mjs": {
-    "sha256": "45145880b1b3d426b1265dd520782cdfe4baf0229009e07c2f8b2c397e23661d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "1ae213feaaae7c0d680561e1538001303158f8512f850cd9fa0b4179e96633ec",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/scripts/secret-mask-proof.mjs": {
     "sha256": "e826829b00b2bc6d211f077b947e616e10a65e7532ca0291b66c809dc07a86b2",
@@ -13858,6 +13927,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/src/components/CodeEditor.tsx": {
+    "sha256": "adc79d785e74ce419992d45763c1b99468407269cd3307d5fb15291cff8782ab",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Platform controlled text editor; language/read-only/label inputs, scoped grammar response and editor lifetime, no feature imports. Actual bundle browser verifies callback freshness, no update echo, grammar races, dark/light theme and mounted height.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/src/components/CollapsibleCard.tsx": {
     "sha256": "6516226c45dffd21e0bdf115e4fa6a47c0289b298a743347453aeaa0b451eee4",
@@ -14148,14 +14227,14 @@
     "issue": "RADD-1354"
   },
   "web/src/components/automations/GraphInspector.tsx": {
-    "sha256": "3a3625f9d0a21b4f754f891d542aa14c98b8ed709ec18e97c455ab2126e1572e",
+    "sha256": "d8fc43dc9747f610da538e7be7ebcb00d46a673d88f628abc00efac67c45db5c",
     "status": "partially_reviewed",
-    "owner": "automations",
+    "owner": "see scoped evidence",
     "evidence": [
-      "Explicit shape propagation verified; host UI ownership and remaining dependencies still need migration in RADD-1347.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1356"
   },
   "web/src/components/automations/LazyGraphCanvas.tsx": {
     "sha256": "7330ae9f0cb82943a13ae5b49378f608c1728dc59347a28bb94604e80c513a56",
@@ -14197,13 +14276,6 @@
   },
   "web/src/components/automations/RunsPanel.tsx": {
     "sha256": "1c0c59c35958f031030a0121c42f63f5e265e39dbc4076331fe569972e7700d8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/SchemaFields.tsx": {
-    "sha256": "b8dd2e66c5e4a068cc19bde0399dcba64f544d54d80fa20144ececd60858c417",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -14608,11 +14680,14 @@
     "issue": null
   },
   "web/src/components/editor/code-block.ts": {
-    "sha256": "87e5a339dc39a2c87455398b2298f3a18a62806632b86e119af93614fac2ce38",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "07ab9e69d4d4ff937998e41f49d773953256819be91680a025efda7d247d389b",
+    "status": "partially_reviewed",
+    "owner": "see scoped evidence",
+    "evidence": [
+      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/src/components/editor/collab/EditingNow.tsx": {
     "sha256": "22474d36f0cfb38b57d171f51cd493e7460707afe0bc66571071afba6648af69",
@@ -15563,13 +15638,6 @@
   },
   "web/src/components/roadmap/useRoadmapViewport.ts": {
     "sha256": "f7c242edbeb306969036f5ce203773609560d1b148f4141c9b4fe8cb17e2bf7f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/scripts/PythonEditor.tsx": {
-    "sha256": "a4e07c8289404ed67e5d2a52a4a68e3fe187436cd3a84c6329ef0362ad501cd1",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -16643,13 +16711,14 @@
     "issue": null
   },
   "web/src/host-components.tsx": {
-    "sha256": "8a8971c7bbf381fe370642be3c9f54706f704cc20b006b6352cd0d112684e0af",
-    "status": "partially_reviewed",
-    "owner": "platform / remaining feature callers under review",
+    "sha256": "a04083bdf998b0ed691996284218fc025539225f6583291e306ab1b4c2af85a3",
+    "status": "reviewed",
+    "owner": "platform",
     "evidence": [
-      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+      "All registrations are generic primitives; previous Scripts and Automations imports removed. AST boundary test and actual Scripts/AI consumers verified.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1356"
   },
   "web/src/index.css": {
     "sha256": "c81fd995ea64036e936a03a7667f07d8a3d18736cf8e34523b3e0f38a31658cc",
@@ -16801,6 +16870,26 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/src/lib/code-highlight.ts": {
+    "sha256": "6f27322dbd88e19f28d33515c613fc228c1c962049fe6229132da7a7ae0cc117",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic syntax token colors extracted unchanged from Markdown; both editors consume one theme definition.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
+  },
+  "web/src/lib/code-languages.ts": {
+    "sha256": "1cda4468e0e291cae32c9db72b7f70e96b339f6365901e7783e8847735217023",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic CodeMirror language/extension lookup extracted without semantic change; no Markdown dependency. Actual JavaScript/Python/Rust loads exercised.",
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+    ],
+    "issue": "RADD-1356"
   },
   "web/src/lib/columns.ts": {
     "sha256": "a3640aca672c660463e4b61ccc9e46db57e31dccd870a3afd0cb9b98923a5e9c",
