@@ -29,6 +29,8 @@ class User(Base, TimestampMixin):
     #: unscoped (a session cookie, a personal token, or an internal actor).
     token_scope = None
     api_token_id = None
+    #: RADD-1314 — the key's `automation_cause`, when the engine minted it.
+    automation_cause = None
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True)  # stored lowercase
@@ -159,6 +161,11 @@ class ApiToken(Base):
     #: {"global": [atoms], "projects": {uuid: [atoms]}}. NULL = unscoped = the
     #: account's full authority, which is what every pre-113 token carries.
     scopes: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), default=None)
+    #: RADD-1314 — set only on a key the automation engine mints for its own
+    #: subprocess (a script run). A request authenticated with it runs inside
+    #: `events.automated()`, so what the script writes is automation-caused and
+    #: cannot re-trigger the automation that ran it. NULL = a person's key.
+    automation_cause: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), default=None)
     expires_at: Mapped[datetime | None]
     last_used_at: Mapped[datetime | None]  # write throttled; see service.user_for_api_token
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

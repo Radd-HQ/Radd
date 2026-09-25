@@ -237,9 +237,17 @@ async def test_backfill_walks_merge_requests_and_imports_their_time_once(db, wor
         return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
+    from radd.modules.events.models import Event
+
+    head = (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
     first = await backfill.run(db, world["connection"], world["repo"], transport=transport)
     assert (first.branches, first.merge_requests, first.commits, first.linked) == (1, 2, 1, 4)
     assert first.timed_merge_requests == 1 and first.worklogs.get("created") == 1
+    # RADD-1314: history is recorded, and nothing may react to it — every event
+    # the backfill emitted (links AND the mirrored worklog) is silent.
+    emitted = list((await db.execute(select(Event).where(Event.id > head))).scalars())
+    assert {"vcs.linked", "worklog.created"} <= {e.event_type for e in emitted}
+    assert all(e.silent for e in emitted), [e.event_type for e in emitted if not e.silent]
 
     second = await backfill.run(db, world["connection"], world["repo"], transport=transport)
     assert second.linked == 4 and second.worklogs.get("created", 0) == 0 and second.worklogs.get("unchanged") == 1

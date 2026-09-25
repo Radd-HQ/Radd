@@ -55,14 +55,22 @@ async def create_api_token(
 
 
 async def mint_ephemeral_token(
-    session: AsyncSession, user: User, *, name: str, ttl_seconds: int
+    session: AsyncSession,
+    user: User,
+    *,
+    name: str,
+    ttl_seconds: int,
+    automation_cause: dict | None = None,
 ) -> tuple[ApiToken, str]:
     """A short-lived UNSCOPED key for `user`, minted by the server for its own
     subprocess (RADD-1269: an automation's script). No API principal is
     involved, so the human-session rule does not apply; the caller deletes
     the row when the run ends and the expiry covers the case where it cannot.
     Unscoped means "exactly the account's rights" — a key can never exceed
-    its account (spec 113), which is the containment the caller relies on."""
+    its account (spec 113), which is the containment the caller relies on.
+
+    `automation_cause` (RADD-1314) marks every request made with the key as
+    automation-caused — the loop guard for writes that arrive over REST."""
     from datetime import timedelta
 
     from radd.clock import utcnow
@@ -75,6 +83,7 @@ async def mint_ephemeral_token(
         prefix_display=raw[:PAT_PREFIX_DISPLAY_CHARS],
         expires_at=utcnow() + timedelta(seconds=max(1, ttl_seconds)),
         scopes=None,
+        automation_cause=automation_cause,
     )
     session.add(token)
     await session.flush()
@@ -119,6 +128,7 @@ async def user_for_api_token(session: AsyncSession, token: str) -> User | None:
         return None
     user.api_token_id = api_token.id
     user.token_scope = None
+    user.automation_cause = api_token.automation_cause
     throttle = timedelta(seconds=settings.token_last_used_throttle_seconds)
     if api_token.last_used_at is None or now - api_token.last_used_at >= throttle:
         api_token.last_used_at = now

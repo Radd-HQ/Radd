@@ -60,6 +60,12 @@ async def optional_user(
         token = authorization[len(_BEARER_PREFIX) :].strip()
         if token.startswith(PAT_PREFIX):
             user = await service.user_for_api_token(session, token)
+            if user is not None and getattr(user, "automation_cause", None) is not None:
+                # RADD-1314: a key the automation engine minted — everything
+                # this request emits is automation-caused.
+                from radd.modules.events.quiet import enter_automated
+
+                enter_automated()
             if user is not None and request.method not in _READ_METHODS:
                 # Self-service account mutations have no project/atom gate.
                 # Keep API keys out of this session-only security surface.

@@ -77,8 +77,13 @@ async def run_body(
     python: str | None = None,
 ) -> runner.Outcome:
     """Mint the run's key, run, discard the key — whatever happened."""
+    # RADD-1314: the key carries the run's causation, so what the script writes
+    # back over REST is automation-caused, exactly like a built-in action's
+    # writes — otherwise a script that updates its own item re-triggers its own
+    # automation.
     token, raw = await service_tokens.mint_ephemeral_token(
-        session, actor, name=f"script run ({label})", ttl_seconds=int(timeout) + 60
+        session, actor, name=f"script run ({label})", ttl_seconds=int(timeout) + 60,
+        automation_cause={"source": "script"},
     )
     # The key must be VISIBLE to the request the child makes, which arrives on
     # another connection: flush is not enough, the row has to be committed. A

@@ -311,8 +311,14 @@ async def test_backfill_is_idempotent_and_uses_canonical_ids(db):
         return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
+    from radd.modules.events.models import Event
+
+    head = (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
     first = await backfill.run(db, connection, repo, transport=transport)
     second = await backfill.run(db, connection, repo, transport=transport)
+    # RADD-1314: a backfill replays history quietly.
+    emitted = list((await db.execute(select(Event).where(Event.id > head))).scalars())
+    assert emitted and all(e.silent for e in emitted)
     assert first.as_dict() == second.as_dict()
     assert first.linked == 3 and first.unknown_keys == ["OTHER-1"]
     rows = (await db.execute(select(ItemVcsLink).where(ItemVcsLink.item_id == item.id))).scalars().all()

@@ -19,6 +19,7 @@ from urllib.parse import quote
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.modules.events import service as events
 from radd.config import settings
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.items import service as items_service
@@ -154,6 +155,23 @@ async def _link(
 
 
 async def run(
+    session: AsyncSession,
+    connection: GitlabConnection,
+    repo: GitlabRepo,
+    *,
+    max_commits: int | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> BackfillReport:
+    """RADD-1314: the backfill runs QUIET. It replays history — every old branch,
+    commit, merge request and mirrored worklog — and before RADD-1308 the only
+    thing keeping that out of automations was the system actor. Quiet is the
+    importers' answer (jiraimport, confluenceimport): history is recorded and
+    indexed, and nothing reacts to it — no automation, webhook or notification."""
+    with events.quiet():
+        return await _run(session, connection, repo, max_commits=max_commits, transport=transport)
+
+
+async def _run(
     session: AsyncSession,
     connection: GitlabConnection,
     repo: GitlabRepo,

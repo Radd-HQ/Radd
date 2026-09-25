@@ -81,3 +81,14 @@ def automated(enabled: bool = True) -> Iterator[None]:
         yield
     finally:
         _automated.reset(token)
+
+
+def enter_automated() -> None:
+    """Mark the REST OF THIS TASK as automation-caused, with no scope to leave.
+
+    For a request authenticated with a key the engine minted (RADD-1314): the
+    auth dependency calls this, and FastAPI awaits dependencies in the request's
+    own task, so the mark covers the endpoint and dies with the request. Never
+    call it from code that outlives one request — a worker loop would mark every
+    later event."""
+    _automated.set(True)
