@@ -83,7 +83,10 @@ async def run_body(
     # automation.
     token, raw = await service_tokens.mint_ephemeral_token(
         session, actor, name=f"script run ({label})", ttl_seconds=int(timeout) + 60,
-        automation_cause={"source": "script"},
+        automation_cause={
+            **(events.current_cause() or events.AutomationCause()).as_json(),
+            "source": "script",
+        },
     )
     # The key must be VISIBLE to the request the child makes, which arrives on
     # another connection: flush is not enough, the row has to be committed. A

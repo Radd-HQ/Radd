@@ -17,10 +17,13 @@ from radd.kernel import changes as kchanges, registries
 # ratchet test bans `events.models` outside this module.
 from . import ledger
 from .models import ConsumerOffset, Event
-from .quiet import automated, is_automated, is_quiet, quiet
+from .quiet import AutomationCause, automated, current_cause, is_automated, is_quiet, quiet, run_cause
 from .types import EventSource
 
-__all__ = ["Event", "quiet", "is_quiet", "automated", "is_automated"]  # re-exported public seam (see above)
+__all__ = [
+    "Event", "quiet", "is_quiet", "automated", "is_automated",
+    "AutomationCause", "current_cause", "run_cause",
+]  # re-exported public seam (see above)
 
 
 async def emit(
@@ -65,6 +68,11 @@ async def emit(
     payload = await _with_subjects(session, payload, subjects)
     payload = _with_changes(str(event_type), payload, changes)
     label = ledger.entity_label(str(entity_type), payload or {})
+    cause = current_cause()
+    if automated_cause is True and cause is None:
+        cause = AutomationCause()
+    elif automated_cause is False:
+        cause = None
     event = Event(
         event_type=str(event_type),
         entity_type=str(entity_type),
@@ -72,7 +80,9 @@ async def emit(
         actor_id=actor_id,
         payload=payload or {},
         silent=is_quiet() if silent is None else silent,
-        automated=is_automated() if automated_cause is None else automated_cause,
+        automated=cause is not None,
+        automation_rule_id=cause.rule_id if cause else None,
+        automation_depth=cause.depth if cause else 0,
         # Spec 123: the ledger columns, derived — an emitter declares nothing new.
         project_id=project_id or ledger.project_of(payload or {}),
         entity_label=label,

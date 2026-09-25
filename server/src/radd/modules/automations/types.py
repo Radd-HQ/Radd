@@ -508,10 +508,11 @@ class AutomationEvent(StrEnum):
 # This module's cursor in the events stream (mirrors webhooks.dispatcher).
 CONSUMER_NAME = "automations.engine"
 
-# The system actor that owns every engine-applied mutation. It is a REAL users row
-# (seeded by this module's migration so the comments.author_id FK resolves) AND the
-# loop guard: the engine skips any item event whose actor_id is this id, so an action
-# that re-triggers its own rule cannot spin. Instance-admin so authz never blocks it.
+# The system actor: a REAL users row (seeded by this module's migration so the
+# comments.author_id FK resolves) that integrations write as, and that an
+# automation with no author runs as. It is NOT the loop guard — that is the
+# `automated` event marker (spec 116, RADD-1308). Instance-admin so authz never
+# blocks it.
 class PlanKind(StrEnum):
     """What a resolved automation action DOES (RADD-898) — the vocabulary the
     engine's planner and applier share. Was a comment on `_Plan.kind`; a typo in

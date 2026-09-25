@@ -86,3 +86,23 @@ async def test_an_engine_minted_key_marks_its_requests_automated(db):
     assert await _automated_after_auth(db, person_raw) == (False, False)
     # And the mark died with the request that set it.
     assert events.is_automated() is False
+
+
+async def test_a_script_keys_writes_carry_its_runs_cause(db):
+    """RADD-1315: the key carries the minting run's cause, so a script's writes
+    chain exactly like a built-in action's — same rule id, same depth."""
+    from sqlalchemy import select
+
+    from radd.modules.events.models import Event
+
+    user = User(email=f"key-{uuid.uuid4().hex[:8]}@example.com", name="Key", instance_role="admin")
+    db.add(user)
+    await db.flush()
+    rule_id = uuid.uuid4()
+    _, raw = await service_tokens.mint_ephemeral_token(
+        db, user, name="script run", ttl_seconds=60,
+        automation_cause={"rule_id": str(rule_id), "depth": 2, "source": "script"},
+    )
+    assert await _automated_after_auth(db, raw) == (True, True)
+    row = (await db.execute(select(Event).order_by(Event.id.desc()).limit(1))).scalar_one()
+    assert (row.automation_rule_id, row.automation_depth) == (rule_id, 2)

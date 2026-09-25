@@ -284,6 +284,33 @@ export function GraphInspector({
             <EventSamples eventType={String(node.params.event ?? "")} />
           )}
 
+          {/* RADD-1315: automation chaining is opt-in, per trigger. Only an EVENT
+              trigger reacts to changes, so the sentinels do not offer it (and the
+              server refuses it on them). */}
+          {![SCHEDULE_TRIGGER, VALIDATE_TRIGGER, MANUAL_TRIGGER].includes(String(node.params.event ?? "")) && (
+            <label className="flex cursor-pointer items-start gap-2 text-[13px] text-fg">
+              <input
+                type="checkbox"
+                data-trigger-include-automated
+                checked={Boolean(node.params.include_automated)}
+                onChange={(event) => {
+                  const params: Record<string, unknown> = { ...node.params };
+                  if (event.target.checked) params.include_automated = true;
+                  else delete params.include_automated;
+                  setParams(params);
+                }}
+                className="mt-0.5 size-3.5 cursor-pointer accent-[var(--accent-fill)]"
+              />
+              <span>
+                Also run on changes made by other automations
+                <span className="block text-xs text-fg-secondary">
+                  Off: only people and integrations start this automation. On: another automation's change
+                  starts it too — never this automation's own, and at most three automations deep.
+                </span>
+              </span>
+            </label>
+          )}
+
           {node.params.event === VALIDATE_TRIGGER && (
             <ValidateTriggerFields params={node.params} onChange={setParams} />
           )}

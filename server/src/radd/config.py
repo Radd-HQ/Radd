@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # either is RECORDED in the run report, never applied in silence — a run that
     # quietly did less is indistinguishable from a run that had less to do.
     automation_graph_max_node_runs: int = 200
+    # RADD-1315: how deep a chain of automations may go. A trigger that opted in
+    # to other automations' changes fires only on events below this depth — two
+    # opted-in rules that feed each other stop here instead of looping.
+    automation_max_chain_depth: int = 3
     automation_graph_max_item_actions: int = 2000
     #: How long recorded runs are kept (RADD-1266). 0 keeps them forever.
     automation_run_retention_days: int = 30

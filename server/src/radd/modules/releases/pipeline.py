@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 async def create_release(
-    session: AsyncSession, data: ReleaseCreate, actor_id: uuid.UUID | None = None
+    session: AsyncSession,
+    data: ReleaseCreate,
+    actor_id: uuid.UUID | None = None,
+    *,
+    sweep_as: uuid.UUID | None = None,
 ) -> tuple[Release, int]:
     """Record a version; one born `released` ships what is waiting (RADD-1007).
 
@@ -47,7 +51,7 @@ async def create_release(
     if release.status != ReleaseStatus.RELEASED.value:
         return release, 0
     project = await projects_service.get_project(session, release.project_id)
-    return release, await sweep(session, project, release)
+    return release, await sweep(session, project, release, actor_id=sweep_as)
 
 
 async def update_release(
@@ -71,7 +75,9 @@ async def update_release(
     return release, await sweep(session, project, release)
 
 
-async def sweep(session: AsyncSession, project: Project, release: Release) -> int:
+async def sweep(
+    session: AsyncSession, project: Project, release: Release, *, actor_id: uuid.UUID | None = None
+) -> int:
     """Perform every on-release transition: each item in a row's from-state moves
     to its to-state with the release recorded. Idempotent — shipped items are no
     longer in a from-state, so a second run finds nothing.
@@ -79,13 +85,16 @@ async def sweep(session: AsyncSession, project: Project, release: Release) -> in
     Deliberately "everything waiting" rather than "the items whose commits are in
     the tag range" (spec 112's simplification): the latter needs a tag-to-tag
     commit walk and is only right if every merge went through a linked PR.
+
+    The moves are made as the system unless `actor_id` names someone — the
+    "Publish version and sweep" node passes its automation's actor (RADD-1315).
     """
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
     rows = await workflow_service.release_transitions(session, project.id)
     if not rows:
         return 0
-    actor = await auth_service.get_user(session, SYSTEM_ACTOR_ID)
+    actor = await auth_service.get_user(session, actor_id or SYSTEM_ACTOR_ID)
     moved = 0
     for row in rows:
         item_ids = list((await session.execute(
@@ -116,7 +125,13 @@ async def _ship_item(session, item_id, state_id, release_id, actor):
 
 
 async def on_release_published(
-    session: AsyncSession, project: Project, *, version: str, name: str = "", notes: str = ""
+    session: AsyncSession,
+    project: Project,
+    *,
+    version: str,
+    name: str = "",
+    notes: str = "",
+    actor_id: uuid.UUID | None = None,
 ) -> tuple[Release, int]:
     """A published version: record it, then sweep. Called by an automation on a
     connector's "release published" trigger — never by a receiver on its own
@@ -129,9 +144,10 @@ async def on_release_published(
     """
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
+    actor_id = actor_id or SYSTEM_ACTOR_ID
     existing = await releases_service.resolve_release(session, project.id, version)
     if existing is not None:
-        return existing, await sweep(session, project, existing)
+        return existing, await sweep(session, project, existing, actor_id=actor_id)
     return await create_release(
         session,
         ReleaseCreate(
@@ -141,5 +157,6 @@ async def on_release_published(
             status=ReleaseStatus.RELEASED,
             description=notes,
         ),
-        actor_id=SYSTEM_ACTOR_ID,
+        actor_id=actor_id,
+        sweep_as=actor_id,
     )

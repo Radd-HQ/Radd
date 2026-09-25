@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Identity, Index, String, Text, false, func
+from sqlalchemy import BigInteger, Identity, Index, SmallInteger, String, Text, false, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -67,4 +67,10 @@ class Event(Base):
     # acted. Identity and causation are different questions and this is what
     # keeps them apart.
     automated: Mapped[bool] = mapped_column(server_default=false(), default=False)
+    #: RADD-1315 — for an automated event, WHICH automation's run wrote it and at
+    #: what chain depth (1 = started by a non-automated event). A trigger that
+    #: opted in to other automations' changes fires only below the configured
+    #: depth and never on its own automation's events. NULL / 0 when not automated.
+    automation_rule_id: Mapped[uuid.UUID | None] = mapped_column(default=None)
+    automation_depth: Mapped[int] = mapped_column(SmallInteger, server_default="0", default=0)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

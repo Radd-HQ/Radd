@@ -111,8 +111,10 @@ async def apply_publish(ctx: Any, plan: _PublishPlan) -> None:
     from . import pipeline
 
     project = await projects.get_project(ctx.session, plan.project_id)
+    # As the automation's actor (RADD-1315), not a hardcoded system user.
     release, moved = await pipeline.on_release_published(
-        ctx.session, project, version=plan.version, name=plan.name, notes=plan.notes
+        ctx.session, project, version=plan.version, name=plan.name, notes=plan.notes,
+        actor_id=ctx.actor.id,
     )
     ctx.set_output("release_id", release.id)
     ctx.set_output("moved", moved)

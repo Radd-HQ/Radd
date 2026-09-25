@@ -84,7 +84,9 @@ def is_automation_caused(event: Event) -> bool:
 
 
 def should_process(event: Event) -> bool:
-    """A human/API event on a subscribable type — never an automation-caused one.
+    """A subscribable event the engine should look at: a human/API/integration
+    event, or (RADD-1315) another automation's change below the chain-depth cap —
+    which then reaches only the trigger nodes that opted in.
     EXCEPTION (spec 69): the scheduler's synthetic `automation.scheduled` event is
     system-emitted by design and not a catalog trigger, so it is admitted by name
     — loop safety holds because the item events a scheduled run emits are marked
@@ -98,7 +100,13 @@ def should_process(event: Event) -> bool:
         return False
     if event.event_type == AutomationEvent.SCHEDULED.value:
         return True
-    return event.event_type in catalog.TRIGGERS and not is_automation_caused(event)
+    if event.event_type not in catalog.TRIGGERS:
+        return False
+    if not is_automation_caused(event):
+        return True
+    # RADD-1315: another automation's change reaches only the triggers that opted
+    # in (`rules_for_trigger(automated=True)`), and only below the chain cap.
+    return int(getattr(event, "automation_depth", 0) or 1) < settings.automation_max_chain_depth
 
 
 async def _resolve_target_item(session: AsyncSession, event: Event) -> WorkItem | None:

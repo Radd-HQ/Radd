@@ -565,6 +565,19 @@ def _check_trigger(
             AutomationEntity.RULE,
             reason=f"trigger {trigger.id!r}: a schedule trigger needs a schedule",
         )
+    include = trigger.params.get("include_automated")
+    if include is not None and not isinstance(include, bool):
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=f"trigger {trigger.id!r}: include_automated is true or false",
+        )
+    if include and event in (AutomationTrigger.MANUAL, AutomationTrigger.SCHEDULE, AutomationTrigger.VALIDATE):
+        # Only an EVENT trigger reacts to changes; a button, a clock and a draft
+        # being checked have no "other automation's change" to include.
+        raise ConflictError(
+            AutomationEntity.RULE,
+            reason=f"trigger {trigger.id!r}: only an event trigger can include other automations' changes",
+        )
     if not scheduled and schedule is not None:
         raise ConflictError(
             AutomationEntity.RULE,
@@ -645,6 +658,7 @@ async def _sync_triggers(
                 node_id=trigger.id,
                 event_type=event,
                 schedule=schedule,
+                include_automated=bool(trigger.params.get("include_automated")),
             )
         )
         if event != AutomationTrigger.SCHEDULE or not rule.enabled or schedule is None:
@@ -864,10 +878,14 @@ async def delete_rule(
 
 
 async def rules_for_trigger(
-    session: AsyncSession, trigger: str
+    session: AsyncSession, trigger: str, *, automated: bool = False
 ) -> list[tuple[Automation, str]]:
     """Enabled automations with a trigger binding for this event, paired with the
     NODE ID that matched, in evaluation order (engine seam).
+
+    `automated` (RADD-1315): the event is another automation's change, so only
+    the trigger nodes that opted in ("also run on changes made by other
+    automations") match.
 
     The node id is returned rather than looked up again because a graph may hold
     several triggers and the run must start at the one that fired — starting at
@@ -878,6 +896,7 @@ async def rules_for_trigger(
         .where(
             Automation.enabled.is_(True),
             TriggerBinding.event_type == trigger,
+            *((TriggerBinding.include_automated.is_(True),) if automated else ()),
         )
         .order_by(Automation.position, Automation.created_at)
     )

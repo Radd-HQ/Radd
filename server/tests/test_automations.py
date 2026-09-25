@@ -9,6 +9,8 @@ end-to-end — is exercised by scripts/demo_automations.sh on an isolated databa
 
 import uuid
 
+from radd.config import settings
+
 import pytest
 from pydantic import ValidationError
 
@@ -59,7 +61,14 @@ def test_should_process_skips_automation_caused_events():
     # this is what stops a rule keyed on its own effect from spinning.
     assert should_process(StubEvent(ItemEvent.UPDATED.value, uuid.uuid4())) is True
     assert should_process(StubEvent(ItemEvent.CREATED.value, uuid.uuid4())) is True
-    assert should_process(StubEvent(ItemEvent.UPDATED.value, SYSTEM_ACTOR_ID, automated=True)) is False
+    # RADD-1315: an automation-caused event is looked at only below the chain
+    # cap — and then reaches only the triggers that opted in (rules_for_trigger).
+    capped = StubEvent(ItemEvent.UPDATED.value, SYSTEM_ACTOR_ID, automated=True)
+    capped.automation_depth = settings.automation_max_chain_depth
+    assert should_process(capped) is False
+    shallow = StubEvent(ItemEvent.UPDATED.value, SYSTEM_ACTOR_ID, automated=True)
+    shallow.automation_depth = 1
+    assert should_process(shallow) is True
 
 
 def test_should_process_admits_integration_writes():

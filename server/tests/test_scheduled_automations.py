@@ -363,10 +363,11 @@ async def test_scheduled_run_applies_item_actions_to_matching_items_only(db, adm
         # Spec 116: the action ran as the automation's AUTHOR, so the actor is a
         # real person — and the loop guard holds anyway because causation is
         # recorded on the event. Asserting both together is the point: identity
-        # moved, `should_process` did not change its answer.
+        # moved, the loop guard did not. RADD-1315: the event names the rule that
+        # caused it, and the engine never runs an automation on its own change.
         assert event.actor_id == rule.created_by_id
         assert event.automated is True
-        assert engine.should_process(event) is False
+        assert event.automation_rule_id == rule.id and event.automation_depth == 1
     # The synthetic scheduler event itself IS processed despite the system actor.
     assert engine.should_process(_scheduled_event(rule)) is True
 

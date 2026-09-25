@@ -1,9 +1,13 @@
 """The automation engine: an outbox consumer that walks each matching
-automation's GRAPH and applies what its action nodes plan, as the system actor.
+automation's GRAPH and applies what its action nodes plan, as the automation's
+author (or the node's `act_as`; the system actor for rows with no author).
 
-Loop guard (critical): every engine-applied mutation emits its item event with
-`actor_id = SYSTEM_ACTOR_ID`. `should_process` skips those, so an automation whose
-action sets a field it also matches on applies exactly once and never spins.
+Loop guard (critical): every engine-applied mutation runs inside
+`events.automated()`, so its events carry the `automated` marker and the run's
+cause — which automation, at what chain depth (RADD-1315). Such an event reaches
+only trigger nodes that opted in to other automations' changes, never the
+automation that caused it, and never past `automation_max_chain_depth` — so an
+automation whose action sets a field it also matches on applies exactly once.
 
 Best-effort: each action runs inside a SAVEPOINT — a failing action rolls back only
 itself, is logged, and the rest continue; the engine never crashes on bad data.
@@ -314,7 +318,13 @@ async def apply_event(session: AsyncSession, event: Event) -> None:
     if event.event_type == AutomationEvent.SCHEDULED.value:  # spec 69 scheduler path
         await apply_scheduled(session, event)
         return
-    rules = await service.rules_for_trigger(session, event.event_type)
+    rules = await service.rules_for_trigger(
+        session, event.event_type, automated=bool(getattr(event, "automated", False))
+    )
+    # RADD-1315: an automation never reacts to its OWN change, opted in or not —
+    # that is a loop by construction, and the depth cap would only bound it.
+    caused_by = getattr(event, "automation_rule_id", None)
+    rules = [(rule, node_id) for rule, node_id in rules if caused_by is None or rule.id != caused_by]
     if not rules:
         return
     system_user = await session.get(User, SYSTEM_ACTOR_ID)
@@ -421,19 +431,24 @@ async def run_graph(
         )
         return None
     started_at = utcnow()
+    # RADD-1315: every write this run makes carries WHICH automation made it and
+    # at what chain depth — one deeper than the event that started it, when that
+    # event was itself another automation's change.
+    depth = (int(getattr(event, "automation_depth", 0) or 0) if getattr(event, "automated", False) else 0) + 1
     try:
-        report = await executor.walk(
-            session,
-            nodes=nodes,
-            edges=edges,
-            trigger=trigger,
-            initial=initial,
-            system_user=author,
-            automation_name=rule.name,
-            budget=executor.new_budget(),
-            apply=apply,
-            deadline=deadline,
-        )
+        with events.run_cause(events.AutomationCause(rule_id=rule.id, depth=depth)):
+            report = await executor.walk(
+                session,
+                nodes=nodes,
+                edges=edges,
+                trigger=trigger,
+                initial=initial,
+                system_user=author,
+                automation_name=rule.name,
+                budget=executor.new_budget(),
+                apply=apply,
+                deadline=deadline,
+            )
     except Exception as exc:
         if not apply:
             raise

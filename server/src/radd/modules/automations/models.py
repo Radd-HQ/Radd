@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint, false
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -121,6 +121,10 @@ class TriggerBinding(Base):
     event_type: Mapped[str] = mapped_column(String(100), index=True)
     #: {kind, minutes|time|days|expression} on a schedule trigger; NULL otherwise.
     schedule: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    #: RADD-1315 — the trigger node's "also run on changes made by other
+    #: automations" checkbox. Off by default: an automation-caused event reaches
+    #: only the triggers that asked for it, below the chain-depth cap.
+    include_automated: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
 
 
 class ValidationBinding(Base):

@@ -338,9 +338,24 @@ async def test_an_automations_own_mail_event_cannot_retrigger_it(db, sender_row,
     emitted = await events_service.read_after(db, before, 20)
     mail_events = [e for e in emitted if e.event_type == MailEvent.SENT.value]
     assert mail_events, "the send must still REPORT itself"
+    # RADD-1315: an automated event is looked at only by triggers that opted in
+    # to other automations' changes. A plain "Email sent" trigger must not run.
+    from radd.modules.automations import runs, service as automations_service
+    from radd.modules.automations.schemas import RuleCreate
+
+    rule = await automations_service.create_rule(db, RuleCreate.model_validate({
+        "name": "on mail sent",
+        "nodes": [
+            {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": MailEvent.SENT.value}},
+            {"id": "act", "kind": "action", "type": "action.notify_user", "params": {"user": "customer@example.com", "message": "x"}},
+        ],
+        "edges": [{"source": "trg", "port": "out", "target": "act"}],
+    }), None)
     for event in mail_events:
         assert event.automated is True
-        assert not should_process(event), "an automation's own mail would retrigger it"
+        assert should_process(event)  # below the chain cap…
+        await automations_engine.apply_event(db, event)  # …yet no opted-in trigger
+    assert await runs.list_runs(db, rule.id) == [], "an automation's own mail would retrigger it"
 
     # The control: the same event outside the scope is a perfectly good trigger,
     # so the guard is the scope and not the event type being unmatchable.
