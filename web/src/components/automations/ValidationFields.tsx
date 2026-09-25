@@ -15,11 +15,9 @@ import { ProjectSelect } from "../projects/ProjectSelect";
  */
 import { Plus, Trash2 } from "lucide-react";
 import {
-  ValidationMode,
   ValidationTargetKind,
   type ValidationTarget,
   type ValidationTargetKindValue,
-  type ValidationModeValue,
 } from "../../lib/types";
 import type { FieldDef } from "../../lib/types";
 import { Button, ButtonVariant } from "../Button";
@@ -67,7 +65,6 @@ export function ValidateTriggerFields({
   onChange: (params: Params) => void;
 }) {
   const targets = (params.targets as ValidationTarget[] | undefined) ?? [];
-  const mode = (params.mode as ValidationModeValue) ?? ValidationMode.advisory;
 
   const setTargets = (next: ValidationTarget[]) => onChange({ ...params, targets: next });
   const patch = (index: number, target: ValidationTarget) =>
@@ -76,8 +73,10 @@ export function ValidateTriggerFields({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-fg-secondary">
-        Runs when someone creates an issue here — <strong>before</strong> it exists. The checks it
-        reaches decide whether the submission is accepted; nothing this graph contains is applied.
+        Runs when someone creates an issue here — <strong>before</strong> it exists. Nothing it
+        reaches is applied: a <strong>Block submission</strong> node refuses the submission, a{" "}
+        <strong>Warn submitter</strong> node shows a problem they can submit past. The chip on this
+        trigger says which it can do.
       </p>
 
       <div className="flex flex-col gap-2">
@@ -139,30 +138,83 @@ export function ValidateTriggerFields({
         </div>
       </div>
 
-      <SelectField
-        label="When a check fails"
-        value={mode}
-        onChange={(event) => onChange({ ...params, mode: event.target.value })}
-        hint={
-          mode === ValidationMode.required
-            ? "Enforced for EVERY caller — the API and MCP included, not just the form."
-            : "The findings are shown and the person may create it anyway."
-        }
-      >
-        <option value={ValidationMode.advisory}>Show the findings — creating is still allowed</option>
-        <option value={ValidationMode.required}>Refuse the creation</option>
-      </SelectField>
     </div>
   );
 }
 
-export function ValidationFailFields({
+/** "Block submission" / "Warn submitter" (RADD-1329): say a fixed message, or
+ * RELAY what an upstream check found in its own words. */
+export function VerdictFields({
+  params,
+  fields,
+  blocks,
+  checks,
+  onChange,
+}: {
+  params: Params;
+  /** The custom-field registry, for the `cf.<key>` half of the picker. */
+  fields: FieldDef[];
+  /** Block submission (true) or Warn submitter (false). */
+  blocks: boolean;
+  /** Upstream nodes that publish findings, which this node may relay. */
+  checks: { id: string; label: string }[];
+  onChange: (params: Params) => void;
+}) {
+  const relay = String(params.relay ?? "");
+  const relaying = Boolean(relay) || (params.message === undefined && checks.length > 0 && params.relay !== undefined);
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-fg-secondary">
+        {blocks
+          ? "Reaching this node refuses the submission. The person sees why, and cannot create it until it is fixed."
+          : "Reaching this node shows the person a problem. They can fix it, or submit again to create it anyway."}
+      </p>
+      <SelectField
+        label="Tell them"
+        value={relaying ? "relay" : "message"}
+        onChange={(event) =>
+          onChange(
+            event.target.value === "relay"
+              ? { relay: checks[0]?.id ?? "" }
+              : { message: "", field: "" },
+          )
+        }
+      >
+        <option value="message">A message you write</option>
+        <option value="relay" disabled={checks.length === 0}>
+          What a check found{checks.length === 0 ? " (no check upstream)" : ""}
+        </option>
+      </SelectField>
+      {relaying ? (
+        <SelectField
+          label="Which check"
+          value={relay}
+          onChange={(event) => onChange({ relay: event.target.value })}
+          hint={
+            blocks
+              ? "Its findings, in its own words. A problem the check graded minor still only advises."
+              : "Its findings, in its own words — all of them advice."
+          }
+        >
+          {checks.map((check) => (
+            <option key={check.id} value={check.id}>
+              {check.label}
+            </option>
+          ))}
+        </SelectField>
+      ) : (
+        <VerdictMessage params={params} fields={fields} onChange={onChange} />
+      )}
+    </div>
+  );
+}
+
+function VerdictMessage({
   params,
   fields,
   onChange,
 }: {
   params: Params;
-  /** The custom-field registry, for the `cf.<key>` half of the picker. */
   fields: FieldDef[];
   onChange: (params: Params) => void;
 }) {
@@ -174,7 +226,7 @@ export function ValidationFailFields({
         value={String(params.message ?? "")}
         onChange={(event) => onChange({ ...params, message: event.target.value })}
         placeholder="Add the steps to reproduce, and what you expected to happen."
-        hint="Reaching this node IS the check failing. Write it as advice, not as an error code."
+        hint="Write it as advice, not as an error code. Only the draft's own {{item.*}} tokens are allowed here."
       />
       <SelectField
         label="About which field"

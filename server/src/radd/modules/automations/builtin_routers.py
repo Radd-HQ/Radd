@@ -1,5 +1,5 @@
-"""The built-in GATES, the SLQ FILTER, the search SOURCE and the validation
-check, registered as `AutomationNodeSpec`s (RADD-1322).
+"""The built-in GATES, the SLQ FILTER, the search SOURCE and the trigger node,
+registered as `AutomationNodeSpec`s (RADD-1322).
 
 Each gate is a pure evaluator in `gates.py` wrapped in a spec whose `plan`
 answers with a port — the same contract `ai.classify` has always had, so the
@@ -25,7 +25,6 @@ from .types import (
     TYPE_GATE_PROJECT,
     TYPE_GATE_STATE_CATEGORY,
     TYPE_SEARCH_SLQ,
-    TYPE_VALIDATION_FAIL,
     NodeArity,
     NodePort,
     SearchMode,
@@ -199,55 +198,6 @@ SEARCH_NODE = AutomationNodeSpec(
 )
 
 
-# --- the spec-119 check ------------------------------------------------------
-
-
-async def _plan_finding(ctx: Any) -> None:
-    """Reaching this node IS the check failing. It records a finding and writes
-    nothing, so a dry run and a live run record identically — and it returns
-    None, which the executor reads as "nothing to put in the plan report".
-
-    On an empty packet it stays quiet — THE APPLICABILITY RULE: `trigger →
-    filter → matched → check` must not report on a draft the filter excluded.
-    On a walk that is not collecting (an event walk) it is a pass-through."""
-    from .executor import UNSPOKEN_FINDING
-
-    if ctx.findings is None or not ctx.packet.item_ids:
-        return None
-    message = str(ctx.node.params.get("message") or "").strip()
-    ctx.add_finding(message or UNSPOKEN_FINDING, str(ctx.node.params.get("field") or ""))
-    return None
-
-
-def _check_finding(params: Mapping[str, Any]) -> None:
-    from radd.modules.fields.types import BuiltinItemField
-
-    from .service import CUSTOM_FIELD_PREFIX
-
-    if not str(params.get("message") or "").strip():
-        raise ValueError("a validation check needs a message — it is what the person submitting reads")
-    target = str(params.get("field") or "").strip()
-    if target and not (target.startswith(CUSTOM_FIELD_PREFIX) or target in set(BuiltinItemField)):
-        raise ValueError(
-            f"{target!r} is not a field — use a builtin name "
-            f"({', '.join(sorted(f.value for f in BuiltinItemField))}) or {CUSTOM_FIELD_PREFIX}<key>"
-        )
-
-
-VALIDATION_FAIL_NODE = AutomationNodeSpec(
-    key=TYPE_VALIDATION_FAIL,
-    kind="action",
-    label="Report a problem",
-    group="Actions",
-    keywords="validation fail finding reject refuse check problem intake quality require",
-    default_params={"message": "", "field": ""},
-    ports=(NodePort.OUT.value,),
-    arity=NodeArity.SET.value,
-    needs_items=False,
-    plan=_plan_finding,
-    check=_check_finding,
-)
-
 #: The trigger node itself. Registered so every stored node TYPE has a spec
 #: (RADD-1322); what it fires on is its `event` param, which the trigger
 #: catalogue describes — its ports are a trigger's single `out`.
@@ -262,5 +212,5 @@ TRIGGER_NODE = AutomationNodeSpec(
 )
 
 ROUTER_NODES: tuple[AutomationNodeSpec, ...] = (
-    TRIGGER_NODE, *GATE_NODES, FILTER_NODE, SEARCH_NODE, VALIDATION_FAIL_NODE,
+    TRIGGER_NODE, *GATE_NODES, FILTER_NODE, SEARCH_NODE,
 )

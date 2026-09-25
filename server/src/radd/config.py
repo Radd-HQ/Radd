@@ -121,8 +121,8 @@ class Settings(BaseSettings):
     # create's transaction — which holds the project's number lock — so this is
     # not the engine's kind of budget: it is how long every other creation in
     # that project can be made to queue. Past it, a check that costs a model
-    # round trip resolves per its own `on_unavailable` (default: let it
-    # through), because an overloaded provider must not become a closed intake.
+    # round trip leaves by its "can't check" port, and the graph decides what
+    # that means (RADD-1329) — an overloaded provider need not close an intake.
     # Deliberately under the 30s AI timeout, so the budget bites first.
     intake_validation_budget_seconds: float = 25.0
 

@@ -47,7 +47,8 @@ import {
   NODE_KIND_ICON,
   NODE_KIND_TONE,
   PORT_TONE,
-  feedbackPortsOf,
+  PORT_LABEL,
+  VERDICT_VISUAL,
   portsOfNode,
 } from "./node-visuals";
 import { layout, NODE_WIDTH } from "../../lib/automation-layout";
@@ -68,28 +69,30 @@ interface NodeData extends Record<string, unknown> {
   ports: string[];
   /** This node's last dry run, when there has been one. */
   run?: NodeResult;
-  /** Ports whose output is a FINDING shown to the submitter (RADD-1074) —
-   * empty on every graph that is not validate-triggered. */
-  feedback: string[];
-  /** Ports that actually have an outgoing edge. A feedback port with none is
-   * drawn as a deliberate END, not as an unfinished stub. */
-  wired: string[];
+  /** On a VALIDATE trigger (RADD-1329): whether anything it reaches can refuse
+   * a submission — a "Block submission" node — or it only ever advises. */
+  validation?: "blocks" | "advises";
 }
 
 /** One node. Deliberately plain: kind icon, its type, and a one-line summary of
  * what it is configured to do — the canvas answers "what is the shape of this
  * automation", and the detail panel answers "what exactly does this node do". */
 function GraphNode({ data, selected }: NodeProps) {
-  const { node, title, subtitle, orientation, arity, ports, run, feedback, wired } = data as NodeData;
+  const { node, title, subtitle, orientation, arity, ports, run, validation } = data as NodeData;
   // Flow enters the top and leaves the bottom when vertical; left/right when
   // horizontal. Getting this wrong draws every edge as a sideways loop.
   const inletSide = orientation === "vertical" ? Position.Top : Position.Left;
   const outletSide = orientation === "vertical" ? Position.Bottom : Position.Right;
-  const Icon = NODE_KIND_ICON[node.kind];
+  const verdict = VERDICT_VISUAL[node.type];
+  const Icon = verdict?.icon ?? NODE_KIND_ICON[node.kind];
+  const tone = verdict?.tone ?? NODE_KIND_TONE[node.kind];
 
   return (
     <div
-      style={{ width: NODE_WIDTH }}
+      // A verdict node is edged in its own colour (RADD-1329): what blocks and
+      // what only warns is readable from across the canvas.
+      style={{ width: NODE_WIDTH, ...(verdict ? { borderLeft: `3px solid ${verdict.tone}` } : {}) }}
+      data-verdict={verdict ? node.type : undefined}
       className={`rounded-[10px] border bg-surface px-3 py-2.5 shadow-lift ${
         selected ? "border-emphasis outline outline-2 outline-offset-1 outline-focus" : "border-strong"
       }`}
@@ -101,8 +104,30 @@ function GraphNode({ data, selected }: NodeProps) {
         <Handle type="target" position={inletSide} style={{ background: INLET_TONE }} />
       )}
       <div className="flex items-center gap-1.5">
-        <Icon size={13} className="shrink-0" style={{ color: NODE_KIND_TONE[node.kind] }} aria-hidden />
-        <span className="truncate text-[11px] uppercase tracking-wide text-fg-muted">{node.kind}</span>
+        <Icon size={13} className="shrink-0" style={{ color: tone }} aria-hidden />
+        <span
+          className="truncate text-[11px] uppercase tracking-wide"
+          style={verdict ? { color: verdict.tone } : undefined}
+        >
+          <span className={verdict ? "" : "text-fg-muted"}>{verdict ? verdict.tag : node.kind}</span>
+        </span>
+        {validation && (
+          <span
+            data-validation-chip={validation}
+            title={
+              validation === "blocks"
+                ? "A Block submission node is reachable: this can refuse a submission."
+                : "Nothing reachable blocks: this only ever advises."
+            }
+            className="ml-auto shrink-0 rounded-[4px] border px-1 py-px text-[9px] uppercase tracking-wide"
+            style={{
+              color: validation === "blocks" ? "var(--status-danger-ink)" : "var(--status-warning-ink)",
+              borderColor: validation === "blocks" ? "var(--status-danger-ink)" : "var(--status-warning-ink)",
+            }}
+          >
+            {validation === "blocks" ? "Can block" : "Advisory only"}
+          </span>
+        )}
         {arity && (
           <span
             data-node-arity={arity}
@@ -142,44 +167,22 @@ function GraphNode({ data, selected }: NodeProps) {
         </div>
       )}
 
-      {feedback.length > 0 && (
-        // WHAT ALREADY HAPPENS, said out loud (RADD-1074). A finding reaches the
-        // person submitting because the intake verdict carries it — there is no
-        // action to wire, and the empty handle below invited people to look for
-        // one. Only rendered on a validate-triggered graph, where it is true.
-        <div
-          data-feedback-note={feedback.join(",")}
-          className="mt-1 truncate text-[10px] text-accent-text"
-          title="Findings are delivered to whoever submitted the draft. Wiring anything after this port is optional."
-        >
-          {feedback.join(" / ")} &rarr; feedback to submitter
-        </div>
-      )}
-
-      {ports.map((port, index) => {
-        // A feedback port with nothing after it is FINISHED, not unfinished:
-        // drawn as a filled cap rather than the same small stub every unwired
-        // port has, so the eye stops there instead of hunting for the branch.
-        const capped = feedback.includes(port) && !wired.includes(port);
-        return (
-          <Handle
-            key={port}
-            id={port}
-            type="source"
-            position={outletSide}
-            data-port-cap={capped ? port : undefined}
-            style={{
-              ...(orientation === "vertical"
-                ? { left: `${((index + 1) / (ports.length + 1)) * 100}%` }
-                : { top: `${((index + 1) / (ports.length + 1)) * 100}%` }),
-              background: PORT_TONE[port] ?? INLET_TONE,
-              width: capped ? 14 : 9,
-              height: capped ? 14 : 9,
-              border: capped ? "2px solid var(--color-base)" : undefined,
-            }}
-          />
-        );
-      })}
+      {ports.map((port, index) => (
+        <Handle
+          key={port}
+          id={port}
+          type="source"
+          position={outletSide}
+          style={{
+            ...(orientation === "vertical"
+              ? { left: `${((index + 1) / (ports.length + 1)) * 100}%` }
+              : { top: `${((index + 1) / (ports.length + 1)) * 100}%` }),
+            background: PORT_TONE[port] ?? INLET_TONE,
+            width: 9,
+            height: 9,
+          }}
+        />
+      ))}
       {ports.length > 1 && (
         <div
           className={
@@ -206,7 +209,7 @@ function GraphNode({ data, selected }: NodeProps) {
                 }
                 style={{ color: PORT_TONE[port] }}
               >
-                {port}
+                {PORT_LABEL[port] ?? port}
                 {outcome && (outcome.taken ? ` ${outcome.count}` : "")}
               </span>
             );
@@ -334,12 +337,9 @@ interface GraphCanvasProps {
   /** No editing affordances — used for a branching automation until the full
    * editor lands, so it can at least be SEEN rather than refused outright. */
   readOnly?: boolean;
-  /** Node ids a VALIDATE trigger can reach (RADD-1074). Reachability rather
-   * than a graph-wide flag: a graph may hold a validate trigger and an event
-   * trigger side by side, and on the event branch the same check is a plain
-   * router whose findings nobody collects. Passed rather than inferred — the
-   * validate sentinel is not in the served trigger catalogue. */
-  validationReach?: ReadonlySet<string>;
+  /** Per VALIDATE trigger id (RADD-1329): can anything it reaches refuse a
+   * submission ("blocks": a Block submission node) or does it only advise. */
+  validationChips?: Readonly<Record<string, "blocks" | "advises">>;
 }
 
 export default function GraphCanvas({
@@ -355,7 +355,7 @@ export default function GraphCanvas({
   catalog,
   run,
   readOnly = false,
-  validationReach,
+  validationChips,
 }: GraphCanvasProps) {
   /**
    * React Flow's own node state, seeded from the graph.
@@ -373,14 +373,6 @@ export default function GraphCanvas({
   //: signature below accounts for.
   const declaredPorts = useMemo(() => contributedPorts(catalog), [catalog]);
   const titles = useMemo(() => titleIndex(catalog), [catalog]);
-  //: Which (node, port) pairs an edge actually leaves by — what tells an unwired
-  //: feedback port from a wired one.
-  const wiredPorts = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const edge of edges) map.set(edge.source, [...(map.get(edge.source) ?? []), edge.port]);
-    return map;
-  }, [edges]);
-
   const build = useCallback(
     (): FlowNode[] =>
       layout(nodes, edges, orientation).map((placed) => ({
@@ -400,16 +392,12 @@ export default function GraphCanvas({
               ? effectiveArity(catalog, placed.node)
               : "",
           ports: portsOfNode(placed.node, declaredPorts),
-          feedback: feedbackPortsOf(
-            placed.node.type,
-            validationReach?.has(placed.node.id) ?? false,
-          ),
-          wired: wiredPorts.get(placed.node.id) ?? [],
+          validation: validationChips?.[placed.node.id],
           run: run?.nodes.find((entry) => entry.node_id === placed.node.id),
         } satisfies NodeData,
         draggable: !readOnly,
       })),
-    [nodes, edges, readOnly, orientation, catalog, declaredPorts, titles, run, validationReach, wiredPorts],
+    [nodes, edges, readOnly, orientation, catalog, declaredPorts, titles, run, validationChips],
   );
 
   const [flowNodes, setFlowNodes, onFlowNodesChange] = useNodesState<FlowNode>(build());
@@ -431,14 +419,13 @@ export default function GraphCanvas({
         // something else nudged the graph is exactly the bug being fixed.
         catalog?.nodes?.length ?? 0,
         run?.nodes.map((n) => [n.node_id, n.ran, n.incoming, n.ports]) ?? null,
-        // The feedback badges are a function of which nodes a validate trigger
-        // REACHES and of which ports are wired, neither of which is in the node
-        // list (RADD-1074).
-        [...(validationReach ?? [])].sort(),
+        // The validate trigger's chip is a function of what it REACHES, which
+        // is not in the node list (RADD-1329).
+        validationChips ?? null,
         edges.map((e) => [e.source, e.port, e.target]),
         nodes.map((n) => [n.id, n.type, n.name, n.params, n.x, n.y]),
       ]),
-    [nodes, edges, orientation, catalog, run, validationReach],
+    [nodes, edges, orientation, catalog, run, validationChips],
   );
   useEffect(() => {
     setFlowNodes(build());

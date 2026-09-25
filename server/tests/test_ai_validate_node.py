@@ -53,7 +53,8 @@ class _Ctx:
     packet: _Packet = field(default_factory=lambda: _Packet((uuid.uuid4(),)))
     session: Any = None
     actor: Any = None
-    collected: list[tuple[str, str]] = field(default_factory=list)
+    #: What the node PUBLISHED (RADD-1329): `{message, field, blocking}`.
+    published: list[dict[str, Any]] = field(default_factory=list)
     #: Whether the walk's wall-clock budget is spent (spec 119). A method rather
     #: than a field because that is the shape the node calls it with.
     spent: bool = False
@@ -61,8 +62,12 @@ class _Ctx:
     def out_of_time(self) -> bool:
         return self.spent
 
-    def add_finding(self, message: str, field_key: str = "") -> None:
-        self.collected.append((message, field_key))
+    def publish_findings(self, found: list[dict[str, Any]]) -> None:
+        self.published = list(found)
+
+    @property
+    def collected(self) -> list[tuple[str, str]]:
+        return [(entry["message"], entry["field"]) for entry in self.published]
 
 
 BAR = {"prompt": "A bug report must name the version and the steps to reproduce."}
@@ -98,7 +103,7 @@ def test_the_ports_are_fixed_and_the_fallback_is_last():
     its branches. Here the answers are prose; what varies is what the model says,
     not how many ways the packet can go. The fallback stays LAST because the
     executor treats a contributed router's final port as its fallback."""
-    assert node.SPEC.ports == ("pass", "fail", "unavailable")
+    assert node.SPEC.ports == ("pass", "fail", "warn", "unavailable")
     assert node.SPEC.ports_at({"prompt": "x"}) == node.PORTS
     assert node.SPEC.ports_at({})[-1] == node.FALLBACK_PORT
 
@@ -227,17 +232,27 @@ async def test_a_provider_failure_takes_the_fallback_and_blocks_nothing(wired, m
     assert ctx.collected == []
 
 
-async def test_an_admin_may_choose_to_refuse_when_the_check_cannot_run(wired, monkeypatch):
-    """Deliberate and visible: `on_unavailable: fail` turns every outage into a
-    refused intake, and says so in the message the submitter reads."""
+async def test_the_model_grades_each_problem_and_the_port_follows(wired, monkeypatch):
+    """RADD-1329: any BLOCKING problem → fail; only MINOR ones → warn. A problem
+    with no grade blocks — the cautious reading of a model that forgot to say."""
+    _answers(monkeypatch, {"passed": False, "findings": [
+        {"message": "A screenshot would help.", "severity": "minor"},
+    ]})
+    ctx = _Ctx(node=_Node(params=dict(BAR)))
+    assert await node.plan(ctx) == node.WARN_PORT
+    assert [entry["blocking"] for entry in ctx.published] == [False]
 
-    async def _boom(_ctx, _params):
-        raise RuntimeError("connection refused")
+    _answers(monkeypatch, {"passed": False, "findings": [
+        {"message": "A screenshot would help.", "severity": "minor"},
+        {"message": "Name the version.", "severity": "blocking", "field": "description"},
+    ]})
+    ctx = _Ctx(node=_Node(params=dict(BAR)))
+    assert await node.plan(ctx) == node.FAIL_PORT
+    assert [entry["blocking"] for entry in ctx.published] == [False, True]
 
-    monkeypatch.setattr(node, "_ask", _boom)
-    ctx = _Ctx(node=_Node(params={**BAR, "on_unavailable": "fail"}))
-    assert await node.plan(ctx) == node.FALLBACK_PORT
-    assert ctx.collected == [(node.UNAVAILABLE_MESSAGE, "")]
+    _answers(monkeypatch, {"passed": False, "findings": [{"message": "Ungraded."}]})
+    ctx = _Ctx(node=_Node(params=dict(BAR)))
+    assert await node.plan(ctx) == node.FAIL_PORT
 
 
 async def test_a_dormant_feature_routes_to_the_fallback(monkeypatch):
@@ -314,9 +329,8 @@ def _walk_context(*, collecting: bool):
 
 
 async def test_on_an_ordinary_walk_it_is_a_pure_router(wired, monkeypatch):
-    """Nothing is collecting findings outside a validation walk, so `add_finding`
-    is a no-op and the node is exactly a pass/fail gate. Same node, both graphs,
-    no mode switch."""
+    """The node only ROUTES (RADD-1329): it publishes what it found and records
+    nothing itself, on any walk."""
     _answers(
         monkeypatch, {"passed": False, "findings": [{"message": "thin", "field": "description"}]}
     )
@@ -325,16 +339,17 @@ async def test_on_an_ordinary_walk_it_is_a_pure_router(wired, monkeypatch):
     assert report.findings == []
 
 
-async def test_on_a_validation_walk_the_same_call_lands_in_the_collection(wired, monkeypatch):
-    """The other half, so neither assertion can pass for the wrong reason: the
-    node behaves identically in both, and only what the walk does with the call
-    is different."""
+async def test_on_a_validation_walk_it_still_only_publishes(wired, monkeypatch):
+    """Even while the walk is collecting, the CHECK records no finding — only a
+    Block submission / Warn submitter node downstream does (RADD-1329). What it
+    found is published under its node id for that node to relay."""
     _answers(
         monkeypatch, {"passed": False, "findings": [{"message": "thin", "field": "description"}]}
     )
     report, ctx = _walk_context(collecting=True)
     assert await node.plan(ctx) == node.FAIL_PORT
-    assert [(f.message, f.field) for f in report.findings] == [("thin", "description")]
+    assert report.findings == []
+    assert report.published == {"chk": [{"message": "thin", "field": "description", "blocking": True}]}
 
 
 # --- the wall-clock budget -----------------------------------------------------
@@ -353,19 +368,6 @@ async def test_a_spent_budget_stops_it_before_the_model_round_trip(wired, monkey
     ctx = _Ctx(node=_Node(params=dict(BAR)), spent=True)
     assert await node.plan(ctx) == node.FALLBACK_PORT
     assert ctx.collected == []
-
-
-async def test_a_spent_budget_still_honours_on_unavailable_fail(wired, monkeypatch):
-    """An admin who would rather refuse than accept anything unchecked chose
-    that for "the check could not run", and being out of time is exactly that."""
-
-    async def _never(_ctx, _params):  # pragma: no cover - must not be called
-        raise AssertionError("the provider must not be asked after the budget is spent")
-
-    monkeypatch.setattr(node, "_ask", _never)
-    ctx = _Ctx(node=_Node(params={**BAR, "on_unavailable": "fail"}), spent=True)
-    assert await node.plan(ctx) == node.FALLBACK_PORT
-    assert ctx.collected == [(node.UNAVAILABLE_MESSAGE, "")]
 
 
 async def test_a_context_with_no_budget_at_all_is_not_out_of_time(wired, monkeypatch):

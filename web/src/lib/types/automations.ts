@@ -41,10 +41,10 @@ export interface ValidationTarget {
 export const ValidationMode = { advisory: "advisory", required: "required" } as const;
 export type ValidationModeValue = (typeof ValidationMode)[keyof typeof ValidationMode];
 
-/** The node type that RECORDS a finding and passes its packet through, so
- * several checks can chain off one branch. An ACTION kind on the server (its
- * ports are an action's `out`), which is why it appears under Actions. */
-export const VALIDATION_FAIL_TYPE = "validation.fail";
+/** The validation VERDICT nodes (RADD-1329): terminal, the only things that
+ * speak to the person submitting. Block refuses; Warn advises. */
+export const VERDICT_BLOCK_TYPE = "verdict.block";
+export const VERDICT_WARN_TYPE = "verdict.warn";
 
 /** Shape of a scheduled rule's `schedule` (spec 69, mirror of ScheduleKind). */
 export const ScheduleKind = {
@@ -114,6 +114,8 @@ export interface NodeInfo {
   default_params: Record<string, unknown>;
   /** Reads the triggering event — refused under a trigger that has none. */
   reads_event: boolean;
+  /** Publishes findings a verdict node can relay (RADD-1329). */
+  produces_findings: boolean;
   /** The node's FIXED ports (RADD-1064). Empty means its outputs depend on its
    * params — an AI classifier's ports are the answers being typed — and the
    * editor computes those locally instead. Without this the canvas could only

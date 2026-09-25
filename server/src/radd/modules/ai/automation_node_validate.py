@@ -12,17 +12,20 @@ to decide, per call, which it is doing; a checker constrained to enumerated
 answers can only ever say "no" without saying why, which is precisely the
 canned-message version this rejected.
 
-**On a validation walk** the findings join the collection through
-`ctx.add_finding` — the seam `automations` exposes for exactly this, so this
-module never imports its vocabulary. **On an ordinary event walk** nothing is
-collecting, `add_finding` is a no-op, and the node is a pure router on
-`pass`/`fail` — the same node, useful in both graphs, with no mode switch.
+**It only ROUTES (RADD-1329).** It used to be drawn as a gate and ALSO write
+the findings, so what refused a submission was the node plus a graph-wide mode
+applied after the walk — nothing on the canvas said so. Now the model grades
+each problem `blocking` or `minor`, the node leaves by:
 
-**An AI outage must not silently block intake.** The provider being down is not
-evidence that a submission is bad. Failures take the `unavailable` port, which a
-graph can wire; whether they ALSO record a blocking finding is `on_unavailable`,
-default `pass`. A required-mode admin who would rather refuse than let anything
-through unchecked sets it to `fail`, deliberately and visibly.
+* `pass` — nothing wrong;
+* `fail` — at least one blocking problem;
+* `warn` — only minor ones;
+* `unavailable` ("can't check") — the provider is down, dormant, or out of time;
+
+and it PUBLISHES what it found (`ctx.publish_findings`) for a "Block submission"
+or "Warn submitter" node downstream to relay. What happens to the submission is
+whichever of those someone wired — including what an outage does, which used to
+be the hidden `on_unavailable` param.
 """
 
 from __future__ import annotations
@@ -38,8 +41,10 @@ NODE_KEY = "ai.validate"
 
 #: The port a clean draft leaves by.
 PASS_PORT = "pass"
-#: The port a draft with findings leaves by.
+#: The port a draft with at least one BLOCKING problem leaves by.
 FAIL_PORT = "fail"
+#: The port a draft with only MINOR problems leaves by (RADD-1329).
+WARN_PORT = "warn"
 #: The port an unreachable/dormant provider takes. LAST in `PORTS` because the
 #: executor treats a contributed router's final port as its fallback — so a
 #: failure the node does not catch itself still lands somewhere sensible.
@@ -51,31 +56,24 @@ FALLBACK_PORT = "unavailable"
 #: ignores its argument (RADD-1064): a client drawing this node's handles has to
 #: know the set before it has any params to ask about, and one that could only
 #: guess drew a gate's TRUE/FALSE instead.
-PORTS: tuple[str, ...] = (PASS_PORT, FAIL_PORT, FALLBACK_PORT)
+PORTS: tuple[str, ...] = (PASS_PORT, FAIL_PORT, WARN_PORT, FALLBACK_PORT)
 
-#: What `on_unavailable` may say. Not booleans on the wire: "pass" and "fail"
-#: read as what happens to the submission, which is the question being answered.
-ON_UNAVAILABLE_PASS = "pass"
-ON_UNAVAILABLE_FAIL = "fail"
+#: How the model grades a problem (RADD-1329).
+SEVERITY_BLOCKING = "blocking"
+SEVERITY_MINOR = "minor"
 
 DEFAULT_MAX_FINDINGS = 5
 #: A hard ceiling independent of the param. A model handed a vague bar can list
 #: twenty things; twenty is a wall, not feedback.
 MAX_FINDINGS_CEILING = 10
 
-#: What the person is told when the check could not run and the admin chose to
-#: refuse anyway. It names the cause, because "this was rejected" with no reason
-#: is the worst refusal there is — and here the reason is not their fault.
-UNAVAILABLE_MESSAGE = (
-    "This submission could not be checked automatically right now, and this "
-    "intake requires the check to run. Please try again shortly."
-)
-
 SYSTEM_PROMPT = (
     "You review newly submitted issue reports against a quality bar the "
     "administrator sets. Answer with findings: short, specific, actionable "
     "sentences addressed to the person who submitted it, in the second person. "
-    "Each finding may name the field it is about. Report only real problems "
+    "Each finding may name the field it is about, and says how serious it is: "
+    "'blocking' when the submission cannot be worked on without it, 'minor' "
+    "when it would merely be better with it. Report only real problems "
     "against the stated bar — if the submission meets it, return no findings at "
     "all. Never invent facts about the issue, never restate the bar back, and "
     "never ask for information the submission already contains."
@@ -108,19 +106,6 @@ PARAMS_SCHEMA: dict[str, Any] = {
             "minimum": 1,
             "maximum": MAX_FINDINGS_CEILING,
             "default": DEFAULT_MAX_FINDINGS,
-        },
-        "on_unavailable": {
-            "type": "string",
-            "title": "If the check cannot run",
-            "description": (
-                "The provider being unreachable is not evidence that a "
-                "submission is bad, so the default lets it through. Choose "
-                "'fail' only if you would rather refuse than accept anything "
-                "unchecked — it turns every provider outage into a refused "
-                "intake."
-            ),
-            "enum": [ON_UNAVAILABLE_PASS, ON_UNAVAILABLE_FAIL],
-            "default": ON_UNAVAILABLE_PASS,
         },
         "include": {
             "type": "object",
@@ -161,11 +146,12 @@ FINDINGS_SCHEMA: dict[str, Any] = {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["message"],
+                "required": ["message", "severity"],
                 "additionalProperties": False,
                 "properties": {
                     "message": {"type": "string"},
                     "field": {"type": "string"},
+                    "severity": {"type": "string", "enum": [SEVERITY_BLOCKING, SEVERITY_MINOR]},
                 },
             },
         },
@@ -190,18 +176,11 @@ def max_findings(params: Mapping[str, Any]) -> int:
     return max(1, min(wanted, MAX_FINDINGS_CEILING))
 
 
-def on_unavailable(params: Mapping[str, Any]) -> str:
-    value = str(params.get("on_unavailable") or ON_UNAVAILABLE_PASS)
-    return value if value in (ON_UNAVAILABLE_PASS, ON_UNAVAILABLE_FAIL) else ON_UNAVAILABLE_PASS
-
-
 async def plan(ctx: Any) -> str:
-    """Check the draft, record what it found, and name the port it leaves by.
+    """Check the draft, publish what it found, and name the port it leaves by.
 
-    Never raises. A contributed router that throws takes its fallback port
-    anyway, but catching here is what lets the node decide whether an outage
-    should ALSO refuse the submission — a decision the executor cannot make on
-    its behalf.
+    Never raises: every failure is the `unavailable` port, which the graph
+    decides the meaning of by what is wired to it.
     """
     from .features import feature_enabled
     from .types import AiFeature
@@ -215,13 +194,11 @@ async def plan(ctx: Any) -> str:
 
     if _out_of_time(ctx):
         # The walk's wall-clock budget is spent (spec 119). Asked BEFORE the
-        # feature gate, because being out of time is a reason not to do any of
-        # the remaining work — and a model round trip is the only work here that
-        # can be measured in seconds. It resolves as an outage rather than as a
-        # pass, so an admin who set `on_unavailable: fail` still gets what they
-        # asked for: the check did not run.
+        # feature gate: being out of time is a reason not to do any of the
+        # remaining work. It is "can't check", which the graph decides the
+        # meaning of by what it wired to that port (RADD-1329).
         logger.info("ai.validate: node %s ran out of time; taking %s", ctx.node.id, FALLBACK_PORT)
-        return _unavailable(ctx, params)
+        return FALLBACK_PORT
 
     try:
         live = await feature_enabled(ctx.session, AiFeature.VALIDATION)
@@ -229,24 +206,28 @@ async def plan(ctx: Any) -> str:
         logger.exception("ai.validate: could not resolve the feature gate")
         live = False
     if not live:
-        return _unavailable(ctx, params)
+        return FALLBACK_PORT
 
     try:
         answer = await _ask(ctx, params)
     except Exception:
         logger.exception("ai.validate: provider unavailable")
-        return _unavailable(ctx, params)
+        return FALLBACK_PORT
 
     findings = _findings_of(answer, params)
     if not findings:
         return PASS_PORT
     vocabulary = await _field_vocabulary(ctx)
-    for message, field in findings:
+    publish = getattr(ctx, "publish_findings", None)
+    if callable(publish):
         # An unknown field key degrades to a GENERAL finding rather than being
         # dropped: the advice is still worth reading, it just has no control to
         # attach itself to. Same rule a card layout's departed attribute follows.
-        ctx.add_finding(message, field if field in vocabulary else "")
-    return FAIL_PORT
+        publish([
+            {"message": message, "field": field if field in vocabulary else "", "blocking": blocking}
+            for message, field, blocking in findings
+        ])
+    return FAIL_PORT if any(blocking for _m, _f, blocking in findings) else WARN_PORT
 
 
 def _out_of_time(ctx: Any) -> bool:
@@ -262,28 +243,25 @@ def _out_of_time(ctx: Any) -> bool:
     return bool(ask()) if callable(ask) else False
 
 
-def _unavailable(ctx: Any, params: Mapping[str, Any]) -> str:
-    if on_unavailable(params) == ON_UNAVAILABLE_FAIL:
-        ctx.add_finding(UNAVAILABLE_MESSAGE)
-    return FALLBACK_PORT
-
-
-def _findings_of(answer: Mapping[str, Any], params: Mapping[str, Any]) -> list[tuple[str, str]]:
-    """`(message, field)` pairs from the model's answer, trimmed and capped.
+def _findings_of(answer: Mapping[str, Any], params: Mapping[str, Any]) -> list[tuple[str, str, bool]]:
+    """`(message, field, blocking)` from the model's answer, trimmed and capped.
+    A finding with no grade (or a grade the schema does not know) BLOCKS — the
+    cautious reading of a model that forgot to say.
 
     `passed` is consulted only when there is nothing to report — a model that
     listed problems and then said it passed has told us about the problems, and
     honouring the flag would throw away the part with information in it.
     """
     raw = answer.get("findings")
-    found: list[tuple[str, str]] = []
+    found: list[tuple[str, str, bool]] = []
     for entry in raw if isinstance(raw, list) else []:
         if not isinstance(entry, dict):
             continue
         message = str(entry.get("message") or "").strip()
         if not message:
             continue
-        found.append((message, str(entry.get("field") or "").strip()))
+        blocking = str(entry.get("severity") or SEVERITY_BLOCKING) != SEVERITY_MINOR
+        found.append((message, str(entry.get("field") or "").strip(), blocking))
     return found[: max_findings(params)]
 
 
@@ -349,14 +327,15 @@ SPEC = AutomationNodeSpec(
     kind="gate",  # routes the packet without changing the item set
     label="AI check",
     description=(
-        "Check a submission against a quality bar you describe, and report what "
-        "falls short in the model's own words. In a validation graph the "
-        "findings are shown to the person submitting; anywhere else it is a "
-        "pass/fail router."
+        "Check a submission against a quality bar you describe. It leaves by pass, "
+        "fail (a blocking problem), warn (only minor ones) or can't check; wire a "
+        "Block submission or Warn submitter node after it to tell the person — "
+        "they relay the model's findings in its own words."
     ),
     group="Gates",
     params_schema=PARAMS_SCHEMA,
     ports=PORTS,
+    produces_findings=True,
     #: A check about nothing has nothing to say — and an empty packet in a
     #: validation walk means an upstream filter excluded this draft.
     needs_items=True,

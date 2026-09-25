@@ -343,7 +343,13 @@ ACTION_TYPE_PREFIX = "action."
 #: `type` is for. On an ordinary event walk it is a no-op that passes through:
 #: nothing is collecting findings there, which is the honest answer rather than
 #: an error about a node someone wired in the wrong graph.
-TYPE_VALIDATION_FAIL = "validation.fail"
+TYPE_VALIDATION_FAIL = "validation.fail"  # retired by RADD-1329; the migration rewrites it
+
+#: RADD-1329: the two TERMINAL verdict nodes of a validation graph. A submission
+#: is refused only because a BLOCK node ran; a WARN node shows its findings and
+#: lets the person submit again to create anyway.
+TYPE_VERDICT_BLOCK = "verdict.block"
+TYPE_VERDICT_WARN = "verdict.warn"
 
 
 #: RADD-1322: the ports, outputs and arity of every built-in node type used to

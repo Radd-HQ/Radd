@@ -53,7 +53,7 @@ VALIDATE_KIND = TriggerKindSpec(
     description="Checks a draft before it becomes an issue.",
     # No targets by default: a trigger that governed something the moment it was
     # dropped could refuse a real submission before its author had finished.
-    default_params={"targets": [], "mode": "advisory"},
+    default_params={"targets": []},
     has_event=False,
     seeds=("item",),
 )

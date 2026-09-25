@@ -650,6 +650,8 @@ class NodeInfo(BaseModel):
     default_params: dict[str, Any] = Field(default_factory=dict)
     #: RADD-1322: reads the triggering event — refused under a trigger with none.
     reads_event: bool = False
+    #: RADD-1329: publishes findings a verdict node can relay.
+    produces_findings: bool = False
     #: The node's FIXED ports, when its outputs do not depend on its params
     #: (RADD-1064). Empty means they DO — the editor computes those itself as the
     #: form is edited, because an AI classifier's ports are the answers someone

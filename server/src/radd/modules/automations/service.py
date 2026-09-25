@@ -453,15 +453,43 @@ def _check_validate_trigger(trigger: graph.Node) -> None:
                 AutomationEntity.RULE,
                 reason=f"trigger {trigger.id!r}: target {entry.get('kind')} has no valid id",
             ) from exc
-    mode = str(trigger.params.get("mode") or ValidationMode.ADVISORY.value)
-    if mode not in set(ValidationMode):
+    if "mode" in trigger.params:
+        # RADD-1329: what blocks is a "Block submission" node on the canvas, not
+        # a graph-wide setting on the trigger. A stored mode would say one thing
+        # while the nodes say another.
         raise ConflictError(
             AutomationEntity.RULE,
             reason=(
-                f"trigger {trigger.id!r}: mode must be "
-                f"{' or '.join(m.value for m in ValidationMode)}"
+                f"trigger {trigger.id!r}: a validation trigger has no mode — wire a "
+                f"Block submission node where a problem should refuse the submission, "
+                f"and a Warn submitter node where it should only advise"
             ),
         )
+
+
+def _check_validate_reach(
+    trigger: graph.Node, nodes: list[graph.Node], edges: list[graph.Edge]
+) -> None:
+    """No APPLYING action downstream of a validate trigger (RADD-1329).
+
+    A validation walk is a dry run by construction — nothing it reaches ever
+    applies — so `fail → Add comment` saved cleanly and silently never happened,
+    while the inspector implied it would. The verdict nodes are the only
+    actions that mean something here, and they apply nothing.
+    """
+    reachable = graph.is_reachable([trigger.id], nodes, edges)
+    for node in nodes:
+        spec = nodes_registry.spec_for(node)
+        if node.id in reachable and spec is not None and spec.kind == AutomationNodeKind.ACTION and spec.apply is not None:
+            raise ConflictError(
+                AutomationEntity.RULE,
+                reason=(
+                    f"node {node.id!r} ({spec.label}) can never run after a validation trigger — "
+                    f"a submission being checked is not created yet. Use Block submission or "
+                    f"Warn submitter to tell the person; an event trigger on item.created can "
+                    f"act once it exists."
+                ),
+            )
 
 
 def _check_eventless_reach(
@@ -504,6 +532,7 @@ def _check_trigger(
     kind = registries.trigger_kinds.get(event)
     if event == AutomationTrigger.VALIDATE:
         _check_validate_trigger(trigger)
+        _check_validate_reach(trigger, nodes, edges or [])
     if kind is not None and kind.check is not None:
         # A contributed kind's own refusal, in its own words (RADD-1323).
         try:
@@ -640,15 +669,22 @@ async def _sync_validations(
     by a check nobody can see on the canvas. There is no per-row state to
     preserve here (a validate trigger has no clock), so the rebuild is total.
     """
-    from .validation import parse_mode, parse_targets
+    from .types import TYPE_VERDICT_BLOCK
+    from .validation import parse_targets
 
     await session.execute(
         delete(ValidationBinding).where(ValidationBinding.automation_id == rule.id)
     )
+    nodes, edges = graph.parse(rule.nodes or [], rule.edges or [])
     for trigger in triggers:
         if str(trigger.params.get("event") or "") != AutomationTrigger.VALIDATE:
             continue
-        mode = parse_mode(trigger.params)
+        # RADD-1329: DERIVED — "can this graph refuse a submission" is "can this
+        # trigger reach a Block submission node". Intake reads it before the
+        # walk (the form's up-front note, `POST /items`' required-only pass).
+        reachable = graph.is_reachable([trigger.id], nodes, edges)
+        can_block = any(node.id in reachable and node.type == TYPE_VERDICT_BLOCK for node in nodes)
+        mode = ValidationMode.REQUIRED if can_block else ValidationMode.ADVISORY
         for target in parse_targets(trigger.params):
             session.add(
                 ValidationBinding(

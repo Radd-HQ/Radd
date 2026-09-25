@@ -112,12 +112,12 @@ class Finding:
     readable advice after it is deleted, it just stops highlighting a control.
     `node_id` is kept so the run report can say which check spoke.
 
-    `mode` is the VALIDATION MODE of the graph that produced it, stamped by
-    `validation.run_graphs` and empty on every other walk. It rides on the
-    finding rather than on the verdict because a draft is routinely governed by
-    several graphs at once: aggregating the mode and then asking "are there
-    findings" refuses a submission that satisfied every REQUIRED graph and only
-    tripped an advisory one — which `POST /items` would have accepted.
+    `mode` says whether THIS finding blocks (`required`) or only advises
+    (`advisory`). Since RADD-1329 it is set by the node that spoke — a "Block
+    submission" node records blocking findings, a "Warn submitter" node advisory
+    ones — rather than stamped from a graph-wide mode afterwards. It rides on the
+    finding because a draft is routinely governed by several graphs at once, and
+    one graph may now both block on one problem and warn about another.
     """
 
     node_id: str
@@ -190,6 +190,9 @@ class RunReport:
     #: claimed and the code did not do. A validate-trigger graph run MANUALLY or
     #: previewed still collects: same trigger, same question, and the rule test
     #: panel exists to show the answer.
+    #: What check nodes published, by node id (RADD-1329). See
+    #: `_NodeContext.publish_findings`.
+    published: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     collecting: bool = False
     #: `time.monotonic()` past which a check that costs real time (a model round
     #: trip) should give up and take its unavailable path. Set only by the
@@ -634,6 +637,9 @@ class _NodeContext:
     outputs: dict[str, str] = field(default_factory=dict)
     #: The automation's name, for a node's log lines and labels (RADD-1322).
     automation_name: str = ""
+    #: What CHECK nodes published this walk, by node id (RADD-1329) — the walk's
+    #: shared store, so a verdict node downstream can relay a check's findings.
+    published: dict[str, list[dict[str, Any]]] | None = None
     #: A memo shared by every invocation of ONE node in one walk (RADD-1322) —
     #: a per-item action over 200 issues loads their facts once, not 200 times.
     cache: dict[str, Any] = field(default_factory=dict)
@@ -647,14 +653,17 @@ class _NodeContext:
         `{{item.*}}` when the packet holds exactly one item. `line=True`
         collapses whitespace — for a value that NAMES something or becomes a
         header, never for a body. Unresolvable tokens stay verbatim."""
-        from .planning import load_item_facts
+        from .planning import _item_ctx, load_item_facts
         from .templating import Renderer
 
         item_ctx = None
         ids = self.packet.item_ids
         if len(ids) == 1:
             loaded = await _load(self.session, ids)
-            item_ctx = (await load_item_facts(self.session, loaded)).get(ids[0])
+            if loaded:
+                item, project = loaded[0]
+                facts = (await load_item_facts(self.session, loaded)).get(item.id)
+                item_ctx = _item_ctx(item, project, facts)
         renderer = Renderer(self.packet.facts, item_ctx, None, self.packet.vars)
         return renderer.line(text) if line else renderer(text)
 
@@ -692,13 +701,27 @@ class _NodeContext:
 
         A node that costs a network round trip asks this before spending one.
         The executor cannot decide on its behalf, because what a node does when
-        it runs out of time is the node's own policy — `ai.validate` takes its
-        `on_unavailable` path, which an admin configured precisely for "the
-        check could not run".
+        it runs out of time is the node's own policy — `ai.validate` leaves by
+        its "can't check" port, whose meaning is whatever the graph wired there.
         """
         return self.deadline is not None and monotonic() >= self.deadline
 
-    def add_finding(self, message: str, field: str = "") -> None:
+    def publish_findings(self, found: list[dict[str, Any]]) -> None:
+        """A CHECK node's seam for saying what it found WITHOUT deciding what
+        happens to the submission (RADD-1329): the findings are kept under the
+        node's id for a downstream "Block submission" / "Warn submitter" node to
+        relay. Each is `{message, field, blocking}`. Kept on every walk — a dry
+        run reports them — and read only by verdict nodes."""
+        if self.published is not None:
+            self.published[self.node.id] = [dict(entry) for entry in found]
+
+    def published_by(self, node_id: str) -> list[dict[str, Any]]:
+        """What an upstream check published, for a verdict node relaying it."""
+        return list((self.published or {}).get(str(node_id), []))
+
+    def add_finding(
+        self, message: str, field: str = "", *, blocking: bool = False, source: str = ""
+    ) -> None:
         """A contributed node's seam for saying what is wrong with the draft.
 
         A METHOD rather than a mutable list a node appends dicts to, because the
@@ -711,7 +734,12 @@ class _NodeContext:
         text = str(message or "").strip()
         if self.findings is None or not text:
             return
-        self.findings.append(Finding(node_id=self.node.id, message=text, field=str(field or "")))
+        mode = "required" if blocking else "advisory"
+        # A RELAYED finding names the check that produced it (RADD-1329), so the
+        # report still says which check spoke — the verdict node only decided.
+        self.findings.append(
+            Finding(node_id=source or self.node.id, message=text, field=str(field or ""), mode=mode)
+        )
 
 
 def _context(
@@ -741,6 +769,7 @@ def _context(
         deadline=report.deadline,
         automation_name=automation_name,
         cache=cache if cache is not None else {},
+        published=report.published,
     )
 
 

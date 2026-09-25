@@ -10,7 +10,7 @@
  * resolves to nothing in an inline style — which is how the first version of the
  * edges shipped black on a dark canvas.
  */
-import { Filter, GitBranch, Play, Search, Zap, type LucideIcon } from "lucide-react";
+import { Filter, Flag, GitBranch, OctagonX, Play, Search, Zap, type LucideIcon } from "lucide-react";
 import { NodeKind, type NodeKindValue } from "../../lib/types";
 
 export const NODE_KIND_ICON: Record<NodeKindValue, LucideIcon> = {
@@ -45,33 +45,28 @@ export const PORT_TONE: Record<string, string> = {
   // unmatched: `fail` is a route, not an error — the packet went the other way.
   pass: "var(--chart-progress-ink)",
   fail: "var(--chart-backlog-ink)",
+  // Only minor problems (RADD-1329): amber, like a warning.
+  warn: "var(--chart-triage-ink)",
   // The provider could not answer. Amber because it is neither branch: nobody
   // decided anything, and a graph that wires it is saying what to do about that.
   unavailable: "var(--chart-triage-ink)",
 };
 
 /**
- * Ports whose output is a FINDING — advice delivered to whoever submitted the
- * draft (RADD-1074).
- *
- * Only meaningful in a graph whose trigger is `validate`, which is why the
- * canvas takes that as a separate flag rather than inferring it here: the same
- * two node types are an ordinary pass/fail router and an inert pass-through on
- * an event-triggered graph, and badging them there would be a promise nobody
- * keeps.
- *
- * `validation.fail` is listed by its `out` port because REACHING the node is
- * the finding — the port carries the packet onward so several checks can chain,
- * and it is the node, not the branch, that spoke.
+ * The two validation VERDICT nodes (RADD-1329) — the only things that can say
+ * something to the person submitting. Their own shape and colour, so what
+ * BLOCKS reads off the canvas without opening a node: red for "Block
+ * submission", amber for "Warn submitter". Terminal — no outlet.
  */
-export const FEEDBACK_PORTS: Record<string, string[]> = {
-  "ai.validate": ["fail"],
-  "validation.fail": ["out"],
+export const VERDICT_VISUAL: Record<string, { icon: LucideIcon; tone: string; tag: string }> = {
+  "verdict.block": { icon: OctagonX, tone: "var(--status-danger-ink)", tag: "Blocks" },
+  "verdict.warn": { icon: Flag, tone: "var(--status-warning-ink)", tag: "Warns" },
 };
 
-export function feedbackPortsOf(type: string, isValidationGraph: boolean): string[] {
-  return isValidationGraph ? (FEEDBACK_PORTS[type] ?? []) : [];
-}
+/** Words a port is SHOWN as, where its wire key would read badly. */
+export const PORT_LABEL: Record<string, string> = {
+  unavailable: "can't check",
+};
 
 export const INLET_TONE = "var(--color-emphasis)";
 export const GRID_TONE = "var(--color-zinc-800)";
@@ -111,6 +106,7 @@ export function portsOfNode(
   node: { kind: NodeKindValue; type: string; params: Record<string, unknown> },
   contributedPorts?: Record<string, string[]>,
 ): string[] {
+  if (VERDICT_VISUAL[node.type]) return []; // terminal (RADD-1329)
   const declared = contributedPorts?.[node.type];
   if (declared?.length) return declared;
   if (node.type === "ai.classify") {

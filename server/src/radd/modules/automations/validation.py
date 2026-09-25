@@ -145,19 +145,6 @@ def parse_targets(params: dict) -> list[ValidationTarget]:
     return found[:MAX_VALIDATION_TARGETS]
 
 
-def parse_mode(params: dict) -> ValidationMode:
-    """The binding's mode; ADVISORY for anything unrecognised.
-
-    Advisory is the safe default in both directions: a graph whose mode was
-    mistyped shows its findings instead of silently blocking every submission,
-    and an admin who meant `required` sees advice rather than nothing at all.
-    """
-    try:
-        return ValidationMode(str(params.get("mode")))
-    except ValueError:
-        return ValidationMode.ADVISORY
-
-
 def strictest(modes: list[ValidationMode]) -> ValidationMode:
     return max(modes, key=lambda mode: VALIDATION_MODE_RANK[mode], default=ValidationMode.ADVISORY)
 
@@ -304,11 +291,11 @@ async def run_graphs(
                 governing.automation.name,
             )
             continue
-        # The producing graph's mode rides on each finding, so `blocks` can
-        # answer "did a REQUIRED graph object" rather than "did anything object
-        # while something required happened to be watching".
+        # RADD-1329: each finding already says whether it blocks — the verdict
+        # node that recorded it decided. Nothing is stamped from a graph mode.
         collected.findings.extend(
-            replace(finding, mode=governing.mode.value) for finding in report.findings
+            finding if finding.mode else replace(finding, mode=ValidationMode.ADVISORY.value)
+            for finding in report.findings
         )
 
     if len(collected.findings) > MAX_INTAKE_FINDINGS:

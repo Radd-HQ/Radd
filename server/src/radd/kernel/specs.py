@@ -484,6 +484,10 @@ class AutomationNodeSpec:
     #: trigger that has no event — a validation walk's synthetic facts or a
     #: schedule — because it could only ever answer with a constant.
     reads_event: bool = False
+    #: RADD-1329: a CHECK that publishes findings (`ctx.publish_findings`) for a
+    #: "Block submission" / "Warn submitter" node downstream to relay. The
+    #: editor's relay picker lists these.
+    produces_findings: bool = False
     #: FIXED outputs, for a node whose ports do not depend on its params. Set
     #: this OR `ports_for`, never both — declaring it is what lets a client draw
     #: the node's handles from the served catalog instead of guessing by kind.

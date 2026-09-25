@@ -113,6 +113,7 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 keywords=spec.keywords,
                 default_params=dict(spec.default_params),
                 reads_event=spec.reads_event,
+                produces_findings=spec.produces_findings,
                 ports=list(spec.ports),
                 default_ports=list(spec.ports_at(spec.default_params or {})),
                 outputs=[_output_info(field) for field in spec.outputs],

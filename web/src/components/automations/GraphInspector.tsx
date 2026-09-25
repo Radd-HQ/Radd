@@ -17,7 +17,8 @@ import {
   NodeKind,
   SCHEDULE_TRIGGER,
   VALIDATE_TRIGGER,
-  VALIDATION_FAIL_TYPE,
+  VERDICT_BLOCK_TYPE,
+  VERDICT_WARN_TYPE,
   type AutomationCatalog,
   type AutomationEdge,
   type AutomationNode,
@@ -33,7 +34,6 @@ import {
   normalizeActionParams,
 } from "../../lib/automation-nodes";
 import { isProducer, nodeNameError, outputsOfNode } from "../../lib/automation-outputs";
-import { feedbackPortsOf } from "./node-visuals";
 import { ActionParams } from "./ActionParams";
 import { ArityField } from "./ArityField";
 import { CreateItemFields } from "./CreateItemFields";
@@ -42,7 +42,7 @@ import { GenerateFields } from "./GenerateFields";
 import { useTokenTarget } from "./useTokenTarget";
 import { EventSamples } from "./EventSamples";
 import { SearchFields } from "./SearchFields";
-import { ValidateTriggerFields, ValidationFailFields } from "./ValidationFields";
+import { ValidateTriggerFields, VerdictFields } from "./ValidationFields";
 import { TokenReference } from "./TokenReference";
 import {
   AiClassifyFields,
@@ -83,11 +83,30 @@ interface GraphInspectorProps {
   /** Whether this graph's triggers resolve a target item — decides whether the
    * token reference marks the item tokens as blank. */
   hasItem?: boolean;
-  /** Whether any trigger runs at INTAKE (RADD-1074) — decides whether a check's
-   * findings are delivered to a submitter or are merely a routing decision. */
-  validation?: boolean;
   onChange: (node: AutomationNode) => void;
   onDelete: (nodeId: string) => void;
+}
+
+/** Node types whose form lives in core — the built-in actions (`ActionParams`),
+ * the named gates, the SLQ filter and source, the verdict nodes and the trigger.
+ * Everything else renders from its served `params_schema`. */
+const CORE_EDITED_TYPES = new Set([
+  "trigger.event",
+  "filter.slq",
+  "search.slq",
+  "gate.payload",
+  "gate.project",
+  "gate.field_changed",
+  "gate.changed_by",
+  "gate.state_category",
+  "gate.comment",
+  "gate.page_space",
+  VERDICT_BLOCK_TYPE,
+  VERDICT_WARN_TYPE,
+]);
+
+function hasCoreEditor(type: string): boolean {
+  return CORE_EDITED_TYPES.has(type) || type.startsWith(ACTION_TYPE_PREFIX);
 }
 
 export function GraphInspector({
@@ -101,7 +120,6 @@ export function GraphInspector({
   valueSuggestions = [],
   canActAs = false,
   hasItem = true,
-  validation = false,
   onChange,
   onDelete,
 }: GraphInspectorProps) {
@@ -152,23 +170,39 @@ export function GraphInspector({
   //: The registered spec, when this node came from a plugin rather than the
   //: built-in palette. Its params are its own business — never the action union.
   const contributed = catalog?.nodes?.find((entry) => entry.key === node.type);
+  //: RADD-1322 made EVERY node a catalog entry, so "is it in the catalog" no
+  //: longer means "has no editor of its own". The core types below carry their
+  //: own forms; anything else gets the one generated from its schema.
+  const coreEdited = hasCoreEditor(node.type);
   const forcedReason = arityForcedReason(node);
   //: Whether naming this node would make anything addressable (spec 120). Asked
   //: of the type AND its params, because `ai.generate` produces `text` before a
   //: single field has been added.
   const produces = isProducer(node, catalog);
   const nameError = nodeNameError(String(node.name ?? ""), node, nodes, catalog);
-  //: The one line this node's own form cannot say for itself (RADD-1074): a
-  //: finding is DELIVERED, so the empty port under it is a choice, not a gap.
-  const feedbackPorts = feedbackPortsOf(node.type, validation);
-  const feedbackNote = feedbackPorts.length > 0 && (
-    <p data-feedback-note className="text-xs text-fg-secondary">
-      Findings from this check are shown to whoever submitted the draft
-      automatically — they are the intake verdict. Wiring anything after{" "}
-      <code className="text-accent-text">{feedbackPorts.join(" / ")}</code> is optional, for
-      when a failed check should also do something else.
-    </p>
-  );
+  //: Checks upstream that publish findings (RADD-1329) — what a verdict node
+  //: may relay. Walked BACKWARDS from this node, so only a check that can
+  //: actually feed it is offered.
+  const relayableChecks = (() => {
+    const upstream = new Set<string>([node.id]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const edge of edges) {
+        if (upstream.has(edge.target) && !upstream.has(edge.source)) {
+          upstream.add(edge.source);
+          grew = true;
+        }
+      }
+    }
+    const publishing = new Set((catalog?.nodes ?? []).filter((entry) => entry.produces_findings).map((entry) => entry.key));
+    return nodes
+      .filter((candidate) => candidate.id !== node.id && upstream.has(candidate.id) && publishing.has(candidate.type))
+      .map((candidate) => ({
+        id: candidate.id,
+        label: `${catalog?.nodes.find((entry) => entry.key === candidate.type)?.label ?? candidate.type}${candidate.name ? ` (${candidate.name})` : ""} · ${candidate.id}`,
+      }));
+  })();
   //: Two panels, and the difference is load-bearing. `planning._plan` is the
   //: ONLY place tokens are rendered, and it renders an ACTION's params — so a
   //: token inserted into a contributed node's own prompt reaches the model as
@@ -396,7 +430,7 @@ export function GraphInspector({
       {/* A CONTRIBUTED node with no hardcoded editor gets a form generated from
           its own params_schema (RADD-923) — the promise AutomationNodeSpec made
           and nothing kept. `ai.classify` keeps its bespoke one above. */}
-      {contributed && node.type !== "ai.classify" && !node.type.startsWith("script.") && (
+      {contributed && !coreEdited && node.type !== "ai.classify" && !node.type.startsWith("script.") && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-fg-secondary">{contributed.description}</p>
           {/* `ai.generate` earns a bespoke form: its central param is an array
@@ -419,13 +453,17 @@ export function GraphInspector({
         </div>
       )}
 
-      {node.type === VALIDATION_FAIL_TYPE && (
-        <ValidationFailFields params={node.params} fields={pickers.fields} onChange={setParams} />
+      {(node.type === VERDICT_BLOCK_TYPE || node.type === VERDICT_WARN_TYPE) && (
+        <VerdictFields
+          params={node.params}
+          fields={pickers.fields}
+          blocks={node.type === VERDICT_BLOCK_TYPE}
+          checks={relayableChecks}
+          onChange={setParams}
+        />
       )}
 
-      {feedbackNote}
-
-      {node.kind === NodeKind.action && !contributed && node.type !== VALIDATION_FAIL_TYPE && (
+      {node.kind === NodeKind.action && node.type.startsWith(ACTION_TYPE_PREFIX) && (
         <div className="flex flex-col gap-2">
           {/* Act as (spec 116). Rendered ONLY when the caller holds
               automation.act_as — a field that is refused on save is worse than

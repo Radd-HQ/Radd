@@ -32,7 +32,8 @@ from radd.modules.automations.intake_schemas import verdict_read
 from radd.modules.automations.models import ValidationBinding
 from radd.modules.automations.schemas import RuleCreate, RuleUpdate
 from radd.modules.automations.types import (
-    TYPE_VALIDATION_FAIL,
+    TYPE_VERDICT_BLOCK,
+    TYPE_VERDICT_WARN,
     AutomationTrigger,
     ValidationMode,
     ValidationTargetKind,
@@ -79,12 +80,13 @@ async def project(db):
     )
 
 
-def _validate_trigger(targets: list[dict], mode: str = ValidationMode.ADVISORY.value) -> dict:
+def _validate_trigger(targets: list[dict]) -> dict:
+    # RADD-1329: no `mode` — what blocks is a Block submission node.
     return {
         "id": "trg",
         "kind": "trigger",
         "type": "trigger.event",
-        "params": {"event": AutomationTrigger.VALIDATE.value, "targets": targets, "mode": mode},
+        "params": {"event": AutomationTrigger.VALIDATE.value, "targets": targets},
     }
 
 
@@ -92,20 +94,34 @@ def _fail_node(node_id: str, message: str, field: str = "") -> dict:
     return {
         "id": node_id,
         "kind": "action",
-        "type": TYPE_VALIDATION_FAIL,
+        # A Warn submitter node; `_graph(mode="required")` makes it a Block one.
+        "type": TYPE_VERDICT_WARN,
         "params": {"message": message, "field": field},
     }
 
 
 async def _graph(db, admin, *, targets, mode=ValidationMode.ADVISORY.value, nodes=(), edges=(),
                  name="checks", enabled=True):
+    """`mode` is how the TESTS say it; the graph says it with nodes (RADD-1329):
+    every `_fail_node` becomes a Block submission node in a "required" graph and
+    a Warn submitter node otherwise, and an AI check with nothing on its `fail`
+    port gets the relay the old implicit verdict stood for."""
+    verdict = TYPE_VERDICT_BLOCK if mode == ValidationMode.REQUIRED.value else TYPE_VERDICT_WARN
+    nodes = [{**n, "type": verdict} if n.get("type") == TYPE_VERDICT_WARN else n for n in nodes]
+    edges = list(edges)
+    for node in list(nodes):
+        if node.get("type") != "ai.validate":
+            continue
+        if not any(e.get("source") == node["id"] and e.get("port") == "fail" for e in edges):
+            nodes.append({"id": f"{node['id']}_says", "kind": "action", "type": verdict, "params": {"relay": node["id"]}})
+            edges.append({"source": node["id"], "port": "fail", "target": f"{node['id']}_says"})
     return await automations_service.create_rule(
         db,
         RuleCreate(
             name=f"{name}-{uuid.uuid4().hex[:6]}",
             enabled=enabled,
-            nodes=[_validate_trigger(targets, mode), *nodes],
-            edges=list(edges),
+            nodes=[_validate_trigger(targets), *nodes],
+            edges=edges,
         ),
         actor_id=admin.id,
     )
@@ -148,10 +164,7 @@ def test_unreadable_targets_degrade_rather_than_raise():
     assert validation.parse_targets({}) == []
 
 
-def test_mode_defaults_to_advisory_and_strictest_wins():
-    assert validation.parse_mode({}) is ValidationMode.ADVISORY
-    assert validation.parse_mode({"mode": "nonsense"}) is ValidationMode.ADVISORY
-    assert validation.parse_mode({"mode": "required"}) is ValidationMode.REQUIRED
+def test_strictest_mode_wins():
     assert validation.strictest([]) is ValidationMode.ADVISORY
     assert (
         validation.strictest([ValidationMode.ADVISORY, ValidationMode.REQUIRED])
@@ -246,15 +259,39 @@ async def test_an_unknown_target_kind_is_refused(db, admin, project):
         await _graph(db, admin, targets=[{"kind": "galaxy", "id": str(project.id)}])
 
 
-async def test_a_bad_mode_is_refused(db, admin, project):
-    with pytest.raises(ConflictError, match="mode must be"):
-        await _graph(
-            db, admin, targets=[{"kind": "project", "id": str(project.id)}], mode="whenever"
+async def test_a_trigger_mode_is_refused(db, admin, project):
+    """RADD-1329: what blocks is a node on the canvas; a stored graph-wide mode
+    would say one thing while the nodes said another."""
+    trigger = _validate_trigger([{"kind": "project", "id": str(project.id)}])
+    trigger["params"]["mode"] = "required"
+    with pytest.raises(ConflictError, match="has no mode"):
+        await automations_service.create_rule(
+            db, RuleCreate(name=f"moded-{uuid.uuid4().hex[:6]}", nodes=[trigger], edges=[]), actor_id=admin.id
         )
 
 
+async def test_the_binding_says_required_exactly_when_a_block_node_is_reachable(db, admin, project):
+    """The binding's mode is DERIVED (RADD-1329): intake reads it before the walk
+    (the form's up-front note, the required-only pass on POST /items)."""
+    targets = [{"kind": "project", "id": str(project.id)}]
+    warns = await _graph(db, admin, targets=targets, nodes=[_fail_node("w", "Consider a screenshot.")],
+                         edges=[{"source": "trg", "port": "out", "target": "w"}])
+    blocks = await _graph(db, admin, targets=targets, mode=ValidationMode.REQUIRED.value,
+                          nodes=[_fail_node("b", "A severity is required.")],
+                          edges=[{"source": "trg", "port": "out", "target": "b"}])
+    detached = await automations_service.create_rule(db, RuleCreate(
+        name=f"detached-{uuid.uuid4().hex[:6]}",
+        nodes=[_validate_trigger(targets), {**_fail_node("b", "Never reached."), "type": TYPE_VERDICT_BLOCK}],
+        edges=[],
+    ), actor_id=admin.id)
+    assert {row.mode for row in await _bindings(db, warns.id)} == {ValidationMode.ADVISORY.value}
+    assert {row.mode for row in await _bindings(db, blocks.id)} == {ValidationMode.REQUIRED.value}
+    # A Block node the trigger cannot REACH blocks nothing.
+    assert {row.mode for row in await _bindings(db, detached.id)} == {ValidationMode.ADVISORY.value}
+
+
 async def test_a_check_with_no_message_is_refused(db, admin, project):
-    with pytest.raises(ConflictError, match="needs a message"):
+    with pytest.raises(ConflictError, match="say something"):
         await _graph(
             db,
             admin,
@@ -284,9 +321,10 @@ async def test_builtin_and_custom_field_shapes_are_accepted(db, admin, project):
             _fail_node("a", "Describe it.", field="description"),
             _fail_node("b", "Pick a severity.", field="cf.severity"),
         ],
+        # Verdict nodes are terminal (RADD-1329): fan out, never chain.
         edges=[
             {"source": "trg", "port": "out", "target": "a"},
-            {"source": "a", "port": "out", "target": "b"},
+            {"source": "trg", "port": "out", "target": "b"},
         ],
     )
     assert len(await _bindings(db, rule.id)) == 1
@@ -442,38 +480,44 @@ async def _draft(db, project, admin, title="a draft"):
     )
 
 
-async def test_the_walk_collects_findings_and_applies_nothing(db, admin, project):
-    """The action node is in the graph and reachable; a validation walk must not
-    have run it. That is `apply=False`, not a second walker."""
+async def test_the_walk_collects_findings(db, admin, project):
     await _graph(
         db,
         admin,
         targets=[{"kind": "project", "id": str(project.id)}],
-        nodes=[
-            _fail_node("chk", "Add steps to reproduce.", field="description"),
-            {"id": "lbl", "kind": "action", "type": "action.add_label",
-             "params": {"label": "validated"}},
-        ],
-        edges=[
-            {"source": "trg", "port": "out", "target": "chk"},
-            {"source": "chk", "port": "out", "target": "lbl"},
-        ],
+        nodes=[_fail_node("chk", "Add steps to reproduce.", field="description")],
+        edges=[{"source": "trg", "port": "out", "target": "chk"}],
     )
     draft = await _draft(db, project, admin)
     scope = validation.DraftScope(project_id=project.id)
     verdict = await validation.run_graphs(
         db, draft.id, scope, await validation.governing_graphs(db, scope)
     )
-
     assert verdict.governed is True
     assert verdict.passed is False
     assert [(f.field, f.message) for f in verdict.findings] == [
         ("description", "Add steps to reproduce.")
     ]
-    # The label action was downstream of the check and reachable — and it did
-    # not run, because a validation walk plans without applying.
-    after = await items_service.get_item(db, draft.id, admin)
-    assert after.labels == []
+
+
+async def test_an_applying_action_after_a_validate_trigger_is_refused_on_write(db, admin, project):
+    """RADD-1329: a validation walk never applies anything, so `check → Add label`
+    used to save cleanly and silently never happen — while the inspector said
+    wiring after `fail` was "for when a failed check should also do something"."""
+    with pytest.raises(ConflictError, match="can never run after a validation trigger"):
+        await _graph(
+            db,
+            admin,
+            targets=[{"kind": "project", "id": str(project.id)}],
+            nodes=[
+                {"id": "f", "kind": "filter", "type": "filter.slq", "params": {"slq": ""}},
+                {"id": "lbl", "kind": "action", "type": "action.add_label", "params": {"label": "validated"}},
+            ],
+            edges=[
+                {"source": "trg", "port": "out", "target": "f"},
+                {"source": "f", "port": "matched", "target": "lbl"},
+            ],
+        )
 
 
 async def test_a_filter_that_matches_nothing_produces_no_findings(db, admin, project):
@@ -1125,7 +1169,7 @@ async def test_the_catalog_serves_the_checks_own_ports(db, admin):
     catalog = await get_catalog(db, admin)
     by_key = {node.key: node for node in catalog.nodes}
 
-    assert by_key["ai.validate"].ports == ["pass", "fail", "unavailable"]
+    assert by_key["ai.validate"].ports == ["pass", "fail", "warn", "unavailable"]
     assert by_key["ai.classify"].ports == []
     # `default_ports` still answers for the params-dependent node, and is still
     # not a port set: an unconfigured classifier has only its fallback.
@@ -1143,7 +1187,7 @@ async def test_the_checks_ports_are_wireable_and_a_gates_are_not(db, admin, proj
     }
     targets = [{"kind": "project", "id": str(project.id)}]
 
-    for port in ("pass", "fail", "unavailable"):
+    for port in ("pass", "fail", "warn", "unavailable"):
         rule = await _graph(
             db,
             admin,
@@ -1362,11 +1406,9 @@ async def http_world():
             RuleCreate(
                 name=f"http-checks-{uuid.uuid4().hex[:6]}",
                 nodes=[
-                    _validate_trigger(
-                        [{"kind": "project", "id": str(project.id)}],
-                        ValidationMode.REQUIRED.value,
-                    ),
-                    _fail_node("chk", "Describe what you expected.", field="description"),
+                    _validate_trigger([{"kind": "project", "id": str(project.id)}]),
+                    {**_fail_node("chk", "Describe what you expected.", field="description"),
+                     "type": TYPE_VERDICT_BLOCK},
                 ],
                 edges=[{"source": "trg", "port": "out", "target": "chk"}],
             ),
