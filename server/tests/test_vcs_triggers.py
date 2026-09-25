@@ -153,6 +153,25 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
             },
             "repository": repository,
         }, {"linked": 1, "triggered": 0}),
+        # RADD-1330: an edit that changed something, and new commits, fire "updated".
+        ("pull_request", {
+            "action": "edited", "changes": {"title": {"from": "old"}},
+            "pull_request": {
+                "number": 5, "title": "ship it", "state": "closed", "merged": True,
+                "merged_at": "2026-09-25T10:00:00Z", "html_url": "https://h.example.com/pr/5",
+                "head": {"ref": branch}, "base": {"ref": "main"}, "body": "",
+            },
+            "repository": repository,
+        }, {"linked": 1, "triggered": 1}),
+        ("pull_request", {
+            "action": "synchronize" if host.name == "github" else "synchronized",
+            "pull_request": {
+                "number": 5, "title": "ship it", "state": "open", "merged": False,
+                "html_url": "https://h.example.com/pr/5",
+                "head": {"ref": branch}, "base": {"ref": "main"}, "body": "",
+            },
+            "repository": repository,
+        }, {"linked": 1, "triggered": 1}),
         # A running report moves the badge only; a finished one fires.
         ("workflow_run", {"workflow_run": {"head_branch": branch, "status": "in_progress"}, "repository": repository},
          {"linked": 1, "triggered": 0}),
@@ -184,3 +203,6 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
     [published] = await _events(db, head, trigger.RELEASE_PUBLISHED.value)
     assert published.payload["version"] == "3.0.0" and published.payload["project"]["id"] == str(project.id)
     assert await _events(db, head, trigger.PR_CLOSED.value) == []
+    updates = await _events(db, head, trigger.PR_UPDATED.value)
+    assert [[c["field"] for c in u.payload["changes"]] for u in updates] == [["title"], ["commits"]]
+    assert updates[0].payload["changes"][0] == {"field": "title", "from": "old", "to": "ship it"}

@@ -132,8 +132,8 @@ def test_forgejo_plan_pull_request_closed_unmerged():
     payload = _forgejo_pr_payload(state="closed", merged=False, action="closed")
     links = forgejo_parsing.plan_pull_request(payload)
     assert forgejo_parsing.pr_action(payload) is RefAction.CLOSED
-    # An edit of a closed PR fires nothing (RADD-1309).
-    assert forgejo_parsing.pr_action({**payload, "action": "edited"}) is None
+    # An edit of a closed PR is "updated", never "closed" again (RADD-1309/1330).
+    assert forgejo_parsing.pr_action({**payload, "action": "edited"}) is RefAction.UPDATED
     assert links[0].status == "closed"
 
 

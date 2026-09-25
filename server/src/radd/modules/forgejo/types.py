@@ -50,6 +50,7 @@ class ForgejoTrigger(StrEnum):
     PR_OPENED = "forgejo.pull_request.opened"
     PR_MERGED = "forgejo.pull_request.merged"
     PR_CLOSED = "forgejo.pull_request.closed"
+    PR_UPDATED = "forgejo.pull_request.updated"  # RADD-1330
     PUSHED = "forgejo.push"
     CI_COMPLETED = "forgejo.ci.completed"
     RELEASE_PUBLISHED = "forgejo.release.published"
@@ -62,6 +63,8 @@ class PrAction(StrEnum):
     OPENED = "opened"
     REOPENED = "reopened"
     CLOSED = "closed"
+    EDITED = "edited"  # RADD-1330: fires "updated"
+    SYNCHRONIZE = "synchronized"  # new commits pushed: "updated" with changes=["commits"]
 
 
 class ReleaseAction(StrEnum):

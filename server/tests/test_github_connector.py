@@ -112,8 +112,10 @@ def test_pr_action_reads_the_action_never_the_state():
     assert action("closed", state="closed", merged=False) is RefAction.CLOSED
     assert action("opened", state="open", merged=False) is RefAction.OPENED
     assert action("reopened", state="open", merged=False) is RefAction.OPENED
-    assert action("edited", state="closed", merged=True) is None
-    assert action("synchronize", state="open", merged=False) is None
+    # RADD-1330: an edit of a merged PR is "updated", never "merged" again.
+    assert action("edited", state="closed", merged=True) is RefAction.UPDATED
+    assert action("synchronize", state="open", merged=False) is RefAction.UPDATED
+    assert action("labeled", state="open", merged=False) is None
 
 
 def test_plan_ci_covers_the_three_shapes():

@@ -65,6 +65,7 @@ class GithubTrigger(StrEnum):
     PR_OPENED = "github.pull_request.opened"
     PR_MERGED = "github.pull_request.merged"
     PR_CLOSED = "github.pull_request.closed"
+    PR_UPDATED = "github.pull_request.updated"  # RADD-1330
     PUSHED = "github.push"
     CI_COMPLETED = "github.ci.completed"
     RELEASE_PUBLISHED = "github.release.published"
@@ -77,6 +78,8 @@ class PrAction(StrEnum):
     OPENED = "opened"
     REOPENED = "reopened"
     CLOSED = "closed"
+    EDITED = "edited"  # RADD-1330: fires "updated"
+    SYNCHRONIZE = "synchronize"  # new commits pushed: "updated" with changes=["commits"]
 
 
 class ReleaseAction(StrEnum):

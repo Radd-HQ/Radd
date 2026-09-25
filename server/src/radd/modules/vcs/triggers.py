@@ -26,6 +26,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.kernel import EventTypeSpec
+from radd.kernel import changes as kchanges
 from radd.modules.events import service as events
 
 from .models import ItemVcsLink
@@ -33,12 +34,37 @@ from .types import VcsEntity
 
 
 class RefAction(StrEnum):
-    """What happened to a merge/pull request, as the trigger names it. An edit
-    (`update`/`edited`/`synchronize`) is none of these and fires nothing."""
+    """What happened to a merge/pull request, as the trigger names it. RADD-1330
+    added UPDATED: an edit (`update`/`edited`) or new commits (`synchronize`),
+    carrying WHICH fields changed in the payload's `changes`."""
 
     OPENED = "opened"
     MERGED = "merged"
     CLOSED = "closed"
+    UPDATED = "updated"
+
+
+#: The `changes` entry an update carries when new commits were pushed to the
+#: request (GitLab `oldrev`, GitHub `synchronize`, Forgejo `synchronized`).
+COMMITS_CHANGE = "commits"
+
+#: Bookkeeping fields every host stamps on an update — never "what changed".
+NOISE_FIELDS: frozenset[str] = frozenset({"updated_at", "updated_by_id", "last_edited_at", "last_edited_by_id"})
+
+
+def diff_entries(pairs) -> list[dict[str, Any]]:
+    """The kernel diff (`[{field, from, to}]`, spec 123) for an update, from
+    `(field, old, new)` triples, without the hosts' bookkeeping stamps. The
+    kernel shape — not a list of names — because `changes` is what the audit
+    ledger, search text and the "field changed" gate already read."""
+    out: list[dict[str, Any]] = []
+    for field_name, old, new in pairs:
+        if str(field_name) in NOISE_FIELDS:
+            continue
+        entry = kchanges.change(str(field_name), old, new)
+        if entry is not None:
+            out.append(entry)
+    return out
 
 
 class CiOutcome(StrEnum):
@@ -92,24 +118,30 @@ class ConnectorTriggers:
     opened: StrEnum
     merged: StrEnum
     closed: StrEnum
+    updated: StrEnum
     pushed: StrEnum
     release_published: StrEnum
     #: None for a host whose CI the connector does not read yet (GitLab: RADD-1255).
     ci_completed: StrEnum | None = None
 
     def for_action(self, action: RefAction) -> StrEnum:
-        return {RefAction.OPENED: self.opened, RefAction.MERGED: self.merged, RefAction.CLOSED: self.closed}[
-            action
-        ]
+        return {
+            RefAction.OPENED: self.opened,
+            RefAction.MERGED: self.merged,
+            RefAction.CLOSED: self.closed,
+            RefAction.UPDATED: self.updated,
+        }[action]
 
     def specs(self) -> tuple[EventTypeSpec, ...]:
         ref = _schema(action={"type": "string"}, ref=_REF_SCHEMA)
 
-        def item_event(event_type: StrEnum, label: str, schema: dict[str, Any]) -> EventTypeSpec:
+        def item_event(
+            event_type: StrEnum, label: str, schema: dict[str, Any], *, diff: bool = False
+        ) -> EventTypeSpec:
             schema = {**schema, "properties": {**schema["properties"], "author": _AUTHOR_SCHEMA}}
             return EventTypeSpec(
                 event_type, f"{self.host}: {label}", self.host,
-                item_scoped=True, subjects=("item", "user"), payload_schema=schema,
+                item_scoped=True, subjects=("item", "user"), payload_schema=schema, has_changes=diff,
             )
 
         change = self.change
@@ -117,6 +149,22 @@ class ConnectorTriggers:
             item_event(self.opened, f"{change} opened", ref),
             item_event(self.merged, f"{change} merged", ref),
             item_event(self.closed, f"{change} closed without merging", ref),
+            item_event(
+                self.updated,
+                f"{change} updated",
+                _schema(
+                    action={"type": "string"},
+                    ref=_REF_SCHEMA,
+                    changes={
+                        "type": "array",
+                        "items": {"type": "object", "properties": {
+                            "field": {"type": "string"}, "from": {}, "to": {},
+                        }},
+                        "description": 'What changed: {field, from, to} per field (title, description, labels, …); field "commits" (old → new sha) when new commits were pushed',
+                    },
+                ),
+                diff=True,
+            ),
             item_event(
                 self.pushed,
                 "branch or commit pushed",
@@ -228,6 +276,7 @@ async def emit_ref(
     actor_id: uuid.UUID | None,
     payload: dict[str, Any],
     author: HostAuthor | None = None,
+    changes: list[dict[str, Any]] | None = None,
 ) -> None:
     """One trigger event about one linked issue. `payload` is the event's own
     data (action, ref, commits, ci); provider/repo are stamped here, and the
@@ -241,6 +290,7 @@ async def emit_ref(
         actor_id=actor_id,
         subjects={"item": link.item_id, "user": user_id},
         payload={"provider": provider, "repo": repo, **payload, "author": author_facts},
+        changes=changes,  # RADD-1330: the kernel diff, on "updated" only
     )
 
 

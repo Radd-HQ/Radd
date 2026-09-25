@@ -41,6 +41,7 @@ TRIGGERS = triggers.ConnectorTriggers(
     opened=GitlabTrigger.MR_OPENED,
     merged=GitlabTrigger.MR_MERGED,
     closed=GitlabTrigger.MR_CLOSED,
+    updated=GitlabTrigger.MR_UPDATED,
     pushed=GitlabTrigger.PUSHED,
     release_published=GitlabTrigger.RELEASE_PUBLISHED,
 )
@@ -109,6 +110,7 @@ async def gitlab_webhook(
             provider=VcsProvider.GITLAB, repo=repo_name, action=action,
             ref_extra=parsing.mr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
             author=triggers.host_author(payload, connection.id),
+            changes=parsing.mr_changes(payload),
         )
 
     # RADD-1259: time added or removed on the MR → fetch the entries and mirror

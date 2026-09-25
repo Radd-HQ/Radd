@@ -84,14 +84,19 @@ async def fire_ref_action(
     ref_extra: Mapping[str, Any],
     actor_id: uuid.UUID | None,
     author: HostAuthor | None = None,
+    changes: list[dict[str, Any]] | None = None,
 ) -> int:
-    """A merge/pull request was opened, merged or closed: one event per issue it names."""
+    """A merge/pull request was opened, merged, closed or updated: one event per
+    issue it names. An update with nothing meaningful changed fires nothing."""
+    if action is RefAction.UPDATED and not changes:
+        return 0
     for rows in links.values():
         await emit_ref(
             session, trigger, rows[0],
             provider=provider, repo=repo, actor_id=actor_id,
             payload={"action": action.value, "ref": ref_of(rows[0], **ref_extra)},
             author=author,
+            changes=changes if action is RefAction.UPDATED else None,
         )
     return len(links)
 

@@ -295,14 +295,16 @@ async def test_a_merge_fires_the_trigger_and_changes_nothing_else(db):
     item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="merge me"), actor=owner)
     before = item.state.id
 
-    def mr(action: str, state: str) -> bytes:
+    def mr(action: str, state: str, changes: dict | None = None, oldrev: str = "") -> bytes:
         return json.dumps({
             "object_kind": "merge_request",
             "project": {"path_with_namespace": "acme/tr"},
             "object_attributes": {
                 "iid": 9, "title": f"{item.key} ship it", "source_branch": "feat", "target_branch": "main",
                 "state": state, "action": action, "url": "https://tr.example.com/acme/tr/-/merge_requests/9",
+                **({"oldrev": oldrev} if oldrev else {}),
             },
+            **({"changes": changes} if changes is not None else {}),
         }).encode()
 
     headers = {"X-Gitlab-Token": "hook-secret", "Content-Type": "application/json"}
@@ -314,6 +316,14 @@ async def test_a_merge_fires_the_trigger_and_changes_nothing_else(db):
         # A later edit of the merged MR repeats `state: merged` and fires nothing.
         edited = await client.post("/integrations/gitlab", content=mr("update", "merged"), headers=headers)
         assert edited.json() == {"linked": 1, "triggered": 0}
+        # RADD-1330: an update that CHANGED something fires "updated" (never
+        # "merged" again); a bookkeeping-only stamp still fires nothing.
+        stamp = mr("update", "merged", changes={"updated_at": {"previous": "a", "current": "b"}})
+        assert (await client.post("/integrations/gitlab", content=stamp, headers=headers)).json()["triggered"] == 0
+        retitled = mr("update", "merged", changes={"title": {"previous": "x", "current": "y"}, "updated_at": {}})
+        assert (await client.post("/integrations/gitlab", content=retitled, headers=headers)).json()["triggered"] == 1
+        pushed = mr("update", "opened", oldrev="abc123")
+        assert (await client.post("/integrations/gitlab", content=pushed, headers=headers)).json()["triggered"] == 1
         release = await client.post("/integrations/gitlab", content=json.dumps({
             "object_kind": "release", "action": "create", "tag": "v2.1.0", "name": "Two one",
             "description": "notes", "url": "https://tr.example.com/acme/tr/-/releases/v2.1.0",
@@ -327,6 +337,10 @@ async def test_a_merge_fires_the_trigger_and_changes_nothing_else(db):
 
     fired = await _events_after(db, head, GitlabTrigger.MR_MERGED.value)
     assert len(fired) == 1
+    updates = await _events_after(db, head, GitlabTrigger.MR_UPDATED.value)
+    assert [[c["field"] for c in u.payload["changes"]] for u in updates] == [["title"], ["commits"]]
+    assert updates[0].payload["changes"][0] == {"field": "title", "from": "x", "to": "y"}
+    assert all(u.payload["action"] == "updated" for u in updates)
     event = fired[0]
     assert event.payload["item"]["id"] == str(item.id)
     assert event.payload["action"] == "merged" and event.payload["repo"] == "acme/tr"

@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
-from radd.modules.vcs.triggers import RefAction
+from radd.modules.vcs.triggers import COMMITS_CHANGE, RefAction, diff_entries
 from radd.modules.vcs.types import VcsRefType
 
 from .types import PrAction, PrStatus
@@ -118,7 +118,23 @@ def pr_action(payload: dict) -> RefAction | None:
     if action == PrAction.CLOSED:
         merged = _pr_status(payload.get("pull_request") or {}) is PrStatus.MERGED
         return RefAction.MERGED if merged else RefAction.CLOSED
+    if action in (PrAction.EDITED, PrAction.SYNCHRONIZE):
+        return RefAction.UPDATED
     return None
+
+
+def pr_changes(payload: dict) -> list[dict]:
+    """What an update changed (RADD-1330), as the kernel diff: an `edited`
+    delivery's `changes` gives `{from}` per field (the new value is on the pull
+    request); a synchronize is new commits, `before` → `after` when sent."""
+    pull = payload.get("pull_request") or {}
+    if str(payload.get("action") or "") == PrAction.SYNCHRONIZE:
+        return diff_entries([(COMMITS_CHANGE, payload.get("before") or "old", payload.get("after") or "new")])
+    return diff_entries(
+        (name, (value or {}).get("from"), pull.get(name))
+        for name, value in (payload.get("changes") or {}).items()
+        if isinstance(value, dict)
+    )
 
 
 def pr_ref_extra(payload: dict) -> dict[str, object]:

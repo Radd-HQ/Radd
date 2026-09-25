@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
-from radd.modules.vcs.triggers import RefAction
+from radd.modules.vcs.triggers import COMMITS_CHANGE, RefAction, diff_entries
 from radd.modules.vcs.types import VcsRefType
 
 from .types import MrAction, MrStatus
@@ -138,7 +138,24 @@ _MR_ACTIONS = {
     MrAction.REOPEN: RefAction.OPENED,
     MrAction.MERGE: RefAction.MERGED,
     MrAction.CLOSE: RefAction.CLOSED,
+    MrAction.UPDATE: RefAction.UPDATED,
 }
+
+
+def mr_changes(payload: dict) -> list[dict]:
+    """What an `update` delivery changed (RADD-1330), as the kernel diff: GitLab's
+    `changes` object gives `{previous, current}` per field, and `oldrev` says new
+    commits were pushed (the new head is `last_commit.id`)."""
+    triples = [
+        (name, (value or {}).get("previous"), (value or {}).get("current"))
+        for name, value in (payload.get("changes") or {}).items()
+        if isinstance(value, dict)
+    ]
+    attributes = payload.get("object_attributes") or {}
+    if attributes.get("oldrev"):
+        head = (attributes.get("last_commit") or {}).get("id") or "new"
+        triples.append((COMMITS_CHANGE, attributes["oldrev"], head))
+    return diff_entries(triples)
 
 
 def mr_action(payload: dict) -> RefAction | None:

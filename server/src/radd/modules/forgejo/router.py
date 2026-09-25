@@ -36,6 +36,7 @@ TRIGGERS = triggers.ConnectorTriggers(
     opened=ForgejoTrigger.PR_OPENED,
     merged=ForgejoTrigger.PR_MERGED,
     closed=ForgejoTrigger.PR_CLOSED,
+    updated=ForgejoTrigger.PR_UPDATED,
     pushed=ForgejoTrigger.PUSHED,
     release_published=ForgejoTrigger.RELEASE_PUBLISHED,
     ci_completed=ForgejoTrigger.CI_COMPLETED,
@@ -105,6 +106,7 @@ async def forgejo_webhook(
             provider=VcsProvider.FORGEJO, repo=repo_name, action=action,
             ref_extra=parsing.pr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
             author=triggers.host_author(payload, connection.id),
+            changes=parsing.pr_changes(payload),
         )
 
     # RADD-1260: Forgejo has no tracked-time webhook, so EVERY pull_request

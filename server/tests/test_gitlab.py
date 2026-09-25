@@ -96,7 +96,9 @@ def test_mr_action_reads_the_action_never_the_state():
         return mr_action({"object_attributes": attributes})
 
     assert action(state="merged", action="merge") is RefAction.MERGED
-    assert action(state="merged", action="update") is None
+    # RADD-1330: an edit of a merged MR is "updated", never "merged" again.
+    assert action(state="merged", action="update") is RefAction.UPDATED
+    assert action(state="opened", action="approved") is None
     assert action(state="opened", action="reopen") is RefAction.OPENED
     assert action(state="closed", action="close") is RefAction.CLOSED
     assert action(state="opened", action="approved") is None

@@ -38,6 +38,7 @@ TRIGGERS = triggers.ConnectorTriggers(
     opened=GithubTrigger.PR_OPENED,
     merged=GithubTrigger.PR_MERGED,
     closed=GithubTrigger.PR_CLOSED,
+    updated=GithubTrigger.PR_UPDATED,
     pushed=GithubTrigger.PUSHED,
     release_published=GithubTrigger.RELEASE_PUBLISHED,
     ci_completed=GithubTrigger.CI_COMPLETED,
@@ -114,6 +115,7 @@ async def github_webhook(
             provider=VcsProvider.GITHUB, repo=repo_name, action=action,
             ref_extra=parsing.pr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
             author=triggers.host_author(payload, connection.id),
+            changes=parsing.pr_changes(payload),
         )
     logger.debug("github delivery %s: %s", x_github_delivery, result)
     return result

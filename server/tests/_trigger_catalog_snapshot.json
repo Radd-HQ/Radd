@@ -179,6 +179,12 @@
     "item_scoped": true,
     "has_changes": false
   },
+  "forgejo.pull_request.updated": {
+    "label": "Forgejo: pull request updated",
+    "group": "Forgejo",
+    "item_scoped": true,
+    "has_changes": true
+  },
   "forgejo.push": {
     "label": "Forgejo: branch or commit pushed",
     "group": "Forgejo",
@@ -233,6 +239,12 @@
     "item_scoped": true,
     "has_changes": false
   },
+  "github.pull_request.updated": {
+    "label": "GitHub: pull request updated",
+    "group": "GitHub",
+    "item_scoped": true,
+    "has_changes": true
+  },
   "github.push": {
     "label": "GitHub: branch or commit pushed",
     "group": "GitHub",
@@ -262,6 +274,12 @@
     "group": "GitLab",
     "item_scoped": true,
     "has_changes": false
+  },
+  "gitlab.merge_request.updated": {
+    "label": "GitLab: merge request updated",
+    "group": "GitLab",
+    "item_scoped": true,
+    "has_changes": true
   },
   "gitlab.push": {
     "label": "GitLab: branch or commit pushed",

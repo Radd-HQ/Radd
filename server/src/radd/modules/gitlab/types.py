@@ -36,18 +36,20 @@ class GitlabTrigger(StrEnum):
     MR_OPENED = "gitlab.merge_request.opened"
     MR_MERGED = "gitlab.merge_request.merged"
     MR_CLOSED = "gitlab.merge_request.closed"
+    MR_UPDATED = "gitlab.merge_request.updated"  # RADD-1330
     PUSHED = "gitlab.push"
     RELEASE_PUBLISHED = "gitlab.release.published"
 
 
 class MrAction(StrEnum):
     """`object_attributes.action` values of a merge_request delivery that fire a
-    trigger. `update`, `approved` and the rest are edits and fire nothing."""
+    trigger. `update` fires "updated" (RADD-1330); `approved` and the rest fire nothing."""
 
     OPEN = "open"
     REOPEN = "reopen"
     MERGE = "merge"
     CLOSE = "close"
+    UPDATE = "update"
 
 
 class ReleaseAction(StrEnum):
