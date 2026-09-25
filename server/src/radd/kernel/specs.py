@@ -369,6 +369,29 @@ class OutputField:
     description: str = ""
 
 
+# --- automation templates (RADD-1316) -----------------------------------------
+@dataclass(frozen=True)
+class AutomationTemplateSpec:
+    """A whole automation a module offers as a STARTING POINT (RADD-1316).
+
+    Built-in behaviour that used to run unasked — an alert comment, a mail
+    receipt — lives here instead: nothing runs until someone opens the template,
+    edits it and saves. The editor starts from an unsaved, DISABLED draft; no row
+    exists until then, so there is nothing to clean up if nobody wants it.
+
+    `nodes` / `edges` are the stored graph shape (dicts), with placeholder params
+    where the author must choose (a state, an address). A template naming a node
+    type or trigger event this instance does not offer is not listed.
+    """
+
+    key: str
+    name: str
+    description: str
+    group: str = "Other"
+    nodes: tuple[dict[str, Any], ...] = ()
+    edges: tuple[dict[str, Any], ...] = ()
+
+
 # --- template tokens (RADD-1324) ----------------------------------------------
 @dataclass(frozen=True)
 class TokenProviderSpec:

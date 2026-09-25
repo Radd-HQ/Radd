@@ -25,6 +25,7 @@ from radd.kernel import (
     AutomationNodeSpec as AutomationNodeSpec,
     TriggerKindSpec as TriggerKindSpec,
     TokenProviderSpec as TokenProviderSpec,
+    AutomationTemplateSpec as AutomationTemplateSpec,
     KERNEL_API_VERSION,
     CapabilitySpec as CapabilitySpec,
     CrudResourceSpec as CrudResourceSpec,

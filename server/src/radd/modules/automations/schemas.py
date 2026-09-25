@@ -746,6 +746,17 @@ class EventSampleRead(BaseModel):
     declared_schema: dict[str, Any] = Field(default_factory=dict)
 
 
+class AutomationTemplateRead(BaseModel):
+    """A whole automation offered as a starting point (RADD-1316)."""
+
+    key: str
+    name: str
+    description: str
+    group: str
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+
+
 class NodeShapeRequest(BaseModel):
     """The params a node currently has (RADD-1325)."""
 

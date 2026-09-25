@@ -41,14 +41,17 @@ import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 interface RuleEditorProps {
   /** The rule to edit, or null to create a new one. */
   rule: Rule | null;
+  /** A new automation's starting graph — a template (RADD-1316). Opened
+   * DISABLED: nothing runs until someone reads it, edits it and switches it on. */
+  draft?: { name: string; nodes: AutomationNode[]; edges: AutomationEdge[] } | null;
   onDone: () => void;
 }
 
-export function RuleEditor({ rule, onDone }: RuleEditorProps) {
+export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
   const queryClient = useQueryClient();
   const [persistedId, setPersistedId] = useState<string | null>(rule?.id ?? null);
-  const [name, setName] = useState(rule?.name ?? "");
-  const [enabled, setEnabled] = useState(rule?.enabled ?? true);
+  const [name, setName] = useState(rule?.name ?? draft?.name ?? "");
+  const [enabled, setEnabled] = useState(rule?.enabled ?? (draft ? false : true));
   const [orientation, setOrientation] = useState<Orientation>(
     (rule?.orientation as Orientation) ?? "vertical",
   );
@@ -64,8 +67,8 @@ export function RuleEditor({ rule, onDone }: RuleEditorProps) {
   const [note, setNote] = useState("");
   const [current, setCurrent] = useState<number>(rule?.version ?? 1);
   const [graph, setGraph] = useState<{ nodes: AutomationNode[]; edges: AutomationEdge[] }>({
-    nodes: rule?.nodes ?? [seededTrigger()],
-    edges: rule?.edges ?? [],
+    nodes: rule?.nodes ?? draft?.nodes ?? [seededTrigger()],
+    edges: rule?.edges ?? draft?.edges ?? [],
   });
 
   // A graph with no nodes is not worth saving; one with no TRIGGER is, because

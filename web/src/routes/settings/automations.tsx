@@ -7,9 +7,10 @@ import { shortDateTime, relativeTime } from "../../lib/dates";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
 import { triggerLabel } from "../../lib/meta";
-import { automationCatalogQuery, automationsQuery, queryKeys } from "../../lib/queries";
-import { NodeKind, Permission, type Rule, type RuleUpdate } from "../../lib/types";
-import { Button } from "../../components/Button";
+import { automationCatalogQuery, automationsQuery, automationTemplatesQuery, queryKeys } from "../../lib/queries";
+import { NodeKind, Permission, type AutomationTemplate, type Rule, type RuleUpdate } from "../../lib/types";
+import { Button, ButtonVariant } from "../../components/Button";
+import { Modal } from "../../components/Modal";
 import { EmptyState } from "../../components/EmptyState";
 import { ListSearchInput } from "../../components/ListSearchInput";
 import { TableSkeleton } from "../../components/TableSkeleton";
@@ -26,7 +27,8 @@ export function AutomationsSettingsPage() {
   const canManage = perms.global(Permission.automationManage);
   const rules = useQuery({ ...automationsQuery(), enabled: canManage });
   /** null = list mode; {rule} = editor mode (rule null → creating). */
-  const [editing, setEditing] = useState<{ rule: Rule | null } | null>(null);
+  const [editing, setEditing] = useState<{ rule: Rule | null; draft?: AutomationTemplate } | null>(null);
+  const [choosing, setChoosing] = useState(false);
   const all = rules.data ?? [];
   const search = useListFilter(all, (rule) => [rule.name]);
   const list = search.filtered;
@@ -37,21 +39,38 @@ export function AutomationsSettingsPage() {
         title={editing.rule ? "Edit automation rule" : "New automation rule"}
         description="React to any event, or run on a schedule — daily, weekly, monthly or a cron expression. Conditions split issues down different branches, and actions can update them, notify people, or create new issues, which is how recurring maintenance tickets and periodic reviews get raised automatically."
       >
-        <RuleEditor rule={editing.rule} onDone={() => setEditing(null)} />
+        <RuleEditor rule={editing.rule} draft={editing.draft ?? null} onDone={() => setEditing(null)} />
       </SettingsPage>
     );
   }
 
+  const picker = choosing && (
+    <TemplatePicker
+      onClose={() => setChoosing(false)}
+      onPick={(template) => {
+        setChoosing(false);
+        setEditing({ rule: null, draft: template });
+      }}
+    />
+  );
+
   return (
+    <>
+    {picker}
     <SettingsPage history={{ entities: ["automation_rule"] }}
       title="Automations"
       description="Rules that react to events or run on a schedule, then change issues, notify people or call out to other systems."
       actions={
         canManage && (
-          <Button onClick={() => setEditing({ rule: null })}>
-            <Plus size={14} aria-hidden />
-            New rule
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant={ButtonVariant.ghost} onClick={() => setChoosing(true)} data-from-template>
+              From template…
+            </Button>
+            <Button onClick={() => setEditing({ rule: null })}>
+              <Plus size={14} aria-hidden />
+              New rule
+            </Button>
+          </div>
         )
       }
     >
@@ -98,6 +117,7 @@ export function AutomationsSettingsPage() {
         </>
       )}
     </SettingsPage>
+    </>
   );
 }
 
@@ -213,5 +233,57 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
         <span className="text-xs text-red-400">{errorMessage(toggle.error ?? remove.error)}</span>
       )}
     </li>
+  );
+}
+
+
+/** "From template…" (RADD-1316): whole automations the loaded plugins offer —
+ * the behaviours Radd no longer runs unasked. Picking one opens an unsaved,
+ * DISABLED draft; nothing exists until it is saved. */
+function TemplatePicker({
+  onClose,
+  onPick,
+}: {
+  onClose: () => void;
+  onPick: (template: AutomationTemplate) => void;
+}) {
+  const templates = useQuery(automationTemplatesQuery);
+  const groups = new Map<string, AutomationTemplate[]>();
+  for (const template of templates.data ?? []) {
+    groups.set(template.group, [...(groups.get(template.group) ?? []), template]);
+  }
+  return (
+    <Modal title="Start from a template" onClose={onClose} wide>
+      <p className="mb-3 text-[13px] text-fg-secondary">
+        Opens as a draft, switched off. Adjust it, then save and enable it — nothing runs until you do.
+      </p>
+      {templates.isPending ? (
+        <TableSkeleton rows={3} />
+      ) : templates.isError ? (
+        <QueryError label="templates" error={templates.error} />
+      ) : groups.size === 0 ? (
+        <EmptyState icon={Workflow} message="No templates are offered on this instance." />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {[...groups.entries()].map(([group, entries]) => (
+            <section key={group} className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">{group}</span>
+              {entries.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  data-template={template.key}
+                  onClick={() => onPick(template)}
+                  className="flex flex-col items-start gap-0.5 rounded-[8px] border border-subtle bg-surface px-3 py-2 text-left hover:border-strong hover:bg-elevated cursor-pointer"
+                >
+                  <span className="text-[13px] font-medium text-heading">{template.name}</span>
+                  <span className="text-xs text-fg-secondary">{template.description}</span>
+                </button>
+              ))}
+            </section>
+          ))}
+        </div>
+      )}
+    </Modal>
   );
 }

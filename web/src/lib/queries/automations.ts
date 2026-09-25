@@ -14,6 +14,7 @@ import {
   MANUAL_TRIGGER,
   SCHEDULE_TRIGGER,
   type AutomationCatalog,
+  type AutomationTemplate,
   type AutomationRun,
   type AutomationRunDetail,
   type AutomationVersion,
@@ -35,6 +36,13 @@ export const automationsQuery = () =>
     queryFn: ({ signal }) => api.get<Rule[]>(ApiPath.automations, { signal }),
     retry: false,
   });
+
+/** Whole-automation templates (RADD-1316) — static per build, like the catalog. */
+export const automationTemplatesQuery = queryOptions({
+  queryKey: [...queryKeys.automationCatalog, "templates"] as const,
+  queryFn: ({ signal }) => api.get<AutomationTemplate[]>(`${ApiPath.automations}/templates`, { signal }),
+  staleTime: Infinity,
+});
 
 /** Trigger/subject/operator catalog for the rule builder (spec 58) — static per build. */
 export const automationCatalogQuery = queryOptions({

@@ -18,6 +18,7 @@ from .specs import (
     AutomationNodeSpec,
     TriggerKindSpec,
     TokenProviderSpec,
+    AutomationTemplateSpec,
     RelationSpec,
     RowGuardSpec,
     CapabilitySpec,
@@ -112,6 +113,8 @@ class KernelRegistries:
     trigger_kinds: dict[str, TriggerKindSpec] = field(default_factory=dict)
     #: RADD-1324: `{{root.field}}` vocabularies contributed by entity owners.
     token_providers: dict[str, TokenProviderSpec] = field(default_factory=dict)
+    #: RADD-1316: whole automations offered as starting points.
+    automation_templates: dict[str, AutomationTemplateSpec] = field(default_factory=dict)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
     #: Which plugin contributed each page extension (RADD-748). The registry is
     #: the only thing that knows — the spec is authored BY the plugin, so a
@@ -139,7 +142,7 @@ class KernelRegistries:
             self.capabilities, self.tasks, self.consumer_names,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
-            self.automation_nodes, self.trigger_kinds, self.token_providers,
+            self.automation_nodes, self.trigger_kinds, self.token_providers, self.automation_templates,
             self.page_extension_sources,
         ):
             f.clear()
@@ -196,6 +199,8 @@ class KernelRegistries:
             self.trigger_kinds[kind.key] = kind
         for provider in plugin.token_providers:
             self.token_providers[provider.root] = provider
+        for template in plugin.automation_templates:
+            self.automation_templates[template.key] = template
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
             self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
@@ -265,6 +270,8 @@ class KernelRegistries:
             self.trigger_kinds.pop(kind.key, None)
         for provider in plugin.token_providers:
             self.token_providers.pop(provider.root, None)
+        for template in plugin.automation_templates:
+            self.automation_templates.pop(template.key, None)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
             self.page_extension_sources.pop(px.name, None)

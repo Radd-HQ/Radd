@@ -15,13 +15,14 @@ from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import catalog, engine, graph, runs, samples, service, versions
+from . import catalog, engine, graph, runs, samples, service, templates, versions
 from .types import AutomationEntity, AutomationTrigger
 from radd.kernel.registry import registries
 
 from . import templating
 
 from .schemas import (
+    AutomationTemplateRead,
     NodeInfo,
     NodeShapeRead,
     NodeShapeRequest,
@@ -152,6 +153,26 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
             for info in templating.all_tokens()
         ],
     )
+
+
+@router.get("/templates", response_model=list[AutomationTemplateRead])
+async def list_templates(session: Session, user: CurrentUser) -> list[AutomationTemplateRead]:
+    """Whole automations offered as starting points (RADD-1316), from every
+    loaded plugin. One that names a node type or trigger event this instance
+    does not offer is left out, so what is listed can be opened and saved."""
+    await authz.require(session, user, authz.Permission.AUTOMATION_CREATE)
+    return [
+        AutomationTemplateRead(
+            key=template.key,
+            name=template.name,
+            description=template.description,
+            group=template.group,
+            nodes=[dict(node) for node in template.nodes],
+            edges=[dict(edge) for edge in template.edges],
+        )
+        for template in registries.automation_templates.values()
+        if templates.available(template)
+    ]
 
 
 @router.post("/nodes/{node_type}/shape", response_model=NodeShapeRead)

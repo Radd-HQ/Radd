@@ -161,6 +161,17 @@ export interface OutputFieldInfo {
   description: string;
 }
 
+/** GET /automations/templates (RADD-1316): a whole automation offered as a
+ * starting point. Opening one starts an unsaved, disabled draft. */
+export interface AutomationTemplate {
+  key: string;
+  name: string;
+  description: string;
+  group: string;
+  nodes: AutomationNode[];
+  edges: AutomationEdge[];
+}
+
 /** GET /automations/catalog — everything the rule builder renders from. */
 export interface AutomationCatalog {
   triggers: TriggerInfo[];
