@@ -1,16 +1,13 @@
 import { useState } from "react";
 import { initials } from "../lib/meta";
-import { leaveTitle, useOnLeave } from "./PersonName";
+import { usePersonIndicators } from "./PersonName";
 
 /**
  * User avatar (spec 34): a colored circle with the user's initials, or their
  * chosen emoji. Falls back to a hue derived from the id so unconfigured users
  * still get stable, distinct colors.
  *
- * On-leave awareness: ONE cached /leave/current query feeds every
- * avatar on screen — someone away today renders dimmed with a palm badge and
- * an "until" tooltip, on every surface that shows people (assignee, reporter,
- * comments, boards, timesheet) with no per-surface wiring.
+ * Status decoration comes from plugin-owned person indicator data.
  */
 
 const SIZES = {
@@ -20,7 +17,7 @@ const SIZES = {
   lg: "size-16 text-xl",
 } as const;
 
-/** The away STATUS DOT per avatar size (presence convention — a dot stays
+/** The status dot per avatar size (presence convention — a dot stays
  * crisp where any glyph would smear). */
 const DOT_SIZES = {
   xs: "size-1.5",
@@ -57,7 +54,8 @@ export function Avatar({
   title?: string;
 }) {
   const background = user.avatar_color || fallbackColor(user.id);
-  const onLeave = useOnLeave(user.id);
+  const indicators = usePersonIndicators(user.id);
+  const dim = indicators.some(indicator => indicator.dim);
   // A picture that fails to load (an IdP URL that expired, a removed blob)
   // falls back to the colour/emoji rather than a broken-image glyph.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -67,7 +65,7 @@ export function Avatar({
   // whatever row hosted the avatar (the comment thread found this).
   return (
     <span
-      title={onLeave ? leaveTitle(user.name, onLeave) : (title ?? user.name)}
+      title={indicators.length ? `${user.name} — ${indicators.map(i => i.title).join("; ")}` : (title ?? user.name)}
       style={picture || user.avatar_emoji ? undefined : { backgroundColor: background }}
       className={
         `relative flex shrink-0 select-none items-center justify-center rounded-full font-semibold text-white ${SIZES[size]} ` +
@@ -85,17 +83,17 @@ export function Avatar({
           referrerPolicy="no-referrer"
           draggable={false}
           onError={() => setFailedUrl(picture)}
-          className={"size-full rounded-full object-cover " + (onLeave ? "opacity-50" : "")}
+          className={"size-full rounded-full object-cover " + (dim ? "opacity-50" : "")}
         />
       ) : (
-        <span className={onLeave ? "opacity-50" : ""}>
+        <span className={dim ? "opacity-50" : ""}>
           {user.avatar_emoji || initials(user.name)}
         </span>
       )}
-      {onLeave && (
+      {indicators.length > 0 && (
         <span
-          aria-label="On leave"
-          className={`absolute -bottom-px -right-px rounded-full bg-amber-400 ring-2 ring-base ${DOT_SIZES[size]}`}
+          aria-label={indicators.map(i => i.ariaLabel).join(", ")}
+          className={`absolute -bottom-px -right-px rounded-full ${{ neutral: "bg-fg-muted", warning: "bg-amber-400", danger: "bg-red-400", success: "bg-green-400" }[indicators[0].tone]} ring-2 ring-base ${DOT_SIZES[size]}`}
         />
       )}
     </span>

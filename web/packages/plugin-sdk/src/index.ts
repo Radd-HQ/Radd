@@ -90,3 +90,5 @@ export type {
   PluginRemote,
   CapabilitiesManifest,
 } from "./types";
+
+export { registerDataSource, unregisterDataSources, usePluginData, invalidatePluginData, type DataSource, type DataContracts, type PersonIndicator, type TimesheetAnnotation, type StatusIndicator } from "./data";

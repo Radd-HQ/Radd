@@ -13,6 +13,8 @@
 import {
   isUiApiCompatible,
   registerSlot,
+  registerDataSource,
+  unregisterDataSources,
   unregisterPlugin,
   type PluginContext,
   type PluginModule,
@@ -42,6 +44,9 @@ const identity = (remote: PluginRemote) => JSON.stringify([remote.remote_entry, 
 function buildContext(entry: LoadedRemote): PluginContext {
   return {
     plugin: entry.name,
+    registerDataSource: (source) => {
+      if (!entry.cancelled && loaded.get(entry.name) === entry) registerDataSource(entry.name, source);
+    },
     registerSlot: (slot, contribution) => {
       // An activation that finished after disable/replacement cannot add stale UI.
       if (!entry.cancelled && loaded.get(entry.name) === entry) {
@@ -71,14 +76,15 @@ async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<vo
     if (entry.cancelled) return;
     const mod = ("default" in imported && imported.default ? imported.default : imported) as PluginModule;
     entry.module = mod;
-    if (!Array.isArray(mod.contributions) && typeof mod.activate !== "function") {
-      throw new Error("remote entry exports neither contributions nor activate");
+    if (!Array.isArray(mod.contributions) && !Array.isArray(mod.dataSources) && typeof mod.activate !== "function") {
+      throw new Error("remote entry exports no contributions, data sources or activation");
     }
     const ctx = buildContext(entry);
     for (const [i, c] of (mod.contributions ?? []).entries()) {
       const { slot, id, ...rest } = c;
       ctx.registerSlot(slot, { id: id ?? `${slot}#${i}`, ...rest });
     }
+    for (const source of mod.dataSources ?? []) ctx.registerDataSource(source);
     await mod.activate?.(ctx);
     if (entry.cancelled) {
       await deactivate(entry);
@@ -86,7 +92,7 @@ async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<vo
     }
     entry.status = RemoteStatus.loaded;
   } catch (error) {
-    if (loaded.get(name) === entry) unregisterPlugin(name);
+    if (loaded.get(name) === entry) { unregisterPlugin(name); unregisterDataSources(name); }
     entry.cancelled = true;
     entry.status = RemoteStatus.errored;
     entry.error = error instanceof Error ? error.message : String(error);
@@ -105,6 +111,7 @@ export async function syncPluginRemotes(remotes: PluginRemote[] | undefined): Pr
     if (!next || identity(next) !== entry.identity) {
       entry.cancelled = true;
       unregisterPlugin(name);
+      unregisterDataSources(name);
       loaded.delete(name);
       // In-flight activation owns its eventual cleanup; do not deactivate twice.
       if (!entry.pending) cleanup.push(deactivate(entry));

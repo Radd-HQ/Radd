@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useOnLeaveIds } from "../PersonName";
+import { usePersonStatusSuffixes } from "../PersonName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Users, UsersRound } from "lucide-react";
 import { api } from "../../lib/api";
@@ -48,7 +48,7 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
   const value = draft.map((row) =>
     row.user_id ? `user:${row.user_id}` : row.team_id ? `team:${row.team_id}` : `group:${row.group_id}`,
   );
-  const onLeaveIds = useOnLeaveIds();
+  const statusSuffixes = usePersonStatusSuffixes();
   const options: TokenOption[] = [
     ...(teams.data ?? []).map((team) => ({
       value: `team:${team.id}`,
@@ -64,7 +64,7 @@ export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editabl
     })),
     ...(users.data ?? [])
       .filter((u) => u.active)
-      .map((u) => ({ value: `user:${u.id}`, label: u.name + (onLeaveIds.has(u.id) ? " (away)" : ""), group: "People" })),
+      .map((u) => ({ value: `user:${u.id}`, label: u.name + (statusSuffixes.get(u.id) ?? ""), group: "People" })),
   ];
   const onChangeGrants = (next: string[]) =>
     save.mutate(

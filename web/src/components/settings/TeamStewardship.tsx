@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useOnLeaveIds } from "../PersonName";
+import { usePersonStatusSuffixes } from "../PersonName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Crown, Trash2, UserCog, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
@@ -80,7 +80,7 @@ export function TeamStewardship({
     onError: (error) => pushToast(errorMessage(error), ToastKind.error),
   });
 
-  const onLeaveIds = useOnLeaveIds();
+  const statusSuffixes = usePersonStatusSuffixes();
   if (!canAdminister && !team.can_delete) return null;
 
   const busy = addManager.isPending || removeManager.isPending || transfer.isPending;
@@ -116,7 +116,7 @@ export function TeamStewardship({
           <Button variant="secondary" onClick={() => void stewards.refetch()}>Retry managers</Button></div>
         : <><ul aria-label="Team managers" className="max-h-[35dvh] overflow-y-auto">
           {stewards.data.managers.map(person => <li key={person.id} className="flex items-center gap-2 py-1 text-sm">
-            <span className="min-w-0 break-words">{person.name}{onLeaveIds.has(person.id) ? " (away)" : ""}</span>
+            <span className="min-w-0 break-words">{person.name}{statusSuffixes.get(person.id) ?? ""}</span>
             {!person.active && <span className="text-xs text-fg-muted">Inactive</span>}
             <IconButton aria-label={`Remove manager ${person.name}`} className="ml-auto shrink-0" danger disabled={busy}
               onClick={() => removeManager.mutate(person.id)}><X size={13} /></IconButton>

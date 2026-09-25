@@ -57,7 +57,7 @@ CodeMirror, lazy-loaded; the `{{token}}` picker; the `params_schema` form). A pl
 from the SDK like any primitive; outside the host they degrade to plain inputs. The `ai` and
 `scripts` plugins' inspectors are the worked examples (`modules/ai/ui`, `modules/scripts/ui`).
 
-The Leave plugin (`modules/leave/ui`) contributes its personal Leave form through `profile.section` and team Holidays through `settings.section` matched to `timelogging`. Neither settings page imports Leave components; disabling the remote withdraws both sections. Avatar indicators and timesheet calendar overlays remain host integrations guarded by runtime plugin availability.
+The Leave plugin (`modules/leave/ui`) contributes its personal Leave form through `profile.section` and team Holidays through `settings.section` matched to `timelogging`. Neither settings page imports Leave components; disabling the remote withdraws both sections. Its avatar/name indicators and timesheet annotations are also plugin-owned data contributions; the host knows only the generic contracts described below.
 
 A contribution is `{ id, render, order?, match?, title?, icon?, label?, toggleable? }`. `id` is
 unique within your plugin (dedupes re-registration); `order` sorts section/tab slots; `match` keys
@@ -105,6 +105,19 @@ available — check with your instance admin" message instead of a broken or emp
 (`MissingPluginType`).
 
 ---
+
+## Data contributions (SDK 1.2)
+
+Features that supply facts to shared views use `definePlugin({ dataSources: [...] })` rather than rendering slots or adding plugin checks to host pages. The loader tags each source with its owner and withdraws sources together with UI slots on disable or activation failure. Imperative activation can use `ctx.registerDataSource(source)` with the same lifecycle protection.
+
+Two typed contracts are currently available:
+
+- `personIndicators`: a shared signed-in lookup returning person ids and semantic status decorations (label, tooltip, accessible label, tone, optional dimming and plain-text suffix).
+- `timesheetAnnotations`: a lookup for `{start, end}`, returning per-person calendar spans, status decorations and an explicit `suppressOutlier` policy. The timesheet clips spans to its window and composes annotations.
+
+The feature owns `fetch(args, signal)`, endpoints, interpretation and refresh intervals. The host calls `usePluginData(kind, args, actorId)`. Query keys include plugin ownership, activation generation and actor id: data is shared between consumers without surviving as a visible contribution after disable or leaking between account identities. The query signal aborts an unused request when its source withdraws. Re-enabling gets a fresh query identity; a failed source contributes no initial data and cannot fail the surrounding host page. Mutation handlers call `invalidatePluginData(queryClient, pluginName)` to refresh their data consumers.
+
+The Leave remote (`modules/leave/ui/src/data.ts`) is the first implementation. The host contains no Leave endpoint, label, date interpretation or enablement check. This is a data contract, not an invisible rendering component pretending to be a service.
 
 ## Logic & data access — where computation goes and what a plugin can see
 

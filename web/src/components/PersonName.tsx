@@ -1,60 +1,32 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { shortDate } from "../lib/dates";
-import { useIsAuthenticated, usePluginEnabled } from "../lib/hooks";
-import { currentLeaveQuery } from "../lib/queries/leave";
-import type { CurrentLeave } from "../lib/types";
+import { usePluginData, type StatusIndicator } from "@radd/plugin-sdk";
+import { useCurrentUser } from "../lib/hooks";
 
-/** The one on-leave lookup every indicator shares (Avatar, PersonName). */
-export function useOnLeave(userId: string | undefined): CurrentLeave | undefined {
-  // Spec 121: leave is a signed-in fact; a visitor's avatars carry no dot.
-  const authenticated = useIsAuthenticated();
-  const leaveEnabled = usePluginEnabled("leave");
-  const enabled = authenticated && leaveEnabled;
-  const leave = useQuery({ ...currentLeaveQuery, enabled });
-  // Disabling a query retains its cache; hide cached indicators as well.
-  return enabled && userId ? leave.data?.find((entry) => entry.user_id === userId) : undefined;
+/** Feature-owned status data; the host has no knowledge of the contributing plugin. */
+export function usePersonIndicators(personId: string | undefined) {
+  const indicators = usePluginData("personIndicators", {}, useCurrentUser()?.id);
+  return indicators.filter(indicator => indicator.personId === personId);
+}
+export function usePersonStatusSuffixes(): Map<string, string> {
+  const indicators = usePluginData("personIndicators", {}, useCurrentUser()?.id);
+  const result = new Map<string, string>();
+  for (const indicator of indicators) {
+    if (indicator.textSuffix) result.set(indicator.personId, `${result.get(indicator.personId) ?? ""} ${indicator.textSuffix}`);
+  }
+  return result;
+}
+export const STATUS_TONES = {
+  neutral: "bg-elevated text-fg-secondary",
+  warning: "bg-amber-400/15 text-amber-300",
+  danger: "bg-red-400/15 text-red-300",
+  success: "bg-green-400/15 text-green-300",
+};
+export function StatusChip({ indicator }: { indicator: StatusIndicator }) {
+  return <span aria-label={indicator.ariaLabel} title={indicator.title}
+    className={`shrink-0 rounded px-1 py-px text-[10px] font-medium leading-3 ${STATUS_TONES[indicator.tone]}`}>
+    {indicator.label}
+  </span>;
 }
 
-/** Away-today ids, for STRING-labeled pickers (TokenMultiSelect chips filter
- * on plain text, so those suffix "🌴" instead of rendering the icon node). */
-export function useOnLeaveIds(): Set<string> {
-  const authenticated = useIsAuthenticated();
-  const leaveEnabled = usePluginEnabled("leave");
-  const enabled = authenticated && leaveEnabled;
-  const leave = useQuery({ ...currentLeaveQuery, enabled });
-  return useMemo(
-    () => new Set((enabled ? leave.data ?? [] : []).map((entry) => entry.user_id)),
-    [enabled, leave.data],
-  );
-}
-
-export function leaveTitle(name: string, onLeave: CurrentLeave): string {
-  return (
-    `${name} — on leave until ${shortDate(onLeave.until)}` +
-    (onLeave.label ? ` (${onLeave.label})` : "")
-  );
-}
-
-/** The "away" chip a name carries while its person is on leave — words, not
- * pictograms: icons smear at these sizes, "away" reads instantly. */
-export function AwayChip() {
-  return (
-    <span
-      aria-label="On leave"
-      className="shrink-0 rounded bg-amber-400/15 px-1 py-px text-[10px] font-medium leading-3 text-amber-300"
-    >
-      away
-    </span>
-  );
-}
-
-/**
- * A person's name with the on-leave "away" chip ATTACHED to it:
- * the text-rendering counterpart of Avatar's status dot, for select options,
- * comment author lines, menu rows — anywhere a person is named without an
- * avatar. Away today → chip + tooltip; otherwise renders just the name.
- */
 /** The quiet "service" chip an automation identity carries in every picker and
  * byline (RADD-869) — the rendering half of `UserDirectoryEntry.source`. */
 function ServiceChip() {
@@ -75,17 +47,17 @@ export function PersonName({
   user: { id: string; name: string; source?: string };
   className?: string;
 }) {
-  const onLeave = useOnLeave(user.id);
+  const indicators = usePersonIndicators(user.id);
   const isService = user.source === "service";
-  if (!onLeave && !isService) return <span className={className}>{user.name}</span>;
+  if (!indicators.length && !isService) return <span className={className}>{user.name}</span>;
   return (
     <span
       className={`inline-flex items-center gap-1.5 ${className}`}
-      title={onLeave ? leaveTitle(user.name, onLeave) : undefined}
+      title={indicators.length ? `${user.name} — ${indicators.map(i => i.title).join("; ")}` : undefined}
     >
       {user.name}
       {isService && <ServiceChip />}
-      {onLeave && <AwayChip />}
+      {indicators.map(indicator => <StatusChip key={indicator.id} indicator={indicator} />)}
     </span>
   );
 }

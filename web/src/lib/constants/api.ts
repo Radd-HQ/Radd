@@ -99,11 +99,6 @@ export const ApiPath = {
   // Spec 22 consumers (time logging):
   workCategories: "/work-categories",
   timesheet: "/timesheet",
-  leave: "/leave",
-  leaveMine: "/leave/mine",
-  leaveHolidays: "/leave/holidays",
-  leaveCurrent: "/leave/current",
-  leaveCalendar: "/leave/calendar",
   // Audit log (admin) — read-only over the event stream.
   audit: "/audit",
   auditCatalog: "/audit/catalog",

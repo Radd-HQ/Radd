@@ -6,20 +6,23 @@ import { stripTypeScriptTypes } from 'node:module';
 let serial = 0;
 async function fixture(importer) {
   const slots = new Set();
+  const dataSources = new Set();
   const key = `__pluginLoaderTest${serial++}`;
   globalThis[key] = {
     isUiApiCompatible: () => true,
     registerSlot: (_slot, _contribution, { plugin }) => slots.add(plugin),
     unregisterPlugin: (name) => slots.delete(name),
+    registerDataSource: (name) => dataSources.add(name),
+    unregisterDataSources: (name) => dataSources.delete(name),
     importer,
   };
   const source = readFileSync('web/src/lib/plugin-loader.ts', 'utf8')
     .replace(/import \{[\s\S]*?\} from "@radd\/plugin-sdk";/,
-      `const {isUiApiCompatible, registerSlot, unregisterPlugin} = globalThis.${key};`)
+      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources} = globalThis.${key};`)
     .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`);
   const js = stripTypeScriptTypes(source, { mode: 'transform' });
   const loader = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
-  return { ...loader, slots };
+  return { ...loader, slots, dataSources };
 }
 const remote = (url = 'v1') => [{ name: 'fixture', remote_entry: url, ui_api_version: '1.0' }];
 const contribution = { slot: 'issue.tab', title: 'Example' };
@@ -70,4 +73,29 @@ test('concurrent sync imports once and changing URL replaces the remote', async 
   await f.syncPluginRemotes(remote('v2'));
   assert.deepEqual(seen, ['v1', 'v2']);
   assert.equal(f.slots.size, 1);
+});
+
+
+test('data-only remote is accepted and its sources withdraw on disable', async () => {
+  const f = await fixture(async () => ({ dataSources: [{ kind: 'personIndicators', id: 'status' }] }));
+  await f.syncPluginRemotes(remote());
+  assert.equal(f.dataSources.size, 1);
+  await f.syncPluginRemotes([]);
+  assert.equal(f.dataSources.size, 0);
+});
+
+test('failed activation and late registrations cannot leave data sources behind', async () => {
+  const wait = deferred();
+  const source = { kind: 'personIndicators', id: 'status' };
+  const f = await fixture(async () => ({ dataSources: [source], async activate(ctx) {
+    await wait.promise; ctx.registerDataSource(source); throw Error('fixture failure');
+  } }));
+  const loading = f.syncPluginRemotes(remote());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.dataSources.size, 1);
+  await f.syncPluginRemotes([]);
+  assert.equal(f.dataSources.size, 0);
+  wait.resolve();
+  await loading;
+  assert.equal(f.dataSources.size, 0);
 });

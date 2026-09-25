@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, Button, Select, Spinner, TextField, tokens, useCurrentUser } from "@radd/plugin-sdk";
+import { api, invalidatePluginData, Button, Select, Spinner, TextField, tokens, useCurrentUser } from "@radd/plugin-sdk";
 
 type Kind = "leave" | "holiday";
 interface Period {
@@ -57,7 +57,7 @@ function PeriodList({ periods, holiday, readonly }: { periods: Period[]; holiday
   const client = useQueryClient();
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/leave/${id}`),
-    onSuccess: () => client.invalidateQueries({ queryKey: ["leave"] }),
+    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ["leave"] }), invalidatePluginData(client, "leave")]),
   });
   return <>
     {periods.length === 0 ? <p style={{ marginBottom: 12, fontSize: 13, color: tokens.textFaint }}>{holiday ? "No team holidays defined." : "No leave recorded."}</p> :
@@ -82,7 +82,7 @@ function AddPeriodForm({ kind, timezone }: { kind: Kind; timezone?: string | nul
   const [endDate, setEndDate] = useState(() => today(timezone));
   const save = useMutation({
     mutationFn: () => api.post<Period>("/leave", { label: label.trim(), start_date: startDate, end_date: endDate, ...(kind === "holiday" ? { team_id: teamId } : {}) }),
-    onSuccess: () => { void client.invalidateQueries({ queryKey: ["leave"] }); setLabel(""); },
+    onSuccess: () => { void client.invalidateQueries({ queryKey: ["leave"] }); void invalidatePluginData(client, "leave"); setLabel(""); },
   });
   const canSave = startDate !== "" && endDate !== "" && endDate >= startDate && (kind !== "holiday" || teamId !== "");
   const submit = (event: FormEvent) => { event.preventDefault(); if (canSave && !save.isPending) save.mutate(); };

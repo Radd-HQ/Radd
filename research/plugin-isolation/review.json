@@ -3437,7 +3437,7 @@
     "issue": null
   },
   "server/src/radd/modules/leave/__init__.py": {
-    "sha256": "f70128e67b39133e4cbbf0f46d3c833f55995b4ce6ca0f7790758c31ad53db7f",
+    "sha256": "ef902735052eafc04d602b0026badb37a9f063065f9077250d0d14203bb4f5cd",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -3486,18 +3486,34 @@
     "issue": null
   },
   "server/src/radd/modules/leave/ui/src/LeaveSection.tsx": {
-    "sha256": "749048d7f7f3a1bedd1d09b1ceb887eaf03a40d7f5f1d1b19a3f035d26a10379",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ff032491d270869ddbd52c49cdf6b915d8d3361b3b9e35045a9defa9981c44fd",
+    "status": "reviewed",
+    "owner": "leave",
+    "evidence": [
+      "Owns Leave settings, endpoints, status wording/date interpretation and timesheet outlier exemption; imports SDK/public packages and own UI only.",
+      "Actual built remote browser lifecycle, mutations, failed bundle and in-flight cancellation checks."
+    ],
+    "issue": "RADD-1345"
+  },
+  "server/src/radd/modules/leave/ui/src/data.ts": {
+    "sha256": "1d91ca940f90fe490b858218d6822f6f44fe9fa1ef07a4148cc8635561868309",
+    "status": "reviewed",
+    "owner": "leave",
+    "evidence": [
+      "Owns Leave settings, endpoints, status wording/date interpretation and timesheet outlier exemption; imports SDK/public packages and own UI only.",
+      "Actual built remote browser lifecycle, mutations, failed bundle and in-flight cancellation checks."
+    ],
+    "issue": "RADD-1345"
   },
   "server/src/radd/modules/leave/ui/src/index.tsx": {
-    "sha256": "69f10e0fd900442d5df590df4f5a2e287365f85b962967c1598c736219153869",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d0bc433b5c013d9ab3fe69bb5d02498ef0a9932e8f00e3b6fd41525e076772ad",
+    "status": "reviewed",
+    "owner": "leave",
+    "evidence": [
+      "Owns Leave settings, endpoints, status wording/date interpretation and timesheet outlier exemption; imports SDK/public packages and own UI only.",
+      "Actual built remote browser lifecycle, mutations, failed bundle and in-flight cancellation checks."
+    ],
+    "issue": "RADD-1345"
   },
   "server/src/radd/modules/linktypes/__init__.py": {
     "sha256": "310d415fe6d5a5a2e25ca645fc7b1495ddd65b647842091b876c054cdedf93f5",
@@ -5719,11 +5735,14 @@
     "issue": null
   },
   "web/src/components/Avatar.tsx": {
-    "sha256": "24a58ab2586cc64f7384f6a16c2936295be829787af21a0d9b430ea54de54834",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "a0668a545b5dcfa81b5c0d1eb186b5ce842598330c97bff38c47326b27459cc1",
+    "status": "reviewed",
+    "owner": "platform UI primitives and contribution lifecycle",
+    "evidence": [
+      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
+      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+    ],
+    "issue": "RADD-1345"
   },
   "web/src/components/Button.tsx": {
     "sha256": "58f2b69dc2cce7291184155542cb2c1e21dd2f27e1ae80d3f74edb8b87f7a3e7",
@@ -5852,11 +5871,14 @@
     "issue": null
   },
   "web/src/components/PersonName.tsx": {
-    "sha256": "e21d3f9a259f3d2acdc09555cc991cc90a2fdcbc4b421fc288a5b49c4ea95441",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "8aaccd777dc72dccd7ace4f276a7b69e34a2576c6ae65fe1c452714b0110d6b3",
+    "status": "reviewed",
+    "owner": "platform UI primitives and contribution lifecycle",
+    "evidence": [
+      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
+      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+    ],
+    "issue": "RADD-1345"
   },
   "web/src/components/Popover.tsx": {
     "sha256": "1f87caaa4ddfca89f2d11308f09a75ea3324d5db80364e707693eb0368b009f6",
@@ -6699,11 +6721,13 @@
     "issue": null
   },
   "web/src/components/forms/FormSharing.tsx": {
-    "sha256": "581047914c5f5c5ef26e98a61c74a60da623cc1264c03e5152393465f7dc2278",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "bf92dd2d9babbaa26e7dfcac94e4bfb9c58bea16cbff3e9ec4205e98637797bf",
+    "status": "partially-reviewed",
+    "owner": "forms",
+    "evidence": [
+      "Leave coupling removed; generic person statuses/calendar annotations verified. Remaining feature UI ownership and other dependencies still require review under the full goal."
+    ],
+    "issue": "RADD-1345"
   },
   "web/src/components/forms/IntakeSubmitShell.tsx": {
     "sha256": "fa2ce7ab98a2ac5bb25c07ccea606d08c723ed683609670045cb7d13dc38a6b2",
@@ -7665,11 +7689,13 @@
     "issue": null
   },
   "web/src/components/settings/RoleGlobalGrants.tsx": {
-    "sha256": "eebef9323771f49e3f15c505c23342ec72e33912012cccb556d469da1297777d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "854f912d7d3e0bc6a8e4475247533aad355ca7169a33728fe81ffcddb6674f50",
+    "status": "partially-reviewed",
+    "owner": "auth",
+    "evidence": [
+      "Leave coupling removed; generic person statuses/calendar annotations verified. Remaining feature UI ownership and other dependencies still require review under the full goal."
+    ],
+    "issue": "RADD-1345"
   },
   "web/src/components/settings/RoleGrantsSection.tsx": {
     "sha256": "a713eabc2aae52b03cc92cbff62d13488167249d54278136fa1ebe1e5ddfed45",
@@ -7777,11 +7803,13 @@
     "issue": null
   },
   "web/src/components/settings/TeamStewardship.tsx": {
-    "sha256": "c02caf369fb2faea888d05945a9b7964e99175e642ded03be3d52ddf1f46051c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "b50bf9f9042aa4826be77c95c10282b3a8bd44e56dcf36e3c8174e9ac50be28f",
+    "status": "partially-reviewed",
+    "owner": "teams",
+    "evidence": [
+      "Leave coupling removed; generic person statuses/calendar annotations verified. Remaining feature UI ownership and other dependencies still require review under the full goal."
+    ],
+    "issue": "RADD-1345"
   },
   "web/src/components/settings/ThreadResolutionSection.tsx": {
     "sha256": "aeb4a5d66c9648b1a30589448d3a368ed5c17309e066c6ae680a34ac608fe8f0",
@@ -8659,7 +8687,7 @@
     "issue": null
   },
   "web/src/lib/constants/api.ts": {
-    "sha256": "835017a9e1176e593d79e09073cb77d4869d04fbf0388f81e16c53e31f2589d2",
+    "sha256": "e930dcb3e394d939fbd40073f68b07e421c29061f9673e488afbad67d0dff310",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -8918,11 +8946,14 @@
     "issue": null
   },
   "web/src/lib/plugin-loader.ts": {
-    "sha256": "f770463250352375bd5c337ea3dd09b6987c931591fdce33f6ab7cb04e78a075",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "1a13d0d4529b871aaa095deb8ea31b42f7356f87dca82844f05b2f7648bbfc14",
+    "status": "reviewed",
+    "owner": "platform UI primitives and contribution lifecycle",
+    "evidence": [
+      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
+      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+    ],
+    "issue": "RADD-1345"
   },
   "web/src/lib/queries/activity.ts": {
     "sha256": "b364bad7197577821226427796f432823f720489530a328300a15649339703aa",
@@ -9016,7 +9047,7 @@
     "issue": null
   },
   "web/src/lib/queries/index.ts": {
-    "sha256": "d1660d128e09969d48feabf0036a70156041ebf91b2553b5f8615ec0df949b5a",
+    "sha256": "1c0c908f43979daef91e5e0fcbf70739077aecbfdb78f29874563a83b57132ca",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9038,13 +9069,6 @@
   },
   "web/src/lib/queries/jira.ts": {
     "sha256": "7cd7da8ef71b098f17da375b53f781ee20377e203e80a798d5a362a1fa822acd",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/lib/queries/leave.ts": {
-    "sha256": "711bed4bf6bdf2776d376be1fae8b53121b2cb68111530b0e3ce50fa01772d9f",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9359,7 +9383,7 @@
     "issue": null
   },
   "web/src/lib/types/index.ts": {
-    "sha256": "1c702e06d995df7d5479eec2f0afac41335c1a1bf325374306425309ef12eb6f",
+    "sha256": "810f12b2cfe6205360afb2bbf12cd9c41c4d1e5976d41ee543465f156e52ffcf",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9388,13 +9412,6 @@
   },
   "web/src/lib/types/labels.ts": {
     "sha256": "11048ace0bc34acb023121414bf3fcdd048407764ba29a6040667bc93bf9628c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/lib/types/leave.ts": {
-    "sha256": "4c381afb71562ca7eac563eb70c5f6523db4e1d2b7efb04e28efe006cb6e5865",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -10094,11 +10111,13 @@
     "issue": null
   },
   "web/src/routes/timesheet.tsx": {
-    "sha256": "26628937d9d273647353af78a1820e4f92fcea2ddf8a3f6925c096b00e0fecae",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "789c67a42bf60d1e0fe2a998bcdfed69df9722cfc31122f89e727d7be15cc6d2",
+    "status": "partially-reviewed",
+    "owner": "timelogging",
+    "evidence": [
+      "Leave coupling removed; generic person statuses/calendar annotations verified. Remaining feature UI ownership and other dependencies still require review under the full goal."
+    ],
+    "issue": "RADD-1345"
   },
   "web/src/routes/view.tsx": {
     "sha256": "6a3fd4aaff1541a626ff1acbe34759b39ebe140ab196d6908c7ff98fe357cea2",
@@ -10121,6 +10140,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/packages/plugin-sdk/src/data.ts": {
+    "sha256": "3bc4409e5b45a040a31f7372f015094d6910e8f4b74f115d9be5d73de079c576",
+    "status": "reviewed",
+    "owner": "platform UI primitives and contribution lifecycle",
+    "evidence": [
+      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
+      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+    ],
+    "issue": "RADD-1345"
+  },
   "web/packages/plugin-sdk/src/hooks.ts": {
     "sha256": "029c281de34ee7bdfda097b1ab3f5fa84e7f7e85b0470d72fb00f50e63eec54f",
     "status": "unreviewed",
@@ -10136,18 +10165,24 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "7b1d5452d986e2261fd4d23cda6d4d4abe3c440573b7b5ce1fdc05f4adc2c783",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "dc51d264bd51d748185bc2a1b7697856d96310923f95859388c3da7293a2d43a",
+    "status": "reviewed",
+    "owner": "platform UI primitives and contribution lifecycle",
+    "evidence": [
+      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
+      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+    ],
+    "issue": "RADD-1345"
   },
   "web/packages/plugin-sdk/src/plugin.ts": {
-    "sha256": "187d81ad48c221e5e35c19f28ef701b9392d878bda959ee19f43efde4df6098a",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "96df02dce5161b51da511d0c266bc2ab740cf85bcc737a4644ec4bde09dd46e8",
+    "status": "reviewed",
+    "owner": "platform UI primitives and contribution lifecycle",
+    "evidence": [
+      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
+      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+    ],
+    "issue": "RADD-1345"
   },
   "web/packages/plugin-sdk/src/primitives.tsx": {
     "sha256": "9b7abf07e13b9bfea505d6821d435aabfc671d0842e82507cd8f432bf5c3a65f",
@@ -10199,11 +10234,14 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "853729e23bd07247e5155060547097a59ef8385f92717143488d3c095c29995f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "4a783d51782119e24086cf1b193b2b7a6e73b671119889de47fec5da9ad9919a",
+    "status": "reviewed",
+    "owner": "platform UI primitives and contribution lifecycle",
+    "evidence": [
+      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
+      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+    ],
+    "issue": "RADD-1345"
   },
   "examples/acme-notes/.venv/bin/activate_this.py": {
     "sha256": "8a8d0a6de7fa1a25c1777bfd7f246b79ac7a5a92fad05ee3b3d884da0f58340c",

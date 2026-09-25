@@ -1,3 +1,4 @@
+import { usePluginData, type TimesheetAnnotation } from "@radd/plugin-sdk";
 import { Fragment, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, ChevronLeft, ChevronRight, Plus, Tag } from "lucide-react";
@@ -14,10 +15,9 @@ import {
   type TimesheetPeriodValue,
 } from "../lib/constants";
 import { formatDuration } from "../lib/duration";
-import { useDurationConfig, usePeek, usePermissions, usePluginEnabled } from "../lib/hooks";
+import { useDurationConfig, usePeek, usePermissions, useCurrentUser } from "../lib/hooks";
 import {
   instanceConfigQuery,
-  leaveCalendarQuery,
   projectsQuery,
   teamsQuery,
   timesheetQuery,
@@ -26,12 +26,11 @@ import {
 } from "../lib/queries";
 import {
   Permission,
-  type LeaveCalendarEntry,
   type Timesheet,
   type TimesheetEntry,
 } from "../lib/types";
 import { Avatar } from "../components/Avatar";
-import { AwayChip } from "../components/PersonName";
+import { StatusChip } from "../components/PersonName";
 import { PersonName } from "../components/PersonName";
 import {
   categoryTotals,
@@ -143,27 +142,17 @@ export function TimesheetPage() {
     () => categoryTotals(timesheet.data?.entries ?? []),
     [timesheet.data],
   );
-  // Leave/holiday spans for the window, exploded to per-user day cells so the
-  // grid renders (and outlier flags skip) exactly the occupied days.
-  const leaveEnabled = usePluginEnabled("leave");
-  const leaveCal = useQuery({ ...leaveCalendarQuery(start, end), enabled: leaveEnabled });
-  const leaveByUserDay = useMemo(() => {
-    const map = new Map<string, Map<string, LeaveCalendarEntry>>();
-    if (!leaveEnabled) return map;
-    for (const entry of leaveCal.data ?? []) {
-      const from = entry.start_date > start ? entry.start_date : start;
-      const to = entry.end_date < end ? entry.end_date : end;
-      for (const day of daysInRange(from, to)) {
-        let inner = map.get(entry.user_id);
-        if (!inner) {
-          inner = new Map();
-          map.set(entry.user_id, inner);
-        }
-        inner.set(day, entry);
-      }
+  const annotations = usePluginData("timesheetAnnotations", { start, end }, useCurrentUser()?.id);
+  const annotationsByUserDay = new Map<string, Map<string, TimesheetAnnotation[]>>();
+  for (const entry of annotations) {
+    const from = entry.start > start ? entry.start : start;
+    const to = entry.end < end ? entry.end : end;
+    for (const day of daysInRange(from, to)) {
+      let person = annotationsByUserDay.get(entry.personId);
+      if (!person) { person = new Map(); annotationsByUserDay.set(entry.personId, person); }
+      person.set(day, [...(person.get(day) ?? []), entry]);
     }
-    return map;
-  }, [leaveEnabled, leaveCal.data, start, end]);
+  }
   const [logging, setLogging] = useState(false);
 
   return (
@@ -319,7 +308,7 @@ export function TimesheetPage() {
             days={days}
             groupBy={groupBy}
             sheet={timesheet.data}
-            leave={leaveByUserDay}
+            annotations={annotationsByUserDay}
           />
         )}
       </div>
@@ -490,14 +479,14 @@ function TimesheetGrid({
   days,
   groupBy,
   sheet,
-  leave,
+  annotations,
 }: {
   rows: TimesheetRow[];
   days: string[];
   groupBy: TimesheetGroupByValue;
   sheet: Timesheet | undefined;
-  /** user id → ISO day → the leave/holiday occupying it. */
-  leave: Map<string, Map<string, LeaveCalendarEntry>>;
+  /** Person → calendar day → feature-contributed annotations. */
+  annotations: Map<string, Map<string, TimesheetAnnotation[]>>;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const { open: openPeek } = usePeek();
@@ -515,7 +504,7 @@ function TimesheetGrid({
   // Outlier flags: PERSON view only — a row is one human, so a
   // day cell is one human-day the bounds apply to. Completed days only (an
   // in-progress today always reads under), under-logging only on workdays,
-  // and a leave/holiday day is never an outlier.
+  // contributed annotations may exempt a day from outlier checks.
   const personMode = groupBy === TimesheetGroupBy.person;
   const todayISO = todayIso();
   const minSeconds = (sheet?.day_min_hours ?? 6) * 3600;
@@ -523,46 +512,46 @@ function TimesheetGrid({
   const flagWorkDays = new Set(sheet?.work_days ?? []);
   const personDayCell = (row: TimesheetRow, day: string) => {
     const seconds = row.byDay[day] ?? 0;
-    const onLeave = personMode ? leave.get(row.key)?.get(day) : undefined;
-    if (onLeave) {
-      const kindLabel = onLeave.kind === "holiday" ? "Holiday" : "Leave";
-      return {
-        className: " opacity-80",
-        title: onLeave.label ? `${kindLabel}: ${onLeave.label}` : kindLabel,
-        content: (
-          <span className="inline-flex items-center justify-end gap-1.5">
-            {seconds > 0 && formatDuration(seconds, durationConfig)}
-            <AwayChip />
-          </span>
-        ),
-      };
-    }
-    const done = day < todayISO;
-    const workday = flagWorkDays.has(WEEKDAY_KEYS[fromISODate(day).getDay()]);
-    if (personMode && done && seconds > maxSeconds) {
-      return {
-        className: " bg-red-500/10",
-        title: `Over-logged: ${formatDuration(seconds, durationConfig)} (max ${sheet?.day_max_hours}h)`,
-        content: <span className="font-medium text-red-300">{formatDuration(seconds, durationConfig)}</span>,
-      };
-    }
-    if (personMode && done && workday && seconds < minSeconds) {
-      return {
-        className: " bg-amber-500/10",
-        title: `Under-logged: ${
-          seconds > 0 ? formatDuration(seconds, durationConfig) : "nothing"
-        } (min ${sheet?.day_min_hours}h)`,
-        content:
-          seconds > 0 ? (
-            <span className="font-medium text-amber-300">
-              {formatDuration(seconds, durationConfig)}
-            </span>
-          ) : (
-            <span className="text-amber-300/70">·</span>
-          ),
-      };
-    }
-    return { className: "", title: undefined, content: cell(seconds) };
+    const dayAnnotations = personMode ? annotations.get(row.key)?.get(day) ?? [] : [];
+    const suppressOutlier = dayAnnotations.some(annotation => annotation.suppressOutlier);
+    const baseCell = (() => {
+      const done = day < todayISO;
+      const workday = flagWorkDays.has(WEEKDAY_KEYS[fromISODate(day).getDay()]);
+      if (!suppressOutlier && personMode && done && seconds > maxSeconds) {
+        return {
+          className: " bg-red-500/10",
+          title: `Over-logged: ${formatDuration(seconds, durationConfig)} (max ${sheet?.day_max_hours}h)`,
+          content: <span className="font-medium text-red-300">{formatDuration(seconds, durationConfig)}</span>,
+        };
+      }
+      if (!suppressOutlier && personMode && done && workday && seconds < minSeconds) {
+        return {
+          className: " bg-amber-500/10",
+          title: `Under-logged: ${
+            seconds > 0 ? formatDuration(seconds, durationConfig) : "nothing"
+          } (min ${sheet?.day_min_hours}h)`,
+          content:
+            seconds > 0 ? (
+              <span className="font-medium text-amber-300">
+                {formatDuration(seconds, durationConfig)}
+              </span>
+            ) : (
+              <span className="text-amber-300/70">·</span>
+            ),
+        };
+      }
+      return { className: "", title: undefined, content: cell(seconds) };
+    })();
+    if (!dayAnnotations.length) return baseCell;
+    return {
+      className: baseCell.className + (dayAnnotations.some(a => a.dim) ? " opacity-80" : ""),
+      title: [baseCell.title, ...dayAnnotations.map(a => a.title)].filter(Boolean).join("; "),
+      content: <span className="inline-flex items-center justify-end gap-1.5">
+        {seconds > 0 && baseCell.content}
+        {dayAnnotations.map(annotation => <StatusChip key={annotation.id} indicator={annotation} />)}
+      </span>,
+    };
+
   };
 
   return (
@@ -606,7 +595,7 @@ function TimesheetGrid({
                       {row.label}
                     </span>
                   ) : personMode ? (
-                    // The Avatar brings the on-leave dim + palm badge with it.
+                    // The Avatar renders contributed person status.
                     <span className="inline-flex items-center gap-1.5 text-fg">
                       <Avatar user={{ id: row.key, name: row.label }} size="xs" />
                       {row.label}

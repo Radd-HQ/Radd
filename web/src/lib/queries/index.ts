@@ -31,6 +31,5 @@ export * from "./storage-admin";
 export * from "./mail-admin";
 export * from "./jira";
 export * from "./confluence";
-export * from "./leave";
 export * from "./integrations";
 export * from "./scripts";

@@ -7,7 +7,7 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { queryKeys, formSharingQuery, formShareCandidatesQuery, FORM_SHARING_PAGE_SIZE, FormShareKind, type FormShareKindValue } from "../../lib/queries";
 import { useDirectory } from "../../lib/useDirectory";
 import { Button } from "../Button";
-import { useOnLeaveIds } from "../PersonName";
+import { usePersonStatusSuffixes } from "../PersonName";
 import { DirectoryPager } from "../DirectoryPager";
 import { ErrorText } from "../ErrorText";
 import { IconButton } from "../IconButton";
@@ -20,7 +20,7 @@ import { TextField } from "../TextField";
 /** Individual portal shares save immediately without replacing unseen recipients. */
 export function FormSharing({ formId, projectId }: { formId: string; projectId: string }) {
   const queryClient = useQueryClient();
-  const onLeaveIds = useOnLeaveIds();
+  const statusSuffixes = usePersonStatusSuffixes();
   const [adding, setAdding] = useState(false);
   const directory = useDirectory(`form-shares:${formId}`, FORM_SHARING_PAGE_SIZE, (q, page) => formSharingQuery(formId, q, page));
   useEffect(() => {
@@ -45,7 +45,7 @@ export function FormSharing({ formId, projectId }: { formId: string; projectId: 
       {!directory.rows.length ? <p className="text-xs text-fg-muted">{directory.filter ? "No matching portal shares." : "No portal shares yet."}</p> :
         <ul aria-label="Portal shares" aria-busy={directory.busy} className="max-h-64 overflow-y-auto">{directory.rows.map(row => <li key={row.id} className="flex min-w-0 items-center gap-2 border-b border-subtle py-2">
           {row.user_id ? <User size={14} aria-label="Person" className="shrink-0" /> : <Users size={14} aria-label="Team" className="shrink-0" />}
-          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-xs">{row.subject_name ?? "Unavailable subject"}{row.user_id && onLeaveIds.has(row.user_id) ? " (away)" : ""}{row.active === false && <span className="text-fg-muted"> (inactive)</span>}</span>
+          <span className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-xs">{row.subject_name ?? "Unavailable subject"}{row.user_id ? statusSuffixes.get(row.user_id) ?? "" : ""}{row.active === false && <span className="text-fg-muted"> (inactive)</span>}</span>
           <IconButton danger aria-label={`Remove portal share ${row.subject_name ?? row.id}`} disabled={remove.isPending} onClick={() => remove.mutate(row.id)}><Trash2 size={13} aria-hidden /></IconButton>
         </li>)}</ul>}
     </>}
@@ -80,7 +80,7 @@ function AddPortalShare({ formId, onClose, onAdded }: { formId: string; onClose:
 function PortalSubjectChoices({ formId, kind, onClose, onSelect }: {
   formId: string; kind: FormShareKindValue; onClose: () => void; onSelect: (row: { value: string; label: string }) => void;
 }) {
-  const onLeaveIds = useOnLeaveIds();
+  const statusSuffixes = usePersonStatusSuffixes();
   const directory = useDirectory(`portal-candidates:${formId}:${kind}`, FORM_SHARING_PAGE_SIZE, (q, page) => formShareCandidatesQuery(formId, kind, q, page));
   useEffect(() => {
     if (directory.isSuccess && !directory.busy && directory.page > 0 && directory.page * directory.pageSize >= directory.total) {
@@ -92,7 +92,7 @@ function PortalSubjectChoices({ formId, kind, onClose, onSelect }: {
     <div className="mt-2 max-h-[45dvh] overflow-y-auto" aria-busy={directory.busy}>
       {directory.isPending ? <Spinner label="Loading portal recipients…" /> : directory.isError ? <div><QueryError label="portal recipients" error={directory.error} /><Button variant="ghost" onClick={() => void directory.refetch()}>Retry portal recipients</Button></div> :
         !directory.rows.length ? <p className="text-xs text-fg-muted">No matching unshared recipients available.</p> :
-        <ul aria-label="Portal recipient choices">{directory.rows.map(row => <li key={row.value}><Button variant="ghost" className="w-full justify-start" onClick={() => onSelect(row)}><span className="truncate">{row.label}{kind === FormShareKind.user && onLeaveIds.has(row.value) ? " (away)" : ""}</span></Button></li>)}</ul>}
+        <ul aria-label="Portal recipient choices">{directory.rows.map(row => <li key={row.value}><Button variant="ghost" className="w-full justify-start" onClick={() => onSelect(row)}><span className="truncate">{row.label}{kind === FormShareKind.user ? statusSuffixes.get(row.value) ?? "" : ""}</span></Button></li>)}</ul>}
     </div>
     <DirectoryPager {...directory} onPage={directory.setPage} label="portal recipients" />
   </Modal>;

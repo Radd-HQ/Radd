@@ -11,7 +11,7 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 | Issue | Scope | Status |
 |---|---|---|
 | RADD-1344 | Complete inventory, ownership and boundary safeguards | In progress |
-| RADD-1345 | Person status and timesheet data contributions | Next |
+| RADD-1345 | Person status and timesheet data contributions | Verified; Waiting for release |
 | RADD-1346 | Settings, imports and VCS provider UI | Pending |
 | RADD-1347 | Issue, automation and editor integrations | Pending |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
@@ -81,3 +81,18 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | webhooks | default | 0 | projects, events, auth, fields, items | Pending |
 | weblinks | default | 0 | projects, auth, events, items | Pending |
 | workflow | default | 0 | projects, events, auth, settings, teams | Pending |
+
+## Confirmed findings still requiring remediation
+
+- Host router directly imports optional settings pages and optional Pages/Dashboards/CSAT routes (`web/src/router.tsx`). Generic slot routes coexist with plugin-specific route components.
+- SDK capability queries use a separate cache and `useHasPlugin` defaults true while loading (`web/packages/plugin-sdk/src/hooks.ts`); capability withdrawal needs a unified contract.
+- SettingsPluginPage shows an indefinite spinner for absent or failed contributions, and directly calls a contribution render function instead of a boundary-wrapped slot.
+- Leave's residual status/timesheet coupling has been removed in RADD-1345. Source review is recorded only for the portions actually examined; this does not mark the entire backend Leave module reviewed.
+
+## RADD-1345 verification
+
+The Leave remote supplies typed `personIndicators` and `timesheetAnnotations` data. Avatar/name, pickers and timesheet consume generic facts; plugin data queries use activation generation and actor-specific cache identity. The loader withdraws sources on disable and failed activation. Unused queries receive cancellation through their AbortSignal. Settings mutations invalidate the plugin's data consumers.
+
+The built-browser regression covers initial disabled state, live enable, withdrawal of cached status, failed remote loading, personal leave add/delete, holiday submission and slot withdrawal, calendar withdrawal, aborted in-flight status lookup and successful fresh activation. Loader unit tests cover data-only remotes and late registration after disable. AST boundary tests check remote relative imports and prevent Leave vocabulary/endpoints re-entering the host. Other plugins and cross-plugin interaction coverage remain pending.
+
+RADD-1345 result: host and all 9 remote bundles build/type-check; 37 frontend unit/boundary tests and 11 focused backend tests pass; the expanded built-browser regression passes all 12 lifecycle/form checks. Local backend manifest reloaded (PID 1955690), health passes. Local Leave enable/disable probe verifies manifest and served remote in the same process and restores disabled. No external deployment.

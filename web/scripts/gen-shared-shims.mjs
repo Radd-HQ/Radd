@@ -38,6 +38,7 @@ const SDK_EXPORTS = [
   "useUserContributionToggles", "useGlobalContributionToggles",
   "UserContributionToggles", "GlobalContributionToggles",
   "definePlugin",
+  "registerDataSource", "unregisterDataSources", "usePluginData", "invalidatePluginData",
   "Button", "TextField", "TextArea", "Select", "Chip", "Card", "Spinner", "EmptyState", "Modal",
   "Avatar",
   "tokens",
