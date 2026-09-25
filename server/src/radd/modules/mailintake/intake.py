@@ -42,6 +42,7 @@ from radd.modules.events import service as events
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentOrigin
 from radd.modules.items import service as items
+from radd.modules.items.enums import ItemOrigin
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
@@ -509,7 +510,7 @@ async def _create(
     # bounce, no trace but a log line. Bouncing the findings back by mail is a
     # real feature and a different one; until it exists, refusing silently is
     # the worse of the two failures.
-    with intake_suppressed():
+    with intake_suppressed(), items.creating_from(ItemOrigin.EMAIL):
         created = await items.create_item(
             session,
             ItemCreate(

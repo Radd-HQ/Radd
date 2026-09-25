@@ -1,6 +1,6 @@
-from radd.kernel import EventTypeSpec, RaddPlugin, SettingSpec
+from radd.kernel import EntityRefSpec, EventTypeSpec, RaddPlugin, SettingSpec
 
-from . import subscribers
+from . import service, subscribers
 from . import entityhost  # noqa: F401 — installs the kernel's EntityHost (RADD-892)
 from .permissions import AUTH_CRUD_RESOURCES, AUTH_PERMISSIONS
 from .types import AuthEvent
@@ -22,6 +22,9 @@ plugin = RaddPlugin(
         "People, sign-in sessions, API tokens and roles."
     ),
     depends_on=("events", "projects"),
+    # RADD-1320: a person is an event subject — `user.*` carry the ref, and
+    # anything naming `subjects={"user": id}` gets the same three fields.
+    entity_refs=(EntityRefSpec("user", service.user_ref_by_id, label="Person"),),
     # Spec 123: the project's public/contributions switches, with old → new.
     event_types=(
         EventTypeSpec(
@@ -31,12 +34,15 @@ plugin = RaddPlugin(
         # RADD-1168: emitted since spec 84/86 and never registered — no label
         # in the audit catalog, and outside the has_changes contract. Not
         # triggers (the automation catalog is a parity oracle).
-        EventTypeSpec(AuthEvent.USER_CREATED, "User created", "People", entity_type="user"),
+        EventTypeSpec(AuthEvent.USER_CREATED, "User created", "People", entity_type="user", subjects=("user",)),
         EventTypeSpec(
             AuthEvent.USER_UPDATED, "User updated", "People",
-            has_changes=True, entity_type="user",
+            has_changes=True, entity_type="user", subjects=("user",),
         ),
-        EventTypeSpec(AuthEvent.USER_DELETED, "User deleted", "People", trigger=False, entity_type="user"),
+        EventTypeSpec(
+            AuthEvent.USER_DELETED, "User deleted", "People", trigger=False, entity_type="user",
+            subjects=("user",),
+        ),
         EventTypeSpec(AuthEvent.ROLE_CREATED, "Role created", "Admin", trigger=False, entity_type="role"),
         EventTypeSpec(
             AuthEvent.ROLE_UPDATED, "Role updated", "Admin",

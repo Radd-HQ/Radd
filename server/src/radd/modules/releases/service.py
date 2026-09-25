@@ -131,3 +131,12 @@ async def _emit(
         subjects={"project": release.project_id},
         changes=diff,
     )
+
+
+async def release_ref(session: AsyncSession, release_id) -> dict | None:
+    """The canonical `{id, version, name, status}` for a release inside an event
+    payload (RADD-1320)."""
+    release = await session.get(Release, release_id)
+    if release is None:
+        return None
+    return {"id": str(release.id), "version": release.version, "name": release.name, "status": release.status}

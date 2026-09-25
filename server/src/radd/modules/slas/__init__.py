@@ -46,5 +46,6 @@ plugin = RaddPlugin(
         ),
         EventTypeSpec(SlaEvent.BREACHED, "SLA breached", "Items", item_scoped=True),
         EventTypeSpec(SlaEvent.DUE_SOON, "SLA due soon", "Service desk", item_scoped=True),
+        EventTypeSpec(SlaEvent.MET, "SLA met", "Service desk", item_scoped=True),
     ),
 )

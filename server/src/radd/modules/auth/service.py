@@ -536,3 +536,36 @@ async def update_profile(session: AsyncSession, user: User, data: ProfileUpdate)
         changes=changes.diff_object(user, before),
     )
     return user
+
+
+#: The account fields a sign-in provider may rewrite (RADD-1320).
+DIRECTORY_FIELDS: tuple[str, ...] = ("name", "email", "source", "instance_role", "active")
+
+
+def directory_snapshot(user: User) -> dict:
+    """What `record_user_changes` diffs against — taken BEFORE a provider writes."""
+    return changes.snapshot(user, DIRECTORY_FIELDS)
+
+
+async def record_user_changes(
+    session: AsyncSession, user: User, before: dict, *, actor_id: uuid.UUID | None = None
+) -> bool:
+    """Emit `user.updated` with the diff when a sign-in path changed the account
+    (RADD-1320). SSO and LDAP rewrote `instance_role` and `source` on every
+    login with no event at all, so an automation could not see a promotion and
+    the audit log (spec 123) could not say who became an admin, or when.
+    Nothing changed → nothing emitted; returns whether it emitted."""
+    diff = changes.diff_object(user, before)
+    if not diff:
+        return False
+    await session.flush()
+    await events.emit(
+        session,
+        event_type=AuthEvent.USER_UPDATED,
+        entity_type=AuthEntity.USER,
+        entity_id=user.id,
+        actor_id=actor_id,
+        payload={"email": user.email, "name": user.name},
+        changes=diff,
+    )
+    return True

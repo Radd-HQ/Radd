@@ -14,7 +14,7 @@ from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields_service
 from radd.modules.items import service as items_service
-from radd.modules.items.enums import ItemKind, Priority
+from radd.modules.items.enums import ItemKind, ItemOrigin, Priority
 from radd.modules.items.schemas import ItemCreate, ItemRead
 from radd.modules.releases import service as releases_service
 from radd.modules.teams import service as teams_service
@@ -414,6 +414,7 @@ async def submit_form(
     *,
     reporter_id: object = _REPORTER_UNSET,
     team_id: uuid.UUID | None = None,
+    origin: ItemOrigin = ItemOrigin.FORM,
 ) -> ItemRead:
     """Validate the submission against the form's required overrides + the registry, then
     create a work item in the form's project with the defaults applied.
@@ -470,7 +471,21 @@ async def submit_form(
         custom_fields=dict(data.values),
         **reporter_override,
     )
-    return await _create_validated(session, form, item, actor, data.commit)
+    with items_service.creating_from(origin):
+        created = await _create_validated(session, form, item, actor, data.commit)
+    # RADD-1320: the submission itself, with WHICH form and WHO submitted — the
+    # reporter when one was named (the portal's visitor), else the actor.
+    submitter = reporter_id if reporter_id is not _REPORTER_UNSET else actor.id
+    await events.emit(
+        session,
+        event_type=FormEvent.SUBMITTED,
+        entity_type=FormEntity.FORM,
+        entity_id=form.id,
+        actor_id=actor.id,
+        subjects={"item": created.id, "project": project.id, "user": submitter},
+        payload={"form": {"id": str(form.id), "name": form.name}, "channel": origin.value},
+    )
+    return created
 
 
 async def _create_validated(

@@ -235,6 +235,7 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
 
     identity = await _identity_for(session, provider, subject)
     linked = False
+    created = False
 
     if identity is not None:
         # Known identity — authoritative. Email is deliberately NOT consulted.
@@ -258,9 +259,11 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
                     "to add the domain or create the account."
                 )
             # password_hash NULL = SSO-only account (the auth model reserved this).
-            user = User(email=email, name=name, password_hash=None, source=UserSource.OIDC)
-            session.add(user)
-            await session.flush()
+            # Through auth's seam (RADD-1320), so it is a `user.created` event.
+            user, _created = await auth_service.ensure_imported_user(
+                session, email=email, name=name, source=UserSource.OIDC
+            )
+            created = True
             # The provider's starting grant (RADD-777) — HERE and nowhere else.
             #
             # This branch is the only one that CREATES an account. The `linked`
@@ -282,6 +285,7 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
     if not user.active:
         raise ForbiddenError("account is deactivated")
 
+    before = auth_service.directory_snapshot(user)
     identity.email = email or identity.email
     identity.claims = {k: claims[k] for k in ("hd", "picture", "name") if k in claims}
     # RADD-1295: the provider's picture is the fallback avatar (an upload wins).
@@ -299,6 +303,10 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
         user.instance_role = (
             InstanceRole.ADMIN.value if _is_admin(provider, claims) else InstanceRole.MEMBER.value
         )
+
+    if not created:
+        # RADD-1320: the source flip and the role re-sync were silent writes.
+        await auth_service.record_user_changes(session, user, before, actor_id=user.id)
 
     if linked:
         await events.emit(

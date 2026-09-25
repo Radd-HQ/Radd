@@ -14,8 +14,9 @@ plugin = RaddPlugin(
     depends_on=("auth", "teams", "events"),
     routers=(router,),
     event_types=(
-        EventTypeSpec(LeaveEvent.CREATED, "Leave recorded", "People"),
-        EventTypeSpec(LeaveEvent.DELETED, "Leave removed", "People"),
+        # RADD-1320: WHO is away — a person or a team, never both (holidays neither).
+        EventTypeSpec(LeaveEvent.CREATED, "Leave recorded", "People", subjects=("user", "team")),
+        EventTypeSpec(LeaveEvent.DELETED, "Leave removed", "People", subjects=("user", "team")),
     ),
     # RADD-1031: the holidays recorded here are dates nobody works, which is
     # what an SLA clock needs to skip. Contributed through the socket rather

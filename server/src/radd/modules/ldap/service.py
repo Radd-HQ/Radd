@@ -365,18 +365,11 @@ async def find_or_create_user(
     """The spec-42 provision core, shared with the explicit imports (spec 84):
     find by email or create an SSO-only account (`password_hash NULL`,
     source=ldap)."""
-    user = await auth_service.get_user_by_email(session, directory_user.email)
-    if user is None:
-        user = User(
-            email=directory_user.email,
-            name=directory_user.name,
-            password_hash=None,
-            source=UserSource.LDAP,
-        )
-        session.add(user)
-        await session.flush()
-        return user, True
-    return user, False
+    # RADD-1320: through auth's own seam, so the account's creation is a
+    # `user.created` event like every other door into Radd.
+    return await auth_service.ensure_imported_user(
+        session, email=directory_user.email, name=directory_user.name, source=UserSource.LDAP
+    )
 
 
 async def provision(session: AsyncSession, directory_user: DirectoryUser) -> User:
@@ -387,12 +380,16 @@ async def provision(session: AsyncSession, directory_user: DirectoryUser) -> Use
         raise ForbiddenError(
             f"no account for {directory_user.email} (auto-provisioning is off)"
         )
-    user, _created = await find_or_create_user(session, directory_user)
+    user, created = await find_or_create_user(session, directory_user)
     if not user.active:
         raise ForbiddenError("account is deactivated")
 
+    before = auth_service.directory_snapshot(user)
     role = InstanceRole.ADMIN.value if directory_user.is_admin else InstanceRole.MEMBER.value
     user.instance_role = role  # re-synced per login (admin group in ⇒ admin, out ⇒ member)
+    if not created:
+        # RADD-1320: a promotion or demotion by the directory is a `user.updated`.
+        await auth_service.record_user_changes(session, user, before, actor_id=user.id)
 
     await events.emit(
         session,

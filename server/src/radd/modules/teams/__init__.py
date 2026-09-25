@@ -1,7 +1,8 @@
-from radd.kernel import EventTypeSpec
+from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
 
+from . import service
 from .router import team_router
 from .types import TeamEvent
 
@@ -17,9 +18,11 @@ plugin = RaddPlugin(
     depends_on=("events", "projects", "auth", "groups"),
     weak_depends=("access", "items"),
     routers=(team_router,),
+    # RADD-1320: a team is an event subject.
+    entity_refs=(EntityRefSpec("team", service.team_ref, label="Team"),),
     event_types=(
-        EventTypeSpec(TeamEvent.CREATED, "Team created", "Admin"),
-        EventTypeSpec(TeamEvent.UPDATED, "Team updated", "Admin", has_changes=True),
-        EventTypeSpec(TeamEvent.DELETED, "Team deleted", "Admin", trigger=False),
+        EventTypeSpec(TeamEvent.CREATED, "Team created", "Admin", subjects=("team",)),
+        EventTypeSpec(TeamEvent.UPDATED, "Team updated", "Admin", has_changes=True, subjects=("team",)),
+        EventTypeSpec(TeamEvent.DELETED, "Team deleted", "Admin", trigger=False, subjects=("team",)),
     ),
 )

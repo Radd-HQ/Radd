@@ -647,3 +647,17 @@ async def _emit(
         },
         changes=diff,
     )
+
+
+async def cycle_ref(session: AsyncSession, cycle_id) -> dict | None:
+    """The canonical `{id, name, start_date, end_date}` for a cycle inside an
+    event payload (RADD-1320)."""
+    cycle = await session.get(Cycle, cycle_id)
+    if cycle is None:
+        return None
+    return {
+        "id": str(cycle.id),
+        "name": cycle.name,
+        "start_date": cycle.start_date.isoformat() if cycle.start_date else None,
+        "end_date": cycle.end_date.isoformat() if cycle.end_date else None,
+    }

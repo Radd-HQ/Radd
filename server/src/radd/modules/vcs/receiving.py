@@ -19,7 +19,7 @@ from radd.modules.items import service as items
 
 from . import service
 from .models import ItemVcsLink
-from .triggers import RefAction, emit_ref, ref_of
+from .triggers import HostAuthor, RefAction, emit_ref, ref_of
 from .types import VcsProvider, VcsRefType
 
 #: Linked issues → the links this delivery wrote for each, in delivery order.
@@ -83,6 +83,7 @@ async def fire_ref_action(
     action: RefAction,
     ref_extra: Mapping[str, Any],
     actor_id: uuid.UUID | None,
+    author: HostAuthor | None = None,
 ) -> int:
     """A merge/pull request was opened, merged or closed: one event per issue it names."""
     for rows in links.values():
@@ -90,6 +91,7 @@ async def fire_ref_action(
             session, trigger, rows[0],
             provider=provider, repo=repo, actor_id=actor_id,
             payload={"action": action.value, "ref": ref_of(rows[0], **ref_extra)},
+            author=author,
         )
     return len(links)
 
@@ -103,6 +105,7 @@ async def fire_push(
     repo: str,
     branch: str,
     actor_id: uuid.UUID | None,
+    author: HostAuthor | None = None,
 ) -> int:
     """A push named these issues (in the branch name or a commit message): one
     event per issue, carrying the branch and the commits that named it."""
@@ -115,6 +118,7 @@ async def fire_push(
             session, trigger, branch_link,
             provider=provider, repo=repo, actor_id=actor_id,
             payload={"branch": branch, "ref": ref_of(branch_link), "commits": commits},
+            author=author,
         )
     return len(links)
 

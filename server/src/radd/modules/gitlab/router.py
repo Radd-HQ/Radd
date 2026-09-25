@@ -101,12 +101,14 @@ async def gitlab_webhook(
             provider=VcsProvider.GITLAB, repo=repo_name,
             branch=str(payload.get("ref") or "").removeprefix("refs/heads/"),
             actor_id=SYSTEM_ACTOR_ID,
+            author=triggers.host_author(payload, connection.id),
         )
     elif (action := parsing.mr_action(payload)) is not None:
         result["triggered"] = await receiving.fire_ref_action(
             session, TRIGGERS.for_action(action), links,
             provider=VcsProvider.GITLAB, repo=repo_name, action=action,
             ref_extra=parsing.mr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
+            author=triggers.host_author(payload, connection.id),
         )
 
     # RADD-1259: time added or removed on the MR → fetch the entries and mirror

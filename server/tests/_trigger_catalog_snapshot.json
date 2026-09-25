@@ -197,6 +197,12 @@
     "item_scoped": false,
     "has_changes": false
   },
+  "form.submitted": {
+    "label": "Intake form submitted",
+    "group": "Intake",
+    "item_scoped": true,
+    "has_changes": false
+  },
   "form.updated": {
     "label": "Intake form updated",
     "group": "Admin",
@@ -493,6 +499,12 @@
   },
   "sla.due_soon": {
     "label": "SLA due soon",
+    "group": "Service desk",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "sla.met": {
+    "label": "SLA met",
     "group": "Service desk",
     "item_scoped": true,
     "has_changes": false

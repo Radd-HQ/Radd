@@ -31,7 +31,8 @@ plugin = RaddPlugin(
             NotifyEvent.NOTIFICATION_CREATED, "Notification created", "System",
             trigger=False, entity_type="notification", audited=False,
         ),
-        EventTypeSpec(NotifyEvent.ITEM_WATCHED, "Item watched", "Items", item_scoped=True),
-        EventTypeSpec(NotifyEvent.ITEM_UNWATCHED, "Item unwatched", "Items", item_scoped=True),
+        # RADD-1320: auto-watch emits too (`auto: true`); the watcher is a subject.
+        EventTypeSpec(NotifyEvent.ITEM_WATCHED, "Item watched", "Items", item_scoped=True, subjects=("item", "user")),
+        EventTypeSpec(NotifyEvent.ITEM_UNWATCHED, "Item unwatched", "Items", item_scoped=True, subjects=("item", "user")),
     ),
 )

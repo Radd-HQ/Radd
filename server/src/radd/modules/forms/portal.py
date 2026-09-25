@@ -20,6 +20,7 @@ from radd.modules.auth.models import User
 from radd.modules.fields import service as fields_service
 from radd.modules.teams import service as teams_service
 from radd.modules.projects import service as projects_service
+from radd.modules.items.enums import ItemOrigin
 
 from . import service
 from .models import Form, FormShare
@@ -215,7 +216,8 @@ async def submit_portal_form(
     team_id = await _resolve_shared_team(session, form, actor, data.team_id)
     system = await auth.get_user(session, SYSTEM_ACTOR_ID)
     item = await service.submit_form(
-        session, form.id, data, system, reporter_id=actor.id, team_id=team_id
+        session, form.id, data, system, reporter_id=actor.id, team_id=team_id,
+        origin=ItemOrigin.PORTAL,
     )
     # RADD-800 — the files were uploaded before the item existed; move the ones
     # this submission claims onto it now.

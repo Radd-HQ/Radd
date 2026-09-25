@@ -64,6 +64,19 @@ class BulkSkipReason(StrEnum):
     ERROR = "error"
 
 
+class ItemOrigin(StrEnum):
+    """WHERE a new issue came from, on `item.created` (RADD-1320). Absent =
+    a person in the app, the API or MCP. `automation` is derived from the
+    automated marker; the rest are stated by the door that created it through
+    `items.service.creating_from`."""
+
+    EMAIL = "email"
+    FORM = "form"
+    PORTAL = "portal"
+    ALERT = "alert"
+    AUTOMATION = "automation"
+
+
 class ItemEvent(StrEnum):
     CREATED = "item.created"
     UPDATED = "item.updated"

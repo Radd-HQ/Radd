@@ -20,6 +20,7 @@ from radd.modules.projects.models import Project
 
 from ..changes import diff_item_reads, field_name_map
 from ..enums import ItemEntity, ItemEvent
+from .origin import current_origin
 from ..hydration import hydrate
 from ..models import WorkItem
 from ..schemas import ItemRead
@@ -102,6 +103,10 @@ async def _finish(
     # Spec 123: an update ALWAYS carries the list — a caller with no `before`
     # snapshot (the rank-only reorder) is the explicit `[]`, which history
     # skips; `None` on an item.updated is refused by emit. Create carries none.
+    if event_type == ItemEvent.CREATED:
+        # RADD-1320: where it came from — email, a form, the portal, an alert,
+        # an automation; absent = a person.
+        payload["origin"] = current_origin()
     if before is not None:
         changes: list[dict] | None = diff_item_reads(
             before, read, field_names=field_name_map(definitions)

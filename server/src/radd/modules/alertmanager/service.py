@@ -25,6 +25,7 @@ from radd.modules.automations.intake import suppressed as intake_suppressed
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.events import service as events
 from radd.modules.items import service as items
+from radd.modules.items.enums import ItemOrigin
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.snapshot import Snapshot
@@ -73,7 +74,7 @@ async def process(session: AsyncSession, receiver: AlertReceiver, payload: dict)
         if plan.action is AlertAction.CREATE:
             # Machine intake is not human intake (spec 119): a monitoring system
             # cannot be asked for repro steps, and refusing it is a 5xx it retries.
-            with intake_suppressed():
+            with intake_suppressed(), items.creating_from(ItemOrigin.ALERT):
                 item = await items.create_item(
                     session,
                     ItemCreate(project_id=receiver.project_id, title=plan.title, description=plan.description),

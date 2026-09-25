@@ -1,8 +1,9 @@
-from radd.kernel import EventTypeSpec
+from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, ProjectPurgeSpec
 
 from .automation import PUBLISH_NODE
+from . import service
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import ReleaseEvent
@@ -28,12 +29,14 @@ plugin = RaddPlugin(
     # RADD-1310: "Publish version and sweep" — what a connector's release trigger
     # leads to, now that no connector publishes anything on its own (RADD-1309).
     automation_nodes=(PUBLISH_NODE,),
+    # RADD-1320: a release is an event subject.
+    entity_refs=(EntityRefSpec("release", service.release_ref, label="Release"),),
     event_types=(
-        EventTypeSpec(ReleaseEvent.CREATED, "Release created", "Releases", subjects=("project",)),
+        EventTypeSpec(ReleaseEvent.CREATED, "Release created", "Releases", subjects=("project", "release")),
         EventTypeSpec(
             ReleaseEvent.UPDATED, "Release updated", "Releases",
-            has_changes=True, subjects=("project",),
+            has_changes=True, subjects=("project", "release"),
         ),
-        EventTypeSpec(ReleaseEvent.DELETED, "Release deleted", "Releases", subjects=("project",)),
+        EventTypeSpec(ReleaseEvent.DELETED, "Release deleted", "Releases", subjects=("project", "release")),
     ),
 )

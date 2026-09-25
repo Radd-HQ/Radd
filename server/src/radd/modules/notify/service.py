@@ -29,13 +29,39 @@ from radd.clock import utcnow
 
 
 async def add_watchers(
-    session: AsyncSession, item_id: uuid.UUID, user_ids: Iterable[uuid.UUID]
-) -> None:
-    """Idempotent bulk follow (auto-watch) — existing rows are left untouched."""
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    user_ids: Iterable[uuid.UUID],
+    *,
+    auto: bool = True,
+    actor_id: uuid.UUID | None = None,
+) -> list[uuid.UUID]:
+    """Idempotent bulk follow — existing rows are left untouched. Returns who
+    was NEWLY added, and emits `item.watched` for each of them (RADD-1320).
+
+    Auto-watch (the reporter, an assignee, a commenter, a participant) used to
+    be silent: only the manual Watch button emitted, so no automation could
+    react to someone starting to follow an issue the way nearly everyone does.
+    `auto` rides the payload so a rule can tell the two apart, and only the
+    INSERTED rows emit, so a repeat pass over the same people stays quiet."""
     rows = [{"item_id": item_id, "user_id": user_id} for user_id in set(user_ids)]
     if not rows:
-        return
-    await session.execute(pg_insert(ItemWatcher).values(rows).on_conflict_do_nothing())
+        return []
+    inserted = await session.execute(
+        pg_insert(ItemWatcher).values(rows).on_conflict_do_nothing().returning(ItemWatcher.user_id)
+    )
+    added = list(inserted.scalars())
+    for user_id in added:
+        await events.emit(
+            session,
+            event_type=NotifyEvent.ITEM_WATCHED,
+            entity_type=NotifyEntity.WATCHER,
+            entity_id=item_id,
+            actor_id=actor_id if actor_id is not None else (None if auto else user_id),
+            subjects={"item": item_id, "user": user_id},
+            payload={"auto": auto},
+        )
+    return added
 
 
 async def watch(
@@ -43,18 +69,8 @@ async def watch(
     item_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> None:
-    """Manual follow — idempotent; emits item.watched (audit) only on first add."""
-    if await is_watching(session, item_id, user_id):
-        return
-    await add_watchers(session, item_id, [user_id])
-    await events.emit(
-        session,
-        event_type=NotifyEvent.ITEM_WATCHED,
-        entity_type=NotifyEntity.WATCHER,
-        entity_id=item_id,
-        actor_id=user_id,
-        subjects={"item": item_id},
-    )
+    """Manual follow — idempotent; `item.watched` (auto=false) only on first add."""
+    await add_watchers(session, item_id, [user_id], auto=False)
 
 
 async def unwatch(
@@ -72,7 +88,7 @@ async def unwatch(
         entity_type=NotifyEntity.WATCHER,
         entity_id=item_id,
         actor_id=user_id,
-        subjects={"item": item_id},
+        subjects={"item": item_id, "user": user_id},
     )
 
 

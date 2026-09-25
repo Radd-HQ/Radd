@@ -222,6 +222,10 @@ class Settings(BaseSettings):
 
     # SLA engine (see radd/modules/slas) — periodic timer evaluation.
     sla_check_interval: float = 60.0
+    # RADD-1320: `sla.met` for a target met longer ago than this is not emitted
+    # when its bookkeeping row is first created — a new policy evaluated over
+    # old, long-answered items must not fire a burst of historical "met" events.
+    sla_met_event_max_age_hours: int = 24
 
     # OIDC SSO (see radd/modules/sso). SEED-ONLY since spec 110: providers are
     # `sso_providers` rows managed in Settings → Sign-in, and these values create

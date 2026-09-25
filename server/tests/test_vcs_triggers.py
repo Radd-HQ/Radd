@@ -140,6 +140,8 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
                 "head": {"ref": branch}, "base": {"ref": "main"}, "body": "",
             },
             "repository": repository,
+            # RADD-1320: who merged it — resolved to a Radd person by email.
+            "sender": {"login": "owner-on-host", "email": owner.email},
         }, {"linked": 1, "triggered": 1}),
         # An edit of the merged PR repeats its state and must fire nothing.
         ("pull_request", {
@@ -173,6 +175,8 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
     [merged] = await _events(db, head, trigger.PR_MERGED.value)
     assert merged.payload["item"]["id"] == str(item.id) and merged.payload["action"] == "merged"
     assert merged.payload["ref"]["number"] == "5" and merged.payload["ref"]["source_branch"] == branch
+    assert merged.payload["author"] == {"username": "owner-on-host", "email": owner.email}
+    assert merged.payload["user"]["id"] == str(owner.id), "the host account maps to the Radd person"
     [pushed] = await _events(db, head, trigger.PUSHED.value)
     assert pushed.payload["branch"] == branch
     [ci] = await _events(db, head, trigger.CI_COMPLETED.value)

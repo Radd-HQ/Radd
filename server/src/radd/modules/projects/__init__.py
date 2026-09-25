@@ -19,9 +19,11 @@ plugin = RaddPlugin(
     # RADD-923: how a project describes itself in an event payload.
     entity_refs=(EntityRefSpec("project", service.project_ref, label="Project"),),
     event_types=(
-        EventTypeSpec(ProjectEvent.PROJECT_CREATED, "Project created", "Admin"),
+        EventTypeSpec(ProjectEvent.PROJECT_CREATED, "Project created", "Admin", subjects=("project",)),
         # RADD-1009: rename/description edits; `changes` carries the diff.
-        EventTypeSpec(ProjectEvent.PROJECT_UPDATED, "Project updated", "Admin", has_changes=True),
+        EventTypeSpec(
+            ProjectEvent.PROJECT_UPDATED, "Project updated", "Admin", has_changes=True, subjects=("project",),
+        ),
         # RADD-1174: the row is gone; the payload names it and what went with it.
         EventTypeSpec(ProjectEvent.PROJECT_DELETED, "Project deleted", "Admin"),
     ),

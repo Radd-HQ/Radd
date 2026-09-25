@@ -75,6 +75,13 @@ def _schema(**properties: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+#: RADD-1320: who acted on the host; `user` (a subject ref) is the Radd person.
+_AUTHOR_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {"username": {"type": "string"}, "email": {"type": "string"}},
+}
+
+
 @dataclass(frozen=True)
 class ConnectorTriggers:
     """One connector's trigger vocabulary. The connector declares the enum
@@ -99,9 +106,10 @@ class ConnectorTriggers:
         ref = _schema(action={"type": "string"}, ref=_REF_SCHEMA)
 
         def item_event(event_type: StrEnum, label: str, schema: dict[str, Any]) -> EventTypeSpec:
+            schema = {**schema, "properties": {**schema["properties"], "author": _AUTHOR_SCHEMA}}
             return EventTypeSpec(
                 event_type, f"{self.host}: {label}", self.host,
-                item_scoped=True, subjects=("item",), payload_schema=schema,
+                item_scoped=True, subjects=("item", "user"), payload_schema=schema,
             )
 
         change = self.change
@@ -152,6 +160,52 @@ class ConnectorTriggers:
         return tuple(out)
 
 
+@dataclass(frozen=True)
+class HostAuthor:
+    """Who acted on the host (RADD-1320): the pusher, the person who opened or
+    merged the request. Resolved to a Radd user through `vcs_user_links` — the
+    identity map the time mirror fills — so a rule can act on the person."""
+
+    connection_id: uuid.UUID | None
+    username: str
+    email: str = ""
+
+
+def host_author(payload: dict, connection_id: uuid.UUID | None) -> HostAuthor | None:
+    """The acting account from a webhook body, across the three hosts: GitLab
+    puts it at `user_username`/`user_email` (push) or `user` (merge request);
+    GitHub and Forgejo at `sender` (GitHub hides the email; a push's `pusher`
+    carries one)."""
+    username = str(payload.get("user_username") or "")
+    email = str(payload.get("user_email") or "")
+    if not username:
+        user = payload.get("user") if isinstance(payload.get("user"), dict) else {}
+        username, email = str(user.get("username") or ""), str(user.get("email") or email)
+    if not username:
+        sender = payload.get("sender") if isinstance(payload.get("sender"), dict) else {}
+        pusher = payload.get("pusher") if isinstance(payload.get("pusher"), dict) else {}
+        username = str(sender.get("login") or sender.get("username") or "")
+        email = str(sender.get("email") or pusher.get("email") or "")
+    return HostAuthor(connection_id, username, email) if username else None
+
+
+async def _author_facts(
+    session: AsyncSession, provider: str, author: HostAuthor | None
+) -> tuple[dict[str, Any] | None, uuid.UUID | None]:
+    if author is None:
+        return None, None
+    user_id = None
+    if author.connection_id is not None:
+        from .timemirror import resolve_author  # deferred: timemirror imports this module's siblings
+        from .types import VcsProvider
+
+        user_id = await resolve_author(
+            session, provider=VcsProvider(provider), connection_id=author.connection_id,
+            username=author.username, email=author.email,
+        )
+    return {"username": author.username, "email": author.email}, user_id
+
+
 def ref_of(link: ItemVcsLink, **extra: Any) -> dict[str, Any]:
     """The `ref` block every ref event carries: the link as recorded, plus what
     the delivery knew that the link does not store (number, branches)."""
@@ -173,17 +227,20 @@ async def emit_ref(
     repo: str,
     actor_id: uuid.UUID | None,
     payload: dict[str, Any],
+    author: HostAuthor | None = None,
 ) -> None:
     """One trigger event about one linked issue. `payload` is the event's own
-    data (action, ref, commits, ci); provider/repo are stamped here."""
+    data (action, ref, commits, ci); provider/repo are stamped here, and the
+    host `author` (RADD-1320) with the Radd `user` it maps to, when it does."""
+    author_facts, user_id = await _author_facts(session, provider, author)
     await events.emit(
         session,
         event_type=event_type,
         entity_type=VcsEntity.VCS_LINK,
         entity_id=link.id,
         actor_id=actor_id,
-        subjects={"item": link.item_id},
-        payload={"provider": provider, "repo": repo, **payload},
+        subjects={"item": link.item_id, "user": user_id},
+        payload={"provider": provider, "repo": repo, **payload, "author": author_facts},
     )
 
 

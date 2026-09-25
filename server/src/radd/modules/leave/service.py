@@ -81,6 +81,8 @@ async def create(session: AsyncSession, actor: User, data: LeaveCreate) -> Leave
         entity_type=LeaveEntity.LEAVE,
         entity_id=period.id,
         actor_id=actor.id,
+        # RADD-1320: WHO is away, as refs the automation walk can act on.
+        subjects={"user": period.user_id, "team": period.team_id},
         payload={
             "user_id": str(period.user_id) if period.user_id else None,
             "team_id": str(period.team_id) if period.team_id else None,
@@ -105,7 +107,14 @@ async def remove(session: AsyncSession, actor: User, period_id: uuid.UUID) -> No
         entity_type=LeaveEntity.LEAVE,
         entity_id=period_id,
         actor_id=actor.id,
-        payload={"kind": period.kind, "label": period.label},
+        # RADD-1320: it named nobody at all — "whose leave went" was unanswerable.
+        subjects={"user": period.user_id, "team": period.team_id},
+        payload={
+            "kind": period.kind,
+            "label": period.label,
+            "start_date": period.start_date.isoformat(),
+            "end_date": period.end_date.isoformat(),
+        },
     )
 
 

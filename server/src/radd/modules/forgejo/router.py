@@ -97,12 +97,14 @@ async def forgejo_webhook(
             provider=VcsProvider.FORGEJO, repo=repo_name,
             branch=str(payload.get("ref") or "").removeprefix("refs/heads/"),
             actor_id=SYSTEM_ACTOR_ID,
+            author=triggers.host_author(payload, connection.id),
         )
     elif (action := parsing.pr_action(payload)) is not None:
         result["triggered"] = await receiving.fire_ref_action(
             session, TRIGGERS.for_action(action), links,
             provider=VcsProvider.FORGEJO, repo=repo_name, action=action,
             ref_extra=parsing.pr_ref_extra(payload), actor_id=SYSTEM_ACTOR_ID,
+            author=triggers.host_author(payload, connection.id),
         )
 
     # RADD-1260: Forgejo has no tracked-time webhook, so EVERY pull_request

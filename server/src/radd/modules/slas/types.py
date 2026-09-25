@@ -11,6 +11,10 @@ class SlaEvent(StrEnum):
     # remaining active time drops to the policy's warning_minutes. Payload
     # mirrors BREACHED plus remaining_seconds. Same entity_type=item.
     DUE_SOON = "sla.due_soon"
+    # RADD-1320: a target was MET — once per item/policy/kind, with `on_time`.
+    # Until now `*_met_at` was written silently: an automation could react to
+    # a miss and a warning, never to the outcome everyone actually wants.
+    MET = "sla.met"
 
 
 class SlaEntity(StrEnum):

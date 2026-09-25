@@ -557,3 +557,11 @@ async def existing_ids(session: AsyncSession, ids: Iterable[uuid.UUID]) -> set[u
     if not wanted:
         return set()
     return set(await session.scalars(select(Team.id).where(Team.id.in_(wanted))))
+
+
+async def team_ref(session: AsyncSession, team_id) -> dict | None:
+    """The canonical `{id, name}` for a team inside an event payload (RADD-1320)."""
+    team = await session.get(Team, team_id)
+    if team is None:
+        return None
+    return {"id": str(team.id), "name": team.name}

@@ -9,9 +9,10 @@ import uuid
 from collections.abc import Iterable, Sequence
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -296,6 +297,15 @@ def due_soon(policy: SlaPolicy, status: timers.TimerStatus) -> bool:
     )
 
 
+def _fresh(met_at, now, row: SlaItemState) -> bool:
+    """Emit `sla.met` for this met_at? Always for a row that already existed (it
+    was watched un-met, so this IS the moment); for a brand-new row only when
+    the met is recent — see `config.sla_met_event_max_age_hours`."""
+    if inspect(row).persistent:
+        return True
+    return now - met_at <= timedelta(hours=settings.sla_met_event_max_age_hours)
+
+
 async def sync_states(
     session: AsyncSession,
     policy: SlaPolicy,
@@ -323,9 +333,25 @@ async def sync_states(
             session.add(row)
         for kind, (_target, status) in per_kind.items():
             prefix = "response" if kind is SlaKind.RESPONSE else "resolution"
+            was_met = getattr(row, f"{prefix}_met_at")
             setattr(row, f"{prefix}_due_at", status.due_at)
             setattr(row, f"{prefix}_met_at", status.met_at)
             already = getattr(row, f"{prefix}_breached_at")
+            if status.met_at is not None and was_met is None and _fresh(status.met_at, now, row):
+                await events.emit(
+                    session,
+                    event_type=SlaEvent.MET,
+                    entity_type=ItemEntity.ITEM,
+                    entity_id=item_id,
+                    actor_id=None,
+                    payload={
+                        **_sla_payload(policy, item_id, kind, status, item_refs),
+                        "met_at": status.met_at.isoformat(),
+                        # Met after the breach already fired = met, late.
+                        "on_time": already is None and not status.breached,
+                    },
+                )
+                emitted += 1
             if status.breached and already is None:
                 setattr(row, f"{prefix}_breached_at", now)
                 await events.emit(

@@ -36,7 +36,7 @@ def test_trigger_registry_reproduces_the_catalog_exactly():
         assert current[et] == expected, f"{et}: {current[et]} != {expected}"
 
 
-def test_trigger_count_is_105():
+def test_trigger_count_is_107():
     # RADD-829 added the three group.* events (synced/missing/restored).
     # RADD-960 added the four mail.* events — the mail channel became something
     # a rule can see, rather than only the item/comment it happened to produce.
@@ -48,4 +48,5 @@ def test_trigger_count_is_105():
     # merged/closed, push, release), GitHub and Forgejo six (the same plus CI).
     # RADD-1317 added Alertmanager's three (firing/repeated/resolved) — the
     # receiver stopped commenting and transitioning and fires these instead.
-    assert len(_current_triggers()) == 105
+    # RADD-1320 added form.submitted and sla.met.
+    assert len(_current_triggers()) == 107

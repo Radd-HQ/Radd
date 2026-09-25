@@ -203,7 +203,7 @@ async def add_participant(
     if data.user_id is not None:
         # Auto-watch (spec 72 §3): the direct participant rides the ordinary
         # watcher fan-out — one mechanism, no parallel path. Idempotent.
-        await notify_service.add_watchers(session, item.id, [data.user_id])
+        await notify_service.add_watchers(session, item.id, [data.user_id], actor_id=actor.id)
     read = (await _reads(session, [row]))[0]
     await _emit(session, ParticipantEvent.ADDED, item, project, actor, read)
     return read
