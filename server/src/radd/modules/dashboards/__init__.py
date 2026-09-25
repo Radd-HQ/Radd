@@ -41,6 +41,7 @@ plugin = RaddPlugin(
         "Dashboards: widgets that chart and list your issues."
     ),
     depends_on=("events", "projects", "auth", "teams", "items", "cycles", "views", "reporting", "access", "groups"),
+    weak_depends=("comments", "forms", "approvals"),
     routers=(router,),
     exception_handlers=((WidgetConfigError, _config_handler),),
 )

@@ -264,7 +264,7 @@ async def test_widget_config_validation(db):
 
     # Width bounds + unknown types are pydantic 422s at the boundary.
     with pytest.raises(pydantic.ValidationError):
-        _slq_count_widget(width=4)
+        _slq_count_widget(width=13)
     with pytest.raises(pydantic.ValidationError):
         pydantic.TypeAdapter(WidgetCreate).validate_python(
             {"widget_type": "sparkline", "config": {}}

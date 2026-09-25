@@ -13,16 +13,16 @@ from radd.modules.views.schemas import ShareGroupRef, ShareTeamRef, ShareUserRef
 
 from .types import ShareLevel, WidgetType
 
-# Grid thirds a widget may span (the /dashboards page is a 3-column CSS grid).
-WIDGET_MIN_WIDTH = 1
-WIDGET_MAX_WIDTH = 3
+# Twelve-column layout, with a two-column minimum for legibility.
+WIDGET_MIN_WIDTH = 2
+WIDGET_MAX_WIDTH = 12
 # slq_list renders a compact card — hard row cap (spec 75).
 SLQ_LIST_MAX_LIMIT = 20
 # Mirrors the /reports/velocity `last` bound.
 VELOCITY_MAX_LAST = 50
 DASHBOARD_MAX_SHARES = 50
 
-_width_field = Field(default=1, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
+_width_field = Field(default=4, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
 
 
 # --- per-type widget configs (the JSONB payloads, shape-validated here; the
@@ -113,6 +113,8 @@ class _WidgetBase(BaseModel):
 
     title: str | None = Field(default=None, max_length=200)
     width: int = _width_field
+    height: int = Field(default=360, ge=160, le=1600)
+    collapsed: bool = False
     position: int = Field(default=0, ge=0)
 
 
@@ -193,6 +195,8 @@ class WidgetUpdate(BaseModel):
 
     title: str | None = Field(default=None, max_length=200)
     width: int | None = Field(default=None, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
+    height: int | None = Field(default=None, ge=160, le=1600)
+    collapsed: bool | None = None
     position: int | None = Field(default=None, ge=0)
     config: dict[str, Any] | None = None
 
@@ -204,6 +208,8 @@ class WidgetRead(BaseModel):
     widget_type: WidgetType | str
     title: str | None
     width: int
+    height: int = 360
+    collapsed: bool = False
     position: int
     config: dict[str, Any]
 
@@ -295,3 +301,21 @@ class DashboardSave(BaseModel):
     transfer_to: uuid.UUID | None = None
     expected_owner_id: uuid.UUID | None
     expected_global_access: ShareLevel | None
+
+
+class WidgetLayoutSave(BaseModel):
+    widgets: list[dict[str, Any]] = Field(max_length=60)
+    expected: list[WidgetRead] = Field(max_length=60)
+
+    @model_validator(mode="after")
+    def unique_ids(self):
+        ids = set()
+        for row in self.widgets:
+            try:
+                widget_id = uuid.UUID(str(row.get("id", "")))
+            except ValueError:
+                raise ValueError("Every widget needs a valid id") from None
+            if widget_id in ids:
+                raise ValueError("Duplicate widget id")
+            ids.add(widget_id)
+        return self

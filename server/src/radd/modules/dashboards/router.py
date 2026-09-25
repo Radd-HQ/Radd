@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Annotated, Any
 
 import pydantic
@@ -22,6 +23,8 @@ from .schemas import (
     PluginWidget,
     WidgetCreate,
     WidgetUpdate,
+    WidgetLayoutSave,
+    WidgetRead,
 )
 from .types import WidgetType
 
@@ -38,22 +41,70 @@ async def create_dashboard(
 
 
 @router.get("", response_model=list[DashboardRead])
-async def list_dashboards(session: Session, user: CurrentUser, response: Response,
-    include_shares: bool = True, q: Annotated[str, Query(max_length=200)] = "",
+async def list_dashboards(
+    session: Session,
+    user: CurrentUser,
+    response: Response,
+    include_shares: bool = True,
+    q: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int | None, Query(ge=1, le=200)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[DashboardRead]:
     """Dashboards the actor can SEE (spec-57 visibility), ordered position→name."""
-    rows, total = await service.page_dashboards(session, actor=user, include_shares=include_shares, q=q, limit=limit, offset=offset)
+    rows, total = await service.page_dashboards(
+        session, actor=user, include_shares=include_shares, q=q, limit=limit, offset=offset
+    )
     response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
 
 @router.get("/summary", response_model=dict[str, int])
-async def dashboard_summary(session: Session, user: CurrentUser,
+async def dashboard_summary(
+    session: Session,
+    user: CurrentUser,
     q: Annotated[str, Query(max_length=200)] = "",
 ) -> dict[str, int]:
     return {"total": await directory.count(session, user, q=q)}
+
+
+@router.get("/my-work/widgets", response_model=list[WidgetRead])
+async def my_work_widgets(session: Session, user: CurrentUser):
+    from . import personal
+
+    if "my_work_widgets" in (user.preferences or {}):
+        return personal.read(user)
+    return await personal.suggested_defaults(session, user)
+
+
+@router.put("/my-work/widgets", response_model=list[WidgetRead])
+async def save_my_work_widgets(data: WidgetLayoutSave, session: Session, user: CurrentUser):
+    from . import personal
+
+    return await personal.save(session, user, data)
+
+
+@router.get("/my-work/defaults", response_model=list[WidgetRead])
+async def my_work_defaults(session: Session, user: CurrentUser):
+    from .personal import suggested_defaults
+
+    return await suggested_defaults(session, user)
+
+
+@router.get("/my-work/activity")
+async def my_activity(
+    session: Session,
+    user: CurrentUser,
+    before: int | None = None,
+    project_id: uuid.UUID | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    limit: int = Query(10, ge=1, le=50),
+):
+    from . import activity
+
+    return await activity.read(
+        session, user, before=before, project_id=project_id, start=start, end=end, limit=limit
+    )
 
 
 @router.get("/{dashboard_id}", response_model=DashboardRead)
@@ -61,7 +112,9 @@ async def get_dashboard(
     dashboard_id: uuid.UUID, session: Session, user: CurrentUser, include_shares: bool = True
 ) -> DashboardRead:
     """The full definition incl. widgets + per-actor can_edit/can_manage."""
-    return await service.get_dashboard_read(session, dashboard_id, actor=user, include_shares=include_shares)
+    return await service.get_dashboard_read(
+        session, dashboard_id, actor=user, include_shares=include_shares
+    )
 
 
 @router.patch("/{dashboard_id}", response_model=DashboardRead)
@@ -141,7 +194,9 @@ def _parse_widget_body(body: dict[str, Any]) -> WidgetCreate | PluginWidget:
 
 
 @router.post(
-    "/{dashboard_id}/widgets", response_model=DashboardRead, status_code=201,
+    "/{dashboard_id}/widgets",
+    response_model=DashboardRead,
+    status_code=201,
     description=_WIDGET_DOC,
 )
 async def create_widget(
@@ -150,9 +205,7 @@ async def create_widget(
     session: Session,
     user: CurrentUser,
 ) -> DashboardRead:
-    return await widgets.create_widget(
-        session, dashboard_id, _parse_widget_body(body), actor=user
-    )
+    return await widgets.create_widget(session, dashboard_id, _parse_widget_body(body), actor=user)
 
 
 @router.patch("/{dashboard_id}/widgets/{widget_id}", response_model=DashboardRead)
@@ -176,6 +229,68 @@ async def delete_widget(
 
 
 @router.post("/{dashboard_id}/save", response_model=DashboardRead)
-async def save_dashboard(dashboard_id: uuid.UUID, data: DashboardSave,
-                      session: Session, user: CurrentUser) -> DashboardRead:
+async def save_dashboard(
+    dashboard_id: uuid.UUID, data: DashboardSave, session: Session, user: CurrentUser
+) -> DashboardRead:
     return await service.save_dashboard(session, dashboard_id, data, actor=user)
+
+
+@router.put("/{dashboard_id}/widgets", response_model=DashboardRead)
+async def replace_widgets(
+    dashboard_id: uuid.UUID, data: WidgetLayoutSave, session: Session, user: CurrentUser
+):
+    from sqlalchemy import select
+    from .models import DashboardWidget
+    from radd.exceptions import ConflictError
+
+    await service.require_edit(session, dashboard_id, user)
+    await service._lock_dashboard(session, str(dashboard_id))
+    current = await service.get_dashboard_read(session, dashboard_id, actor=user)
+    if [w.model_dump(mode="json") for w in current.widgets] != [
+        w.model_dump(mode="json") for w in data.expected
+    ]:
+        raise ConflictError(
+            "dashboard", reason="Dashboard changed elsewhere. Reload before editing."
+        )
+    parsed = [_parse_widget_body(raw) for raw in data.widgets]
+    stored = {
+        str(row.id): row
+        for row in await session.scalars(
+            select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard_id)
+        )
+    }
+    kept = set()
+    dashboard = await service.require_edit(session, dashboard_id, user)
+    for index, (raw, row) in enumerate(zip(data.widgets, parsed)):
+        widget_id = raw.get("id")
+        if widget_id in kept:
+            raise ConflictError("dashboard", reason="Duplicate widget id")
+        kept.add(widget_id)
+        if not isinstance(row, PluginWidget):
+            await widgets._check_references(session, user, dashboard, row.config)
+        model = stored.get(widget_id)
+        if model is None:
+            model = DashboardWidget(dashboard_id=dashboard_id)
+            session.add(model)
+        for name in ("widget_type", "title", "width", "height", "collapsed"):
+            setattr(model, name, getattr(row, name))
+        model.position = index
+        model.config = (
+            dict(row.config)
+            if isinstance(row, PluginWidget)
+            else row.config.model_dump(mode="json")
+        )
+    for widget_id, model in stored.items():
+        if widget_id not in kept:
+            await session.delete(model)
+    await session.flush()
+    from .types import DashboardEvent
+
+    await service.emit(
+        session,
+        DashboardEvent.UPDATED,
+        dashboard,
+        user,
+        diff=[{"field": "widgets", "from": "Previous layout", "to": "Updated layout"}],
+    )
+    return await service.get_dashboard_read(session, dashboard_id, actor=user)

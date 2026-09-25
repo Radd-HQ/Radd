@@ -221,6 +221,7 @@ async def query_events(
     end: datetime | None = None,
     q: str | None = None,
     ascending: bool = False,
+    before_id: int | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[Event]:
@@ -237,6 +238,8 @@ async def query_events(
     the audit view drops what `EventTypeSpec.audited=False` marks as noise.
     """
     conditions = []
+    if before_id is not None:
+        conditions.append(Event.id < before_id)
     if q:
         conditions.append(Event.search_text.ilike(ilike_term(q)))
     if entity_type is not None:

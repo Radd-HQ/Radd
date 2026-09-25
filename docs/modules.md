@@ -764,3 +764,7 @@ entry point); backend summary/cursor/permission invariants in
 `tests/test_board_loading.py`, `test_item_visibility.py` and
 `test_slq_field_oracle.py`. This is incremental loading, not card virtualization:
 very deep browsing still accumulates mounted cards.
+
+### Personal dashboards and email signatures (RADD-1333–1338)
+
+`dashboards` exposes private My Work widget definitions and current-access-filtered personal activity. It reads the append-only log through `events.service.query_events` and checks current item and comment visibility. Deferred, optional reads of `comments`, `forms`, and `approvals` are declared weak dependencies; the latter two select relevant defaults. Shared and personal definitions use the same widget schemas and twelve-column layout. Personal definitions live in the user's server preferences; shared definitions remain dashboard-owned.

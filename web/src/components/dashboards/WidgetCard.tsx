@@ -192,10 +192,10 @@ function SlqCountCard({
   const q = widgetQuery(widget, filterQuery);
   const query = useQuery(itemsCountQuery(slqScope(widget), q));
   if (query.isError) return <UnavailableCard title={widget.title} />;
-  const label = widget.config.label || widget.title || "Matching issues";
+  const label = widget.config.label;
   return (
-    <div className="rounded-xl border border-subtle bg-surface px-4 py-4 shadow-lift">
-      <p className="truncate text-[11px] uppercase tracking-wide text-fg-muted">{label}</p>
+    <div className="px-1 py-1">
+      {label && <p className="truncate text-xs text-fg-muted">{label}</p>}
       <p className="mt-1 text-3xl font-semibold tabular-nums text-heading">
         {query.data ? query.data.total : "…"}
       </p>
@@ -221,10 +221,7 @@ function SlqListCard({
   if (query.isError) return <UnavailableCard title={widget.title} />;
   const items = query.data ?? [];
   return (
-    <div className="overflow-hidden rounded-xl border border-subtle bg-surface shadow-lift">
-      <p className="border-b border-subtle/60 px-4 py-2 text-[11px] uppercase tracking-wide text-fg-muted">
-        {widget.title || "Issues"}
-      </p>
+    <div className="overflow-hidden">
       {query.isPending ? (
         <Spinner label="Loading…" />
       ) : items.length === 0 ? (

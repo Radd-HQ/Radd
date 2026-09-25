@@ -9,6 +9,8 @@ import type { ShareLevelValue, ShareSubjectRef, ViewShare } from "./views";
 
 /** Mirror of the backend WidgetType enum — what a dashboard widget renders. */
 export const WidgetType = {
+  assigned: "assigned", due: "due", activity: "activity", inbox: "inbox", starred: "starred",
+  approvals: "approvals", requests: "requests", forms: "forms", recent: "recent",
   reportThroughput: "report_throughput",
   reportCfd: "report_cfd",
   reportTimeInState: "report_time_in_state",
@@ -27,6 +29,8 @@ export type WidgetTypeValue = (typeof WidgetType)[keyof typeof WidgetType];
  * and renderers simple; each widget type reads only its own fields.
  */
 export interface WidgetConfig {
+  start?: string;
+  end?: string;
   project_id?: string | null;
   cycle_id?: string;
   view_id?: string;
@@ -45,8 +49,10 @@ export interface DashboardWidget {
   widget_type: WidgetTypeValue;
   /** Optional card-label override. */
   title: string | null;
-  /** Grid thirds spanned (1..3). */
+  /** Grid columns spanned (2..12). */
   width: number;
+  height: number;
+  collapsed: boolean;
   position: number;
   config: WidgetConfig;
 }
@@ -91,6 +97,8 @@ export interface DashboardWidgetCreate {
   widget_type: WidgetTypeValue;
   title?: string | null;
   width?: number;
+  height?: number;
+  collapsed?: boolean;
   position?: number;
   config: WidgetConfig;
 }
@@ -99,6 +107,8 @@ export interface DashboardWidgetCreate {
 export interface DashboardWidgetUpdate {
   title?: string | null;
   width?: number;
+  height?: number;
+  collapsed?: boolean;
   position?: number;
   config?: WidgetConfig;
 }

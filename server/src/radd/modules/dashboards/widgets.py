@@ -107,6 +107,7 @@ async def create_widget(
     data: WidgetCreate | PluginWidget,
     actor: User,
 ) -> DashboardRead:
+    await service._lock_dashboard(session, str(dashboard_id))
     dashboard = await service.require_edit(session, dashboard_id, actor)
     if isinstance(data, PluginWidget):
         # Plugin-contributed type (registries.widget_types): the config is
@@ -117,6 +118,8 @@ async def create_widget(
             widget_type=data.widget_type,
             title=data.title,
             width=data.width,
+            height=data.height,
+            collapsed=data.collapsed,
             position=data.position,
             config=dict(data.config),
         )
@@ -127,6 +130,8 @@ async def create_widget(
             widget_type=WidgetType(data.widget_type).value,
             title=data.title,
             width=data.width,
+            height=data.height,
+            collapsed=data.collapsed,
             position=data.position,
             config=data.config.model_dump(mode="json"),
         )
@@ -160,6 +165,7 @@ async def update_widget(
     data: WidgetUpdate,
     actor: User,
 ) -> DashboardRead:
+    await service._lock_dashboard(session, str(dashboard_id))
     dashboard = await service.require_edit(session, dashboard_id, actor)
     widget = await _get_widget(session, dashboard, widget_id)
     before = changes.snapshot(widget, ("title", "width", "position", "config"))
@@ -168,6 +174,10 @@ async def update_widget(
         widget.title = data.title
     if data.width is not None:
         widget.width = data.width
+    if data.height is not None:
+        widget.height = data.height
+    if data.collapsed is not None:
+        widget.collapsed = data.collapsed
     if data.position is not None:
         widget.position = data.position
     if data.config is not None:
@@ -196,6 +206,7 @@ async def update_widget(
 async def delete_widget(
     session: AsyncSession, dashboard_id: uuid.UUID, widget_id: uuid.UUID, actor: User
 ) -> None:
+    await service._lock_dashboard(session, str(dashboard_id))
     dashboard = await service.require_edit(session, dashboard_id, actor)
     widget = await _get_widget(session, dashboard, widget_id)
     label = _label(widget)

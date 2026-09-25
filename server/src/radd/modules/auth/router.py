@@ -279,6 +279,8 @@ async def put_preferences(
     patch: dict[str, Any], user: CurrentUser, session: Session
 ) -> dict[str, Any]:
     """Merge `patch` into the user's preferences (shallow). Returns the full merged dict."""
+    from sqlalchemy import select
+    await session.execute(select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True))
     merged = {**(user.preferences or {}), **patch}
     user.preferences = merged
     await session.flush()

@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { ChartHeightContext } from "./ChartHeightContext";
 import { CHART_GRID, CHART_MUTED_TEXT, niceScale, sampledIndices } from "./chart-utils";
 
 export interface StackSegment {
@@ -26,7 +28,9 @@ const PAD = { top: 14, right: 12, bottom: 28, left: 32 };
  * StateCategory order. Hand-rolled inline SVG; the legend is rendered by the
  * caller (ChartLegend).
  */
-export function StackedBarChart({ bars, height = 220, ariaLabel }: StackedBarChartProps) {
+export function StackedBarChart({ bars, height: requestedHeight, ariaLabel }: StackedBarChartProps) {
+  const availableHeight = useContext(ChartHeightContext);
+  const height = requestedHeight ?? availableHeight ?? 220;
   const plotWidth = VIEW_WIDTH - PAD.left - PAD.right;
   const plotHeight = height - PAD.top - PAD.bottom;
   const totals = bars.map((bar) => bar.segments.reduce((sum, segment) => sum + segment.value, 0));

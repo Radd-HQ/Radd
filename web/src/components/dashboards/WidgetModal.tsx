@@ -52,11 +52,7 @@ const WIDGET_TYPE_OPTIONS: readonly { value: WidgetTypeValue; label: string }[] 
   { value: WidgetType.reportSla, label: "Service desk SLA" },
 ];
 
-const WIDTH_OPTIONS: readonly { value: string; label: string }[] = [
-  { value: "1", label: "⅓" },
-  { value: "2", label: "⅔" },
-  { value: "3", label: "Full" },
-];
+const WIDTH_OPTIONS = Array.from({ length: 11 }, (_, i) => ({ value: String(i + 2), label: `${i + 2} / 12` }));
 
 const INTERVAL_OPTIONS = REPORT_INTERVAL_ORDER.map((interval) => ({
   value: interval,
@@ -73,6 +69,7 @@ const PROJECT_TYPES: readonly WidgetTypeValue[] = [
 ];
 const OPTIONAL_PROJECT_TYPES: readonly WidgetTypeValue[] = [
   WidgetType.reportSla,
+  WidgetType.activity,
   WidgetType.slqCount,
   WidgetType.slqList,
 ];
@@ -92,8 +89,12 @@ export function WidgetModal({
   dashboard,
   widget,
   onClose,
+  onDraft,
+  personal = false,
 }: {
   dashboard: Dashboard;
+  personal?: boolean;
+  onDraft?: (widget: DashboardWidget) => void;
   /** When set, edit this widget's config in place (type is immutable). */
   widget?: DashboardWidget;
   onClose: () => void;
@@ -101,7 +102,7 @@ export function WidgetModal({
   const queryClient = useQueryClient();
   const [type, setType] = useState<string>(widget?.widget_type ?? WidgetType.slqCount);
   const [title, setTitle] = useState(widget?.title ?? "");
-  const [width, setWidth] = useState(String(widget?.width ?? 1));
+  const [width, setWidth] = useState(String(widget?.width ?? 4));
   const [projectId, setProjectId] = useState(widget?.config.project_id ?? NONE);
   const [interval, setInterval] = useState<ReportIntervalValue>(
     widget?.config.interval ?? ReportInterval.week,
@@ -116,6 +117,8 @@ export function WidgetModal({
   const [q, setQ] = useState(widget?.config.q ?? "");
   const [label, setLabel] = useState(widget?.config.label ?? "");
   const [limit, setLimit] = useState(String(widget?.config.limit ?? 10));
+  const [start, setStart] = useState(widget?.config.start ?? "");
+  const [end, setEnd] = useState(widget?.config.end ?? "");
   const [viewId, setViewId] = useState(widget?.config.view_id ?? NONE);
 
   // Plugin-contributed widget types (spec 94) join the Type dropdown; the plugin renders them and
@@ -153,6 +156,8 @@ export function WidgetModal({
         return { project_id: projectId || null, q, limit: Number(limit) };
       case WidgetType.viewCount:
         return { view_id: viewId };
+      case WidgetType.activity:
+        return { project_id: projectId || null, start, end };
       default:
         return {};
     }
@@ -167,6 +172,11 @@ export function WidgetModal({
   const save = useMutation({
     mutationFn: async () => {
       const common = { title: title.trim() || null, width: Number(width), config: buildConfig() };
+      if (onDraft) {
+        onDraft({ id: widget?.id ?? crypto.randomUUID(), widget_type: type as WidgetTypeValue,
+          position: widget?.position ?? dashboard.widgets.length, height: widget?.height ?? 360, collapsed: widget?.collapsed ?? false, ...common });
+        return;
+      }
       if (widget) {
         return api.patch<Dashboard>(
           apiDashboardWidgetPath(dashboard.id, widget.id),
@@ -204,6 +214,7 @@ export function WidgetModal({
             disabled={Boolean(widget)}
             hint={widget ? "Fixed — remove and re-add to change the type" : undefined}
           >
+            {personal && ["assigned", "due", "activity", "inbox", "starred", "approvals", "requests", "forms", "recent"].map(kind => <option key={kind} value={kind}>{({ assigned: "Assigned to me", due: "Due soon", activity: "My activity", inbox: "Inbox", starred: "Starred", approvals: "Approvals", requests: "My requests", forms: "Request forms", recent: "Recently viewed" } as Record<string, string>)[kind]}</option>)}
             {WIDGET_TYPE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -310,6 +321,10 @@ export function WidgetModal({
           />
         )}
 
+        {type === WidgetType.activity && <div className="flex gap-3">
+          <TextField label="From date (optional)" type="date" value={start} onChange={e => setStart(e.target.value)} />
+          <TextField label="To date (optional)" type="date" min={start} value={end} onChange={e => setEnd(e.target.value)} />
+        </div>}
         {type === WidgetType.slqCount && (
           <TextField
             label="Number caption (optional)"
@@ -342,7 +357,7 @@ export function WidgetModal({
           label="Width"
           value={width}
           onChange={(event) => setWidth(event.target.value)}
-          hint="Grid thirds — full-width suits charts, thirds suit counters"
+          hint="Columns out of 12. You can also drag to resize in edit mode."
         >
           {WIDTH_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

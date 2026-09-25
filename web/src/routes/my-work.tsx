@@ -1,12 +1,16 @@
+import { DashboardCanvas } from "../components/dashboards/DashboardCanvas";
+import { WidgetBody } from "../components/dashboards/WidgetCard";
+import { ActivityWidget } from "../components/dashboards/ActivityWidget";
+import { ErrorText } from "../components/ErrorText";
 import { QuickStar } from "../components/items/QuickStar";
 import type { LucideIcon } from "lucide-react";
-import { api, type CursorPage } from "../lib/api";
+import { api, ApiError, type CursorPage } from "../lib/api";
 import { Entity, entityMeta } from "../lib/cache";
 import { Link } from "@tanstack/react-router";
 import { MyForms } from "../components/forms/MyForms";
 import { ListSection } from "../components/requests/ListSection";
 import { MyRequests } from "../components/requests/RequestSection";
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, History, Inbox, ShieldCheck, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
 import { RoutePath } from "../lib/constants";
@@ -16,7 +20,7 @@ import { notificationsQuery, pendingApprovalsQuery, itemsCountQuery } from "../l
 import { PRIORITY_META } from "../lib/meta";
 import { combineQueryWithFilters, splitQueryOrder } from "../lib/slq";
 import { useSlqQueryState } from "../lib/slq-filter";
-import type { Item } from "../lib/types";
+import type { Item, Dashboard, DashboardWidget } from "../lib/types";
 import { Avatar } from "../components/Avatar";
 import { ItemKeyLink } from "../components/items/ItemBadges";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
@@ -38,45 +42,54 @@ const STARRED_Q = `starred = true AND ${OPEN}`;
  * never leave the dashboard.
  */
 export function MyWorkPage() {
-  const dueQ = `assignee = me AND target <= ${shiftIsoDay(todayIso(), DUE_SOON_DAYS)} AND ${OPEN}`;
-
-  // Page-wide SLQ filter (top-bar query): ANDs into every section's own
-  // query server-side — "project = TD" narrows Due soon, Assigned and
-  // Starred at once. Recently viewed and the inbox aren't item queries.
+  const client = useQueryClient();
+  const query = useQuery({ queryKey: ["my-work-widgets"], retry: false, queryFn: () => api.get<DashboardWidget[]>("/dashboards/my-work/widgets") });
   const slqFilter = useSlqQueryState();
-  const withFilter = (q: string) =>
-    slqFilter.committed ? combineQueryWithFilters(q, [slqFilter.committed]) : q;
+  if (query.isPending) return <p className="p-6">Loading My Work…</p>;
+  if (query.isError && query.error instanceof ApiError && query.error.status === 404) return <div className="space-y-6 p-6">
+    <h1 className="text-lg font-semibold text-heading">My Work</h1>
+    <MyForms /><MyRequests compact /><AwaitingApprovalSection />
+    <WorkPreview icon={UserRound} title="Assigned to me" q={`${ASSIGNED_Q} ORDER BY category DESC, priority DESC`} limit={10} empty="Nothing on your plate." />
+    <WorkPreview icon={Star} title="Starred" q={STARRED_Q} limit={5} empty="Star issues to pin them here." />
+    <InboxWidget />
+  </div>;
+  if (query.isError) return <ErrorText error={query.error} />;
+  const dashboard: Dashboard = { id: "my-work", name: "My Work", description: "", owner_id: null, owner: null, global_access: null,
+    shared: false, shares: [], can_edit: true, can_manage: false, position: 0, widgets: query.data, created_at: "", updated_at: "" };
+  return <div className="w-full p-6">
+    <TopBarQuery><QueryBar filter={slqFilter} placeholder="Filter issue widgets with SLQ: project = TD" /></TopBarQuery>
+    <h1 className="mb-3 text-lg font-semibold text-heading">My Work</h1>
+    <DashboardCanvas dashboard={dashboard} defaults={() => api.get<DashboardWidget[]>("/dashboards/my-work/defaults")}
+      save={async (widgets, expected) => {
+        const saved = await api.put<DashboardWidget[]>("/dashboards/my-work/widgets", { widgets, expected });
+        client.setQueryData(["my-work-widgets"], saved);
+      }} render={widget => <PersonalWidget widget={widget} filter={slqFilter.committed} />} />
+  </div>;
+}
 
+function PersonalWidget({ widget, filter }: { widget: DashboardWidget; filter: string }) {
+  const q = (scope: string, order: string) => {
+    const parts = splitQueryOrder(filter ? combineQueryWithFilters(scope, [filter]) : scope);
+    return `${parts.where} ${parts.order || `ORDER BY ${order}`}`;
+  };
+  switch (widget.widget_type) {
+    case "assigned": return <WorkPreview icon={UserRound} title="Assigned to me" q={q(ASSIGNED_Q, "category DESC, priority DESC, rank")} limit={10} empty="Nothing on your plate." />;
+    case "due": return <WorkPreview icon={CalendarClock} title="Due soon" q={q(`assignee = me AND target <= ${shiftIsoDay(todayIso(), DUE_SOON_DAYS)} AND ${OPEN}`, "target ASC, priority DESC")} limit={10} showDue empty="Nothing due in the next week." />;
+    case "starred": return <WorkPreview icon={Star} title="Starred" q={q(STARRED_Q, "rank")} limit={5} empty="Star issues to pin them here." />;
+    case "activity": return <ActivityWidget key={JSON.stringify(widget.config)} config={widget.config} />;
+    case "inbox": return <InboxWidget />;
+    case "approvals": return <AwaitingApprovalSection />;
+    case "requests": return <MyRequests compact />;
+    case "forms": return <MyForms />;
+    case "recent": return <RecentlyViewedSection />;
+    default: return <WidgetBody widget={widget} filterQuery={filter} />;
+  }
+}
+
+function InboxWidget() {
   const notifications = useQuery(notificationsQuery(true));
-  const queryFor = (q: string, order: string) => { const parts = splitQueryOrder(withFilter(q)); return `${parts.where} ${parts.order || `ORDER BY ${order}`}`; };
-  const laterQ = `${ASSIGNED_Q} AND (target IS EMPTY OR target > ${shiftIsoDay(todayIso(), DUE_SOON_DAYS)})`;
-
-  return (
-    <div className="w-full px-6 py-6">
-      <TopBarQuery>
-        <QueryBar
-          filter={slqFilter}
-          placeholder="Filter My Work with SLQ: project = TD AND priority = high"
-        />
-      </TopBarQuery>
-      <h1 className="mb-5 text-lg font-semibold text-heading">My Work</h1>
-
-      <div className="flex flex-col gap-6">
-        {/* Requester surfaces first (RADD-785/786): for someone whose only
-            relationship with Radd is filing requests, these are the whole page,
-            and both render nothing when they are empty. */}
-        <MyForms />
-        <MyRequests compact />
-
-        <AwaitingApprovalSection />
-
-        <WorkPreview icon={CalendarClock} title="Due soon" q={queryFor(dueQ, "target ASC, priority DESC, number DESC")} limit={25} showDue empty="Nothing due in the next week." />
-        <WorkPreview icon={UserRound} title="Assigned to me" q={queryFor(laterQ, "rank")} limit={25} empty="Nothing else on your plate." />
-        <WorkPreview icon={Star} title="Starred" q={queryFor(STARRED_Q, "rank")} limit={8} empty="Star issues to pin them here." />
-
-        <RecentlyViewedSection />
-
-        <section>
+  if (notifications.isError) return <ErrorText error={notifications.error} />;
+  return (        <section>
           <header className="mb-2 flex items-center gap-2">
             <Inbox size={12} className="text-fg-muted" aria-hidden />
             {/* RADD-1294: the same heading as every other My Work section. */}
@@ -117,10 +130,7 @@ export function MyWorkPage() {
               ))}
             </ul>
           )}
-        </section>
-      </div>
-    </div>
-  );
+        </section>);
 }
 
 /**
@@ -131,7 +141,9 @@ function AwaitingApprovalSection() {
   const peek = usePeek();
   const pending = useQuery(pendingApprovalsQuery);
   const rows = pending.data ?? [];
-  if (rows.length === 0) return null;
+  if (pending.isError) return <ErrorText error={pending.error} />;
+  if (pending.isPending) return <p className="text-sm text-fg-muted">Loading approvals…</p>;
+  if (rows.length === 0) return <p className="text-sm text-fg-muted">No approvals waiting for you.</p>;
   return (
     <section>
       <header className="mb-2 flex items-center gap-2">

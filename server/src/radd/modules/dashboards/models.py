@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,7 +40,7 @@ class DashboardWidget(Base, TimestampMixin):
     """One widget on a dashboard: a `WidgetType` + its per-type `config`
     (JSONB, validated on write — shape via the discriminated schema union,
     references [project/cycle/view existence + writer visibility, SLQ compile]
-    in widgets.py), a grid `width` in thirds (1..3), and `position` ordering.
+    in widgets.py), a grid `width` in twelfths, pixel height, and `position` ordering.
     `title` overrides the card's default label. Rows die with the dashboard
     (FK CASCADE)."""
 
@@ -52,6 +52,8 @@ class DashboardWidget(Base, TimestampMixin):
     )
     widget_type: Mapped[str] = mapped_column(String(30))  # WidgetType
     title: Mapped[str | None] = mapped_column(String(200))
-    width: Mapped[int] = mapped_column(Integer, default=1)  # grid thirds, 1..3
+    width: Mapped[int] = mapped_column(Integer, default=4)  # twelve-column grid
     position: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=360, server_default="360")
+    collapsed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)

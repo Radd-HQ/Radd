@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { ChartHeightContext } from "./ChartHeightContext";
 import {
   CHART_AXIS_TEXT,
   CHART_GRID,
@@ -28,7 +30,9 @@ const PAD = { top: 14, right: 12, bottom: 28, left: 32 };
  * Bars are centered within even slots so small series (2 bars) still read well;
  * x labels thin out past ~14 bars.
  */
-export function BarChart({ data, color, height = 200, ariaLabel }: BarChartProps) {
+export function BarChart({ data, color, height: requestedHeight, ariaLabel }: BarChartProps) {
+  const availableHeight = useContext(ChartHeightContext);
+  const height = requestedHeight ?? availableHeight ?? 200;
   const plotWidth = VIEW_WIDTH - PAD.left - PAD.right;
   const plotHeight = height - PAD.top - PAD.bottom;
   const { max, ticks } = niceScale(Math.max(0, ...data.map((datum) => datum.value)));

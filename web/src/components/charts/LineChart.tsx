@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { ChartHeightContext } from "./ChartHeightContext";
 import {
   CHART_AXIS_TEXT,
   CHART_GRID,
@@ -28,7 +30,9 @@ const PAD = { top: 14, right: 44, bottom: 28, left: 32 };
  * Line-pair chart (burnup: scope vs completed) — hand-rolled inline SVG.
  * Series share one y-scale; x labels thin out. Legend rendered by the caller.
  */
-export function LineChart({ xLabels, series, height = 220, ariaLabel }: LineChartProps) {
+export function LineChart({ xLabels, series, height: requestedHeight, ariaLabel }: LineChartProps) {
+  const availableHeight = useContext(ChartHeightContext);
+  const height = requestedHeight ?? availableHeight ?? 220;
   const count = xLabels.length;
   const plotWidth = VIEW_WIDTH - PAD.left - PAD.right;
   const plotHeight = height - PAD.top - PAD.bottom;

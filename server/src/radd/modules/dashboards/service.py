@@ -206,6 +206,8 @@ async def _hydrate(
                         widget_type=_read_widget_type(w.widget_type),
                         title=w.title,
                         width=w.width,
+                        height=w.height,
+                        collapsed=w.collapsed,
                         position=w.position,
                         config=w.config or {},
                     )

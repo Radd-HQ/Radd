@@ -561,3 +561,11 @@ html.compact body {
   transition: outline-color 600ms;
 }
 
+
+.widget-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.dashboard-widget { grid-column: span var(--widget-width); height: var(--widget-height); }
+.dashboard-widget[data-collapsed] { height: auto; }
+@media (max-width: 767px) {
+  .widget-grid { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-widget { grid-column: 1; }
+}
