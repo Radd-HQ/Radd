@@ -260,3 +260,12 @@ then enable it in **Settings → Plugins** — its UI and backend contributions 
 Settings pages may host other plugins' sections with `<Slot id={SlotId.settingsSection} match="monitoring" />`. A contribution owns its data request as well as its UI. For polling that is useful only while visible, consume the query `signal` and use `gcTime: 0` / `staleTime: 0` to abort on withdrawal and fetch fresh data on reactivation. Mutations already accepted by the backend may finish; do not discard saved configuration on disable. Navigation requirements are presentation gates; the owning endpoint must enforce authorization too.
 
 Built-in remotes use the shared Tailwind sheet, whose source scan includes every module's `ui/src` directory. External bundles should use SDK primitives/tokens or supply their own styles; adding a plugin must never require a named entry in the host stylesheet.
+
+
+## Owner-contributed directories (SDK 1.4)
+
+`DirectorySelect` resolves a provider's `directory.select` contribution by `source` and forwards its value, selection callback, labels, disabled state and optional string context. The SDK does not know the directory's entities or endpoints. Auth contributes `auth.people`; Teams contributes `teams.teams` and `teams.candidates` (context: `teamId`, `purpose` = member/manager/owner). These are public UI contribution contracts, not host-provided feature components.
+
+The provider can use `PagedDirectorySelect` for the shared searchable/paged dialog. It supplies a query factory returning the query key, entity metadata and abortable query function. The shared `api.getPaged<T>` preserves `X-Total-Count` as `{rows, total}` using the host's account-scoped transport. Generic Modal, ListSearchInput and DirectoryPager adapters reuse the host's accessible controls. Each dialog has its own query lifetime; closing, changing source/context or withdrawing the provider unmounts it, aborts unused reads and discards its cache. Selected values belong to the caller and survive an unavailable provider. Missing/failed providers render a disabled, explicitly unavailable control.
+
+Auth/Teams remain required core modules; these tests do not imply the plugin manager can disable them. Missing/failed/withdrawn frontend contributions are exercised independently. Other Auth/Teams UI remains under ownership review. The host PeopleDirectorySelect is a temporary compatibility adapter for existing callers; new remote callers use DirectorySelect directly.

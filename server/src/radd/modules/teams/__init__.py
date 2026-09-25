@@ -1,4 +1,4 @@
-from radd.kernel import EntityRefSpec, EventTypeSpec
+from radd.kernel import PluginUiManifest, EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
 
@@ -8,6 +8,7 @@ from .types import TeamEvent
 
 plugin = RaddPlugin(
     name="teams",
+    ui=PluginUiManifest(remote="/plugins/teams/remoteEntry.js", ui_api_version="1.4.0"),
     crud_resources=(
         CrudResourceSpec(
             "team", "global", "teams", "global.manage",

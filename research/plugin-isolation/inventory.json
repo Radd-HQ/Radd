@@ -165,6 +165,7 @@
       "manifest": "server/src/radd/modules/auth/__init__.py",
       "declarations": {
         "name": "auth",
+        "ui": "PluginUiManifest(remote='/plugins/auth/remoteEntry.js', ui_api_version='1.4.0')",
         "description": "People, sign-in sessions, API tokens and roles.",
         "depends_on": [
           "events",
@@ -185,7 +186,9 @@
         "crud_resources": "AUTH_CRUD_RESOURCES",
         "on_startup": "(subscribers.ensure_seeded,)"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/auth/ui/src/index.tsx"
+      ]
     },
     "automations": {
       "manifest": "server/src/radd/modules/automations/__init__.py",
@@ -1218,6 +1221,7 @@
       "manifest": "server/src/radd/modules/teams/__init__.py",
       "declarations": {
         "name": "teams",
+        "ui": "PluginUiManifest(remote='/plugins/teams/remoteEntry.js', ui_api_version='1.4.0')",
         "crud_resources": "(CrudResourceSpec('team', 'global', 'teams', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Teams: groups of people you can give access to projects.",
         "depends_on": [
@@ -1234,7 +1238,9 @@
         "entity_refs": "(EntityRefSpec('team', service.team_ref, label='Team'),)",
         "event_types": "(EventTypeSpec(TeamEvent.CREATED, 'Team created', 'Admin', subjects=('team',)), EventTypeSpec(TeamEvent.UPDATED, 'Team updated', 'Admin', has_changes=True, subjects=('team',)), EventTypeSpec(TeamEvent.DELETED, 'Team deleted', 'Admin', trigger=False, subjects=('team',)))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/teams/ui/src/index.tsx"
+      ]
     },
     "timelogging": {
       "manifest": "server/src/radd/modules/timelogging/__init__.py",
@@ -9885,13 +9891,14 @@
       ]
     },
     "server/src/radd/modules/auth/__init__.py": {
-      "sha256": "975699b9dc0b40c8ff8bc39171c2151655ef0cacf7cd43bf93d70025cd58ad0e",
+      "sha256": "51c8cb6545d29259120b83d0c626b90721c7b4937a654056e86df272a30d0e48",
       "module_directory": "auth",
       "imports": [
         {
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "PluginUiManifest",
             "EntityRefSpec",
             "EventTypeSpec",
             "RaddPlugin",
@@ -13424,6 +13431,16 @@
           "names": [
             "registries"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/auth/ui/src/index.tsx": {
+      "sha256": "c5d2e3e6794aa7d6a43c2cc78bcaa218e82166d7583cfa0b7427ea927cd0b202",
+      "module_directory": "auth",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -54628,13 +54645,14 @@
       ]
     },
     "server/src/radd/modules/teams/__init__.py": {
-      "sha256": "2558abd6fe176724deb4e0accb7d3330b7ec3ad7d6b680c7950825cb59993368",
+      "sha256": "ea2284fb3582ed8d9c69f12a83f8cc2b4618050952b25e1b0856a3c999f57d00",
       "module_directory": "teams",
       "imports": [
         {
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "PluginUiManifest",
             "EntityRefSpec",
             "EventTypeSpec"
           ]
@@ -55227,6 +55245,16 @@
           "names": [
             "StrEnum"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/teams/ui/src/index.tsx": {
+      "sha256": "e2083ae8cb4dcf7863f3f94260e96007d09b8e2677c264931e31fcb952c16157",
+      "module_directory": "teams",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -61226,56 +61254,12 @@
       ]
     },
     "web/src/components/PeopleDirectorySelect.tsx": {
-      "sha256": "ab955de122fb828f9b5421b6dd33914f33430075c1b8ec9f5df64abadc305b29",
+      "sha256": "63e7fa8195c8f8b62745f4ae1be5658a6b91e47201c1b9b12fbf2f3d3277f2b3",
       "module_directory": null,
       "imports": [
         {
           "line": 1,
-          "module": "react"
-        },
-        {
-          "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "lucide-react"
-        },
-        {
-          "line": 4,
-          "module": "../lib/queries/users"
-        },
-        {
-          "line": 5,
-          "module": "../lib/hooks"
-        },
-        {
-          "line": 6,
-          "module": "../lib/constants"
-        },
-        {
-          "line": 7,
-          "module": "./Button"
-        },
-        {
-          "line": 8,
-          "module": "./Modal"
-        },
-        {
-          "line": 9,
-          "module": "./ListSearchInput"
-        },
-        {
-          "line": 10,
-          "module": "./DirectoryPager"
-        },
-        {
-          "line": 11,
-          "module": "./QueryError"
-        },
-        {
-          "line": 12,
-          "module": "./Spinner"
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -76505,7 +76489,7 @@
       ]
     },
     "web/src/host-components.tsx": {
-      "sha256": "8b2611491e417e23e91ae25543d50e7bf86d5b31be074fba4836609881f12dca",
+      "sha256": "8a8971c7bbf381fe370642be3c9f54706f704cc20b006b6352cd0d112684e0af",
       "module_directory": null,
       "imports": [
         {
@@ -76529,27 +76513,39 @@
           "module": "./components/scripts/PythonEditor"
         },
         {
+          "line": 37,
+          "module": "./components/DirectoryPager"
+        },
+        {
           "line": 38,
-          "module": "./components/settings/SettingsPage"
+          "module": "./components/ListSearchInput"
         },
         {
           "line": 39,
-          "module": "./components/Button"
-        },
-        {
-          "line": 40,
-          "module": "./components/TextField"
-        },
-        {
-          "line": 41,
-          "module": "./components/SelectField"
+          "module": "./components/Modal"
         },
         {
           "line": 42,
-          "module": "./components/Callout"
+          "module": "./components/settings/SettingsPage"
         },
         {
           "line": 43,
+          "module": "./components/Button"
+        },
+        {
+          "line": 44,
+          "module": "./components/TextField"
+        },
+        {
+          "line": 45,
+          "module": "./components/SelectField"
+        },
+        {
+          "line": 46,
+          "module": "./components/Callout"
+        },
+        {
+          "line": 47,
           "module": "./components/QueryError"
         }
       ]
@@ -76607,7 +76603,7 @@
       "imports": []
     },
     "web/src/lib/api.ts": {
-      "sha256": "075cb1e57922028b70febaf115e3962a7015a6e0a52afe440b4be397a7bf39e3",
+      "sha256": "27578217629bb22691adad6e98a06932ee37122f5fed366b42f06d48a455d8ea",
       "module_directory": null,
       "imports": [
         {
@@ -76625,6 +76621,10 @@
         {
           "line": 4,
           "module": "./types/automations"
+        },
+        {
+          "line": 94,
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -78416,31 +78416,35 @@
       ]
     },
     "web/src/lib/queries/users.ts": {
-      "sha256": "760ad086cbddd828b95ea6716f2bd26cae0abd1e66f93074bd9659c9ee0bd977",
+      "sha256": "e40990d112522eccd99556ef8ecf5b309a46e46eaa1885fbcb2fac61dd400b5e",
       "module_directory": null,
       "imports": [
         {
           "line": 3,
-          "module": "@tanstack/react-query"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 4,
-          "module": "../api"
+          "module": "@tanstack/react-query"
         },
         {
           "line": 5,
+          "module": "../api"
+        },
+        {
+          "line": 6,
           "module": "../cache"
         },
         {
-          "line": 17,
+          "line": 18,
           "module": "../constants"
         },
         {
-          "line": 18,
+          "line": 19,
           "module": "./shared"
         },
         {
-          "line": 36,
+          "line": 37,
           "module": "../types"
         }
       ]
@@ -84533,7 +84537,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/api.ts": {
-      "sha256": "fcceb9fc6bf692dabc2d29eb2c623975244b3eb3f43dce432a73f6ef94226c2b",
+      "sha256": "d39532704e8af3604339a583f3a9153396f261edc520a4dc376a89ff89b94f6e",
       "module_directory": null,
       "imports": []
     },
@@ -84556,6 +84560,36 @@
       "module_directory": null,
       "imports": []
     },
+    "web/packages/plugin-sdk/src/directory.tsx": {
+      "sha256": "04557b1cd57c66784dc9cfc3ed2405dea4bd02b573b4d46854c30b6d93528f7d",
+      "module_directory": null,
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "./slots"
+        },
+        {
+          "line": 4,
+          "module": "./primitives"
+        },
+        {
+          "line": 5,
+          "module": "./host"
+        },
+        {
+          "line": 6,
+          "module": "./api"
+        }
+      ]
+    },
     "web/packages/plugin-sdk/src/hooks.ts": {
       "sha256": "856b819d052f8225ae89a867bbbe0b76bdb1e42c6da87802da3d9115199b22da",
       "module_directory": null,
@@ -84575,7 +84609,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/host-registry.ts": {
-      "sha256": "173fb0b8fceb6ba6e1501dbb4dc962ab3e5c70dc57f841092b95a7d263a22d57",
+      "sha256": "69d027e400bb78025176700c69c48932b4e83f97d18752d92dc048e743274a24",
       "module_directory": null,
       "imports": [
         {
@@ -84585,7 +84619,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/host.tsx": {
-      "sha256": "4219d4a36e2c7ed0e69647de65d61594f5e33aa44ca24b0d4cc861ce052d6afa",
+      "sha256": "24819f8bc01741a3c43af8210cb0a0de30cc9d71721115241c59042ec71c1919",
       "module_directory": null,
       "imports": [
         {
@@ -84607,7 +84641,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/index.ts": {
-      "sha256": "0a14403a477f5237d9c2ef6eab7711a0f7164ceed9b6d3f7998bcd01c84b92fa",
+      "sha256": "7683b1ce706b9ced1d7c74874f4832863512957706b0193cefb4552dadf011b5",
       "module_directory": null,
       "imports": [
         {
@@ -84631,28 +84665,32 @@
           "module": "./tokens"
         },
         {
-          "line": 68,
+          "line": 69,
           "module": "./host"
         },
         {
-          "line": 70,
+          "line": 71,
           "module": "./api"
         },
         {
-          "line": 81,
+          "line": 82,
           "module": "./hooks"
         },
         {
-          "line": 94,
+          "line": 95,
           "module": "./types"
         },
         {
-          "line": 96,
+          "line": 97,
           "module": "./data"
         },
         {
-          "line": 98,
+          "line": 99,
           "module": "./dates"
+        },
+        {
+          "line": 101,
+          "module": "./directory"
         }
       ]
     },
@@ -84671,7 +84709,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/primitives.tsx": {
-      "sha256": "8d15c05b63ef863cf3070c3dd5065597f7d088d0d3b240f26d89e7f5863c7968",
+      "sha256": "dd144f0be5d448642ee4a69c7b94ed02bc28722e47a9b1393b2d1d22351ca4c9",
       "module_directory": null,
       "imports": [
         {
@@ -84741,7 +84779,7 @@
       "imports": []
     },
     "web/packages/plugin-sdk/src/version.ts": {
-      "sha256": "d7e7f3c3a511d36d229225de44d200812943ae37539b9758b449d0d88c1eedb6",
+      "sha256": "7ee73f3878ea9cb21b5dedc17c540328d7e6ad3a368ce901b6d139d9db26eed0",
       "module_directory": null,
       "imports": []
     },

@@ -888,11 +888,13 @@
     "issue": null
   },
   "server/src/radd/modules/auth/__init__.py": {
-    "sha256": "975699b9dc0b40c8ff8bc39171c2151655ef0cacf7cd43bf93d70025cd58ad0e",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "51c8cb6545d29259120b83d0c626b90721c7b4937a654056e86df272a30d0e48",
+    "status": "partially_reviewed",
+    "owner": "auth",
+    "evidence": [
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+    ],
+    "issue": "RADD-1353"
   },
   "server/src/radd/modules/auth/account_directory.py": {
     "sha256": "0024bce13e5bf133db2af88d0c2df31307893244ee4109bc64b141adf92d37db",
@@ -1145,6 +1147,15 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/auth/ui/src/index.tsx": {
+    "sha256": "c5d2e3e6794aa7d6a43c2cc78bcaa218e82166d7583cfa0b7427ea927cd0b202",
+    "status": "reviewed",
+    "owner": "auth",
+    "evidence": [
+      "Directory provider/consumer contract reviewed; Auth and Teams own queries and candidate semantics; platform owns generic dialog/search/paging. 10 actual-bundle browser checks include both provider withdrawals and in-flight aborts, selected-value preservation, failure/recovery, permissions, pagination and host Audit adapter. SDK paged transport preserves totals and account cancellation."
+    ],
+    "issue": "RADD-1353"
   },
   "server/src/radd/modules/automations/__init__.py": {
     "sha256": "7051a0fb43d45ea1b88c1fdf8f27b4ce50b9b9bbdadf2406b28cdf75e7008768",
@@ -5232,11 +5243,13 @@
     "issue": null
   },
   "server/src/radd/modules/teams/__init__.py": {
-    "sha256": "2558abd6fe176724deb4e0accb7d3330b7ec3ad7d6b680c7950825cb59993368",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ea2284fb3582ed8d9c69f12a83f8cc2b4618050952b25e1b0856a3c999f57d00",
+    "status": "partially_reviewed",
+    "owner": "teams",
+    "evidence": [
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+    ],
+    "issue": "RADD-1353"
   },
   "server/src/radd/modules/teams/models.py": {
     "sha256": "16c8daf7ea37dc45667f60c1535c6cd01f5a9ca67aa252512d702ba45794fca0",
@@ -5286,6 +5299,15 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/teams/ui/src/index.tsx": {
+    "sha256": "e2083ae8cb4dcf7863f3f94260e96007d09b8e2677c264931e31fcb952c16157",
+    "status": "reviewed",
+    "owner": "teams",
+    "evidence": [
+      "Directory provider/consumer contract reviewed; Auth and Teams own queries and candidate semantics; platform owns generic dialog/search/paging. 10 actual-bundle browser checks include both provider withdrawals and in-flight aborts, selected-value preservation, failure/recovery, permissions, pagination and host Audit adapter. SDK paged transport preserves totals and account cancellation."
+    ],
+    "issue": "RADD-1353"
   },
   "server/src/radd/modules/timelogging/__init__.py": {
     "sha256": "0368798c126b5c3b60b34c00c61a896cd8c926b4ff36334fbe7b1c1d716624cd",
@@ -5986,11 +6008,13 @@
     "issue": null
   },
   "web/src/components/PeopleDirectorySelect.tsx": {
-    "sha256": "ab955de122fb828f9b5421b6dd33914f33430075c1b8ec9f5df64abadc305b29",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "63e7fa8195c8f8b62745f4ae1be5658a6b91e47201c1b9b12fbf2f3d3277f2b3",
+    "status": "partially_reviewed",
+    "owner": "platform / remaining feature callers under review",
+    "evidence": [
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+    ],
+    "issue": "RADD-1353"
   },
   "web/src/components/PersonName.tsx": {
     "sha256": "8aaccd777dc72dccd7ace4f276a7b69e34a2576c6ae65fe1c452714b0110d6b3",
@@ -8654,13 +8678,13 @@
     "issue": null
   },
   "web/src/host-components.tsx": {
-    "sha256": "8b2611491e417e23e91ae25543d50e7bf86d5b31be074fba4836609881f12dca",
+    "sha256": "8a8971c7bbf381fe370642be3c9f54706f704cc20b006b6352cd0d112684e0af",
     "status": "partially_reviewed",
-    "owner": "platform (residual feature ownership under review)",
+    "owner": "platform / remaining feature callers under review",
     "evidence": [
-      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1353"
   },
   "web/src/index.css": {
     "sha256": "c81fd995ea64036e936a03a7667f07d8a3d18736cf8e34523b3e0f38a31658cc",
@@ -8698,13 +8722,13 @@
     "issue": null
   },
   "web/src/lib/api.ts": {
-    "sha256": "075cb1e57922028b70febaf115e3962a7015a6e0a52afe440b4be397a7bf39e3",
+    "sha256": "27578217629bb22691adad6e98a06932ee37122f5fed366b42f06d48a455d8ea",
     "status": "partially_reviewed",
-    "owner": "platform (residual feature ownership under review)",
+    "owner": "platform / remaining feature callers under review",
     "evidence": [
-      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1353"
   },
   "web/src/lib/attachments.ts": {
     "sha256": "98d3ec82c28b98aa26378770d11015325fb72952a5f3d27b1612395aaf542420",
@@ -9313,11 +9337,13 @@
     "issue": null
   },
   "web/src/lib/queries/users.ts": {
-    "sha256": "760ad086cbddd828b95ea6716f2bd26cae0abd1e66f93074bd9659c9ee0bd977",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "e40990d112522eccd99556ef8ecf5b309a46e46eaa1885fbcb2fac61dd400b5e",
+    "status": "partially_reviewed",
+    "owner": "platform / remaining feature callers under review",
+    "evidence": [
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+    ],
+    "issue": "RADD-1353"
   },
   "web/src/lib/queries/views.ts": {
     "sha256": "3121341200daa0d93d1990288eeaea17e3a38548048d3358ae1cf8c79f8381c3",
@@ -10241,7 +10267,7 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/api.ts": {
-    "sha256": "fcceb9fc6bf692dabc2d29eb2c623975244b3eb3f43dce432a73f6ef94226c2b",
+    "sha256": "d39532704e8af3604339a583f3a9153396f261edc520a4dc376a89ff89b94f6e",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -10266,6 +10292,15 @@
     ],
     "issue": "RADD-1351"
   },
+  "web/packages/plugin-sdk/src/directory.tsx": {
+    "sha256": "04557b1cd57c66784dc9cfc3ed2405dea4bd02b573b4d46854c30b6d93528f7d",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Directory provider/consumer contract reviewed; Auth and Teams own queries and candidate semantics; platform owns generic dialog/search/paging. 10 actual-bundle browser checks include both provider withdrawals and in-flight aborts, selected-value preservation, failure/recovery, permissions, pagination and host Audit adapter. SDK paged transport preserves totals and account cancellation."
+    ],
+    "issue": "RADD-1353"
+  },
   "web/packages/plugin-sdk/src/hooks.ts": {
     "sha256": "856b819d052f8225ae89a867bbbe0b76bdb1e42c6da87802da3d9115199b22da",
     "status": "partially_reviewed",
@@ -10276,25 +10311,25 @@
     "issue": "RADD-1351"
   },
   "web/packages/plugin-sdk/src/host-registry.ts": {
-    "sha256": "173fb0b8fceb6ba6e1501dbb4dc962ab3e5c70dc57f841092b95a7d263a22d57",
+    "sha256": "69d027e400bb78025176700c69c48932b4e83f97d18752d92dc048e743274a24",
     "status": "reviewed",
     "owner": "platform",
     "evidence": [
-      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+      "Shared generic control registration, modal/paging/search adapters and SDK minimum version contract. 44 frontend tests, all host/remotes type-check/build, 10 browser checks."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1353"
   },
   "web/packages/plugin-sdk/src/host.tsx": {
-    "sha256": "4219d4a36e2c7ed0e69647de65d61594f5e33aa44ca24b0d4cc861ce052d6afa",
+    "sha256": "24819f8bc01741a3c43af8210cb0a0de30cc9d71721115241c59042ec71c1919",
     "status": "reviewed",
     "owner": "platform",
     "evidence": [
-      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+      "Shared generic control registration, modal/paging/search adapters and SDK minimum version contract. 44 frontend tests, all host/remotes type-check/build, 10 browser checks."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1353"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "0a14403a477f5237d9c2ef6eab7711a0f7164ceed9b6d3f7998bcd01c84b92fa",
+    "sha256": "7683b1ce706b9ced1d7c74874f4832863512957706b0193cefb4552dadf011b5",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -10311,13 +10346,13 @@
     "issue": "RADD-1345"
   },
   "web/packages/plugin-sdk/src/primitives.tsx": {
-    "sha256": "8d15c05b63ef863cf3070c3dd5065597f7d088d0d3b240f26d89e7f5863c7968",
+    "sha256": "dd144f0be5d448642ee4a69c7b94ed02bc28722e47a9b1393b2d1d22351ca4c9",
     "status": "partially_reviewed",
-    "owner": "platform (residual feature ownership under review)",
+    "owner": "platform / remaining feature callers under review",
     "evidence": [
-      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1353"
   },
   "web/packages/plugin-sdk/src/slots.tsx": {
     "sha256": "9c21989edb3df158672ca647847c767df996ec66baeb7e6713c8aea1e3fadb73",
@@ -10364,13 +10399,13 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "d7e7f3c3a511d36d229225de44d200812943ae37539b9758b449d0d88c1eedb6",
+    "sha256": "7ee73f3878ea9cb21b5dedc17c540328d7e6ad3a368ce901b6d139d9db26eed0",
     "status": "reviewed",
     "owner": "platform",
     "evidence": [
-      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+      "Shared generic control registration, modal/paging/search adapters and SDK minimum version contract. 44 frontend tests, all host/remotes type-check/build, 10 browser checks."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1353"
   },
   "examples/acme-notes/.venv/bin/activate_this.py": {
     "sha256": "8a8d0a6de7fa1a25c1777bfd7f246b79ac7a5a92fad05ee3b3d884da0f58340c",

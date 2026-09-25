@@ -1,0 +1,17 @@
+import { definePlugin, DIRECTORY_SELECT_SLOT, PagedDirectorySelect, api, type DirectoryChoice, type DirectorySelectProps } from "@radd/plugin-sdk";
+
+/** Auth owns who can be selected from the people directory. */
+function PersonSelect(props: DirectorySelectProps) {
+  return <PagedDirectorySelect {...props} noun="people" searchPlaceholder="Search people…" query={(q, page, pageSize) => ({
+    queryKey: ["users", "choices", q, page, ""],
+    meta: { entities: ["member", "team", "role"] },
+    queryFn: ({ signal }) => api.getPaged<DirectoryChoice>("/users/directory", {
+      signal, query: { q, limit: String(pageSize), offset: String(page * pageSize) },
+    }),
+  })} />;
+}
+
+export default definePlugin({ contributions: [{
+  id: "person-select", slot: DIRECTORY_SELECT_SLOT, match: "auth.people", toggleable: false,
+  render: props => <PersonSelect {...(props as unknown as DirectorySelectProps)} />,
+}] });

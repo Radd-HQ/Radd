@@ -4,7 +4,7 @@
  * `ui_api_version` requires a newer version or a different MAJOR — a clean version gate, mirroring the backend
  * `api_version` gate. Bump the major on a breaking SDK change; the minor on additive changes.
  */
-export const UI_API_VERSION = "1.3.0";
+export const UI_API_VERSION = "1.4.0";
 
 function versionParts(version: string): number[] | null {
   if (!/^\d+\.\d+(?:\.\d+)?$/.test(version)) return null;

@@ -15,6 +15,7 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 | RADD-1346 | Settings, imports and VCS provider UI | In progress |
 | RADD-1351 | Shared settings contracts and truthful page lifecycle | Verified; Waiting for release |
 | RADD-1352 | Scripts/Monitoring settings and AI/mail health contributions | Verified; Waiting for release |
+| RADD-1353 | Owner-contributed directory controls | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | Pending |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -32,7 +33,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | approvals | False | 2 | events, projects, auth, teams, workflow, items | Pending |
 | attachments | default | 0 | events, projects, auth, items, access, groups, teams | Pending |
 | audit | default | 0 | events, auth, projects, items | Pending |
-| auth | default | 0 | events, projects | Pending |
+| auth | default | 1 | events, projects | Pending |
 | automations | default | 0 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
 | avatars | default | 0 | auth, attachments | Pending |
 | backup | default | 0 | auth, events | Pending |
@@ -76,7 +77,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | settings | default | 0 | events, projects, auth | Pending |
 | slas | False | 0 | events, projects, auth, settings, workflow, items, comments, automations, reporting, teams | Pending |
 | sso | False | 0 | events, projects, auth, teams | Pending |
-| teams | default | 0 | events, projects, auth, groups | Pending |
+| teams | default | 1 | events, projects, auth, groups | Pending |
 | timelogging | default | 0 | events, projects, auth, teams, items, settings | Pending |
 | vcs | default | 0 | projects, auth, events, items, timelogging | Pending |
 | views | default | 0 | projects, workflow, items, fields, auth, events, access, groups, teams | Pending |
@@ -114,3 +115,11 @@ Evidence: host + all 10 remotes type-check/build; 42 frontend tests; 17 focused 
 The local backend serves the new manifests, assets and mail-health endpoint. A local authenticated probe disables/re-enables Scripts and Monitoring in the same PID, checks API withdrawal and restores every initial plugin state. Saved interpreter/index configuration is compared before/after. No package/interpreter mutation was performed on the user's local data; those form writes were exercised against the browser fixture. No external publication.
 
 Remaining for these modules: full backend ownership and dependency review, Monitoring's fixed catalog-count list, and its legacy `overview.mail` compatibility field. AI/mail settings and other host UI remain in later inventory groups; adding health contributions does not imply their entire feature UI is isolated. Scripts' automation integration and saved-node lifecycle require the RADD-1347 audit.
+
+## RADD-1353 verification
+
+The VCS dependency trace found its identity map imports a host-owned PeopleDirectorySelect with both Auth and Teams queries. Those query providers now live in their owning remotes, contributed through the generic SDK DirectorySelect contract. SDK 1.4 adds paged transport and reusable generic search/pagination/modal controls; no directory endpoint or entity kind is encoded in the SDK control. Existing host callers use a thin compatibility adapter. This is a prerequisite for VCS migration, not completion of VCS or all Auth/Teams UI ownership.
+
+Evidence: 44 frontend tests, 19 focused capabilities/kernel/module-contract backend tests, host + all 12 remotes type-check/build. `browser-directory-contributions.mjs` passes 10 checks using the actual Auth/Teams bundles: unavailable controls; paged totals/search/selection; team/member/manager/owner source semantics; withdrawal of each provider while a request is in flight; restored fresh data; failed bundle isolation/recovery; denied data with retry; modal focus/dismissal; and the existing host Audit page adapter updating its selected actor. Screenshot inspected. A local authenticated probe checks the two advertised/served remotes, actual paged directory endpoints, and all three team candidate purposes. No plugin choices were changed; ephemeral token discarded. Auth and Teams remain required core plugins, so browser withdrawal tests establish frontend behavior, not a new backend disable permission.
+
+Next dependency work: VCS's remaining host imports include IntegrationAutomations/RuleEditor, business-time formatting, entity cache metadata and shared form primitives. IntegrationAutomations also hardcodes the Email group and derives event prefixes from display labels; ownership of those selectors must be resolved in the automation migration. VCS's common form uses Forgejo-named wire types for all providers; the common contract belongs to VCS, while provider configuration belongs to each connector. The VCS host/provider page migration remains unfinished.

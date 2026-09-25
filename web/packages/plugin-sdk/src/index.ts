@@ -57,6 +57,7 @@ export { tokens, type TokenName } from "./tokens";
 
 export {
   provideHostComponents,
+  DirectoryPager, ListSearchInput,
   SettingsPage, SelectField, Callout, CalloutKind, QueryError,
   CodeEditor,
   TokenList,
@@ -67,7 +68,7 @@ export {
   type SchemaFormProps,
 } from "./host";
 
-export { api, ApiError, API_BASE, provideApiTransport, errorMessage, type RequestOptions as ApiRequestOptions } from "./api";
+export { api, ApiError, API_BASE, provideApiTransport, errorMessage, type Paged, type RequestOptions as ApiRequestOptions } from "./api";
 
 export {
   useCurrentUser,
@@ -96,3 +97,5 @@ export type {
 export { registerDataSource, unregisterDataSources, usePluginData, invalidatePluginData, type DataSource, type DataContracts, type PersonIndicator, type TimesheetAnnotation, type StatusIndicator } from "./data";
 
 export * from "./dates";
+
+export { DirectorySelect, PagedDirectorySelect, DIRECTORY_SELECT_SLOT, type DirectoryChoice, type DirectorySelectProps, type DirectoryQuery } from "./directory";

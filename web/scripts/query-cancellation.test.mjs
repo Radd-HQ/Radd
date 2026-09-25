@@ -121,5 +121,16 @@ try {
   abortAccountRequests();
   await accountRejection;
   assert(accountSignal.aborted, 'host account switch cancels remote requests through the shared transport');
+  for (const [label, transport] of [['standalone SDK', sdk.api], ['host-backed SDK', sdkModule.api]]) {
+    const paged = transport.getPaged('/directory', {query: {limit:'50',offset:'50'}});
+    assert(pending.at(-1).url.includes('offset=50'));
+    pending.at(-1).resolve(new Response(JSON.stringify([{id:'person',name:'Person'}]), {headers:{'X-Total-Count':'101'}}));
+    assert.deepEqual(await paged, {rows:[{id:'person',name:'Person'}],total:101}, label+' must preserve pagination headers');
+  }
+  const pagedAccountRequest = sdkModule.api.getPaged('/directory-cancel');
+  const pagedAccountRejection = assert.rejects(pagedAccountRequest);
+  const pagedSignal = pending.at(-1).signal;
+  abortAccountRequests(); await pagedAccountRejection;
+  assert(pagedSignal.aborted, 'account changes cancel paged remote reads too');
   console.log('Query observers cancel superseded GET/POST search, closed pages and plugin requests.');
 } finally {client.clear();globalThis.fetch=oldFetch;delete globalThis.window;}

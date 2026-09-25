@@ -1,4 +1,4 @@
-import { useProvided, type ButtonVariantValue } from "./host-registry";
+import { useProvided, type ModalProps, type ButtonVariantValue } from "./host-registry";
 import {
   useId,
   type ButtonHTMLAttributes,
@@ -224,13 +224,10 @@ export function Avatar({
   );
 }
 
-export function Modal({
-  onClose,
-  children,
-}: {
-  onClose: () => void;
-  children: ReactNode;
-}) {
+export function Modal(props: ModalProps) {
+  const { Modal: Host } = useProvided();
+  if (Host) return <Host {...props} />;
+  const { onClose, children } = props;
   return (
     <div
       className="radd-modal__backdrop"

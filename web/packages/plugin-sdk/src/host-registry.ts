@@ -39,7 +39,13 @@ export type ButtonVariantValue = "primary" | "secondary" | "ghost" | "danger" | 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { variant?: ButtonVariantValue; size?: "sm" | "md" }
 export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> { label?: string; hint?: string; error?: string }
 export interface CalloutProps extends HTMLAttributes<HTMLDivElement> { kind: "info" | "success" | "warning" | "danger"; children: ReactNode }
+export interface ModalProps { title?: string; onClose: () => void; children: ReactNode; wide?: boolean; extraWide?: boolean }
+export interface DirectoryPagerProps { page: number; pageSize: number; total: number; busy: boolean; onPage: (page: number) => void; label: string }
+export interface ListSearchInputProps { value: string; onChange: (next: string) => void; placeholder: string; ariaLabel?: string; total?: number; matched: number; noun: string; className?: string }
 export interface HostComponents {
+  DirectoryPager?: ComponentType<DirectoryPagerProps>;
+  ListSearchInput?: ComponentType<ListSearchInputProps>;
+  Modal?: ComponentType<ModalProps>;
   Button?: ComponentType<ButtonProps>;
   TextField?: ComponentType<FieldProps>;
   SelectField?: ComponentType<SelectFieldProps>;

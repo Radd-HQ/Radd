@@ -1,4 +1,4 @@
-import { ApiError, provideApiTransport, type ApiRequestOptions } from "@radd/plugin-sdk";
+import { ApiError, provideApiTransport, type ApiRequestOptions, type Paged } from "@radd/plugin-sdk";
 import { API_BASE, On401, RoutePath, type On401Value } from "./constants";
 import { FORBIDDEN_FALLBACK_MESSAGE, pushToast } from "./toast";
 import type { Finding } from "./types/automations";
@@ -91,10 +91,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 /** Rows + the pre-pagination total from X-Total-Count (RADD-883). `total` is
  * null when the server didn't send the header — an unpaged request. */
-export interface Paged<T> {
-  rows: T[];
-  total: number | null;
-}
+export type { Paged } from "@radd/plugin-sdk";
 
 export interface CursorPage<T> { rows: T[]; next: string | null }
 
@@ -298,6 +295,7 @@ export const api = {
 };
 
 // Both host and remotes use the same account-scoped transport and error class.
-provideApiTransport(<T>(path: string, options: ApiRequestOptions) => request<T>(path, {
-  ...options, on401: options.throwOn401 ? On401.throw : On401.redirect,
-}), errorMessage);
+provideApiTransport(<T>(path: string, options: ApiRequestOptions) => {
+  const shared = { ...options, on401: options.throwOn401 ? On401.throw : On401.redirect };
+  return options.response === "paged" ? pagedRequest<unknown>(path, shared) as Promise<T> : request<T>(path, shared);
+}, errorMessage);

@@ -70,3 +70,16 @@ test('Monitoring UI consumes contributions instead of importing AI or mail featu
   }
   assert.deepEqual(violations,[]);
 });
+
+
+test('host directory adapter owns no queries or feature implementation',()=>{
+  const file='web/src/components/PeopleDirectorySelect.tsx';
+  const imports=nodes(file).filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
+  assert.deepEqual(imports,['@radd/plugin-sdk']);
+  assert(!readFileSync('web/src/lib/queries/users.ts','utf8').includes('peopleChoicesQuery'));
+});
+
+test('directory query providers belong to Auth or Teams, not the SDK control',()=>{
+  const sdk=readFileSync('web/packages/plugin-sdk/src/directory.tsx','utf8');
+  assert(!/\/(?:users|teams)|auth\.people|teams\.candidates/.test(sdk));
+});

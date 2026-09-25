@@ -17,7 +17,11 @@ export class ApiError extends Error {
   }
 }
 
+export interface Paged<T> { rows: T[]; total: number | null }
+
 export interface RequestOptions {
+  /** Select the generic paged response envelope, including the total header. */
+  response?: "json" | "paged";
   method?: string;
   signal?: AbortSignal;
   keepalive?: boolean;
@@ -77,19 +81,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(response.status, detail);
   }
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  const data = await response.json();
+  if (options.response === "paged") {
+    const total = response.headers.get("X-Total-Count");
+    return { rows: data, total: total === null ? null : Number(total) } as T;
+  }
+  return data as T;
 }
 
 export const api = {
-  get: <T>(path: string, opts?: Omit<RequestOptions, "method" | "body">) =>
+  getPaged: <T>(path: string, opts?: Omit<RequestOptions, "method" | "body" | "response">) =>
+    request<Paged<T>>(path, { ...opts, method: "GET", response: "paged" }),
+  get: <T>(path: string, opts?: Omit<RequestOptions, "method" | "body" | "response">) =>
     request<T>(path, { ...opts, method: "GET" }),
-  post: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "body">) =>
+  post: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "body" | "response">) =>
     request<T>(path, { ...opts, method: "POST", body }),
-  patch: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "body">) =>
+  patch: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "body" | "response">) =>
     request<T>(path, { ...opts, method: "PATCH", body }),
-  put: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "body">) =>
+  put: <T>(path: string, body?: unknown, opts?: Omit<RequestOptions, "method" | "body" | "response">) =>
     request<T>(path, { ...opts, method: "PUT", body }),
-  delete: <T>(path: string, opts?: Omit<RequestOptions, "method" | "body">) =>
+  delete: <T>(path: string, opts?: Omit<RequestOptions, "method" | "body" | "response">) =>
     request<T>(path, { ...opts, method: "DELETE" }),
 };
 

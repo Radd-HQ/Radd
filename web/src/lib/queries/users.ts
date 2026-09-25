@@ -1,5 +1,6 @@
 /** Users + admin, directory (LDAP), teams, and personal access tokens. */
 
+import type { DirectoryChoice as PeopleChoice } from "@radd/plugin-sdk";
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
@@ -53,15 +54,7 @@ export const usersQuery = queryOptions({
   staleTime: 60_000,
 });
 
-export interface PeopleChoice { id: string; name: string }
-export const PEOPLE_CHOICES_PAGE_SIZE = 50;
-export const peopleChoicesQuery = (kind: "person" | "team", q: string, page: number, candidateTeamId?: string, candidatePurpose: "member" | "manager" | "owner" = "member") => queryOptions({
-  queryKey: [...(candidateTeamId ? queryKeys.teamMembers(candidateTeamId) : kind === "person" ? queryKeys.users : queryKeys.teams), "choices", q, page, candidateTeamId ? candidatePurpose : ""] as const,
-  meta: entityMeta(kind === "person" ? Entity.member : Entity.team, Entity.team, Entity.role),
-  queryFn: ({ signal }) => api.getPaged<PeopleChoice>(candidateTeamId ? `${apiTeamPath(candidateTeamId)}/${candidatePurpose === "member" ? "member-candidates" : "steward-candidates"}` : kind === "person" ? ApiPath.userDirectory : ApiPath.teams, {
-    signal, query: { q, limit: String(PEOPLE_CHOICES_PAGE_SIZE), offset: String(page * PEOPLE_CHOICES_PAGE_SIZE), ...(candidateTeamId && candidatePurpose !== "member" ? { purpose: candidatePurpose } : {}) },
-  }),
-});
+export type { PeopleChoice };
 
 /**
  * The same directory, annotated for ONE project (RADD-938).

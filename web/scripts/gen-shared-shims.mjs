@@ -45,7 +45,7 @@ const SDK_EXPORTS = [
   "Avatar",
   "tokens",
   "provideHostComponents", "CodeEditor", "TokenList", "SchemaForm",
-  "api", "ApiError", "API_BASE", "provideApiTransport", "errorMessage",
+  "api", "ApiError", "API_BASE", "provideApiTransport", "DirectoryPager", "ListSearchInput", "DirectorySelect", "PagedDirectorySelect", "DIRECTORY_SELECT_SLOT", "errorMessage",
   "useCurrentUser", "usePermissions", "useCapabilities", "useHasPlugin",
   "useItemsQuery", "useItemQuery", "useProjectsQuery", "useApiQueryClient",
 ];

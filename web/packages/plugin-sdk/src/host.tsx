@@ -12,7 +12,7 @@ import { TextArea, Select } from "./primitives";
 
 export { provideHostComponents } from "./host-registry";
 export type { HostComponents, CodeEditorProps, TokenListProps, SchemaFormProps, SettingsPageProps, SelectFieldProps } from "./host-registry";
-import { useProvided, type CodeEditorProps, type TokenListProps, type SchemaFormProps, type SettingsPageProps, type SelectFieldProps, type CalloutProps } from "./host-registry";
+import { useProvided, type CodeEditorProps, type TokenListProps, type SchemaFormProps, type SettingsPageProps, type SelectFieldProps, type CalloutProps, type DirectoryPagerProps, type ListSearchInputProps } from "./host-registry";
 /** A code editor — the host's CodeMirror, else a monospace text area. */
 export function CodeEditor(props: CodeEditorProps) {
   const { CodeEditor: Host } = useProvided();
@@ -69,4 +69,18 @@ export function Callout(props: CalloutProps) {
 export function QueryError(props: { label: string; error: unknown }) {
   const { QueryError: Host } = useProvided();
   return Host ? <Host {...props} /> : <p role="alert">Failed to load {props.label}: {String(props.error)}</p>;
+}
+
+export function DirectoryPager(props: DirectoryPagerProps) {
+  const { DirectoryPager: Host } = useProvided();
+  if (Host) return <Host {...props} />;
+  return <nav aria-label={`${props.label} pagination`}>
+    <button disabled={props.busy || props.page === 0} onClick={() => props.onPage(props.page - 1)}>Previous</button>
+    <span>{props.page + 1}</span>
+    <button disabled={props.busy || (props.page + 1) * props.pageSize >= props.total} onClick={() => props.onPage(props.page + 1)}>Next</button>
+  </nav>;
+}
+export function ListSearchInput(props: ListSearchInputProps) {
+  const { ListSearchInput: Host } = useProvided();
+  return Host ? <Host {...props} /> : <input type="search" aria-label={props.ariaLabel ?? props.placeholder} placeholder={props.placeholder} value={props.value} onChange={event => props.onChange(event.target.value)} />;
 }
