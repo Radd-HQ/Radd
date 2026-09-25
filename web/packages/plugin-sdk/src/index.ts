@@ -54,6 +54,17 @@ export {
 
 export { tokens, type TokenName } from "./tokens";
 
+export {
+  provideHostComponents,
+  CodeEditor,
+  TokenList,
+  SchemaForm,
+  type HostComponents,
+  type CodeEditorProps,
+  type TokenListProps,
+  type SchemaFormProps,
+} from "./host";
+
 export { api, ApiError, API_BASE } from "./api";
 
 export {

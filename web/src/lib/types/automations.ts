@@ -116,6 +116,11 @@ export interface NodeInfo {
   reads_event: boolean;
   /** Publishes findings a verdict node can relay (RADD-1329). */
   produces_findings: boolean;
+  /** RADD-1325: ports / outputs depend on params — the shape endpoint answers. */
+  dynamic_ports: boolean;
+  dynamic_outputs: boolean;
+  /** RADD-1329: no output ports at all. */
+  terminal: boolean;
   /** The node's FIXED ports (RADD-1064). Empty means its outputs depend on its
    * params — an AI classifier's ports are the answers being typed — and the
    * editor computes those locally instead. Without this the canvas could only

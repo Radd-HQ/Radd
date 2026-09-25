@@ -10,13 +10,16 @@ run OUT OF PROCESS with a short-lived key minted for the automation's
 identity, so a script can never exceed what the automation may already do.
 """
 
-from radd.kernel import EventTypeSpec, PermissionSpec, RaddPlugin
+from radd.kernel import EventTypeSpec, PermissionSpec, PluginUiManifest, RaddPlugin
 
 from .nodes import DECIDE_NODE, RUN_NODE
 from .router import router
 from .types import PERM_MANAGE, ScriptEvent
 
 plugin = RaddPlugin(
+    # RADD-1325: this plugin's automation-node inspectors ship in its own UI
+    # remote (./ui), registered through `automation.node.inspector`.
+    ui=PluginUiManifest(remote="/plugins/scripts/remoteEntry.js", ui_api_version="1.1.0"),
     name="scripts",
     id="radd.scripts",
     version="1.0.0",

@@ -11,6 +11,7 @@
  * menu). Everything is a node, triggers included — a graph fires only for the
  * triggers it actually contains, and it may contain several.
  */
+import { useNodeShapes } from "../../lib/node-shapes";
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowRight } from "lucide-react";
@@ -204,6 +205,9 @@ export function GraphEditor({
   );
 
   const triggers = useMemo(() => nodes.filter((n) => n.kind === NodeKind.trigger), [nodes]);
+  // RADD-1325: ask the server for the ports/outputs of every node whose shape
+  // depends on its params; the canvas and token picker read the cached answer.
+  useNodeShapes(nodes, catalog.data);
 
   /** Per VALIDATE trigger (RADD-1329): does anything it REACHES block? The
    * trigger's chip — "Can block" / "Advisory only" — is what makes the graph

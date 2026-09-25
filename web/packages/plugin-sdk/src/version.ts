@@ -4,7 +4,7 @@
  * `ui_api_version` has a different MAJOR than this — a clean version gate, mirroring the backend
  * `api_version` gate. Bump the major on a breaking SDK change; the minor on additive changes.
  */
-export const UI_API_VERSION = "1.0.0";
+export const UI_API_VERSION = "1.1.0";
 
 function major(version: string): number {
   const first = version.split(".")[0];

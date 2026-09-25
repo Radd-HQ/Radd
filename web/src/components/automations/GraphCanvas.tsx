@@ -16,6 +16,7 @@
  * `automation-layout.ts`, so every automation migrated by d116graphs opens tidy
  * without a data migration guessing positions for graphs nobody had opened.
  */
+import { useShapeVersion } from "../../lib/node-shapes";
 import { useCallback, useEffect, useMemo } from "react";
 import {
   Background,
@@ -285,7 +286,6 @@ function summarise(node: AutomationNode): string {
     const spaces = (params.spaces as string[]) ?? [];
     return `${params.negate ? "not in " : "in "}${spaces.join(", ") || "…"}`;
   }
-  if (node.type === "ai.classify") return String(params.prompt ?? "") || "ask a question…";
   if (node.type === "gate.project") {
     const projects = (params.projects as string[]) ?? [];
     return `${params.negate ? "not " : ""}${projects.join(", ") || "…"}`;
@@ -372,6 +372,9 @@ export default function GraphCanvas({
   //: cannot derive for itself. Empty until the catalog resolves, which the
   //: signature below accounts for.
   const declaredPorts = useMemo(() => contributedPorts(catalog), [catalog]);
+  //: Bumps when a node's server-computed shape arrives (RADD-1325), so the
+  //: handles redraw from the server's answer.
+  const shapeVersion = useShapeVersion();
   const titles = useMemo(() => titleIndex(catalog), [catalog]);
   const build = useCallback(
     (): FlowNode[] =>
@@ -418,6 +421,7 @@ export default function GraphCanvas({
         // questions, and a node drawn with the kind's fallback ports until
         // something else nudged the graph is exactly the bug being fixed.
         catalog?.nodes?.length ?? 0,
+        shapeVersion,
         run?.nodes.map((n) => [n.node_id, n.ran, n.incoming, n.ports]) ?? null,
         // The validate trigger's chip is a function of what it REACHES, which
         // is not in the node list (RADD-1329).
@@ -425,7 +429,7 @@ export default function GraphCanvas({
         edges.map((e) => [e.source, e.port, e.target]),
         nodes.map((n) => [n.id, n.type, n.name, n.params, n.x, n.y]),
       ]),
-    [nodes, edges, orientation, catalog, run, validationChips],
+    [nodes, edges, orientation, catalog, run, validationChips, shapeVersion],
   );
   useEffect(() => {
     setFlowNodes(build());

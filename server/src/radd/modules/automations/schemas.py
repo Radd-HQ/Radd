@@ -652,6 +652,12 @@ class NodeInfo(BaseModel):
     reads_event: bool = False
     #: RADD-1329: publishes findings a verdict node can relay.
     produces_findings: bool = False
+    #: RADD-1325: the ports / outputs depend on the params — ask the shape
+    #: endpoint rather than computing them client-side.
+    dynamic_ports: bool = False
+    #: RADD-1329: no output ports at all.
+    terminal: bool = False
+    dynamic_outputs: bool = False
     #: The node's FIXED ports, when its outputs do not depend on its params
     #: (RADD-1064). Empty means they DO — the editor computes those itself as the
     #: form is edited, because an AI classifier's ports are the answers someone
@@ -738,6 +744,22 @@ class EventSampleRead(BaseModel):
     #: `sampled` is 0, which is the case the samples panel could not answer:
     #: sampling describes what HAS happened, declaration describes what WILL.
     declared_schema: dict[str, Any] = Field(default_factory=dict)
+
+
+class NodeShapeRequest(BaseModel):
+    """The params a node currently has (RADD-1325)."""
+
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class NodeShapeRead(BaseModel):
+    """What a node emits FOR THESE PARAMS (RADD-1325): its ports and the named
+    values it produces. The editor asks whenever a node whose shape depends on
+    its params changes — so the canvas draws a third-party classifier's handles
+    from the server's answer, never from a copy of its rules in the SPA."""
+
+    ports: list[str]
+    outputs: list["OutputFieldInfo"] = Field(default_factory=list)
 
 
 class TriggerKindInfo(BaseModel):

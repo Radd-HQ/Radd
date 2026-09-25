@@ -89,7 +89,7 @@ export function contributedPorts(
 ): Record<string, string[]> {
   const map: Record<string, string[]> = {};
   for (const node of catalog?.nodes ?? []) {
-    if (node.ports?.length) map[node.key] = node.ports;
+    if (node.ports?.length || node.terminal) map[node.key] = node.terminal ? [] : node.ports;
   }
   return map;
 }

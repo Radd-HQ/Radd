@@ -1,6 +1,7 @@
 // Publish the shared federation singletons BEFORE anything else, so plugin remotes loaded later
 // resolve react / query / the SDK to the host's instances (spec 94).
 import "./shared-runtime";
+import "./host-components";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

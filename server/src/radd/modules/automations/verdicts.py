@@ -101,8 +101,7 @@ def _spec(key: str, label: str, blocking: bool, description: str, keywords: str)
         default_params={"message": "", "field": ""},
         # TERMINAL: no outlet. Chaining after a verdict is what made the old
         # "Report a problem" node look like it did something it did not.
-        ports=(),
-        ports_for=lambda _params: (),
+        terminal=True,
         arity=NodeArity.SET.value,
         needs_items=False,
         plan=_plan_for(blocking),

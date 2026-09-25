@@ -38,14 +38,13 @@ import { ActionParams } from "./ActionParams";
 import { ArityField } from "./ArityField";
 import { CreateItemFields } from "./CreateItemFields";
 import { SchemaFields } from "./SchemaFields";
-import { GenerateFields } from "./GenerateFields";
+import { Slot, SlotId } from "@radd/plugin-sdk";
 import { useTokenTarget } from "./useTokenTarget";
 import { EventSamples } from "./EventSamples";
 import { SearchFields } from "./SearchFields";
 import { ValidateTriggerFields, VerdictFields } from "./ValidationFields";
 import { TokenReference } from "./TokenReference";
 import {
-  AiClassifyFields,
   ChangedByFields,
   FieldChangedFields,
   StateCategoryFields,
@@ -53,7 +52,6 @@ import {
   PageSpaceFields,
   PayloadGateFields,
   ProjectGateFields,
-  ScriptNodeFields,
 } from "./GateFields";
 import type { PickerData } from "./ActionsBuilder";
 const ACTION_TYPE_PREFIX = "action.";
@@ -409,12 +407,6 @@ export function GraphInspector({
       {node.type === "gate.page_space" && (
         <PageSpaceFields params={node.params} onChange={setParams} />
       )}
-      {node.type === "ai.classify" && (
-        <AiClassifyFields params={node.params} onChange={setParams} />
-      )}
-      {(node.type === "script.run" || node.type === "script.decide") && (
-        <ScriptNodeFields params={node.params} decide={node.type === "script.decide"} onChange={setParams} />
-      )}
 
       {/* Routers that can read either way. Per item turns a gate into a
           PARTITION — each issue leaves by its own answer's port — which is what
@@ -427,28 +419,25 @@ export function GraphInspector({
         />
       )}
 
-      {/* A CONTRIBUTED node with no hardcoded editor gets a form generated from
-          its own params_schema (RADD-923) — the promise AutomationNodeSpec made
-          and nothing kept. `ai.classify` keeps its bespoke one above. */}
-      {contributed && !coreEdited && node.type !== "ai.classify" && !node.type.startsWith("script.") && (
+      {/* A plugin's node renders the inspector its OWN UI bundle registered
+          for its type (RADD-1325: `automation.node.inspector`) — the AI and
+          scripts editors live in those plugins now, and core knows no plugin
+          node type. With none registered, the form generated from the node's
+          served params_schema (RADD-923). */}
+      {contributed && !coreEdited && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-fg-secondary">{contributed.description}</p>
-          {/* `ai.generate` earns a bespoke form: its central param is an array
-              of objects whose shape varies per row, which is exactly the case
-              SchemaFields' docstring names as "ship your own component". */}
-          {node.type === "ai.generate" ? (
-            <GenerateFields
-              schema={contributed.params_schema}
-              params={node.params}
-              onChange={setParams}
-            />
-          ) : (
-            <SchemaFields
-              schema={contributed.params_schema}
-              params={node.params}
-              onChange={setParams}
-            />
-          )}
+          <Slot
+            id={SlotId.automationNodeInspector}
+            match={node.type}
+            node={node}
+            params={node.params}
+            schema={contributed.params_schema}
+            onChange={setParams}
+            fallback={
+              <SchemaFields schema={contributed.params_schema} params={node.params} onChange={setParams} />
+            }
+          />
           {tokenPanel(false)}
         </div>
       )}

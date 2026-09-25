@@ -14,6 +14,7 @@
  * reached from, and those resolve to nothing at run time. Walking the edges
  * BACKWARDS is what makes the picker's list the same list the run will have.
  */
+import { cachedShape } from "./node-shapes";
 import {
   NodeArity,
   type AutomationCatalog,
@@ -28,12 +29,7 @@ import {
  * read as one identifier, so one rule covers a node's name and an output's. */
 export const OUTPUT_NAME_RE = /^[a-z][a-z0-9_]{0,29}$/;
 
-const field = (
-  name: string,
-  description = "",
-  kind = "text",
-  choices: string[] = [],
-): OutputFieldInfo => ({ name, label: name, kind, choices, description });
+
 
 /**
  * The named values a node produces.
@@ -48,56 +44,11 @@ export function outputsOfNode(
   node: Pick<AutomationNode, "type" | "params">,
   catalog: AutomationCatalog | undefined,
 ): OutputFieldInfo[] {
-  if (node.type === "ai.generate") {
-    return [
-      field("text", "The model's own words about this item."),
-      ...generateFields(node.params).map((entry) =>
-        field(entry.name, entry.description ?? "", entry.kind, entry.choices ?? []),
-      ),
-    ];
-  }
-  if (node.type === "ai.classify") {
-    const answers = [
-      ...new Set(
-        ((node.params.answers as string[]) ?? []).map((a) => String(a).trim()).filter(Boolean),
-      ),
-    ].slice(0, 8);
-    return answers.length >= 2
-      ? [field("answer", "The answer the model chose.", "enum", answers)]
-      : [];
-  }
-  if (node.type === "script.run") {
-    // RADD-1269: the outputs are the keys the author says the script returns.
-    const names = [
-      ...new Set(((node.params.outputs as string[]) ?? []).map((a) => String(a).trim()).filter(Boolean)),
-    ].slice(0, 20);
-    return names.map((name) => field(name, `\`${name}\` from the dict the script returns.`));
-  }
+  // RADD-1325: a node whose outputs depend on its params (a generator's fields,
+  // a script's declared keys) is answered by the server; the cache holds it.
+  const shape = cachedShape(node);
+  if (shape) return shape.outputs;
   return catalog?.nodes?.find((entry) => entry.key === node.type)?.outputs ?? [];
-}
-
-/** One declared field of an `ai.generate` node, as the form stores it. */
-export interface GenerateField {
-  name: string;
-  kind: string;
-  choices?: string[];
-  description?: string;
-}
-
-/** The stored `fields` list, read defensively — a hand-edited row (or a node
- * saved by an older build) must render as something rather than crash the
- * inspector. */
-export function generateFields(params: Record<string, unknown>): GenerateField[] {
-  const raw = params.fields;
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
-    .map((entry) => ({
-      name: String(entry.name ?? ""),
-      kind: String(entry.kind ?? "text"),
-      choices: Array.isArray(entry.choices) ? entry.choices.map(String) : [],
-      description: String(entry.description ?? ""),
-    }));
 }
 
 /** How a node type may read its packet, from the served table.
@@ -163,17 +114,11 @@ export function portCarriesOutputs(
   catalog: AutomationCatalog | undefined,
 ): boolean {
   const contributed = catalog?.nodes?.find((entry) => entry.key === node.type);
-  if (!contributed) return true;
-  const ports = contributed.ports?.length
-    ? contributed.ports
-    : // Dynamic ports: the client computes them the same way the canvas does.
-      (node.type === "ai.classify"
-        ? [
-            ...new Set(
-              ((node.params.answers as string[]) ?? []).map((a) => String(a).trim()).filter(Boolean),
-            ),
-          ].slice(0, 8).concat("unavailable")
-        : []);
+  // Only a ROUTER has a fallback port (its last). An action's ports all carry:
+  // `create_item` stamps both `out` and `created` (RADD-1322 put built-ins in
+  // the catalog, and without this check `created` read as a fallback).
+  if (!contributed || (contributed.kind !== "gate" && contributed.kind !== "filter")) return true;
+  const ports = contributed.ports?.length ? contributed.ports : (cachedShape(node)?.ports ?? []);
   return ports.length === 0 ? true : port !== ports[ports.length - 1];
 }
 

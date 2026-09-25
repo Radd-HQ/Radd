@@ -12,6 +12,7 @@
  */
 import { Filter, Flag, GitBranch, OctagonX, Play, Search, Zap, type LucideIcon } from "lucide-react";
 import { NodeKind, type NodeKindValue } from "../../lib/types";
+import { cachedShape } from "../../lib/node-shapes";
 
 export const NODE_KIND_ICON: Record<NodeKindValue, LucideIcon> = {
   [NodeKind.trigger]: Play,
@@ -106,22 +107,11 @@ export function portsOfNode(
   node: { kind: NodeKindValue; type: string; params: Record<string, unknown> },
   contributedPorts?: Record<string, string[]>,
 ): string[] {
-  if (VERDICT_VISUAL[node.type]) return []; // terminal (RADD-1329)
+  // Terminal nodes are in the map with no ports (RADD-1329); fixed ports are
+  // declared; params-dependent ones are the server's answer (RADD-1325).
   const declared = contributedPorts?.[node.type];
-  if (declared?.length) return declared;
-  if (node.type === "ai.classify") {
-    const answers = ((node.params.answers as string[]) ?? [])
-      .map((a) => String(a).trim())
-      .filter(Boolean);
-    return [...new Set(answers)].slice(0, 8).concat("unavailable");
-  }
-  if (node.type === "script.decide") {
-    // RADD-1269: the ports are the names the author declares, plus the
-    // fallback — the same shape as the AI classifier's answers.
-    const ports = ((node.params.ports as string[]) ?? [])
-      .map((a) => String(a).trim())
-      .filter((a) => a && a !== "unavailable");
-    return [...new Set(ports)].slice(0, 8).concat("unavailable");
-  }
+  if (declared) return declared;
+  const shape = cachedShape(node);
+  if (shape) return shape.ports;
   return PORTS_BY_TYPE[node.type] ?? PORTS_BY_KIND[node.kind] ?? ["out"];
 }

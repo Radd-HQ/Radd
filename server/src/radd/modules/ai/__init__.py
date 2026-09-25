@@ -2,7 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from radd.kernel import CapabilitySpec, EventTypeSpec
-from radd.kernel import RaddPlugin
+from radd.kernel import PluginUiManifest, RaddPlugin
 from radd.kernel import SettingSpec
 
 from . import registry
@@ -86,6 +86,9 @@ from . import automation_node_validate as ai_automation_node_validate  # noqa: E
 from . import automation_node_generate as ai_automation_node_generate  # noqa: E402
 
 plugin = RaddPlugin(
+    # RADD-1325: this plugin's automation-node inspectors ship in its own UI
+    # remote (./ui), registered through `automation.node.inspector`.
+    ui=PluginUiManifest(remote="/plugins/ai/remoteEntry.js", ui_api_version="1.1.0"),
     name="ai",
     consumer_names=("ai.embedder",),
     core=False,  # optional plugin — disableable via the plugin manager

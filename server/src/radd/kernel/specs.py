@@ -429,6 +429,14 @@ class TriggerKindSpec:
     matches: Callable[[Mapping[str, Any], Mapping[str, Any]], bool] | None = None
 
 
+def _default_ports_for(_params: Mapping[str, Any]) -> tuple[str, ...]:
+    return ("out",)
+
+
+def _default_outputs_for(_params: Mapping[str, Any]) -> tuple["OutputField", ...]:
+    return ()
+
+
 # --- automation nodes (spec 116 phase 2: the canvas palette is contributed) ---
 @dataclass(frozen=True)
 class AutomationNodeSpec:
@@ -488,13 +496,16 @@ class AutomationNodeSpec:
     #: "Block submission" / "Warn submitter" node downstream to relay. The
     #: editor's relay picker lists these.
     produces_findings: bool = False
+    #: RADD-1329: an END of the graph — no output ports at all (the verdict
+    #: nodes). Nothing can be wired after it.
+    terminal: bool = False
     #: FIXED outputs, for a node whose ports do not depend on its params. Set
     #: this OR `ports_for`, never both — declaring it is what lets a client draw
     #: the node's handles from the served catalog instead of guessing by kind.
     ports: tuple[str, ...] = ()
     #: Outputs for a given params dict, when they genuinely vary (an AI
     #: classifier's answers ARE its branches). Ignored when `ports` is set.
-    ports_for: Callable[[Mapping[str, Any]], tuple[str, ...]] = lambda _params: ("out",)
+    ports_for: Callable[[Mapping[str, Any]], tuple[str, ...]] = _default_ports_for
     #: FIXED named values this node produces (spec 120), stamped into the
     #: packet's variable bag under the node's name. Same static-or-dynamic pair
     #: as ports, ranked the same way in `outputs_at` — and for the same reason:
@@ -503,7 +514,7 @@ class AutomationNodeSpec:
     outputs: tuple[OutputField, ...] = ()
     #: Outputs for a given params dict, when they vary. `ai.generate`'s outputs
     #: ARE its params — the fields someone typed — which no static tuple can say.
-    outputs_for: Callable[[Mapping[str, Any]], tuple[OutputField, ...]] = lambda _params: ()
+    outputs_for: Callable[[Mapping[str, Any]], tuple[OutputField, ...]] = _default_outputs_for
     #: False = runs even when nothing reached it (webhook, chat, "nothing matched").
     needs_items: bool = True
     #: How the node reads its packet — a `NodeArity` value, "set" or "item"
@@ -562,7 +573,22 @@ class AutomationNodeSpec:
     #: does not belong in the executor.
     plan_items: Callable[..., Any] | None = None
 
+    @property
+    def dynamic_ports(self) -> bool:
+        """Whether this node's ports depend on its params (RADD-1325) — the
+        editor asks `POST /automations/nodes/{type}/shape` for those."""
+        return not self.terminal and not self.ports and self.ports_for is not _default_ports_for
+
+    @property
+    def dynamic_outputs(self) -> bool:
+        return not self.outputs and self.outputs_for is not _default_outputs_for
+
     def ports_at(self, params: Mapping[str, Any]) -> tuple[str, ...]:
+        if self.terminal:
+            return ()
+        return self._ports_at(params)
+
+    def _ports_at(self, params: Mapping[str, Any]) -> tuple[str, ...]:
         """This node's outputs for these params — the ONE place the two
         declarations are ranked.
 

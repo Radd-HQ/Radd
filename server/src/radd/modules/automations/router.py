@@ -23,6 +23,8 @@ from . import templating
 
 from .schemas import (
     NodeInfo,
+    NodeShapeRead,
+    NodeShapeRequest,
     TriggerKindInfo,
     OutputFieldInfo,
     EventSampleRead,
@@ -114,6 +116,9 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 default_params=dict(spec.default_params),
                 reads_event=spec.reads_event,
                 produces_findings=spec.produces_findings,
+                dynamic_ports=spec.dynamic_ports,
+                terminal=spec.terminal,
+                dynamic_outputs=spec.dynamic_outputs,
                 ports=list(spec.ports),
                 default_ports=list(spec.ports_at(spec.default_params or {})),
                 outputs=[_output_info(field) for field in spec.outputs],
@@ -146,6 +151,22 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
             )
             for info in templating.all_tokens()
         ],
+    )
+
+
+@router.post("/nodes/{node_type}/shape", response_model=NodeShapeRead)
+async def node_shape(node_type: str, data: NodeShapeRequest, user: CurrentUser) -> NodeShapeRead:
+    """A node's ports and outputs for the given params (RADD-1325) — the one
+    answer `graph.validate` checks edges against, served so the canvas never
+    has to recompute it. Pure: no session, nothing stored."""
+    from radd.exceptions import NotFoundError
+
+    spec = registries.automation_nodes.get(node_type)
+    if spec is None:
+        raise NotFoundError(AutomationEntity.RULE, node_type)
+    return NodeShapeRead(
+        ports=list(spec.ports_at(data.params)),
+        outputs=[_output_info(field) for field in spec.outputs_at(data.params)],
     )
 
 
