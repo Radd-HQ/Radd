@@ -22,11 +22,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.vcs import receiving, triggers
+from radd.modules.vcs import receiving, service as vcs, triggers
 from radd.modules.vcs.types import VcsProvider
 
 from . import parsing, service, timelogs
-from .types import GitlabEntity, GitlabEventKind, GitlabTrigger, ReleaseAction
+from .types import (
+    DEPLOYMENT_OUTCOMES,
+    PIPELINE_STATES,
+    GitlabEntity,
+    GitlabEventKind,
+    GitlabTrigger,
+    ReleaseAction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +51,7 @@ TRIGGERS = triggers.ConnectorTriggers(
     updated=GitlabTrigger.MR_UPDATED,
     pushed=GitlabTrigger.PUSHED,
     release_published=GitlabTrigger.RELEASE_PUBLISHED,
+    ci_completed=GitlabTrigger.CI_COMPLETED,  # RADD-1255
 )
 
 
@@ -84,12 +92,16 @@ async def gitlab_webhook(
     if kind == GitlabEventKind.RELEASE:
         result["triggered"] = await _handle_release(session, payload, repo)
         return result
+    if kind == GitlabEventKind.PIPELINE:
+        return await _handle_pipeline(session, payload, connection)
+    if kind == GitlabEventKind.DEPLOYMENT:
+        return await _handle_deployment(session, payload, connection)
     if kind == GitlabEventKind.PUSH:
         planned = parsing.plan_push(payload)
     elif kind == GitlabEventKind.MERGE_REQUEST:
         planned = parsing.plan_merge_request(payload)
     else:
-        # tag_push / pipeline / deployment: RADD-1255.
+        # tag_push: nothing to link.
         return result
 
     links = await receiving.link_planned(
@@ -139,6 +151,57 @@ async def gitlab_webhook(
 
     logger.debug("gitlab delivery %s: %s", x_gitlab_event_uuid, result)
     return result
+
+
+async def _handle_pipeline(session: AsyncSession, payload: dict, connection) -> dict[str, Any]:
+    """RADD-1255: stamp the ref's CI badge (branch, commit and, for an MR
+    pipeline, the MR — the latest run wins), and fire "GitLab: CI finished" once
+    per linked issue when the run reached an outcome. A running report only moves
+    the badge; a pipeline for a ref no issue mentions writes nothing."""
+    update = parsing.plan_pipeline(payload)
+    if update is None:
+        return {"linked": 0, "triggered": 0}
+    state = PIPELINE_STATES.get(update.status, "unknown")
+    stamped = await vcs.set_ci_state(
+        session, provider=VcsProvider.GITLAB, external_ids=update.external_ids, ci_state=state, ci_url=update.url,
+    )
+    fired = 0
+    if state in tuple(triggers.CiOutcome):
+        fired = await receiving.fire_ci(
+            session, GitlabTrigger.CI_COMPLETED, stamped,
+            provider=VcsProvider.GITLAB, repo=update.repo, state=state, url=update.url,
+            actor_id=SYSTEM_ACTOR_ID,
+        )
+    return {"linked": len(stamped), "triggered": fired}
+
+
+async def _handle_deployment(session: AsyncSession, payload: dict, connection) -> dict[str, Any]:
+    """RADD-1255: a deployment of a linked ref reached an outcome (success,
+    failed, canceled) → "GitLab: deployment finished" once per linked issue,
+    with the environment. What that means — Done when production succeeds, say —
+    is an automation's call. A deployment still running fires nothing."""
+    update = parsing.plan_deployment(payload)
+    if update is None or update.status not in DEPLOYMENT_OUTCOMES:
+        return {"linked": 0, "triggered": 0}
+    links = await vcs.links_for_refs(session, provider=VcsProvider.GITLAB, external_ids=update.external_ids)
+    by_item: dict = {}
+    for link in links:
+        by_item.setdefault(link.item_id, link)
+    author = triggers.host_author(payload, connection.id)
+    for link in by_item.values():
+        await triggers.emit_ref(
+            session, GitlabTrigger.DEPLOYMENT_FINISHED, link,
+            provider=VcsProvider.GITLAB, repo=update.repo, actor_id=SYSTEM_ACTOR_ID,
+            payload={
+                "environment": update.environment,
+                "status": update.status,
+                "url": update.url,
+                "ref": triggers.ref_of(link),
+                "sha": update.sha,
+            },
+            author=author,
+        )
+    return {"linked": len(links), "triggered": len(by_item)}
 
 
 async def _handle_release(session: AsyncSession, payload: dict, repo) -> int:

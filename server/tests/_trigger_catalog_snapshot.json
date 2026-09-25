@@ -257,6 +257,18 @@
     "item_scoped": false,
     "has_changes": false
   },
+  "gitlab.ci.completed": {
+    "label": "GitLab: CI finished",
+    "group": "GitLab",
+    "item_scoped": true,
+    "has_changes": false
+  },
+  "gitlab.deployment.finished": {
+    "label": "GitLab: deployment finished",
+    "group": "GitLab",
+    "item_scoped": true,
+    "has_changes": false
+  },
   "gitlab.merge_request.closed": {
     "label": "GitLab: merge request closed without merging",
     "group": "GitLab",

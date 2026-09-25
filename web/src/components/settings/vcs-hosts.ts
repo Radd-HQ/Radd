@@ -110,9 +110,9 @@ const GITLAB: VcsHostConfig = {
   historyEntities: ["gitlab_connection", "gitlab_repo", "vcs_user_link"],
   description:
     "Hosts whose pushes, branches and merge requests link themselves to issues by key (the key in a branch name, a commit message or a merge request title). For a repository with “Mirror time” switched on, time logged on a merge request with /spend is copied into the linked issue's worklogs, and the backfill imports that history once.",
-  triggerNoun: "merge, push or published release",
+  triggerNoun: "merge, push, pipeline, deployment or published release",
   webhookPath:
-    "/api/v1/integrations/gitlab (project or group hook; triggers: push, merge request, releases; paste the same secret token here)",
+    "/api/v1/integrations/gitlab (project or group hook; triggers: push, merge request, pipeline, deployment, releases; paste the same secret token here)",
   namePlaceholder: "GitLab",
   baseUrlPlaceholder: "https://gitlab.example.com",
   defaultBaseUrl: "https://gitlab.com",

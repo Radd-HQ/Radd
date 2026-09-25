@@ -11,7 +11,7 @@ class GitlabEventKind(StrEnum):
     PUSH = "push"
     TAG_PUSH = "tag_push"
     MERGE_REQUEST = "merge_request"
-    # RADD-1255 will read these for CI state and deployment markers.
+    # RADD-1255: CI state + the CI trigger, and the deployment trigger.
     PIPELINE = "pipeline"
     DEPLOYMENT = "deployment"
     # RADD-1309: `create` fires the release-published trigger.
@@ -37,6 +37,10 @@ class GitlabTrigger(StrEnum):
     MR_MERGED = "gitlab.merge_request.merged"
     MR_CLOSED = "gitlab.merge_request.closed"
     MR_UPDATED = "gitlab.merge_request.updated"  # RADD-1330
+    # RADD-1255: a pipeline finished for a ref an issue is linked to, and a
+    # deployment of such a ref finished (success, failed or canceled).
+    CI_COMPLETED = "gitlab.ci.completed"
+    DEPLOYMENT_FINISHED = "gitlab.deployment.finished"
     PUSHED = "gitlab.push"
     RELEASE_PUBLISHED = "gitlab.release.published"
 
@@ -80,3 +84,24 @@ class GitlabEntity(StrEnum):
 #: gitlab.com's web host; a self-managed instance is any other base URL. Both
 #: serve REST under `/api/v4` and GraphQL under `/api/graphql`.
 GITLAB_COM = "https://gitlab.com"
+
+
+#: RADD-1255: GitLab pipeline `status` → the ref's CI state (the vocabulary the
+#: GitHub/Forgejo badges use). `manual`/`scheduled` wait on a person or a clock.
+PIPELINE_STATES: dict[str, str] = {
+    "success": "success",
+    "failed": "failure",
+    "canceled": "cancelled",
+    "skipped": "cancelled",
+    "running": "running",
+    "pending": "running",
+    "created": "running",
+    "preparing": "running",
+    "waiting_for_resource": "running",
+    "manual": "unknown",
+    "scheduled": "unknown",
+}
+
+#: A deployment `status` that is an OUTCOME — the ones that fire the trigger.
+DEPLOYMENT_OUTCOMES: frozenset[str] = frozenset({"success", "failed", "canceled"})
+

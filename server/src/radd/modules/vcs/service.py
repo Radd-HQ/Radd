@@ -179,6 +179,22 @@ async def _emit(
     )
 
 
+async def links_for_refs(
+    session: AsyncSession, *, provider: str, external_ids: Sequence[str]
+) -> list[ItemVcsLink]:
+    """Every link naming one of these refs (RADD-1255) — what a pipeline or a
+    deployment for a ref is about. A ref no issue mentions has none, and so
+    causes nothing: linking is the key mention's job."""
+    if not external_ids:
+        return []
+    rows = await session.execute(
+        select(ItemVcsLink).where(
+            ItemVcsLink.provider == provider, ItemVcsLink.external_id.in_(list(external_ids))
+        )
+    )
+    return list(rows.scalars())
+
+
 async def set_ci_state(
     session: AsyncSession,
     *,
@@ -195,14 +211,7 @@ async def set_ci_state(
     concerns a ref, and that ref may be linked from several items — all of them
     want the same answer.
     """
-    if not external_ids:
-        return []
-    rows = await session.execute(
-        select(ItemVcsLink).where(
-            ItemVcsLink.provider == provider, ItemVcsLink.external_id.in_(list(external_ids))
-        )
-    )
-    links = list(rows.scalars())
+    links = await links_for_refs(session, provider=provider, external_ids=external_ids)
     for link in links:
         link.ci_state = ci_state
         link.ci_url = ci_url

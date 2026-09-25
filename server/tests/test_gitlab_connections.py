@@ -360,3 +360,73 @@ async def test_a_merge_fires_the_trigger_and_changes_nothing_else(db):
     }), owner.id)
     await engine.apply_event(db, event)  # a SYSTEM-actor event: RADD-1308 is what lets it through
     assert (await items_service.require_item(db, item.id)).state_id == waiting.id
+
+
+async def test_pipelines_stamp_ci_and_fire_and_deployments_fire_with_the_environment(db):
+    """RADD-1255. A pipeline for a linked branch moves its CI badge; one that
+    reached an outcome also fires "GitLab: CI finished". A finished deployment of
+    that branch fires "GitLab: deployment finished" with its environment. A
+    pipeline for a branch no issue mentions writes nothing, and a running
+    deployment fires nothing."""
+    import httpx
+
+    from radd.modules.auth.models import User
+    from radd.modules.gitlab.types import GitlabTrigger
+
+    connection = await _connection(db, f"ci-{uuid.uuid4().hex[:6]}", "hook-secret")
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"CI{uuid.uuid4().hex[:4].upper()}", name="Pipelines")
+    )
+    await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="acme/ci", project_id=project.id))
+    owner = User(name="Owner", email=f"{uuid.uuid4()}@test.invalid", instance_role="admin")
+    db.add(owner)
+    await db.flush()
+    item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="ship"), actor=owner)
+    branch = f"{item.key.lower()}-work"
+    headers = {"X-Gitlab-Token": "hook-secret", "Content-Type": "application/json"}
+    project_json = {"path_with_namespace": "acme/ci", "web_url": "https://gl.example.com/acme/ci"}
+
+    def body(payload: dict) -> bytes:
+        return json.dumps({"project": project_json, **payload}).encode()
+
+    def pipeline(ref: str, status: str) -> bytes:
+        return body({"object_kind": "pipeline", "object_attributes": {
+            "id": 77, "ref": ref, "sha": "c0ffee", "status": status, "tag": False,
+            "url": "https://gl.example.com/acme/ci/-/pipelines/77",
+        }})
+
+    transport = httpx.ASGITransport(app=_app(db))
+    head = await _head(db)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        # The branch gets linked by a push naming the issue.
+        pushed = await client.post("/integrations/gitlab", content=body({
+            "object_kind": "push", "ref": f"refs/heads/{branch}", "commits": [],
+        }), headers=headers)
+        assert pushed.json()["linked"] == 1
+        running = await client.post("/integrations/gitlab", content=pipeline(branch, "running"), headers=headers)
+        assert running.json() == {"linked": 1, "triggered": 0}
+        [link] = list((await db.execute(select(ItemVcsLink).where(ItemVcsLink.item_id == item.id))).scalars())
+        assert link.ci_state == "running"
+        failed = await client.post("/integrations/gitlab", content=pipeline(branch, "failed"), headers=headers)
+        assert failed.json() == {"linked": 1, "triggered": 1}
+        stranger = await client.post("/integrations/gitlab", content=pipeline("nobody-mentions-this", "success"), headers=headers)
+        assert stranger.json() == {"linked": 0, "triggered": 0}
+
+        def deployment(status: str) -> bytes:
+            return body({"object_kind": "deployment", "status": status, "environment": "production",
+                         "ref": branch, "sha": "c0ffee", "environment_external_url": "https://app.example.com",
+                         "user": {"username": "deployer"}})
+
+        assert (await client.post("/integrations/gitlab", content=deployment("running"), headers=headers)).json()["triggered"] == 0
+        assert (await client.post("/integrations/gitlab", content=deployment("success"), headers=headers)).json()["triggered"] == 1
+
+    await db.refresh(link)
+    assert link.ci_state == "failure" and link.ci_url.endswith("/pipelines/77")
+    [ci] = await _events_after(db, head, GitlabTrigger.CI_COMPLETED.value)
+    assert ci.payload["ci"] == {"state": "failure", "url": "https://gl.example.com/acme/ci/-/pipelines/77"}
+    assert ci.payload["item"]["id"] == str(item.id)
+    [deployed] = await _events_after(db, head, GitlabTrigger.DEPLOYMENT_FINISHED.value)
+    assert deployed.payload["environment"] == "production" and deployed.payload["status"] == "success"
+    assert deployed.payload["url"] == "https://app.example.com"
+    assert deployed.payload["author"]["username"] == "deployer"
+

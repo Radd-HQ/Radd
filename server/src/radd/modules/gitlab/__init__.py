@@ -4,7 +4,7 @@ from . import service
 from .admin_router import router as admin_router
 from .models import GitlabConnection, GitlabRepo  # noqa: F401 — Alembic autogenerate
 from .router import TRIGGERS, router
-from .types import GitlabEvent
+from .types import GitlabEvent, GitlabTrigger
 
 
 def _admin_event(event_type: GitlabEvent, label: str, entity: str) -> EventTypeSpec:
@@ -29,6 +29,18 @@ plugin = RaddPlugin(
         _admin_event(GitlabEvent.REPO_DELETED, "GitLab project removed", "gitlab_repo"),
         # RADD-1309: GitLab's own automation triggers — the connector acts on nothing itself.
         *TRIGGERS.specs(),
+        # RADD-1255: GitLab-only — neither GitHub nor Forgejo webhooks carry deployments.
+        EventTypeSpec(
+            GitlabTrigger.DEPLOYMENT_FINISHED, "GitLab: deployment finished", "GitLab",
+            item_scoped=True, subjects=("item", "user"),
+            payload_schema={"type": "object", "properties": {
+                "environment": {"type": "string", "description": "e.g. staging, production"},
+                "status": {"type": "string", "enum": ["success", "failed", "canceled"]},
+                "url": {"type": "string", "description": "The environment's URL (or the deploy job's)"},
+                "ref": {"type": "object"},
+                "sha": {"type": "string"},
+            }},
+        ),
     ),
     routers=(router, admin_router),
     # RADD_GITLAB_WEBHOOK_SECRET seeds ONE connection row, once (the spec-101 rule).

@@ -36,7 +36,7 @@ def test_trigger_registry_reproduces_the_catalog_exactly():
         assert current[et] == expected, f"{et}: {current[et]} != {expected}"
 
 
-def test_trigger_count_is_110():
+def test_trigger_count_is_112():
     # RADD-829 added the three group.* events (synced/missing/restored).
     # RADD-960 added the four mail.* events — the mail channel became something
     # a rule can see, rather than only the item/comment it happened to produce.
@@ -50,4 +50,5 @@ def test_trigger_count_is_110():
     # receiver stopped commenting and transitioning and fires these instead.
     # RADD-1320 added form.submitted and sla.met.
     # RADD-1330 added each VCS host's "merge/pull request updated".
-    assert len(_current_triggers()) == 110
+    # RADD-1255 added GitLab's CI finished and deployment finished.
+    assert len(_current_triggers()) == 112

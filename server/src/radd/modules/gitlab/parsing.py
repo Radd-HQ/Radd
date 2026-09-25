@@ -185,3 +185,69 @@ def time_spent_changed(payload: dict) -> bool:
     if "total_time_spent" in changes or "time_change" in changes:
         return True
     return bool((payload.get("object_attributes") or {}).get("time_change"))
+
+
+@dataclass(frozen=True)
+class RefUpdate:
+    """What a pipeline or deployment delivery is about (RADD-1255): the ref ids
+    it names, and the outcome it reports."""
+
+    repo: str
+    external_ids: tuple[str, ...]
+    status: str
+    url: str
+    ref: str = ""
+    sha: str = ""
+    environment: str = ""
+
+
+def _ref_ids(repo: str, ref: str, sha: str, *, is_tag: bool, mr_iid: object = None) -> tuple[str, ...]:
+    ids: list[str] = []
+    if ref and not is_tag:
+        ids.append(branch_external_id(repo, ref))
+    if sha:
+        ids.append(commit_external_id(repo, sha))
+    if mr_iid not in (None, ""):
+        ids.append(pr_external_id(repo, mr_iid))
+    return tuple(ids)
+
+
+def plan_pipeline(payload: dict) -> RefUpdate | None:
+    """A `pipeline` delivery: `object_attributes.{ref, sha, status, url, tag}`,
+    and `merge_request.iid` for an MR pipeline. The branch, the commit and the MR
+    are all "this ref" — the badge on each is the latest run's."""
+    attributes = payload.get("object_attributes") or {}
+    repo = project_path(payload)
+    ref, sha = str(attributes.get("ref") or ""), str(attributes.get("sha") or "")
+    if not repo or not (ref or sha):
+        return None
+    mr = payload.get("merge_request") or {}
+    web_url = str((payload.get("project") or {}).get("web_url") or "")
+    url = str(attributes.get("url") or (f"{web_url}/-/pipelines/{attributes.get('id')}" if web_url else ""))
+    return RefUpdate(
+        repo=repo,
+        external_ids=_ref_ids(repo, ref, sha, is_tag=bool(attributes.get("tag")), mr_iid=mr.get("iid")),
+        status=str(attributes.get("status") or ""),
+        url=url,
+        ref=ref,
+        sha=sha,
+    )
+
+
+def plan_deployment(payload: dict) -> RefUpdate | None:
+    """A `deployment` delivery: `status`, `environment`, `ref`, `sha`, and the
+    environment's own URL (`environment_external_url`) or the job's."""
+    repo = project_path(payload)
+    ref, sha = str(payload.get("ref") or ""), str(payload.get("sha") or "")
+    if not repo or not (ref or sha):
+        return None
+    return RefUpdate(
+        repo=repo,
+        external_ids=_ref_ids(repo, ref, sha, is_tag=bool(payload.get("tag"))),
+        status=str(payload.get("status") or ""),
+        url=str(payload.get("environment_external_url") or payload.get("deployable_url") or ""),
+        ref=ref,
+        sha=sha,
+        environment=str(payload.get("environment") or ""),
+    )
+
