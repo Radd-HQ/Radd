@@ -640,6 +640,24 @@ class _NodeContext:
     #: What the node MADE, per subject, for the `created` port (RADD-1322).
     created: dict[str, list[uuid.UUID]] = field(default_factory=dict)
 
+    async def render(self, text: Any, *, line: bool = False) -> str:
+        """Substitute `{{tokens}}` in a contributed node's text exactly as a
+        built-in action's are (RADD-1324): the event's roots, every registered
+        provider's (`page`, `comment`, a plugin's), the variable bag, and
+        `{{item.*}}` when the packet holds exactly one item. `line=True`
+        collapses whitespace — for a value that NAMES something or becomes a
+        header, never for a body. Unresolvable tokens stay verbatim."""
+        from .planning import load_item_facts
+        from .templating import Renderer
+
+        item_ctx = None
+        ids = self.packet.item_ids
+        if len(ids) == 1:
+            loaded = await _load(self.session, ids)
+            item_ctx = (await load_item_facts(self.session, loaded)).get(ids[0])
+        renderer = Renderer(self.packet.facts, item_ctx, None, self.packet.vars)
+        return renderer.line(text) if line else renderer(text)
+
     def add_created(self, subject: str, entity_id: uuid.UUID) -> None:
         """Say this invocation CREATED a row, so the node's `created` port carries
         it downstream — `create_item`'s follow-up issue, a plugin's new row. A

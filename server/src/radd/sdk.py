@@ -24,6 +24,7 @@ from radd.db import Base as Base, TimestampMixin as TimestampMixin, get_session 
 from radd.kernel import (
     AutomationNodeSpec as AutomationNodeSpec,
     TriggerKindSpec as TriggerKindSpec,
+    TokenProviderSpec as TokenProviderSpec,
     KERNEL_API_VERSION,
     CapabilitySpec as CapabilitySpec,
     CrudResourceSpec as CrudResourceSpec,

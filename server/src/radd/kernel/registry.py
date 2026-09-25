@@ -17,6 +17,7 @@ from .plugin import RaddPlugin
 from .specs import (
     AutomationNodeSpec,
     TriggerKindSpec,
+    TokenProviderSpec,
     RelationSpec,
     RowGuardSpec,
     CapabilitySpec,
@@ -109,6 +110,8 @@ class KernelRegistries:
     automation_nodes: dict[str, AutomationNodeSpec] = field(default_factory=dict)
     #: RADD-1323: trigger KINDS (manual/schedule/validate + any a plugin adds).
     trigger_kinds: dict[str, TriggerKindSpec] = field(default_factory=dict)
+    #: RADD-1324: `{{root.field}}` vocabularies contributed by entity owners.
+    token_providers: dict[str, TokenProviderSpec] = field(default_factory=dict)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
     #: Which plugin contributed each page extension (RADD-748). The registry is
     #: the only thing that knows — the spec is authored BY the plugin, so a
@@ -136,7 +139,7 @@ class KernelRegistries:
             self.capabilities, self.tasks, self.consumer_names,
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
-            self.automation_nodes, self.trigger_kinds,
+            self.automation_nodes, self.trigger_kinds, self.token_providers,
             self.page_extension_sources,
         ):
             f.clear()
@@ -191,6 +194,8 @@ class KernelRegistries:
             self.automation_nodes[node.key] = node
         for kind in plugin.trigger_kinds:
             self.trigger_kinds[kind.key] = kind
+        for provider in plugin.token_providers:
+            self.token_providers[provider.root] = provider
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
             self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
@@ -258,6 +263,8 @@ class KernelRegistries:
             self.automation_nodes.pop(node.key, None)
         for kind in plugin.trigger_kinds:
             self.trigger_kinds.pop(kind.key, None)
+        for provider in plugin.token_providers:
+            self.token_providers.pop(provider.root, None)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
             self.page_extension_sources.pop(px.name, None)

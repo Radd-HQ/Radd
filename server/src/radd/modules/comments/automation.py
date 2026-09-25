@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from radd.sdk import AutomationNodeSpec
+from radd.sdk import AutomationNodeSpec, TokenProviderSpec
 
 GATE_KEY = "gate.comment"
 THREAD_ANY, THREAD_ROOT, THREAD_REPLY = "any", "root", "reply"
@@ -61,4 +61,27 @@ COMMENT_GATE = AutomationNodeSpec(
     needs_items=False,
     reads_event=True,
     plan=_plan,
+)
+
+
+# --- {{comment.*}} tokens (RADD-1248), owned by comments since RADD-1324 -----
+
+
+def resolve_comment_token(field_name: str, payload: dict[str, Any]) -> str | None:
+    """The comment event's own data — `excerpt`, `visibility`, `parent_id`."""
+    key = {"parent_id": "parent_comment_id"}.get(field_name, field_name)
+    if key not in ("excerpt", "visibility", "parent_comment_id"):
+        return None
+    value = payload.get(key)
+    return "" if value is None and key == "parent_comment_id" else (None if value is None else str(value))
+
+
+COMMENT_TOKENS = TokenProviderSpec(
+    root="comment",
+    tokens=(
+        ("excerpt", "The comment's first 200 characters, on a comment event."),
+        ("visibility", "public or internal."),
+        ("parent_id", "The thread root's id when the comment is a reply; blank on a root."),
+    ),
+    resolve=resolve_comment_token,
 )

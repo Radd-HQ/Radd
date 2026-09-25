@@ -72,16 +72,6 @@ TOKENS: tuple[TokenInfo, ...] = (
     TokenInfo("{{items.count}}", "How many items this action is acting on."),
     TokenInfo("{{items.keys}}", "Their keys, comma-separated — TD-42, TD-43."),
     TokenInfo("{{items.list}}", "One per line: `TD-42 — the title`. For chat and email bodies."),
-    # RADD-1248: the page a comment or page event is about, and the comment
-    # itself. Resolved from the payload's refs, so they read the same on a page
-    # event (`page` ref) and on a page comment (the same ref, as a subject).
-    TokenInfo("{{page.title}}", "The page's title, on a page event or a page comment."),
-    TokenInfo("{{page.path}}", "Its readable address inside the space, e.g. onboarding/laptops."),
-    TokenInfo("{{page.space}}", "Its space's slug."),
-    TokenInfo("{{page.url}}", "A permalink to the page (survives renames and moves)."),
-    TokenInfo("{{comment.excerpt}}", "The comment's first 200 characters, on a comment event."),
-    TokenInfo("{{comment.visibility}}", "public or internal."),
-    TokenInfo("{{comment.parent_id}}", "The thread root's id when the comment is a reply; blank on a root."),
     TokenInfo(
         "{{payload.<path>}}",
         "Anything from the raw event payload, by dotted path — e.g. "
@@ -90,7 +80,19 @@ TOKENS: tuple[TokenInfo, ...] = (
 )
 
 
-@lru_cache(maxsize=1)
+def all_tokens() -> tuple[TokenInfo, ...]:
+    """The engine's own tokens plus every registered provider's (RADD-1324) —
+    what the catalog serves and what the reserved roots derive from."""
+    from radd.kernel.registry import registries
+
+    contributed = tuple(
+        TokenInfo(f"{{{{{provider.root}.{field_name}}}}}", description)
+        for provider in registries.token_providers.values()
+        for field_name, description in provider.tokens
+    )
+    return (*TOKENS, *contributed)
+
+
 def reserved_roots() -> frozenset[str]:
     """The first segment of every documented token — the words a node may NOT be
     named (spec 120).
@@ -101,11 +103,19 @@ def reserved_roots() -> frozenset[str]:
     reserved would let someone name a node `item` and shadow `{{item.key}}` in
     every action of the graph.
 
-    Memoised because `Renderer` asks per TOKEN, and `TOKENS` is a module
-    constant — recomputing a twelve-element frozenset inside a render loop over
-    200 items is work with no answer attached to it.
+    Memoised per set of registered providers (RADD-1324: a plugin can add a
+    root), because `Renderer` asks per TOKEN and recomputing inside a render
+    loop over 200 items is work with no answer attached to it.
     """
-    return frozenset(token.token.strip("{} ").split(".", 1)[0] for token in TOKENS)
+    from radd.kernel.registry import registries
+
+    return _roots(tuple(sorted(registries.token_providers)))
+
+
+@lru_cache(maxsize=8)
+def _roots(provider_roots: tuple[str, ...]) -> frozenset[str]:
+    core = {token.token.strip("{} ").split(".", 1)[0] for token in TOKENS}
+    return frozenset(core | set(provider_roots))
 
 
 def _resolve(
@@ -127,42 +137,18 @@ def _resolve(
     if token.startswith("payload."):
         values = _payload_path(facts.payload, token.removeprefix("payload."))
         return ", ".join(str(v) for v in values) if values else None
-    if token.startswith("page."):
-        return _resolve_page(token.removeprefix("page."), facts.payload)
-    if token.startswith("comment."):
-        return _resolve_comment(token.removeprefix("comment."), facts.payload)
     if token.startswith("item.") and item_ctx is not None:
         value = item_ctx.get(token.removeprefix("item."))
         return None if value is None else str(value)
+    # RADD-1324: a root an entity's owner registered — `page`, `comment`, a
+    # plugin's `milestone` — answered from the refs the event carries.
+    from radd.kernel.registry import registries
+
+    root, dot, field_name = token.partition(".")
+    provider = registries.token_providers.get(root) if dot else None
+    if provider is not None:
+        return provider.resolve(field_name, facts.payload)
     return None
-
-
-def _resolve_page(field: str, payload: Mapping[str, Any]) -> str | None:
-    """The `page` ref the kernel wrote (RADD-1248): on a page event and on a
-    page comment alike. The space rides inside the ref, but page events also
-    carry a top-level `page_space` ref — either answers `page.space`."""
-    page = payload.get("page")
-    if not isinstance(page, dict):
-        return None
-    if field == "space":
-        space = page.get("space") or payload.get("page_space")
-        return str(space.get("slug")) if isinstance(space, dict) and space.get("slug") else None
-    if field == "url":
-        from radd.config import settings
-
-        number = page.get("number")
-        return f"{settings.app_base_url.rstrip('/')}/pages?pageId={number}" if number else None
-    value = page.get(field)
-    return None if value is None or isinstance(value, dict) else str(value)
-
-
-def _resolve_comment(field: str, payload: Mapping[str, Any]) -> str | None:
-    """The comment event's own data — `excerpt`, `visibility`, `parent_id`."""
-    key = {"parent_id": "parent_comment_id"}.get(field, field)
-    if key not in ("excerpt", "visibility", "parent_comment_id"):
-        return None
-    value = payload.get(key)
-    return "" if value is None and key == "parent_comment_id" else (None if value is None else str(value))
 
 
 def _resolve_items(field: str, items: list[dict[str, Any]] | None) -> str | None:

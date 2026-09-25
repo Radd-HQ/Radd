@@ -2,7 +2,7 @@ from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin, SlqFieldSpec
 from radd.kernel import PermissionSpec
 
-from .automation import COMMENT_GATE  # RADD-1322: "Comment is" belongs to comments
+from .automation import COMMENT_GATE, COMMENT_TOKENS  # RADD-1322/1324: "Comment is" + {{comment.*}}
 from .slq import commented_by_item_ids
 
 from .router import router
@@ -52,6 +52,7 @@ _COMMENT_PAYLOAD_SCHEMA: dict = {
 plugin = RaddPlugin(
     name="comments",
     automation_nodes=(COMMENT_GATE,),
+    token_providers=(COMMENT_TOKENS,),
     permissions=(
         PermissionSpec("comment.write", "project", "Comment on the project's work items."),
         PermissionSpec("comment.read_internal", "project", "See internal (team-only) comments."),

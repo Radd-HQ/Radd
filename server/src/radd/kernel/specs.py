@@ -369,6 +369,27 @@ class OutputField:
     description: str = ""
 
 
+# --- template tokens (RADD-1324) ----------------------------------------------
+@dataclass(frozen=True)
+class TokenProviderSpec:
+    """A `{{root.field}}` vocabulary an automation's text can use, contributed by
+    the module that owns the entity (RADD-1324).
+
+    `page` and `comment` lived inside the automation engine, which meant the
+    engine knew the shape of those modules' event payloads — and a plugin could
+    not offer `{{milestone.name}}` at all. A provider reads the event PAYLOAD
+    (where the kernel writes each subject's ref, RADD-923) and answers one field.
+
+    `resolve(field, payload) -> str | None`: None means "nothing to say", and the
+    token then renders verbatim, exactly as an unknown token always has.
+    """
+
+    root: str
+    #: (field, description) pairs — what the editor's token panel lists.
+    tokens: tuple[tuple[str, str], ...]
+    resolve: Callable[[str, Mapping[str, Any]], str | None]
+
+
 # --- trigger kinds (RADD-1323) -------------------------------------------------
 @dataclass(frozen=True)
 class TriggerKindSpec:

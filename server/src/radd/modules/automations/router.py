@@ -143,7 +143,7 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
             TemplateTokenInfo(
                 token=info.token, description=info.description, needs_item=info.needs_item
             )
-            for info in templating.TOKENS
+            for info in templating.all_tokens()
         ],
     )
 

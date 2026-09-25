@@ -396,9 +396,13 @@ def test_the_classifier_declares_its_answers_as_an_enum():
 def test_reserved_roots_are_derived_from_the_token_catalogue():
     """Not hand-listed: a root that stopped being reserved would let someone name
     a node `item` and shadow `{{item.key}}` everywhere in the graph."""
+    from radd.config import settings
+    from radd.kernel import load_plugins
+
+    load_plugins(settings.modules)  # RADD-1324: page/comment are registered providers
     roots = templating.reserved_roots()
     assert {"item", "items", "actor", "payload", "event_type", "page", "comment"} <= roots
-    for token in templating.TOKENS:
+    for token in templating.all_tokens():
         assert token.token.strip("{} ").split(".", 1)[0] in roots
 
 

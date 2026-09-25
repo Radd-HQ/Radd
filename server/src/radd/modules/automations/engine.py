@@ -32,6 +32,7 @@ import hashlib
 import hmac
 import json
 import logging
+from dataclasses import replace
 import uuid
 
 import httpx
@@ -304,6 +305,22 @@ def _subjects_of(event: Event) -> dict[str, tuple[uuid.UUID, ...]]:
 
 
 # --- per-event application (one transaction per event; the caller commits) ---
+
+
+async def _seeded_facts(session: AsyncSession, subject: str, subject_id: uuid.UUID):
+    """A manual run's stand-in facts, carrying the seeded subject's REF the way
+    an event carries it (RADD-1324) — so `{{page.title}}` resolves on a page
+    run exactly as it does on a page event."""
+    from radd.kernel.registry import registries
+
+    facts = _manual_facts()
+    ref = registries.entity_refs.get(subject)
+    if ref is None or subject == graph.ITEM_SUBJECT:
+        return facts
+    resolved = await ref.ref(session, subject_id)
+    if resolved is None:
+        return facts
+    return replace(facts, payload={subject: resolved})
 
 
 def _matching_kind(event: Event, rules: list) -> list:
@@ -598,7 +615,7 @@ async def run_manual(
     report = await run_graph(
         session,
         rule,
-        Packet.of(_manual_facts(), **{subject: (item_id,)}),
+        Packet.of(await _seeded_facts(session, subject, item_id), **{subject: (item_id,)}),
         system_user,
         start_node_id=start_node_id,
         source=RunSource.MANUAL,
@@ -685,7 +702,10 @@ async def preview(
     report = await run_graph(
         session,
         rule,
-        Packet.of(_manual_facts(), **subjects),
+        Packet.of(
+            await _seeded_facts(session, subject, subject_id) if subject != graph.ITEM_SUBJECT and subject_id else _manual_facts(),
+            **subjects,
+        ),
         system_user,
         apply=False,
         start_node_id=trigger.id if trigger is not None else None,

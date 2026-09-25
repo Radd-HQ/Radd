@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from radd.sdk import AutomationNodeSpec
+from radd.sdk import AutomationNodeSpec, TokenProviderSpec
 
 SPACE_GATE_KEY = "gate.page_space"
 COMMENT_NODE_KEY = "page.comment"
@@ -79,7 +79,8 @@ async def _page(ctx: Any):
 
 
 async def plan_comment(ctx: Any) -> _CommentPlan:
-    body = str(ctx.node.params.get("body") or "").strip()
+    # RADD-1324: rendered — `{{page.title}}` used to be posted verbatim.
+    body = (await ctx.render(str(ctx.node.params.get("body") or ""))).strip()
     visibility = str(ctx.node.params.get("visibility") or "public")
     if not body:
         return _CommentPlan(None, body, visibility, "page.comment: no comment text", False)
@@ -211,4 +212,38 @@ SPACE_GATE = AutomationNodeSpec(
     needs_items=False,
     reads_event=True,
     plan=_plan_space,
+)
+
+
+# --- {{page.*}} tokens (RADD-1248), owned by pages since RADD-1324 -----------
+
+
+def resolve_page_token(field_name: str, payload: dict[str, Any]) -> str | None:
+    """The `page` ref the kernel wrote: on a page event and on a page comment
+    alike. The space rides inside the ref, but page events also carry a
+    top-level `page_space` ref — either answers `page.space`."""
+    page = payload.get("page")
+    if not isinstance(page, dict):
+        return None
+    if field_name == "space":
+        space = page.get("space") or payload.get("page_space")
+        return str(space.get("slug")) if isinstance(space, dict) and space.get("slug") else None
+    if field_name == "url":
+        from radd.config import settings
+
+        number = page.get("number")
+        return f"{settings.app_base_url.rstrip('/')}/pages?pageId={number}" if number else None
+    value = page.get(field_name)
+    return None if value is None or isinstance(value, dict) else str(value)
+
+
+PAGE_TOKENS = TokenProviderSpec(
+    root="page",
+    tokens=(
+        ("title", "The page's title, on a page event or a page comment."),
+        ("path", "Its readable address inside the space, e.g. onboarding/laptops."),
+        ("space", "Its space's slug."),
+        ("url", "A permalink to the page (survives renames and moves)."),
+    ),
+    resolve=resolve_page_token,
 )

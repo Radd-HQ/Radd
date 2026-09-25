@@ -13,9 +13,8 @@ is its repository's default project), and the executor supplies the savepoint,
 the budget and the loop guard. Nothing here imports `automations`.
 
 Where the version comes from: the event's own `version` (the tag with a leading
-`v` stripped), unless the node names one. A literal override exists for the
-"publish 2.0 now" button of a manual run; templating belongs to the engine, and
-this module cannot reach it.
+`v` stripped), unless the node names one — a literal, or a template rendered
+through `ctx.render` (RADD-1324).
 """
 
 from __future__ import annotations
@@ -83,7 +82,9 @@ async def plan_publish(ctx: Any) -> _PublishPlan:
     from . import service as releases
 
     payload = _payload(ctx)
-    override = str(ctx.node.params.get("version") or "").strip()
+    # RADD-1324: the override is a template now — `{{payload.tag}}`, a node's
+    # output — rendered like any action's text.
+    override = (await ctx.render(str(ctx.node.params.get("version") or ""), line=True)).strip()
     # The event's name and notes describe the event's version; an override is a
     # different version, so it takes neither.
     version = override or str(payload.get("version") or "").strip()

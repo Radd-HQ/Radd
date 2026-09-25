@@ -409,10 +409,14 @@ async def test_publish_says_why_it_cannot_run(db, project, admin):
 
     from radd.modules.releases.automation import plan_publish
 
+    async def render(text, *, line=False):
+        return str(text)
+
     def ctx(params, payload, subject_ids=()):
         return SimpleNamespace(
             session=db, node=SimpleNamespace(params=params),
             packet=SimpleNamespace(facts=SimpleNamespace(payload=payload)), subject_ids=subject_ids,
+            render=render,
         )
 
     no_project = await plan_publish(ctx({}, {"version": "1.0.0"}))

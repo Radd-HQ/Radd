@@ -192,6 +192,9 @@ async def test_page_comment_and_move_plan_against_the_page_subject(db, admin):
             self.session, self.actor, self.subject_ids = db, admin, ids
             self.node = type("N", (), {"params": params})()
 
+        async def render(self, text, *, line=False):  # RADD-1324: contributed nodes render
+            return str(text)
+
     plan = await plan_comment(Ctx({"body": "stale?"}, (page.id,)))
     assert plan.resolves and plan.page_id == page.id
     await apply_comment(Ctx({}, ()), plan)

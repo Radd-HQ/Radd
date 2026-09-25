@@ -289,7 +289,11 @@ def test_every_documented_token_actually_resolves():
     # that only resolves with items is still a resolving token.
     items = [item_ctx, {"key": "TD-43", "title": "Another", "id": "33333333-3333-3333-3333-333333333333"}]
 
-    for info in templating.TOKENS:
+    from radd.config import settings
+    from radd.kernel import load_plugins
+
+    load_plugins(settings.modules)  # RADD-1324: page/comment tokens come from providers
+    for info in templating.all_tokens():
         token = info.token
         if "<path>" in token:  # the documented shape, not a literal token
             token = "{{payload.changes.field}}"
