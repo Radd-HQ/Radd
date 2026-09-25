@@ -113,7 +113,11 @@ async def gitlab_webhook(
 
     # RADD-1259: time added or removed on the MR → fetch the entries and mirror
     # them. Needs a token; a hook-only connection simply reports nothing.
-    if kind == GitlabEventKind.MERGE_REQUEST and connection.api_token and parsing.time_spent_changed(payload):
+    # RADD-1321: only a repository someone switched mirroring on for.
+    if (
+        kind == GitlabEventKind.MERGE_REQUEST and connection.api_token and repo is not None
+        and repo.mirror_time and parsing.time_spent_changed(payload)
+    ):
         attributes = payload.get("object_attributes") or {}
         try:
             report = await timelogs.reconcile_merge_request(

@@ -98,6 +98,8 @@ export type ForgejoRepo = {
   /** RADD-1258: the work category a worklog mirrored from this repository's
    *  MRs/PRs carries; null = the instance's Development. */
   time_category_id: string | null;
+  /** RADD-1321: copy MR/PR time into worklogs — off until switched on. */
+  mirror_time: boolean;
   created_at: string;
 };
 

@@ -206,23 +206,24 @@ async def _run(
                 status=str(status),
             )
             # RADD-1260: the PR's tracked time — one paged GET each; the seam
-            # makes a repeat run a no-op.
-            try:
-                report.absorb_time(
-                    await timelogs.reconcile_pull_request(
-                        session,
-                        connection,
-                        repo,
-                        full_name=repo.full_name,
-                        index=number,
-                        title=str(pull.get("title") or ""),
-                        head_branch=head_ref,
-                        body=str(pull.get("body") or ""),
-                        transport=transport,
+            # makes a repeat run a no-op. RADD-1321: only when switched on.
+            if repo.mirror_time:
+                try:
+                    report.absorb_time(
+                        await timelogs.reconcile_pull_request(
+                            session,
+                            connection,
+                            repo,
+                            full_name=repo.full_name,
+                            index=number,
+                            title=str(pull.get("title") or ""),
+                            head_branch=head_ref,
+                            body=str(pull.get("body") or ""),
+                            transport=transport,
+                        )
                     )
-                )
-            except Exception:
-                logger.exception("forgejo backfill %s: tracked-time mirror failed for #%s", repo.full_name, number)
+                except Exception:
+                    logger.exception("forgejo backfill %s: tracked-time mirror failed for #%s", repo.full_name, number)
 
         async for commit in client.paged(
             f"/repos/{repo.full_name}/commits", {"sha": repo.default_branch}, cap=cap

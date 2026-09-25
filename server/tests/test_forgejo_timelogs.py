@@ -59,6 +59,8 @@ async def world(db):
         db, ConnectionCreate(name=f"fj-{suffix}", base_url="https://git.example.com", api_token="tok", webhook_secret="s")
     )
     repo = await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="acme/widgets"))
+    repo.mirror_time = True  # RADD-1321: the switch is off by default; these tests are the ON case
+    await db.flush()
     return {"admin": admin, "project": project, "item": item, "key": f"{project.key}-{item.number}", "connection": connection, "repo": repo}
 
 
@@ -153,8 +155,16 @@ async def test_pull_request_delivery_triggers_the_reconcile(db, world, monkeypat
     body = json.dumps(payload).encode()
     signature = hmac.new(b"s", body, hashlib.sha256).hexdigest()
     transport = httpx.ASGITransport(app=_app(db))
+    headers = {"X-Forgejo-Signature": signature, "X-Forgejo-Event": "pull_request", "Content-Type": "application/json"}
+    # RADD-1321: the repository's switch OFF — linked, no time fetched, no worklog.
+    world["repo"].mirror_time = False
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/integrations/forgejo", content=body, headers={"X-Forgejo-Signature": signature, "X-Forgejo-Event": "pull_request", "Content-Type": "application/json"})
+        off = await client.post("/integrations/forgejo", content=body, headers=headers)
+    assert off.status_code == 200 and "worklogs" not in off.json()
+    assert calls["times"] == 0 and await _worklogs(db, world["item"].id) == []
+    world["repo"].mirror_time = True
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/integrations/forgejo", content=body, headers=headers)
     assert response.status_code == 200
     result = response.json()
     assert result["linked"] == 1 and result["worklogs"]["created"] == 1

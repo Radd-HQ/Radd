@@ -110,7 +110,8 @@ async def forgejo_webhook(
     # RADD-1260: Forgejo has no tracked-time webhook, so EVERY pull_request
     # delivery reconciles that PR's time. Needs a token; best-effort — the link
     # half has already landed.
-    if kind == ForgejoEventKind.PULL_REQUEST and connection.api_token:
+    # RADD-1321: only a repository someone switched mirroring on for.
+    if kind == ForgejoEventKind.PULL_REQUEST and connection.api_token and _repo is not None and _repo.mirror_time:
         pull = payload.get("pull_request") or {}
         full_name = str((payload.get("repository") or {}).get("full_name") or "")
         try:

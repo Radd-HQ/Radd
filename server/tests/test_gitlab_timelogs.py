@@ -57,6 +57,8 @@ async def world(db):
         db, ConnectionCreate(name=f"gl-{suffix}", base_url="https://gitlab.example.com", api_token="glpat-x", webhook_secret="s")
     )
     repo = await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="pipe/tools"))
+    repo.mirror_time = True  # RADD-1321: the switch is off by default; these tests are the ON case
+    await db.flush()
     return {"admin": admin, "project": project, "item": item, "key": f"{project.key}-{item.number}", "connection": connection, "repo": repo}
 
 
@@ -239,6 +241,14 @@ async def test_backfill_walks_merge_requests_and_imports_their_time_once(db, wor
     transport = httpx.MockTransport(handler)
     from radd.modules.events.models import Event
 
+    # RADD-1321: with the repository's switch OFF the walk still links, and
+    # mirrors nothing — the default for every repository.
+    world["repo"].mirror_time = False
+    off = await backfill.run(db, world["connection"], world["repo"], transport=transport)
+    assert off.linked == 4 and not off.worklogs.get("created")
+    assert await _worklogs(db, world["item"].id) == []
+    world["repo"].mirror_time = True
+
     head = (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
     first = await backfill.run(db, world["connection"], world["repo"], transport=transport)
     assert (first.branches, first.merge_requests, first.commits, first.linked) == (1, 2, 1, 4)
@@ -246,7 +256,8 @@ async def test_backfill_walks_merge_requests_and_imports_their_time_once(db, wor
     # RADD-1314: history is recorded, and nothing may react to it — every event
     # the backfill emitted (links AND the mirrored worklog) is silent.
     emitted = list((await db.execute(select(Event).where(Event.id > head))).scalars())
-    assert {"vcs.linked", "worklog.created"} <= {e.event_type for e in emitted}
+    # (the links were made by the OFF run above, so this run re-links: vcs.updated)
+    assert {"worklog.created"} <= {e.event_type for e in emitted}
     assert all(e.silent for e in emitted), [e.event_type for e in emitted if not e.silent]
 
     second = await backfill.run(db, world["connection"], world["repo"], transport=transport)

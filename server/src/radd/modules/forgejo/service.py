@@ -85,6 +85,7 @@ async def _repo_snapshot(session: AsyncSession, repo: ForgejoRepo) -> dict:
         "project": ref["key"] if ref else None,
         "default_branch": repo.default_branch,
         "time_category_id": str(repo.time_category_id) if repo.time_category_id else None,
+        "mirror_time": repo.mirror_time,
     }
 
 
@@ -248,6 +249,8 @@ async def update_repo(
         repo.default_branch = data.default_branch
     if "time_category_id" in data.model_fields_set:  # explicit null = the default
         repo.time_category_id = data.time_category_id
+    if data.mirror_time is not None:
+        repo.mirror_time = data.mirror_time
     await session.flush()
     diff = changes.diff(before, await _repo_snapshot(session, repo))
     await _emit_repo(session, ForgejoEvent.REPO_UPDATED, repo, actor_id, diff)

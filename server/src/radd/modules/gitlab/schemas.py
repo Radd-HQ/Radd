@@ -59,6 +59,7 @@ class RepoUpdate(BaseModel):
     project_id: uuid.UUID | None = None
     default_branch: str | None = Field(default=None, max_length=200)
     time_category_id: uuid.UUID | None = None
+    mirror_time: bool | None = None  # RADD-1321
 
 
 class RepoRead(BaseModel):
@@ -71,6 +72,7 @@ class RepoRead(BaseModel):
     default_branch: str
     last_backfill_at: datetime | None
     time_category_id: uuid.UUID | None = None
+    mirror_time: bool = False
     created_at: UtcDatetime
 
 

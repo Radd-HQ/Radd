@@ -222,7 +222,7 @@ async def _run(
             )
             # RADD-1259: the historical time. Only MRs that report any — one
             # GraphQL round trip each, none for the rest.
-            if int((mr.get("time_stats") or {}).get("total_time_spent") or 0) > 0:
+            if repo.mirror_time and int((mr.get("time_stats") or {}).get("total_time_spent") or 0) > 0:
                 try:
                     time_report = await timelogs.reconcile_merge_request(
                         session,

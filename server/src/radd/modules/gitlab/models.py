@@ -12,7 +12,7 @@ stored as-is because it must be replayable to sign every request; reads expose
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, true
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, false, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -79,3 +79,6 @@ class GitlabRepo(Base, TimestampMixin):
     time_category_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("work_categories.id", ondelete="SET NULL"), default=None
     )
+    # RADD-1321: copy time logged on this repository's merge/pull requests into
+    # worklogs. OFF by default — nothing mirrors until someone switches it on.
+    mirror_time: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

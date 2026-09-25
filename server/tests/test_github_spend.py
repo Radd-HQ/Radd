@@ -85,6 +85,8 @@ async def world(db):
     await categories.ensure_default_categories(db)
     connection = await service.create_connection(db, ConnectionCreate(name=f"gh-{suffix}", webhook_secret=SECRET))
     repo = await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="acme/widgets"))
+    repo.mirror_time = True  # RADD-1321: the switch is off by default; these tests are the ON case
+    await db.flush()
     return {"admin": admin, "project": project, "item": item, "key": f"{project.key}-{item.number}", "connection": connection, "repo": repo}
 
 
@@ -132,6 +134,12 @@ async def test_comment_created_edited_deleted(db, world):
     key = world["key"]
     # The login is known: map it by hand (GitHub hides emails).
     await timemirror.set_user_link(db, provider=VcsProvider.GITHUB, connection_id=world["connection"].id, username="octo", user_id=admin.id, actor_id=admin.id)
+
+    # RADD-1321: the repository's switch OFF — the /spend comment writes nothing.
+    world["repo"].mirror_time = False
+    off = await _deliver(db, "issue_comment", _comment("created", 500, "/spend 1h", number=5, title=f"{key} the PR", login="octo"))
+    assert "worklogs" not in off and await _worklogs(db, world["item"].id) == []
+    world["repo"].mirror_time = True
 
     created = await _deliver(db, "issue_comment", _comment("created", 501, "/spend 1h30\n/spend 45m 2026-09-18 pairing", number=5, title=f"{key} the PR", login="octo"))
     assert created["worklogs"]["created"] == 2

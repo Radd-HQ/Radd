@@ -204,8 +204,11 @@ async def _run(
             )
             # RADD-1261: the PR's comments (issue + review), replayed through the
             # /spend convention as one whole-scope reconcile — only when it has
-            # comments at all, so a quiet PR costs nothing.
-            if int(pull.get("comments") or 0) + int(pull.get("review_comments") or 0) > 0 or "comments" not in pull:
+            # comments at all, so a quiet PR costs nothing. RADD-1321: and only
+            # for a repository someone switched mirroring on for.
+            if repo.mirror_time and (
+                int(pull.get("comments") or 0) + int(pull.get("review_comments") or 0) > 0 or "comments" not in pull
+            ):
                 comments: list[dict[str, Any]] = []
                 try:
                     async for comment in client.paged(f"/repos/{name}/issues/{number}/comments", cap=settings.github_backfill_max_comments):

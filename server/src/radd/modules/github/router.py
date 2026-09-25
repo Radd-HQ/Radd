@@ -125,6 +125,8 @@ async def _handle_comment(
     """RADD-1261: a PR comment or review carrying `/spend` lines (or `/unspend`).
     Comments on plain issues are ignored — the convention is for pull requests."""
     result: dict[str, Any] = dict(_NOTHING)
+    if repo is None or not repo.mirror_time:
+        return result  # RADD-1321: mirroring is a per-repository switch, off by default
     repo_name = str((payload.get("repository") or {}).get("full_name") or "")
     action = str(payload.get("action") or "")
     if kind == GithubEventKind.ISSUE_COMMENT:

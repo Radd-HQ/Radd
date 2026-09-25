@@ -120,6 +120,12 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
       api.patch<ForgejoRepo>(config.paths.repo(vars.id), { time_category_id: vars.categoryId }),
     onSettled: refresh,
   });
+  // RADD-1321: time mirroring is a per-repository switch, off by default.
+  const setMirror = useMutation({
+    mutationFn: (vars: { id: string; mirror: boolean }) =>
+      api.patch<ForgejoRepo>(config.paths.repo(vars.id), { mirror_time: vars.mirror }),
+    onSettled: refresh,
+  });
   const removeRepo = useMutation({
     mutationFn: (id: string) => api.delete<void>(config.paths.repo(id)),
     onSettled: refresh,
@@ -271,6 +277,20 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
                                     </option>
                                   ))}
                               </SelectField>
+                              <label
+                                className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[12px] text-fg-secondary"
+                                title="Copy time logged on this repository's merge/pull requests into worklogs"
+                              >
+                                <input
+                                  type="checkbox"
+                                  data-mirror-time={repo.full_name}
+                                  checked={repo.mirror_time}
+                                  disabled={!canManage}
+                                  onChange={(event) => setMirror.mutate({ id: repo.id, mirror: event.target.checked })}
+                                  className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
+                                />
+                                Mirror time
+                              </label>
                               {canManage && (
                                 <>
                                   <Button
