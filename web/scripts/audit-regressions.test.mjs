@@ -61,7 +61,9 @@ const oldFetch = globalThis.fetch;
 globalThis.fetch = (_url, options) => new Promise((_resolve, reject) => {
   options.signal.addEventListener("abort", () => reject(options.signal.reason), {once: true});
 });
+const sdkModule = evaluate(readFileSync(new URL('../packages/plugin-sdk/src/api.ts',import.meta.url),'utf8').replace('export { API_BASE };',''), {}, ['api','ApiError','provideApiTransport']);
 const requestModule = evaluate(source("api.ts"), {
+  ApiError: sdkModule.ApiError, provideApiTransport: sdkModule.provideApiTransport,
   API_BASE: "/api", On401: {redirect: "redirect"}, RoutePath: {login: "/login"}, pushToast() {}, FORBIDDEN_FALLBACK_MESSAGE: "Denied",
 }, ["api", "abortAccountRequests"]);
 let stopped = false;

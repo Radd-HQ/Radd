@@ -1,3 +1,4 @@
+import { capabilitiesQuery } from "../../lib/queries";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -74,7 +75,8 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
   // `pluginManagerSection` widget keyed by its registry name — the kernel forces nothing. If it did,
   // the row gets an expander revealing that plugin-owned admin UI (its GlobalContributionToggles).
   const adminSection = useSlotMatch(SlotId.pluginManagerSection, plugin.name);
-  const settingsLink = settingsPathForPlugin(plugin.name);
+  const manifest = useQuery(capabilitiesQuery);
+  const settingsLink = settingsPathForPlugin(plugin.name, manifest.data);
   const hasSection = adminSection !== undefined;
   const [open, setOpen] = useState(false);
 

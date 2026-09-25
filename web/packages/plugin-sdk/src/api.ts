@@ -17,16 +17,30 @@ export class ApiError extends Error {
   }
 }
 
-interface RequestOptions {
+export interface RequestOptions {
   method?: string;
   signal?: AbortSignal;
+  keepalive?: boolean;
   body?: unknown;
   query?: Record<string, string | undefined>;
   /** When true, a 401 rejects instead of redirecting to /login (default redirects). */
   throwOn401?: boolean;
 }
 
+type Transport = <T>(path: string, options: RequestOptions) => Promise<T>;
+let hostTransport: Transport | undefined;
+let hostErrorMessage: ((error: unknown) => string) | undefined;
+/** Share the host's session cancellation and error semantics; features never provide this. */
+export function provideApiTransport(transport: Transport, formatError?: (error: unknown) => string): void {
+  hostTransport = transport;
+  hostErrorMessage = formatError;
+}
+export function errorMessage(error: unknown): string {
+  return hostErrorMessage ? hostErrorMessage(error) : error instanceof Error ? error.message : String(error);
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (hostTransport) return hostTransport<T>(path, options);
   const { method = "GET", body, query, throwOn401 = false } = options;
   const url = new URL(API_BASE + path, window.location.origin);
   if (query) {

@@ -1,5 +1,4 @@
-import { useSyncExternalStore, type ComponentType } from "react";
-import { TextArea } from "./primitives";
+import { TextArea, Select } from "./primitives";
 
 /**
  * Host-provided components (RADD-1325).
@@ -11,52 +10,9 @@ import { TextArea } from "./primitives";
  * automation-node inspector looks and behaves like the host's own forms without shipping CodeMirror.
  */
 
-export interface CodeEditorProps {
-  value: string;
-  onChange: (value: string) => void;
-  /** e.g. "python". */
-  language?: string;
-  minHeight?: number;
-}
-
-export interface TokenListProps {
-  value: string[];
-  onChange: (value: string[]) => void;
-  placeholder?: string;
-  ariaLabel?: string;
-}
-
-export interface SchemaFormProps {
-  schema: Record<string, unknown>;
-  params: Record<string, unknown>;
-  onChange: (params: Record<string, unknown>) => void;
-}
-
-export interface HostComponents {
-  CodeEditor?: ComponentType<CodeEditorProps>;
-  TokenList?: ComponentType<TokenListProps>;
-  SchemaForm?: ComponentType<SchemaFormProps>;
-}
-
-let provided: HostComponents = {};
-const listeners = new Set<() => void>();
-
-/** Called once by the host at startup. */
-export function provideHostComponents(components: HostComponents): void {
-  provided = { ...provided, ...components };
-  for (const listener of listeners) listener();
-}
-
-function useProvided(): HostComponents {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    () => provided,
-  );
-}
-
+export { provideHostComponents } from "./host-registry";
+export type { HostComponents, CodeEditorProps, TokenListProps, SchemaFormProps, SettingsPageProps, SelectFieldProps } from "./host-registry";
+import { useProvided, type CodeEditorProps, type TokenListProps, type SchemaFormProps, type SettingsPageProps, type SelectFieldProps, type CalloutProps } from "./host-registry";
 /** A code editor — the host's CodeMirror, else a monospace text area. */
 export function CodeEditor(props: CodeEditorProps) {
   const { CodeEditor: Host } = useProvided();
@@ -91,4 +47,26 @@ export function TokenList(props: TokenListProps) {
 export function SchemaForm(props: SchemaFormProps) {
   const { SchemaForm: Host } = useProvided();
   return Host ? <Host {...props} /> : null;
+}
+
+
+/** Shared page chrome and controls; these contracts carry no feature implementation. */
+export function SettingsPage(props: SettingsPageProps) {
+  const { SettingsPage: Host } = useProvided();
+  return Host ? <Host {...props} /> : <section><h2>{props.title}</h2><p>{props.description}</p>{props.children}</section>;
+}
+export function SelectField(props: SelectFieldProps) {
+  const { SelectField: Host } = useProvided();
+  if (Host) return <Host {...props} />;
+  const { ariaLabel, hint: _hint, error: _error, onOpen: _onOpen, ...rest } = props;
+  return <Select {...rest} aria-label={ariaLabel} />;
+}
+export const CalloutKind = { info: "info", success: "success", warning: "warning", danger: "danger" } as const;
+export function Callout(props: CalloutProps) {
+  const { Callout: Host } = useProvided();
+  return Host ? <Host {...props} /> : <div role="note">{props.children}</div>;
+}
+export function QueryError(props: { label: string; error: unknown }) {
+  const { QueryError: Host } = useProvided();
+  return Host ? <Host {...props} /> : <p role="alert">Failed to load {props.label}: {String(props.error)}</p>;
 }

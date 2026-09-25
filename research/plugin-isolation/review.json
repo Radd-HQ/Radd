@@ -217,7 +217,7 @@
     "issue": null
   },
   "server/src/radd/kernel/specs.py": {
-    "sha256": "fb417c4fc9c8c9d1bcbb5b0f54b39de52ba0d3da49f89dc6285bf525d97eb7d3",
+    "sha256": "2f7c91380470a10fdbd2e946277e769b5a24491d2eb6098bb23d7c50bd4b3a01",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -1484,14 +1484,14 @@
     "issue": null
   },
   "server/src/radd/modules/capabilities/router.py": {
-    "sha256": "0a2c7167a05fce0ee0a9b401d0901d3aaa189c588d13440fdc305ee7822872ed",
+    "sha256": "6a95f0be29ac4e53e914444c8900b0e7e3c013cb224f2e86537b6b496589fbde",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
     "issue": null
   },
   "server/src/radd/modules/capabilities/schemas.py": {
-    "sha256": "e07daae9280bd1a89a5f6f4a3851be359dc57cbead4000cd949da4b429ca627a",
+    "sha256": "07fd51c19795bf79c74285d870cf4dcac2b7f415b66f656de1aaaf841ef6dcd3",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -8182,6 +8182,15 @@
     "evidence": [],
     "issue": null
   },
+  "web/src/components/shell/ContributedPage.tsx": {
+    "sha256": "febf5dd24d67c4fe9bf47e0983aeb910a0458087d55390a342cbc2d661f124fb",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+    ],
+    "issue": "RADD-1351"
+  },
   "web/src/components/shell/InboxPeek.tsx": {
     "sha256": "ff988044e73862d7c9f6d4453a7eb660e0e49ef3ed01459fc77b6eab675a4499",
     "status": "unreviewed",
@@ -8204,11 +8213,13 @@
     "issue": null
   },
   "web/src/components/shell/PluginPage.tsx": {
-    "sha256": "dd5c48beecf718a931945835227980dd6766fe0ba41fc22d9fa805a205cb20d2",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "b631a97376ec7358e09fe79f64a9ad24236d1276946ed35b74f0e0efc4bca6e3",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+    ],
+    "issue": "RADD-1351"
   },
   "web/src/components/shell/PluginRemotes.tsx": {
     "sha256": "2dd8a97a90eb89441f5c24000de62c737973fa47a32b695f65df61fe94872371",
@@ -8225,11 +8236,13 @@
     "issue": null
   },
   "web/src/components/shell/SettingsPluginPage.tsx": {
-    "sha256": "dd8908341f6d583cb5de8f800f3daf0715a7cfb0cdb7eaafbe09f127b48af0ff",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "62b4ddc13607f0d731d2af51ea5d51597385a39525e179e50082fbf3d8bad1ea",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+    ],
+    "issue": "RADD-1351"
   },
   "web/src/components/shell/Sidebar.tsx": {
     "sha256": "d0b4db585657778489da712df0d2da6738a1e32f505848efaa50f2c150a9fdf6",
@@ -8519,11 +8532,13 @@
     "issue": null
   },
   "web/src/host-components.tsx": {
-    "sha256": "1cf533c83f4f7119b23c505333c5b22c363d5262c765c1f3d221b77c65686f97",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "8b2611491e417e23e91ae25543d50e7bf86d5b31be074fba4836609881f12dca",
+    "status": "partially_reviewed",
+    "owner": "platform (residual feature ownership under review)",
+    "evidence": [
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+    ],
+    "issue": "RADD-1351"
   },
   "web/src/index.css": {
     "sha256": "68bea747f3680cdfcd6a17cfad45b94d5ec85d56788e31197b429cf5bb35e755",
@@ -8561,11 +8576,13 @@
     "issue": null
   },
   "web/src/lib/api.ts": {
-    "sha256": "fbd2e34c8907353d67e7786c098257eab3be10d4308be4d980f1f80fcc8c606e",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "075cb1e57922028b70febaf115e3962a7015a6e0a52afe440b4be397a7bf39e3",
+    "status": "partially_reviewed",
+    "owner": "platform (residual feature ownership under review)",
+    "evidence": [
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+    ],
+    "issue": "RADD-1351"
   },
   "web/src/lib/attachments.ts": {
     "sha256": "98d3ec82c28b98aa26378770d11015325fb72952a5f3d27b1612395aaf542420",
@@ -8750,11 +8767,13 @@
     "issue": null
   },
   "web/src/lib/dates.ts": {
-    "sha256": "c86320edf51db8a34e5b3d957dbdd67af9d5e482055d240c22660d1361d449d6",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6ef472ddaf0abf7ccbc29f72bf84c457a985a9d0d4921be0dd0050835edfde57",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+    ],
+    "issue": "RADD-1351"
   },
   "web/src/lib/dialog-focus.ts": {
     "sha256": "ec0cc71d214437d10bdba8cf28b1d957f57d600b93951b9a81cbdcae25e9b70b",
@@ -8946,14 +8965,13 @@
     "issue": null
   },
   "web/src/lib/plugin-loader.ts": {
-    "sha256": "1a13d0d4529b871aaa095deb8ea31b42f7356f87dca82844f05b2f7648bbfc14",
+    "sha256": "4185ffc60cba4fd84ed5467d8102d91db809edbe81db53d7dff6148a4cc31653",
     "status": "reviewed",
-    "owner": "platform UI primitives and contribution lifecycle",
+    "owner": "platform",
     "evidence": [
-      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
-      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
     ],
-    "issue": "RADD-1345"
+    "issue": "RADD-1351"
   },
   "web/src/lib/queries/activity.ts": {
     "sha256": "b364bad7197577821226427796f432823f720489530a328300a15649339703aa",
@@ -9453,7 +9471,7 @@
     "issue": null
   },
   "web/src/lib/types/plugins.ts": {
-    "sha256": "328b22ff1d24b869612c1102dbe701f3279f7ca463c1a85a28f03e85e6b6c266",
+    "sha256": "32a29bf36edf2d0a4a33f3ccc6cc925b1a5574b915dff7961ff35dd04095ca00",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9978,11 +9996,13 @@
     "issue": null
   },
   "web/src/routes/settings/layout.tsx": {
-    "sha256": "cbf56365e3c16a3a482a12f6245f9d30c21256064d603f02fedfdace5fd4e2da",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "849198bac222b596a5b88e1ee5f3a8d44ab800ca78c7e57bb6a674c725cf0fe6",
+    "status": "partially_reviewed",
+    "owner": "platform (residual feature ownership under review)",
+    "evidence": [
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+    ],
+    "issue": "RADD-1351"
   },
   "web/src/routes/settings/link-types.tsx": {
     "sha256": "77d25738835ef96dc21e38a2f0cf2bd053faac6b50573f410bd2d7ffc315442c",
@@ -10013,11 +10033,13 @@
     "issue": null
   },
   "web/src/routes/settings/plugins.tsx": {
-    "sha256": "3b56b7826dae301edcc0c8a21939c254d1efbc96cedb76c96e61170ad24fbba1",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "365cbbdf0d4d193f5e8cc203e3a877e119a476c2d8f92c714b510d9053db6e4b",
+    "status": "partially_reviewed",
+    "owner": "platform (residual feature ownership under review)",
+    "evidence": [
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+    ],
+    "issue": "RADD-1351"
   },
   "web/src/routes/settings/profile.tsx": {
     "sha256": "c6a4d5724978be5459efafbf64e3622419ae1f46c1600296b45fac19b6226c9b",
@@ -10134,7 +10156,7 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/api.ts": {
-    "sha256": "df1fcc2b78c183cbd68a5c3d206d0b099abb607b05c74eeb2959730ca8376719",
+    "sha256": "fcceb9fc6bf692dabc2d29eb2c623975244b3eb3f43dce432a73f6ef94226c2b",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -10150,29 +10172,48 @@
     ],
     "issue": "RADD-1345"
   },
+  "web/packages/plugin-sdk/src/dates.ts": {
+    "sha256": "c86320edf51db8a34e5b3d957dbdd67af9d5e482055d240c22660d1361d449d6",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+    ],
+    "issue": "RADD-1351"
+  },
   "web/packages/plugin-sdk/src/hooks.ts": {
-    "sha256": "029c281de34ee7bdfda097b1ab3f5fa84e7f7e85b0470d72fb00f50e63eec54f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "856b819d052f8225ae89a867bbbe0b76bdb1e42c6da87802da3d9115199b22da",
+    "status": "partially_reviewed",
+    "owner": "platform (residual feature ownership under review)",
+    "evidence": [
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+    ],
+    "issue": "RADD-1351"
+  },
+  "web/packages/plugin-sdk/src/host-registry.ts": {
+    "sha256": "173fb0b8fceb6ba6e1501dbb4dc962ab3e5c70dc57f841092b95a7d263a22d57",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+    ],
+    "issue": "RADD-1351"
   },
   "web/packages/plugin-sdk/src/host.tsx": {
-    "sha256": "cfd88b4c40ebedc915ee4deb041251c6362b7c5c44453210a6f918022fb8310a",
+    "sha256": "4219d4a36e2c7ed0e69647de65d61594f5e33aa44ca24b0d4cc861ce052d6afa",
+    "status": "reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
+    ],
+    "issue": "RADD-1351"
+  },
+  "web/packages/plugin-sdk/src/index.ts": {
+    "sha256": "0a14403a477f5237d9c2ef6eab7711a0f7164ceed9b6d3f7998bcd01c84b92fa",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
     "issue": null
-  },
-  "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "dc51d264bd51d748185bc2a1b7697856d96310923f95859388c3da7293a2d43a",
-    "status": "reviewed",
-    "owner": "platform UI primitives and contribution lifecycle",
-    "evidence": [
-      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
-      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
-    ],
-    "issue": "RADD-1345"
   },
   "web/packages/plugin-sdk/src/plugin.ts": {
     "sha256": "96df02dce5161b51da511d0c266bc2ab740cf85bcc737a4644ec4bde09dd46e8",
@@ -10185,18 +10226,22 @@
     "issue": "RADD-1345"
   },
   "web/packages/plugin-sdk/src/primitives.tsx": {
-    "sha256": "9b7abf07e13b9bfea505d6821d435aabfc671d0842e82507cd8f432bf5c3a65f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "8d15c05b63ef863cf3070c3dd5065597f7d088d0d3b240f26d89e7f5863c7968",
+    "status": "partially_reviewed",
+    "owner": "platform (residual feature ownership under review)",
+    "evidence": [
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+    ],
+    "issue": "RADD-1351"
   },
   "web/packages/plugin-sdk/src/slots.tsx": {
-    "sha256": "37c73ea51e86f567527e6c604c5624bfd6c36a5d42dbff5010ba0fb7630c6dcf",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "9c21989edb3df158672ca647847c767df996ec66baeb7e6713c8aea1e3fadb73",
+    "status": "partially_reviewed",
+    "owner": "platform (residual feature ownership under review)",
+    "evidence": [
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+    ],
+    "issue": "RADD-1351"
   },
   "web/packages/plugin-sdk/src/styles/components.css": {
     "sha256": "21574be09e4c37f1109dd626a00bdda9acb8abe589ff5eb3f7d14b730518c80d",
@@ -10227,21 +10272,20 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/types.ts": {
-    "sha256": "24cce9beb15703a9764c1322ee520517508af735e825a23caf8001025b082b47",
+    "sha256": "52f40ce8af6fa35bbccede6df14c2b7bcc671311cf3aa7feb73553d019e21fe5",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "4a783d51782119e24086cf1b193b2b7a6e73b671119889de47fec5da9ad9919a",
+    "sha256": "d7e7f3c3a511d36d229225de44d200812943ae37539b9758b449d0d88c1eedb6",
     "status": "reviewed",
-    "owner": "platform UI primitives and contribution lifecycle",
+    "owner": "platform",
     "evidence": [
-      "No Leave endpoint, vocabulary or enablement key in host; typed plugin data contracts with generation and actor scoped queries.",
-      "Build host and all remotes; browser-leave-availability.mjs; plugin-loader.test.mjs; plugin-boundaries.test.mjs."
+      "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
     ],
-    "issue": "RADD-1345"
+    "issue": "RADD-1351"
   },
   "examples/acme-notes/.venv/bin/activate_this.py": {
     "sha256": "8a8d0a6de7fa1a25c1777bfd7f246b79ac7a5a92fad05ee3b3d884da0f58340c",

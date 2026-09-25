@@ -991,6 +991,8 @@ class NavItemSpec:
     requires: tuple[str, ...] = ()  # permission atoms gating visibility
     order: int = 100
     capability: str = ""  # hide unless this capability is enabled
+    group: str = ""  # optional settings navigation group label
+    requires_admin: bool = False
 
 
 @dataclass(frozen=True)
@@ -1002,6 +1004,6 @@ class PluginUiManifest:
     # host imports at runtime and whose `activate()` registers its UI slots. Builtin remotes are
     # served same-origin under /plugins/<name>/; external plugins serve their own.
     remote: str = ""
-    # The @radd/plugin-sdk major the remote was built against; the host loader refuses an
-    # incompatible major (§9). Only meaningful when `remote` is set.
+    # The minimum @radd/plugin-sdk version required by the remote. The host refuses
+    # a different major or newer required minor/patch. Only meaningful with `remote`.
     ui_api_version: str = ""

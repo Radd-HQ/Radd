@@ -37,7 +37,7 @@ import {
 import { RoutePath } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { capabilitiesQuery } from "../../lib/queries";
-import { InstanceRole, Permission, type PermissionValue } from "../../lib/types";
+import { InstanceRole, Permission, type PermissionValue, type CapabilitiesManifest } from "../../lib/types";
 
 /** Predicate helpers a nav item uses to decide whether the viewer may see it. */
 interface NavGate {
@@ -56,6 +56,7 @@ interface NavGate {
 
 interface SettingsNavItem {
   to: string;
+  order?: number;
   label: string;
   icon: LucideIcon;
   show: (g: NavGate) => boolean;
@@ -332,7 +333,9 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
  * plugin's configuration reachable FROM its plugin, per `docs/plugin-ui.md`,
  * without duplicating the page into an accordion row.
  */
-export function settingsPathForPlugin(name: string): { to: string; label: string } | null {
+export function settingsPathForPlugin(name: string, manifest?: CapabilitiesManifest): { to: string; label: string } | null {
+  const contributed = manifest?.nav.find(n => n.plugin === name && n.section === "settings");
+  if (contributed) return { to: contributed.path, label: contributed.label };
   if (name === "jiraimport" || name === "confluenceimport") return { to: RoutePath.settingsImportData, label: "Import data" };
   for (const group of SETTINGS_NAV_GROUPS) {
     const match = group.items.find((item) =>
@@ -371,7 +374,7 @@ export function SettingsLayout() {
     (typeof item.plugin === "string" ? mounted.has(item.plugin) : item.plugin.some((name) => mounted.has(name)));
   const visibleGroups = SETTINGS_NAV_GROUPS.map((group) => ({
     label: group.label,
-    items: group.items.filter((item) => item.show(gate) && isMounted(item)),
+    items: group.items.map((item, index) => ({ ...item, order: item.order ?? index * 10 })).filter((item) => item.show(gate) && isMounted(item)),
   })).filter((group) => group.items.length > 0);
 
   // Plugin-contributed settings pages (spec 94): federated plugins register a `settings.page` slot
@@ -385,8 +388,21 @@ export function SettingsLayout() {
   const pluginSettingsNav = (manifest?.nav ?? [])
     .filter((n) => n.section === "settings")
     .filter((n) => !n.capability || enabledCaps.has(n.capability))
+    .filter((n) => !n.requires_admin || gate.instanceAdmin)
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => !disabledNav.has(n.path));
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks };
+  for (const nav of pluginSettingsNav) {
+    const label = nav.group || "Extensions";
+    let group = visibleGroups.find(g => g.label === label);
+    if (!group) { group = { label, items: [] }; visibleGroups.push(group); }
+    if (!group.items.some(item => item.to === nav.path)) group.items.push({
+      to: nav.path, label: nav.label, icon: iconByName[nav.icon] ?? Blocks,
+      order: nav.order, show: () => true,
+    });
+  }
+  for (const group of visibleGroups) group.items.sort((a, b) => a.order - b.order);
+
 
   return (
     <div className="flex h-full flex-col">
@@ -422,27 +438,7 @@ export function SettingsLayout() {
               </ul>
             </section>
           ))}
-          {pluginSettingsNav.length > 0 && (
-            <section aria-label="Extensions">
-              <h2 className="hidden lg:block px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
-                Extensions
-              </h2>
-              <ul className="flex gap-0.5 lg:flex-col">
-                {pluginSettingsNav.map((n) => (
-                  <li key={n.key}>
-                    <a
-                      href={n.path}
-                      data-plugin-settings-nav={n.key}
-                      className="flex items-center whitespace-nowrap gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-focus"
-                    >
-                      <Blocks size={14} aria-hidden />
-                      {n.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+
         </nav>
         <div className="min-w-0 flex-1 overflow-y-auto">
           <Outlet />

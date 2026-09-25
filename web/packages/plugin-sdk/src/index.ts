@@ -40,6 +40,7 @@ export {
 
 export {
   Button,
+  ButtonVariant,
   TextField,
   TextArea,
   Select,
@@ -56,6 +57,7 @@ export { tokens, type TokenName } from "./tokens";
 
 export {
   provideHostComponents,
+  SettingsPage, SelectField, Callout, CalloutKind, QueryError,
   CodeEditor,
   TokenList,
   SchemaForm,
@@ -65,7 +67,7 @@ export {
   type SchemaFormProps,
 } from "./host";
 
-export { api, ApiError, API_BASE } from "./api";
+export { api, ApiError, API_BASE, provideApiTransport, errorMessage, type RequestOptions as ApiRequestOptions } from "./api";
 
 export {
   useCurrentUser,
@@ -92,3 +94,5 @@ export type {
 } from "./types";
 
 export { registerDataSource, unregisterDataSources, usePluginData, invalidatePluginData, type DataSource, type DataContracts, type PersonIndicator, type TimesheetAnnotation, type StatusIndicator } from "./data";
+
+export * from "./dates";

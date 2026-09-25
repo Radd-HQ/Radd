@@ -41,7 +41,7 @@ export function usePermissions(): Permissions {
 
 export function useCapabilities(): CapabilitiesManifest | undefined {
   const { data } = useQuery({
-    queryKey: ["radd-sdk", "capabilities"],
+    queryKey: ["capabilities"],
     queryFn: () => api.get<CapabilitiesManifest>("/capabilities"),
     staleTime: 60_000,
   });
@@ -51,8 +51,8 @@ export function useCapabilities(): CapabilitiesManifest | undefined {
 /** True when a plugin is currently enabled (its UI should show). */
 export function useHasPlugin(name: string): boolean {
   const caps = useCapabilities();
-  // Absent manifest (still loading / anonymous) → optimistic true, matching the host's band-aid.
-  return caps?.plugins?.includes(name) ?? true;
+  // Loading is unavailable; consumers must never issue feature requests optimistically.
+  return caps?.plugins?.includes(name) ?? false;
 }
 
 /** SLQ-scoped item list (GET /items?q=…) — permission-scoped by the backend. */

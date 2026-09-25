@@ -22,6 +22,7 @@ import {
 } from "@radd/plugin-sdk";
 
 export const RemoteStatus = {
+  loading: "loading",
   loaded: "loaded",
   errored: "errored",
   incompatible: "incompatible",
@@ -39,6 +40,26 @@ interface LoadedRemote {
 }
 
 const loaded = new Map<string, LoadedRemote>();
+export interface RemoteState { name: string; status: RemoteStatusValue; error?: string }
+let states: RemoteState[] = [];
+const listeners = new Set<() => void>();
+function publish() {
+  states = [...loaded.values()].map(({ name, status, error }) => ({ name, status, error }));
+  for (const listener of listeners) listener();
+}
+export function readRemoteStates(): RemoteState[] { return states; }
+export function subscribeRemoteStates(listener: () => void): () => void {
+  listeners.add(listener); return () => { listeners.delete(listener); };
+}
+async function bounded<T>(operation: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([operation, new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("Plugin UI took too long to load")), 30_000);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
 const identity = (remote: PluginRemote) => JSON.stringify([remote.remote_entry, remote.ui_api_version]);
 
 function buildContext(entry: LoadedRemote): PluginContext {
@@ -69,10 +90,11 @@ async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<vo
   if (!isUiApiCompatible(version)) {
     entry.status = RemoteStatus.incompatible;
     entry.error = `ui_api_version ${version}`;
+    publish();
     return;
   }
   try {
-    const imported = (await import(/* @vite-ignore */ url)) as PluginModule | { default?: PluginModule };
+    const imported = (await bounded(import(/* @vite-ignore */ url))) as PluginModule | { default?: PluginModule };
     if (entry.cancelled) return;
     const mod = ("default" in imported && imported.default ? imported.default : imported) as PluginModule;
     entry.module = mod;
@@ -85,17 +107,19 @@ async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<vo
       ctx.registerSlot(slot, { id: id ?? `${slot}#${i}`, ...rest });
     }
     for (const source of mod.dataSources ?? []) ctx.registerDataSource(source);
-    await mod.activate?.(ctx);
+    await bounded(Promise.resolve(mod.activate?.(ctx)));
     if (entry.cancelled) {
       await deactivate(entry);
       return;
     }
     entry.status = RemoteStatus.loaded;
+    publish();
   } catch (error) {
     if (loaded.get(name) === entry) { unregisterPlugin(name); unregisterDataSources(name); }
     entry.cancelled = true;
     entry.status = RemoteStatus.errored;
     entry.error = error instanceof Error ? error.message : String(error);
+    publish();
     await deactivate(entry);
     console.error(`[radd] plugin UI "${name}" failed to load:`, entry.error);
   }
@@ -120,10 +144,11 @@ export async function syncPluginRemotes(remotes: PluginRemote[] | undefined): Pr
   for (const remote of enabled.values()) {
     if (loaded.has(remote.name)) continue;
     const entry: LoadedRemote = {
-      name: remote.name, identity: identity(remote), status: RemoteStatus.loaded, cancelled: false,
+      name: remote.name, identity: identity(remote), status: RemoteStatus.loading, cancelled: false,
     };
     loaded.set(remote.name, entry);
     entry.pending = loadRemote(remote, entry).finally(() => { entry.pending = undefined; });
   }
+  publish();
   await Promise.all([...cleanup, ...[...loaded.values()].map((entry) => entry.pending)]);
 }

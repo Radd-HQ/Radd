@@ -33,3 +33,15 @@ provideHostComponents({
     <SchemaFields schema={schema} params={params} onChange={onChange} />
   ),
 });
+
+// Page frames and generic form primitives are platform-owned, shared by every remote.
+import { SettingsPage } from "./components/settings/SettingsPage";
+import { Button } from "./components/Button";
+import { TextField } from "./components/TextField";
+import { SelectField } from "./components/SelectField";
+import { Callout } from "./components/Callout";
+import { QueryError } from "./components/QueryError";
+provideHostComponents({
+  SettingsPage, Button, SelectField, Callout, QueryError,
+  TextField: props => <TextField {...props} label={props.label ?? ""} />,
+});

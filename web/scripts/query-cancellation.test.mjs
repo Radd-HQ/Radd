@@ -18,9 +18,11 @@ globalThis.fetch=(url,options)=>new Promise((resolve,reject)=>{
   const row={url:String(url),...options,resolve};pending.push(row);
   options.signal?.addEventListener('abort',()=>reject(options.signal.reason),{once:true});
 });
-const {api}=evaluate(source('api.ts'),{
+const sdkModule = evaluate(readFileSync(new URL('../packages/plugin-sdk/src/api.ts',import.meta.url),'utf8').replace('export { API_BASE };',''), {}, ['api','ApiError','provideApiTransport']);
+const {api,abortAccountRequests}=evaluate(source('api.ts'),{
+  ApiError: sdkModule.ApiError, provideApiTransport: sdkModule.provideApiTransport,
   API_BASE:'/api/v1',On401:{redirect:'redirect'},RoutePath:{login:'/login'},pushToast(){},FORBIDDEN_FALLBACK_MESSAGE:'Denied',
-},['api']);
+},['api','abortAccountRequests']);
 const imports={api,Entity,entityMeta,projectEntityMeta,queryKeys,queryOptions:x=>x,keepPreviousData:undefined,
  ApiPath:{search:'/search',aiSimilar:'/ai/similar',searchSemantic:'/search/semantic',searchDeflect:'/search/deflect',items:'/items'},
  DEFLECT_MIN_QUERY_CHARS:2,apiItemSimilarPath:id=>'/items/'+id+'/similar',
@@ -113,5 +115,11 @@ try {
   const request=sdk.api.get('/remote',{signal:controller.signal});
   const rejection=assert.rejects(request);controller.abort();await rejection;
   assert(pending.at(-1).signal.aborted,'plugin SDK must forward cancellation');
+  const accountRequest = sdkModule.api.get('/remote-account');
+  const accountRejection = assert.rejects(accountRequest);
+  const accountSignal = pending.at(-1).signal;
+  abortAccountRequests();
+  await accountRejection;
+  assert(accountSignal.aborted, 'host account switch cancels remote requests through the shared transport');
   console.log('Query observers cancel superseded GET/POST search, closed pages and plugin requests.');
 } finally {client.clear();globalThis.fetch=oldFetch;delete globalThis.window;}

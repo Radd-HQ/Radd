@@ -49,7 +49,8 @@ async def get_capabilities(user: Actor) -> CapabilitiesRead:
             NavItemRead(
                 key=n.key, label=n.label, path=n.path, icon=n.icon,
                 section=n.section, requires=list(n.requires),
-                capability=n.capability, order=n.order,
+                capability=n.capability, order=n.order, group=n.group, requires_admin=n.requires_admin,
+                plugin=next((p.name for p in registries.plugins.values() if p.ui and n in p.ui.nav), ""),
             )
             for n in sorted(registries.nav, key=lambda n: (n.order, n.label))
         ],

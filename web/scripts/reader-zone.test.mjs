@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 const dir = mkdtempSync(join(tmpdir(), "reader-zone-"));
 const file = join(dir, "dates.ts");
-writeFileSync(file, readFileSync("web/src/lib/dates.ts", "utf8"));
+writeFileSync(file, readFileSync("web/packages/plugin-sdk/src/dates.ts", "utf8"));
 const {
   setReaderTimeZone, readerTimeZone, formatIso, formatDate, formatDateTime,
   shortDate, isoDayOf, todayIso, shiftIsoDay, isoDaysAgo,

@@ -1,3 +1,4 @@
+import { ApiError, provideApiTransport, type ApiRequestOptions } from "@radd/plugin-sdk";
 import { API_BASE, On401, RoutePath, type On401Value } from "./constants";
 import { FORBIDDEN_FALLBACK_MESSAGE, pushToast } from "./toast";
 import type { Finding } from "./types/automations";
@@ -10,18 +11,7 @@ import type { Finding } from "./types/automations";
  * - 403 → global toast (RBAC surprises surface everywhere), then rethrow
  */
 
-export class ApiError extends Error {
-  readonly status: number;
-  /** FastAPI error payload: string detail, or a 422 list of field errors. */
-  readonly detail: unknown;
-
-  constructor(status: number, detail: unknown) {
-    super(typeof detail === "string" ? detail : `Request failed (${status})`);
-    this.name = "ApiError";
-    this.status = status;
-    this.detail = detail;
-  }
-}
+export { ApiError };
 
 interface RequestOptions {
   method?: string;
@@ -306,3 +296,8 @@ export const api = {
   delete: <T>(path: string, options?: Omit<RequestOptions, "method">) =>
     request<T>(path, { ...options, method: "DELETE" }),
 };
+
+// Both host and remotes use the same account-scoped transport and error class.
+provideApiTransport(<T>(path: string, options: ApiRequestOptions) => request<T>(path, {
+  ...options, on401: options.throwOn401 ? On401.throw : On401.redirect,
+}), errorMessage);

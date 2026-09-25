@@ -9,6 +9,9 @@ export interface PluginNavItem {
   path: string;
   icon: string;
   section: string;
+  group?: string;
+  requires_admin?: boolean;
+  plugin?: string;
   requires: string[];
   capability: string;
   order: number;

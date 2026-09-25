@@ -1,3 +1,4 @@
+import { useProvided, type ButtonVariantValue } from "./host-registry";
 import {
   useId,
   type ButtonHTMLAttributes,
@@ -13,15 +14,18 @@ import {
  * hardcoded color. A remote imports these from `@radd/plugin-sdk` (a federation singleton).
  */
 
-type ButtonVariant = "primary" | "ghost" | "danger";
+export const ButtonVariant = { primary: "primary", secondary: "secondary", ghost: "ghost", danger: "danger", dangerGhost: "danger-ghost" } as const;
 
 export function Button({
   variant = "primary",
   small = false,
+  size,
   className = "",
   type = "button",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; small?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariantValue; small?: boolean; size?: "sm" | "md" }) {
+  const { Button: Host } = useProvided();
+  if (Host) return <Host variant={variant} size={size ?? (small ? "sm" : "md")} className={className} type={type} {...props} />;
   const cls = ["radd-btn", `radd-btn--${variant}`, small ? "radd-btn--sm" : "", className]
     .filter(Boolean)
     .join(" ");
@@ -35,8 +39,10 @@ export function TextField({
   className = "",
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { label?: string; hint?: string; error?: string }) {
+  const { TextField: Host } = useProvided();
   const id = useId();
   const descId = `${id}-desc`;
+  if (Host) return <Host label={label} hint={hint} error={error} className={className} {...props} />;
   return (
     <div className="radd-field">
       {label && (

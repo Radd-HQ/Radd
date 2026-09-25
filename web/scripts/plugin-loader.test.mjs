@@ -99,3 +99,37 @@ test('failed activation and late registrations cannot leave data sources behind'
   await loading;
   assert.equal(f.dataSources.size, 0);
 });
+
+
+test('remote state distinguishes pending imports from success and failure', async () => {
+  const wait = deferred();
+  const f = await fixture(() => wait.promise);
+  const loading = f.syncPluginRemotes(remote());
+  assert.equal(f.readRemoteStates()[0].status, 'loading');
+  wait.resolve({ contributions: [contribution] });
+  await loading;
+  assert.equal(f.readRemoteStates()[0].status, 'loaded');
+  await f.syncPluginRemotes([]);
+  assert.deepEqual(f.readRemoteStates(), []);
+});
+
+test('a stalled import becomes a visible error and cannot register after timeout', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const wait = deferred();
+  const f = await fixture(() => wait.promise);
+  const loading = f.syncPluginRemotes(remote());
+  t.mock.timers.tick(30_000);
+  await loading;
+  assert.equal(f.readRemoteStates()[0].status, 'errored');
+  wait.resolve({ contributions: [contribution] });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.slots.size, 0);
+});
+
+
+test('SDK version gate rejects remotes requiring newer APIs', async () => {
+  const js = stripTypeScriptTypes(readFileSync('web/packages/plugin-sdk/src/version.ts','utf8'));
+  const sdk = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+  for (const version of ['1.0.0','1.1.0','1.2.0',sdk.UI_API_VERSION]) assert(sdk.isUiApiCompatible(version));
+  for (const version of ['2.0.0','1.999.0','1.3.999','','1.garbage.0']) assert(!sdk.isUiApiCompatible(version));
+});

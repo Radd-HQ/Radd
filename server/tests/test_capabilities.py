@@ -120,3 +120,23 @@ def test_evaluate_is_serializable_shape():
     for c in kcaps.evaluate():
         assert set(c) == {"key", "label", "category", "enabled", "detail"}
         assert isinstance(c["enabled"], bool)
+
+
+async def test_navigation_carries_ownership_and_generic_display_constraints(monkeypatch):
+    from radd.kernel import NavItemSpec, PluginUiManifest, RaddPlugin, registries
+    from radd.modules.capabilities.router import get_capabilities
+
+    nav = NavItemSpec(
+        key="fixture", label="Fixture", path="/settings/fixture", section="settings",
+        group="Server", requires_admin=True,
+    )
+    plugin = RaddPlugin(name="fixture", ui=PluginUiManifest(nav=(nav,)))
+    monkeypatch.setattr(registries, "plugins", {"fixture": plugin})
+    monkeypatch.setattr(registries, "nav", [nav])
+    manifest = await get_capabilities(None)
+    assert manifest.nav[0].plugin == "fixture"
+    assert manifest.nav[0].group == "Server"
+    assert manifest.nav[0].requires_admin is True
+    monkeypatch.setattr(registries, "plugins", {})
+    monkeypatch.setattr(registries, "nav", [])
+    assert (await get_capabilities(None)).nav == []

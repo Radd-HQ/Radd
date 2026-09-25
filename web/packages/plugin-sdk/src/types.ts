@@ -90,6 +90,9 @@ export interface CapabilitiesManifest {
     path: string;
     icon?: string;
     section?: string;
+    group?: string;
+    requires_admin?: boolean;
+    plugin?: string;
     requires?: PermissionValue[];
     capability?: string;
     order?: number;

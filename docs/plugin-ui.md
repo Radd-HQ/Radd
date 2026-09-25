@@ -106,6 +106,16 @@ available — check with your instance admin" message instead of a broken or emp
 
 ---
 
+## Shared settings contracts (SDK 1.3)
+
+Plugin settings pages use the SDK's `SettingsPage`, `SelectField`, `Callout`, `QueryError`, `Button` and `TextField`. The host supplies generic implementations so the plugin retains the app's layout, accessibility, keyboard handling and permission-aware history link. The host component registry must never contain a feature page, feature-specific form or connector implementation. Date formatting also lives in the SDK singleton, preserving the reader's timezone across host and remotes.
+
+The host installs its account-scoped API transport into the SDK. Host and remote requests share cancellation on account changes, the same `ApiError` class and error formatting. Capability hooks observe the host's `capabilities` query rather than a second cache; an unknown plugin is unavailable while discovery loads.
+
+A navigation manifest entry may declare `group` (for example `Server`) and `requires_admin`, in addition to permission atoms. `/capabilities` attaches the owning `plugin`; generic navigation and page loading use that ownership. No per-plugin route/page mapping is needed. Settings links in the Plugins page prefer manifest entries.
+
+Plugin pages show loading while their bundle activates, an unavailable message after withdrawal, and a failure message for incompatible/failed bundles or render exceptions. Imports/activation time out after 30 seconds. Render callbacks execute *inside* the slot boundary; a fresh registration resets a prior render failure. SDK compatibility requires a matching major and a host version at least as new as the remote's declared minimum.
+
 ## Data contributions (SDK 1.2)
 
 Features that supply facts to shared views use `definePlugin({ dataSources: [...] })` rather than rendering slots or adding plugin checks to host pages. The loader tags each source with its owner and withdraws sources together with UI slots on disable or activation failure. Imperative activation can use `ctx.registerDataSource(source)` with the same lifecycle protection.

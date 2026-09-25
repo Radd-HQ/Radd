@@ -21,6 +21,9 @@ class NavItemRead(BaseModel):
     path: str
     icon: str = ""
     section: str = "main"  # main | settings
+    group: str = ""
+    requires_admin: bool = False
+    plugin: str = ""  # owning plugin, assigned by the registry
     requires: list[str] = []  # permission atoms that must ALL be held
     capability: str = ""  # hide unless this capability is enabled
     order: int = 100
