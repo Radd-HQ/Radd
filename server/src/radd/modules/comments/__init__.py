@@ -49,8 +49,11 @@ _COMMENT_PAYLOAD_SCHEMA: dict = {
 }
 
 
+from .types import CommentEntity  # noqa: E402 — RADD-1328
+
 plugin = RaddPlugin(
     name="comments",
+    record_local_entities=(CommentEntity.COMMENT.value,),  # RADD-1328
     automation_nodes=(COMMENT_GATE,),
     token_providers=(COMMENT_TOKENS,),
     permissions=(

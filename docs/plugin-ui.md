@@ -48,6 +48,14 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `sidebarNav` | Left sidebar nav | `{}` | today driven by the backend nav manifest | `components/shell/Sidebar.tsx` |
 | `dashboardWidget` | A dashboard widget type | `{config, widget, filterQuery}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry; `filterQuery` = the dashboard-wide SLQ filter (plugin widgets decide how to honor it) | `components/dashboards/WidgetCard.tsx` |
 | `itemAction` | An item's action menu | `{item}` | | *menu host* |
+| `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `{node, params, schema, onChange}` | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `components/automations/GraphInspector.tsx` |
+
+**Host components (RADD-1325).** An inspector should look and behave like the host's own forms
+without bundling heavy editors. `@radd/plugin-sdk` exports `CodeEditor`, `TokenList` and
+`SchemaForm`: thin wrappers the host fills at boot via `provideHostComponents` (the SPA's
+CodeMirror, lazy-loaded; the `{{token}}` picker; the `params_schema` form). A plugin imports them
+from the SDK like any primitive; outside the host they degrade to plain inputs. The `ai` and
+`scripts` plugins' inspectors are the worked examples (`modules/ai/ui`, `modules/scripts/ui`).
 
 A contribution is `{ id, render, order?, match?, title?, icon?, label?, toggleable? }`. `id` is
 unique within your plugin (dedupes re-registration); `order` sorts section/tab slots; `match` keys

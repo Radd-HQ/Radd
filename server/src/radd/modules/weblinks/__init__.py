@@ -5,8 +5,11 @@ from . import mcptools
 from .router import router
 from .types import WebLinkEvent
 
+from .types import WebLinkEntity  # noqa: E402 — RADD-1328
+
 plugin = RaddPlugin(
     name="weblinks",
+    record_local_entities=(WebLinkEntity.WEB_LINK.value,),  # RADD-1328
     description="Related links on issues: docs, designs and other references.",
     depends_on=("projects", "auth", "events", "items"),
     routers=(router,),

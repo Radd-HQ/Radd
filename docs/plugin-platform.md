@@ -293,6 +293,19 @@ class RaddPlugin:
     on_startup / on_shutdown / exception_handlers / openapi_augmentors  # kept from today
 ```
 
+> **As built (RADD-1328).** The sketch above is the design; these are the fields that exist on
+> `RaddPlugin` today for the parts a plugin most often reaches for:
+>
+> | Sketch | Built |
+> |---|---|
+> | `consumers: ConsumerSpec` | `consumer_names` + the SDK's consumer API: `read_events`, `get_offset`/`set_offset`/`offset_exists`, `run_consumer` (the head-seeded, at-most-once runner the core delivery consumers use) — `tests/test_sdk_consumer.py` runs one on `radd.sdk` alone |
+> | `automation_actions`, `automation_conditions` | `automation_nodes: AutomationNodeSpec` — every node kind (source/filter/gate/action/verdict); the built-in nodes are registered the same way (RADD-1322) |
+> | `triggers` | `trigger_kinds: TriggerKindSpec` (a button, a clock, a validation, or anything event-backed a plugin defines — RADD-1323); event triggers are every `EventTypeSpec` with `trigger=True` |
+> | — | `token_providers` (`{{root.field}}` vocabularies), `automation_templates` (whole automations offered as disabled drafts) |
+> | — | `notification_kinds: NotificationKindSpec` — inbox + preferences matrix rows, and the events that produce them (RADD-1326) |
+> | `entities` search wiring | `EntitySpec.searchable/mentionable/url` derive a `SearchableSpec`; `searchables=` for hand-written entities (RADD-1327) |
+> | — | `record_local_entities` — entity types the realtime hub may narrow to one item's refresh |
+
 Registries the kernel exposes (one per contribution kind): `entities`, `events`(produce),
 `consumers`, `triggers`, `actions`, `conditions`, `tasks`, `settings`, `permissions`,
 `crud_resources`, `access_resources`, `capabilities`, `integrations`, `ui`. Each is a dict populated

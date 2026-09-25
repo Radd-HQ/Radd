@@ -305,3 +305,26 @@ same distinction the arity addendum introduced into the emit map, surfaced.
 - An action can be told to run once for the whole set or once per item, and a router set
   to per item partitions its input across its ports.
 - An automation can reach issues its trigger never named.
+
+## Addendum — as built (RADD-1328, 2026-09-25)
+
+What the phases above promised, and what exists after the automation-integrity wave
+(RADD-1311…1329):
+
+- **Phase 2 is real.** Every built-in node is an `AutomationNodeSpec` in the registry
+  (`automations/builtin_actions.py`, `builtin_routers.py`; RADD-1322); the executor has one
+  path for all of them. There is no `GET /automations/nodes`: the palette reads
+  `GET /automations/catalog` (`nodes` + `trigger_kinds`), and a node whose ports or outputs
+  depend on its params is asked `POST /automations/nodes/{type}/shape` (RADD-1325).
+- **TRIGGER is not a contributable node kind.** A trigger node is always `trigger.event`;
+  what a plugin contributes is a `TriggerKindSpec` (RADD-1323) or an `EventTypeSpec` with
+  `trigger=True`. Sources, filters, gates, actions and the two validation verdicts
+  (`verdict.block`, `verdict.warn` — RADD-1329) are node kinds.
+- **Plugin node UI slots exist** — `SlotId.automationNodeInspector`, with `CodeEditor`,
+  `TokenList` and `SchemaForm` provided by the host (`docs/plugin-ui.md`).
+- **Chaining is explicit.** A trigger fires on another automation's changes only when its
+  "triggered by other automations" box is ticked, to a depth of
+  `automation_max_chain_depth` (RADD-1315).
+- **Integrations act only through automations** (RADD-1309, 1317–1319): what a merge, an
+  alert, an email or a release should DO is a template someone enables.
+

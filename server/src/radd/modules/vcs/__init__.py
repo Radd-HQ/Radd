@@ -5,8 +5,11 @@ from .models import VcsPendingWorklog, VcsUserLink  # noqa: F401 — Alembic aut
 from .router import router
 from .types import VcsEvent, VcsUserLinkEvent
 
+from .types import VcsEntity  # noqa: E402 — RADD-1328
+
 plugin = RaddPlugin(
     name="vcs",
+    record_local_entities=(VcsEntity.VCS_LINK.value,),  # RADD-1328
     description=(
         "Links from issues to branches, commits and pull requests in your code hosts."
     ),

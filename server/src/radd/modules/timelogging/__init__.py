@@ -51,8 +51,11 @@ WORKLOG_OWN = RelationSpec(
 )
 register_relation(WORKLOG_OWN)
 
+from .types import TimelogEntity  # noqa: E402 — RADD-1328
+
 plugin = RaddPlugin(
     name="timelogging",
+    record_local_entities=(TimelogEntity.WORKLOG.value, TimelogEntity.ITEM_ESTIMATE.value),  # RADD-1328
     permissions=(
         PermissionSpec(
             "worklog.write", "project", "Log work on items and manage your own worklogs."

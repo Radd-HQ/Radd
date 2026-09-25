@@ -121,6 +121,8 @@ class KernelRegistries:
     notification_kinds: dict[str, NotificationKindSpec] = field(default_factory=dict)
     #: RADD-1327: what Cmd-K and `#` mentions can find, by entity type.
     searchables: dict[str, SearchableSpec] = field(default_factory=dict)
+    #: RADD-1328: entity types the realtime hub may narrow to their item.
+    record_local_entities: set[str] = field(default_factory=set)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
     #: Which plugin contributed each page extension (RADD-748). The registry is
     #: the only thing that knows — the spec is authored BY the plugin, so a
@@ -149,7 +151,7 @@ class KernelRegistries:
             self.integrations, self.plugin_ui_dirs, self.slq_fields,
             self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
             self.automation_nodes, self.trigger_kinds, self.token_providers, self.automation_templates,
-            self.notification_kinds, self.searchables,
+            self.notification_kinds, self.searchables, self.record_local_entities,
             self.page_extension_sources,
         ):
             f.clear()
@@ -212,6 +214,7 @@ class KernelRegistries:
             self.notification_kinds[kind.key] = kind
         for searchable in plugin.searchables:
             self.searchables[searchable.entity_type] = searchable
+        self.record_local_entities.update(plugin.record_local_entities)
         for px in plugin.page_extensions:
             self.page_extensions[px.name] = px
             self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
@@ -288,6 +291,7 @@ class KernelRegistries:
             self.notification_kinds.pop(kind.key, None)
         for searchable in plugin.searchables:
             self.searchables.pop(searchable.entity_type, None)
+        self.record_local_entities.difference_update(plugin.record_local_entities)
         for px in plugin.page_extensions:
             self.page_extensions.pop(px.name, None)
             self.page_extension_sources.pop(px.name, None)

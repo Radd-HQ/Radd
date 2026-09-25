@@ -82,6 +82,12 @@ _LAZY: dict[str, tuple[str, str]] = {
     # events (produce/consume the outbox)
     "emit_event": ("radd.modules.events.service", "emit"),
     "read_events": ("radd.modules.events.service", "read_after"),
+    # RADD-1328: the rest of what a consumer needs — its cursor, and the
+    # head-seeded at-most-once runner every delivery-flavoured core consumer uses.
+    "get_offset": ("radd.modules.events.service", "get_offset"),
+    "set_offset": ("radd.modules.events.service", "set_offset"),
+    "offset_exists": ("radd.modules.events.service", "offset_exists"),
+    "run_consumer": ("radd.modules.events.runner", "run_head_seeded"),
     # access grants (register a grantable ResourceSpec)
     "register_access_resource": ("radd.modules.access.registry", "register_resource"),
 }

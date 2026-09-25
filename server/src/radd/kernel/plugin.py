@@ -133,6 +133,10 @@ class RaddPlugin:
     notification_kinds: tuple[NotificationKindSpec, ...] = ()
     #: Cmd-K / `#`-mention searchables (RADD-1327).
     searchables: tuple[SearchableSpec, ...] = ()
+    #: RADD-1328: event entity types whose effects stay on ONE item record (a
+    #: comment, a worklog, a link) — the realtime hub narrows their refresh to
+    #: that item instead of invalidating every open list.
+    record_local_entities: tuple[str, ...] = ()
     page_extensions: tuple[PageExtensionSpec, ...] = ()  # page fenced blocks (RADD-709)
     #: Rows that die with a parent (RADD-745). A FACTORY, not a tuple: the set is
     #: derived from a binding registry that other modules populate at import

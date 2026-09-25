@@ -13,6 +13,7 @@ from fastapi import WebSocket
 from radd.modules.events.service import Event
 
 from .types import NOTIFICATION_ENTITY
+from radd.kernel.registry import registries
 
 
 @dataclass
@@ -84,7 +85,9 @@ def scoped_event_item_id(event: Event) -> str | None:
             for change in changes
         ):
             return None
-    elif event.entity_type not in {"comment", "worklog", "item_estimate", "web_link", "vcs_link"}:
+    elif event.entity_type not in registries.record_local_entities:
+        # RADD-1328: each owner declares its record-local entity types
+        # (`RaddPlugin.record_local_entities`) — the set was a raw literal here.
         return None
     item = payload.get("item")
     return str(item["id"]) if isinstance(item, dict) and item.get("id") else None
