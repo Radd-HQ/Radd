@@ -13,6 +13,8 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 | RADD-1344 | Complete inventory, ownership and boundary safeguards | In progress |
 | RADD-1345 | Person status and timesheet data contributions | Verified; Waiting for release |
 | RADD-1346 | Settings, imports and VCS provider UI | In progress |
+| RADD-1351 | Shared settings contracts and truthful page lifecycle | Verified; Waiting for release |
+| RADD-1352 | Scripts/Monitoring settings and AI/mail health contributions | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | Pending |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -25,7 +27,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | Module | Core declaration | Remote sources | Dependencies | Review |
 |---|---|---|---|---|
 | access | default | 0 | projects, events, auth, teams, groups | Pending |
-| ai | False | 2 | auth, projects, items, fields, workflow, comments, search, settings, events, pages, timelogging, attachments | Pending |
+| ai | False | 3 | auth, projects, items, fields, workflow, comments, search, settings, events, pages, timelogging, attachments | Pending |
 | alertmanager | False | 0 | projects, auth, items, events, automations | Pending |
 | approvals | False | 2 | events, projects, auth, teams, workflow, items | Pending |
 | attachments | default | 0 | events, projects, auth, items, access, groups, teams | Pending |
@@ -54,12 +56,12 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | jiraimport | False | 0 | auth, projects, fields, items, workflow, comments, cycles, attachments, events, itemtypes, linktypes, notify, releases, timelogging, weblinks, teams | Pending |
 | labels | default | 0 | projects, events, auth | Pending |
 | ldap | False | 0 | events, projects, auth, settings, groups, teams | Pending |
-| leave | False | 2 | auth, teams, events | Pending |
+| leave | False | 3 | auth, teams, events | Pending |
 | linktypes | default | 0 | projects, events, auth | Pending |
-| mailintake | False | 2 | projects, auth, items, comments, automations, events, attachments, settings, workflow | Pending |
+| mailintake | False | 3 | projects, auth, items, comments, automations, events, attachments, settings, workflow | Pending |
 | mcp | False | 0 | auth, projects, fields, linktypes | Pending |
 | milestones | False | 2 | projects, auth, events | Pending |
-| monitoring | False | 0 | auth, events | Pending |
+| monitoring | False | 4 | auth, events | Settings UI verified; backend review pending |
 | notify | default | 0 | events, projects, auth, items, comments, teams | Pending |
 | pages | False | 0 | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Pending |
 | participants | False | 3 | events, projects, auth, teams, items, notify | Pending |
@@ -69,7 +71,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | releases | default | 0 | projects, auth, events, workflow | Pending |
 | reporting | default | 0 | events, projects, auth, workflow, cycles, items | Pending |
 | screens | default | 0 | projects, events, auth, fields, itemtypes | Pending |
-| scripts | False | 2 | auth, events, projects, items | Pending |
+| scripts | False | 6 | auth, events, projects, items | Settings UI verified; backend review pending |
 | search | default | 0 | events, projects, auth, workflow, items, comments, access, fields, teams | Pending |
 | settings | default | 0 | events, projects, auth | Pending |
 | slas | False | 0 | events, projects, auth, settings, workflow, items, comments, automations, reporting, teams | Pending |
@@ -102,3 +104,13 @@ RADD-1345 result: host and all 9 remote bundles build/type-check; 37 frontend un
 The SDK exposes generic settings chrome and controls through the host registry, shares timezone formatting and the account-cancelled API transport, and reads the host capabilities cache. Settings navigation accepts owner/group/admin metadata. Page slots render callbacks inside their error boundary, distinguish loading/unavailable/failure, and recover when a registration is replaced. Imports and activation time out; unsupported SDK minimum versions are rejected.
 
 Verified: host + 9 actual remote bundles build/type-check; all 40 frontend tests and 12 capabilities/module-contract backend tests pass. The built-host page fixture passes 8 lifecycle/error/cache checks; the actual Leave remote passes all 12 lifecycle/form/data-cancellation regressions. Recovered-page screenshot inspected. These checks prove the shared contracts, not ownership of every SDK primitive or host settings page. Feature migrations continue in RADD-1352 and the remaining work groups.
+
+## RADD-1352 verification
+
+Scripts and Monitoring settings now live in their owners' remotes, including queries and wire types, and register page/navigation contributions. The host no longer names their routes or API paths. Scripts preserves interpreter rebuild, package install/remove, index/offline settings and audit links; it reports read failures before showing actionable forms. Monitoring accepts independent AI and Mail health cards. Each card owns its endpoint and polling; withdrawal aborts reads and discards unused caches. Consumer descriptions come from each plugin's declaration and are withdrawn independently of durable cursor rows. The new Mail health endpoint preserves the instance-admin data boundary.
+
+Evidence: host + all 10 remotes type-check/build; 42 frontend tests; 17 focused consumer/capability/permission/boundary backend tests plus 31 kernel/runtime/mail-transport regressions. `browser-settings-ownership.mjs` loads the four actual remote bundles and passes 12 form/lifecycle/dependency/failure checks, including initially disabled pages, saved configuration after re-enable, fresh AI coverage, an aborted in-flight query, no polling after withdrawal, permission denial and a utility class exclusive to a remote source. Both page screenshots were inspected. The scan initially omitted classes when using a directory glob; an explicit recursive source-file pattern fixed it, and the browser now asserts the remote-only width.
+
+The local backend serves the new manifests, assets and mail-health endpoint. A local authenticated probe disables/re-enables Scripts and Monitoring in the same PID, checks API withdrawal and restores every initial plugin state. Saved interpreter/index configuration is compared before/after. No package/interpreter mutation was performed on the user's local data; those form writes were exercised against the browser fixture. No external publication.
+
+Remaining for these modules: full backend ownership and dependency review, Monitoring's fixed catalog-count list, and its legacy `overview.mail` compatibility field. AI/mail settings and other host UI remain in later inventory groups; adding health contributions does not imply their entire feature UI is isolated. Scripts' automation integration and saved-node lifecycle require the RADD-1347 audit.

@@ -62,14 +62,12 @@ const AuditSettingsPage = lazyRouteComponent(() => import("./routes/settings/aud
 const BackupsSettingsPage = lazyRouteComponent(() => import("./routes/settings/backups"), "BackupsSettingsPage");
 const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/plugins"), "PluginsSettingsPage");
 const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
-const ScriptsSettingsPage = lazyRouteComponent(() => import("./routes/settings/scripts"), "ScriptsSettingsPage");
 const VcsSettingsPage = lazyRouteComponent(() => import("./routes/settings/vcs"), "VcsSettingsPage");
 const ServiceAccountsSettingsPage = lazyRouteComponent(() => import("./routes/settings/service-accounts"), "ServiceAccountsSettingsPage");
 const AiSettingsPage = lazyRouteComponent(() => import("./routes/settings/ai"), "AiSettingsPage");
 const StorageSettingsPage = lazyRouteComponent(() => import("./routes/settings/storage"), "StorageSettingsPage");
 const EmailSettingsPage = lazyRouteComponent(() => import("./routes/settings/email"), "EmailSettingsPage");
 const SignInSettingsPage = lazyRouteComponent(() => import("./routes/settings/sign-in"), "SignInSettingsPage");
-const MonitoringSettingsPage = lazyRouteComponent(() => import("./routes/settings/monitoring"), "MonitoringSettingsPage");
 const AlertmanagerSettingsPage = lazyRouteComponent(() => import("./routes/settings/alertmanager"), "AlertmanagerSettingsPage");
 const WebhooksSettingsPage = lazyRouteComponent(() => import("./routes/settings/webhooks"), "WebhooksSettingsPage");
 const NotificationSettingsPage = lazyRouteComponent(() => import("./routes/settings/notifications"), "NotificationSettingsPage");
@@ -583,13 +581,6 @@ const settingsPluginsRoute = createRoute({
   component: PluginsSettingsPage,
 });
 
-/** Scripts (RADD-1269): the managed interpreter, its packages, the script library. */
-const settingsScriptsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.scripts,
-  component: ScriptsSettingsPage,
-});
-
 /** Canned responses admin (spec 30). */
 const settingsCannedRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -676,13 +667,6 @@ const settingsSignInRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.signIn,
   component: SignInSettingsPage,
-});
-
-/** Operator monitoring (DB health / counts / workers) — instance-admin only. */
-const settingsMonitoringRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.monitoring,
-  component: MonitoringSettingsPage,
 });
 
 /** Alertmanager receivers (RADD-1317): one row per receiver, token + project. */
@@ -849,7 +833,6 @@ const routeTree = rootRoute.addChildren([
       settingsBackupsRoute,
       settingsPluginsRoute,
       settingsCannedRoute,
-      settingsScriptsRoute,
       settingsVcsRoute,
       settingsForgejoRoute,
       settingsGithubRoute,
@@ -860,7 +843,6 @@ const routeTree = rootRoute.addChildren([
       settingsStorageRoute,
   settingsEmailRoute,
       settingsSignInRoute,
-      settingsMonitoringRoute,
     settingsWebhooksRoute,
     settingsAlertmanagerRoute,
       settingsHolidaysRoute,

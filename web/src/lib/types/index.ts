@@ -39,6 +39,4 @@ export * from "./search";
 export * from "./pages";
 export * from "./ai";
 export * from "./sso";
-export * from "./monitoring";
 export * from "./webhooks";
-export * from "./scripts";

@@ -1,4 +1,5 @@
 import { definePlugin, SlotId } from "@radd/plugin-sdk";
+import { ScriptsSettingsPage } from "./SettingsPage";
 import { ScriptInspector } from "./ScriptInspector";
 
 /**
@@ -8,6 +9,7 @@ import { ScriptInspector } from "./ScriptInspector";
  * remote ships no editor of its own.
  */
 export default definePlugin({
+  contributions: [{ id: "settings", slot: SlotId.settingsPage, match: "/settings/scripts", render: () => <ScriptsSettingsPage /> }],
   activate(ctx) {
     for (const type of ["script.run", "script.decide"]) {
       ctx.registerSlot(SlotId.automationNodeInspector, {

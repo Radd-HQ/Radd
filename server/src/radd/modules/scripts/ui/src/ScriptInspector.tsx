@@ -2,15 +2,9 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api, Button, CodeEditor, TextField, TokenList, tokens } from "@radd/plugin-sdk";
 
-type Params = Record<string, unknown>;
+import type { ScriptRunOutcome } from "./types";
 
-interface ScriptRunOutcome {
-  ok: boolean;
-  result?: unknown;
-  error?: string | null;
-  stderr?: string;
-  duration_ms: number;
-}
+type Params = Record<string, unknown>;
 
 const note = { fontSize: 12, color: tokens.textMuted, margin: 0 } as const;
 const heading = {

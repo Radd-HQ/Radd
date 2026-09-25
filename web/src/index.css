@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Colocated built-in remotes share the platform theme utility sheet. */
+@source "../../server/src/radd/modules/*/ui/src/**/*.{ts,tsx}";
 
 /*
  * Inter (OFL 1.1 — https://rsms.me/inter/) self-hosted variable font, weight

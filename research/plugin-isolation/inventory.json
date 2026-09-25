@@ -21,10 +21,16 @@
     "ai": {
       "manifest": "server/src/radd/modules/ai/__init__.py",
       "declarations": {
-        "ui": "PluginUiManifest(remote='/plugins/ai/remoteEntry.js', ui_api_version='1.1.0')",
+        "ui": "PluginUiManifest(remote='/plugins/ai/remoteEntry.js', ui_api_version='1.3.0')",
         "name": "ai",
         "consumer_names": [
           "ai.embedder"
+        ],
+        "consumer_descriptions": [
+          [
+            "ai.embedder",
+            "Builds semantic-search vectors"
+          ]
         ],
         "core": false,
         "description": "AI features: summaries, similar-issue suggestions, natural-language search and editor actions, using the providers you configure.",
@@ -52,6 +58,7 @@
         "capabilities": "(CapabilitySpec('ai', 'AI features', 'ai', check=_chat_capability),)"
       },
       "ui_sources": [
+        "server/src/radd/modules/ai/ui/src/EmbeddingHealthCard.tsx",
         "server/src/radd/modules/ai/ui/src/index.tsx",
         "server/src/radd/modules/ai/ui/src/inspectors.tsx"
       ]
@@ -189,6 +196,7 @@
         "automation_templates": "TEMPLATES",
         "event_types": "(EventTypeSpec(AutomationEvent.CREATED, 'Automation created', 'Admin', trigger=False, entity_type='automation_rule'), EventTypeSpec(AutomationEvent.UPDATED, 'Automation updated', 'Admin', has_changes=True, trigger=False, entity_type='automation_rule'), EventTypeSpec(AutomationEvent.DELETED, 'Automation deleted', 'Admin', trigger=False, entity_type='automation_rule'), EventTypeSpec(AutomationEvent.SCHEDULED, 'Automation scheduled run', 'System', trigger=False, entity_type='automation', audited=False), EventTypeSpec(AutomationEvent.RUN_FAILED, 'Automation run failed', 'Admin', trigger=False, entity_type='automation_rule'))",
         "consumer_names": "(CONSUMER_NAME,)",
+        "consumer_descriptions": "((CONSUMER_NAME, 'Runs automation rules'),)",
         "permissions": "(PermissionSpec('automation.manage', 'global', 'Manage global automation rules that can read and change issues through the system actor.'), PermissionSpec('automation.act_as', 'global', \"Build automations whose actions run as someone else. Without it an author's automations always act as the author, and the Act as field is not offered at all \u2014 an affordance that is refused on save is worse than one that is absent.\"))",
         "crud_resources": "(CrudResourceSpec('automation', 'global', 'automation rules', 'automation.manage'),)",
         "description": "Automations: rules that react to events or run on a schedule and change issues, notify people or call out.",
@@ -356,6 +364,7 @@
       "declarations": {
         "name": "csat",
         "consumer_names": "(CONSUMER_NAME,)",
+        "consumer_descriptions": "((CONSUMER_NAME, 'Sends satisfaction surveys'),)",
         "core": false,
         "description": "Customer satisfaction surveys emailed to requesters when their issue is resolved.",
         "depends_on": [
@@ -441,6 +450,12 @@
         "name": "events",
         "consumer_names": [
           "events.cascade"
+        ],
+        "consumer_descriptions": [
+          [
+            "events.cascade",
+            "Applies event-driven cleanup and entity cascades"
+          ]
         ],
         "depends_on": [],
         "weak_depends": [
@@ -767,6 +782,7 @@
       "declarations": {
         "name": "mailintake",
         "consumer_names": "(OUTBOUND_CONSUMER_NAME,)",
+        "consumer_descriptions": "((OUTBOUND_CONSUMER_NAME, 'Sends outbound mail replies'),)",
         "core": false,
         "description": "Email in and out: turns incoming mail into issues and comments, and replies to requesters.",
         "depends_on": [
@@ -790,10 +806,11 @@
         "on_shutdown": "(dispatcher.stop,)",
         "capabilities": "(CapabilitySpec('email_intake', 'Email-to-issue intake', 'connector', check=registry.capability_state),)",
         "event_types": "(EventTypeSpec(MailEvent.RECEIVED, 'Email received', 'Email', item_scoped=True, subjects=('item',)), EventTypeSpec(MailEvent.SENT, 'Email sent', 'Email', item_scoped=True, subjects=('item',)), EventTypeSpec(MailEvent.FAILED, 'Email delivery failed', 'Email', item_scoped=True, subjects=('item',), audited=False), EventTypeSpec(MailEvent.DROPPED, 'Email discarded', 'Email'), *(EventTypeSpec(event_type, label, 'Admin', has_changes=event_type.endswith('.updated'), trigger=False, entity_type=entity) for event_type, label, entity in ((MailEvent.SOURCE_CREATED, 'Mail source created', 'mail_source'), (MailEvent.SOURCE_UPDATED, 'Mail source updated', 'mail_source'), (MailEvent.SOURCE_DELETED, 'Mail source deleted', 'mail_source'), (MailEvent.SENDER_CREATED, 'Mail sender created', 'mail_sender'), (MailEvent.SENDER_UPDATED, 'Mail sender updated', 'mail_sender'), (MailEvent.SENDER_DELETED, 'Mail sender deleted', 'mail_sender'), (MailEvent.RULE_CREATED, 'Mail routing rule created', 'mail_rule'), (MailEvent.RULE_UPDATED, 'Mail routing rule updated', 'mail_rule'), (MailEvent.RULE_DELETED, 'Mail routing rule deleted', 'mail_rule'))))",
-        "ui": "PluginUiManifest(remote='/plugins/mailintake/remoteEntry.js', ui_api_version='1.0.0')"
+        "ui": "PluginUiManifest(remote='/plugins/mailintake/remoteEntry.js', ui_api_version='1.3.0')"
       },
       "ui_sources": [
         "server/src/radd/modules/mailintake/ui/src/ExternalRequesterChip.tsx",
+        "server/src/radd/modules/mailintake/ui/src/MailHealthCard.tsx",
         "server/src/radd/modules/mailintake/ui/src/index.tsx"
       ]
     },
@@ -844,6 +861,7 @@
       "manifest": "server/src/radd/modules/monitoring/__init__.py",
       "declarations": {
         "name": "monitoring",
+        "ui": "PluginUiManifest(remote='/plugins/monitoring/remoteEntry.js', ui_api_version='1.3.0', nav=(NavItemSpec(key='monitoring', label='Monitoring', path='/settings/monitoring', section='settings', group='Server', icon='Activity', order=115, requires_admin=True),))",
         "core": false,
         "description": "Server health for admins: database, background workers and search coverage.",
         "depends_on": [
@@ -855,13 +873,19 @@
         ],
         "routers": "(router,)"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/monitoring/ui/src/SettingsPage.tsx",
+        "server/src/radd/modules/monitoring/ui/src/cards.tsx",
+        "server/src/radd/modules/monitoring/ui/src/index.tsx",
+        "server/src/radd/modules/monitoring/ui/src/types.ts"
+      ]
     },
     "notify": {
       "manifest": "server/src/radd/modules/notify/__init__.py",
       "declarations": {
         "name": "notify",
         "consumer_names": "(CONSUMER_NAME,)",
+        "consumer_descriptions": "((CONSUMER_NAME, 'Turns events into notifications and emails'),)",
         "description": "Notifications: the inbox, email and watching.",
         "depends_on": [
           "events",
@@ -1074,7 +1098,7 @@
     "scripts": {
       "manifest": "server/src/radd/modules/scripts/__init__.py",
       "declarations": {
-        "ui": "PluginUiManifest(remote='/plugins/scripts/remoteEntry.js', ui_api_version='1.1.0')",
+        "ui": "PluginUiManifest(remote='/plugins/scripts/remoteEntry.js', ui_api_version='1.3.0', nav=(NavItemSpec(key='scripts', label='Scripts', path='/settings/scripts', section='settings', group='Server', icon='Terminal', order=95, requires=(PERM_MANAGE,)),))",
         "name": "scripts",
         "id": "radd.scripts",
         "version": "1.0.0",
@@ -1092,8 +1116,12 @@
         "automation_nodes": "(RUN_NODE, DECIDE_NODE)"
       },
       "ui_sources": [
+        "server/src/radd/modules/scripts/ui/src/ContractSection.tsx",
         "server/src/radd/modules/scripts/ui/src/ScriptInspector.tsx",
-        "server/src/radd/modules/scripts/ui/src/index.tsx"
+        "server/src/radd/modules/scripts/ui/src/SettingsPage.tsx",
+        "server/src/radd/modules/scripts/ui/src/index.tsx",
+        "server/src/radd/modules/scripts/ui/src/queries.ts",
+        "server/src/radd/modules/scripts/ui/src/types.ts"
       ]
     },
     "search": {
@@ -1101,6 +1129,7 @@
       "declarations": {
         "name": "search",
         "consumer_names": "(CONSUMER_NAME,)",
+        "consumer_descriptions": "((CONSUMER_NAME, 'Keeps full-text search fresh'),)",
         "description": "Search across issues and pages.",
         "depends_on": [
           "events",
@@ -1284,6 +1313,7 @@
       "declarations": {
         "name": "webhooks",
         "consumer_names": "(CONSUMER_NAME,)",
+        "consumer_descriptions": "((CONSUMER_NAME, 'Delivers webhook calls'),)",
         "permissions": "(PermissionSpec('webhook.manage', 'global', 'Manage endpoints that export instance event payloads to external services.', implied_by=('global.manage',)),)",
         "crud_resources": "(CrudResourceSpec('webhook', 'global', 'webhooks', 'webhook.manage'),)",
         "description": "Webhooks: signed event deliveries to your own endpoints, with retries.",
@@ -2861,7 +2891,7 @@
       ]
     },
     "server/src/radd/kernel/plugin.py": {
-      "sha256": "fbcb1c84caefb2898263b771cf4c58a338ad60ff3b6aa57ee3fddab6513bc676",
+      "sha256": "ead5c2a3b571366d0e74725b78ec6def18191a9f4a320c4fd4087083abff18b7",
       "module_directory": null,
       "imports": [
         {
@@ -4320,7 +4350,7 @@
       ]
     },
     "server/src/radd/modules/ai/__init__.py": {
-      "sha256": "7da5c36e97b3a96c2ba824beae666673648f91b0c73cbdc7218516474308a655",
+      "sha256": "f70232bb8bfa1073f1c5f2197472758f196ea94f342c1ed0abad34d93906f979",
       "module_directory": "ai",
       "imports": [
         {
@@ -6778,8 +6808,26 @@
         }
       ]
     },
+    "server/src/radd/modules/ai/ui/src/EmbeddingHealthCard.tsx": {
+      "sha256": "91891297636bb01c1b7fbfda4526fb80ef04d16070dfedefe45ed7b89b37b066",
+      "module_directory": "ai",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 2,
+          "module": "lucide-react"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
     "server/src/radd/modules/ai/ui/src/index.tsx": {
-      "sha256": "0bc52d12134efa0b9c778e0f5a7f409b6ad1fd1f9fea644d6daff9d30eda3a72",
+      "sha256": "35106b95bc5f73dc71f59d2ae348587b25487f16e52f2f7f33036331bf370bca",
       "module_directory": "ai",
       "imports": [
         {
@@ -6788,6 +6836,10 @@
         },
         {
           "line": 2,
+          "module": "./EmbeddingHealthCard"
+        },
+        {
+          "line": 3,
           "module": "./inspectors"
         }
       ]
@@ -13376,7 +13428,7 @@
       ]
     },
     "server/src/radd/modules/automations/__init__.py": {
-      "sha256": "e3b5a616f1cf7119a986fa8a240e7da17fbe5ba935ff2e850dc578433c543d40",
+      "sha256": "7051a0fb43d45ea1b88c1fdf8f27b4ce50b9b9bbdadf2406b28cdf75e7008768",
       "module_directory": "automations",
       "imports": [
         {
@@ -21463,7 +21515,7 @@
       ]
     },
     "server/src/radd/modules/csat/__init__.py": {
-      "sha256": "3c25bf8ce022505b48d1d47139b0e69519501e9c36dc09475b3ed17a3d06ce93",
+      "sha256": "235fd95cc287c94df847906f249902302267d9cf2e9642a28a8ce105594acc82",
       "module_directory": "csat",
       "imports": [
         {
@@ -23697,7 +23749,7 @@
       ]
     },
     "server/src/radd/modules/events/__init__.py": {
-      "sha256": "046bcd0c4c4afd1444451e0e16a14f7013e45ccf7129fb60d12061533d041e04",
+      "sha256": "08c046563d8fcd7883ce342cd2d7fddac500e29912caaf3350435d5e7c815e7a",
       "module_directory": "events",
       "imports": [
         {
@@ -24084,7 +24136,7 @@
       ]
     },
     "server/src/radd/modules/events/service.py": {
-      "sha256": "a36d1912de8cf7845daa9ea01820e07368a277441d25800b96505f46231e6c51",
+      "sha256": "fa3264fe7979404e34e502e22eb16fb5f002cd549e49fabb3b842ed25ba53724",
       "module_directory": "events",
       "imports": [
         {
@@ -39689,7 +39741,7 @@
       ]
     },
     "server/src/radd/modules/mailintake/__init__.py": {
-      "sha256": "0ba486d254f3b2f01c5905569cc776eff7e4188d349dbe14f922b6d7f93303b8",
+      "sha256": "c96d0fb3884303e26a187acfd9c11252964782f25795c19247185a3e1336f530",
       "module_directory": "mailintake",
       "imports": [
         {
@@ -41017,7 +41069,7 @@
       ]
     },
     "server/src/radd/modules/mailintake/router.py": {
-      "sha256": "27712abf2e2b57e78e67a4dea450be405168896ce640a3d2e54f47d487421f6f",
+      "sha256": "664add4fcffaa720fceaee93666557ad81848fa05aa99953288740ef8440f15b",
       "module_directory": "mailintake",
       "imports": [
         {
@@ -41071,6 +41123,7 @@
           "line": 10,
           "module": "radd.exceptions",
           "names": [
+            "ForbiddenError",
             "NotFoundError"
           ]
         },
@@ -41083,20 +41136,27 @@
         },
         {
           "line": 12,
+          "module": "radd.modules.auth",
+          "names": [
+            "authz"
+          ]
+        },
+        {
+          "line": 13,
           "module": "radd.modules.auth.deps",
           "names": [
             "CurrentUser"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": "radd.modules.items",
           "names": [
             "service"
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": ".",
           "names": [
             "intake",
@@ -41107,28 +41167,35 @@
           ]
         },
         {
-          "line": 16,
+          "line": 17,
           "module": ".models",
           "names": [
             "MailMessage"
           ]
         },
         {
-          "line": 17,
+          "line": 18,
           "module": ".schemas",
           "names": [
             "MailContactRead"
           ]
         },
         {
-          "line": 18,
+          "line": 19,
           "module": ".sources",
           "names": [
             "webhook"
           ]
         },
         {
-          "line": 19,
+          "line": 20,
+          "module": ".transport",
+          "names": [
+            "MailHealth"
+          ]
+        },
+        {
+          "line": 21,
           "module": ".types",
           "names": [
             "MAX_BODY_BYTES",
@@ -42093,8 +42160,30 @@
         }
       ]
     },
+    "server/src/radd/modules/mailintake/ui/src/MailHealthCard.tsx": {
+      "sha256": "4720cade41c10582bb54e42f14d1d5f019666f7ab867a749c1db8de85f27dc61",
+      "module_directory": "mailintake",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 2,
+          "module": "lucide-react"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 4,
+          "module": "react"
+        }
+      ]
+    },
     "server/src/radd/modules/mailintake/ui/src/index.tsx": {
-      "sha256": "2d66b3ef3be694b3cedfddf18c918db6ec10d86c5a5bfd1298cc59fd20cd8812",
+      "sha256": "07261274fb6b776a89b35e44121b7b763773bcfffc10347570cb3090fe84aafb",
       "module_directory": "mailintake",
       "imports": [
         {
@@ -42103,6 +42192,10 @@
         },
         {
           "line": 2,
+          "module": "./MailHealthCard"
+        },
+        {
+          "line": 3,
           "module": "./ExternalRequesterChip"
         }
       ]
@@ -42803,13 +42896,15 @@
       ]
     },
     "server/src/radd/modules/monitoring/__init__.py": {
-      "sha256": "81112b802bc7077e9c7969d8c74038ce79efe4bb01985cbb008dd34bd249b08c",
+      "sha256": "d081b7919dfd5a146523a51dc2fbdbce682a84894cce8bacce6c59c5c8c8e3a4",
       "module_directory": "monitoring",
       "imports": [
         {
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "NavItemSpec",
+            "PluginUiManifest",
             "RaddPlugin"
           ]
         },
@@ -42924,7 +43019,7 @@
       ]
     },
     "server/src/radd/modules/monitoring/schemas.py": {
-      "sha256": "bba1a05f81cd136c05d0146d63dfb2ec7c1f263ebdf47d8115004a9f5236ee2d",
+      "sha256": "5aa351ad5fae2bd34c82ab89a9ca9b13d59b200a6336e7c58c36339c6b5b298b",
       "module_directory": "monitoring",
       "imports": [
         {
@@ -42989,8 +43084,67 @@
         }
       ]
     },
+    "server/src/radd/modules/monitoring/ui/src/SettingsPage.tsx": {
+      "sha256": "f05934407154992943041f3c4006a8d355972f49cc07c8d86afb77371ae5e2bc",
+      "module_directory": "monitoring",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 2,
+          "module": "lucide-react"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 4,
+          "module": "./types"
+        },
+        {
+          "line": 5,
+          "module": "./cards"
+        }
+      ]
+    },
+    "server/src/radd/modules/monitoring/ui/src/cards.tsx": {
+      "sha256": "04f52dfa17bc7be89f9ffb0a58f3b4897ef96c582f736bc447fc5b0ea07166b8",
+      "module_directory": "monitoring",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "lucide-react"
+        }
+      ]
+    },
+    "server/src/radd/modules/monitoring/ui/src/index.tsx": {
+      "sha256": "c986f46a6504bf0a0c326109b0c3cd6437d303641e7e3ba627fb592959410aeb",
+      "module_directory": "monitoring",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./SettingsPage"
+        }
+      ]
+    },
+    "server/src/radd/modules/monitoring/ui/src/types.ts": {
+      "sha256": "416e0ccbcabe9d95822aa9c8c33861c12d0f0c7887c31af1149f60c16f7ee83e",
+      "module_directory": "monitoring",
+      "imports": []
+    },
     "server/src/radd/modules/notify/__init__.py": {
-      "sha256": "129dcacd073fe5542aa03e97d36ecf7e6dcca401d42441a91a1b8a46384fab20",
+      "sha256": "d4a20023a4fb6ea3dd3a4bb497214e4c51d7f754fb1ad23f3f0355952f1fa5ad",
       "module_directory": "notify",
       "imports": [
         {
@@ -50699,13 +50853,14 @@
       ]
     },
     "server/src/radd/modules/scripts/__init__.py": {
-      "sha256": "b704e80d2b8690178762ebe633b8173616e4b531095c451a451e308c9f02b4e4",
+      "sha256": "901c4bf070260b587107f3f19d01e823ea29bcca3ede372526a57e6a58595d31",
       "module_directory": "scripts",
       "imports": [
         {
           "line": 13,
           "module": "radd.kernel",
           "names": [
+            "NavItemSpec",
             "EventTypeSpec",
             "PermissionSpec",
             "PluginUiManifest",
@@ -51319,8 +51474,18 @@
         }
       ]
     },
+    "server/src/radd/modules/scripts/ui/src/ContractSection.tsx": {
+      "sha256": "3c698199b5edd97ea65bd9f4b08f5da92e8f6729f967a6785ecf0959ab4ed144",
+      "module_directory": "scripts",
+      "imports": [
+        {
+          "line": 1,
+          "module": "lucide-react"
+        }
+      ]
+    },
     "server/src/radd/modules/scripts/ui/src/ScriptInspector.tsx": {
-      "sha256": "724f11d90749ff9cda0166cc8ed2963892342e6a4af0a0982b4238556a3acc27",
+      "sha256": "3f47a8f1daeb823da40c297974eebf214854347a4e1c2cdd33da9a6e843b6c00",
       "module_directory": "scripts",
       "imports": [
         {
@@ -51334,11 +51499,49 @@
         {
           "line": 3,
           "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 5,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/scripts/ui/src/SettingsPage.tsx": {
+      "sha256": "7f9f53c94514cf029ec96be4baa5492898286986f2ea3d0d1e879392b415d40e",
+      "module_directory": "scripts",
+      "imports": [
+        {
+          "line": 6,
+          "module": "react"
+        },
+        {
+          "line": 7,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 8,
+          "module": "lucide-react"
+        },
+        {
+          "line": 9,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 10,
+          "module": "./queries"
+        },
+        {
+          "line": 11,
+          "module": "./types"
+        },
+        {
+          "line": 12,
+          "module": "./ContractSection"
         }
       ]
     },
     "server/src/radd/modules/scripts/ui/src/index.tsx": {
-      "sha256": "9a38ec5ff1b55956f7494e72b80e9422f76801cb63d090fe87c0fdec6fdc1519",
+      "sha256": "5069259e756959d71c0d5ce13ddfdca256423cf10328340731a575a24622d5b9",
       "module_directory": "scripts",
       "imports": [
         {
@@ -51347,12 +51550,39 @@
         },
         {
           "line": 2,
+          "module": "./SettingsPage"
+        },
+        {
+          "line": 3,
           "module": "./ScriptInspector"
         }
       ]
     },
+    "server/src/radd/modules/scripts/ui/src/queries.ts": {
+      "sha256": "4451225c7b9484325da5d4d68b571a4330932418c949f59de127b36c686add2d",
+      "module_directory": "scripts",
+      "imports": [
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 4,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/scripts/ui/src/types.ts": {
+      "sha256": "d52e9945f6caa63171eb5db8002f28b9c7357b8d332116805dfbee20a28c47ae",
+      "module_directory": "scripts",
+      "imports": []
+    },
     "server/src/radd/modules/search/__init__.py": {
-      "sha256": "90cf6808c8b6b8fe7ddd36c3f7797639d935e1102f2cc1431ba81ca4a59d7751",
+      "sha256": "dd3a486c12ce42b7f237769f672ed516cb950932fc53c76b2acbefc882bcf4de",
       "module_directory": "search",
       "imports": [
         {
@@ -58381,7 +58611,7 @@
       ]
     },
     "server/src/radd/modules/webhooks/__init__.py": {
-      "sha256": "2cbb0f3e737f6325a4c85c272a83b943b9dbe3a8b6c0c280318c81eff5b9ad5c",
+      "sha256": "9b5fa44e26339cd5d3855f415224db1ca7af275df62f9003b9ebb2bd8349dcb1",
       "module_directory": "webhooks",
       "imports": [
         {
@@ -76325,7 +76555,7 @@
       ]
     },
     "web/src/index.css": {
-      "sha256": "68bea747f3680cdfcd6a17cfad45b94d5ec85d56788e31197b429cf5bb35e755",
+      "sha256": "c81fd995ea64036e936a03a7667f07d8a3d18736cf8e34523b3e0f38a31658cc",
       "module_directory": null,
       "imports": [
         {
@@ -76676,7 +76906,7 @@
       ]
     },
     "web/src/lib/constants/api.ts": {
-      "sha256": "e930dcb3e394d939fbd40073f68b07e421c29061f9673e488afbad67d0dff310",
+      "sha256": "49824d4ba44e4bcc8b8263986457beb772285b141f72fef41e43c162178c84a7",
       "module_directory": null,
       "imports": [
         {
@@ -76738,7 +76968,7 @@
       "imports": []
     },
     "web/src/lib/constants/routes.ts": {
-      "sha256": "a0b2d1db7b4d88ec9fe370368d9184fa5570b120b41c9a856cf152d935ae1c58",
+      "sha256": "2d4a68037fbd434a9eb4ba0a78111e2eeb264cd3b4751df71ee759f30682216e",
       "module_directory": null,
       "imports": [
         {
@@ -77594,7 +77824,7 @@
       ]
     },
     "web/src/lib/queries/index.ts": {
-      "sha256": "1c0c908f43979daef91e5e0fcbf70739077aecbfdb78f29874563a83b57132ca",
+      "sha256": "2dfac46c6e76d82965bed2fbc71203c6398b06780174290b07f776071e6a0bb9",
       "module_directory": null,
       "imports": [
         {
@@ -77712,10 +77942,6 @@
         {
           "line": 34,
           "module": "./integrations"
-        },
-        {
-          "line": 35,
-          "module": "./scripts"
         }
       ]
     },
@@ -78037,28 +78263,6 @@
         }
       ]
     },
-    "web/src/lib/queries/scripts.ts": {
-      "sha256": "3c0299f3317d9c92e17674e390524ae0bef57c9785d4892c00f3432786ad90bd",
-      "module_directory": null,
-      "imports": [
-        {
-          "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "../api"
-        },
-        {
-          "line": 4,
-          "module": "../constants"
-        },
-        {
-          "line": 5,
-          "module": "../types"
-        }
-      ]
-    },
     "web/src/lib/queries/service-desk.ts": {
       "sha256": "19dec2b454664bcd55d26519791ea96caf524b4425ed96d31f404ca28e865c25",
       "module_directory": null,
@@ -78120,7 +78324,7 @@
       ]
     },
     "web/src/lib/queries/shared.ts": {
-      "sha256": "f6255dffb2228381d4506b9f016a62cf98fe18726e790e2e2ff6982e78a1643c",
+      "sha256": "c477fa5c041f6265658e199eacd765c12046d07fff924d9adf091fe7985e3d71",
       "module_directory": null,
       "imports": [
         {
@@ -78618,7 +78822,7 @@
       ]
     },
     "web/src/lib/types/index.ts": {
-      "sha256": "810f12b2cfe6205360afb2bbf12cd9c41c4d1e5976d41ee543465f156e52ffcf",
+      "sha256": "2656260df79bbfc535ee2f77b0c2dde802f62bc85e7e5b7a503d799cf63b92c8",
       "module_directory": null,
       "imports": [
         {
@@ -78763,15 +78967,7 @@
         },
         {
           "line": 42,
-          "module": "./monitoring"
-        },
-        {
-          "line": 43,
           "module": "./webhooks"
-        },
-        {
-          "line": 44,
-          "module": "./scripts"
         }
       ]
     },
@@ -78819,11 +79015,6 @@
       "module_directory": null,
       "imports": []
     },
-    "web/src/lib/types/monitoring.ts": {
-      "sha256": "02e17e9d9c48e600c2f66243b687988cb92b2725c9c37f85f9fe065469946d11",
-      "module_directory": null,
-      "imports": []
-    },
     "web/src/lib/types/notifications.ts": {
       "sha256": "cedd02935b97e5d21c8b05372d8a4f04630e42aa8f815b02da5d5db5e73b59ab",
       "module_directory": null,
@@ -78835,7 +79026,7 @@
       "imports": []
     },
     "web/src/lib/types/permissions.ts": {
-      "sha256": "5b07382b8a6892508212980475cf384bc86e5574235ee5308fda391940d0787c",
+      "sha256": "79e55ee2ee2520dc06d156855e0febac73f5961d0289ea11a9039e841b32de81",
       "module_directory": null,
       "imports": []
     },
@@ -78853,11 +79044,6 @@
           "module": "./workflow"
         }
       ]
-    },
-    "web/src/lib/types/scripts.ts": {
-      "sha256": "d52e9945f6caa63171eb5db8002f28b9c7357b8d332116805dfbee20a28c47ae",
-      "module_directory": null,
-      "imports": []
     },
     "web/src/lib/types/search.ts": {
       "sha256": "c6b50f11e425d65c16d76d1d83fb3450826f054b6ad282be5101fa34f3071826",
@@ -79282,7 +79468,7 @@
       ]
     },
     "web/src/router.tsx": {
-      "sha256": "d0f25223523a13be4721948d527a4f9f8a39d5ef45e6901ebf3994f90c61cf92",
+      "sha256": "9f2907e26b2fc4c5dce9b6dd5d69447580f07c06b2009c6e6bbdf12f0d47be37",
       "module_directory": null,
       "imports": [
         {
@@ -79515,78 +79701,70 @@
         },
         {
           "line": 65,
-          "module": "./routes/settings/scripts"
-        },
-        {
-          "line": 66,
           "module": "./routes/settings/vcs"
         },
         {
-          "line": 67,
+          "line": 66,
           "module": "./routes/settings/service-accounts"
         },
         {
-          "line": 68,
+          "line": 67,
           "module": "./routes/settings/ai"
         },
         {
-          "line": 69,
+          "line": 68,
           "module": "./routes/settings/storage"
         },
         {
-          "line": 70,
+          "line": 69,
           "module": "./routes/settings/email"
         },
         {
-          "line": 71,
+          "line": 70,
           "module": "./routes/settings/sign-in"
         },
         {
-          "line": 72,
-          "module": "./routes/settings/monitoring"
-        },
-        {
-          "line": 73,
+          "line": 71,
           "module": "./routes/settings/alertmanager"
         },
         {
-          "line": 74,
+          "line": 72,
           "module": "./routes/settings/webhooks"
         },
         {
-          "line": 75,
+          "line": 73,
           "module": "./routes/settings/notifications"
         },
         {
-          "line": 76,
+          "line": 74,
           "module": "./routes/settings/profile"
         },
         {
-          "line": 77,
+          "line": 75,
           "module": "./routes/settings/instance"
         },
         {
-          "line": 78,
+          "line": 76,
           "module": "./routes/settings/pages"
         },
         {
-          "line": 79,
+          "line": 77,
           "module": "./routes/view"
         },
         {
-          "line": 80,
+          "line": 78,
           "module": "./routes/pages-index"
         },
         {
-          "line": 81,
+          "line": 79,
           "module": "./routes/page-space"
         },
         {
-          "line": 82,
+          "line": 80,
           "module": "./routes/page-print"
         },
         {
-          "line": 83,
+          "line": 81,
           "module": "./routes/dashboard"
         }
       ]
@@ -82803,7 +82981,7 @@
       ]
     },
     "web/src/routes/settings/layout.tsx": {
-      "sha256": "849198bac222b596a5b88e1ee5f3a8d44ab800ca78c7e57bb6a674c725cf0fe6",
+      "sha256": "19a8c00d41f03ff0df5937830fbdfc9e99151fe7f223488890711a0635ac98d7",
       "module_directory": null,
       "imports": [
         {
@@ -82927,52 +83105,6 @@
         {
           "line": 27,
           "module": "../../components/ErrorText"
-        }
-      ]
-    },
-    "web/src/routes/settings/monitoring.tsx": {
-      "sha256": "f5bc65d4bd8c1d2b2641bdc9b51b3e7edee4d4e967105033cdc5dbb7b89e2cb7",
-      "module_directory": null,
-      "imports": [
-        {
-          "line": 1,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 2,
-          "module": "lucide-react"
-        },
-        {
-          "line": 3,
-          "module": "../../lib/api"
-        },
-        {
-          "line": 4,
-          "module": "../../lib/constants"
-        },
-        {
-          "line": 5,
-          "module": "../../lib/queries"
-        },
-        {
-          "line": 11,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 12,
-          "module": "../../components/QueryError"
-        },
-        {
-          "line": 13,
-          "module": "../../components/settings/SettingsPage"
-        },
-        {
-          "line": 14,
-          "module": "../../components/Spinner"
-        },
-        {
-          "line": 15,
-          "module": "../../lib/dates"
         }
       ]
     },
@@ -83391,64 +83523,6 @@
         {
           "line": 28,
           "module": "../../components/history/ChangeHistoryPanel"
-        }
-      ]
-    },
-    "web/src/routes/settings/scripts.tsx": {
-      "sha256": "67ccede8f3a1d81e6e17cb6af0e458a6965028bce7e4bc1576947c05a71d653d",
-      "module_directory": null,
-      "imports": [
-        {
-          "line": 6,
-          "module": "react"
-        },
-        {
-          "line": 7,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 8,
-          "module": "lucide-react"
-        },
-        {
-          "line": 9,
-          "module": "../../lib/api"
-        },
-        {
-          "line": 10,
-          "module": "../../lib/constants"
-        },
-        {
-          "line": 11,
-          "module": "../../lib/dates"
-        },
-        {
-          "line": 12,
-          "module": "../../lib/queries"
-        },
-        {
-          "line": 13,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 14,
-          "module": "../../components/Button"
-        },
-        {
-          "line": 15,
-          "module": "../../components/Callout"
-        },
-        {
-          "line": 16,
-          "module": "../../components/SelectField"
-        },
-        {
-          "line": 17,
-          "module": "../../components/settings/SettingsPage"
-        },
-        {
-          "line": 18,
-          "module": "../../components/TextField"
         }
       ]
     },

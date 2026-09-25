@@ -1,4 +1,5 @@
 import { definePlugin, SlotId } from "@radd/plugin-sdk";
+import { EmbeddingHealthCard } from "./EmbeddingHealthCard";
 import { ClassifyInspector, GenerateInspector } from "./inspectors";
 
 /**
@@ -8,6 +9,7 @@ import { ClassifyInspector, GenerateInspector } from "./inspectors";
  * the host renders it from its served schema.
  */
 export default definePlugin({
+  contributions: [{ id: "embedding-health", slot: SlotId.settingsSection, match: "monitoring", order: 20, render: () => <EmbeddingHealthCard /> }],
   activate(ctx) {
     ctx.registerSlot(SlotId.automationNodeInspector, {
       id: "ai-classify-inspector",

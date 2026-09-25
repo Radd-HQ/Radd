@@ -47,3 +47,31 @@ async def test_unclaimed_offset_row_reads_as_unregistered(db):
     for name, row in rows.items():
         if name in registries.consumer_names:
             assert row["registered"] is True
+
+
+def test_consumer_descriptions_belong_to_the_declaring_plugin():
+    from radd.kernel import RaddPlugin
+
+    for plugin in registries.plugins.values():
+        assert dict(plugin.consumer_descriptions).keys() <= set(plugin.consumer_names)
+        assert all(description for _, description in plugin.consumer_descriptions)
+    with pytest.raises(ValueError, match="own consumers"):
+        RaddPlugin(name="fixture", consumer_descriptions=(("other.worker", "Wrong owner"),))
+
+
+async def test_description_withdraws_without_deleting_cursor(db, monkeypatch):
+    from radd.kernel import RaddPlugin
+
+    plugin = RaddPlugin(name="fixture", consumer_names=("fixture.worker",),
+                        consumer_descriptions=(("fixture.worker", "Fixture work"),))
+    monkeypatch.setattr(registries, "plugins", {"fixture": plugin})
+    monkeypatch.setattr(registries, "consumer_names", {"fixture.worker"})
+    db.add(ConsumerOffset(name="fixture.worker", last_event_id=0))
+    await db.flush()
+    rows = {row["name"]: row for row in await events_service.consumer_status(db)}
+    assert rows["fixture.worker"]["description"] == "Fixture work"
+    registries.plugins.clear()
+    registries.consumer_names.clear()
+    rows = {row["name"]: row for row in await events_service.consumer_status(db)}
+    assert rows["fixture.worker"]["registered"] is False
+    assert rows["fixture.worker"]["description"] == ""

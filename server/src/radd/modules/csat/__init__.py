@@ -10,6 +10,7 @@ from .types import CsatEvent, CONSUMER_NAME
 plugin = RaddPlugin(
     name="csat",
     consumer_names=(CONSUMER_NAME,),
+    consumer_descriptions=((CONSUMER_NAME, "Sends satisfaction surveys"),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Customer satisfaction surveys emailed to requesters when their issue is resolved.",
     depends_on=("projects", "auth", "items", "settings", "events", "mailintake", "workflow"),

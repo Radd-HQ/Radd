@@ -88,9 +88,10 @@ from . import automation_node_generate as ai_automation_node_generate  # noqa: E
 plugin = RaddPlugin(
     # RADD-1325: this plugin's automation-node inspectors ship in its own UI
     # remote (./ui), registered through `automation.node.inspector`.
-    ui=PluginUiManifest(remote="/plugins/ai/remoteEntry.js", ui_api_version="1.1.0"),
+    ui=PluginUiManifest(remote="/plugins/ai/remoteEntry.js", ui_api_version="1.3.0"),
     name="ai",
     consumer_names=("ai.embedder",),
+    consumer_descriptions=(("ai.embedder", "Builds semantic-search vectors"),),
     core=False,  # optional plugin — disableable via the plugin manager
     description=(
         "AI features: summaries, similar-issue suggestions, natural-language search and editor actions, using the providers you configure."

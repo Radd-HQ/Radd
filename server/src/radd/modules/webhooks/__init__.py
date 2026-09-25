@@ -8,6 +8,7 @@ from .router import router
 plugin = RaddPlugin(
     name="webhooks",
     consumer_names=(CONSUMER_NAME,),
+    consumer_descriptions=((CONSUMER_NAME, "Delivers webhook calls"),),
     permissions=(
         PermissionSpec(
             "webhook.manage",

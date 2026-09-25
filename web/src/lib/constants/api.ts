@@ -89,7 +89,6 @@ export const ApiPath = {
   releases: "/releases",
   // Spec 20 consumers:
   automations: "/automations",
-  scripts: "/scripts",
   forms: "/forms",
   // Requester portal (spec 73): eligibility-gated form directory, any authed user.
   portalForms: "/portal/forms",
@@ -203,7 +202,6 @@ export const ApiPath = {
   mailRules: "/mail/rules",
   /** Per-kind defaults — what the add-a-source/sender form prefills itself with. */
   mailKinds: "/mail/kinds",
-  monitoringOverview: "/monitoring/overview",
   // Storage host registry (spec 102) — instance admin: Settings → Storage.
   storageHosts: "/storage/hosts",
   // Storage routing chain + move jobs (spec 102) — instance admin.

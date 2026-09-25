@@ -183,7 +183,6 @@ export const queryKeys = {
   mailSenders: ["mailSenders"] as const,
   mailKinds: ["mailKinds"] as const,
   mailRules: (sourceId: string) => ["mailRules", { sourceId }] as const,
-  monitoringOverview: ["monitoringOverview"] as const,
   // Storage host registry + routing chain + move jobs (spec 102).
   storageHosts: ["storageHosts"] as const,
   storageRules: ["storageRules"] as const,

@@ -271,14 +271,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.ws(Permission.automationManage),
       },
       {
-        // RADD-1269: the scripts plugin's surface — withdrawn with the plugin.
-        to: RoutePath.settingsScripts,
-        label: "Scripts",
-        icon: Terminal,
-        plugin: "scripts",
-        show: (g) => g.ws(Permission.scriptManage),
-      },
-      {
         // Outbound webhooks (RADD-1096): endpoints, secrets, the delivery log.
         to: RoutePath.settingsWebhooks,
         label: "Webhooks",
@@ -291,14 +283,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Alertmanager",
         icon: BellRing,
         plugin: "alertmanager",
-        show: (g) => g.instanceAdmin,
-      },
-      {
-        // Operator monitoring: DB health, counts, worker lag.
-        to: RoutePath.settingsMonitoring,
-        label: "Monitoring",
-        icon: Activity,
-        plugin: "monitoring",
         show: (g) => g.instanceAdmin,
       },
       {

@@ -189,11 +189,13 @@
     "issue": null
   },
   "server/src/radd/kernel/plugin.py": {
-    "sha256": "fbcb1c84caefb2898263b771cf4c58a338ad60ff3b6aa57ee3fddab6513bc676",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ead5c2a3b571366d0e74725b78ec6def18191a9f4a320c4fd4087083abff18b7",
+    "status": "partially_reviewed",
+    "owner": "platform",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/kernel/registry.py": {
     "sha256": "22d0886a3addbc864a5eba41bb491fa18f6ad6205c77a1a2393efb640578799e",
@@ -343,11 +345,13 @@
     "issue": null
   },
   "server/src/radd/modules/ai/__init__.py": {
-    "sha256": "7da5c36e97b3a96c2ba824beae666673648f91b0c73cbdc7218516474308a655",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "f70232bb8bfa1073f1c5f2197472758f196ea94f342c1ed0abad34d93906f979",
+    "status": "partially_reviewed",
+    "owner": "ai",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/ai/admin_router.py": {
     "sha256": "8ca050aa8fa8dfb2e06e538c9b59add6cf311bf248cb5431a79d2dd7b39eb8d6",
@@ -559,8 +563,17 @@
     "evidence": [],
     "issue": null
   },
+  "server/src/radd/modules/ai/ui/src/EmbeddingHealthCard.tsx": {
+    "sha256": "91891297636bb01c1b7fbfda4526fb80ef04d16070dfedefe45ed7b89b37b066",
+    "status": "reviewed",
+    "owner": "ai",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
   "server/src/radd/modules/ai/ui/src/index.tsx": {
-    "sha256": "0bc52d12134efa0b9c778e0f5a7f409b6ad1fd1f9fea644d6daff9d30eda3a72",
+    "sha256": "35106b95bc5f73dc71f59d2ae348587b25487f16e52f2f7f33036331bf370bca",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -1134,11 +1147,13 @@
     "issue": null
   },
   "server/src/radd/modules/automations/__init__.py": {
-    "sha256": "e3b5a616f1cf7119a986fa8a240e7da17fbe5ba935ff2e850dc578433c543d40",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "7051a0fb43d45ea1b88c1fdf8f27b4ce50b9b9bbdadf2406b28cdf75e7008768",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/automations/builtin_actions.py": {
     "sha256": "b0dc0a159b098e0498d48eddb7bb985915b02af94ae11a1ce4ed0aac549247ca",
@@ -1869,11 +1884,13 @@
     "issue": null
   },
   "server/src/radd/modules/csat/__init__.py": {
-    "sha256": "3c25bf8ce022505b48d1d47139b0e69519501e9c36dc09475b3ed17a3d06ce93",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "235fd95cc287c94df847906f249902302267d9cf2e9642a28a8ce105594acc82",
+    "status": "partially_reviewed",
+    "owner": "csat",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/csat/dispatcher.py": {
     "sha256": "8b2128b330659a61944210a3961a81e616b94ad1b95bf8e6921134b8db9969ea",
@@ -2086,11 +2103,13 @@
     "issue": null
   },
   "server/src/radd/modules/events/__init__.py": {
-    "sha256": "046bcd0c4c4afd1444451e0e16a14f7013e45ccf7129fb60d12061533d041e04",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "08c046563d8fcd7883ce342cd2d7fddac500e29912caaf3350435d5e7c815e7a",
+    "status": "partially_reviewed",
+    "owner": "events",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/events/cascade.py": {
     "sha256": "33d19b9b53c150f926f76e0756212babc05c82df736bd953490e5b3edbd6b881",
@@ -2142,11 +2161,13 @@
     "issue": null
   },
   "server/src/radd/modules/events/service.py": {
-    "sha256": "a36d1912de8cf7845daa9ea01820e07368a277441d25800b96505f46231e6c51",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "fa3264fe7979404e34e502e22eb16fb5f002cd549e49fabb3b842ed25ba53724",
+    "status": "partially_reviewed",
+    "owner": "events",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/events/types.py": {
     "sha256": "df3582c4aa403be13eaca58d9872c230656d812a178167fafea90a53e7a98fb1",
@@ -3565,11 +3586,13 @@
     "issue": null
   },
   "server/src/radd/modules/mailintake/__init__.py": {
-    "sha256": "0ba486d254f3b2f01c5905569cc776eff7e4188d349dbe14f922b6d7f93303b8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "c96d0fb3884303e26a187acfd9c11252964782f25795c19247185a3e1336f530",
+    "status": "partially_reviewed",
+    "owner": "mailintake",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/mailintake/attachments.py": {
     "sha256": "d30396e529530cd364ecbb689a58c47ea69c1e18f6597f1ca90dd79b1472582e",
@@ -3691,11 +3714,13 @@
     "issue": null
   },
   "server/src/radd/modules/mailintake/router.py": {
-    "sha256": "27712abf2e2b57e78e67a4dea450be405168896ce640a3d2e54f47d487421f6f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "664add4fcffaa720fceaee93666557ad81848fa05aa99953288740ef8440f15b",
+    "status": "partially_reviewed",
+    "owner": "mailintake",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/mailintake/routing.py": {
     "sha256": "589237a90de60c1b517c415768ec19b1f10c7c81421830bf352f23b44cfae6d3",
@@ -3816,8 +3841,17 @@
     "evidence": [],
     "issue": null
   },
+  "server/src/radd/modules/mailintake/ui/src/MailHealthCard.tsx": {
+    "sha256": "4720cade41c10582bb54e42f14d1d5f019666f7ab867a749c1db8de85f27dc61",
+    "status": "reviewed",
+    "owner": "mailintake",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
   "server/src/radd/modules/mailintake/ui/src/index.tsx": {
-    "sha256": "2d66b3ef3be694b3cedfddf18c918db6ec10d86c5a5bfd1298cc59fd20cd8812",
+    "sha256": "07261274fb6b776a89b35e44121b7b763773bcfffc10347570cb3090fe84aafb",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -3922,11 +3956,13 @@
     "issue": null
   },
   "server/src/radd/modules/monitoring/__init__.py": {
-    "sha256": "81112b802bc7077e9c7969d8c74038ce79efe4bb01985cbb008dd34bd249b08c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d081b7919dfd5a146523a51dc2fbdbce682a84894cce8bacce6c59c5c8c8e3a4",
+    "status": "partially_reviewed",
+    "owner": "monitoring",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/monitoring/router.py": {
     "sha256": "cdfde23521af4ff9e1f4750260b7b181943adc173860a7ff1bc902f204d50655",
@@ -3936,11 +3972,13 @@
     "issue": null
   },
   "server/src/radd/modules/monitoring/schemas.py": {
-    "sha256": "bba1a05f81cd136c05d0146d63dfb2ec7c1f263ebdf47d8115004a9f5236ee2d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "5aa351ad5fae2bd34c82ab89a9ca9b13d59b200a6336e7c58c36339c6b5b298b",
+    "status": "partially_reviewed",
+    "owner": "monitoring",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/monitoring/service.py": {
     "sha256": "762e86d49691a881761ce07792f110837d82ee2c3a94bda1e6e8a1254b32511b",
@@ -3949,12 +3987,50 @@
     "evidence": [],
     "issue": null
   },
+  "server/src/radd/modules/monitoring/ui/src/SettingsPage.tsx": {
+    "sha256": "f05934407154992943041f3c4006a8d355972f49cc07c8d86afb77371ae5e2bc",
+    "status": "reviewed",
+    "owner": "monitoring",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
+  "server/src/radd/modules/monitoring/ui/src/cards.tsx": {
+    "sha256": "04f52dfa17bc7be89f9ffb0a58f3b4897ef96c582f736bc447fc5b0ea07166b8",
+    "status": "reviewed",
+    "owner": "monitoring",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
+  "server/src/radd/modules/monitoring/ui/src/index.tsx": {
+    "sha256": "c986f46a6504bf0a0c326109b0c3cd6437d303641e7e3ba627fb592959410aeb",
+    "status": "reviewed",
+    "owner": "monitoring",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
+  "server/src/radd/modules/monitoring/ui/src/types.ts": {
+    "sha256": "416e0ccbcabe9d95822aa9c8c33861c12d0f0c7887c31af1149f60c16f7ee83e",
+    "status": "reviewed",
+    "owner": "monitoring",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
   "server/src/radd/modules/notify/__init__.py": {
-    "sha256": "129dcacd073fe5542aa03e97d36ecf7e6dcca401d42441a91a1b8a46384fab20",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d4a20023a4fb6ea3dd3a4bb497214e4c51d7f754fb1ad23f3f0355952f1fa5ad",
+    "status": "partially_reviewed",
+    "owner": "notify",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/notify/audience.py": {
     "sha256": "b2a3d6f65bdf082afc92c0a54d6305b00dde90ddc439a7aa187d739cb780788a",
@@ -4720,11 +4796,13 @@
     "issue": null
   },
   "server/src/radd/modules/scripts/__init__.py": {
-    "sha256": "b704e80d2b8690178762ebe633b8173616e4b531095c451a451e308c9f02b4e4",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "901c4bf070260b587107f3f19d01e823ea29bcca3ede372526a57e6a58595d31",
+    "status": "partially_reviewed",
+    "owner": "scripts",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/scripts/harness.py": {
     "sha256": "05fd0db5140358f9326cec1e7857c32a3f9c95a13ec45d338a0c866055e63088",
@@ -4789,26 +4867,68 @@
     "evidence": [],
     "issue": null
   },
+  "server/src/radd/modules/scripts/ui/src/ContractSection.tsx": {
+    "sha256": "3c698199b5edd97ea65bd9f4b08f5da92e8f6729f967a6785ecf0959ab4ed144",
+    "status": "reviewed",
+    "owner": "scripts",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
   "server/src/radd/modules/scripts/ui/src/ScriptInspector.tsx": {
-    "sha256": "724f11d90749ff9cda0166cc8ed2963892342e6a4af0a0982b4238556a3acc27",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "3f47a8f1daeb823da40c297974eebf214854347a4e1c2cdd33da9a6e843b6c00",
+    "status": "partially_reviewed",
+    "owner": "scripts",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
+  },
+  "server/src/radd/modules/scripts/ui/src/SettingsPage.tsx": {
+    "sha256": "7f9f53c94514cf029ec96be4baa5492898286986f2ea3d0d1e879392b415d40e",
+    "status": "reviewed",
+    "owner": "scripts",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/scripts/ui/src/index.tsx": {
-    "sha256": "9a38ec5ff1b55956f7494e72b80e9422f76801cb63d090fe87c0fdec6fdc1519",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "5069259e756959d71c0d5ce13ddfdca256423cf10328340731a575a24622d5b9",
+    "status": "reviewed",
+    "owner": "scripts",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
+  "server/src/radd/modules/scripts/ui/src/queries.ts": {
+    "sha256": "4451225c7b9484325da5d4d68b571a4330932418c949f59de127b36c686add2d",
+    "status": "reviewed",
+    "owner": "scripts",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
+  },
+  "server/src/radd/modules/scripts/ui/src/types.ts": {
+    "sha256": "d52e9945f6caa63171eb5db8002f28b9c7357b8d332116805dfbee20a28c47ae",
+    "status": "reviewed",
+    "owner": "scripts",
+    "evidence": [
+      "Owns settings/card UI, queries and wire types. Uses SDK primitives and declared slots; no host feature imports. Actual-bundle browser: 12 form/lifecycle/permission checks, source scan style assertion and screenshots. Host/all 10 remotes type-check/build; 42 frontend and 48 focused backend checks."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/search/__init__.py": {
-    "sha256": "90cf6808c8b6b8fe7ddd36c3f7797639d935e1102f2cc1431ba81ca4a59d7751",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "dd3a486c12ce42b7f237769f672ed516cb950932fc53c76b2acbefc882bcf4de",
+    "status": "partially_reviewed",
+    "owner": "search",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/search/deflect.py": {
     "sha256": "07180a1f61a1190145367d1a6751f2691b5142f2d19a6ae4b2434d00eb1e3e80",
@@ -5483,11 +5603,13 @@
     "issue": null
   },
   "server/src/radd/modules/webhooks/__init__.py": {
-    "sha256": "2cbb0f3e737f6325a4c85c272a83b943b9dbe3a8b6c0c280318c81eff5b9ad5c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "9b5fa44e26339cd5d3855f415224db1ca7af275df62f9003b9ebb2bd8349dcb1",
+    "status": "partially_reviewed",
+    "owner": "webhooks",
+    "evidence": [
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+    ],
+    "issue": "RADD-1352"
   },
   "server/src/radd/modules/webhooks/dispatcher.py": {
     "sha256": "ee1ac17a375e44d98604dbede6acf11396b80547e1609cf136e2716ea7157115",
@@ -8541,7 +8663,7 @@
     "issue": "RADD-1351"
   },
   "web/src/index.css": {
-    "sha256": "68bea747f3680cdfcd6a17cfad45b94d5ec85d56788e31197b429cf5bb35e755",
+    "sha256": "c81fd995ea64036e936a03a7667f07d8a3d18736cf8e34523b3e0f38a31658cc",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -8704,7 +8826,7 @@
     "issue": null
   },
   "web/src/lib/constants/api.ts": {
-    "sha256": "e930dcb3e394d939fbd40073f68b07e421c29061f9673e488afbad67d0dff310",
+    "sha256": "49824d4ba44e4bcc8b8263986457beb772285b141f72fef41e43c162178c84a7",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -8732,7 +8854,7 @@
     "issue": null
   },
   "web/src/lib/constants/routes.ts": {
-    "sha256": "a0b2d1db7b4d88ec9fe370368d9184fa5570b120b41c9a856cf152d935ae1c58",
+    "sha256": "2d4a68037fbd434a9eb4ba0a78111e2eeb264cd3b4751df71ee759f30682216e",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9065,7 +9187,7 @@
     "issue": null
   },
   "web/src/lib/queries/index.ts": {
-    "sha256": "1c0c908f43979daef91e5e0fcbf70739077aecbfdb78f29874563a83b57132ca",
+    "sha256": "2dfac46c6e76d82965bed2fbc71203c6398b06780174290b07f776071e6a0bb9",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9148,13 +9270,6 @@
     "evidence": [],
     "issue": null
   },
-  "web/src/lib/queries/scripts.ts": {
-    "sha256": "3c0299f3317d9c92e17674e390524ae0bef57c9785d4892c00f3432786ad90bd",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
   "web/src/lib/queries/service-desk.ts": {
     "sha256": "19dec2b454664bcd55d26519791ea96caf524b4425ed96d31f404ca28e865c25",
     "status": "unreviewed",
@@ -9170,7 +9285,7 @@
     "issue": null
   },
   "web/src/lib/queries/shared.ts": {
-    "sha256": "f6255dffb2228381d4506b9f016a62cf98fe18726e790e2e2ff6982e78a1643c",
+    "sha256": "c477fa5c041f6265658e199eacd765c12046d07fff924d9adf091fe7985e3d71",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9401,7 +9516,7 @@
     "issue": null
   },
   "web/src/lib/types/index.ts": {
-    "sha256": "810f12b2cfe6205360afb2bbf12cd9c41c4d1e5976d41ee543465f156e52ffcf",
+    "sha256": "2656260df79bbfc535ee2f77b0c2dde802f62bc85e7e5b7a503d799cf63b92c8",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9442,13 +9557,6 @@
     "evidence": [],
     "issue": null
   },
-  "web/src/lib/types/monitoring.ts": {
-    "sha256": "02e17e9d9c48e600c2f66243b687988cb92b2725c9c37f85f9fe065469946d11",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
   "web/src/lib/types/notifications.ts": {
     "sha256": "cedd02935b97e5d21c8b05372d8a4f04630e42aa8f815b02da5d5db5e73b59ab",
     "status": "unreviewed",
@@ -9464,7 +9572,7 @@
     "issue": null
   },
   "web/src/lib/types/permissions.ts": {
-    "sha256": "5b07382b8a6892508212980475cf384bc86e5574235ee5308fda391940d0787c",
+    "sha256": "79e55ee2ee2520dc06d156855e0febac73f5961d0289ea11a9039e841b32de81",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9479,13 +9587,6 @@
   },
   "web/src/lib/types/reporting.ts": {
     "sha256": "f8e96883e784a0825fb4285f0aa1b3d8551eafff5ffc88184a65d1d94991a8d8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/lib/types/scripts.ts": {
-    "sha256": "d52e9945f6caa63171eb5db8002f28b9c7357b8d332116805dfbee20a28c47ae",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9667,7 +9768,7 @@
     "issue": null
   },
   "web/src/router.tsx": {
-    "sha256": "d0f25223523a13be4721948d527a4f9f8a39d5ef45e6901ebf3994f90c61cf92",
+    "sha256": "9f2907e26b2fc4c5dce9b6dd5d69447580f07c06b2009c6e6bbdf12f0d47be37",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -9996,23 +10097,14 @@
     "issue": null
   },
   "web/src/routes/settings/layout.tsx": {
-    "sha256": "849198bac222b596a5b88e1ee5f3a8d44ab800ca78c7e57bb6a674c725cf0fe6",
-    "status": "partially_reviewed",
-    "owner": "platform (residual feature ownership under review)",
-    "evidence": [
-      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
-    ],
-    "issue": "RADD-1351"
-  },
-  "web/src/routes/settings/link-types.tsx": {
-    "sha256": "77d25738835ef96dc21e38a2f0cf2bd053faac6b50573f410bd2d7ffc315442c",
+    "sha256": "19a8c00d41f03ff0df5937830fbdfc9e99151fe7f223488890711a0635ac98d7",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
     "issue": null
   },
-  "web/src/routes/settings/monitoring.tsx": {
-    "sha256": "f5bc65d4bd8c1d2b2641bdc9b51b3e7edee4d4e967105033cdc5dbb7b89e2cb7",
+  "web/src/routes/settings/link-types.tsx": {
+    "sha256": "77d25738835ef96dc21e38a2f0cf2bd053faac6b50573f410bd2d7ffc315442c",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -10050,13 +10142,6 @@
   },
   "web/src/routes/settings/roles.tsx": {
     "sha256": "e765396b3339b0eba137bb9d224b258e1e65d91dcebada85e5ee60e7fe728686",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/routes/settings/scripts.tsx": {
-    "sha256": "67ccede8f3a1d81e6e17cb6af0e458a6965028bce7e4bc1576947c05a71d653d",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],

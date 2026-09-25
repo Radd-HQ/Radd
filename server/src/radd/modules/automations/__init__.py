@@ -96,6 +96,7 @@ plugin = RaddPlugin(
         ),
     ),
     consumer_names=(CONSUMER_NAME,),
+    consumer_descriptions=((CONSUMER_NAME, "Runs automation rules"),),
     permissions=(
         PermissionSpec(
             "automation.manage", "global", "Manage global automation rules that can read and change issues through the system actor."

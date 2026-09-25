@@ -52,3 +52,21 @@ test('Leave owns its endpoint vocabulary; host integrations use generic data con
   }
   assert.deepEqual(violations,[]);
 });
+
+test('Scripts and Monitoring settings have no host-owned routes or endpoint vocabulary',()=>{
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    if (node.type==='StringLiteral' && /^(?:\/(?:settings\/)?(?:scripts|monitoring)(?:\/|$)|(?:scripts|monitoring)$)/.test(node.value)) {
+      violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
+    }
+  }
+  assert.deepEqual(violations,[]);
+});
+
+test('Monitoring UI consumes contributions instead of importing AI or mail features',()=>{
+  const violations=[];
+  for (const file of files('server/src/radd/modules/monitoring/ui/src')) for(const node of nodes(file)) {
+    if (node.type==='StringLiteral' && /^(?:\/(?:ai|mail)(?:\/|$)|(?:ai|mailintake)(?:\.|$))/.test(node.value)) violations.push(`${file}: ${node.value}`);
+  }
+  assert.deepEqual(violations,[]);
+});

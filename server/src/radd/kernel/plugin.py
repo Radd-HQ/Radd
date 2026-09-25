@@ -153,10 +153,17 @@ class RaddPlugin:
     on_startup: tuple[StartupHook, ...] = ()
     on_shutdown: tuple[StartupHook, ...] = ()
 
+    #: Optional operator-facing descriptions, declared beside the owning consumer.
+    #: Appended for positional compatibility. Names must belong to consumer_names.
+    consumer_descriptions: tuple[tuple[str, str], ...] = ()
+
     def __post_init__(self) -> None:
         if not self.id:
             object.__setattr__(self, "id", self.name)
         self._reject_unwrapped_contributions()
+        names = [name for name, _description in self.consumer_descriptions]
+        if len(names) != len(set(names)) or not set(names) <= set(self.consumer_names):
+            raise ValueError(f"RaddPlugin({self.name!r}): descriptions must uniquely name its own consumers")
 
     def _reject_unwrapped_contributions(self) -> None:
         """Refuse a single contribution passed where a tuple is declared.

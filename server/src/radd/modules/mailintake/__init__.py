@@ -14,6 +14,7 @@ from .types import MailEvent, OUTBOUND_CONSUMER_NAME
 plugin = RaddPlugin(
     name="mailintake",
     consumer_names=(OUTBOUND_CONSUMER_NAME,),
+    consumer_descriptions=((OUTBOUND_CONSUMER_NAME, "Sends outbound mail replies"),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Email in and out: turns incoming mail into issues and comments, and replies to requesters.",
     # attachments: mail parts become item attachments through the spec-102
@@ -88,5 +89,5 @@ plugin = RaddPlugin(
     ),
     # Federated UI (spec 94): the external-requester chip in the issue rail
     # (web/remotes/mailintake), rendered by the host via the issue.panel.section slot.
-    ui=PluginUiManifest(remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.0.0"),
+    ui=PluginUiManifest(remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.3.0"),
 )

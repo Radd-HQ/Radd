@@ -50,7 +50,6 @@ export const SettingsSection = {
   pages: "pages",
   // Plugin manager (spec 93 / A4) — install/enable/disable non-core plugins. Admin.
   plugins: "plugins",
-  scripts: "scripts",
   // Alertmanager receivers (RADD-1317) — admin, withdrawn with the plugin.
   alertmanager: "alertmanager",
   // Backups (spec 99) — schedules, artifacts, restore. Instance admin only.
@@ -63,8 +62,6 @@ export const SettingsSection = {
   email: "email",
   // SSO provider registry + signup domain allowlists (spec 110) — admin only.
   signIn: "sign-in",
-  // Operator monitoring: DB health, counts, worker lag — admin only.
-  monitoring: "monitoring",
   // Outbound webhooks: endpoints, secrets, the delivery log (RADD-1096).
   webhooks: "webhooks",
   // Per-team public holidays (People group) — admin-managed.
@@ -179,7 +176,6 @@ export const RoutePath = {
   settingsNotifications: `${SETTINGS_SEGMENT}/${SettingsSection.notifications}`,
   /** Automation rules admin (spec 20, global, `automation.manage`). */
   settingsAutomations: `${SETTINGS_SEGMENT}/${SettingsSection.automations}`,
-  settingsScripts: `${SETTINGS_SEGMENT}/${SettingsSection.scripts}`,
   /** Work-categories admin (spec 22/50, global manage) — the shared category list. */
   settingsTimelogging: `${SETTINGS_SEGMENT}/${SettingsSection.timelogging}`,
   /** Audit log (admin): every attributable change across the server. */
@@ -193,7 +189,6 @@ export const RoutePath = {
   settingsEmail: `${SETTINGS_SEGMENT}/${SettingsSection.email}`,
   /** SSO providers + per-provider signup domain allowlists (spec 110, admin). */
   settingsSignIn: `${SETTINGS_SEGMENT}/${SettingsSection.signIn}`,
-  settingsMonitoring: `${SETTINGS_SEGMENT}/${SettingsSection.monitoring}`,
   settingsWebhooks: `${SETTINGS_SEGMENT}/${SettingsSection.webhooks}`,
   /** Alertmanager receivers (RADD-1317, admin). */
   settingsAlertmanager: `${SETTINGS_SEGMENT}/${SettingsSection.alertmanager}`,

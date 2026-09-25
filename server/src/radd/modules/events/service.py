@@ -353,6 +353,8 @@ async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:
     skip history on re-enable."""
     from radd.kernel.registry import registries
 
+    descriptions = {name: text for plugin in registries.plugins.values()
+                    for name, text in plugin.consumer_descriptions}
     head = await latest_event_id(session)
     result = await session.execute(
         select(
@@ -364,6 +366,7 @@ async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:
     return [
         {
             "name": name,
+            "description": descriptions.get(name, ""),
             "last_event_id": last_event_id,
             "stream_head": head,
             "lag": max(0, head - last_event_id),

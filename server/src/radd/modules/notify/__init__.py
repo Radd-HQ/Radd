@@ -10,6 +10,7 @@ from .types import NotifyEvent, CONSUMER_NAME
 plugin = RaddPlugin(
     name="notify",
     consumer_names=(CONSUMER_NAME,),
+    consumer_descriptions=((CONSUMER_NAME, "Turns events into notifications and emails"),),
     description="Notifications: the inbox, email and watching.",
     depends_on=("events", "projects", "auth", "items", "comments", "teams"),
     # participants: the recipient union (spec 72), resolved at fan-out time.

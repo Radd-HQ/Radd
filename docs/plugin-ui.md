@@ -255,3 +255,8 @@ then enable it in **Settings → Plugins** — its UI and backend contributions 
   types (`register_*`) — a bounded backend follow-up.
 - **`settingsSection`** is available; wire it by dropping `<Slot id={SlotId.settingsSection}
   match="<pageKey>"/>` into whichever settings page should accept injected sections.
+
+
+Settings pages may host other plugins' sections with `<Slot id={SlotId.settingsSection} match="monitoring" />`. A contribution owns its data request as well as its UI. For polling that is useful only while visible, consume the query `signal` and use `gcTime: 0` / `staleTime: 0` to abort on withdrawal and fetch fresh data on reactivation. Mutations already accepted by the backend may finish; do not discard saved configuration on disable. Navigation requirements are presentation gates; the owning endpoint must enforce authorization too.
+
+Built-in remotes use the shared Tailwind sheet, whose source scan includes every module's `ui/src` directory. External bundles should use SDK primitives/tokens or supply their own styles; adding a plugin must never require a named entry in the host stylesheet.

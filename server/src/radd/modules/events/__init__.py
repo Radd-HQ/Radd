@@ -19,6 +19,7 @@ plugin = RaddPlugin(
     on_shutdown=(_shutdown,),
     name="events",
     consumer_names=("events.cascade",),
+    consumer_descriptions=(("events.cascade", "Applies event-driven cleanup and entity cascades"),),
     depends_on=(),
     weak_depends=("auth",),
     description="The event log every other feature reads from — history, notifications, webhooks and automations.",

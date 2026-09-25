@@ -19,6 +19,7 @@ class EntityCount(BaseModel):
 
 
 class WorkerStatus(BaseModel):
+    description: str = ""
     name: str
     last_event_id: int
     stream_head: int

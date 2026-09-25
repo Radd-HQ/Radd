@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
 from radd.db import get_session
-from radd.exceptions import NotFoundError
+from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.attachments import service as attachments_service
+from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
 
@@ -16,6 +17,7 @@ from . import intake, loops, parsing, registry, service
 from .models import MailMessage
 from .schemas import MailContactRead
 from .sources import webhook
+from .transport import MailHealth
 from .types import MAX_BODY_BYTES, RAW_MESSAGE_CONTENT_TYPE, RAW_MESSAGE_FILENAME, MailEntity
 
 logger = logging.getLogger(__name__)
@@ -190,3 +192,11 @@ async def mail_message_raw(
         media_type=RAW_MESSAGE_CONTENT_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{RAW_MESSAGE_FILENAME}"'},
     )
+
+
+@router.get("/mail/health", response_model=MailHealth)
+async def outbound_health(session: Session, user: CurrentUser) -> MailHealth:
+    """Operator-only delivery health, owned by the plugin that sends the mail."""
+    if not authz.is_instance_admin(user):
+        raise ForbiddenError("mail health requires an instance admin")
+    return await service.mail_health(session)

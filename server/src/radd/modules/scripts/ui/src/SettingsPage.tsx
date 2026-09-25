@@ -5,19 +5,16 @@
  */
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Globe, Package, Play, Plus, RotateCcw, Terminal, Trash2 } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
-import { ApiPath } from "../../lib/constants";
-import { relativeTime } from "../../lib/dates";
-import { scriptInterpreterQuery, scriptKeys, scriptPackagesQuery } from "../../lib/queries";
-import type { ScriptInterpreter, ScriptInterpreterSettings, ScriptPackage } from "../../lib/types";
-import { Button, ButtonVariant } from "../../components/Button";
-import { Callout, CalloutKind } from "../../components/Callout";
-import { SelectField } from "../../components/SelectField";
-import { SettingsPage } from "../../components/settings/SettingsPage";
-import { TextField } from "../../components/TextField";
+import { Globe, Package, Plus, RotateCcw, Terminal, Trash2 } from "lucide-react";
+import { api, errorMessage, relativeTime, Button, ButtonVariant, Callout, CalloutKind, SelectField, SettingsPage, TextField, QueryError, Spinner } from "@radd/plugin-sdk";
+import { scriptInterpreterQuery, scriptKeys, scriptPackagesQuery, SCRIPTS_API } from "./queries";
+import type { ScriptInterpreter, ScriptInterpreterSettings, ScriptPackage } from "./types";
+import { ContractSection } from "./ContractSection";
 
 export function ScriptsSettingsPage() {
+  const interpreter = useQuery(scriptInterpreterQuery);
+  if (interpreter.isPending) return <Spinner />;
+  if (interpreter.isError) return <div className="p-8"><QueryError label="script interpreter" error={interpreter.error} /></div>;
   return (
     <SettingsPage
       history={{ entities: ["script_package", "script_interpreter"] }}
@@ -37,7 +34,7 @@ export function ScriptsSettingsPage() {
 // --- the interpreter ---------------------------------------------------------
 
 const STATUS_TONE: Record<ScriptInterpreter["status"], string> = {
-  ready: "bg-emerald-500/15 text-emerald-300",
+  ready: "bg-status-success/15 text-status-success",
   missing: "bg-elevated text-fg-secondary",
   failed: "bg-status-danger/15 text-status-danger",
 };
@@ -49,7 +46,7 @@ function InterpreterSection() {
   const [showLog, setShowLog] = useState(false);
   const rebuild = useMutation({
     mutationFn: (python_version: string) =>
-      api.post<ScriptInterpreter>(`${ApiPath.scripts}/interpreter/rebuild`, { python_version }),
+      api.post<ScriptInterpreter>(`${SCRIPTS_API}/interpreter/rebuild`, { python_version }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: scriptKeys.interpreter });
       await queryClient.invalidateQueries({ queryKey: scriptKeys.packages });
@@ -132,7 +129,7 @@ function IndexSection() {
     }
   }, [data, touched]);
   const save = useMutation({
-    mutationFn: (body: ScriptInterpreterSettings) => api.put<ScriptInterpreter>(`${ApiPath.scripts}/interpreter`, body),
+    mutationFn: (body: ScriptInterpreterSettings) => api.put<ScriptInterpreter>(`${SCRIPTS_API}/interpreter`, body),
     onSuccess: async () => {
       setTouched(false);
       await queryClient.invalidateQueries({ queryKey: scriptKeys.interpreter });
@@ -205,7 +202,7 @@ function IndexSection() {
 // --- packages -----------------------------------------------------------------
 
 const PACKAGE_TONE: Record<ScriptPackage["status"], string> = {
-  installed: "bg-emerald-500/15 text-emerald-300",
+  installed: "bg-status-success/15 text-status-success",
   pending: "bg-elevated text-fg-secondary",
   failed: "bg-status-danger/15 text-status-danger",
 };
@@ -217,14 +214,14 @@ function PackagesSection() {
   const [openLog, setOpenLog] = useState<string | null>(null);
   const invalidate = () => queryClient.invalidateQueries({ queryKey: scriptKeys.packages });
   const add = useMutation({
-    mutationFn: (value: string) => api.post<ScriptPackage>(`${ApiPath.scripts}/packages`, { spec: value }),
+    mutationFn: (value: string) => api.post<ScriptPackage>(`${SCRIPTS_API}/packages`, { spec: value }),
     onSuccess: async () => {
       setSpec("");
       await invalidate();
     },
   });
   const remove = useMutation({
-    mutationFn: (id: string) => api.delete<void>(`${ApiPath.scripts}/packages/${id}`),
+    mutationFn: (id: string) => api.delete<void>(`${SCRIPTS_API}/packages/${id}`),
     onSuccess: invalidate,
   });
 
@@ -235,6 +232,7 @@ function PackagesSection() {
         <h2 className="text-sm font-medium text-heading">Packages</h2>
         <span className="text-[11px] text-fg-muted">What your scripts may import, beyond the standard library and the SDK.</span>
       </div>
+      {packages.isError && <QueryError label="packages" error={packages.error} />}
       {packages.data && packages.data.length > 0 && (
         <ul className="flex flex-col gap-0.5">
           {packages.data.map((row) => (
@@ -280,43 +278,3 @@ function PackagesSection() {
   );
 }
 
-// --- the contract -------------------------------------------------------------
-
-/** Where the script itself lives is the automation node (RADD-1272). This
- * page owns what is instance-wide; the contract is repeated here so an admin
- * reads it where they set the interpreter up. */
-function ContractSection() {
-  return (
-    <section data-scripts-contract className="flex flex-col gap-2 rounded-[10px] border border-subtle bg-surface p-4">
-      <div className="flex items-center gap-2">
-        <Play size={15} className="text-accent-text" aria-hidden />
-        <h2 className="text-sm font-medium text-heading">Writing a script</h2>
-      </div>
-      <p className="text-xs text-fg-secondary">
-        Drop a <strong className="font-medium text-fg">Run a script</strong> or{" "}
-        <strong className="font-medium text-fg">Decide with a script</strong> node on an automation; the
-        Python lives on the node, and the automation&rsquo;s versions are its history. A new node arrives
-        with this contract filled in:
-      </p>
-      <pre className="overflow-auto rounded-[8px] border border-subtle bg-base p-3 text-[12px] leading-5 text-fg">{CONTRACT}</pre>
-      <p className="text-xs text-fg-secondary">
-        A <em>Run a script</em> node publishes the dict <code className="text-fg">main</code> returns: each key
-        you declare as an output becomes a <code className="text-fg">{"{{name.key}}"}</code> token downstream.
-        A <em>Decide with a script</em> node takes the port <code className="text-fg">main</code> names; a
-        failure, a timeout or an unknown name takes <em>unavailable</em>. Scripts run out of process, with a
-        short-lived key for the automation&rsquo;s identity: whatever they do through{" "}
-        <code className="text-fg">ctx.client</code> is what that identity could do by hand.
-      </p>
-    </section>
-  );
-}
-
-const CONTRACT = `def main(ctx):
-    ctx.event        # the event that fired (type, actor, payload) — None on a manual/scheduled run
-    ctx.items        # the issues this node is acting on, as full read models (list of dicts)
-    ctx.item         # the first of them, for the per-item case
-    ctx.vars         # values upstream nodes produced: ctx.vars["triage"]["priority"]
-    ctx.params       # this node's own params
-    ctx.client       # a ready radd_sdk.RaddClient, acting as the automation's identity
-    ctx.log("text")  # a line on the run's stderr, shown in the run report
-    return {"count": len(ctx.items)}`

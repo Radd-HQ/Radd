@@ -1,4 +1,5 @@
 import { definePlugin, SlotId, type Item, type Project } from "@radd/plugin-sdk";
+import { MailHealthCard } from "./MailHealthCard";
 import { ExternalRequesterChip } from "./ExternalRequesterChip";
 
 /**
@@ -7,6 +8,7 @@ import { ExternalRequesterChip } from "./ExternalRequesterChip";
  * exactly this contribution. Contributes the external-requester chip to the issue right-rail.
  */
 export default definePlugin({
+  contributions: [{ id: "mail-health", slot: SlotId.settingsSection, match: "monitoring", order: 10, render: () => <MailHealthCard /> }],
   activate(ctx) {
     ctx.registerSlot(SlotId.issuePanelSection, {
       id: "mailintake",

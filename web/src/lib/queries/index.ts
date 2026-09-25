@@ -32,4 +32,3 @@ export * from "./mail-admin";
 export * from "./jira";
 export * from "./confluence";
 export * from "./integrations";
-export * from "./scripts";
