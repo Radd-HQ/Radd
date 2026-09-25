@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { GitBranch } from "lucide-react";
@@ -9,6 +10,8 @@ import {
   isVcsHostKind,
   type VcsHostKindValue,
 } from "../../components/settings/vcs-hosts";
+import { Spinner } from "../../components/Spinner";
+import { QueryError } from "../../components/QueryError";
 import { EmptyState } from "../../components/EmptyState";
 import { RoutePath } from "../../lib/constants";
 import { capabilitiesQuery } from "../../lib/queries";
@@ -19,16 +22,22 @@ import { capabilitiesQuery } from "../../lib/queries";
  * per kind. The tab is URL-carried (`?host=gitlab`) so a link lands on the right
  * host, and the old per-kind paths redirect here.
  *
- * A kind whose plugin is disabled keeps its tab and explains itself; hiding it
- * would make "where did GitLab go" a support question.
+ * Only loaded connectors appear. Old links fall back to an available provider;
+ * plugin discovery and enabling belong on the Plugins page.
  */
 export function VcsSettingsPage() {
   const search = useSearch({ strict: false }) as { host?: VcsHostKindValue };
   const navigate = useNavigate();
   const manifest = useQuery(capabilitiesQuery);
   const mounted = new Set(manifest.data?.plugins ?? []);
-  const active: VcsHostKindValue = isVcsHostKind(search.host) ? search.host : VCS_HOST_KINDS[0];
-  const config = VCS_HOST_CONFIGS[active];
+  const available = VCS_HOST_KINDS.filter(kind => mounted.has(kind));
+  const active = isVcsHostKind(search.host) && mounted.has(search.host) ? search.host : available[0];
+  const config = active ? VCS_HOST_CONFIGS[active] : undefined;
+  useEffect(() => {
+    if (manifest.data && active && search.host !== active) {
+      void navigate({ to: RoutePath.settingsVcs, search: { host: active }, replace: true });
+    }
+  }, [manifest.data, active, search.host, navigate]);
   const select = (host: VcsHostKindValue) =>
     void navigate({ to: RoutePath.settingsVcs, search: { host }, replace: true });
 
@@ -36,10 +45,15 @@ export function VcsSettingsPage() {
     <SettingsPage
       title="Version control"
       description="Hosts whose branches, commits, merge and pull requests link themselves to issues by key, and — per repository, when switched on — copy the time logged on them. Merges, pushes, CI results and releases are automation triggers."
-      history={{ entities: config.historyEntities }}
+      history={config ? { entities: config.historyEntities } : undefined}
     >
+      {manifest.isPending ? <Spinner /> : manifest.isError ? <QueryError label="connectors" error={manifest.error} /> : !config ? (
+        <EmptyState icon={GitBranch} message="No version control connectors are enabled." action={
+          <Link to={RoutePath.settingsPlugins} className="text-sm text-accent-text hover:underline">Manage plugins →</Link>
+        } />
+      ) : <>
       <div role="tablist" aria-label="Version control hosts" className="mb-5 flex flex-wrap gap-1 border-b border-subtle">
-        {VCS_HOST_KINDS.map((kind) => {
+        {available.map((kind) => {
           const isActive = kind === active;
           return (
             <button
@@ -57,28 +71,14 @@ export function VcsSettingsPage() {
             >
               <GitBranch size={13} aria-hidden />
               {VCS_HOST_CONFIGS[kind].title}
-              {manifest.data && !mounted.has(kind) && (
-                <span className="rounded bg-elevated px-1.5 py-px text-[10px] text-fg-muted">off</span>
-              )}
             </button>
           );
         })}
       </div>
       <div role="tabpanel" id={`vcs-panel-${active}`} aria-labelledby={`vcs-tab-${active}`}>
-        {manifest.data && !mounted.has(active) ? (
-          <EmptyState
-            icon={GitBranch}
-            message={`The ${config.title} connector is disabled, so its hosts cannot be configured here.`}
-            action={
-              <Link to={RoutePath.settingsPlugins} className="text-sm text-accent-text hover:underline">
-                Enable it in Plugins →
-              </Link>
-            }
-          />
-        ) : (
-          <VcsHostSettings key={active} config={config} />
-        )}
+        <VcsHostSettings key={active} config={config} />
       </div>
+      </>}
     </SettingsPage>
   );
 }

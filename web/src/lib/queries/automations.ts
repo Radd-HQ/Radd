@@ -37,14 +37,14 @@ export const automationsQuery = () =>
     retry: false,
   });
 
-/** Whole-automation templates (RADD-1316) — static per build, like the catalog. */
+/** Whole-automation templates (RADD-1316) — refreshed with the loaded plugin set. */
 export const automationTemplatesQuery = queryOptions({
   queryKey: [...queryKeys.automationCatalog, "templates"] as const,
   queryFn: ({ signal }) => api.get<AutomationTemplate[]>(`${ApiPath.automations}/templates`, { signal }),
   staleTime: Infinity,
 });
 
-/** Trigger/subject/operator catalog for the rule builder (spec 58) — static per build. */
+/** Trigger/subject/operator catalog for the rule builder (spec 58) — refreshed with the loaded plugin set. */
 export const automationCatalogQuery = queryOptions({
   queryKey: queryKeys.automationCatalog,
   queryFn: ({ signal }) => api.get<AutomationCatalog>(`${ApiPath.automations}/catalog`, { signal }),

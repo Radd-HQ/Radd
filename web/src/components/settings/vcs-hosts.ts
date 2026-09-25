@@ -29,7 +29,7 @@ import type { VcsHostConfig } from "./VcsHostSettings";
 /**
  * The three host kinds Settings → Version control offers as tabs (RADD-1262).
  * Each is a `VcsHostConfig` over the same wire shape; `plugin` is the module
- * that serves it, so a disabled kind explains itself instead of 404ing.
+ * that serves it; the settings page only renders currently loaded kinds.
  */
 export const VcsHostKind = {
   forgejo: "forgejo",

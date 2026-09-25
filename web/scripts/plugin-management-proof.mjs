@@ -76,11 +76,11 @@ try {
   await s.click('button',t=>t.trim()==='Enable');
   await until('Restart required to apply this change');
   failDisable=true;
-  await s.click('button',t=>t.trim()==='Disable');
+  await s.click('button',t=>t.trim()==='Cancel enable');
   await until('Required by dependent-plugin');
   assert(await s.eval(`document.querySelector('[role="alert"]').innerText.includes('Required by')`));
   failDisable=false;
-  await s.click('button',t=>t.trim()==='Disable');
+  await s.click('button',t=>t.trim()==='Cancel enable');
   await until('Forget…');
   await s.click('button',t=>t.trim()==='Forget…');
   await until('Stored plugin data and the deployed package remain');

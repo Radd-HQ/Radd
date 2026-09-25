@@ -1,8 +1,8 @@
-import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { syncContributionPrefs } from "@radd/plugin-sdk";
 import { useIsAuthenticated } from "../../lib/hooks";
-import { capabilitiesQuery } from "../../lib/queries";
+import { capabilitiesQuery, queryKeys } from "../../lib/queries";
 import { syncPluginRemotes } from "../../lib/plugin-loader";
 
 /**
@@ -13,6 +13,16 @@ import { syncPluginRemotes } from "../../lib/plugin-loader";
  */
 export function PluginRemotes() {
   const { data } = useQuery({...capabilitiesQuery, refetchInterval: 15000});
+  const client = useQueryClient();
+  const pluginKey = data ? [...data.plugins].sort().join(",") : undefined;
+  const previousPlugins = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (pluginKey === undefined || pluginKey === previousPlugins.current) return;
+    previousPlugins.current = pluginKey;
+    // Catalog, templates and event samples include plugin contributions. Mark
+    // inactive queries stale too, so reopening the editor cannot reuse old nodes.
+    void client.invalidateQueries({ queryKey: queryKeys.automationCatalog });
+  }, [client, pluginKey]);
   const remotes = data?.remotes;
   const authenticated = useIsAuthenticated();
   useEffect(() => {

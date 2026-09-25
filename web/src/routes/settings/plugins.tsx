@@ -11,6 +11,7 @@ import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TextField } from "../../components/TextField";
+import { Callout } from "../../components/Callout";
 import { Spinner } from "../../components/Spinner";
 import { QueryError } from "../../components/QueryError";
 import { settingsPathForPlugin } from "./layout";
@@ -40,6 +41,7 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
     // The nav/capabilities manifest reflects enabled plugins — refresh it so the
     // sidebar plugin nav appears/disappears immediately.
     queryClient.invalidateQueries({ queryKey: ["capabilities"] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.automationCatalog });
   };
   // RADD-1101: install/uninstall always existed as endpoints; the page offered
   // only enable/disable, leaving the lifecycle's ends to curl.
@@ -94,7 +96,11 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           <div className="flex items-center gap-2">
             <span className="truncate text-[13px] font-medium text-heading">{plugin.id}</span>
             <span className="text-[11px] text-fg-muted">v{plugin.version}</span>
-            <StateBadge state={plugin.state} />
+            {plugin.restart_required ? (
+              <span className="rounded-full bg-callout-warning-fill px-2 py-0.5 text-[11px] font-medium text-callout-warning-ink ring-1 ring-callout-warning-border/60">
+                {plugin.active ? "Disable pending" : "Enable pending"}
+              </span>
+            ) : <StateBadge state={plugin.state} />}
             <span className="text-[11px] text-fg-muted">{plugin.origin === "package" ? "Package" : "Built in"}</span>
             {/* Connector configured-ness (env token present) — the home for
                 per-connector status since the 2026-08-01 reorg; the Server
@@ -127,6 +133,11 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
             {plugin.restart_required && (plugin.live_supported ? " · Applying live change…" : " · Restart required to apply this change")}
             {plugin.live_supported && " · Supports live activation"}
           </p>
+          {plugin.restart_required && !plugin.live_supported && <p className="mt-1 text-[12px] text-callout-warning-ink">
+            {plugin.active
+              ? "Still active: its integrations and automation nodes remain available until web and worker processes restart."
+              : "Not active yet: its integrations and automation nodes become available after web and worker processes restart."}
+          </p>}
           {plugin.dependencies?.length > 0 && <p className="mt-1 text-[12px] text-fg-muted">
             Requires: {plugin.dependencies.join(", ")}
           </p>}
@@ -165,12 +176,12 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
           </>
         ) : enabled ? (
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => disable.mutate()}>
-            Disable
+            {plugin.restart_required && !plugin.active ? "Cancel enable" : "Disable"}
           </Button>
         ) : (
           <>
             <Button size="sm" disabled={busy || (plugin.problems?.length ?? 0) > 0} onClick={() => enable.mutate()}>
-              Enable
+              {plugin.restart_required && plugin.active ? "Cancel disable" : "Enable"}
             </Button>
             {plugin.origin === "package" && <Button
               size="sm"
@@ -267,6 +278,7 @@ export function PluginsSettingsPage() {
   const {data: peers} = useQuery({queryKey: ["plugin-processes"],
     queryFn: () => api.get<Array<{process: string; stale: boolean; error?: string}>>(`${ApiPath.plugins}/runtime`),
     refetchInterval: 5000});
+  const pendingRestart = (plugins ?? []).filter(plugin => plugin.restart_required && !plugin.live_supported);
   const [search, setSearch] = useState("");
   const visible = (plugins ?? []).filter(plugin =>
     `${plugin.id} ${plugin.name} ${plugin.description}`.toLowerCase().includes(search.trim().toLowerCase()));
@@ -276,6 +288,11 @@ export function PluginsSettingsPage() {
       title="Plugins"
       description="Upload and manage extensions. Live-capable plugins apply automatically; backend changes show when a restart is needed."
     >
+      {pendingRestart.length > 0 && <Callout kind="warning" role="status" className="mb-4 text-sm">
+        <strong>Plugin changes are waiting for a restart.</strong>
+        <p>Restart the web and worker processes to apply changes to {pendingRestart.map(plugin => plugin.name).join(", ")}.
+          Until then, currently loaded plugins keep running. Stored settings and data are retained.</p>
+      </Callout>}
       <PackageUpload />
       {peers?.some(peer => peer.stale || peer.error) && <p role="status" className="mb-4 text-[13px] text-fg">
         Some process reports are stale or failed. Package removal is blocked until those processes are confirmed stopped.
