@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useThreadExpansion } from "../comments/useThreadExpansion";
+import { useCallback, useState } from "react";
 import { useMutation, useQueries, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff, MessageSquare, MessagesSquare, Pencil, Send, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
@@ -42,7 +45,6 @@ import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from 
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
-import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
 import { formatDateTime } from "../../lib/dates";
 
 /** Upload a pasted/inserted image to the item and resolve its served URL —
@@ -115,11 +117,8 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const [visibleTeams, setVisibleTeams] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   // RADD-1246: which thread is open, and each thread's unsent reply draft.
-  const [openThread, setOpenThread] = useState<string | null>(null);
+  const expansion = useThreadExpansion(linked?.root_id);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (linked && linked.id !== linked.root_id) setOpenThread(linked.root_id);
-  }, [linked]);
   useLandOnComment(linked?.id);
   // A read-mode AI transform pending for the comment being opened for edit —
   // handed to the editor as its initial whole-document run.
@@ -290,19 +289,21 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                   {user && (
                     <button
                       type="button"
-                      onClick={() => setOpenThread(openThread === comment.id ? null : comment.id)}
-                      aria-expanded={openThread === comment.id}
+                      onClick={() => expansion.toggle(comment)}
+                      aria-expanded={expansion.isOpen(comment)}
                       data-thread-toggle={comment.id}
-                      className="text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
+                      className="inline-flex min-h-8 items-center gap-1 rounded px-1 text-sm font-medium text-fg-secondary hover:bg-elevated hover:text-fg cursor-pointer"
                     >
-                      {repliesLabel(comment, openThread === comment.id, canComment)}
+                      {expansion.isOpen(comment) ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                      {repliesLabel(comment, expansion.isOpen(comment), canComment)}
                     </button>
                   )}
                   {thread && canResolve && <ResolveThreadButton comment={comment} />}
                   </div>
-                  {openThread === comment.id && (
+                  {expansion.isOpen(comment) && (
                     <CommentReplies
                       row={comment}
+                      linkedReplyId={linked?.root_id === comment.id ? linked.id : undefined}
                       canReply={canComment}
                       draft={replyDrafts[comment.id] ?? ""}
                       onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}

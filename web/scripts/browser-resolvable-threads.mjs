@@ -119,10 +119,12 @@ try {
   assert.equal(await s.eval(`document.querySelector('[data-comment-id="locked"] [data-thread-state]').textContent.trim()`), "Resolved by A Manager");
   assert.equal(await s.eval(`!!document.querySelector('[data-thread-resolution="locked"]')`), false, "Resolve offered against the rule");
   await s.click('[data-thread-toggle="locked"]');
+  await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-open-reply]')`), "reply action missing");
+  await s.click('[data-comment-replies="locked"] [data-open-reply]');
   await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [contenteditable="true"]')`), "locked thread reply composer missing");
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-reply-unresolve]')`), false, "Reply and unresolve offered against the rule");
   await s.click('[data-thread-toggle="locked"]');
-  await s.click('[data-thread-toggle="thread"]');
+  if (await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute("aria-expanded") === "false"`)) await s.click('[data-thread-toggle="thread"]');
   await until(() => s.eval(`document.body.innerText.includes('Checking the delivery now.')`), "reply history missing");
   failResolve = true;
   await s.click('[data-thread-resolution="thread"]');
@@ -134,7 +136,10 @@ try {
   await until(() => s.eval(`document.querySelector('[data-thread-resolution="thread"]').textContent.includes('Unresolve thread')
     && document.querySelector('[data-comment-id="thread"] [data-thread-state]').textContent.includes('Resolved by Review Owner')`), "resolution did not update controls");
   await until(() => requests.filter(r => r.route.endsWith("/allowed-transitions")).length > before, "resolution did not refresh transitions");
-  assert(await s.eval(`document.body.innerText.includes('Checking the delivery now.')`));
+  assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute('aria-expanded')`), 'false');
+  await s.click('[data-thread-toggle="thread"]');
+  await until(() => s.eval(`!!document.querySelector('[data-comment-replies="thread"] [data-open-reply]')`), "reply action missing");
+  await s.click('[data-comment-replies="thread"] [data-open-reply]');
   // A resolved thread still takes replies: Reply keeps it resolved, Reply and unresolve reopens it.
   await until(() => s.eval(`!!document.querySelector('[data-reply-unresolve]')`), "resolved thread offers no Reply and unresolve");
   assert.equal(await s.eval(`document.querySelector('[data-reply-unresolve]').disabled`), true, "Reply and unresolve lit before any text");
@@ -178,8 +183,11 @@ try {
   await s.click('[data-start-thread]');
   await until(() => comments.some(c => c.body.includes("Please verify") && c.is_thread), "composer did not create thread");
   await until(() => s.eval(`!!document.querySelector('[contenteditable="true"]') && document.querySelector('[data-start-thread]').disabled`), "fresh composer missing");
-  await s.click('[contenteditable="true"]');
-  await s.send("Input.insertText", {text: "An ordinary follow-up"});
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await s.click('[contenteditable="true"]');
+    await s.send("Input.insertText", {text: "An ordinary follow-up"});
+    if (await s.eval(`new Promise(r => setTimeout(() => r(Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === 'Comment' && !b.disabled)), 400))`)) break;
+  }
   await until(() => s.eval(`Array.from(document.querySelectorAll("button")).some(b => b.textContent.trim() === "Comment" && !b.disabled)`), "comment submit did not enable");
   await s.click('button', text => text.trim() === "Comment");
   await until(() => comments.some(c => c.body.includes("ordinary follow-up") && !c.is_thread), "ordinary comment was marked as a thread");

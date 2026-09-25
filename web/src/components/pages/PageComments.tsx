@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+import { useThreadExpansion } from "../comments/useThreadExpansion";
+import { useState } from "react";
 import { commentHref, useLandOnComment, useLinkedComment } from "../../lib/comment-links";
 import { CopyCommentLink } from "../comments/CopyCommentLink";
 import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
@@ -55,11 +57,8 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   const [composerKey, setComposerKey] = useState(0);
   const [confirmDialog, confirm] = useConfirm();
   // RADD-1246: a discussion comment is a thread like an annotation is.
-  const [openThread, setOpenThread] = useState<string | null>(null);
+  const expansion = useThreadExpansion(linkedDiscussion?.root_id);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (linkedDiscussion && linkedDiscussion.id !== linkedDiscussion.root_id) setOpenThread(linkedDiscussion.root_id);
-  }, [linkedDiscussion]);
   useLandOnComment(linkedDiscussion?.id);
 
   const invalidate = () => void invalidateEntities(queryClient, Entity.comment);
@@ -153,19 +152,21 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                   {user && (
                     <button
                       type="button"
-                      onClick={() => setOpenThread(openThread === comment.id ? null : comment.id)}
-                      aria-expanded={openThread === comment.id}
+                      onClick={() => expansion.toggle(comment)}
+                      aria-expanded={expansion.isOpen(comment)}
                       data-thread-toggle={comment.id}
-                      className="text-xs text-fg-muted hover:text-fg hover:underline cursor-pointer"
+                      className="inline-flex min-h-8 items-center gap-1 rounded px-1 text-sm font-medium text-fg-secondary hover:bg-elevated hover:text-fg cursor-pointer"
                     >
-                      {repliesLabel(comment, openThread === comment.id, canComment)}
+                      {expansion.isOpen(comment) ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
+                      {repliesLabel(comment, expansion.isOpen(comment), canComment)}
                     </button>
                   )}
                   {comment.can_resolve && <ResolveThreadButton comment={comment} />}
                 </div>
-                {openThread === comment.id && (
+                {expansion.isOpen(comment) && (
                   <CommentReplies
                     row={comment}
+                      linkedReplyId={linkedDiscussion?.root_id === comment.id ? linkedDiscussion.id : undefined}
                     canReply={canComment}
                     draft={replyDrafts[comment.id] ?? ""}
                     onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}

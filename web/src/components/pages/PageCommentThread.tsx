@@ -99,7 +99,7 @@ export function PageCommentThread({
         />
       </div>
       <button type="button" onClick={onToggle} aria-expanded={expanded}
-        className="mt-2 text-xs text-fg-muted hover:text-fg hover:underline">
+        className="mt-2 min-h-8 rounded px-1 text-sm font-medium text-fg-secondary hover:bg-elevated hover:text-fg">
         {repliesLabel(row, expanded, canReply)}
       </button>
       {expanded && <CommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} canResolve={canResolve} linkFor={commentHref} />}

@@ -130,6 +130,8 @@ try {
   await until(`document.querySelector('[data-comment-id="comment-0"]').classList.contains('border-strong')`);
   await until(`document.querySelector('[aria-label="Inline comment thread"]')?.textContent.includes('The original reply')`);
   // RADD-1246: the reply composer is the rich editor, not a textarea.
+  await until(`!!document.querySelector('[data-page-comment-popover] [data-comment-replies] [data-open-reply]')`);
+  await s.click('[data-page-comment-popover] [data-comment-replies] [data-open-reply]');
   await until(`!!document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror')`);
   await s.click('[data-page-comment-popover] [data-reply-composer] .ProseMirror');
   await s.send("Input.insertText", {text: "My persistent reply"});
@@ -177,6 +179,8 @@ try {
   const mobilePoint = await s.eval(`(() => {const r = [...CSS.highlights.get('radd-inline-comment-focus')][0].getClientRects()[0]; return {x:r.left+5,y:r.top+r.height/2};})()`);
   await s.send("Input.dispatchMouseEvent", {type: "mousePressed", button: "left", clickCount: 1, ...mobilePoint});
   await s.send("Input.dispatchMouseEvent", {type: "mouseReleased", button: "left", clickCount: 1, ...mobilePoint});
+  await until(`!!document.querySelector('[aria-label="Inline comment thread"] [data-comment-replies] [data-open-reply]')`);
+  await s.click('[aria-label="Inline comment thread"] [data-comment-replies] [data-open-reply]');
   await until(`!!document.querySelector('[aria-label="Inline comment thread"] [data-reply-composer] .ProseMirror')`);
   assert(await s.eval(`(() => {const r=document.querySelector('[data-page-comment-popover]').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight;})()`));
   await s.screenshot('/tmp/radd-page-comment-thread-mobile.png');

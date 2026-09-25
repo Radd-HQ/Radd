@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { infiniteQueryOptions, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "../../lib/api";
 import { apiCommentPath, apiCommentTasksPath } from "../../lib/constants";
@@ -40,7 +40,9 @@ export function CommentReplies({
   quickActions,
   canResolve = false,
   linkFor,
+  linkedReplyId,
 }: {
+  linkedReplyId?: string;
   row: Comment;
   canReply: boolean;
   draft: string;
@@ -56,6 +58,7 @@ export function CommentReplies({
   /** RADD-1297: the link that lands on one reply; omit to offer none. */
   linkFor?: (commentId: string) => string;
 }) {
+  const [composing, setComposing] = useState(false);
   const client = useQueryClient();
   const me = useCurrentUser();
   const [internal, setInternal] = useState(false);
@@ -72,9 +75,15 @@ export function CommentReplies({
           query: { limit: "50", ...(pageParam ? { before: pageParam } : {}) },
         }),
       getNextPageParam: (page) => page.older_cursor ?? undefined,
+      enabled: row.reply_count !== 0 || !!linkedReplyId && linkedReplyId !== row.id,
       retry: false,
     }),
   );
+  const replies = chronologicalComments(query.data?.pages);
+  useEffect(() => {
+    if (linkedReplyId && linkedReplyId !== row.id && !replies.some(reply => reply.id === linkedReplyId)
+      && query.hasNextPage && !query.isFetching && !query.isError) void query.fetchNextPage();
+  }, [linkedReplyId, row.id, replies, query.hasNextPage, query.isFetching, query.isError, query.fetchNextPage]);
   const post = useMutation({
     mutationFn: ({ body, unresolve }: { body: string; unresolve: boolean }) =>
       api.post<Comment>(`${apiCommentPath(row.id)}/replies`, {
@@ -83,6 +92,7 @@ export function CommentReplies({
         ...(canInternal && internal ? { visibility: CommentVisibility.internal } : {}),
       }),
     onSuccess: () => {
+      setComposing(true);
       onDraft("");
       setInternal(false);
       setComposerKey((key) => key + 1);
@@ -102,7 +112,7 @@ export function CommentReplies({
         onOlder={() => query.fetchNextPage()}
         error={query.isError ? errorMessage(query.error) : undefined}
       >
-        {query.isPending && (
+        {query.isPending && query.isFetching && (
           <p role="status" className="text-xs text-fg-muted">
             Loading replies…
           </p>
@@ -152,7 +162,8 @@ export function CommentReplies({
           );
         })}
       </CommentHistory>
-      {canReply && (
+      {canReply && !composing && !draft && <Button size="sm" variant="ghost" data-open-reply onClick={() => setComposing(true)}>Reply</Button>}
+      {canReply && (composing || !!draft) && (
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -214,7 +225,7 @@ export function CommentReplies({
 
 /** The label of the toggle that opens a thread: what is there, or what you can do. */
 export function repliesLabel(row: Comment, expanded: boolean, canReply: boolean): string {
-  if (expanded) return "Hide replies";
+  if (expanded) return row.reply_count ? `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}` : "Hide replies";
   if (row.reply_count) return `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}`;
   return canReply ? "Reply" : "View thread";
 }
