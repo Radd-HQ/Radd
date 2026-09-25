@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, Clock, Plus } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiWorkCategoryPath, ApiPath } from "../../lib/constants";
-import { usePermissions, usePluginEnabled } from "../../lib/hooks";
+import { usePermissions } from "../../lib/hooks";
 import { workCategoriesQuery } from "../../lib/queries";
 import {
   Permission,
@@ -16,7 +16,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
-import { TeamHolidaysSection } from "../../components/settings/LeaveSections";
+import { Slot, SlotId } from "@radd/plugin-sdk";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { IconButton } from "../../components/IconButton";
@@ -36,10 +36,6 @@ import { IconButton } from "../../components/IconButton";
  * ENABLEMENT stays under each project.
  */
 export function TimeloggingSettingsPage() {
-  // `leave` is an optional plugin — with it disabled the endpoint is unmounted,
-  // so the section is dropped rather than left to render a 404 (RADD-928).
-  const leaveEnabled = usePluginEnabled("leave");
-
   return (
     <SettingsPage history={{ entities: ["work_category", "scoped_setting"] }}
       title="Time logging"
@@ -59,14 +55,7 @@ export function TimeloggingSettingsPage() {
         <ScopedSettingsEditor scope={SettingScope.instance} section="timelogging" />
       </Section>
 
-      {leaveEnabled && (
-        <Section
-          title="Holidays"
-          hint="Per-team public holidays — regional teams differ, which is the point. They mark every current member of the team away on the timesheet and exempt those days from the outlier flags above."
-        >
-          <TeamHolidaysSection />
-        </Section>
-      )}
+      <Slot id={SlotId.settingsSection} match="timelogging" />
     </SettingsPage>
   );
 }

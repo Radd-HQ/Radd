@@ -1,4 +1,4 @@
-from radd.kernel import EventTypeSpec, IntegrationSpec, RaddPlugin
+from radd.kernel import EventTypeSpec, IntegrationSpec, PluginUiManifest, RaddPlugin
 from radd.kernel.sockets import Socket
 
 from .holidays import HolidayCalendar
@@ -13,6 +13,7 @@ plugin = RaddPlugin(
     ),
     depends_on=("auth", "teams", "events"),
     routers=(router,),
+    ui=PluginUiManifest(remote="/plugins/leave/remoteEntry.js", ui_api_version="1.0.0"),
     event_types=(
         # RADD-1320: WHO is away — a person or a team, never both (holidays neither).
         EventTypeSpec(LeaveEvent.CREATED, "Leave recorded", "People", subjects=("user", "team")),

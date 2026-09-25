@@ -15,7 +15,6 @@ import { Density, Theme, setDensity, setTheme, useAppearance } from "../../lib/t
 import { Button } from "../../components/Button";
 import { Select } from "../../components/Select";
 import { TextField } from "../../components/TextField";
-import { MyLeaveSection } from "../../components/settings/LeaveSections";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TotpPanel } from "../../components/settings/TotpPanel";
 import { ProfilePicture } from "../../components/settings/ProfilePicture";
@@ -46,15 +45,6 @@ export function ProfileSettingsPage() {
       )}
 
       <AppearanceSection />
-
-      <section className="mt-8 border-t border-subtle pt-6">
-        <h2 className="mb-1 text-sm font-semibold text-fg">Leave</h2>
-        <p className="mb-4 text-xs text-fg-muted">
-          Your absences show on the timesheet and dim your avatar everywhere while you're
-          away. Team-wide holidays are set under Settings → Time logging.
-        </p>
-        <MyLeaveSection />
-      </section>
 
       <section className="mt-8 border-t border-subtle pt-6">
         <h2 className="mb-1 text-sm font-semibold text-fg">Notifications</h2>

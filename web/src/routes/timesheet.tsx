@@ -14,7 +14,7 @@ import {
   type TimesheetPeriodValue,
 } from "../lib/constants";
 import { formatDuration } from "../lib/duration";
-import { useDurationConfig, usePeek, usePermissions } from "../lib/hooks";
+import { useDurationConfig, usePeek, usePermissions, usePluginEnabled } from "../lib/hooks";
 import {
   instanceConfigQuery,
   leaveCalendarQuery,
@@ -145,9 +145,11 @@ export function TimesheetPage() {
   );
   // Leave/holiday spans for the window, exploded to per-user day cells so the
   // grid renders (and outlier flags skip) exactly the occupied days.
-  const leaveCal = useQuery(leaveCalendarQuery(start, end));
+  const leaveEnabled = usePluginEnabled("leave");
+  const leaveCal = useQuery({ ...leaveCalendarQuery(start, end), enabled: leaveEnabled });
   const leaveByUserDay = useMemo(() => {
     const map = new Map<string, Map<string, LeaveCalendarEntry>>();
+    if (!leaveEnabled) return map;
     for (const entry of leaveCal.data ?? []) {
       const from = entry.start_date > start ? entry.start_date : start;
       const to = entry.end_date < end ? entry.end_date : end;
@@ -161,7 +163,7 @@ export function TimesheetPage() {
       }
     }
     return map;
-  }, [leaveCal.data, start, end]);
+  }, [leaveEnabled, leaveCal.data, start, end]);
   const [logging, setLogging] = useState(false);
 
   return (

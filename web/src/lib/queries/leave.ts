@@ -1,10 +1,10 @@
 /** Leave + team holidays: the app-wide on-leave indicator's one
- * cached query, the timesheet's range calendar, and the settings lists. */
+ * cached query and the timesheet's range calendar. Settings lists live in the plugin UI. */
 
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import { ApiPath } from "../constants";
-import type { CurrentLeave, LeaveCalendarEntry, LeavePeriod } from "../types";
+import type { CurrentLeave, LeaveCalendarEntry } from "../types";
 
 /** Who is away TODAY. One query for every Avatar on screen — keep it calm. */
 export const currentLeaveQuery = queryOptions({
@@ -20,13 +20,3 @@ export const leaveCalendarQuery = (start: string, end: string) =>
     queryFn: ({ signal }) =>
       api.get<LeaveCalendarEntry[]>(ApiPath.leaveCalendar, { signal, query: { start, end } }),
   });
-
-export const myLeaveQuery = queryOptions({
-  queryKey: ["leave", "mine"] as const,
-  queryFn: ({ signal }) => api.get<LeavePeriod[]>(ApiPath.leaveMine, { signal }),
-});
-
-export const holidaysQuery = queryOptions({
-  queryKey: ["leave", "holidays"] as const,
-  queryFn: ({ signal }) => api.get<LeavePeriod[]>(ApiPath.leaveHolidays, { signal }),
-});

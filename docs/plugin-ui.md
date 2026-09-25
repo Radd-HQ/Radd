@@ -42,7 +42,7 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `viewType` | A whole saved-view TYPE | `{view, items}` | `match` = the view_type key; pair with a `view_types=` manifest entry | `routes/view.tsx` |
 | `routePage` | A full page at a nav path | `{path}` | `match` = the pathname | `components/shell/PluginPage.tsx` (splat route) |
 | `settingsPage` | A full page under Settings → … | `{path}` | `match` = the pathname | `components/shell/SettingsPluginPage.tsx` |
-| `settingsSection` | Into an *existing* settings page | `{}` | `match` = the page's key | *add a `<Slot>` to that page* |
+| `settingsSection` | Into an *existing* settings page | `{}` | `match` = the page's key | `routes/settings/timelogging.tsx` (`match="timelogging"`); add anchors to other pages as needed |
 | `profileSection` | The user's Profile page | `{}` | per-user prefs; drop `<UserContributionToggles>` here | `routes/settings/profile.tsx` |
 | `pluginManagerSection` | A plugin's row in Settings → Plugins (admin) | `{plugin, pluginId}` | `match` = the plugin's registry name; drop `<GlobalContributionToggles>` here | `routes/settings/plugins.tsx` |
 | `sidebarNav` | Left sidebar nav | `{}` | today driven by the backend nav manifest | `components/shell/Sidebar.tsx` |
@@ -56,6 +56,8 @@ without bundling heavy editors. `@radd/plugin-sdk` exports `CodeEditor`, `TokenL
 CodeMirror, lazy-loaded; the `{{token}}` picker; the `params_schema` form). A plugin imports them
 from the SDK like any primitive; outside the host they degrade to plain inputs. The `ai` and
 `scripts` plugins' inspectors are the worked examples (`modules/ai/ui`, `modules/scripts/ui`).
+
+The Leave plugin (`modules/leave/ui`) contributes its personal Leave form through `profile.section` and team Holidays through `settings.section` matched to `timelogging`. Neither settings page imports Leave components; disabling the remote withdraws both sections. Avatar indicators and timesheet calendar overlays remain host integrations guarded by runtime plugin availability.
 
 A contribution is `{ id, render, order?, match?, title?, icon?, label?, toggleable? }`. `id` is
 unique within your plugin (dedupes re-registration); `order` sorts section/tab slots; `match` keys
