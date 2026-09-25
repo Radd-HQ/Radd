@@ -480,6 +480,7 @@ function CustomFieldParams({ pickers, params, set }: ParamsControlProps) {
         onChange={(event) => set({ key: event.target.value, value: null })}
       >
         <option value="">Select…</option>
+        {key && !field && <option value={key}>{key} (unavailable field)</option>}
         {pickers.fields.map((definition) => (
           <option key={definition.id} value={definition.key}>
             {definition.name}

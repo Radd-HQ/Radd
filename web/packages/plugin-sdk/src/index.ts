@@ -109,3 +109,5 @@ export { usePagedDirectory, type PagedDirectoryQuery } from "./paged-directory";
 
 export { TokenMultiSelect, type TokenOption, type TokenMultiSelectProps } from "./token-multi-select";
 export { ErrorText, type ErrorTextProps } from "./error-text";
+
+export { registerQuerySource, unregisterQuerySources, useContributedQuery, type QuerySource } from "./query-sources";

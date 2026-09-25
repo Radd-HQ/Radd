@@ -1,3 +1,4 @@
+import type { QuerySource } from "./query-sources";
 import type { DataSource } from "./data";
 import type { SlotContribution, SlotIdValue } from "./slots";
 
@@ -14,6 +15,7 @@ import type { SlotContribution, SlotIdValue } from "./slots";
 export interface PluginContext {
   /** The stable plugin name (matches the backend manifest / enable key). */
   plugin: string;
+  registerQuerySource: (source: QuerySource) => void;
   registerDataSource: (source: DataSource) => void;
   /** Register a slot contribution, auto-tagged with this plugin. */
   registerSlot: (slot: SlotIdValue | string, contribution: SlotContribution) => void;
@@ -30,6 +32,7 @@ export interface PluginModule {
   /** Declarative: every UI attachment in one place (preferred). */
   contributions?: PluginContribution[];
   dataSources?: DataSource[];
+  querySources?: QuerySource[];
   /** Imperative escape hatch, for dynamic/conditional registration. */
   activate?: (ctx: PluginContext) => void | Promise<void>;
   deactivate?: (ctx: PluginContext) => void | Promise<void>;

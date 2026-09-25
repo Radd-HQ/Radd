@@ -25,7 +25,7 @@ from .service import _BUILTIN_SPEC, _FIELD_SPEC  # noqa: E402 - bindings require
 
 plugin = RaddPlugin(
     name="fields",
-    ui=PluginUiManifest(remote="/plugins/fields/remoteEntry.js", ui_api_version="1.8.0"),
+    ui=PluginUiManifest(remote="/plugins/fields/remoteEntry.js", ui_api_version="1.9.0"),
     permissions=(
         PermissionSpec(
             "field.manage",

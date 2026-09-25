@@ -40,6 +40,7 @@ const SDK_EXPORTS = [
   "definePlugin",
   "SettingsPage", "SelectField", "Callout", "CalloutKind", "QueryError", "ButtonVariant",
   "setReaderTimeZone", "readerTimeZone", "browserTimeZone", "formatIso", "isoDayOf", "todayIso", "shiftIsoDay", "isoDaysAgo", "shortDate", "formatDate", "formatDateOrNever", "formatDateTime", "shortDateTime", "formatSeconds", "relativeTime",
+  "registerQuerySource", "unregisterQuerySources", "useContributedQuery",
   "registerDataSource", "unregisterDataSources", "usePluginData", "invalidatePluginData",
   "Button", "TextField", "TextArea", "Select", "Chip", "Card", "Spinner", "EmptyState", "Modal",
   "Avatar",

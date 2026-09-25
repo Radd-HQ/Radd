@@ -11,6 +11,7 @@
  * menu). Everything is a node, triggers included — a graph fires only for the
  * triggers it actually contains, and it may contain several.
  */
+import { Button, ErrorText } from "@radd/plugin-sdk";
 import { useNodeShapes } from "../../lib/node-shapes";
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -268,6 +269,12 @@ export function GraphEditor({
 
   return (
     <div className="flex flex-col gap-2">
+      {pickers.catalogStatus.filter(status => !status.available || status.loading || status.error).map(status =>
+        <div key={status.name} className="text-xs text-fg-muted" data-catalog-status={status.name}>
+          {!status.available ? `${status.name} choices are unavailable. Saved values are preserved.`
+            : status.loading ? `Loading ${status.name.toLowerCase()} choices…`
+            : <><ErrorText error={status.error} /><Button size="sm" variant="ghost" onClick={status.retry}>Retry {status.name.toLowerCase()} choices</Button></>}
+        </div>)}
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-fg-secondary">
           {triggers.length === 0

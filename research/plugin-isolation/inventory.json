@@ -542,7 +542,7 @@
       "manifest": "server/src/radd/modules/fields/__init__.py",
       "declarations": {
         "name": "fields",
-        "ui": "PluginUiManifest(remote='/plugins/fields/remoteEntry.js', ui_api_version='1.8.0')",
+        "ui": "PluginUiManifest(remote='/plugins/fields/remoteEntry.js', ui_api_version='1.9.0')",
         "permissions": "(PermissionSpec('field.manage', 'project', 'Manage custom-field definitions and field access rules.', implied_by=('project.manage',)),)",
         "crud_resources": "(CrudResourceSpec('field', 'project', 'custom fields', 'field.manage'),)",
         "access_resources": "(_FIELD_SPEC, _BUILTIN_SPEC)",
@@ -565,6 +565,7 @@
       },
       "ui_sources": [
         "server/src/radd/modules/fields/ui/src/CustomFieldsForm.tsx",
+        "server/src/radd/modules/fields/ui/src/catalog.ts",
         "server/src/radd/modules/fields/ui/src/control-contract.ts",
         "server/src/radd/modules/fields/ui/src/index.tsx",
         "server/src/radd/modules/fields/ui/src/types.ts"
@@ -791,6 +792,7 @@
       "manifest": "server/src/radd/modules/labels/__init__.py",
       "declarations": {
         "name": "labels",
+        "ui": "PluginUiManifest(remote='/plugins/labels/remoteEntry.js', ui_api_version='1.9.0')",
         "crud_resources": "(CrudResourceSpec('label', 'global', 'labels', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Labels: shared free-form tags for issues and pages.",
         "depends_on": [
@@ -801,7 +803,11 @@
         "routers": "(router,)",
         "event_types": "(EventTypeSpec(LabelEvent.CREATED, 'Label created', 'Admin'), EventTypeSpec(LabelEvent.UPDATED, 'Label updated', 'Admin', has_changes=True, trigger=False), EventTypeSpec(LabelEvent.DELETED, 'Label deleted', 'Admin', trigger=False))"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/labels/ui/src/catalog.ts",
+        "server/src/radd/modules/labels/ui/src/index.tsx",
+        "server/src/radd/modules/labels/ui/src/types.ts"
+      ]
     },
     "ldap": {
       "manifest": "server/src/radd/modules/ldap/__init__.py",
@@ -1717,6 +1723,17 @@
         "build": "vite build"
       }
     },
+    "server/src/radd/modules/labels/ui/package.json": {
+      "name": "@radd-plugin-ui/labels",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
     "server/src/radd/modules/leave/ui/package.json": {
       "name": "@radd-plugin-ui/leave",
       "version": "1.0.0",
@@ -1888,7 +1905,7 @@
         "build": "tsc -b && vite build",
         "preview": "vite preview",
         "test": "cd .. && node --test web/scripts/*.test.mjs",
-        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs",
+        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs && node scripts/browser-query-contributions.mjs",
         "build:all": "node scripts/build-all.mjs",
         "check": "npm run test && npm run build:all && npm run test:browser"
       }
@@ -2338,7 +2355,7 @@
       "imports": []
     },
     "docs/modules.md": {
-      "sha256": "eb21ab77c5021f5dc87988c5f95337137ba0eb0c7184694a33815f0a78638c9f",
+      "sha256": "83372bf6f8488daa3d112857a4cb2d2792a65cc5953d63a587d67ca60fe0c37d",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -2374,7 +2391,7 @@
       "imports": []
     },
     "docs/plugin-platform.md": {
-      "sha256": "86e5a0f37b10426e67eedc1dbbd3e94347a0f6d8ff97abad9663fbf12a156f78",
+      "sha256": "161ae3b0ed32f40eda1f2c55e949b1506e6fc947779b50dd4028292a00dccae3",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -3958,7 +3975,7 @@
       "imports": []
     },
     "research/plugin-isolation/README.md": {
-      "sha256": "25eae1203c9ddb009481a5828b95f2e094f1fefc9533bd3da2a06f524c8b17d2",
+      "sha256": "d3a4df4350aa8e19720ff2da2890958e00589bb8a9e2ce6934fff0324f17021e",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -34675,7 +34692,7 @@
       ]
     },
     "server/src/radd/modules/fields/__init__.py": {
-      "sha256": "59007181c3d4c415cb5c3fe7a7264ac887781c930f71407cf49008937e95dfa6",
+      "sha256": "03c30647c61b0e8d0f091a98068cc5331f0bdbc9eeb4c2302c9fe65a302a7ecd",
       "module_directory": "fields",
       "role": "runtime_source",
       "imports": [
@@ -35516,6 +35533,21 @@
         }
       ]
     },
+    "server/src/radd/modules/fields/ui/src/catalog.ts": {
+      "sha256": "5a9999fa479518651d5c1f00c0dc0efe966c5bc9774f0c6a8881a2a6973b85d9",
+      "module_directory": "fields",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./types"
+        }
+      ]
+    },
     "server/src/radd/modules/fields/ui/src/control-contract.ts": {
       "sha256": "fbf5c72752a55253c90b2f4f700e3109e37251d7ba1632a7b710383f6bec2a6f",
       "module_directory": "fields",
@@ -35528,7 +35560,7 @@
       ]
     },
     "server/src/radd/modules/fields/ui/src/index.tsx": {
-      "sha256": "fa7fbf5a9c18f1a9864603f59c6b5e829584cdfd301706a6e1af063d08111ceb",
+      "sha256": "6e24e82fd670034ea7d98bfd2209cd8db3c1dcd115ef8848443b211faac45064",
       "module_directory": "fields",
       "role": "runtime_source",
       "imports": [
@@ -35543,6 +35575,10 @@
         {
           "line": 3,
           "module": "./control-contract"
+        },
+        {
+          "line": 4,
+          "module": "./catalog"
         }
       ]
     },
@@ -48686,7 +48722,7 @@
       ]
     },
     "server/src/radd/modules/labels/__init__.py": {
-      "sha256": "127c1f033a292a9278f77ab76c051ff10d17813893d05ab2bad09b43f8f1f926",
+      "sha256": "f963302784b1c62fad818671cd426d8f7542860cd134ea2d0e778b96187ddd3a",
       "module_directory": "labels",
       "role": "runtime_source",
       "imports": [
@@ -48694,7 +48730,8 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "EventTypeSpec",
+            "PluginUiManifest"
           ]
         },
         {
@@ -48966,6 +49003,73 @@
           "names": [
             "StrEnum"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/labels/ui/package.json": {
+      "sha256": "77fd6abed86a5cd2f731ae7c0c58a0279df0ba9f50957b8cddc0e0fd86de9a76",
+      "module_directory": "labels",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/labels/ui/src/catalog.ts": {
+      "sha256": "852df1ac5c6f6b4ec2a97b08798a526dc599efbd46fd060e2817b3156666d616",
+      "module_directory": "labels",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/labels/ui/src/index.tsx": {
+      "sha256": "879ded0e9c455a76850e7b313ad07fea0299e3faefebe957c82a5e7344d6c146",
+      "module_directory": "labels",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./catalog"
+        }
+      ]
+    },
+    "server/src/radd/modules/labels/ui/src/types.ts": {
+      "sha256": "11048ace0bc34acb023121414bf3fcdd048407764ba29a6040667bc93bf9628c",
+      "module_directory": "labels",
+      "role": "runtime_source",
+      "imports": []
+    },
+    "server/src/radd/modules/labels/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "labels",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/labels/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "labels",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -109794,7 +109898,7 @@
       "imports": []
     },
     "web/package.json": {
-      "sha256": "2fce3e253f828a6e306167166a7608d8210ba6fbc5a47d9e99ab2e13b1d5da22",
+      "sha256": "269f922f26d26864a41ccdf0a5aa696105f45422ba32d863cef17bd373658b9f",
       "module_directory": null,
       "role": "configuration",
       "imports": []
@@ -109934,7 +110038,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/index.ts": {
-      "sha256": "b7bb28ed3f5cccdd6005539267c1aff31cae1616129dad4605ea8103f2a52cf8",
+      "sha256": "9a3a73f816412921c21ffa796da60758f6e3c0e27ca83dfb51acd3c080700448",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -110013,6 +110117,10 @@
         {
           "line": 111,
           "module": "./error-text"
+        },
+        {
+          "line": 113,
+          "module": "./query-sources"
         }
       ]
     },
@@ -110071,16 +110179,20 @@
       ]
     },
     "web/packages/plugin-sdk/src/plugin.ts": {
-      "sha256": "96df02dce5161b51da511d0c266bc2ab740cf85bcc737a4644ec4bde09dd46e8",
+      "sha256": "6e13d96b32fd8518a8c31d66dc643b374d38632e14e0a33d2c7137acf64907ac",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "./data"
+          "module": "./query-sources"
         },
         {
           "line": 2,
+          "module": "./data"
+        },
+        {
+          "line": 3,
           "module": "./slots"
         }
       ]
@@ -110097,6 +110209,21 @@
         {
           "line": 9,
           "module": "react"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/query-sources.ts": {
+      "sha256": "f5ed83f36544ed02a090c29ddde2320b8f333b5263f7271580c128876418ac58",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
         }
       ]
     },
@@ -110204,7 +110331,7 @@
       "imports": []
     },
     "web/packages/plugin-sdk/src/version.ts": {
-      "sha256": "9efa61938e7d42d551a65a2578353278c649013ef31a29a87431482ba7900707",
+      "sha256": "4d60d14e321551a07f4e8a9011936e737ce6db7b5126fef22c11f1ce6200df5e",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
@@ -110299,7 +110426,7 @@
       "imports": []
     },
     "web/public/shared/radd-plugin-sdk.js": {
-      "sha256": "549b3d8973bf254d5b64b096d3855b3dd5cdf3d29eebe4947a3cf6eb535c1c7d",
+      "sha256": "15eacf7fc40201e54f55f51bbe25c00762fc65a12f7effea584b80320ea57545",
       "module_directory": null,
       "role": "generated_source",
       "imports": []
@@ -111305,6 +111432,53 @@
         }
       ]
     },
+    "web/scripts/browser-query-contributions.mjs": {
+      "sha256": "baa2d58fb907fddcdb22d8c8b5297ff4bab748ae94190391d11ae727d43593a5",
+      "module_directory": null,
+      "role": "tooling_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:http"
+        },
+        {
+          "line": 4,
+          "module": "node:fs"
+        },
+        {
+          "line": 5,
+          "module": "node:fs/promises"
+        },
+        {
+          "line": 6,
+          "module": "node:path"
+        },
+        {
+          "line": 7,
+          "module": "./lib/cdp.mjs"
+        },
+        {
+          "line": 14,
+          "module": "react"
+        },
+        {
+          "line": 14,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 18,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 19,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
     "web/scripts/browser-resolvable-threads.mjs": {
       "sha256": "cab5dd4e9f6141ed40cb5b002433fcf3309f4174f1ef134929aa3d59a308a71d",
       "module_directory": null,
@@ -111922,7 +112096,7 @@
       ]
     },
     "web/scripts/gen-shared-shims.mjs": {
-      "sha256": "63100b1faa8ca8b1082c21165faf43678e4d0d080d201c8c346944167d06493e",
+      "sha256": "79c6c93634dd524efee3e5f2dd551033d95e81e016be3353a0331fdede8f51f1",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -112732,7 +112906,7 @@
       ]
     },
     "web/scripts/plugin-boundaries.test.mjs": {
-      "sha256": "27d878bb06f52886b9a4ac29377df9e03f5b8f74619907795747cd0130fe31fb",
+      "sha256": "f48b07bd439c3db07c03750d197bda7a9e65b22d0b58bf26fea4ca928409a52b",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -112774,7 +112948,7 @@
       ]
     },
     "web/scripts/plugin-loader.test.mjs": {
-      "sha256": "578c36a62851e76b30914a634a49e01738060a233d39a9efd4df1de8be8476bf",
+      "sha256": "45909f7c79efb7084ebb79e6bdc74e828b2e90a2ab533df6b39318091dcdfd71",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -112795,7 +112969,7 @@
           "module": "node:module"
         },
         {
-          "line": 20,
+          "line": 23,
           "module": "@radd\\/plugin-sdk"
         }
       ]
@@ -112934,7 +113108,7 @@
       ]
     },
     "web/scripts/query-cancellation.test.mjs": {
-      "sha256": "84d581cec2efa24ebeb75b546f6bc7438e846f90f0432427f3d0b2e9f9490967",
+      "sha256": "feb612ee0ab9799ffa7155d069f409f4c345fba75539942d5221786e36bdd7f4",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -114310,7 +114484,7 @@
       ]
     },
     "web/src/components/automations/ActionParams.tsx": {
-      "sha256": "ce417087877879dfef7cdd16a683aff17faa221857aaf19deb67ea71db6e971c",
+      "sha256": "ebc9726532072ade4247fab0ed9ca4e249ab1668447a96da4d05d539d77baf33",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -114369,24 +114543,20 @@
       ]
     },
     "web/src/components/automations/ActionsBuilder.tsx": {
-      "sha256": "d4d926f72b8f32a529ad7955ee870b09332e94eb8f4053c5b0877cbd639a808a",
+      "sha256": "224549e26e7191d45bddea84d6b51a45fc5839e66543850f2af0e0892f787b00",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "@tanstack/react-query"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 2,
           "module": "../../lib/hooks"
         },
         {
-          "line": 6,
-          "module": "../../lib/queries"
-        },
-        {
-          "line": 13,
+          "line": 10,
           "module": "../../lib/types"
         }
       ]
@@ -114512,49 +114682,49 @@
       ]
     },
     "web/src/components/automations/GraphEditor.tsx": {
-      "sha256": "46ef90bf3a9cfd8ac768396788640e4188e02303c43dae460c9e3cec197a8a6b",
+      "sha256": "20c09752ff8a2d4226679543fc37b03e3845846a7dc10c91c0b7db32bc6d3a44",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 14,
-          "module": "../../lib/node-shapes"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 15,
-          "module": "react"
+          "module": "../../lib/node-shapes"
         },
         {
           "line": 16,
-          "module": "@tanstack/react-query"
+          "module": "react"
         },
         {
           "line": 17,
-          "module": "lucide-react"
+          "module": "@tanstack/react-query"
         },
         {
           "line": 18,
-          "module": "../../lib/queries"
+          "module": "lucide-react"
         },
         {
           "line": 19,
-          "module": "../../lib/automation-nodes"
+          "module": "../../lib/queries"
         },
         {
           "line": 20,
+          "module": "../../lib/automation-nodes"
+        },
+        {
+          "line": 21,
           "module": "../../lib/automation-layout"
         },
         {
-          "line": 27,
+          "line": 28,
           "module": "../../lib/types"
         },
         {
-          "line": 28,
-          "module": "../Callout"
-        },
-        {
           "line": 29,
-          "module": "./ActionsBuilder"
+          "module": "../Callout"
         },
         {
           "line": 30,
@@ -114562,18 +114732,22 @@
         },
         {
           "line": 31,
-          "module": "./GraphInspector"
+          "module": "./ActionsBuilder"
         },
         {
           "line": 32,
-          "module": "./LazyGraphCanvas"
+          "module": "./GraphInspector"
         },
         {
           "line": 33,
-          "module": "./NodePanel"
+          "module": "./LazyGraphCanvas"
         },
         {
           "line": 34,
+          "module": "./NodePanel"
+        },
+        {
+          "line": 35,
           "module": "./NodeSearchMenu"
         }
       ]
@@ -114974,7 +115148,7 @@
       ]
     },
     "web/src/components/automations/ValidationFields.tsx": {
-      "sha256": "b62b03f73dc50a17b3e0c44dcef20776cdf35c61ee192434b7f69b4143f22a04",
+      "sha256": "8bcd61070a9b2d7e87ffa2d554c568f8d1f3fe6ee97e21b0e0b21784b80c9fcc",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -130395,12 +130569,12 @@
       "imports": []
     },
     "web/src/lib/plugin-loader.ts": {
-      "sha256": "4185ffc60cba4fd84ed5467d8102d91db809edbe81db53d7dff6148a4cc31653",
+      "sha256": "0ac19543af3d74e30de65c4414a15d5d1b1a194786fbb39c6f12350393ccfc02",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
-          "line": 22,
+          "line": 24,
           "module": "@radd/plugin-sdk"
         }
       ]
@@ -130747,7 +130921,7 @@
       ]
     },
     "web/src/lib/queries/fields.ts": {
-      "sha256": "827c101b3e383d65d96a0659e3d75b6706f68e446732800ba520de40c144c9b4",
+      "sha256": "550a9caf40393c760c810e8aba8614c00ef40fc2509665dfb1140162d22c7491",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -130772,8 +130946,16 @@
           "module": "../cache"
         },
         {
-          "line": 17,
+          "line": 15,
           "module": "../types"
+        },
+        {
+          "line": 17,
+          "module": "../../../../server/src/radd/modules/fields/ui/src/catalog"
+        },
+        {
+          "line": 98,
+          "module": "../../../../server/src/radd/modules/labels/ui/src/catalog"
         }
       ]
     },
@@ -132066,10 +132248,15 @@
       ]
     },
     "web/src/lib/types/labels.ts": {
-      "sha256": "11048ace0bc34acb023121414bf3fcdd048407764ba29a6040667bc93bf9628c",
+      "sha256": "1fe456e7cbb42adaaa54e52a1cffd8596b48484f8a11b10010581533adc518b1",
       "module_directory": null,
       "role": "runtime_source",
-      "imports": []
+      "imports": [
+        {
+          "line": 1,
+          "module": "../../../../server/src/radd/modules/labels/ui/src/types"
+        }
+      ]
     },
     "web/src/lib/types/link-types.ts": {
       "sha256": "4354e21676f48bd15d03694599612ea25e95269121479a422676005d6f470209",

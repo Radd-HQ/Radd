@@ -235,6 +235,8 @@ function VerdictMessage({
         hint="Highlights that control on the form. Leave it general when the problem is the submission as a whole."
       >
         <option value="">The submission as a whole</option>
+        {target.startsWith(CUSTOM_FIELD_PREFIX) && !fields.some(field => `${CUSTOM_FIELD_PREFIX}${field.key}` === target)
+          && <option value={target}>{target} (unavailable field)</option>}
         <optgroup label="Built-in fields">
           {BUILTIN_FIELDS.map(([key, label]) => (
             <option key={key} value={key}>

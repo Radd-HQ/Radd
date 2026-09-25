@@ -5,7 +5,7 @@ import {QueryClient, QueryObserver, InfiniteQueryObserver} from '../node_modules
 
 const source=path=>readFileSync(new URL('../src/lib/'+path,import.meta.url),'utf8');
 function evaluate(code,imports,names){
-  const js=stripTypeScriptTypes(code).replace(/^import[\s\S]*?from ["'][^"']+["'];\n/gm,'').replaceAll('export ','');
+  const js=stripTypeScriptTypes(code).replace(/^import[\s\S]*?from ["'][^"']+["'];\n/gm,'').replace(/^export \{[^}]+\} from ["'][^"']+["'];\n/gm,'').replaceAll('export ','');
   return Function(...Object.keys(imports),js+';return {'+names.join(',')+'}')( ...Object.values(imports));
 }
 const ownerKeys = Object.assign({}, ...['projects','cycles'].map(owner => {

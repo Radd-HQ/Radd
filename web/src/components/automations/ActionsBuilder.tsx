@@ -1,14 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useContributedQuery } from "@radd/plugin-sdk";
 import { usePermissions } from "../../lib/hooks";
-import {
-  fieldsQuery,
-  labelsQuery,
-} from "../../lib/queries";
 import {
   ActionType,
   Permission,
   type CustomFieldValue,
   type FieldDef,
+  type Label,
   type RuleAction,
 } from "../../lib/types";
 
@@ -17,6 +14,12 @@ export interface PickerData {
   canChoosePeople: boolean;
   labelNames: string[];
   fields: FieldDef[];
+  catalogStatus: { name: string; available: boolean; loading: boolean; error: unknown; retry: () => void }[];
+}
+
+function catalogStatus(name: string, query: { available: boolean; isPending: boolean; error: unknown; refetch: () => unknown }) {
+  return { name, available: query.available, loading: query.available && query.isPending, error: query.error,
+    retry: () => { void query.refetch(); } };
 }
 
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
@@ -24,12 +27,13 @@ const uniqueSorted = (values: string[]) => [...new Set(values)].sort((a, b) => a
 /** Remaining global registries; project-owned choices load in their controls. */
 export function usePickerData(): PickerData {
   const perms = usePermissions();
-  const labels = useQuery(labelsQuery());
-  const fields = useQuery(fieldsQuery());
+  const labels = useContributedQuery<Label[]>("labels.catalog");
+  const fields = useContributedQuery<FieldDef[]>("fields.catalog");
   return {
     canChoosePeople: perms.global(Permission.userManage),
     labelNames: uniqueSorted((labels.data ?? []).map((label) => label.name)),
     fields: fields.data ?? [],
+    catalogStatus: [catalogStatus("Fields", fields), catalogStatus("Labels", labels)],
   };
 }
 

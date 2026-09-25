@@ -168,3 +168,13 @@ test('Fields owns registry form rendering and the SDK token/error primitives are
     assert(!nodes(file).some(n=>n.type==='ImportDeclaration'&&/modules|web\/src|components\//.test(n.source.value)));
   }
 });
+
+
+test('catalog transport belongs to owners and contributed-query registry has no feature vocabulary',()=>{
+  const sdk=nodes('web/packages/plugin-sdk/src/query-sources.ts');
+  assert(!sdk.some(n=>n.type==='ImportDeclaration'&&/modules|web\/src/.test(n.source.value)));
+  assert(!sdk.some(n=>n.type==='StringLiteral'&&/^(?:fields|labels)(?:\.|$)|^\/(?:fields|labels)/.test(n.value)));
+  const consumer=nodes('web/src/components/automations/ActionsBuilder.tsx');
+  assert(!consumer.some(n=>n.type==='ImportDeclaration'&&n.source.value.includes('/queries')));
+  assert(!consumer.some(n=>n.type==='CallExpression'&&n.callee?.name==='useQuery'));
+});

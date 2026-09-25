@@ -27,6 +27,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1358 | Owner-contributed project/cycle pickers | Verified; Waiting for release |
 | RADD-1359 | Owner-contributed team relationships/audiences | Verified; Waiting for release |
 | RADD-1360 | Fields-owned controls and generic input primitives | Verified; Waiting for release |
+| RADD-1361 | Owner catalog queries and nonvisual contribution lifecycle | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -58,7 +59,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | cycles | default | 7 | projects, auth, events, settings, teams | Picker contributions verified (RADD-1358); remaining review pending |
 | dashboards | False | 0 | events, projects, auth, teams, items, cycles, views, reporting, access, groups | Pending |
 | events | default | 0 |  | Pending |
-| fields | default | 4 | projects, events, auth, teams, access | Form/control contributions verified (RADD-1360); remaining review pending |
+| fields | default | 5 | projects, events, auth, teams, access | Catalog contributions verified (RADD-1361); remaining review pending |
 | forgejo | False | 0 | events, projects, auth, items, vcs, automations | Pending |
 | forms | default | 2 | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Option contributions verified (RADD-1357); remaining review pending |
 | github | False | 0 | events, projects, auth, items, vcs, automations | Pending |
@@ -67,7 +68,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | items | default | 0 | projects, workflow, labels, fields, cycles, releases, auth, teams, events, access, itemtypes, linktypes, settings | Pending |
 | itemtypes | default | 2 | projects, events, auth | Option contributions verified (RADD-1357); remaining review pending |
 | jiraimport | False | 0 | auth, projects, fields, items, workflow, comments, cycles, attachments, events, itemtypes, linktypes, notify, releases, timelogging, weblinks, teams | Pending |
-| labels | default | 0 | projects, events, auth | Pending |
+| labels | default | 3 | projects, events, auth | Catalog contributions verified (RADD-1361); remaining review pending |
 | ldap | False | 0 | events, projects, auth, settings, groups, teams | Pending |
 | leave | False | 3 | auth, teams, events | Pending |
 | linktypes | default | 0 | projects, events, auth | Pending |
@@ -407,3 +408,48 @@ Remaining work includes field registry queries, settings/navigation, display-cel
 presentation, automation picker data and inspectors, host-located consuming feature
 pages, and all other partial/unreviewed artifacts. This stage does not claim those
 features have achieved full ownership or lifecycle isolation.
+
+## RADD-1361 verification
+
+SDK 1.9 now has a nonvisual query-source registry, with declarative sources and
+loader-scoped imperative registration. Owners define namespaced keys, transport
+and cache metadata. Queries carry consumer, activation, arguments and enabled-state
+identity, cancellation signals and zero unused retention. Failed/absent sources
+expose availability separately from empty success; query errors hide prior data.
+The loader withdraws sources on disable/replacement/failure and suppresses late
+activation registrations. A browser reload exposed a collision flaw in the first
+implementation: a competing plugin could claim a key after its owner disappeared.
+Enforcing the plugin namespace prevents that takeover, including while the owner
+is absent or loading.
+
+Fields and Labels own their catalog transport/types and register `fields.catalog`
+and `labels.catalog`. Automation picker data consumes these sources instead of
+host query factories, reports unavailable/loading/error state, and supports retry.
+Saved custom-field keys in action/finding selectors remain visible when missing;
+existing values are preserved. Query compatibility exports remain for pages not
+yet migrated. Full catalog reads are intentionally unchanged in this ownership
+stage; no pagination or broad scale improvement is claimed.
+
+Evidence: host + 23 remotes typecheck/build; 59 frontend tests; 28 focused backend
+field-listing/scoped-member, capability, module-contract and kernel tests; targeted
+Python lint. Loader tests cover query-only modules, withdrawal/reactivation,
+activation failure rollback and suppression of late registration. The actual-bundle
+query proof passes 12 grouped checks (21 requests, 4 observed cancellations):
+initial absence, actual owner rows/metadata, entity invalidation, independent owner
+withdrawal, fresh re-enable, denied-read retry, failed remote recovery, namespace
+collision rejection, argument-change cancellation, disabled-consumer/refetch refusal,
+independent consumers, and the real automation editor's saved field key/value
+through Fields withdrawal. Existing field-control (13) and automation-canvas (15)
+regression groups pass. The editor screenshot was inspected. The new proof is in
+`test:browser`.
+
+The backend was reloaded for the manifests and serves the new build. A read-only
+authenticated probe verified both SDK 1.9 sources and their real catalogs (319 fields,
+2,305 labels). Plugin enablement was unchanged, Leave/GitHub/Forgejo remain disabled,
+and the temporary token was removed. Nothing was pushed or deployed externally.
+
+Remaining: the query proof observed five independent host settings-summary reads.
+Those, compatibility-query consumers, field/label settings, other automation
+queries/inspectors, navigation and all remaining partial/unreviewed artifacts still
+need migration. The new nonvisual contract enables that work; it does not establish
+full platform separation by itself.

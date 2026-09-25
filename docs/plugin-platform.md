@@ -608,6 +608,38 @@ field settings/navigation, display cells or automation inspector ownership. In
 particular, the settings sidebar still queries `/fields/settings-summary`; that
 remaining dependency is recorded in the audit.
 
+### Data-only query contributions (RADD-1361)
+
+SDK 1.9 supports `PluginModule.querySources` and
+`PluginContext.registerQuerySource`. A source declares a `key`, optional entity
+cache `meta`, and `fetch(args, signal)`. Its key must start with its registering
+plugin name followed by a dot; another plugin cannot claim that contract even
+while the owner is absent. Re-registering an owned key replaces its generation.
+The loader accepts query-only remotes and removes sources on withdrawal, replacement
+or failed activation. Late imperative registration cannot resurrect a withdrawn
+source. The registry contains no field/label/endpoint table.
+
+Consumers call `useContributedQuery<Result>(key, args, { enabled })` and inspect
+`available` separately from pending/error/success. Arguments belong to the owner's
+contract and must be suitable for a query key. Each mounted consumer has its own
+query identity, including source generation, arguments and enabled state. Switching
+any of those removes the obsolete observer; owners must pass the supplied signal
+to transport. Unused results have zero retention, retries are explicit, and errors
+hide prior data. Disabled or absent sources cannot issue requests even through an
+explicit refetch. Owners supply cache tags for ordinary entity invalidation.
+
+Fields contributes its full definition catalog; Labels contributes its full label
+catalog. Their existing endpoints and permission checks are unchanged. The host
+query compatibility exports share the owner implementations, but are not themselves
+lifecycle-gated. Automations' picker hook now uses contributed sources, displays
+unavailable/loading/error state and offers retry. Stored custom-field keys remain
+visible without a catalog and their values restore when Fields returns.
+
+These are data contracts, not render slots. They do not certify the remaining host
+settings/navigation queries, field/label pages, automation editor composition, or
+other consumers still using compatibility exports. The existing full-catalog read
+behavior is retained; this stage does not introduce a paged registry protocol.
+
 ### Original frontend design
 
 *(Built in specs 93/94: the SPA now has the federation seam and `GET /capabilities` exists —

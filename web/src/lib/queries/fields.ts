@@ -9,20 +9,12 @@ import { queryKeys } from "./shared";
 import { Entity, entityMeta } from "../cache";
 import type {
   AccessGrant,
-  FieldDef,
   GrantResourceSpec,
-  Label,
   LinkTypeDef,
   RoleGrant,
 } from "../types";
 
-export const fieldsQuery = () =>
-  queryOptions({
-    queryKey: queryKeys.fields,
-    meta: entityMeta(Entity.field),
-    queryFn: ({ signal }) => api.get<FieldDef[]>(ApiPath.fields, { signal }),
-    staleTime: 60_000,
-  });
+export { fieldsQuery } from "../../../../server/src/radd/modules/fields/ui/src/catalog";
 
 /**
  * Every registered resource's GRANT MODEL (RADD-947) — accesses, subject kinds,
@@ -103,9 +95,4 @@ export const linkTypesQuery = (projectId?: string) =>
     staleTime: 60_000,
   });
 
-export const labelsQuery = () =>
-  queryOptions({
-    queryKey: queryKeys.labels,
-    queryFn: ({ signal }) => api.get<Label[]>(ApiPath.labels, { signal }),
-    staleTime: 60_000,
-  });
+export { labelsQuery } from "../../../../server/src/radd/modules/labels/ui/src/catalog";

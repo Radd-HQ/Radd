@@ -1,5 +1,13 @@
 # Module map
 
+RADD-1361: Fields and Labels contribute data-only catalog sources (`fields.catalog`,
+`labels.catalog`) through SDK 1.9. Owners hold transport, row types and entity cache
+metadata. Automations' picker data consumes their availability/error/result state;
+withdrawal cancels catalog reads and preserves saved field keys/values. Generic
+query registration is tied to remote activation and requires the owner's namespace.
+Old query exports remain for unmigrated pages. This does not move the full automation
+editor, field/label settings or the host settings-summary queries.
+
 RADD-1360: Fields owns its custom-field form/control rendering and public registry
 value/definition types. The UI remote contributes `fields.form` and `fields.control`
 using SDK 1.8; host issue components are transitional adapters. The SDK now owns

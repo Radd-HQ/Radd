@@ -1,4 +1,4 @@
-from radd.kernel import EventTypeSpec
+from radd.kernel import EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
 
@@ -7,6 +7,7 @@ from .types import LabelEvent
 
 plugin = RaddPlugin(
     name="labels",
+    ui=PluginUiManifest(remote="/plugins/labels/remoteEntry.js", ui_api_version="1.9.0"),
     # RADD-816 (F6): label.read is a deliverable atom — Baseline-seeded, so day-one
     # behaviour is the old member floor, but REVOCABLE for the first time.
     crud_resources=(

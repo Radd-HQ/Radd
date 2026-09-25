@@ -7,22 +7,25 @@ let serial = 0;
 async function fixture(importer) {
   const slots = new Set();
   const dataSources = new Set();
+  const querySources = new Set();
   const key = `__pluginLoaderTest${serial++}`;
   globalThis[key] = {
     isUiApiCompatible: () => true,
     registerSlot: (_slot, _contribution, { plugin }) => slots.add(plugin),
     unregisterPlugin: (name) => slots.delete(name),
+    registerQuerySource: (name) => querySources.add(name),
+    unregisterQuerySources: (name) => querySources.delete(name),
     registerDataSource: (name) => dataSources.add(name),
     unregisterDataSources: (name) => dataSources.delete(name),
     importer,
   };
   const source = readFileSync('web/src/lib/plugin-loader.ts', 'utf8')
     .replace(/import \{[\s\S]*?\} from "@radd\/plugin-sdk";/,
-      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources} = globalThis.${key};`)
+      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources} = globalThis.${key};`)
     .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`);
   const js = stripTypeScriptTypes(source, { mode: 'transform' });
   const loader = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
-  return { ...loader, slots, dataSources };
+  return { ...loader, slots, dataSources, querySources };
 }
 const remote = (url = 'v1') => [{ name: 'fixture', remote_entry: url, ui_api_version: '1.0' }];
 const contribution = { slot: 'issue.tab', title: 'Example' };
@@ -132,4 +135,21 @@ test('SDK version gate rejects remotes requiring newer APIs', async () => {
   const sdk = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
   for (const version of ['1.0.0','1.1.0','1.2.0','1.3.0',sdk.UI_API_VERSION]) assert(sdk.isUiApiCompatible(version));
   for (const version of ['2.0.0','1.999.0',sdk.UI_API_VERSION.replace(/\d+$/, n => String(Number(n) + 1)),'','1.garbage.0']) assert(!sdk.isUiApiCompatible(version));
+});
+
+
+test('query-only remote registers, withdraws and can be reactivated',async()=>{
+  const f=await fixture(async()=>({querySources:[{key:'fixture.catalog',fetch:async()=>[]}]}));
+  await f.syncPluginRemotes(remote());assert.equal(f.querySources.size,1);
+  await f.syncPluginRemotes([]);assert.equal(f.querySources.size,0);
+  await f.syncPluginRemotes(remote('v2'));assert.equal(f.querySources.size,1);
+});
+test('failed activation rolls back query sources and ignores late registration after withdrawal',async()=>{
+  const source={key:'fixture.catalog',fetch:async()=>[]};
+  const failed=await fixture(async()=>({querySources:[source],activate(){throw Error('failure');}}));
+  await failed.syncPluginRemotes(remote());assert.equal(failed.querySources.size,0);
+  const wait=deferred();const pending=await fixture(async()=>({querySources:[source],async activate(ctx){await wait.promise;ctx.registerQuerySource(source);}}));
+  const loading=pending.syncPluginRemotes(remote());await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(pending.querySources.size,1);await pending.syncPluginRemotes([]);assert.equal(pending.querySources.size,0);
+  wait.resolve();await loading;assert.equal(pending.querySources.size,0);
 });
