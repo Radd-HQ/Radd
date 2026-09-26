@@ -187,3 +187,23 @@ async def test_backfill_shape_matches_emit(db):
     )
     await db.refresh(row)
     assert row.entity_label == "BF-1 Backfilled"
+
+
+async def test_audit_destination_is_owned_and_does_not_rewrite_stored_events(db, admin, project, item):
+    from radd.modules.items import plugin
+    before = (await audit.audit_log(db, actor=admin, project_id=project.id, changed_field='title'))[0]
+    assert before.entity_url == f'/issues/{item.key}'
+    assert before.entity_owner == 'items'
+    spec = registries.entity_links.pop('item')
+    owner = registries.entity_link_owners.pop('item')
+    try:
+        after = (await audit.audit_log(db, actor=admin, project_id=project.id, changed_field='title'))[0]
+        assert after.entity_url is None and after.entity_owner is None
+        assert after.entity_label == before.entity_label
+        assert after.changes == before.changes
+    finally:
+        registries.entity_links['item'] = spec
+        registries.entity_link_owners['item'] = owner
+    restored = (await audit.audit_log(db, actor=admin, project_id=project.id, changed_field='title'))[0]
+    assert restored.entity_owner == plugin.name
+    assert restored.entity_url == before.entity_url

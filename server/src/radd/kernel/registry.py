@@ -28,6 +28,7 @@ from .specs import (
     CrudResourceSpec,
     EntitySpec,
     EntityRefSpec,
+    EntityLinkSpec,
     EventTypeSpec,
     GrantScopeSpec,
     ProjectRelationSpec,
@@ -75,6 +76,8 @@ class KernelRegistries:
     #: entity type -> how to describe it in an event payload (RADD-923). Read by
     #: `events.emit` to expand `subjects={"item": id}` into a canonical ref.
     entity_refs: dict[str, EntityRefSpec] = field(default_factory=dict)
+    entity_links: dict[str, EntityLinkSpec] = field(default_factory=dict)
+    entity_link_owners: dict[str, RaddPlugin] = field(default_factory=dict)
     permissions: dict[str, PermissionSpec] = field(default_factory=dict)
     #: RADD-891: scalar cascade settings, keyed like `settings.types.SettingKey`'s
     #: values — the inversion of that module's old hardcoded catalog dict.
@@ -144,6 +147,7 @@ class KernelRegistries:
     def clear(self) -> None:
         for f in (
             self.plugins, self.entities, self.event_types, self.entity_refs, self.permissions,
+            self.entity_links, self.entity_link_owners,
             self.settings, self.relations, self.relation_domains, self.access_resources,
             self.row_guards,
             self.crud_resources, self.nav_facts, self.grant_scopes, self.project_relations, self.project_purges,
@@ -161,6 +165,22 @@ class KernelRegistries:
 
     # --- registration (called by the loader per plugin) ---
     def register_plugin(self, plugin: RaddPlugin) -> None:
+        from .entity_links import contributed_links
+
+        links = contributed_links(plugin)
+        # Validate before changing any registry: a failed activation must not
+        # steal another owner's link or leave this plugin partially registered.
+        for link in links:
+            previous = self.entity_link_owners.get(link.entity_type)
+            if previous is not None and previous.id != plugin.id:
+                raise ValueError(f"entity link {link.entity_type!r} already belongs to {previous.name!r}")
+        for key, owner in list(self.entity_link_owners.items()):
+            if owner.id == plugin.id:
+                self.entity_links.pop(key, None)
+                self.entity_link_owners.pop(key, None)
+        for link in links:
+            self.entity_links[link.entity_type] = link
+            self.entity_link_owners[link.entity_type] = plugin
         self.plugins[plugin.id] = plugin
         for e in plugin.entities:
             self.entities[e.key] = e
@@ -234,7 +254,14 @@ class KernelRegistries:
     def unregister_plugin(self, plugin: RaddPlugin) -> None:
         """Remove a plugin's contributions (runtime disable) — its nav, event types,
         atoms, resources, capabilities, integrations, and entities stop being served."""
+        # A delayed cleanup from a replaced generation owns no current state.
+        if self.plugins.get(plugin.id) is not plugin:
+            return
         self.plugins.pop(plugin.id, None)
+        for key, owner in list(self.entity_link_owners.items()):
+            if owner is plugin:
+                self.entity_links.pop(key, None)
+                self.entity_link_owners.pop(key, None)
         for task in plugin.tasks:
             if self.tasks.get(task.name) is task:
                 self.tasks.pop(task.name)

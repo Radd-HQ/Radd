@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec
 from radd.kernel import PluginUiManifest, RaddPlugin
 from radd.kernel import SettingSpec
@@ -90,6 +91,11 @@ plugin = RaddPlugin(
     # remote (./ui), registered through `automation.node.inspector`.
     ui=PluginUiManifest(remote="/plugins/ai/remoteEntry.js", ui_api_version="1.3.0"),
     name="ai",
+    entity_links=(
+        EntityLinkSpec('ai_provider', ('/settings/ai',)),
+        EntityLinkSpec('ai_role', ('/settings/ai',)),
+        EntityLinkSpec('ai_preset', ('/settings/ai',)),
+    ),
     consumer_names=("ai.embedder",),
     consumer_descriptions=(("ai.embedder", "Builds semantic-search vectors"),),
     core=False,  # optional plugin — disableable via the plugin manager

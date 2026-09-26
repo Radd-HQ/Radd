@@ -1,0 +1,232 @@
+[
+  {
+    "owner": "auth",
+    "entity_type": "user",
+    "url": "/settings/users"
+  },
+  {
+    "owner": "auth",
+    "entity_type": "service_account",
+    "url": "/settings/service-accounts"
+  },
+  {
+    "owner": "auth",
+    "entity_type": "role",
+    "url": "/settings/roles"
+  },
+  {
+    "owner": "fields",
+    "entity_type": "field",
+    "url": "/settings/fields"
+  },
+  {
+    "owner": "labels",
+    "entity_type": "label",
+    "url": "/settings/labels"
+  },
+  {
+    "owner": "linktypes",
+    "entity_type": "link_type",
+    "url": "/settings/link-types"
+  },
+  {
+    "owner": "cycles",
+    "entity_type": "cycle",
+    "url": "/settings/cycles"
+  },
+  {
+    "owner": "cycles",
+    "entity_type": "cycle_series",
+    "url": "/settings/cycles"
+  },
+  {
+    "owner": "teams",
+    "entity_type": "team",
+    "url": "/settings/teams"
+  },
+  {
+    "owner": "webhooks",
+    "entity_type": "webhook_endpoint",
+    "url": "/settings/webhooks"
+  },
+  {
+    "owner": "automations",
+    "entity_type": "automation_rule",
+    "url": "/settings/automations"
+  },
+  {
+    "owner": "canned",
+    "entity_type": "canned_response",
+    "url": "/settings/canned"
+  },
+  {
+    "owner": "timelogging",
+    "entity_type": "work_category",
+    "url": "/settings/timelogging"
+  },
+  {
+    "owner": "sso",
+    "entity_type": "sso_provider",
+    "url": "/settings/sign-in"
+  },
+  {
+    "owner": "ai",
+    "entity_type": "ai_provider",
+    "url": "/settings/ai"
+  },
+  {
+    "owner": "ai",
+    "entity_type": "ai_role",
+    "url": "/settings/ai"
+  },
+  {
+    "owner": "ai",
+    "entity_type": "ai_preset",
+    "url": "/settings/ai"
+  },
+  {
+    "owner": "attachments",
+    "entity_type": "storage_host",
+    "url": "/settings/storage"
+  },
+  {
+    "owner": "attachments",
+    "entity_type": "storage_rule",
+    "url": "/settings/storage"
+  },
+  {
+    "owner": "mailintake",
+    "entity_type": "mail_source",
+    "url": "/settings/email"
+  },
+  {
+    "owner": "mailintake",
+    "entity_type": "mail_sender",
+    "url": "/settings/email"
+  },
+  {
+    "owner": "mailintake",
+    "entity_type": "mail_rule",
+    "url": "/settings/email"
+  },
+  {
+    "owner": "forgejo",
+    "entity_type": "forgejo_connection",
+    "url": "/settings/forgejo"
+  },
+  {
+    "owner": "forgejo",
+    "entity_type": "forgejo_repo",
+    "url": "/settings/forgejo"
+  },
+  {
+    "owner": "github",
+    "entity_type": "github_connection",
+    "url": "/settings/github"
+  },
+  {
+    "owner": "github",
+    "entity_type": "github_repo",
+    "url": "/settings/github"
+  },
+  {
+    "owner": "gitlab",
+    "entity_type": "gitlab_connection",
+    "url": "/settings/gitlab"
+  },
+  {
+    "owner": "gitlab",
+    "entity_type": "gitlab_repo",
+    "url": "/settings/gitlab"
+  },
+  {
+    "owner": "vcs",
+    "entity_type": "vcs_user_link",
+    "url": "/settings/vcs"
+  },
+  {
+    "owner": "jiraimport",
+    "entity_type": "jira_connection",
+    "url": "/settings/jira-import"
+  },
+  {
+    "owner": "confluenceimport",
+    "entity_type": "confluence_connection",
+    "url": "/settings/confluence-import"
+  },
+  {
+    "owner": "backup",
+    "entity_type": "backup_schedule",
+    "url": "/settings/backups"
+  },
+  {
+    "owner": "pluginmgr",
+    "entity_type": "plugin",
+    "url": "/settings/plugins"
+  },
+  {
+    "owner": "pages",
+    "entity_type": "page_space",
+    "url": "/settings/pages"
+  },
+  {
+    "owner": "pages",
+    "entity_type": "page",
+    "url": "/pages?pageId=123"
+  },
+  {
+    "owner": "groups",
+    "entity_type": "group",
+    "url": "/settings/directory"
+  },
+  {
+    "owner": "workflow",
+    "entity_type": "state",
+    "url": "/p/TEST/settings/workflow"
+  },
+  {
+    "owner": "workflow",
+    "entity_type": "workflow_transition",
+    "url": "/p/TEST/settings/workflow"
+  },
+  {
+    "owner": "itemtypes",
+    "entity_type": "issue_type",
+    "url": "/p/TEST/settings/types"
+  },
+  {
+    "owner": "screens",
+    "entity_type": "screen",
+    "url": "/p/TEST/settings/screens"
+  },
+  {
+    "owner": "releases",
+    "entity_type": "release",
+    "url": "/p/TEST/settings/releases"
+  },
+  {
+    "owner": "forms",
+    "entity_type": "form",
+    "url": "/p/TEST/settings/forms"
+  },
+  {
+    "owner": "slas",
+    "entity_type": "sla_policy",
+    "url": "/p/TEST/settings/sla"
+  },
+  {
+    "owner": "projects",
+    "entity_type": "project",
+    "url": "/p/TEST/settings/general"
+  },
+  {
+    "owner": "settings",
+    "entity_type": "scoped_setting",
+    "url": "/p/TEST/settings/general"
+  },
+  {
+    "owner": "items",
+    "entity_type": "item",
+    "url": "/issues/TEST-7"
+  }
+]

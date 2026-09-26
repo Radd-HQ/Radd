@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Bot, ScrollText, Server, X } from "lucide-react";
 import { ApiError } from "../../lib/api";
+import { useCapabilities } from "@radd/plugin-sdk";
 import { auditEntityLink, auditSentence, type AuditSearch } from "../../lib/audit";
 import { RoutePath } from "../../lib/constants";
 import { SEARCH_DEBOUNCE_MS } from "../../lib/constants";
@@ -47,6 +48,9 @@ export function AuditSettingsPage() {
   const search = useSearch({ strict: false }) as AuditSearch;
   const navigate = useNavigate();
   const perms = usePermissions();
+  const capabilities = useCapabilities();
+  const availablePlugins = useMemo(() => new Set(capabilities?.plugins ?? []), [capabilities?.plugins]);
+  const ownerRevision = JSON.stringify([capabilities?.plugins, capabilities?.remotes]);
   const instanceWide = perms.global(Permission.globalManage);
 
   const setSearch = (patch: Partial<AuditSearch>) => {
@@ -92,7 +96,7 @@ export function AuditSettingsPage() {
       includeNoise: search.noise,
       limit: AUDIT_PAGE_SIZE,
       offset: (page - 1) * AUDIT_PAGE_SIZE,
-    }),
+    }, ownerRevision),
     enabled: !needsProject,
   });
   const forbidden = audit.error instanceof ApiError && audit.error.status === 403;
@@ -218,7 +222,7 @@ export function AuditSettingsPage() {
             </THead>
             <TBody>
               {audit.data.map((entry) => (
-                <AuditRow key={entry.id} entry={entry} showProject={!search.project} />
+                <AuditRow key={entry.id} entry={entry} showProject={!search.project} availablePlugins={availablePlugins} />
               ))}
             </TBody>
           </Table>
@@ -238,10 +242,10 @@ export function AuditSettingsPage() {
   );
 }
 
-function AuditRow({ entry, showProject }: { entry: AuditEntry; showProject: boolean }) {
+function AuditRow({ entry, showProject, availablePlugins }: { entry: AuditEntry; showProject: boolean; availablePlugins: ReadonlySet<string> }) {
   const [expanded, setExpanded] = useState(false);
   const { who, did, what } = auditSentence(entry);
-  const link = auditEntityLink(entry);
+  const link = auditEntityLink(entry, availablePlugins);
   const changes = entry.changes ?? [];
   const visible = expanded ? changes : changes.slice(0, CHANGES_PREVIEW);
   const hidden = changes.length - visible.length;

@@ -506,17 +506,20 @@
     "issue": null
   },
   "docs/modules.md": {
-    "sha256": "baf7e6f9678f3a86f4cd99f16b17174cfd580e7f927690013e396f02da420a14",
+    "sha256": "b7714d540588583d76353de4c4b7f7a3fe2c97a2a527b78a6299f552f0a827af",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform entity navigation and audit integration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1363"
   },
   "docs/performance-safety-audit.md": {
     "sha256": "103b850cbfe71ea293d998895fd8449ee03f8a4764199133d84bf080dcbda7d9",
@@ -554,17 +557,20 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "0a573803a6d0c71e78d824fe3175fd2c578ed9bc77e700ce1fbe1bc91d276f4a",
+    "sha256": "1c6dfbde9296c9dd0c2b5e958ae056e3f449e8bf37e035e4ab36f23493e21662",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform entity navigation and audit integration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1363"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2058,17 +2064,20 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "f53c5c5e2dfe5b0eaf4d58d31b1486a230361fb626858d1eb61ca63f7f76ecce",
+    "sha256": "8db2517f3d79c9c6b57ac967dbb182282e3fb06848186283e5eedd680cc397cc",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform entity navigation and audit integration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1363"
   },
   "research/review-2026-09-25/FIXES.md": {
     "sha256": "247e2f0759a2a12cb87c1e1d28fd6baefb175deb7f2d58bff79200f4d80925c2",
@@ -4219,11 +4228,15 @@
     "issue": null
   },
   "server/src/radd/kernel/__init__.py": {
-    "sha256": "64300234ef9c03bd1fd739a12723842f3d59158efeb12fe4b5f4738e44c2d012",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "46ae3e5deef52ceaec03c0460f34488da2ecf707f395da72635cf20af312333d",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/kernel/capabilities.py": {
     "sha256": "835c27d1d80c27b8e0f57a65aa872173b53e7c6d52f93a36549540506edd0950",
@@ -4245,6 +4258,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/kernel/entity_links.py": {
+    "sha256": "ed208206b1d98611771376b9564617e22a4d24b98a66334059080fed347ca1e4",
+    "status": "reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/kernel/hosts.py": {
     "sha256": "86f5df232f1eefc94bafa05bed8d7cbf23f40ecf5df017b096fb6f710894bf59",
@@ -4268,20 +4291,27 @@
     "issue": null
   },
   "server/src/radd/kernel/plugin.py": {
-    "sha256": "ead5c2a3b571366d0e74725b78ec6def18191a9f4a320c4fd4087083abff18b7",
+    "sha256": "d5b97d4672c3457c58602faf5eb15607abe2d1da9387c8603aede0538243022c",
     "status": "partially_reviewed",
-    "owner": "platform",
+    "owner": "platform entity navigation and audit integration",
     "evidence": [
-      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1352"
+    "issue": "RADD-1363"
   },
   "server/src/radd/kernel/registry.py": {
-    "sha256": "22d0886a3addbc864a5eba41bb491fa18f6ad6205c77a1a2393efb640578799e",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "a3df14b7abfc84edcff120df624a119b51f1a31f4c72f216883028fff04ad9de",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/kernel/runtime.py": {
     "sha256": "e90e5954f71193bc2a44c32f8c7182fbafaced5cd07fb5ab246b19a96e8197ca",
@@ -4298,11 +4328,15 @@
     "issue": null
   },
   "server/src/radd/kernel/specs.py": {
-    "sha256": "2f7c91380470a10fdbd2e946277e769b5a24491d2eb6098bb23d7c50bd4b3a01",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "89a0a6b7908197aa682bbe499d79e5e8b475add716c32fd74c52198b5c5be297",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/mailrender.py": {
     "sha256": "57ab07ed23c2301f7b354e48866589f76a20e891fd600542c4033996367a2c32",
@@ -4424,13 +4458,16 @@
     "issue": null
   },
   "server/src/radd/modules/ai/__init__.py": {
-    "sha256": "f70232bb8bfa1073f1c5f2197472758f196ea94f342c1ed0abad34d93906f979",
+    "sha256": "bb58d927082e93598bac1d19c582267f509187d68316f476d7236ef8471661af",
     "status": "partially_reviewed",
     "owner": "ai",
     "evidence": [
-      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1352"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/ai/admin_router.py": {
     "sha256": "8ca050aa8fa8dfb2e06e538c9b59add6cf311bf248cb5431a79d2dd7b39eb8d6",
@@ -4827,11 +4864,15 @@
     "issue": null
   },
   "server/src/radd/modules/attachments/__init__.py": {
-    "sha256": "61ad64357d40b02090b58b94b0b27705362fa2ede765ff445dde6e92e71c6474",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "2ef7c3dd00b6f16d1bc927cdd6b8cb9f287ee266f8c22017f544974ede04bc8d",
+    "status": "partially_reviewed",
+    "owner": "attachments",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/attachments/acl.py": {
     "sha256": "274b3b6bec57d45daf7030f9e5775bef33e5d094fc2936d64661c5402129c98e",
@@ -4995,28 +5036,39 @@
     "issue": null
   },
   "server/src/radd/modules/audit/schemas.py": {
-    "sha256": "223665ea1079dd1a5f9e487bd8b4ec2e3e38bfba0c12bf356e04ceb4ad931894",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "aa3a41caab8601ea0e3e825afcfa026db93a79afea39ebbd6cf5b47af9f2c5dd",
+    "status": "partially_reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/audit/service.py": {
-    "sha256": "d60ea65dbec4c32e10f4123dc68fe1fb1862306c8aeb9d68432666b2defb2133",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "20ab91620604658d31276d40a8b43f3a9f1c0437d7659e0b4b2b98894bc31712",
+    "status": "partially_reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/auth/__init__.py": {
-    "sha256": "766854cd2161b07da135250ec2315ee79973e711f2a089fe6632097480f5c33c",
+    "sha256": "d8920ea0bbec9afb313fd6ea22361bed5c16dd40166acd71bb5f7589b9cbff4b",
     "status": "partially_reviewed",
     "owner": "auth",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/auth/account_directory.py": {
     "sha256": "0024bce13e5bf133db2af88d0c2df31307893244ee4109bc64b141adf92d37db",
@@ -5312,7 +5364,7 @@
     "issue": null
   },
   "server/src/radd/modules/automations/__init__.py": {
-    "sha256": "b5c4110fb6323266654e80d14bf056403fedf9d7a2deef1fc54351bd61085cb6",
+    "sha256": "18f3921f1594928800c904b6c43c8e9f2955c9186d9e5c3aa128c5370de45aca",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
@@ -5320,9 +5372,12 @@
       "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/automations/builtin_actions.py": {
     "sha256": "b0dc0a159b098e0498d48eddb7bb985915b02af94ae11a1ce4ed0aac549247ca",
@@ -5738,15 +5793,18 @@
     "issue": null
   },
   "server/src/radd/modules/backup/__init__.py": {
-    "sha256": "7ac2978abca1d00d8a6f4cf4641b99adfdde29a07f1b4126568c05b8c9cf9a04",
+    "sha256": "81f59bbbb392ea1b6faaf8b6368fa5372fe44b6f4141d28a1ea43ed69c9ba31b",
     "status": "partially_reviewed",
     "owner": "backup",
     "evidence": [
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/backup/models.py": {
     "sha256": "f05be770fd054496d001bad81a4ebdc075e0688009f2da29cd4c1dbc058815bb",
@@ -5848,11 +5906,15 @@
     "issue": "RADD-1362"
   },
   "server/src/radd/modules/canned/__init__.py": {
-    "sha256": "6636b551b1472be59b35cc6afdb9680f8f5ea07c01feff107de02cbfbb436403",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "9bbbee19ab7fa277aaf2d71fda1fd4855118f9442108f37e6d84c04776ed39c6",
+    "status": "partially_reviewed",
+    "owner": "canned",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/canned/models.py": {
     "sha256": "f7b6043ae6343aad306eceb3960677415c2e141fb1f3b2512a6d3a3700560470",
@@ -6086,11 +6148,15 @@
     "issue": null
   },
   "server/src/radd/modules/confluenceimport/__init__.py": {
-    "sha256": "409058517c10f023fc636e0d8407351bfec73a3ec193e4462ef02261fb2c9178",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d8a3d987223ce4d38efb63cf77cc4ba3c196c445e719b0015333f8b97961ef93",
+    "status": "partially_reviewed",
+    "owner": "confluenceimport",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/confluenceimport/apply.py": {
     "sha256": "8dd36b4321d4e848323fb2014eeca5246295e09078ba595199660d81a8d3d9b5",
@@ -6396,14 +6462,17 @@
     "issue": null
   },
   "server/src/radd/modules/cycles/__init__.py": {
-    "sha256": "70a2857aaabedb0e713382993fc4debaa1df00e3906635ca18744520d5de8e72",
+    "sha256": "5ef26a6a51ddb7c0344ad955a6957303150232e2202e31209cffc81b58c8bfc3",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "cycles",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/cycles/directory.py": {
     "sha256": "3dd30be206a0c7aff7035b53778257d1b267bc80056ae3e49bb61e0102cc5e36",
@@ -6706,14 +6775,17 @@
     "issue": null
   },
   "server/src/radd/modules/fields/__init__.py": {
-    "sha256": "03c30647c61b0e8d0f091a98068cc5331f0bdbc9eeb4c2302c9fe65a302a7ecd",
+    "sha256": "1b1a0013b764f55a0c92b6ae6facec8ceea1c94f27f95aa8c977ce10204a163b",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "fields",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/fields/directory.py": {
     "sha256": "b70005598bcd37a22161288fc861a572ba3146ff7c57d26f2fa3846924d773a6",
@@ -6866,11 +6938,15 @@
     "issue": null
   },
   "server/src/radd/modules/forgejo/__init__.py": {
-    "sha256": "156a39071cfa559e44b3db3d73072eeeafb5f9a1bca1ea3523616a4cc3f732ed",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "a5070f5732421b7b00e4803da5c635374a9e24b7eba9854a9d6704c01baa868e",
+    "status": "partially_reviewed",
+    "owner": "forgejo",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/forgejo/admin_router.py": {
     "sha256": "3a566af9c3c2bb999f715051ad938e9f10536c769e5104df91f4187c0ffbb583",
@@ -6936,14 +7012,17 @@
     "issue": null
   },
   "server/src/radd/modules/forms/__init__.py": {
-    "sha256": "64caf4377da8b610d52e7c40579f9254d2cd7f99392de61fba0802239b9c1a38",
+    "sha256": "ce85cc4236918fdb319371b63d7d63f6c3f42383de99275257144cd732e8d188",
     "status": "partially_reviewed",
     "owner": "forms",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/forms/models.py": {
     "sha256": "e5541389275eb5a1e7d52954d964b19d90eeff0dccee52e4836496df09b5d68d",
@@ -7087,11 +7166,15 @@
     "issue": null
   },
   "server/src/radd/modules/github/__init__.py": {
-    "sha256": "0891738e1bfc596b8b9e5fad2601984f5318dc28f7f769f177ae3f537fda3f2f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "4cdaf96a953a81f516f4f5344a308b1f6ac666180e9fa67ab1938e019d24d687",
+    "status": "partially_reviewed",
+    "owner": "github",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/github/admin_router.py": {
     "sha256": "257a5d0f2ebc62c4670891fc70568e9f3991d0e85b8696d67197f127b9b6cc14",
@@ -7164,11 +7247,15 @@
     "issue": null
   },
   "server/src/radd/modules/gitlab/__init__.py": {
-    "sha256": "bf5e369880503f6b5c7d81132ff59e287cb0a3cadf1678141726ed6f34f5f3e8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "323d810651e4bd4e0ba920fcca0c671d4dbe8a7c4c26e8753238d37597df98aa",
+    "status": "partially_reviewed",
+    "owner": "gitlab",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/gitlab/admin_router.py": {
     "sha256": "6635911d4135746ee14ea877528f69bfd79eb4e1dc33718b65279e767fb217b2",
@@ -7234,14 +7321,17 @@
     "issue": null
   },
   "server/src/radd/modules/groups/__init__.py": {
-    "sha256": "6adb3722357cb62a318de48b6143583633969200451e8166d599b834a1126f11",
+    "sha256": "0065f59050445cbc282309d3f3055f48b12db5ebd36a7f91382ac4797182c4fd",
     "status": "partially_reviewed",
     "owner": "groups",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/groups/models.py": {
     "sha256": "3549d9dbb0baa43de6ece5574686f62ca90749a408a4f5066a4685a56e420f71",
@@ -7343,11 +7433,15 @@
     "issue": "RADD-1357"
   },
   "server/src/radd/modules/items/__init__.py": {
-    "sha256": "cb28fbe259eab5b0d734a3315c7333c403caabc3687676a2ddcac52b3a2375ad",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "746f9f36f72baae62cabff0b195f0ffb3d37d5f69cd4bc7bff9c1a0be49f1720",
+    "status": "partially_reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/items/bulk.py": {
     "sha256": "cd14013735f2922eac919b0bf0e425c987e53195aa8035a5376e40599ecf469d",
@@ -7714,14 +7808,17 @@
     "issue": null
   },
   "server/src/radd/modules/itemtypes/__init__.py": {
-    "sha256": "243e85475f65db1e19f0c1dfd28d1325ae8e95f96c896792efe733e1591a2cdc",
+    "sha256": "04fe2218ae8a843abda8b8d9e3eba32025f542862bbaa578217467726e29ede8",
     "status": "partially_reviewed",
     "owner": "itemtypes",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/itemtypes/models.py": {
     "sha256": "20565f4038eedac504aed77573603b515a51f16dc42fff72ec984bd7ad3e63cf",
@@ -7823,11 +7920,15 @@
     "issue": "RADD-1357"
   },
   "server/src/radd/modules/jiraimport/__init__.py": {
-    "sha256": "80e3152c25a1e5ff1d25ac905104c89aaa3065daf1e6337dca723e108408501a",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "b2e490a29aa295197918bef234309cad26801222e5fdae99bf9671844227a788",
+    "status": "partially_reviewed",
+    "owner": "jiraimport",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/jiraimport/apply.py": {
     "sha256": "08d34bd6ba3c93b5a970a09368fde81f0dd75ffe6168c3f4e382f8727aa2ab6c",
@@ -8110,14 +8211,17 @@
     "issue": null
   },
   "server/src/radd/modules/labels/__init__.py": {
-    "sha256": "f963302784b1c62fad818671cd426d8f7542860cd134ea2d0e778b96187ddd3a",
+    "sha256": "0288c4b7ba81bf5ae10caa04cba43ba8ae54f3949e479f23f84ba24f3b0c0867",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "labels",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/labels/models.py": {
     "sha256": "f51433b964b818c51d115d69578b6e925b0198d8bef702436dafd10f30725163",
@@ -8392,11 +8496,15 @@
     "issue": null
   },
   "server/src/radd/modules/linktypes/__init__.py": {
-    "sha256": "310d415fe6d5a5a2e25ca645fc7b1495ddd65b647842091b876c054cdedf93f5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "b862a6e8ebaa2c2eed7418a178ab92566a86b26f2245ca841856d7fa4a6be160",
+    "status": "partially_reviewed",
+    "owner": "linktypes",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/linktypes/models.py": {
     "sha256": "ce9c9fde02f58065f5eb2b597874eac7962a5b1c399431aac1401775954ec913",
@@ -8441,13 +8549,16 @@
     "issue": null
   },
   "server/src/radd/modules/mailintake/__init__.py": {
-    "sha256": "c96d0fb3884303e26a187acfd9c11252964782f25795c19247185a3e1336f530",
+    "sha256": "cec7ba19323883a36e18818a774975d7dbe2825c3be81e4ab5e25ae766142109",
     "status": "partially_reviewed",
     "owner": "mailintake",
     "evidence": [
-      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1352"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/mailintake/attachments.py": {
     "sha256": "d30396e529530cd364ecbb689a58c47ea69c1e18f6597f1ca90dd79b1472582e",
@@ -9105,14 +9216,17 @@
     "issue": null
   },
   "server/src/radd/modules/pages/__init__.py": {
-    "sha256": "e9d4b418cbd3c937724e28f08f8c42ce350207ce2c9347cb175cb0f21452a8bd",
+    "sha256": "c40406a175cd4e6f937cf0df235169f937c1bd7b8aa0892056f2346b2615dad2",
     "status": "partially_reviewed",
     "owner": "pages",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/pages/access.py": {
     "sha256": "c8e73af778425852ed30df2933502e5bb900be34e027c9f20f2e76aa957144f6",
@@ -9473,11 +9587,15 @@
     "issue": null
   },
   "server/src/radd/modules/pluginmgr/__init__.py": {
-    "sha256": "f6f9ae2cdf6f7abad58f0964410a3f4f6e650d00a8c3bcf6f9556598b08ed9d3",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "78d8e6344190d810b508b081df78a714b2fdef7c15ebcd23db3df1b751144e67",
+    "status": "partially_reviewed",
+    "owner": "pluginmgr",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/pluginmgr/boot.py": {
     "sha256": "782fa40fef4b205ee4290af64e11069d2439267ce49b5a4a57f26b12b2a7e666",
@@ -9543,14 +9661,17 @@
     "issue": null
   },
   "server/src/radd/modules/projects/__init__.py": {
-    "sha256": "6dc00faea8a69a69cc37bff5342c250503203275884ea1a88190d0c5b0cdc003",
+    "sha256": "74df57ccacb1df2cb8890814692fd430b85d173e35ae8d2daf85f735a2d88aee",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "projects",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/projects/directory.py": {
     "sha256": "f5cc336cc007bcd7b5f2bf3f03c44ec1063bc9ecf74c140521d7821781b09be6",
@@ -9737,14 +9858,17 @@
     "issue": null
   },
   "server/src/radd/modules/releases/__init__.py": {
-    "sha256": "37fa5d2d83ae011447b6f1ce3cbbcf884376141f581a925ddf30e4dad0b8335a",
+    "sha256": "0052ce703cd79995acab19fc0b18d30706f75044bf283a1b77c08ed7d4de0fb0",
     "status": "partially_reviewed",
     "owner": "releases",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/releases/automation.py": {
     "sha256": "7722ca8faf5675201c8854f8a829b78820869d4733d20d50ba2f4f15901ee622",
@@ -9909,11 +10033,15 @@
     "issue": null
   },
   "server/src/radd/modules/screens/__init__.py": {
-    "sha256": "dcba43d529d6deba1cf861c0efc57a89cd9a41152fd51594e9190996c4fefdd0",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "8b30e835846db1f8fa001a1530c34726b4fc6b9696ac42181237f7ab2cb63636",
+    "status": "partially_reviewed",
+    "owner": "screens",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/screens/models.py": {
     "sha256": "e1a727dbfead171b0fefbef3a9e2d186209fce1461437172490422f7b27f6dce",
@@ -10193,11 +10321,15 @@
     "issue": null
   },
   "server/src/radd/modules/settings/__init__.py": {
-    "sha256": "8f9599716ffb09855f88a2ea3cf5f7fe15049674f611e1dea1e82bb5bd907710",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ba9c6cb65fe0a6587242ffa639aa4964d224e0417297671f0d1ff82edc895ecc",
+    "status": "partially_reviewed",
+    "owner": "settings",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/settings/models.py": {
     "sha256": "e91b2f9ac403c665d582344d1830ba99e572cd628bd0e924fb65ddd8897219fa",
@@ -10242,11 +10374,15 @@
     "issue": null
   },
   "server/src/radd/modules/slas/__init__.py": {
-    "sha256": "4d2e9d7965f8a6c61b55732182e89d5e02ab4d2738380a4b460f8270113509ea",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "fdbd72e6d408df9dd0839fab33314afc35a406e7f73050aa9fb76ce4e5e81b70",
+    "status": "partially_reviewed",
+    "owner": "slas",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/slas/calendar.py": {
     "sha256": "526ff77cc89272eca055758320cc6f28a4f2caac228094a6ebe963b98af7c234",
@@ -10340,11 +10476,15 @@
     "issue": null
   },
   "server/src/radd/modules/sso/__init__.py": {
-    "sha256": "24bfb9ad959f3fd2854713466e7becc4d9070b69dc1addfe35756a17d766f42c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "3550d60ae6edd3ade78001e2e3a60d9bf93e0be66725ea2c26d9ca965bf23856",
+    "status": "partially_reviewed",
+    "owner": "sso",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/sso/admin_router.py": {
     "sha256": "33b5036ff7d49f5e814ce1fff98cf47296f58a56b10586b346e00abb530bef10",
@@ -10410,14 +10550,17 @@
     "issue": null
   },
   "server/src/radd/modules/teams/__init__.py": {
-    "sha256": "9f9450b19e5383ccce3a2058ab12e4a65da689ae148ac2172baf0280ba42f90a",
+    "sha256": "c760113dad9604c910defdad51b4a88352bc3bbac5d1a41c037e63b5a1f6e72d",
     "status": "partially_reviewed",
     "owner": "teams",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/teams/models.py": {
     "sha256": "16c8daf7ea37dc45667f60c1535c6cd01f5a9ca67aa252512d702ba45794fca0",
@@ -10550,11 +10693,15 @@
     "issue": null
   },
   "server/src/radd/modules/timelogging/__init__.py": {
-    "sha256": "0368798c126b5c3b60b34c00c61a896cd8c926b4ff36334fbe7b1c1d716624cd",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "51ff31971f78f4a0cda815a741f4a0f521b9c6ae86185f9bb9ab620c04a308bf",
+    "status": "partially_reviewed",
+    "owner": "timelogging",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/timelogging/categories.py": {
     "sha256": "44bb48f0f5dee27b799ef8f49c9eaeebfadd7217346fc72d73e20b417a50f834",
@@ -10697,11 +10844,15 @@
     "issue": null
   },
   "server/src/radd/modules/vcs/__init__.py": {
-    "sha256": "9034d6b5704f806128a4dc0e7ff95a3ab4417da2ac13b3c93ccc6ad156c19695",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "cd810a818decc6a6e648c1742405994384c9fe8e7a677873530e52a4429cf89c",
+    "status": "partially_reviewed",
+    "owner": "vcs",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/vcs/admin_router.py": {
     "sha256": "c6133bc7c039df84c52cc347969bd5ca5e2ac13ddd2787dc1ac46f34a6523221",
@@ -10865,13 +11016,16 @@
     "issue": null
   },
   "server/src/radd/modules/webhooks/__init__.py": {
-    "sha256": "9b5fa44e26339cd5d3855f415224db1ca7af275df62f9003b9ebb2bd8349dcb1",
+    "sha256": "6dd703b26eff245b8d5365bebcd71f953a35e35d7ecf107b515afdfbb0f76cf4",
     "status": "partially_reviewed",
     "owner": "webhooks",
     "evidence": [
-      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved."
+      "Settings/health contribution or consumer-description seam reviewed and tested. Full backend/automation/dependency review remains pending; existing API compatibility preserved.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1352"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/webhooks/dispatcher.py": {
     "sha256": "ee1ac17a375e44d98604dbede6acf11396b80547e1609cf136e2716ea7157115",
@@ -10965,14 +11119,17 @@
     "issue": null
   },
   "server/src/radd/modules/workflow/__init__.py": {
-    "sha256": "8acfd44657228a52fc98496814ecae178af819c28733a0f90c456e6d25c3c113",
+    "sha256": "1a6d17d83f695ba4d9b9fda40077ff25c7837de483922cb67317fb07fab8e39b",
     "status": "partially_reviewed",
     "owner": "workflow",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1363"
   },
   "server/src/radd/modules/workflow/guards.py": {
     "sha256": "aa27b499c138e01e969b34768933af48e9f684d298d74981adc51b203507f77d",
@@ -11126,11 +11283,15 @@
     "issue": null
   },
   "server/src/radd/sdk.py": {
-    "sha256": "27193f6b57b34913371e1352f1c527a9ab7f4b77b64ea98d003499f138a79389",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "70377edc533fbc8856ee15acb690a7358952262090f334b830d44b7c7e24e5a0",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/src/radd/secretbox.py": {
     "sha256": "f5234fefcf9bb165cd9730babe71b2bec32e0f79b3e47d14c4dcb6d293823c07",
@@ -11194,6 +11355,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/tests/fixtures/audit-entity-destinations.json": {
+    "sha256": "794c4835e116b82e9278524467e815b7ecfe0b0aed913c9ace4c9bce4bdc2b41",
+    "status": "reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built."
+    ],
+    "issue": "RADD-1363"
   },
   "server/tests/fixtures/gitlab_mr_time_change.json": {
     "sha256": "f636f80e64af1a7bcd694fdc81ad6299b510da53134249db526eb36e7c5e0021",
@@ -11378,11 +11549,15 @@
     "issue": null
   },
   "server/tests/test_audit_ledger.py": {
-    "sha256": "d1fdee55c94a1a5364719a2cfc53c54b249a0f2678818f8dedb3f94f64ff3add",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "829f7ae898615d543141bb81188a7d4c4c5783bc0668dcde87741c91a7ad8123",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "server/tests/test_audit_mcp.py": {
     "sha256": "c3f76bdf3d6744a465bbe40f445d6a6f17d1db390ffd9214b53d8837f0f7bf96",
@@ -11852,6 +12027,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/tests/test_entity_links.py": {
+    "sha256": "6b5953fa053a77fa0bc4027988e99490d9d9d39adb7731b7369b3e8f20acc7cf",
+    "status": "reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built."
+    ],
+    "issue": "RADD-1363"
   },
   "server/tests/test_entity_search.py": {
     "sha256": "33e86a0069e779b9ed371ff0ac0a87ec187691ba8ef22b3f8f867fffe9fdf4d2",
@@ -13390,17 +13575,20 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "9ea3f5e4be0850fc6555b224182dedff555046fb6b430f7e4c95ea6ec0206bb1",
+    "sha256": "731300e119c9f9c2ab3c9f6bdd300f23fb3898a8fb338b117801ac1c2a7423b2",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform entity navigation and audit integration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1363"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -13873,6 +14061,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/scripts/audit-links.test.mjs": {
+    "sha256": "1f3f139f50f3f0ed36a90a7fa81a5a6b1d8e5f31597e3daf64af575da4ff0d04",
+    "status": "reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built."
+    ],
+    "issue": "RADD-1363"
+  },
   "web/scripts/audit-proof.mjs": {
     "sha256": "a4a2126f6806a40b645733ecca2844f52e8374dc1c4e59223d4027077c524d0f",
     "status": "unreviewed",
@@ -14004,6 +14202,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/scripts/browser-audit-entity-links.mjs": {
+    "sha256": "96c4812f17ca804f43f96a1de96525f5fcb433d808d429247e84affa13692c06",
+    "status": "reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built."
+    ],
+    "issue": "RADD-1363"
   },
   "web/scripts/browser-autocomplete.mjs": {
     "sha256": "0634f6012386163d2300dcec3131c9dffe91031f166e72f9122cf5e280719ce1",
@@ -14595,17 +14803,20 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "8c90975e27629d5ca235d2be3254dbc4b6769bdfda8fe4b1dfe0ec3c81f5260a",
+    "sha256": "8183144868aad1e61c0226d06ca9ec7da626c9f81b26214d393d1e005128102c",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform entity navigation and audit integration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1363"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -17887,11 +18098,15 @@
     "issue": null
   },
   "web/src/lib/audit.ts": {
-    "sha256": "5ab3ce225e89bc1f207c7331299acffd2b5ec8139f7b54728110c67ff34673bd",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "web/src/lib/auth.ts": {
     "sha256": "ae4d828258075dfda25d6d0540055f02867cf0703335e4d0e3d1183385b4868f",
@@ -18308,11 +18523,15 @@
     "issue": "RADD-1361"
   },
   "web/src/lib/queries/activity.ts": {
-    "sha256": "b364bad7197577821226427796f432823f720489530a328300a15649339703aa",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "97c230a17f248ab7bed66047efc947fefe68516310bd7bc70c07c903aef7e941",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "web/src/lib/queries/ai-admin.ts": {
     "sha256": "987606fbab1c6a2bb5aee12f80dc37bbd7ccf73bbe3e9f2c208a99fe8e10b546",
@@ -18748,11 +18967,15 @@
     "issue": null
   },
   "web/src/lib/types/history.ts": {
-    "sha256": "4078897c73c4f7e06a7f7abcf389b2d5068ba056c68f638817c6786b5445a7b6",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "97524987a06a4c7929714c6381c5739a6849da928795e910693a691ccaba4fd2",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "web/src/lib/types/index.ts": {
     "sha256": "2656260df79bbfc535ee2f77b0c2dde802f62bc85e7e5b7a503d799cf63b92c8",
@@ -19247,11 +19470,15 @@
     "issue": null
   },
   "web/src/routes/settings/audit.tsx": {
-    "sha256": "9061bed114a1272f4901ebde102a28ae330ab1bc3698d3384b349716d3790bb1",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ad8846c4e389668c78b0738fe15208d597924ce333883445b15164cdd9f2b8b2",
+    "status": "partially_reviewed",
+    "owner": "platform entity navigation and audit integration",
+    "evidence": [
+      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+    ],
+    "issue": "RADD-1363"
   },
   "web/src/routes/settings/automations.tsx": {
     "sha256": "001b550d029f08a60b9441317b80147c3e56dd13931c1269f630487c5ffb0024",

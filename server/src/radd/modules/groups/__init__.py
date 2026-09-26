@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import PluginUiManifest
 from radd.kernel import EventTypeSpec, RaddPlugin
 
@@ -6,6 +7,9 @@ from .types import GroupEvent
 
 plugin = RaddPlugin(
     name="groups",
+    entity_links=(
+        EntityLinkSpec('group', ('/settings/directory',)),
+    ),
     ui=PluginUiManifest(remote="/plugins/groups/remoteEntry.js", ui_api_version="1.6.0"),
     description=(
         "Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups."

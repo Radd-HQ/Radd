@@ -2,6 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from .types import CONSUMER_NAME, AutomationEvent
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin, PluginUiManifest
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
@@ -64,6 +65,9 @@ async def _validation_unavailable_handler(
 
 plugin = RaddPlugin(
     name="automations",
+    entity_links=(
+        EntityLinkSpec('automation_rule', ('/settings/automations',)),
+    ),
     ui=PluginUiManifest(remote="/plugins/automations/remoteEntry.js", ui_api_version="1.10.0"),
     # RADD-1322: the built-in nodes are registered exactly as a plugin's are.
     automation_nodes=(*ROUTER_NODES, *ACTION_NODES, *VERDICT_NODES),

@@ -608,6 +608,36 @@ field settings/navigation, display cells or automation inspector ownership. In
 particular, the settings sidebar still queries `/fields/settings-summary`; that
 remaining dependency is recorded in the audit.
 
+### Entity navigation contributions (RADD-1363)
+
+`EntityLinkSpec(entity_type, templates)` is exported by `radd.sdk` and declared
+through `RaddPlugin.entity_links`. This is nonvisual metadata owned by the entity's
+plugin; consumers do not maintain tables of other features' settings pages.
+Templates are tried in order. They accept `{id}`, `{refs.<type>.<field>}` and
+`{project.<field>}`; absent/nonscalar substitutions try the next template. Values
+are URI-component encoded, and templates must be local absolute paths without
+browser authority escapes. This is navigation metadata, not an authorization grant.
+
+The kernel derives equivalent contributions for existing `EntitySpec.url` and
+`EntityRefSpec.url` declarations unless the owner supplies an explicit link spec.
+No current-row lookup is needed, which preserves navigation for historical refs.
+Explicit links must name types in the owner’s entity, ref, event or CRUD declarations.
+Registration validates duplicates and active foreign ownership before mutation. Replacing
+an owner removes its old link keys; stale-generation cleanup cannot remove a new
+registration. Withdrawal and registry reset remove both links and recorded owners.
+
+Audit authorizes its query first, then resolves destinations over the public subject
+refs it already returns and the authorized project context. Its response includes
+`entity_url` and `entity_owner`, or nulls when no active owner resolves a destination.
+Historical payload URLs do not override current declarations. Its current host
+consumer gates cached links on live capabilities and scopes query identity to the
+loaded plugin/build set. This removes the central cross-feature navigation table;
+it does not complete migration of the host Audit page or shared change renderer.
+
+The pre-migration destination fixture covers all 46 original entries. Browser proof
+also opens the actual Milestones remote using its derived URL, including its hash,
+and exercises withdrawal, re-enable, failed bundle recovery and denied refreshes.
+
 ### Shared scheduling inputs and owner contributions (RADD-1362)
 
 SDK 1.10 exports `ScheduleConfig`, `ScheduleKind`, `defaultSchedule`,

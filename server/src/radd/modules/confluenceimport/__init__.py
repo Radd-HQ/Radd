@@ -7,6 +7,7 @@ a staged, silent, reversible run.
 Server/DC only. Cloud would be a second `client.py` behind the same `service.py`.
 """
 
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from . import connections, runs, snapshot
@@ -29,6 +30,9 @@ def _admin_event(event_type: ConfluenceEvent, label: str) -> EventTypeSpec:
 
 plugin = RaddPlugin(
     name="confluenceimport",
+    entity_links=(
+        EntityLinkSpec('confluence_connection', ('/settings/confluence-import',)),
+    ),
     event_types=(
         _admin_event(ConfluenceEvent.CONNECTION_CREATED, "Confluence connection created"),
         _admin_event(ConfluenceEvent.CONNECTION_UPDATED, "Confluence connection updated"),

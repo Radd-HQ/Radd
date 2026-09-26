@@ -1,5 +1,15 @@
 # Module map
 
+RADD-1363: Entity navigation is declared by owners through `EntityLinkSpec`
+(`RaddPlugin.entity_links`, exported by `radd.sdk`). All 46 destinations formerly
+hardcoded in the host Audit helper now live in their 33 owning manifests. The
+kernel resolves ordered local URL templates over id, public subject refs and
+project context; existing EntitySpec/EntityRefSpec URLs derive contributions too.
+Audit rows receive current `entity_url`/`entity_owner` after scope authorization.
+Disablement withdraws links without rewriting history, and the host suppresses
+cached destinations when their owner disappears. The Audit page and remaining
+shared diff rendering are still awaiting their full UI migration.
+
 RADD-1362: Automations and Backup own their schedule editor contributions and
 preview endpoints (`automations.schedule.editor`, `backup.schedule.editor`).
 The SDK 1.10 schedule control is domain-independent: controlled schedule inputs

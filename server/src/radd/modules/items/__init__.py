@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import PermissionSpec, ProjectPurgeSpec, ProjectRelationSpec
@@ -37,6 +38,9 @@ async def _slq_handler(request: Request, exc: SlqError) -> JSONResponse:
 
 plugin = RaddPlugin(
     name="items",
+    entity_links=(
+        EntityLinkSpec('item', ('/issues/{refs.item.key}',)),
+    ),
     # RADD-890: the work-item atoms are declared where they are enforced.
     permissions=(
         # RADD-1305: managing a project means seeing its issues.

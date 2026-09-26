@@ -10,6 +10,7 @@ depends on time logging.
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin, SlqFieldSpec
 from radd.kernel import NavFactSpec, PermissionSpec, ProjectPurgeSpec
@@ -55,6 +56,9 @@ from .types import TimelogEntity  # noqa: E402 — RADD-1328
 
 plugin = RaddPlugin(
     name="timelogging",
+    entity_links=(
+        EntityLinkSpec('work_category', ('/settings/timelogging',)),
+    ),
     record_local_entities=(TimelogEntity.WORKLOG.value, TimelogEntity.ITEM_ESTIMATE.value),  # RADD-1328
     permissions=(
         PermissionSpec(

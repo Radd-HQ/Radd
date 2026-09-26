@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec, RaddPlugin
 
 from . import registry, service
@@ -12,6 +13,9 @@ async def _startup() -> None:
 
 plugin = RaddPlugin(
     name="sso",
+    entity_links=(
+        EntityLinkSpec('sso_provider', ('/settings/sign-in',)),
+    ),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Single sign-on with Google, GitHub or any OpenID Connect provider.",
     depends_on=("events", "projects", "auth", "teams"),

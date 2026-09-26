@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError
 from radd.kernel import registries
+from radd.kernel.entity_links import resolve_entity_link
 from radd.modules.auth import authz, service as auth
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -112,6 +113,15 @@ async def audit_log(
         changes = payload.get("changes")
         if changes is not None and redaction is not None and row.entity_type == ItemEntity.ITEM:
             changes = item_history.redact_changes(changes, *redaction)
+        refs = {
+            key: value for key, value in payload.items()
+            if key in registries.entity_refs and isinstance(value, dict)
+        }
+        audit_project = projects.get(row.project_id) if row.project_id else None
+        destination = resolve_entity_link(
+            str(row.entity_type), row.entity_id, refs=refs,
+            project=audit_project.model_dump() if audit_project else None,
+        )
         entries.append(
             AuditEntry(
                 id=row.id,
@@ -122,12 +132,10 @@ async def audit_log(
                 event_group=spec.group if spec else "Other",
                 entity_type=str(row.entity_type),
                 entity_id=row.entity_id,
+                entity_url=destination.url if destination else None,
+                entity_owner=destination.owner if destination else None,
                 entity_label=row.entity_label,
-                refs={
-                    key: value
-                    for key, value in payload.items()
-                    if key in registries.entity_refs and isinstance(value, dict)
-                },
+                refs=refs,
                 project=projects.get(row.project_id) if row.project_id else None,
                 automated=row.automated,
                 silent=row.silent,

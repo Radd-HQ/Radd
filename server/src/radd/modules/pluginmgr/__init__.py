@@ -1,5 +1,6 @@
 """Plugin state, managed package storage and per-process runtime reconciliation."""
 
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
@@ -7,6 +8,9 @@ from .types import PluginEvent
 
 plugin = RaddPlugin(
     name="pluginmgr",
+    entity_links=(
+        EntityLinkSpec('plugin', ('/settings/plugins',)),
+    ),
     description="Installs, enables and disables plugins.",
     depends_on=("auth", "events"),
     weak_depends=("access",),

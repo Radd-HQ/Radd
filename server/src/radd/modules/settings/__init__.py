@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
@@ -6,6 +7,9 @@ from .types import SettingEvent
 
 plugin = RaddPlugin(
     name="settings",
+    entity_links=(
+        EntityLinkSpec('scoped_setting', ('/p/{project.key}/settings/general', '/settings/general')),
+    ),
     description="Settings that apply to every project, with per-project overrides.",
     depends_on=("events", "projects", "auth"),
     routers=(router,),

@@ -83,6 +83,9 @@ export interface AuditEntry {
   event_group: string;
   entity_type: string;
   entity_id: string;
+  /** Current owner-declared destination; absent for unavailable or unlinked types. */
+  entity_url?: string | null;
+  entity_owner?: string | null;
   /** The entity's display label at write time (`RADD-123 Board scroll`). */
   entity_label: string | null;
   refs: Record<string, AuditRef>;

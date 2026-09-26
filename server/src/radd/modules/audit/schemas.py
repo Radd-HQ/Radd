@@ -31,6 +31,9 @@ class AuditEntry(BaseModel):
     event_group: str
     entity_type: str
     entity_id: str
+    #: Current owner-resolved navigation; historical payload URLs are never trusted.
+    entity_url: str | None = None
+    entity_owner: str | None = None
     #: The entity's display label at write time (`RADD-123 Board scroll`).
     entity_label: str | None = None
     #: The subject refs the payload carries (`item`, `page`, `page_space`,

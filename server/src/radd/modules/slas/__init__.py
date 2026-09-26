@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
@@ -8,6 +9,9 @@ from .types import SlaEvent
 
 plugin = RaddPlugin(
     name="slas",
+    entity_links=(
+        EntityLinkSpec('sla_policy', ('/p/{project.key}/settings/sla',)),
+    ),
     # RADD-816: no sla.read — policy reads ride the project's item.read (the list is
     # project-scoped), and a minted-but-unenforced atom is the dead class it deleted.
     # RADD-1303: project-scoped under project.manage — policies are per project.

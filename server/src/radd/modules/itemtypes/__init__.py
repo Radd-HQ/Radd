@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import PluginUiManifest
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
@@ -9,6 +10,9 @@ from .types import TypeEvent
 
 plugin = RaddPlugin(
     name="itemtypes",
+    entity_links=(
+        EntityLinkSpec('issue_type', ('/p/{project.key}/settings/types',)),
+    ),
     ui=PluginUiManifest(remote="/plugins/itemtypes/remoteEntry.js", ui_api_version="1.6.0"),
     crud_resources=(
         CrudResourceSpec("issue_type", "project", "issue types", "project.manage"),

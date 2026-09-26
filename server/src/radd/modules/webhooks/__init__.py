@@ -1,4 +1,5 @@
 from .types import CONSUMER_NAME, WebhookEvent
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
@@ -7,6 +8,9 @@ from .router import router
 
 plugin = RaddPlugin(
     name="webhooks",
+    entity_links=(
+        EntityLinkSpec('webhook_endpoint', ('/settings/webhooks',)),
+    ),
     consumer_names=(CONSUMER_NAME,),
     consumer_descriptions=((CONSUMER_NAME, "Delivers webhook calls"),),
     permissions=(

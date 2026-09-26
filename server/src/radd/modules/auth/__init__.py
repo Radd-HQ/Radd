@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import PluginUiManifest, EntityRefSpec, EventTypeSpec, RaddPlugin, SettingSpec
 
 from . import service, subscribers
@@ -18,6 +19,11 @@ from . import mcptools
 
 plugin = RaddPlugin(
     name="auth",
+    entity_links=(
+        EntityLinkSpec('user', ('/settings/users',)),
+        EntityLinkSpec('service_account', ('/settings/service-accounts',)),
+        EntityLinkSpec('role', ('/settings/roles',)),
+    ),
     ui=PluginUiManifest(remote="/plugins/auth/remoteEntry.js", ui_api_version="1.6.0"),
     description=(
         "People, sign-in sessions, API tokens and roles."

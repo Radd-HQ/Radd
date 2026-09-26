@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
 
@@ -13,6 +14,11 @@ from .types import MailEvent, OUTBOUND_CONSUMER_NAME
 
 plugin = RaddPlugin(
     name="mailintake",
+    entity_links=(
+        EntityLinkSpec('mail_source', ('/settings/email',)),
+        EntityLinkSpec('mail_sender', ('/settings/email',)),
+        EntityLinkSpec('mail_rule', ('/settings/email',)),
+    ),
     consumer_names=(OUTBOUND_CONSUMER_NAME,),
     consumer_descriptions=((OUTBOUND_CONSUMER_NAME, "Sends outbound mail replies"),),
     core=False,  # optional plugin — disableable via the plugin manager

@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 
 from .router import router
@@ -7,6 +8,9 @@ from .types import LinkTypeEvent
 
 plugin = RaddPlugin(
     name="linktypes",
+    entity_links=(
+        EntityLinkSpec('link_type', ('/settings/link-types',)),
+    ),
     # RADD-1168: emitted since spec 91 and never registered. Not triggers.
     event_types=(
         EventTypeSpec(LinkTypeEvent.CREATED, "Link type created", "Admin", trigger=False),

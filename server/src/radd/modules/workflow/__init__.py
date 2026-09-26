@@ -1,6 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from radd.kernel import EntityLinkSpec
 from radd.kernel import PluginUiManifest
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
@@ -29,6 +30,10 @@ async def _transition_handler(request: Request, exc: TransitionError) -> JSONRes
 
 plugin = RaddPlugin(
     name="workflow",
+    entity_links=(
+        EntityLinkSpec('state', ('/p/{project.key}/settings/workflow',)),
+        EntityLinkSpec('workflow_transition', ('/p/{project.key}/settings/workflow',)),
+    ),
     ui=PluginUiManifest(remote="/plugins/workflow/remoteEntry.js", ui_api_version="1.6.0"),
     permissions=(
         PermissionSpec(

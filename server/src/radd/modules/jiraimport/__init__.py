@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 from radd.modules.attachments import hosts as storage_hosts
 
@@ -23,6 +24,9 @@ storage_hosts.register_use_check(snapshot_store.blob_count_for_host)
 
 plugin = RaddPlugin(
     name="jiraimport",
+    entity_links=(
+        EntityLinkSpec('jira_connection', ('/settings/jira-import',)),
+    ),
     event_types=(
         _admin_event(JiraEvent.CONNECTION_CREATED, "Jira connection created"),
         _admin_event(JiraEvent.CONNECTION_UPDATED, "Jira connection updated"),

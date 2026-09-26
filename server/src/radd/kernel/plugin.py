@@ -16,6 +16,7 @@ from fastapi import APIRouter, Request, Response
 
 from .specs import (
     EntityRefSpec,
+    EntityLinkSpec,
     AutomationNodeSpec,
     TriggerKindSpec,
     TokenProviderSpec,
@@ -156,6 +157,9 @@ class RaddPlugin:
     #: Optional operator-facing descriptions, declared beside the owning consumer.
     #: Appended for positional compatibility. Names must belong to consumer_names.
     consumer_descriptions: tuple[tuple[str, str], ...] = ()
+
+    #: Historical entity destinations, owned independently of any consuming UI.
+    entity_links: tuple[EntityLinkSpec, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.id:

@@ -34,6 +34,7 @@ from radd.kernel import (
     EntityFieldSpec as EntityFieldSpec,
     EntitySpec as EntitySpec,
     EntityRefSpec as EntityRefSpec,
+    EntityLinkSpec as EntityLinkSpec,
     EventTypeSpec as EventTypeSpec,
     IntegrationSpec as IntegrationSpec,
     McpToolSpec as McpToolSpec,

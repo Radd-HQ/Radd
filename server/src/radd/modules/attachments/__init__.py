@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec, IntegrationSpec
 from radd.kernel.sockets import Socket
 from radd.kernel import RaddPlugin
@@ -62,6 +63,10 @@ from .acl import _SPEC as _ATTACHMENT_SPEC  # noqa: E402 - bindings require init
 plugin = RaddPlugin(
     cascades=lambda: gc.cascades(),
     name="attachments",
+    entity_links=(
+        EntityLinkSpec('storage_host', ('/settings/storage',)),
+        EntityLinkSpec('storage_rule', ('/settings/storage',)),
+    ),
     # RADD-790: attaching a file is its OWN authority. It used to be `item.update`,
     # which conflated "may edit this issue" with "may add a file to it" — a role
     # built to discuss an issue without editing it commented fine and 403'd the

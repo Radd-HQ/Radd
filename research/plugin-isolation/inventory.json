@@ -69,6 +69,7 @@
       "declarations": {
         "ui": "PluginUiManifest(remote='/plugins/ai/remoteEntry.js', ui_api_version='1.3.0')",
         "name": "ai",
+        "entity_links": "(EntityLinkSpec('ai_provider', ('/settings/ai',)), EntityLinkSpec('ai_role', ('/settings/ai',)), EntityLinkSpec('ai_preset', ('/settings/ai',)))",
         "consumer_names": [
           "ai.embedder"
         ],
@@ -159,6 +160,7 @@
       "declarations": {
         "cascades": "lambda: gc.cascades()",
         "name": "attachments",
+        "entity_links": "(EntityLinkSpec('storage_host', ('/settings/storage',)), EntityLinkSpec('storage_rule', ('/settings/storage',)))",
         "permissions": "(PermissionSpec('attachment.create', 'project', 'Attach files to items and comments.', implied_by=('project.manage',)), PermissionSpec('attachment.delete', 'project', \"Delete anyone's attachments.\", implied_by=('project.manage',)))",
         "access_resources": "(_ATTACHMENT_SPEC,)",
         "relations": "(ATTACHMENT_OWN,)",
@@ -211,6 +213,7 @@
       "manifest": "server/src/radd/modules/auth/__init__.py",
       "declarations": {
         "name": "auth",
+        "entity_links": "(EntityLinkSpec('user', ('/settings/users',)), EntityLinkSpec('service_account', ('/settings/service-accounts',)), EntityLinkSpec('role', ('/settings/roles',)))",
         "ui": "PluginUiManifest(remote='/plugins/auth/remoteEntry.js', ui_api_version='1.6.0')",
         "description": "People, sign-in sessions, API tokens and roles.",
         "depends_on": [
@@ -241,6 +244,7 @@
       "manifest": "server/src/radd/modules/automations/__init__.py",
       "declarations": {
         "name": "automations",
+        "entity_links": "(EntityLinkSpec('automation_rule', ('/settings/automations',)),)",
         "ui": "PluginUiManifest(remote='/plugins/automations/remoteEntry.js', ui_api_version='1.10.0')",
         "automation_nodes": "(*ROUTER_NODES, *ACTION_NODES, *VERDICT_NODES)",
         "trigger_kinds": "TRIGGER_KINDS",
@@ -309,6 +313,7 @@
       "manifest": "server/src/radd/modules/backup/__init__.py",
       "declarations": {
         "name": "backup",
+        "entity_links": "(EntityLinkSpec('backup_schedule', ('/settings/backups',)),)",
         "ui": "PluginUiManifest(remote='/plugins/backup/remoteEntry.js', ui_api_version='1.10.0')",
         "description": "Scheduled and on-demand encrypted backups of the database and attachments, with restore.",
         "depends_on": [
@@ -330,6 +335,7 @@
       "manifest": "server/src/radd/modules/canned/__init__.py",
       "declarations": {
         "name": "canned",
+        "entity_links": "(EntityLinkSpec('canned_response', ('/settings/canned',)),)",
         "event_types": "(EventTypeSpec(CannedEvent.CREATED, 'Canned response created', 'Service desk', trigger=False), EventTypeSpec(CannedEvent.UPDATED, 'Canned response updated', 'Service desk', has_changes=True, trigger=False), EventTypeSpec(CannedEvent.DELETED, 'Canned response deleted', 'Service desk', trigger=False))",
         "crud_resources": "(CrudResourceSpec('canned', 'global', 'canned responses', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Canned responses: reusable reply snippets for service-desk comments, with placeholders.",
@@ -408,6 +414,7 @@
       "manifest": "server/src/radd/modules/confluenceimport/__init__.py",
       "declarations": {
         "name": "confluenceimport",
+        "entity_links": "(EntityLinkSpec('confluence_connection', ('/settings/confluence-import',)),)",
         "event_types": "(_admin_event(ConfluenceEvent.CONNECTION_CREATED, 'Confluence connection created'), _admin_event(ConfluenceEvent.CONNECTION_UPDATED, 'Confluence connection updated'), _admin_event(ConfluenceEvent.CONNECTION_DELETED, 'Confluence connection deleted'))",
         "core": false,
         "description": "Imports spaces and pages from Confluence Server or Data Center.",
@@ -462,6 +469,7 @@
       "manifest": "server/src/radd/modules/cycles/__init__.py",
       "declarations": {
         "name": "cycles",
+        "entity_links": "(EntityLinkSpec('cycle', ('/settings/cycles',)), EntityLinkSpec('cycle_series', ('/settings/cycles',)))",
         "ui": "PluginUiManifest(remote='/plugins/cycles/remoteEntry.js', ui_api_version='1.7.0')",
         "crud_resources": "(CrudResourceSpec('cycle', 'global', 'cycles', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Cycles (sprints) with dates and optional recurring series.",
@@ -549,6 +557,7 @@
       "manifest": "server/src/radd/modules/fields/__init__.py",
       "declarations": {
         "name": "fields",
+        "entity_links": "(EntityLinkSpec('field', ('/settings/fields',)),)",
         "ui": "PluginUiManifest(remote='/plugins/fields/remoteEntry.js', ui_api_version='1.9.0')",
         "permissions": "(PermissionSpec('field.manage', 'project', 'Manage custom-field definitions and field access rules.', implied_by=('project.manage',)),)",
         "crud_resources": "(CrudResourceSpec('field', 'project', 'custom fields', 'field.manage'),)",
@@ -582,6 +591,7 @@
       "manifest": "server/src/radd/modules/forgejo/__init__.py",
       "declarations": {
         "name": "forgejo",
+        "entity_links": "(EntityLinkSpec('forgejo_connection', ('/settings/forgejo',)), EntityLinkSpec('forgejo_repo', ('/settings/forgejo',)))",
         "core": false,
         "description": "Forgejo and Gitea integration: links branches, commits and pull requests to issues, and offers merges, CI results and releases as automation triggers.",
         "depends_on": [
@@ -604,6 +614,7 @@
       "manifest": "server/src/radd/modules/forms/__init__.py",
       "declarations": {
         "name": "forms",
+        "entity_links": "(EntityLinkSpec('form', ('/p/{project.key}/settings/forms',)),)",
         "ui": "PluginUiManifest(remote='/plugins/forms/remoteEntry.js', ui_api_version='1.6.0')",
         "permissions": "(PermissionSpec('form.manage', 'project', \"Create and manage the project's intake forms.\"),)",
         "crud_resources": "(CrudResourceSpec('form', 'project', 'intake forms', 'form.manage'),)",
@@ -641,6 +652,7 @@
       "manifest": "server/src/radd/modules/github/__init__.py",
       "declarations": {
         "name": "github",
+        "entity_links": "(EntityLinkSpec('github_connection', ('/settings/github',)), EntityLinkSpec('github_repo', ('/settings/github',)))",
         "core": false,
         "description": "GitHub integration: links branches, commits and pull requests to issues, shows CI status, and offers merges, CI results and releases as automation triggers.",
         "depends_on": [
@@ -663,6 +675,7 @@
       "manifest": "server/src/radd/modules/gitlab/__init__.py",
       "declarations": {
         "name": "gitlab",
+        "entity_links": "(EntityLinkSpec('gitlab_connection', ('/settings/gitlab',)), EntityLinkSpec('gitlab_repo', ('/settings/gitlab',)))",
         "core": false,
         "description": "GitLab integration: links branches, commits and merge requests to issues, mirrors time spent on them, and offers merges and releases as automation triggers.",
         "depends_on": [
@@ -685,6 +698,7 @@
       "manifest": "server/src/radd/modules/groups/__init__.py",
       "declarations": {
         "name": "groups",
+        "entity_links": "(EntityLinkSpec('group', ('/settings/directory',)),)",
         "ui": "PluginUiManifest(remote='/plugins/groups/remoteEntry.js', ui_api_version='1.6.0')",
         "description": "Directory groups mirrored from Active Directory or LDAP, for granting access to whole groups.",
         "depends_on": [
@@ -706,6 +720,7 @@
       "manifest": "server/src/radd/modules/items/__init__.py",
       "declarations": {
         "name": "items",
+        "entity_links": "(EntityLinkSpec('item', ('/issues/{refs.item.key}',)),)",
         "permissions": "(PermissionSpec('item.read', 'project', \"See the project's work items.\", implied_by=('project.manage',)), PermissionSpec('item.create', 'project', 'Create work items in the project.'), PermissionSpec('item.update', 'project', \"Edit the project's work items.\", implies=('attachment.create', 'attachment.delete@own')), PermissionSpec('item.delete', 'project', 'Hard-delete work items.', implied_by=('project.manage',)))",
         "description": "Issues: projects' work items, with keys, hierarchy, assignees, dates and links.",
         "settings_keys": "(SettingSpec(key='item_default_visibility', type='string', scopes=('instance', 'project'), label='Default issue visibility', description=\"Who can see a new issue unless its reporter chooses otherwise. Public: anyone who can read the project (everyone, if the project is public). Members only: the project's members. Restricted: only the reporter, assignee and participants \u2014 useful for HR or security projects.\", choices=tuple((v.value for v in ItemVisibility))), SettingSpec(key='estimation_points', type='bool', scopes=('instance', 'project'), label='Story points', description='Estimate issues in story points (0\u2013999, one decimal) alongside time. Off by default; when on, velocity and burnup can report in points.'))",
@@ -745,6 +760,7 @@
       "manifest": "server/src/radd/modules/itemtypes/__init__.py",
       "declarations": {
         "name": "itemtypes",
+        "entity_links": "(EntityLinkSpec('issue_type', ('/p/{project.key}/settings/types',)),)",
         "ui": "PluginUiManifest(remote='/plugins/itemtypes/remoteEntry.js', ui_api_version='1.6.0')",
         "crud_resources": "(CrudResourceSpec('issue_type', 'project', 'issue types', 'project.manage'),)",
         "project_purges": "(ProjectPurgeSpec(name='itemtypes', tables=('issue_types',), order=75),)",
@@ -766,6 +782,7 @@
       "manifest": "server/src/radd/modules/jiraimport/__init__.py",
       "declarations": {
         "name": "jiraimport",
+        "entity_links": "(EntityLinkSpec('jira_connection', ('/settings/jira-import',)),)",
         "event_types": "(_admin_event(JiraEvent.CONNECTION_CREATED, 'Jira connection created'), _admin_event(JiraEvent.CONNECTION_UPDATED, 'Jira connection updated'), _admin_event(JiraEvent.CONNECTION_DELETED, 'Jira connection deleted'))",
         "core": false,
         "description": "Imports projects, issues and history from Jira Server or Data Center, reversibly.",
@@ -799,6 +816,7 @@
       "manifest": "server/src/radd/modules/labels/__init__.py",
       "declarations": {
         "name": "labels",
+        "entity_links": "(EntityLinkSpec('label', ('/settings/labels',)),)",
         "ui": "PluginUiManifest(remote='/plugins/labels/remoteEntry.js', ui_api_version='1.9.0')",
         "crud_resources": "(CrudResourceSpec('label', 'global', 'labels', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Labels: shared free-form tags for issues and pages.",
@@ -865,6 +883,7 @@
       "manifest": "server/src/radd/modules/linktypes/__init__.py",
       "declarations": {
         "name": "linktypes",
+        "entity_links": "(EntityLinkSpec('link_type', ('/settings/link-types',)),)",
         "event_types": "(EventTypeSpec(LinkTypeEvent.CREATED, 'Link type created', 'Admin', trigger=False), EventTypeSpec(LinkTypeEvent.UPDATED, 'Link type updated', 'Admin', has_changes=True, trigger=False), EventTypeSpec(LinkTypeEvent.DELETED, 'Link type deleted', 'Admin', trigger=False))",
         "description": "Issue link types (blocks, duplicates, relates, or your own).",
         "depends_on": [
@@ -884,6 +903,7 @@
       "manifest": "server/src/radd/modules/mailintake/__init__.py",
       "declarations": {
         "name": "mailintake",
+        "entity_links": "(EntityLinkSpec('mail_source', ('/settings/email',)), EntityLinkSpec('mail_sender', ('/settings/email',)), EntityLinkSpec('mail_rule', ('/settings/email',)))",
         "consumer_names": "(OUTBOUND_CONSUMER_NAME,)",
         "consumer_descriptions": "((OUTBOUND_CONSUMER_NAME, 'Sends outbound mail replies'),)",
         "core": false,
@@ -1015,6 +1035,7 @@
       "manifest": "server/src/radd/modules/pages/__init__.py",
       "declarations": {
         "name": "pages",
+        "entity_links": "(EntityLinkSpec('page_space', ('/settings/pages',)), EntityLinkSpec('page', ('/pages?pageId={refs.page.number}', '/pages?pageId={refs.page.id}')))",
         "ui": "PluginUiManifest(remote='/plugins/pages/remoteEntry.js', ui_api_version='1.6.0')",
         "automation_nodes": "(COMMENT_NODE, MOVE_NODE, SPACE_GATE)",
         "searchables": "(PAGE_SEARCHABLE,)",
@@ -1088,6 +1109,7 @@
       "manifest": "server/src/radd/modules/pluginmgr/__init__.py",
       "declarations": {
         "name": "pluginmgr",
+        "entity_links": "(EntityLinkSpec('plugin', ('/settings/plugins',)),)",
         "description": "Installs, enables and disables plugins.",
         "depends_on": [
           "auth",
@@ -1105,6 +1127,7 @@
       "manifest": "server/src/radd/modules/projects/__init__.py",
       "declarations": {
         "name": "projects",
+        "entity_links": "(EntityLinkSpec('project', ('/p/{project.key}/settings/general',)),)",
         "ui": "PluginUiManifest(remote='/plugins/projects/remoteEntry.js', ui_api_version='1.7.0')",
         "description": "Projects: the containers issues live in.",
         "depends_on": [
@@ -1152,6 +1175,7 @@
       "manifest": "server/src/radd/modules/releases/__init__.py",
       "declarations": {
         "name": "releases",
+        "entity_links": "(EntityLinkSpec('release', ('/p/{project.key}/settings/releases',)),)",
         "ui": "PluginUiManifest(remote='/plugins/releases/remoteEntry.js', ui_api_version='1.6.0')",
         "crud_resources": "(CrudResourceSpec('release', 'project', 'releases', 'project.manage'),)",
         "project_purges": "(ProjectPurgeSpec(name='releases', tables=('releases',), order=30),)",
@@ -1202,6 +1226,7 @@
       "manifest": "server/src/radd/modules/screens/__init__.py",
       "declarations": {
         "name": "screens",
+        "entity_links": "(EntityLinkSpec('screen', ('/p/{project.key}/settings/screens',)),)",
         "event_types": "(EventTypeSpec(ScreenEvent.UPDATED, 'Screen layout updated', 'Admin', has_changes=True, trigger=False, subjects=('project',)),)",
         "description": "Screens: which fields an issue type shows, collapses or hides.",
         "depends_on": [
@@ -1278,6 +1303,7 @@
       "manifest": "server/src/radd/modules/settings/__init__.py",
       "declarations": {
         "name": "settings",
+        "entity_links": "(EntityLinkSpec('scoped_setting', ('/p/{project.key}/settings/general', '/settings/general')),)",
         "description": "Settings that apply to every project, with per-project overrides.",
         "depends_on": [
           "events",
@@ -1293,6 +1319,7 @@
       "manifest": "server/src/radd/modules/slas/__init__.py",
       "declarations": {
         "name": "slas",
+        "entity_links": "(EntityLinkSpec('sla_policy', ('/p/{project.key}/settings/sla',)),)",
         "crud_resources": "(CrudResourceSpec('sla', 'project', 'SLA policies', 'project.manage'),)",
         "core": false,
         "description": "Service levels: response and resolution targets with timers and breach alerts.",
@@ -1319,6 +1346,7 @@
       "manifest": "server/src/radd/modules/sso/__init__.py",
       "declarations": {
         "name": "sso",
+        "entity_links": "(EntityLinkSpec('sso_provider', ('/settings/sign-in',)),)",
         "core": false,
         "description": "Single sign-on with Google, GitHub or any OpenID Connect provider.",
         "depends_on": [
@@ -1338,6 +1366,7 @@
       "manifest": "server/src/radd/modules/teams/__init__.py",
       "declarations": {
         "name": "teams",
+        "entity_links": "(EntityLinkSpec('team', ('/settings/teams',)),)",
         "ui": "PluginUiManifest(remote='/plugins/teams/remoteEntry.js', ui_api_version='1.6.0')",
         "crud_resources": "(CrudResourceSpec('team', 'global', 'teams', 'global.manage', actions=('create', 'read', 'update', 'delete')),)",
         "description": "Teams: groups of people you can give access to projects.",
@@ -1368,6 +1397,7 @@
       "manifest": "server/src/radd/modules/timelogging/__init__.py",
       "declarations": {
         "name": "timelogging",
+        "entity_links": "(EntityLinkSpec('work_category', ('/settings/timelogging',)),)",
         "record_local_entities": "(TimelogEntity.WORKLOG.value, TimelogEntity.ITEM_ESTIMATE.value)",
         "permissions": "(PermissionSpec('worklog.write', 'project', 'Log work on items and manage your own worklogs.'), PermissionSpec('worklog.delete', 'project', \"Delete other people's worklogs.\", implied_by=('project.manage',)), PermissionSpec('timesheet.view', 'global', \"See other people's timesheets (global).\"))",
         "relations": "(WORKLOG_OWN,)",
@@ -1396,6 +1426,7 @@
       "manifest": "server/src/radd/modules/vcs/__init__.py",
       "declarations": {
         "name": "vcs",
+        "entity_links": "(EntityLinkSpec('vcs_user_link', ('/settings/vcs',)),)",
         "record_local_entities": "(VcsEntity.VCS_LINK.value,)",
         "description": "Links from issues to branches, commits and pull requests in your code hosts.",
         "crud_resources": "(CrudResourceSpec('vcsconn', 'global', 'version-control connections', 'global.manage'),)",
@@ -1440,6 +1471,7 @@
       "manifest": "server/src/radd/modules/webhooks/__init__.py",
       "declarations": {
         "name": "webhooks",
+        "entity_links": "(EntityLinkSpec('webhook_endpoint', ('/settings/webhooks',)),)",
         "consumer_names": "(CONSUMER_NAME,)",
         "consumer_descriptions": "((CONSUMER_NAME, 'Delivers webhook calls'),)",
         "permissions": "(PermissionSpec('webhook.manage', 'global', 'Manage endpoints that export instance event payloads to external services.', implied_by=('global.manage',)),)",
@@ -1481,6 +1513,7 @@
       "manifest": "server/src/radd/modules/workflow/__init__.py",
       "declarations": {
         "name": "workflow",
+        "entity_links": "(EntityLinkSpec('state', ('/p/{project.key}/settings/workflow',)), EntityLinkSpec('workflow_transition', ('/p/{project.key}/settings/workflow',)))",
         "ui": "PluginUiManifest(remote='/plugins/workflow/remoteEntry.js', ui_api_version='1.6.0')",
         "permissions": "(PermissionSpec('state.manage', 'project', \"Manage the project's workflow states.\", implied_by=('project.manage',)),)",
         "crud_resources": "(CrudResourceSpec('state', 'project', 'workflow states', 'state.manage'),)",
@@ -1923,7 +1956,7 @@
         "build": "tsc -b && vite build",
         "preview": "vite preview",
         "test": "cd .. && node --test web/scripts/*.test.mjs",
-        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs && node scripts/browser-query-contributions.mjs && node scripts/browser-schedule-contributions.mjs",
+        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs && node scripts/browser-query-contributions.mjs && node scripts/browser-schedule-contributions.mjs && node scripts/browser-audit-entity-links.mjs",
         "build:all": "node scripts/build-all.mjs",
         "check": "npm run test && npm run build:all && npm run test:browser"
       }
@@ -2373,7 +2406,7 @@
       "imports": []
     },
     "docs/modules.md": {
-      "sha256": "baf7e6f9678f3a86f4cd99f16b17174cfd580e7f927690013e396f02da420a14",
+      "sha256": "b7714d540588583d76353de4c4b7f7a3fe2c97a2a527b78a6299f552f0a827af",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -2409,7 +2442,7 @@
       "imports": []
     },
     "docs/plugin-platform.md": {
-      "sha256": "0a573803a6d0c71e78d824fe3175fd2c578ed9bc77e700ce1fbe1bc91d276f4a",
+      "sha256": "1c6dfbde9296c9dd0c2b5e958ae056e3f449e8bf37e035e4ab36f23493e21662",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -3993,7 +4026,7 @@
       "imports": []
     },
     "research/plugin-isolation/README.md": {
-      "sha256": "f53c5c5e2dfe5b0eaf4d58d31b1486a230361fb626858d1eb61ca63f7f76ecce",
+      "sha256": "8db2517f3d79c9c6b57ac967dbb182282e3fb06848186283e5eedd680cc397cc",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -12082,7 +12115,7 @@
       ]
     },
     "server/src/radd/kernel/__init__.py": {
-      "sha256": "64300234ef9c03bd1fd739a12723842f3d59158efeb12fe4b5f4738e44c2d012",
+      "sha256": "46ae3e5deef52ceaec03c0460f34488da2ecf707f395da72635cf20af312333d",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -12149,6 +12182,7 @@
             "EntityFieldSpec",
             "EntitySpec",
             "EntityRefSpec",
+            "EntityLinkSpec",
             "EventTypeSpec",
             "GrantScopeSpec",
             "ProjectRelationSpec",
@@ -12408,6 +12442,95 @@
         }
       ]
     },
+    "server/src/radd/kernel/entity_links.py": {
+      "sha256": "ed208206b1d98611771376b9564617e22a4d24b98a66334059080fed347ca1e4",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "__future__",
+          "names": [
+            "annotations"
+          ]
+        },
+        {
+          "line": 4,
+          "module": "re"
+        },
+        {
+          "line": 5,
+          "module": "collections.abc",
+          "names": [
+            "Mapping"
+          ]
+        },
+        {
+          "line": 6,
+          "module": "dataclasses",
+          "names": [
+            "dataclass"
+          ]
+        },
+        {
+          "line": 7,
+          "module": "string",
+          "names": [
+            "Formatter"
+          ]
+        },
+        {
+          "line": 8,
+          "module": "typing",
+          "names": [
+            "TYPE_CHECKING",
+            "Any"
+          ]
+        },
+        {
+          "line": 9,
+          "module": "urllib.parse",
+          "names": [
+            "quote"
+          ]
+        },
+        {
+          "line": 12,
+          "module": ".plugin",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 13,
+          "module": ".registry",
+          "names": [
+            "KernelRegistries"
+          ]
+        },
+        {
+          "line": 14,
+          "module": ".specs",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 39,
+          "module": ".specs",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 76,
+          "module": ".registry",
+          "names": [
+            "registries"
+          ]
+        }
+      ]
+    },
     "server/src/radd/kernel/hosts.py": {
       "sha256": "86f5df232f1eefc94bafa05bed8d7cbf23f40ecf5df017b096fb6f710894bf59",
       "module_directory": null,
@@ -12493,7 +12616,7 @@
       ]
     },
     "server/src/radd/kernel/plugin.py": {
-      "sha256": "ead5c2a3b571366d0e74725b78ec6def18191a9f4a320c4fd4087083abff18b7",
+      "sha256": "d5b97d4672c3457c58602faf5eb15607abe2d1da9387c8603aede0538243022c",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -12535,6 +12658,7 @@
           "module": ".specs",
           "names": [
             "EntityRefSpec",
+            "EntityLinkSpec",
             "AutomationNodeSpec",
             "TriggerKindSpec",
             "TokenProviderSpec",
@@ -12567,7 +12691,7 @@
       ]
     },
     "server/src/radd/kernel/registry.py": {
-      "sha256": "22d0886a3addbc864a5eba41bb491fa18f6ad6205c77a1a2393efb640578799e",
+      "sha256": "a3df14b7abfc84edcff120df624a119b51f1a31f4c72f216883028fff04ad9de",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -12617,6 +12741,7 @@
             "CrudResourceSpec",
             "EntitySpec",
             "EntityRefSpec",
+            "EntityLinkSpec",
             "EventTypeSpec",
             "GrantScopeSpec",
             "ProjectRelationSpec",
@@ -12635,7 +12760,14 @@
           ]
         },
         {
-          "line": 247,
+          "line": 168,
+          "module": ".entity_links",
+          "names": [
+            "contributed_links"
+          ]
+        },
+        {
+          "line": 274,
           "module": ".entities",
           "names": [
             "_event_types",
@@ -12835,7 +12967,7 @@
       ]
     },
     "server/src/radd/kernel/specs.py": {
-      "sha256": "2f7c91380470a10fdbd2e946277e769b5a24491d2eb6098bb23d7c50bd4b3a01",
+      "sha256": "89a0a6b7908197aa682bbe499d79e5e8b475add716c32fd74c52198b5c5be297",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -12879,7 +13011,14 @@
           ]
         },
         {
-          "line": 978,
+          "line": 159,
+          "module": ".entity_links",
+          "names": [
+            "validate_templates"
+          ]
+        },
+        {
+          "line": 998,
           "module": "radd.config",
           "names": [
             "settings"
@@ -13974,7 +14113,7 @@
       ]
     },
     "server/src/radd/modules/ai/__init__.py": {
-      "sha256": "f70232bb8bfa1073f1c5f2197472758f196ea94f342c1ed0abad34d93906f979",
+      "sha256": "bb58d927082e93598bac1d19c582267f509187d68316f476d7236ef8471661af",
       "module_directory": "ai",
       "role": "runtime_source",
       "imports": [
@@ -13996,12 +14135,19 @@
           "line": 4,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 5,
+          "module": "radd.kernel",
+          "names": [
             "CapabilitySpec",
             "EventTypeSpec"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": "radd.kernel",
           "names": [
             "PluginUiManifest",
@@ -14009,42 +14155,42 @@
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": "radd.kernel",
           "names": [
             "SettingSpec"
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".",
           "names": [
             "registry"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".admin_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".editor_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".types",
           "names": [
             "AiConfigError",
@@ -14056,49 +14202,49 @@
           ]
         },
         {
-          "line": 84,
+          "line": 85,
           "module": ".",
           "names": [
             "automation_node"
           ]
         },
         {
-          "line": 85,
+          "line": 86,
           "module": ".",
           "names": [
             "automation_node_validate"
           ]
         },
         {
-          "line": 86,
+          "line": 87,
           "module": ".",
           "names": [
             "automation_node_generate"
           ]
         },
         {
-          "line": 33,
+          "line": 34,
           "module": "radd.db",
           "names": [
             "SessionLocal"
           ]
         },
         {
-          "line": 35,
+          "line": 36,
           "module": ".embeddings",
           "names": [
             "dispatcher"
           ]
         },
         {
-          "line": 36,
+          "line": 37,
           "module": ".embeddings",
           "names": [
             "service"
           ]
         },
         {
-          "line": 45,
+          "line": 46,
           "module": ".embeddings",
           "names": [
             "dispatcher"
@@ -17511,12 +17657,19 @@
       ]
     },
     "server/src/radd/modules/attachments/__init__.py": {
-      "sha256": "61ad64357d40b02090b58b94b0b27705362fa2ede765ff445dde6e92e71c6474",
+      "sha256": "2ef7c3dd00b6f16d1bc927cdd6b8cb9f287ee266f8c22017f544974ede04bc8d",
       "module_directory": "attachments",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "CapabilitySpec",
@@ -17525,42 +17678,42 @@
           ]
         },
         {
-          "line": 2,
+          "line": 3,
           "module": "radd.kernel.sockets",
           "names": [
             "Socket"
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": "radd.kernel",
           "names": [
             "PermissionSpec"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": "fastapi",
           "names": [
             "Request"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": "fastapi.responses",
           "names": [
             "JSONResponse"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".",
           "names": [
             "acl",
@@ -17570,14 +17723,14 @@
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".admin_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".router",
           "names": [
             "router",
@@ -17585,35 +17738,35 @@
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".routing",
           "names": [
             "rules"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".routing.store",
           "names": [
             "RuleConfigError"
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": ".service",
           "names": [
             "AttachmentTooLarge"
           ]
         },
         {
-          "line": 16,
+          "line": 17,
           "module": ".types",
           "names": [
             "AttachmentEvent",
@@ -17621,28 +17774,28 @@
           ]
         },
         {
-          "line": 44,
+          "line": 45,
           "module": "radd.kernel.registry",
           "names": [
             "register_relation"
           ]
         },
         {
-          "line": 45,
+          "line": 46,
           "module": "radd.kernel.specs",
           "names": [
             "RelationSpec"
           ]
         },
         {
-          "line": 46,
+          "line": 47,
           "module": ".models",
           "names": [
             "Attachment"
           ]
         },
         {
-          "line": 60,
+          "line": 61,
           "module": ".acl",
           "names": [
             "_SPEC"
@@ -19483,7 +19636,7 @@
       ]
     },
     "server/src/radd/modules/audit/schemas.py": {
-      "sha256": "223665ea1079dd1a5f9e487bd8b4ec2e3e38bfba0c12bf356e04ceb4ad931894",
+      "sha256": "aa3a41caab8601ea0e3e825afcfa026db93a79afea39ebbd6cf5b47af9f2c5dd",
       "module_directory": "audit",
       "role": "runtime_source",
       "imports": [
@@ -19515,7 +19668,7 @@
       ]
     },
     "server/src/radd/modules/audit/service.py": {
-      "sha256": "d60ea65dbec4c32e10f4123dc68fe1fb1862306c8aeb9d68432666b2defb2133",
+      "sha256": "20ab91620604658d31276d40a8b43f3a9f1c0437d7659e0b4b2b98894bc31712",
       "module_directory": "audit",
       "role": "runtime_source",
       "imports": [
@@ -19564,6 +19717,13 @@
         },
         {
           "line": 16,
+          "module": "radd.kernel.entity_links",
+          "names": [
+            "resolve_entity_link"
+          ]
+        },
+        {
+          "line": 17,
           "module": "radd.modules.auth",
           "names": [
             "authz",
@@ -19571,70 +19731,70 @@
           ]
         },
         {
-          "line": 17,
+          "line": 18,
           "module": "radd.modules.auth.authz",
           "names": [
             "Permission"
           ]
         },
         {
-          "line": 18,
+          "line": 19,
           "module": "radd.modules.auth.models",
           "names": [
             "User"
           ]
         },
         {
-          "line": 19,
+          "line": 20,
           "module": "radd.modules.auth.principals",
           "names": [
             "is_instance_admin"
           ]
         },
         {
-          "line": 20,
+          "line": 21,
           "module": "radd.modules.events",
           "names": [
             "service"
           ]
         },
         {
-          "line": 21,
+          "line": 22,
           "module": "radd.modules.events.types",
           "names": [
             "EventSource"
           ]
         },
         {
-          "line": 22,
+          "line": 23,
           "module": "radd.modules.items",
           "names": [
             "history"
           ]
         },
         {
-          "line": 23,
+          "line": 24,
           "module": "radd.modules.items.enums",
           "names": [
             "ItemEntity"
           ]
         },
         {
-          "line": 24,
+          "line": 25,
           "module": "radd.modules.projects",
           "names": [
             "service"
           ]
         },
         {
-          "line": 25,
+          "line": 26,
           "module": "radd.modules.projects.models",
           "names": [
             "Project"
           ]
         },
         {
-          "line": 27,
+          "line": 28,
           "module": ".schemas",
           "names": [
             "AuditActor",
@@ -19648,12 +19808,19 @@
       ]
     },
     "server/src/radd/modules/auth/__init__.py": {
-      "sha256": "766854cd2161b07da135250ec2315ee79973e711f2a089fe6632097480f5c33c",
+      "sha256": "d8920ea0bbec9afb313fd6ea22361bed5c16dd40166acd71bb5f7589b9cbff4b",
       "module_directory": "auth",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "PluginUiManifest",
@@ -19664,7 +19831,7 @@
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".",
           "names": [
             "service",
@@ -19672,14 +19839,14 @@
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".",
           "names": [
             "entityhost"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".permissions",
           "names": [
             "AUTH_CRUD_RESOURCES",
@@ -19687,14 +19854,14 @@
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".types",
           "names": [
             "AuthEvent"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".roles_router",
           "names": [
             "permission_router",
@@ -19703,7 +19870,7 @@
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".router",
           "names": [
             "auth_router",
@@ -19713,7 +19880,7 @@
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".mfa_router",
           "names": [
             "mfa_admin_router",
@@ -19721,14 +19888,14 @@
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".",
           "names": [
             "mfa_policy"
           ]
         },
         {
-          "line": 17,
+          "line": 18,
           "module": ".",
           "names": [
             "mcptools"
@@ -23286,7 +23453,7 @@
       ]
     },
     "server/src/radd/modules/automations/__init__.py": {
-      "sha256": "b5c4110fb6323266654e80d14bf056403fedf9d7a2deef1fc54351bd61085cb6",
+      "sha256": "18f3921f1594928800c904b6c43c8e9f2955c9186d9e5c3aa128c5370de45aca",
       "module_directory": "automations",
       "role": "runtime_source",
       "imports": [
@@ -23316,13 +23483,20 @@
           "line": 5,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 6,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin",
             "PluginUiManifest"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -23330,7 +23504,7 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".",
           "names": [
             "dispatcher",
@@ -23338,77 +23512,77 @@
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".builtin_actions",
           "names": [
             "ACTION_NODES"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".builtin_routers",
           "names": [
             "ROUTER_NODES"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".trigger_kinds",
           "names": [
             "TRIGGER_KINDS"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".verdicts",
           "names": [
             "VERDICT_NODES"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".templates",
           "names": [
             "TEMPLATES"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": ".intake",
           "names": [
             "ValidationBlocked"
           ]
         },
         {
-          "line": 16,
+          "line": 17,
           "module": ".intake_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 17,
+          "line": 18,
           "module": ".intake_schemas",
           "names": [
             "finding_read"
           ]
         },
         {
-          "line": 18,
+          "line": 19,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 19,
+          "line": 20,
           "module": ".validation",
           "names": [
             "ValidationUnavailable"
@@ -26960,7 +27134,7 @@
       ]
     },
     "server/src/radd/modules/backup/__init__.py": {
-      "sha256": "7ac2978abca1d00d8a6f4cf4641b99adfdde29a07f1b4126568c05b8c9cf9a04",
+      "sha256": "81f59bbbb392ea1b6faaf8b6368fa5372fe44b6f4141d28a1ea43ed69c9ba31b",
       "module_directory": "backup",
       "role": "runtime_source",
       "imports": [
@@ -26975,20 +27149,27 @@
           "line": 10,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 11,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin",
             "PluginUiManifest"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".",
           "names": [
             "scheduler"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".router",
           "names": [
             "router"
@@ -27535,7 +27716,7 @@
       ]
     },
     "server/src/radd/modules/canned/__init__.py": {
-      "sha256": "6636b551b1472be59b35cc6afdb9680f8f5ea07c01feff107de02cbfbb436403",
+      "sha256": "9bbbee19ab7fa277aaf2d71fda1fd4855118f9442108f37e6d84c04776ed39c6",
       "module_directory": "canned",
       "role": "runtime_source",
       "imports": [
@@ -27543,26 +27724,33 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec",
-            "RaddPlugin"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
+            "EventTypeSpec",
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 3,
+          "module": "radd.kernel",
+          "names": [
             "CrudResourceSpec"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".types",
           "names": [
             "CannedEvent"
@@ -29789,7 +29977,7 @@
       ]
     },
     "server/src/radd/modules/confluenceimport/__init__.py": {
-      "sha256": "409058517c10f023fc636e0d8407351bfec73a3ec193e4462ef02261fb2c9178",
+      "sha256": "d8a3d987223ce4d38efb63cf77cc4ba3c196c445e719b0015333f8b97961ef93",
       "module_directory": "confluenceimport",
       "role": "runtime_source",
       "imports": [
@@ -29797,12 +29985,19 @@
           "line": 10,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 11,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".",
           "names": [
             "connections",
@@ -29811,21 +30006,21 @@
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".pipeline_router",
           "names": [
             "pipeline_router"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": ".types",
           "names": [
             "ConfluenceEvent"
@@ -32510,7 +32705,7 @@
       ]
     },
     "server/src/radd/modules/cycles/__init__.py": {
-      "sha256": "70a2857aaabedb0e713382993fc4debaa1df00e3906635ca18744520d5de8e72",
+      "sha256": "5ef26a6a51ddb7c0344ad955a6957303150232e2202e31209cffc81b58c8bfc3",
       "module_directory": "cycles",
       "role": "runtime_source",
       "imports": [
@@ -32518,11 +32713,18 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
+          "module": "radd.kernel",
+          "names": [
+            "PluginUiManifest"
+          ]
+        },
+        {
+          "line": 3,
           "module": "radd.kernel",
           "names": [
             "EntityRefSpec",
@@ -32530,28 +32732,28 @@
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".router",
           "names": [
             "router",
@@ -32559,7 +32761,7 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".types",
           "names": [
             "CycleEvent",
@@ -34846,7 +35048,7 @@
       ]
     },
     "server/src/radd/modules/fields/__init__.py": {
-      "sha256": "03c30647c61b0e8d0f091a98068cc5331f0bdbc9eeb4c2302c9fe65a302a7ecd",
+      "sha256": "1b1a0013b764f55a0c92b6ae6facec8ceea1c94f27f95aa8c977ce10204a163b",
       "module_directory": "fields",
       "role": "runtime_source",
       "imports": [
@@ -34868,19 +35070,26 @@
           "line": 4,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec",
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 5,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec",
+            "PluginUiManifest"
           ]
         },
         {
           "line": 6,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 7,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -34888,56 +35097,56 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".openapi",
           "names": [
             "augment_openapi"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".settings_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".service",
           "names": [
             "warm_schema_cache"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".types",
           "names": [
             "FieldEvent"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".validation",
           "names": [
             "FieldValidationError"
           ]
         },
         {
-          "line": 24,
+          "line": 25,
           "module": ".service",
           "names": [
             "_BUILTIN_SPEC",
@@ -35819,7 +36028,7 @@
       ]
     },
     "server/src/radd/modules/forgejo/__init__.py": {
-      "sha256": "156a39071cfa559e44b3db3d73072eeeafb5f9a1bca1ea3523616a4cc3f732ed",
+      "sha256": "a5070f5732421b7b00e4803da5c635374a9e24b7eba9854a9d6704c01baa868e",
       "module_directory": "forgejo",
       "role": "runtime_source",
       "imports": [
@@ -35827,39 +36036,46 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "CapabilitySpec"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "CapabilitySpec"
           ]
         },
         {
           "line": 3,
           "module": "radd.kernel",
           "names": [
+            "EventTypeSpec"
+          ]
+        },
+        {
+          "line": 4,
+          "module": "radd.kernel",
+          "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".admin_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".models",
           "names": [
             "ForgejoConnection",
@@ -35867,7 +36083,7 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".router",
           "names": [
             "TRIGGERS",
@@ -35875,7 +36091,7 @@
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".types",
           "names": [
             "ForgejoEvent"
@@ -36574,7 +36790,7 @@
       ]
     },
     "server/src/radd/modules/forms/__init__.py": {
-      "sha256": "64caf4377da8b610d52e7c40579f9254d2cd7f99392de61fba0802239b9c1a38",
+      "sha256": "ce85cc4236918fdb319371b63d7d63f6c3f42383de99275257144cd732e8d188",
       "module_directory": "forms",
       "role": "runtime_source",
       "imports": [
@@ -36596,25 +36812,32 @@
           "line": 4,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 5,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 6,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 7,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 8,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -36624,21 +36847,21 @@
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".",
           "names": [
             "portal"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".",
           "names": [
             "staging"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".portal_router",
           "names": [
             "requests_router",
@@ -36646,28 +36869,28 @@
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".types",
           "names": [
             "FormEvent"
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": ".validation",
           "names": [
             "FormValidationError"
@@ -37899,7 +38122,7 @@
       ]
     },
     "server/src/radd/modules/github/__init__.py": {
-      "sha256": "0891738e1bfc596b8b9e5fad2601984f5318dc28f7f769f177ae3f537fda3f2f",
+      "sha256": "4cdaf96a953a81f516f4f5344a308b1f6ac666180e9fa67ab1938e019d24d687",
       "module_directory": "github",
       "role": "runtime_source",
       "imports": [
@@ -37907,33 +38130,40 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "CapabilitySpec",
-            "RaddPlugin"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
+            "CapabilitySpec",
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 3,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".admin_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".models",
           "names": [
             "GithubConnection",
@@ -37941,7 +38171,7 @@
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".router",
           "names": [
             "TRIGGERS",
@@ -37949,7 +38179,7 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".types",
           "names": [
             "GithubEvent"
@@ -38690,12 +38920,19 @@
       ]
     },
     "server/src/radd/modules/gitlab/__init__.py": {
-      "sha256": "bf5e369880503f6b5c7d81132ff59e287cb0a3cadf1678141726ed6f34f5f3e8",
+      "sha256": "323d810651e4bd4e0ba920fcca0c671d4dbe8a7c4c26e8753238d37597df98aa",
       "module_directory": "gitlab",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "CapabilitySpec",
@@ -38704,21 +38941,21 @@
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".admin_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".models",
           "names": [
             "GitlabConnection",
@@ -38726,7 +38963,7 @@
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "TRIGGERS",
@@ -38734,7 +38971,7 @@
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".types",
           "names": [
             "GitlabEvent",
@@ -39434,7 +39671,7 @@
       ]
     },
     "server/src/radd/modules/groups/__init__.py": {
-      "sha256": "6adb3722357cb62a318de48b6143583633969200451e8166d599b834a1126f11",
+      "sha256": "0065f59050445cbc282309d3f3055f48b12db5ebd36a7f91382ac4797182c4fd",
       "module_directory": "groups",
       "role": "runtime_source",
       "imports": [
@@ -39442,11 +39679,18 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
+          "module": "radd.kernel",
+          "names": [
+            "PluginUiManifest"
+          ]
+        },
+        {
+          "line": 3,
           "module": "radd.kernel",
           "names": [
             "EventTypeSpec",
@@ -39454,14 +39698,14 @@
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".types",
           "names": [
             "GroupEvent"
@@ -39911,7 +40155,7 @@
       ]
     },
     "server/src/radd/modules/items/__init__.py": {
-      "sha256": "cb28fbe259eab5b0d734a3315c7333c403caabc3687676a2ddcac52b3a2375ad",
+      "sha256": "746f9f36f72baae62cabff0b195f0ffb3d37d5f69cd4bc7bff9c1a0be49f1720",
       "module_directory": "items",
       "role": "runtime_source",
       "imports": [
@@ -39933,19 +40177,26 @@
           "line": 4,
           "module": "radd.kernel",
           "names": [
-            "EntityRefSpec",
-            "EventTypeSpec"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 5,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EntityRefSpec",
+            "EventTypeSpec"
           ]
         },
         {
           "line": 6,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 7,
           "module": "radd.kernel",
           "names": [
             "PermissionSpec",
@@ -39954,56 +40205,56 @@
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": "radd.kernel",
           "names": [
             "SettingSpec"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".enums",
           "names": [
             "ItemEvent"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".filters",
           "names": [
             "FilterParseError"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".service.refs",
           "names": [
             "item_ref"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".enums",
           "names": [
             "ItemVisibility"
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": ".service.visibility",
           "names": [
             "ITEM_RELATIONS",
@@ -40011,21 +40262,21 @@
           ]
         },
         {
-          "line": 18,
+          "line": 19,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 19,
+          "line": 20,
           "module": ".slq",
           "names": [
             "SlqError"
           ]
         },
         {
-          "line": 24,
+          "line": 25,
           "module": ".mcptools",
           "names": [
             "MCP_TOOLS"
@@ -45331,7 +45582,7 @@
       ]
     },
     "server/src/radd/modules/itemtypes/__init__.py": {
-      "sha256": "243e85475f65db1e19f0c1dfd28d1325ae8e95f96c896792efe733e1591a2cdc",
+      "sha256": "04fe2218ae8a843abda8b8d9e3eba32025f542862bbaa578217467726e29ede8",
       "module_directory": "itemtypes",
       "role": "runtime_source",
       "imports": [
@@ -45339,25 +45590,32 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 3,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 4,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 5,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -45365,21 +45623,21 @@
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".types",
           "names": [
             "TypeEvent"
@@ -45825,7 +46083,7 @@
       ]
     },
     "server/src/radd/modules/jiraimport/__init__.py": {
-      "sha256": "80e3152c25a1e5ff1d25ac905104c89aaa3065daf1e6337dca723e108408501a",
+      "sha256": "b2e490a29aa295197918bef234309cad26801222e5fdae99bf9671844227a788",
       "module_directory": "jiraimport",
       "role": "runtime_source",
       "imports": [
@@ -45833,19 +46091,26 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 2,
+          "line": 3,
           "module": "radd.modules.attachments",
           "names": [
             "hosts"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".",
           "names": [
             "connections",
@@ -45854,28 +46119,28 @@
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".types",
           "names": [
             "JiraEvent"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".routers",
           "names": [
             "pipeline_router"
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".snapshot",
           "names": [
             "store"
@@ -48876,7 +49141,7 @@
       ]
     },
     "server/src/radd/modules/labels/__init__.py": {
-      "sha256": "f963302784b1c62fad818671cd426d8f7542860cd134ea2d0e778b96187ddd3a",
+      "sha256": "0288c4b7ba81bf5ae10caa04cba43ba8ae54f3949e479f23f84ba24f3b0c0867",
       "module_directory": "labels",
       "role": "runtime_source",
       "imports": [
@@ -48884,33 +49149,40 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec",
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec",
+            "PluginUiManifest"
           ]
         },
         {
           "line": 3,
           "module": "radd.kernel",
           "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 4,
+          "module": "radd.kernel",
+          "names": [
             "CrudResourceSpec"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".types",
           "names": [
             "LabelEvent"
@@ -50523,7 +50795,7 @@
       ]
     },
     "server/src/radd/modules/linktypes/__init__.py": {
-      "sha256": "310d415fe6d5a5a2e25ca645fc7b1495ddd65b647842091b876c054cdedf93f5",
+      "sha256": "b862a6e8ebaa2c2eed7418a178ab92566a86b26f2245ca841856d7fa4a6be160",
       "module_directory": "linktypes",
       "role": "runtime_source",
       "imports": [
@@ -50531,33 +50803,40 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".service",
           "names": [
             "ensure_builtins"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".types",
           "names": [
             "LinkTypeEvent"
@@ -50906,12 +51185,19 @@
       ]
     },
     "server/src/radd/modules/mailintake/__init__.py": {
-      "sha256": "c96d0fb3884303e26a187acfd9c11252964782f25795c19247185a3e1336f530",
+      "sha256": "cec7ba19323883a36e18818a774975d7dbe2825c3be81e4ab5e25ae766142109",
       "module_directory": "mailintake",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "CapabilitySpec",
@@ -50920,14 +51206,14 @@
           ]
         },
         {
-          "line": 2,
+          "line": 3,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".",
           "names": [
             "dispatcher",
@@ -50936,56 +51222,56 @@
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".config_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".signature_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".rules_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".templates",
           "names": [
             "TEMPLATES"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".automation",
           "names": [
             "RESOLUTION_NODE"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".types",
           "names": [
             "MailEvent",
@@ -56200,7 +56486,7 @@
       ]
     },
     "server/src/radd/modules/pages/__init__.py": {
-      "sha256": "e9d4b418cbd3c937724e28f08f8c42ce350207ce2c9347cb175cb0f21452a8bd",
+      "sha256": "c40406a175cd4e6f937cf0df235169f937c1bd7b8aa0892056f2346b2615dad2",
       "module_directory": "pages",
       "role": "runtime_source",
       "imports": [
@@ -56208,116 +56494,123 @@
           "line": 9,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 10,
           "module": "radd.kernel",
           "names": [
-            "EntityRefSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 11,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "EntityRefSpec"
           ]
         },
         {
           "line": 12,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 13,
           "module": "radd.kernel",
           "names": [
-            "PermissionSpec"
+            "RaddPlugin"
           ]
         },
         {
           "line": 14,
           "module": "radd.kernel",
           "names": [
+            "PermissionSpec"
+          ]
+        },
+        {
+          "line": 15,
+          "module": "radd.kernel",
+          "names": [
             "SettingSpec"
           ]
         },
         {
-          "line": 16,
+          "line": 17,
           "module": ".",
           "names": [
             "refs"
           ]
         },
         {
-          "line": 17,
+          "line": 18,
           "module": ".searchable",
           "names": [
             "PAGE_SEARCHABLE"
           ]
         },
         {
-          "line": 19,
+          "line": 20,
           "module": ".",
           "names": [
             "attachments_binding"
           ]
         },
         {
-          "line": 20,
+          "line": 21,
           "module": ".",
           "names": [
             "comments_binding"
           ]
         },
         {
-          "line": 21,
+          "line": 22,
           "module": ".extensions",
           "names": [
             "PAGE_EXTENSIONS"
           ]
         },
         {
-          "line": 22,
+          "line": 23,
           "module": ".grantscope",
           "names": [
             "SPACE_SCOPE"
           ]
         },
         {
-          "line": 23,
+          "line": 24,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 24,
+          "line": 25,
           "module": ".types",
           "names": [
             "PageEvent"
           ]
         },
         {
-          "line": 26,
+          "line": 27,
           "module": ".page_access",
           "names": [
             "_PAGE_SPEC"
           ]
         },
         {
-          "line": 29,
+          "line": 30,
           "module": ".",
           "names": [
             "mcptools"
           ]
         },
         {
-          "line": 30,
+          "line": 31,
           "module": ".automation",
           "names": [
             "COMMENT_NODE",
@@ -59317,7 +59610,7 @@
       ]
     },
     "server/src/radd/modules/pluginmgr/__init__.py": {
-      "sha256": "f6f9ae2cdf6f7abad58f0964410a3f4f6e650d00a8c3bcf6f9556598b08ed9d3",
+      "sha256": "78d8e6344190d810b508b081df78a714b2fdef7c15ebcd23db3df1b751144e67",
       "module_directory": "pluginmgr",
       "role": "runtime_source",
       "imports": [
@@ -59325,19 +59618,26 @@
           "line": 3,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 4,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".types",
           "names": [
             "PluginEvent"
@@ -59992,7 +60292,7 @@
       ]
     },
     "server/src/radd/modules/projects/__init__.py": {
-      "sha256": "6dc00faea8a69a69cc37bff5342c250503203275884ea1a88190d0c5b0cdc003",
+      "sha256": "74df57ccacb1df2cb8890814692fd430b85d173e35ae8d2daf85f735a2d88aee",
       "module_directory": "projects",
       "role": "runtime_source",
       "imports": [
@@ -60000,11 +60300,18 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
+          "module": "radd.kernel",
+          "names": [
+            "PluginUiManifest"
+          ]
+        },
+        {
+          "line": 3,
           "module": "radd.kernel",
           "names": [
             "EntityRefSpec",
@@ -60013,21 +60320,21 @@
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "instance_router",
@@ -60035,14 +60342,14 @@
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".types",
           "names": [
             "ProjectEvent"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".",
           "names": [
             "mcptools"
@@ -61008,7 +61315,7 @@
       "imports": []
     },
     "server/src/radd/modules/releases/__init__.py": {
-      "sha256": "37fa5d2d83ae011447b6f1ce3cbbcf884376141f581a925ddf30e4dad0b8335a",
+      "sha256": "0052ce703cd79995acab19fc0b18d30706f75044bf283a1b77c08ed7d4de0fb0",
       "module_directory": "releases",
       "role": "runtime_source",
       "imports": [
@@ -61016,11 +61323,18 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
+          "module": "radd.kernel",
+          "names": [
+            "PluginUiManifest"
+          ]
+        },
+        {
+          "line": 3,
           "module": "radd.kernel",
           "names": [
             "EntityRefSpec",
@@ -61028,14 +61342,14 @@
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -61043,42 +61357,42 @@
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".automation",
           "names": [
             "PUBLISH_NODE"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 9,
+          "line": 10,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".types",
           "names": [
             "ReleaseEvent"
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".",
           "names": [
             "mcptools"
@@ -62331,7 +62645,7 @@
       ]
     },
     "server/src/radd/modules/screens/__init__.py": {
-      "sha256": "dcba43d529d6deba1cf861c0efc57a89cd9a41152fd51594e9190996c4fefdd0",
+      "sha256": "8b30e835846db1f8fa001a1530c34726b4fc6b9696ac42181237f7ab2cb63636",
       "module_directory": "screens",
       "role": "runtime_source",
       "imports": [
@@ -62339,19 +62653,26 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".types",
           "names": [
             "ScreenEvent"
@@ -64403,7 +64724,7 @@
       ]
     },
     "server/src/radd/modules/settings/__init__.py": {
-      "sha256": "8f9599716ffb09855f88a2ea3cf5f7fe15049674f611e1dea1e82bb5bd907710",
+      "sha256": "ba9c6cb65fe0a6587242ffa639aa4964d224e0417297671f0d1ff82edc895ecc",
       "module_directory": "settings",
       "role": "runtime_source",
       "imports": [
@@ -64411,26 +64732,33 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".types",
           "names": [
             "SettingEvent"
@@ -64804,7 +65132,7 @@
       ]
     },
     "server/src/radd/modules/slas/__init__.py": {
-      "sha256": "4d2e9d7965f8a6c61b55732182e89d5e02ab4d2738380a4b460f8270113509ea",
+      "sha256": "fdbd72e6d408df9dd0839fab33314afc35a406e7f73050aa9fb76ce4e5e81b70",
       "module_directory": "slas",
       "role": "runtime_source",
       "imports": [
@@ -64812,39 +65140,46 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 2,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 3,
           "module": "radd.kernel",
           "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 4,
+          "module": "radd.kernel",
+          "names": [
             "CrudResourceSpec"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".",
           "names": [
             "engine"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".types",
           "names": [
             "SlaEvent"
@@ -65727,12 +66062,19 @@
       ]
     },
     "server/src/radd/modules/sso/__init__.py": {
-      "sha256": "24bfb9ad959f3fd2854713466e7becc4d9070b69dc1addfe35756a17d766f42c",
+      "sha256": "3550d60ae6edd3ade78001e2e3a60d9bf93e0be66725ea2c26d9ca965bf23856",
       "module_directory": "sso",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "CapabilitySpec",
@@ -65741,7 +66083,7 @@
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".",
           "names": [
             "registry",
@@ -65749,21 +66091,21 @@
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".types",
           "names": [
             "SsoEvent"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".admin_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "router"
@@ -66481,12 +66823,19 @@
       ]
     },
     "server/src/radd/modules/teams/__init__.py": {
-      "sha256": "9f9450b19e5383ccce3a2058ab12e4a65da689ae148ac2172baf0280ba42f90a",
+      "sha256": "c760113dad9604c910defdad51b4a88352bc3bbac5d1a41c037e63b5a1f6e72d",
       "module_directory": "teams",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "PluginUiManifest",
@@ -66495,35 +66844,35 @@
           ]
         },
         {
-          "line": 2,
+          "line": 3,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin"
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec"
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "team_router"
           ]
         },
         {
-          "line": 7,
+          "line": 8,
           "module": ".types",
           "names": [
             "TeamEvent"
@@ -67250,7 +67599,7 @@
       ]
     },
     "server/src/radd/modules/timelogging/__init__.py": {
-      "sha256": "0368798c126b5c3b60b34c00c61a896cd8c926b4ff36334fbe7b1c1d716624cd",
+      "sha256": "51ff31971f78f4a0cda815a741f4a0f521b9c6ae86185f9bb9ab620c04a308bf",
       "module_directory": "timelogging",
       "role": "runtime_source",
       "imports": [
@@ -67272,11 +67621,18 @@
           "line": 13,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 14,
+          "module": "radd.kernel",
+          "names": [
+            "EventTypeSpec"
+          ]
+        },
+        {
+          "line": 15,
           "module": "radd.kernel",
           "names": [
             "RaddPlugin",
@@ -67284,7 +67640,7 @@
           ]
         },
         {
-          "line": 15,
+          "line": 16,
           "module": "radd.kernel",
           "names": [
             "NavFactSpec",
@@ -67293,112 +67649,112 @@
           ]
         },
         {
-          "line": 16,
+          "line": 17,
           "module": "radd.kernel",
           "names": [
             "SettingSpec"
           ]
         },
         {
-          "line": 18,
+          "line": 19,
           "module": ".slq",
           "names": [
             "logged_by_item_ids"
           ]
         },
         {
-          "line": 20,
+          "line": 21,
           "module": ".",
           "names": [
             "categories"
           ]
         },
         {
-          "line": 21,
+          "line": 22,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 22,
+          "line": 23,
           "module": ".category_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 23,
+          "line": 24,
           "module": ".duration",
           "names": [
             "DurationError"
           ]
         },
         {
-          "line": 24,
+          "line": 25,
           "module": ".enablement_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 25,
+          "line": 26,
           "module": ".timesheet_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 26,
+          "line": 27,
           "module": ".types",
           "names": [
             "WorklogEvent"
           ]
         },
         {
-          "line": 27,
+          "line": 28,
           "module": ".worklog_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 28,
+          "line": 29,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 31,
+          "line": 32,
           "module": ".",
           "names": [
             "mcptools"
           ]
         },
         {
-          "line": 38,
+          "line": 39,
           "module": "radd.kernel.registry",
           "names": [
             "register_relation"
           ]
         },
         {
-          "line": 39,
+          "line": 40,
           "module": "radd.kernel.specs",
           "names": [
             "RelationSpec"
           ]
         },
         {
-          "line": 40,
+          "line": 41,
           "module": ".models",
           "names": [
             "Worklog"
           ]
         },
         {
-          "line": 54,
+          "line": 55,
           "module": ".types",
           "names": [
             "TimelogEntity"
@@ -68967,12 +69323,19 @@
       ]
     },
     "server/src/radd/modules/vcs/__init__.py": {
-      "sha256": "9034d6b5704f806128a4dc0e7ff95a3ab4417da2ac13b3c93ccc6ad156c19695",
+      "sha256": "cd810a818decc6a6e648c1742405994384c9fe8e7a677873530e52a4429cf89c",
       "module_directory": "vcs",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
+          "module": "radd.kernel",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 2,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -68981,14 +69344,14 @@
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": ".admin_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 4,
+          "line": 5,
           "module": ".models",
           "names": [
             "VcsPendingWorklog",
@@ -68996,14 +69359,14 @@
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".types",
           "names": [
             "VcsEvent",
@@ -69011,7 +69374,7 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": ".types",
           "names": [
             "VcsEntity"
@@ -70675,7 +71038,7 @@
       ]
     },
     "server/src/radd/modules/webhooks/__init__.py": {
-      "sha256": "9b5fa44e26339cd5d3855f415224db1ca7af275df62f9003b9ebb2bd8349dcb1",
+      "sha256": "6dd703b26eff245b8d5365bebcd71f953a35e35d7ecf107b515afdfbb0f76cf4",
       "module_directory": "webhooks",
       "role": "runtime_source",
       "imports": [
@@ -70691,12 +71054,19 @@
           "line": 2,
           "module": "radd.kernel",
           "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 3,
+          "module": "radd.kernel",
+          "names": [
             "EventTypeSpec",
             "RaddPlugin"
           ]
         },
         {
-          "line": 3,
+          "line": 4,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -70704,14 +71074,14 @@
           ]
         },
         {
-          "line": 5,
+          "line": 6,
           "module": ".",
           "names": [
             "dispatcher"
           ]
         },
         {
-          "line": 6,
+          "line": 7,
           "module": ".router",
           "names": [
             "router"
@@ -71509,7 +71879,7 @@
       ]
     },
     "server/src/radd/modules/workflow/__init__.py": {
-      "sha256": "8acfd44657228a52fc98496814ecae178af819c28733a0f90c456e6d25c3c113",
+      "sha256": "1a6d17d83f695ba4d9b9fda40077ff25c7837de483922cb67317fb07fab8e39b",
       "module_directory": "workflow",
       "role": "runtime_source",
       "imports": [
@@ -71531,25 +71901,32 @@
           "line": 4,
           "module": "radd.kernel",
           "names": [
-            "PluginUiManifest"
+            "EntityLinkSpec"
           ]
         },
         {
           "line": 5,
           "module": "radd.kernel",
           "names": [
-            "EventTypeSpec"
+            "PluginUiManifest"
           ]
         },
         {
           "line": 6,
           "module": "radd.kernel",
           "names": [
-            "RaddPlugin"
+            "EventTypeSpec"
           ]
         },
         {
           "line": 7,
+          "module": "radd.kernel",
+          "names": [
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 8,
           "module": "radd.kernel",
           "names": [
             "CrudResourceSpec",
@@ -71558,28 +71935,28 @@
           ]
         },
         {
-          "line": 8,
+          "line": 9,
           "module": "radd.kernel",
           "names": [
             "SettingSpec"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
           "module": ".",
           "names": [
             "subscribers"
           ]
         },
         {
-          "line": 11,
+          "line": 12,
           "module": ".guards",
           "names": [
             "TransitionError"
           ]
         },
         {
-          "line": 12,
+          "line": 13,
           "module": ".router",
           "names": [
             "router",
@@ -71587,14 +71964,14 @@
           ]
         },
         {
-          "line": 13,
+          "line": 14,
           "module": ".transitions_router",
           "names": [
             "router"
           ]
         },
         {
-          "line": 14,
+          "line": 15,
           "module": ".types",
           "names": [
             "StateEvent",
@@ -72677,7 +73054,7 @@
       "imports": []
     },
     "server/src/radd/sdk.py": {
-      "sha256": "27193f6b57b34913371e1352f1c527a9ab7f4b77b64ea98d003499f138a79389",
+      "sha256": "70377edc533fbc8856ee15acb690a7358952262090f334b830d44b7c7e24e5a0",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -72717,6 +73094,7 @@
             "EntityFieldSpec",
             "EntitySpec",
             "EntityRefSpec",
+            "EntityLinkSpec",
             "EventTypeSpec",
             "IntegrationSpec",
             "McpToolSpec",
@@ -72738,14 +73116,14 @@
           ]
         },
         {
-          "line": 56,
+          "line": 57,
           "module": "radd.kernel",
           "names": [
             "changes"
           ]
         },
         {
-          "line": 57,
+          "line": 58,
           "module": "radd.kernel",
           "names": [
             "entities"
@@ -73156,6 +73534,12 @@
           ]
         }
       ]
+    },
+    "server/tests/fixtures/audit-entity-destinations.json": {
+      "sha256": "794c4835e116b82e9278524467e815b7ecfe0b0aed913c9ace4c9bce4bdc2b41",
+      "module_directory": null,
+      "role": "fixture_or_baseline",
+      "imports": []
     },
     "server/tests/fixtures/gitlab_mr_time_change.json": {
       "sha256": "f636f80e64af1a7bcd694fdc81ad6299b510da53134249db526eb36e7c5e0021",
@@ -75725,7 +76109,7 @@
       ]
     },
     "server/tests/test_audit_ledger.py": {
-      "sha256": "d1fdee55c94a1a5364719a2cfc53c54b249a0f2678818f8dedb3f94f64ff3add",
+      "sha256": "829f7ae898615d543141bb81188a7d4c4c5783bc0668dcde87741c91a7ad8123",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -75864,6 +76248,13 @@
           "module": "radd.modules.projects.schemas",
           "names": [
             "ProjectCreate"
+          ]
+        },
+        {
+          "line": 193,
+          "module": "radd.modules.items",
+          "names": [
+            "plugin"
           ]
         }
       ]
@@ -84240,6 +84631,85 @@
           "module": "radd.modules.projects.schemas",
           "names": [
             "ProjectCreate"
+          ]
+        }
+      ]
+    },
+    "server/tests/test_entity_links.py": {
+      "sha256": "6b5953fa053a77fa0bc4027988e99490d9d9d39adb7731b7369b3e8f20acc7cf",
+      "module_directory": null,
+      "role": "test",
+      "imports": [
+        {
+          "line": 2,
+          "module": "importlib"
+        },
+        {
+          "line": 3,
+          "module": "json"
+        },
+        {
+          "line": 4,
+          "module": "dataclasses",
+          "names": [
+            "replace"
+          ]
+        },
+        {
+          "line": 5,
+          "module": "pathlib",
+          "names": [
+            "Path"
+          ]
+        },
+        {
+          "line": 7,
+          "module": "pytest"
+        },
+        {
+          "line": 9,
+          "module": "radd.kernel",
+          "names": [
+            "EntityRefSpec",
+            "EntitySpec",
+            "EventTypeSpec",
+            "KernelRegistries",
+            "RaddPlugin"
+          ]
+        },
+        {
+          "line": 10,
+          "module": "radd.sdk",
+          "names": [
+            "EntityLinkSpec"
+          ]
+        },
+        {
+          "line": 11,
+          "module": "radd.kernel.entity_links",
+          "names": [
+            "resolve_entity_link"
+          ]
+        },
+        {
+          "line": 36,
+          "module": "radd.modules.pages",
+          "names": [
+            "plugin"
+          ]
+        },
+        {
+          "line": 37,
+          "module": "radd.modules.settings",
+          "names": [
+            "plugin"
+          ]
+        },
+        {
+          "line": 38,
+          "module": "radd.modules.releases",
+          "names": [
+            "plugin"
           ]
         }
       ]
@@ -110169,7 +110639,7 @@
       "imports": []
     },
     "web/package.json": {
-      "sha256": "9ea3f5e4be0850fc6555b224182dedff555046fb6b430f7e4c95ea6ec0206bb1",
+      "sha256": "731300e119c9f9c2ab3c9f6bdd300f23fb3898a8fb338b117801ac1c2a7423b2",
       "module_directory": null,
       "role": "configuration",
       "imports": []
@@ -110959,6 +111429,33 @@
         }
       ]
     },
+    "web/scripts/audit-links.test.mjs": {
+      "sha256": "1f3f139f50f3f0ed36a90a7fa81a5a6b1d8e5f31597e3daf64af575da4ff0d04",
+      "module_directory": null,
+      "role": "test",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:test"
+        },
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:fs"
+        },
+        {
+          "line": 4,
+          "module": "node:os"
+        },
+        {
+          "line": 5,
+          "module": "node:path"
+        }
+      ]
+    },
     "web/scripts/audit-proof.mjs": {
       "sha256": "a4a2126f6806a40b645733ecca2844f52e8374dc1c4e59223d4027077c524d0f",
       "module_directory": null,
@@ -111278,6 +111775,45 @@
         {
           "line": 7,
           "module": "./lib/cdp.mjs"
+        }
+      ]
+    },
+    "web/scripts/browser-audit-entity-links.mjs": {
+      "sha256": "96c4812f17ca804f43f96a1de96525f5fcb433d808d429247e84affa13692c06",
+      "module_directory": null,
+      "role": "tooling_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:http"
+        },
+        {
+          "line": 4,
+          "module": "node:child_process"
+        },
+        {
+          "line": 5,
+          "module": "node:fs"
+        },
+        {
+          "line": 6,
+          "module": "node:fs/promises"
+        },
+        {
+          "line": 7,
+          "module": "node:path"
+        },
+        {
+          "line": 8,
+          "module": "./lib/cdp.mjs"
+        },
+        {
+          "line": 22,
+          "module": ":"
         }
       ]
     },
@@ -113269,7 +113805,7 @@
       ]
     },
     "web/scripts/plugin-boundaries.test.mjs": {
-      "sha256": "8c90975e27629d5ca235d2be3254dbc4b6769bdfda8fe4b1dfe0ec3c81f5260a",
+      "sha256": "8183144868aad1e61c0226d06ca9ec7da626c9f81b26214d393d1e005128102c",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -130126,7 +130662,7 @@
       ]
     },
     "web/src/lib/audit.ts": {
-      "sha256": "5ab3ce225e89bc1f207c7331299acffd2b5ec8139f7b54728110c67ff34673bd",
+      "sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -130136,11 +130672,7 @@
         },
         {
           "line": 10,
-          "module": "./constants"
-        },
-        {
-          "line": 11,
-          "module": "./page-links"
+          "module": "@tanstack/react-router"
         }
       ]
     },
@@ -130977,7 +131509,7 @@
       ]
     },
     "web/src/lib/queries/activity.ts": {
-      "sha256": "b364bad7197577821226427796f432823f720489530a328300a15649339703aa",
+      "sha256": "97c230a17f248ab7bed66047efc947fefe68516310bd7bc70c07c903aef7e941",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -132438,7 +132970,7 @@
       "imports": []
     },
     "web/src/lib/types/history.ts": {
-      "sha256": "4078897c73c4f7e06a7f7abcf389b2d5068ba056c68f638817c6786b5445a7b6",
+      "sha256": "97524987a06a4c7929714c6381c5739a6849da928795e910693a691ccaba4fd2",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -135642,7 +136174,7 @@
       ]
     },
     "web/src/routes/settings/audit.tsx": {
-      "sha256": "9061bed114a1272f4901ebde102a28ae330ab1bc3698d3384b349716d3790bb1",
+      "sha256": "ad8846c4e389668c78b0738fe15208d597924ce333883445b15164cdd9f2b8b2",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -135668,11 +136200,11 @@
         },
         {
           "line": 6,
-          "module": "../../lib/audit"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 7,
-          "module": "../../lib/constants"
+          "module": "../../lib/audit"
         },
         {
           "line": 8,
@@ -135680,78 +136212,82 @@
         },
         {
           "line": 9,
-          "module": "../../lib/dates"
+          "module": "../../lib/constants"
         },
         {
           "line": 10,
-          "module": "../../lib/hooks"
+          "module": "../../lib/dates"
         },
         {
           "line": 11,
-          "module": "../../lib/meta"
+          "module": "../../lib/hooks"
         },
         {
           "line": 12,
-          "module": "../../lib/queries"
+          "module": "../../lib/meta"
         },
         {
           "line": 13,
-          "module": "../../lib/types"
+          "module": "../../lib/queries"
         },
         {
           "line": 14,
-          "module": "../../components/Avatar"
+          "module": "../../lib/types"
         },
         {
           "line": 15,
-          "module": "../../components/Button"
+          "module": "../../components/Avatar"
         },
         {
           "line": 16,
-          "module": "../../components/EmptyState"
+          "module": "../../components/Button"
         },
         {
           "line": 17,
-          "module": "../../components/history/ChangeLines"
+          "module": "../../components/EmptyState"
         },
         {
           "line": 18,
-          "module": "../../components/items/PlanningFields"
+          "module": "../../components/history/ChangeLines"
         },
         {
           "line": 19,
-          "module": "../../components/Pager"
+          "module": "../../components/items/PlanningFields"
         },
         {
           "line": 20,
-          "module": "../../components/PeopleDirectorySelect"
+          "module": "../../components/Pager"
         },
         {
           "line": 21,
-          "module": "../../components/projects/ProjectSelect"
+          "module": "../../components/PeopleDirectorySelect"
         },
         {
           "line": 22,
-          "module": "../../components/QueryError"
+          "module": "../../components/projects/ProjectSelect"
         },
         {
           "line": 23,
-          "module": "../../components/Select"
+          "module": "../../components/QueryError"
         },
         {
           "line": 24,
-          "module": "../../components/settings/SettingsPage"
+          "module": "../../components/Select"
         },
         {
           "line": 25,
-          "module": "../../components/Table"
+          "module": "../../components/settings/SettingsPage"
         },
         {
           "line": 26,
-          "module": "../../components/TableSkeleton"
+          "module": "../../components/Table"
         },
         {
           "line": 27,
+          "module": "../../components/TableSkeleton"
+        },
+        {
+          "line": 28,
           "module": "../../components/TextField"
         }
       ]

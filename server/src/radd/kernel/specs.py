@@ -141,6 +141,26 @@ class EntityRefSpec:
     url: str = ""
 
 
+@dataclass(frozen=True)
+class EntityLinkSpec:
+    """Owner-declared destinations for historical entity references.
+
+    Templates are tried in order; missing values fall through to the next one.
+    Available values are `id`, `refs.<type>.<field>` and `project.<field>`.
+    Substitutions are URI-component encoded. This is navigation metadata only:
+    consumers must authorize the underlying data before resolving a destination.
+    Unlike EntityRefSpec, it needs no current database row or reference fetch.
+    """
+
+    entity_type: str
+    templates: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        from .entity_links import validate_templates
+
+        validate_templates(self.entity_type, self.templates)
+
+
 # --- search + mentions (RADD-1327) --------------------------------------------
 @dataclass(frozen=True)
 class SearchableSpec:

@@ -117,17 +117,17 @@ const auditWire = (params: AuditParams): Record<string, string | undefined> => (
 });
 
 /** The audit ledger (newest first). Admins read the instance, project managers one project (403 otherwise). */
-export const auditQuery = (params: AuditParams) =>
+export const auditQuery = (params: AuditParams, ownerRevision = "") =>
   queryOptions({
-    queryKey: queryKeys.audit(
+    queryKey: [...queryKeys.audit(
       Object.fromEntries(
         Object.entries(auditWire(params)).map(([key, value]) => [key, value ?? ""]),
       ),
-    ),
+    ), ownerRevision],
     queryFn: ({ signal }) =>
       api.get<AuditEntry[]>(ApiPath.audit, { signal, query: auditWire(params) }),
     retry: false,
-    placeholderData: keepPreviousData,
+
   });
 
 /** The registry's event/entity vocabulary — what the audit filters are built from. */

@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import CrudResourceSpec, EventTypeSpec, RaddPlugin
 
 from .admin_router import router as admin_router
@@ -9,6 +10,9 @@ from .types import VcsEntity  # noqa: E402 — RADD-1328
 
 plugin = RaddPlugin(
     name="vcs",
+    entity_links=(
+        EntityLinkSpec('vcs_user_link', ('/settings/vcs',)),
+    ),
     record_local_entities=(VcsEntity.VCS_LINK.value,),  # RADD-1328
     description=(
         "Links from issues to branches, commits and pull requests in your code hosts."

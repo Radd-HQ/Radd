@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, RaddPlugin
 from radd.kernel import CrudResourceSpec
 
@@ -6,6 +7,9 @@ from .types import CannedEvent
 
 plugin = RaddPlugin(
     name="canned",
+    entity_links=(
+        EntityLinkSpec('canned_response', ('/settings/canned',)),
+    ),
     # RADD-1168: emitted since spec 30 and never registered. Not triggers.
     event_types=(
         EventTypeSpec(CannedEvent.CREATED, "Canned response created", "Service desk", trigger=False),

@@ -29,6 +29,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1360 | Fields-owned controls and generic input primitives | Verified; Waiting for release |
 | RADD-1361 | Owner catalog queries and nonvisual contribution lifecycle | Verified; Waiting for release |
 | RADD-1362 | Independent scheduling contributions and preview lifecycle | Verified; Waiting for release |
+| RADD-1363 | Owner-declared entity destinations for audit navigation | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -508,3 +509,51 @@ Remaining work includes the full automation editor, audit history contribution,
 public cross-plugin contracts, Backup settings ownership, and every other partial
 or unreviewed inventory artifact. This stage does not establish complete plugin
 isolation.
+
+## RADD-1363 verification
+
+Removed the host Audit's cross-feature destination table. All 46 pre-existing
+entries were assigned to their 33 owning modules and now use `EntityLinkSpec` in
+those manifests. The kernel owns only local-template validation, URI-component
+substitution, fallback ordering and lifecycle. The public `radd.sdk` exports the
+contract. Existing declarative entity/reference URLs derive contributions, preserving
+third-party navigation without adding those plugins to a central table.
+
+Audit resolves `entity_url` and `entity_owner` after its existing scope authorization
+and over the same registered subject refs it returns. It does not trust historical
+payload URLs or alter stored events. Missing/disabled owners leave labels and changes
+readable without a destination. The current host consumer hides cached links when
+capabilities withdraw their owner; plugin/build changes replace the audit query
+identity and cancel older reads. Query replacement no longer borrows a previous
+scope's audit rows. Failed target bundles use the existing generic unavailable page.
+
+Registration requires explicit links to name the plugin’s own entity/ref/event/CRUD
+types and rejects duplicate types and collisions with active owners before any mutation, removes old link keys on replacement, and ignores stale-generation cleanup.
+The full Audit page, permission affordances, footer and structured-change renderer
+still require migration; moving these destinations does not mark them complete.
+
+Evidence:
+- `server/tests/fixtures/audit-entity-destinations.json` records every former mapping;
+  the owner-declaration test verifies all 46 concrete results. Ordered page-id and
+  scoped-setting fallbacks, project key escaping, template rejection, owner collisions,
+  replacement/withdrawal/reset and EntitySpec/EntityRefSpec compatibility are covered.
+- 66 backend tests passed across entity links, audit ledger, audit credential security,
+  audit MCP, module/kernel contracts, frontend federation and plugin workflow. Audit
+  scope/redaction tests remain green; a DB-backed test verifies labels/changes survive
+  removal and restoration of a destination contribution.
+- 67 frontend tests passed, including URL parsing/safety, cached-owner withdrawal and
+  an AST guard against restoring feature-specific navigation in the Audit helper.
+- Host plus 24 remotes built. `browser-audit-entity-links.mjs` passed 7 groups with
+  47 exact destinations, 14 audit reads and one confirmed abort. It uses actual Python
+  owner declarations and the actual host Audit page, opens the real Milestones bundle
+  with its hash intact, and covers owner withdrawal/restoration, failed bundle recovery
+  and denied refreshes. It performs no persistent writes. Its unavailable project/person
+  pickers are deliberate fixture omissions, not evidence that those controls were tested.
+- Local server reloaded; an ephemeral-token probe inspected 200 real audit rows,
+  including 81 current owner links. The filtered local dataset contained no GitHub/
+  Forgejo connection/repository audit rows, so that local probe establishes no historical
+  VCS withdrawal claim; the browser fixture and registry tests cover it. Plugin choices
+  were unchanged and Leave/GitHub/Forgejo remain disabled. Token discarded afterwards.
+- Screenshot `/tmp/radd-audit-entity-links.png` inspected. The temporary scope-denied
+  toast belongs to the refusal scenario immediately before recovery. Logs:
+  `/tmp/radd-1363-{build,unit,backend,browser,reload}.log`.

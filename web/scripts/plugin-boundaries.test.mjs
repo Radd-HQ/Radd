@@ -215,3 +215,10 @@ test('federation shim exports every runtime value in the public SDK',()=>{
   }
   assert.deepEqual(exportsOf('web/public/shared/radd-plugin-sdk.js').sort(),exportsOf('web/packages/plugin-sdk/src/index.ts').sort());
 });
+
+test('audit navigation has no feature destination table or entity-specific routing branches',()=>{
+  const ast=nodes('web/src/lib/audit.ts');
+  assert(ast.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='./types'||n.source.value==='@tanstack/react-router'));
+  assert(!ast.some(n=>n.type==='StringLiteral'&&/^\/(?:settings|issues|pages|p\/)/.test(n.value)));
+  assert(!ast.some(n=>n.type==='MemberExpression'&&n.property?.name==='entity_type'));
+});

@@ -6,6 +6,7 @@ stale (the PLAN §9 fallback — CRDT co-editing can land later behind the same
 PATCH contract).
 """
 
+from radd.kernel import EntityLinkSpec
 from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec
 from radd.kernel import EventTypeSpec
@@ -31,6 +32,10 @@ from .automation import COMMENT_NODE, MOVE_NODE, PAGE_TOKENS, SPACE_GATE  # RADD
 
 plugin = RaddPlugin(
     name="pages",
+    entity_links=(
+        EntityLinkSpec('page_space', ('/settings/pages',)),
+        EntityLinkSpec('page', ('/pages?pageId={refs.page.number}', '/pages?pageId={refs.page.id}')),
+    ),
     ui=PluginUiManifest(remote="/plugins/pages/remoteEntry.js", ui_api_version="1.6.0"),
     automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
     searchables=(PAGE_SEARCHABLE,),  # RADD-1327

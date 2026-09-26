@@ -1,3 +1,4 @@
+from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
@@ -18,6 +19,10 @@ def _admin_event(event_type: ForgejoEvent, label: str, entity: str) -> EventType
 
 plugin = RaddPlugin(
     name="forgejo",
+    entity_links=(
+        EntityLinkSpec('forgejo_connection', ('/settings/forgejo',)),
+        EntityLinkSpec('forgejo_repo', ('/settings/forgejo',)),
+    ),
     # Spec 111 declared the `vcsconn.*` atoms here; RADD-1258 moved them to `vcs`
     # (always loaded), since GitHub and GitLab gate on them too.
     core=False,  # optional plugin — disableable via the plugin manager
