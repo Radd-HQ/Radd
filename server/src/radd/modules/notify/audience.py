@@ -6,10 +6,10 @@ because a flat recipient list (which is what `recipient_ids` was on its own) is
 exactly what makes "stop telling me about issues I merely watch, but keep
 telling me about mine" unsayable.
 
-Its own file rather than more of `consumer.py`: the wiki's fan-out asks the same
-question about a page, the answers come from four different modules, and the
-handlers that consume it read better without a hundred lines of set-building
-between them.
+Its own file rather than more of `consumer.py`: the answers come from four
+different modules, and the handlers that consume it read better without a
+hundred lines of set-building between them. (A page's audience is its subject
+provider's to give — `subjects.py`.)
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import sockets
+from radd.kernel.sockets import Socket
 from radd.modules.auth import service as auth
 from radd.modules.events.service import Event
 from radd.modules.items.models import WorkItem
@@ -29,22 +31,24 @@ from .rules import Subject
 
 
 async def recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> frozenset[uuid.UUID]:
-    """The PARTICIPATING set: watchers ∪ CURRENT members of the item's
-    participant teams (spec 72 — resolved at fan-out time, so team joins/leaves
-    take effect without cleanup rows). Deferred feature-detected import: the
-    participants module loads AFTER notify and may be disabled. Every recipient
-    still passes `consumer._allowed` (item.read + internal-comment filters) —
-    team participation never widens what someone may see.
+    """The PARTICIPATING set: watchers ∪ whatever every live
+    `NOTIFICATION_AUDIENCE` source adds — `participants` answers with the
+    CURRENT members of the item's participant teams (spec 72, resolved at
+    fan-out time, so team joins/leaves take effect without cleanup rows).
+
+    Through the kernel socket since RADD-1385. It was a `try: import
+    participants` that could never fail — plugin code is always importable — so
+    a participants plugin disabled at runtime went on widening the audience.
+    Every recipient still passes `consumer._allowed` (item.read + the
+    internal-comment filter): a source widens who is ASKED, never what anyone
+    may see.
 
     This used to be the WHOLE ambient recipient set. Since spec 118 it is one of
     four: flattening them lost which set someone came out of, and that is the
     only thing the channel matrix's columns are about."""
     recipients = set(await service.watcher_ids(session, item_id))
-    try:
-        from radd.modules.participants import service as participants
-    except ImportError:
-        return frozenset(recipients)
-    recipients |= await participants.team_recipient_ids(session, item_id)
+    for source in sockets.providers(Socket.NOTIFICATION_AUDIENCE).values():
+        recipients |= set(await source.participant_ids(session, item_id))
     return frozenset(recipients)
 
 

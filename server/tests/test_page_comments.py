@@ -230,7 +230,7 @@ async def test_editing_a_page_notifies_its_watchers_but_not_the_editor(db, admin
     await pages_service.update_page(db, page.id, PageUpdate(body="rewritten"), admin.id)
     await db.flush()
     for event in await events_service.read_after(db, head, 100):
-        if event.event_type in consumer._HANDLED:
+        if consumer.handles(event.event_type):
             await consumer._handle(db, event, watch_only=False)
 
     rows = await db.execute(

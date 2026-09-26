@@ -1,12 +1,10 @@
 """Revalidate queued delivery against current resource and discussion access."""
 
-import uuid
-
 from radd.exceptions import ForbiddenError, NotFoundError
-from radd.modules.auth.authz import Permission
 from radd.modules.comments.reading import can_read_comment
 from radd.modules.items.service import require_readable_item
-from radd.modules.pages.page_access import guard_page
+
+from . import subjects
 
 
 async def notification_readable(session, notification, user) -> bool:
@@ -14,11 +12,9 @@ async def notification_readable(session, notification, user) -> bool:
     try:
         if notification.item_id is not None:
             await require_readable_item(session, notification.item_id, user)
-        elif (notification.payload or {}).get("page_id"):
-            await guard_page(
-                session, user, uuid.UUID(notification.payload["page_id"]), Permission.PAGE_READ
-            )
-        else:
+        elif not await subjects.readable(session, notification.payload or {}, user):
+            # RADD-1385: a non-item subject answers through its provider — or,
+            # its plugin disabled, nobody does and the row is not delivered.
             return False
         from .mailer import _comment_id
 

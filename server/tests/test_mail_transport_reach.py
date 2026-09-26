@@ -48,9 +48,10 @@ from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.mailintake import service as mail_service, transport
 from radd.modules.mailintake.models import MailSender
-from radd.modules.mailintake.types import MailEvent, MailFailureReport, MailSenderKind
+from radd.modules.mailintake.types import MailEvent, MailSenderKind
 from radd.modules.notify import emailer, service as notify_service
 from radd.modules.notify.models import Notification
+from radd.modules.notify.transport import MailFailureReport, NotificationMailKind
 from radd.modules.notify.types import NotificationType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
@@ -362,7 +363,7 @@ async def test_an_automations_own_mail_event_cannot_retrigger_it(db, sender_row,
     # so the guard is the scope and not the event type being unmatchable.
     await transport.send_plain_mail(
         db, to_address="human@example.com", subject="Hand-sent", text="hi",
-        kind=SentMailKind.DIGEST,
+        kind=NotificationMailKind.DIGEST,
     )
     await db.flush()
     human = [

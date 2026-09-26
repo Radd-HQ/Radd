@@ -13,16 +13,12 @@ plugin = RaddPlugin(
     consumer_descriptions=((CONSUMER_NAME, "Turns events into notifications and emails"),),
     description="Notifications: the inbox, email and watching.",
     depends_on=("events", "projects", "auth", "items", "comments", "teams"),
-    # participants: the recipient union (spec 72), resolved at fan-out time.
-    # mailintake: the mail TRANSPORT (RADD-968) — `service.send_item_mail`,
-    # reached deferred + feature-detected so a disabled/absent mail plugin
-    # degrades to the env relay rather than silencing notification email.
-    # pages: spec 118 — space subscriptions need a space's NAME to display and a
-    # page's read gate to enforce. Same shape as the two above: pages loads
-    # AFTER notify and is a disableable plugin, so both reaches are deferred and
-    # feature-detected, and an instance with the wiki off degrades rather than
-    # failing to import.
-    weak_depends=("participants", "mailintake", "pages"),
+    # RADD-1385: no edge to any optional plugin. What notify used to import from
+    # them — participants' team audience, mailintake's transport, the wiki's
+    # watchers/read gate/space picker — arrives on kernel sockets
+    # (NOTIFICATION_AUDIENCE, MAIL_TRANSPORT, NOTIFICATION_SUBJECT), which a
+    # runtime disable withdraws. A `try: import` never could: plugin code is
+    # always importable. Those plugins depend on notify now, not the reverse.
     routers=(router,),
     # RADD-1326: notify's own kinds through the same registry a plugin uses —
     # the preferences matrix and the inbox read the registry, not this module.

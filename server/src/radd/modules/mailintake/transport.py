@@ -44,6 +44,7 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import StrEnum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,6 +55,10 @@ from radd.modules.events import service as events
 
 from radd.clock import utcnow
 
+# RADD-1385: the failure vocabulary is notify's — the only caller that ever
+# passes anything but the default runs a retry ladder, and the ladder is notify's.
+from radd.modules.notify.transport import MailFailureReport
+
 from . import registry, senders, threading
 from .providers import OutboundMessage
 from .types import (
@@ -63,8 +68,6 @@ from .types import (
     MailDirection,
     MailEntity,
     MailEvent,
-    MailFailureReport,
-    SentMailKind,
     MailSenderKind,
 )
 
@@ -236,7 +239,7 @@ async def send_item_mail(
     attachments: tuple[MailAttachment, ...] = (),
     failure: MailFailureReport = MailFailureReport.REPORT,
     headers: Mapping[str, str] | None = None,
-    kind: SentMailKind,
+    kind: StrEnum,
 ) -> str | None:
     """Mail one person about one issue. Returns the Message-ID that went on the
     wire, or None when nothing was sent (no relay, no address, a failure).
@@ -323,7 +326,7 @@ async def send_plain_mail(
     html: str = "",
     failure: MailFailureReport = MailFailureReport.REPORT,
     headers: Mapping[str, str] | None = None,
-    kind: SentMailKind,
+    kind: StrEnum,
 ) -> str | None:
     """Mail one person about NO issue in particular (RADD-983). Returns the
     Message-ID that went on the wire, or None when nothing was sent.
@@ -389,7 +392,7 @@ async def _deliver(
     headers: dict[str, str],
     comment_id: uuid.UUID | None,
     failure: MailFailureReport,
-    kind: SentMailKind,
+    kind: StrEnum,
     attachments: tuple[MailAttachment, ...] = (),
 ) -> str | None:
     """One message onto one relay, and the report of what happened to it.
@@ -464,7 +467,7 @@ async def _emit_outcome(
     address: str,
     subject: str,
     *,
-    kind: SentMailKind,
+    kind: StrEnum,
     error: str = "",
     given_up: bool = False,
 ) -> None:

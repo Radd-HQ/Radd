@@ -2,6 +2,7 @@
 
 import re
 import uuid
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 
@@ -166,18 +167,27 @@ APPROVAL_REQUESTED_EVENT = "approval.requested"
 APPROVAL_APPROVED_EVENT = "approval.approved"
 APPROVAL_DECLINED_EVENT = "approval.declined"
 
-# Wire strings for the pages module's page events (spec 43; spec 118) — the same
-# idiom once more: pages loads AFTER notify and is a disableable plugin, so the
-# consumer knows these by name and reads their payload, never the module. Keep in
-# sync with `pages.types.PageEvent`.
-PAGE_CREATED_EVENT = "page.created"
-PAGE_UPDATED_EVENT = "page.updated"
+#: What notify stamps on a notification about a NON-ITEM subject (RADD-1385),
+#: beside the provider's own display payload: which subject provider vouches
+#: for the row, and the subject's id. The mail loops' read re-check asks that
+#: provider again at send time, so a row names who can still answer for it.
+SUBJECT_TYPE_KEY = "subject_type"
+SUBJECT_ID_KEY = "subject_id"
 
-#: The subject keys the kernel writes onto a page event's payload from
-#: `emit(subjects=…)` (RADD-923) — the ref shapes notify reads instead of
-#: importing `pages.models`, which the spine rule forbids anyway.
-PAGE_SUBJECT = "page"
-PAGE_SPACE_SUBJECT = "page_space"
+
+@dataclass(frozen=True)
+class SubjectRef:
+    """A non-item subject, as a `NOTIFICATION_SUBJECT` provider locates it.
+
+    `scope_id` is its CONTAINER — the id a subscription in the provider's scope
+    names (a page's space). `payload` is what the notification row is written
+    with, resolved at WRITE time so a later rename cannot make the row lie.
+    """
+
+    id: uuid.UUID
+    scope_id: uuid.UUID | None = None
+    payload: dict = field(default_factory=dict)
+
 
 # Wire string for the participants module's add event (spec 72; RADD-978) — the
 # same idiom again, participants loads AFTER notify (and is disableable); keep in

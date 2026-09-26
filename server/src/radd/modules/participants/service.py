@@ -9,8 +9,8 @@ pass every notify filter (internal comments stay internal). Direct USER
 participants are auto-watched on add (`notify.add_watchers` — one fan-out
 mechanism, no parallel path); TEAM participants stay LIVE: the notify consumer
 unions `team_recipient_ids` (CURRENT members at fan-out time) into the watcher
-set through a deferred feature-detected seam on its side (this module loads
-after notify).
+set through the kernel `NOTIFICATION_AUDIENCE` socket this plugin serves
+(`audience.py`, RADD-1385) — so disabling it stops the widening.
 
 The management gate is the feature's point: `item.update` OR being the item's
 REPORTER — an identity check, not a permission — so a requester can share
@@ -42,7 +42,7 @@ from .schemas import ItemParticipantsRead, ParticipantAdd, ParticipantRow
 from .types import ParticipantEntity, ParticipantEvent
 
 
-# --- the notify seam (feature-detected deferred import on notify's side) ---
+# --- the notify seam (served on the NOTIFICATION_AUDIENCE socket, audience.py) ---
 
 
 async def team_recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> set[uuid.UUID]:

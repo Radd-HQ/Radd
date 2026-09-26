@@ -1,15 +1,17 @@
 from sqlalchemy import false, or_, select
 
-from radd.kernel import EventTypeSpec, PermissionSpec, PluginUiManifest, ProjectRelationSpec
+from radd.kernel import EventTypeSpec, IntegrationSpec, PermissionSpec, PluginUiManifest, ProjectRelationSpec
 from radd.kernel import RaddPlugin
+from radd.kernel.sockets import Socket
 from radd.kernel.registry import register_relation
 from radd.kernel.specs import RelationSpec
 from radd.modules.items.models import WorkItem
 
 from .models import ItemParticipant
 from . import mcptools, service
+from .audience import ParticipantTeamAudience
 from .router import router
-from .types import PARTICIPANT_MANAGE, ParticipantEvent
+from .types import PARTICIPANT_MANAGE, TEAM_AUDIENCE, ParticipantEvent
 
 # RADD-844: being shared into an item is a RELATION on it — the second-reporter
 # model. `item.read@participant` + `comment.write@participant` (seeded on the
@@ -68,6 +70,11 @@ plugin = RaddPlugin(
         ),
     ),
     relation_domains=((PARTICIPANT_MANAGE, "item"),),
+    # RADD-1385: team participants widen an item's notification audience through
+    # the kernel socket notify reads — withdrawn with the plugin on disable.
+    integrations=(
+        IntegrationSpec(Socket.NOTIFICATION_AUDIENCE, TEAM_AUDIENCE, impl=ParticipantTeamAudience()),
+    ),
     event_types=(
         EventTypeSpec(ParticipantEvent.ADDED, "Participant added", "Service desk", item_scoped=True),
         EventTypeSpec(ParticipantEvent.REMOVED, "Participant removed", "Service desk", item_scoped=True),

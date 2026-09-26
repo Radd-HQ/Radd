@@ -20,3 +20,7 @@ class ParticipantEntity(StrEnum):
 #: ticket — which was an identity check in code (`reporter_id == actor.id`)
 #: until it became a grant an admin can see and revoke.
 PARTICIPANT_MANAGE = "participant.manage"
+
+
+#: RADD-1385: this plugin's provider name on the kernel NOTIFICATION_AUDIENCE socket.
+TEAM_AUDIENCE = "participant_teams"

@@ -34,7 +34,7 @@ from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import kinds, mentions, pageevents, planner, rules as notify_rules, service
+from . import kinds, mentions, planner, rules as notify_rules, service, subjects
 from .audience import actor_name_of, item_audience, own_of, recipient_ids, subject_of
 from .audience import item_ref as _ref
 from .planner import Plan, PlannedNotification
@@ -49,8 +49,6 @@ from .types import (
     APPROVAL_DECLINED_EVENT,
     APPROVAL_REQUESTED_EVENT,
     CONSUMER_NAME,
-    PAGE_CREATED_EVENT,
-    PAGE_UPDATED_EVENT,
     PARTICIPANT_ADDED_EVENT,
     SLA_BREACHED_EVENT,
     SLA_DUE_SOON_EVENT,
@@ -75,19 +73,6 @@ _HANDLED = {
     APPROVAL_APPROVED_EVENT,
     APPROVAL_DECLINED_EVENT,
     PARTICIPANT_ADDED_EVENT,
-    # Spec 118. The wiki's fan-out moved off the save request and onto the
-    # stream; adding them here is what makes the bootstrap consider them, and
-    # the bootstrap is WATCH-ONLY, so a fresh instance replaying years of page
-    # edits writes nothing — `pageevents` contributes no watcher rows either,
-    # because `pages.update_page` already writes them on the write path.
-    PAGE_CREATED_EVENT,
-    PAGE_UPDATED_EVENT,
-}
-
-# Page events fan out identically; only the notification kind differs.
-_PAGE_EVENT_TYPES = {
-    PAGE_CREATED_EVENT: NotificationType.PAGE_CREATED,
-    PAGE_UPDATED_EVENT: NotificationType.PAGE_UPDATED,
 }
 
 # SLA timer events fan out identically; only the notification type differs.
@@ -95,6 +80,17 @@ _SLA_EVENT_TYPES = {
     SLA_BREACHED_EVENT: NotificationType.SLA_BREACH,
     SLA_DUE_SOON_EVENT: NotificationType.SLA_DUE_SOON,
 }
+
+
+def handles(event_type: str) -> bool:
+    """Does this consumer act on the event at all? The core families, a
+    plugin's contributed kinds (RADD-1326), and the events of every LIVE
+    notification subject (RADD-1385 — a page's, while the wiki is enabled)."""
+    return (
+        event_type in _HANDLED
+        or event_type in kinds.contributed_events()
+        or subjects.handles(event_type)
+    )
 
 
 async def run_once() -> int:
@@ -116,9 +112,7 @@ async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
         # happened years ago in another system. The importer sets watchers from the
         # source data explicitly, so skipping these also keeps the watcher graph
         # out of the bootstrap's hands rather than half-derived from imported rows.
-        if event.silent or (
-            event.event_type not in _HANDLED and event.event_type not in kinds.contributed_events()
-        ):
+        if event.silent or not handles(event.event_type):
             continue
         try:
             async with session.begin_nested():
@@ -153,6 +147,10 @@ async def _handle_derived(session: AsyncSession, event: Event, *, watch_only: bo
     if not watch_only:
         for spec in kinds.contributed_for(event.event_type):
             await _handle_contributed(session, event, spec)
+        # RADD-1385: a non-item subject's own events (spec 118's page fan-out).
+        # Watch-only has nothing to do: the subject's module follows on its own
+        # write path (`pages.update_page` auto-watches the editor, RADD-719).
+        await subjects.handle_event(session, event)
     if event.event_type not in _HANDLED:
         # RADD-1326: a plugin's kind answers this event. Never on the watch-only
         # bootstrap — a contributed kind notifies; it does not follow anything.
@@ -170,13 +168,6 @@ async def _handle_derived(session: AsyncSession, event: Event, *, watch_only: bo
         # handler has nothing to contribute to a watch-only bootstrap pass.
         if not watch_only:
             await _handle_participant_added(session, event)
-    elif event.event_type in _PAGE_EVENT_TYPES:
-        # Same shape, same reason: `pages.update_page` auto-watches the editor
-        # itself (RADD-719), so the wiki contributes nothing to the bootstrap.
-        if not watch_only:
-            await pageevents.handle_page_event(
-                session, event, _PAGE_EVENT_TYPES[event.event_type]
-            )
     else:
         await _handle_item_event(session, event, watch_only=watch_only)
 
@@ -252,8 +243,11 @@ async def _handle_comment_created(
     (`page_updated`) made the subsystem look alive.
     """
     payload = event.payload or {}
-    if payload.get("entity_type") == CommentParentType.PAGE.value:
-        await pageevents.handle_page_comment(session, event, watch_only=watch_only)
+    parent = payload.get("entity_type") or CommentParentType.ITEM.value
+    if parent != CommentParentType.ITEM.value:
+        # RADD-1385: the parent's subject provider answers, or — its plugin
+        # disabled — nobody does, which is a comment on a page nobody may hear.
+        await subjects.handle_comment(session, event, parent, watch_only=watch_only)
         return
     item_id = uuid.UUID(_ref(payload)["id"])
     item = await items.require_item(session, item_id)

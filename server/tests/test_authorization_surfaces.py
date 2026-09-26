@@ -362,20 +362,20 @@ async def test_queued_notification_is_dropped_after_access_revocation(db, monkey
         assert (await c.get(f"/api/v1/items/{item.id}")).status_code in (403, 404)
     captured = []
 
-    async def can_send(*args, **kwargs):
-        return True
+    class Capture:  # a transport that would send anything it is handed
+        async def configured(self, session):
+            return True
 
-    async def capture(*args, **kwargs):
-        captured.append((args, kwargs))
-        return True
+        async def send(self, session, mail):
+            captured.append(mail)
+            return True
 
-    monkeypatch.setattr(mailer, "can_send", can_send)
+    from radd.modules.notify import transport
+
+    monkeypatch.setattr(transport, "mail_transport", Capture)
     if channel == "immediate":
-        monkeypatch.setattr(mailer, "_mail_transport", lambda: None)
-        monkeypatch.setattr(mailer, "_send_direct", capture)
         sent = await mailer.run_batch(db)
     else:
-        monkeypatch.setattr(mailer, "send_plain", capture)
         sent = await emailer.run_batch(db)
     assert sent == 0 and not captured
     assert row.emailed_at is not None

@@ -1,12 +1,15 @@
 """Email digests: one email per user batching their unemailed notifications.
 
-**Sends through the ONE transport since RADD-983** (`mailer.send_plain`, i.e.
-`mailintake.service.send_plain_mail`, with the env relay as the fallback when
-that module is not loaded). It used to dial `radd.smtp` itself and gate on
-`settings.smtp_host`, which meant an instance configured entirely through
-Settings → Email — sender ROWS, no `RADD_SMTP_*` — never sent a digest and said
-nothing about it. Now the gate is `outbound_configured` (rows OR env) and every
-failure is a `mail.failed` event as well as a log line.
+**Sends through the ONE transport since RADD-983** (`mailer.send_plain` → the
+kernel `MAIL_TRANSPORT` socket since RADD-1385; `mailintake` provides it). It
+used to dial `radd.smtp` itself and gate on `settings.smtp_host`, which meant an
+instance configured entirely through Settings → Email — sender ROWS, no
+`RADD_SMTP_*` — never sent a digest and said nothing about it. Now the gate is
+the transport's `configured` (rows OR env) and every failure is a `mail.failed`
+event as well as a log line. With NO transport registered there is no digest:
+every pending row is stamped (`mailer.record_undeliverable`) as the backlog
+drains for a person who opted out, and nothing is held for a transport that may
+never come back.
 
 The digest is deliberately the ITEMLESS half of the transport: it is about ten
 issues, so there is nothing to thread it onto.
@@ -46,7 +49,7 @@ from radd.config import settings
 from radd.db import SessionLocal
 from radd.modules.auth import service as auth
 
-from . import lines, mailer, retry, service
+from . import lines, mailer, retry, service, transport as mail
 from .models import Notification
 from radd.clock import utcnow
 
@@ -85,10 +88,13 @@ async def run_batch(session: AsyncSession) -> int:
     Until RADD-996 this loop had no end-to-end test at all — which is how it went
     on mailing service accounts beside the mailer.
     """
-    if not await mailer.can_send(session):
+    transport = mail.mail_transport()
+    if transport is not None and not await transport.configured(session):
         # Rows OR env (RADD-983) — `settings.smtp_host` alone silenced every
         # digest on an instance configured through Settings → Email. Asked once
         # per tick, like the mailer's, because resolving the sender is a query.
+        # Unconfigured is a WAIT (an admin is one form away); no transport at
+        # all is not, and falls through to the stamp below (RADD-1385).
         return 0
     now = utcnow()
     cutoff = now - timedelta(hours=settings.notify_email_max_age_hours)
@@ -113,6 +119,11 @@ async def run_batch(session: AsyncSession) -> int:
     )
     rows = list(result.scalars())
     if not rows:
+        return 0
+    if transport is None:
+        # RADD-1385: no digest without a transport; the backlog drains as it
+        # does for someone who opted out, rather than waiting for one.
+        await mailer.record_undeliverable(session, rows, mail.NotificationMailKind.DIGEST)
         return 0
     by_user: dict[uuid.UUID, list[Notification]] = defaultdict(list)
     for row in rows:
@@ -147,6 +158,7 @@ async def run_batch(session: AsyncSession) -> int:
             message = compose(pending, actor_names)
             delivered = await mailer.send_plain(
                 session,
+                transport,
                 user.email,
                 user.name,
                 DIGEST_SUBJECT_TEMPLATE.format(

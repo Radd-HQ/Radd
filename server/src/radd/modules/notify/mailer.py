@@ -36,16 +36,16 @@ Rows are stamped `emailed_at` on send, so the digest — whose selection is
 already `emailed_at IS NULL` — never repeats what went out here. The two
 channels dedup for free, with no new column.
 
-Transport is `mailintake.service.send_item_mail`, reached DEFERRED and
-feature-detected (the module loads later and may be disabled) — the shape
-`consumer.recipient_ids` uses for participants. Absent, the env relay sends it
-directly, which is the digest's existing posture; what is lost is threading, so
-a reply to that copy opens a new ticket instead of landing on the issue.
+Transport is the kernel `MAIL_TRANSPORT` socket (RADD-1385 — `mailintake`
+provides it; see `transport.py`). It was a deferred import of
+`mailintake.service`, which a runtime disable could not switch off. With no
+transport registered, email is UNAVAILABLE: the pending rows are stamped as
+undeliverable (`record_undeliverable`) and the inbox is untouched — there is no
+env-relay copy any more, because the relay is the transport's business.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from collections.abc import Mapping
@@ -54,20 +54,21 @@ from datetime import timedelta
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd import mailrender, smtp
+from radd import mailrender
 from radd.clock import utcnow
 from radd.config import settings
 from radd.db import SessionLocal
+from radd.kernel.sockets import MailTransport
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
 from radd.modules.comments import service as comments
 from radd.modules.comments.types import CommentEvent
 from radd.modules.events import service as events
-from radd.modules.mailintake.types import MailFailureReport, SentMailKind
 
-from . import lines, retry, service
+from . import lines, retry, service, transport as mail
 from .authorization import notification_readable
 from .models import Notification
+from .transport import MailFailureReport, NotificationMail, NotificationMailKind
 from .types import NotificationType
 
 logger = logging.getLogger(__name__)
@@ -92,7 +93,11 @@ async def run_batch(session: AsyncSession) -> int:
     rows = await _pending(session)
     if not rows:
         return 0
-    if not await can_send(session):
+    transport = mail.mail_transport()
+    if transport is None:
+        await record_undeliverable(session, rows, NotificationMailKind.NOTIFICATION)
+        return 0
+    if not await transport.configured(session):
         # Nothing to send FROM. Leave the rows unstamped: the digest loop is
         # gated the same way and will stamp them when it can.
         return 0
@@ -111,6 +116,7 @@ async def run_batch(session: AsyncSession) -> int:
             continue
         if await _send(
             session,
+            transport,
             row,
             user,
             actor_names,
@@ -182,30 +188,34 @@ async def _actor_names(
     return {user_id: user.name for user_id, user in actors.items() if user.name}
 
 
-def _mail_transport():
-    """mailintake's transport seam, or None. Deferred + feature-detected: the
-    module loads AFTER notify and may be disabled — the shape
-    `consumer.recipient_ids` uses for participants."""
-    try:
-        from radd.modules.mailintake import service as mailintake
-    except ImportError:
-        return None
-    return mailintake
+async def record_undeliverable(
+    session: AsyncSession, rows: list[Notification], kind: NotificationMailKind
+) -> None:
+    """No transport is registered: email is unavailable, and the rows say so.
 
-
-async def can_send(session: AsyncSession) -> bool:
-    """Is there anywhere to send FROM? Asked once per tick, not once per row:
-    resolving the sender is a query. Public because the digest loop asks the
-    same question and asking it a second way is how the two channels came to
-    disagree about whether the instance had a relay (RADD-983)."""
-    transport = _mail_transport()
-    if transport is None:
-        return bool(settings.smtp_host)
-    return await transport.outbound_configured(session)
+    Stamped, which is this module's vocabulary for "this channel is finished
+    with this row" (an inactive recipient and an exhausted retry ladder get the
+    same stamp) — not a claim that anything was sent. Leaving them pending would
+    hold a day of mail for whenever a transport returns, and a mail plugin
+    switched back on must not empty that into everyone's mailbox. The INBOX
+    half of each row is untouched: in-app delivery never depended on mail.
+    Public because the digest records its own rows the same way.
+    """
+    await session.execute(
+        update(Notification)
+        .where(Notification.id.in_([row.id for row in rows]))
+        .values(emailed_at=utcnow())
+    )
+    logger.info(
+        "notify: no mail transport registered — %d %s email(s) recorded undeliverable",
+        len(rows),
+        kind.value,
+    )
 
 
 async def _send(
     session: AsyncSession,
+    transport: MailTransport,
     notification: Notification,
     user: User,
     actor_names: dict[uuid.UUID, str],
@@ -264,23 +274,25 @@ async def _send(
         else (entry.subject or entry.headline)
     )
     headers = mailrender.unsubscribe_headers(preferences)
-    transport = _mail_transport()
-    if transport is None or notification.item_id is None:
-        return await _send_direct(user.email, user.name, subject, message, headers=headers)
-    return bool(
-        await transport.send_item_mail(
-            session,
-            item_id=notification.item_id,
+    # A notification about no item (a page) has nothing to thread on, so it
+    # goes as the digest does. It used to skip the transport for the env relay
+    # — no sender row, no `mail.sent` — which is the RADD-983 shape again.
+    return await transport.send(
+        session,
+        NotificationMail(
             to_address=user.email,
             to_name=user.name,
             subject=subject,
             text=message.text,
             html=message.html,
-            comment_id=await _comment_id(session, notification),
+            kind=NotificationMailKind.NOTIFICATION,
             failure=failure,
             headers=headers,
-            kind=SentMailKind.NOTIFICATION,
-        )
+            item_id=notification.item_id,
+            comment_id=(
+                await _comment_id(session, notification) if notification.item_id else None
+            ),
+        ),
     )
 
 
@@ -330,6 +342,7 @@ async def _comment_body(session: AsyncSession, notification: Notification) -> st
 
 async def send_plain(
     session: AsyncSession,
+    transport: MailTransport,
     to_address: str,
     to_name: str,
     subject: str,
@@ -342,14 +355,9 @@ async def send_plain(
 
     The digest's send, shared with this file because "which relay, and is the
     outcome reported" is one answer for both of notify's email channels and was
-    two before: the per-event mailer had ridden `send_item_mail` since
-    RADD-968, while the digest still dialled `radd.smtp` off `settings.*` and
-    therefore sent nothing at all on an instance configured only through
-    Settings → Email.
-
-    Itemless because a digest is about ten items — see `send_plain_mail`. The
-    env-relay fallback below is what a disabled mailintake degrades to, exactly
-    as `_send`'s does.
+    two before: the per-event mailer had ridden the transport since RADD-968,
+    while the digest still dialled `radd.smtp` off `settings.*` and therefore
+    sent nothing at all on an instance configured only through Settings → Email.
 
     The CALLER's session goes through, `_send`'s shape and for its reason: the
     `mail.sent` event belongs in the same transaction as the `emailed_at` stamp
@@ -357,47 +365,16 @@ async def send_plain(
     while the stamp was still uncommitted — two truths about one message, in the
     order that makes a rolled-back tick claim to have sent mail.
     """
-    transport = _mail_transport()
-    if transport is None:
-        return await _send_direct(to_address, to_name, subject, message, headers=headers)
-    return bool(
-        await transport.send_plain_mail(
-            session,
+    return await transport.send(
+        session,
+        NotificationMail(
             to_address=to_address,
             to_name=to_name,
             subject=subject,
             text=message.text,
             html=message.html,
+            kind=NotificationMailKind.DIGEST,
             failure=failure,
-            headers=headers,
-            kind=SentMailKind.DIGEST,
-        )
+            headers=dict(headers or {}),
+        ),
     )
-
-
-async def _send_direct(
-    to_address: str,
-    to_name: str,
-    subject: str,
-    message: mailrender.RenderedMail,
-    *,
-    headers: Mapping[str, str] | None = None,
-) -> bool:
-    """mailintake absent: the env relay, no threading. The digest's posture —
-    a message with no conversation is better than no message."""
-    if not settings.smtp_host:
-        return False
-    try:
-        await asyncio.to_thread(
-            smtp.send_message,
-            to_address,
-            subject,
-            message.text,
-            to_name=to_name,
-            headers=headers,
-            html_body=message.html,
-        )
-    except Exception:
-        logger.exception("notify: mail to %s failed", to_address)
-        return False
-    return True

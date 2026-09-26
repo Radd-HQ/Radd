@@ -118,11 +118,17 @@ async def test_candidate_bounds_and_absent_wiki(world,monkeypatch):
     _,client,_,_,_,_,_,_,_,_=world
     for params in [{'scope':'own'},{'scope':'space','limit':201},{'scope':'team','offset':-1},{'scope':'project','q':'x'*201}]:
         assert (await client.get('/api/v1/notifications/subscription-options',params=params)).status_code==422
-    import builtins
-    original=builtins.__import__
-    def absent(name,*args,**kwargs):
-        if name=='radd.modules.pages':raise ImportError('wiki absent')
-        return original(name,*args,**kwargs)
-    monkeypatch.setattr(builtins,'__import__',absent)
-    r=await client.get('/api/v1/notifications/subscription-options',params={'scope':'space'})
+    # RADD-1385: "absent" is the plugin WITHDRAWN from the registry, the way the
+    # plugin manager disables it — not an ImportError, which never happens (plugin
+    # code is always importable). The space picker is the NOTIFICATION_SUBJECT
+    # provider's, so with the wiki disabled there is no space to offer.
+    from radd.kernel.registry import registries
+    from radd.modules.pages import plugin as pages_plugin
+    control=await client.get('/api/v1/notifications/subscription-options',params={'scope':'space'})
+    assert control.json(), "a space exists, so the empty answer below is the withdrawal"
+    registries.unregister_plugin(pages_plugin)
+    try:
+        r=await client.get('/api/v1/notifications/subscription-options',params={'scope':'space'})
+    finally:
+        registries.register_plugin(pages_plugin)
     assert r.status_code==200 and r.json()==[]

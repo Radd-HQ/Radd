@@ -7,10 +7,10 @@ PATCH contract).
 """
 
 from radd.kernel import EntityLinkSpec
+from radd.kernel import IntegrationSpec
 from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec
 from radd.kernel import EventTypeSpec
-from radd.kernel import IntegrationSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import PermissionSpec
 from radd.kernel import SettingSpec
@@ -32,6 +32,7 @@ from .page_access import _PAGE_SPEC
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
 from . import mcptools
 from .automation import COMMENT_NODE, MOVE_NODE, PAGE_TOKENS, SPACE_GATE  # RADD-1267/1322/1324: page nodes + tokens
+from .notifications import PAGE_NOTIFICATIONS
 
 plugin = RaddPlugin(
     name="pages",
@@ -42,12 +43,6 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(remote="/plugins/pages/remoteEntry.js", ui_api_version="1.9.0"),
     automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
     searchables=(PAGE_SEARCHABLE,),  # RADD-1327
-    # RADD-1384: the documents search shows beside issues (deflection, Ask
-    # mode), served on the kernel socket so `search` never imports this plugin
-    # and a runtime disable withdraws the wiki's hits with its routes.
-    integrations=(
-        IntegrationSpec(Socket.SEARCH_DOCUMENTS, PageEntity.PAGE.value, impl=PageDocuments()),
-    ),
     token_providers=(PAGE_TOKENS,),
     # RADD-791: SPACE-scoped. They were global because a page had no scope to be
     # checked against, which made per-space access inexpressible.
@@ -138,4 +133,15 @@ plugin = RaddPlugin(
     # registration replaces the mcp pages_bridge feature probe, so disabling this
     # plugin removes them from catalog + dispatch together.
     mcp_tools=mcptools.MCP_TOOLS,
+    # What the wiki provides on kernel sockets, so neither consumer imports it and
+    # a runtime disable withdraws both with its routes:
+    # - RADD-1384: the documents search shows beside issues (deflection, Ask mode);
+    # - RADD-1385: a page as a notification SUBJECT — watchers, the read gate, the
+    #   space picker and its labels.
+    integrations=(
+        IntegrationSpec(Socket.SEARCH_DOCUMENTS, PageEntity.PAGE.value, impl=PageDocuments()),
+        IntegrationSpec(
+            Socket.NOTIFICATION_SUBJECT, PageEntity.PAGE.value, impl=PAGE_NOTIFICATIONS
+        ),
+    ),
 )

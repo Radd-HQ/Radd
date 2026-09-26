@@ -2,8 +2,9 @@
 
 Out of the router because it is not routing: it joins three registries (the kind
 vocabulary, the scope defaults, the saved rules) and resolves each
-subscription's TARGET NAME, which is a query per entity family and a deferred
-import for the one that loads later.
+subscription's TARGET NAME, which is a query per entity family — and, for a
+container of a non-item subject (a wiki space), a question for that subject's
+provider on the kernel socket (RADD-1385).
 
 **A subscription is shown by name or not at all.** A rule row stores a uuid; a
 settings page that renders "Subscribed to 3f2a-…" is a page nobody can audit.
@@ -30,7 +31,7 @@ from radd.modules.auth.models import User
 from radd.modules.projects.models import Project
 from radd.modules.teams import service as teams
 
-from . import rules as rules_policy, service, targets
+from . import rules as rules_policy, service, subjects, targets
 from .kinds import all_specs, every_kind
 from .models import NotificationRule
 from .schemas import (
@@ -94,26 +95,6 @@ async def _team_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.U
     return {team_id: team.name for team_id, team in found.items()}
 
 
-async def _space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
-    """Space names, or nothing when the wiki plugin is not loaded.
-
-    The deferred feature-detected import this module uses everywhere for pages:
-    it loads AFTER notify and is disableable, so a space subscription on an
-    instance with the wiki turned off degrades to an unlabelled row rather than
-    an ImportError in a settings page.
-
-    `ids` is already narrowed to what the actor may read — the caller does that
-    (`targets.readable_targets`), so the owner projects only those names.
-    """
-    if not ids:
-        return {}
-    try:
-        from radd.modules.pages import service as pages_service
-    except ImportError:
-        return {}
-    return await pages_service.space_names(session, ids)
-
-
 def _scope_of(row: NotificationRule) -> RuleScope | None:
     try:
         return RuleScope(row.scope)
@@ -130,17 +111,19 @@ async def _labels(
     unreadable target is never fetched — which is the difference between a filter
     and a gate when the thing being filtered is the answer itself.
     """
-    readable = await targets.readable_targets(
-        session,
-        user,
-        targets.targets_by_scope(
-            (scope, row.scope_id) for row in rows if (scope := _scope_of(row)) is not None
-        ),
+    wanted = targets.targets_by_scope(
+        (scope, row.scope_id) for row in rows if (scope := _scope_of(row)) is not None
     )
+    core = {scope: ids for scope, ids in wanted.items() if scope in targets.CORE_TARGETS}
+    readable = await targets.readable_targets(session, user, core)
     labels: dict[uuid.UUID, str] = {}
     labels |= await _project_names(session, readable.get(RuleScope.PROJECT, set()))
     labels |= await _team_names(session, readable.get(RuleScope.TEAM, set()))
-    labels |= await _space_names(session, readable.get(RuleScope.SPACE, set()))
+    for scope, ids in wanted.items():
+        if scope not in core:
+            # A subject provider narrows and names in ONE call — the name is the
+            # whole of what the gate protects (RADD-1385). No provider: unlabelled.
+            labels |= await subjects.scope_names(session, user, scope, ids)
     return labels
 
 

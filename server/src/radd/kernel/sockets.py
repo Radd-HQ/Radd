@@ -28,6 +28,10 @@ class Socket(StrEnum):
     TRANSITION_CHECK = "transition_check"  # a workflow transition-rule check (RADD-1383)
     SEARCH_DOCUMENTS = "search_documents"  # non-item hits search shows (RADD-1384)
     SEMANTIC_CANDIDATES = "semantic_candidates"  # meaning-ranked ids for a query (RADD-1384)
+    # RADD-1385: what notify learns from optional plugins instead of importing them.
+    NOTIFICATION_SUBJECT = "notification_subject"  # a non-item thing notifications are about (pages)
+    NOTIFICATION_AUDIENCE = "notification_audience"  # more people following an item (participants)
+    MAIL_TRANSPORT = "mail_transport"  # carries a notification email (mailintake)
 
 
 # --- interface definitions (the seam contracts) ---
@@ -196,6 +200,85 @@ class SemanticCandidateSource(Protocol):
         limit: int,
         project_ids: Sequence[Any] | None = None,
     ) -> list[tuple[Any, float]]: ...
+
+
+@runtime_checkable
+class NotificationSubjectProvider(Protocol):
+    """Something other than an issue that notifications can be ABOUT (RADD-1385).
+
+    Mechanism only: `notify` owns the kinds × scopes matrix, the planner, the
+    channel verdict, the inbox and the mail; an issue is its built-in subject.
+    Anything else — a wiki page — registers here under its ENTITY TYPE (the
+    IntegrationSpec's name, which is also the comment parent type), and notify
+    asks it only what it cannot know itself:
+
+    * `entity_type` — the key above;
+    * `scope` — the SUBSCRIPTION scope the subject's container answers to
+      (`space` for a page): the prefs picker and a subscription's label ask the
+      provider of that scope;
+    * `events` — event type → the notification kind it fans out as;
+    * `locate(session, event)` — the subject an event is about (one of `events`,
+      or a comment whose parent is this entity type), as notify's `SubjectRef`
+      (id, container id, the display payload the row is written with), or None;
+    * `watcher_ids(session, subject_id)` — who follows it (`participating`);
+    * `reader_ids(session, subject_id, user_ids)` — of these people, the ACTIVE
+      ones who may read it now. The one read gate: fan-out and the mail loops'
+      re-check both ask it;
+    * `scope_options(session, actor, *, q, limit, offset, exclude)` — the
+      containers the actor may subscribe to, paged `(choices, total)`;
+    * `scope_names(session, actor, scope_ids)` — of these containers, the ones
+      the actor may NAME, by name. It narrows and labels at once, because the
+      label is the whole of what an unchecked subscription id would leak.
+
+    A subject whose provider is gone — the plugin disabled — notifies nobody,
+    and its queued rows stop being mailed: nothing is left to vouch for them.
+    """
+
+    entity_type: str
+    scope: str
+    events: Mapping[str, str]
+
+    async def locate(self, session: Any, event: Any) -> Any: ...
+    async def watcher_ids(self, session: Any, subject_id: Any) -> set[Any]: ...
+    async def reader_ids(self, session: Any, subject_id: Any, user_ids: Any) -> set[Any]: ...
+    async def scope_options(
+        self, session: Any, actor: Any, *, q: str, limit: int, offset: int, exclude: list[str]
+    ) -> tuple[list[Any], int]: ...
+    async def scope_names(self, session: Any, actor: Any, scope_ids: Any) -> dict[Any, str]: ...
+
+
+@runtime_checkable
+class NotificationAudienceSource(Protocol):
+    """More people PARTICIPATING in an issue than its watchers (RADD-1385).
+
+    `participants` answers with the CURRENT members of the item's participant
+    teams — resolved at fan-out time, so joining a team joins its shared
+    tickets. Every provider is asked and the answers UNION; each recipient
+    still passes notify's per-row read check, so a source can widen who is
+    ASKED, never what anyone may see.
+    """
+
+    async def participant_ids(self, session: Any, item_id: Any) -> set[Any]: ...
+
+
+@runtime_checkable
+class MailTransport(Protocol):
+    """Carries one notification email (RADD-1385).
+
+    `notify` decides who is mailed what; the transport owns sender resolution,
+    threading and the `mail.sent`/`mail.failed` record. `mailintake` provides it.
+    With none registered email is UNAVAILABLE: notify records the rows as
+    undeliverable instead of dialling a relay of its own, and the inbox is
+    untouched.
+
+    * `configured(session)` — is there anywhere to send FROM? Asked once per
+      loop tick, never per recipient;
+    * `send(session, mail)` — deliver notify's `NotificationMail` (its `kind`
+      and `failure` are notify's vocabulary). True when it went out; never raises.
+    """
+
+    async def configured(self, session: Any) -> bool: ...
+    async def send(self, session: Any, mail: Any) -> bool: ...
 
 
 @runtime_checkable

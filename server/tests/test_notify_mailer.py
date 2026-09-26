@@ -916,32 +916,6 @@ async def test_a_notification_email_carries_list_unsubscribe_and_a_preferences_l
     assert "Notification settings" in _html(message)
 
 
-async def test_the_env_relay_copy_says_how_to_stop_it_too(
-    db, world, relay, quiet_backlog, monkeypatch
-):
-    """The header is the mailer's, not the transport's: with mailintake absent
-    the message goes over `radd.smtp` directly and must carry it just the same —
-    a deliverability signal that depended on which module was loaded would be
-    the RADD-983 shape again."""
-    _agent, _project, item = world
-    monkeypatch.setattr(mailer, "_mail_transport", lambda: None)
-    monkeypatch.setattr(settings, "smtp_host", "smtp.env.test")
-    monkeypatch.setattr(settings, "smtp_starttls", False)
-    monkeypatch.setattr(settings, "smtp_from_address", RELAY_FROM)
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
-    await _grant(db, watcher, BuiltinRoleKey.MEMBER, item.project_id)
-    await _notify(db, watcher, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"})
-    await db.execute(
-        update(Notification).where(Notification.user_id == watcher.id).values(email=True)
-    )
-
-    assert await mailer.run_batch(db) == 1
-
-    message = _addressed(relay, watcher.email)[0]
-    assert str(message["List-Unsubscribe"]) == f"<{PREFERENCES_URL}>"
-    assert f"Notification settings: {PREFERENCES_URL}" in _text(message)
-
-
 async def test_the_digest_carries_the_header_and_the_link_in_both_parts(
     db, world, relay, env_relay, quiet_backlog
 ):
@@ -1089,34 +1063,9 @@ async def test_a_failed_digest_takes_the_same_ladder(
 # --- transport ----------------------------------------------------------------
 
 
-async def test_without_mailintake_the_env_relay_still_sends(
-    db, world, relay, quiet_backlog, monkeypatch
-):
-    """mailintake is optional and disableable. Absent, the message still goes —
-    over the env relay, the digest's existing posture. What is lost is the
-    conversation: no thread row, so a reply opens a new ticket."""
-    _agent, _project, item = world
-    monkeypatch.setattr(mailer, "_mail_transport", lambda: None)
-    monkeypatch.setattr(settings, "smtp_host", "smtp.env.test")
-    monkeypatch.setattr(settings, "smtp_starttls", False)
-    monkeypatch.setattr(settings, "smtp_from_address", RELAY_FROM)
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
-    await _grant(db, watcher, BuiltinRoleKey.MEMBER, item.project_id)
-    await notify_service.create_notification(
-        db,
-        user_id=watcher.id,
-        type_=NotificationType.COMMENTED,
-        event_id=None,
-        item_id=item.id,
-        actor_id=None,
-        payload={"item_key": "NM-1", "item_title": "Printer on fire", "excerpt": "any update?"},
-    )
-
-    assert await mailer.run_batch(db) == 1
-
-    assert len(_addressed(relay, watcher.email)) == 1
-    stored = await db.execute(select(MailMessage).where(MailMessage.item_id == item.id))
-    assert list(stored.scalars()) == []
+# With NO transport registered (mailintake disabled) there is no env-relay copy
+# any more: the rows are recorded undeliverable and the inbox is untouched —
+# `test_notify_plugin_sockets.py` drives that against the real plugin (RADD-1385).
 
 
 async def test_nothing_is_stamped_when_there_is_nowhere_to_send_from(

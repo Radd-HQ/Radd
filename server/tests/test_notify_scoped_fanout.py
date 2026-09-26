@@ -104,7 +104,7 @@ async def _drain(db, after: int) -> None:
     outside like a notification nobody wanted. Here it raises.
     """
     for event in await events_service.read_after(db, after, 500):
-        if event.silent or event.event_type not in consumer._HANDLED:
+        if event.silent or not consumer.handles(event.event_type):
             continue
         await consumer._handle(db, event, watch_only=False)
 

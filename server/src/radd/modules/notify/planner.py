@@ -238,19 +238,21 @@ def plan_sla_breached(
     return plan
 
 
-def plan_page_event(
-    type_: NotificationType,
+def plan_subject_event(
+    type_: NotificationType | str,
     actor_id: uuid.UUID | None,
     audience: Audience,
     detail: dict | None = None,
 ) -> Plan:
-    """A page was created or edited (spec 118).
+    """A non-item subject's own event — a page created or edited (spec 118;
+    generic since RADD-1385, the kind comes from the subject's provider).
 
-    Wiki events have no personal half — nobody is "assigned" a page — so this is
+    Such events have no personal half — nobody is "assigned" a page — so this is
     one loop, and the whole of the decision is which scope each recipient stands
-    in. It plans no watch: `pages.update_page` auto-watches the editor on the
-    write path (RADD-719), and a second mechanism agreeing by luck is how the two
-    fan-outs this spec deleted came to disagree.
+    in. It plans no watch: the provider's module follows on its write path
+    (`pages.update_page` auto-watches the editor, RADD-719), and a second
+    mechanism agreeing by luck is how the two fan-outs spec 118 deleted came to
+    disagree.
     """
     plan = Plan()
     for user_id in audience.everyone():

@@ -507,10 +507,10 @@ async def test_page_update_fan_out_obeys_the_channel_rules(db):
     await db.flush()
     # `_handle`, not `_consume`: the latter swallows (a SAVEPOINT + a log line),
     # and here a raise should fail the test. Routing is still proved — the
-    # filter below is the consumer's own `_HANDLED`, so a page event missing
-    # from it would be skipped here exactly as it would be in production.
+    # filter below is the consumer's own `handles`, so a page event its subject
+    # provider does not claim would be skipped here exactly as in production.
     for event in await events_service.read_after(db, head, 100):
-        if event.event_type in consumer._HANDLED:
+        if consumer.handles(event.event_type):
             await consumer._handle(db, event, watch_only=False)
 
     assert await _count(db, muted, NotificationType.PAGE_UPDATED) == 0

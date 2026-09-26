@@ -4,8 +4,8 @@ A subscription's `scope_id` is a uuid the client chooses, and two things follow
 from that if nobody checks it.
 
 **A name oracle.** Delivery is safe on its own — every notification still passes
-`consumer._allowed` or `pages.refs.readable_page_ids_for_users`, so a rule
-pointing at a project you cannot read delivers nothing. But the preferences READ
+`consumer._allowed` or its subject provider's `reader_ids`, so a rule pointing
+at a project you cannot read delivers nothing. But the preferences READ
 resolves each target's name for display, because a settings page that renders
 "Subscribed to 3f2a-…" is a page nobody can audit. Store an arbitrary uuid, read
 it back, and that display is a lookup service for the name and key of every
@@ -20,7 +20,9 @@ uses, so the API and the UI cannot disagree about what exists:
 
 * project — `authz.visible_projects`, exactly `GET /projects` (RADD-937/1041);
 * team — `team.read`, exactly `GET /teams`, which is all-or-nothing (RADD-816);
-* space — `pages.access.readable_spaces`, exactly `GET /page-spaces` (RADD-791).
+* space — the `NOTIFICATION_SUBJECT` provider for the scope (the wiki's
+  `readable_spaces`, exactly `GET /page-spaces`, RADD-791), reached through the
+  kernel socket since RADD-1385, so a disabled wiki names no space at all.
 
 It is applied on BOTH sides. The write drops a target the actor may not name; the
 read refuses to label one. Two applications rather than one because a stored row
@@ -40,10 +42,15 @@ from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 
+from . import subjects
 from .types import SUBSCRIPTION_SCOPES, RuleScope
 
 #: What `readable_targets` answers with: {subscription scope: allowed target ids}.
 ReadableTargets = dict[RuleScope, set[uuid.UUID]]
+
+#: The subscription families notify gates itself. Any other names the container
+#: of a non-item subject, and that subject's provider answers for it.
+CORE_TARGETS: frozenset[RuleScope] = frozenset({RuleScope.PROJECT, RuleScope.TEAM})
 
 
 def targets_by_scope(
@@ -59,20 +66,6 @@ def targets_by_scope(
         if scope_id is not None and scope in SUBSCRIPTION_SCOPES:
             wanted.setdefault(scope, set()).add(scope_id)
     return wanted
-
-
-def _pages_access():
-    """The wiki's space-read seam, or None when the plugin is not loaded.
-
-    The module's usual deferred feature-detected import: `pages` loads AFTER
-    notify and is disableable. Absent, no space target is readable — which is the
-    correct answer, not a degradation: an instance with no wiki has no spaces.
-    """
-    try:
-        from radd.modules.pages import access as pages_access
-    except ImportError:
-        return None
-    return pages_access
 
 
 async def readable_targets(
@@ -100,14 +93,13 @@ async def readable_targets(
         allowed = await authz.holds(session, user, Permission.TEAM_READ)
         readable[RuleScope.TEAM] = set(teams) if allowed else set()
 
-    spaces = wanted.get(RuleScope.SPACE) or set()
-    if spaces:
-        pages_access = _pages_access()
-        if pages_access is None:
-            readable[RuleScope.SPACE] = set()
-        else:
-            visible_spaces = await pages_access.readable_spaces(session, user)
-            readable[RuleScope.SPACE] = spaces & set(visible_spaces)
+    for scope, ids in wanted.items():
+        if scope in CORE_TARGETS or not ids:
+            continue
+        # A container of a non-item subject (a wiki space): what its provider
+        # lets this actor name. No provider — the plugin disabled — names none,
+        # which is the correct answer: an instance with no wiki has no spaces.
+        readable[scope] = set(await subjects.scope_names(session, user, scope, set(ids)))
 
     return readable
 

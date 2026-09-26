@@ -1,7 +1,8 @@
-from radd.kernel import EntityLinkSpec
+from radd.kernel import EntityLinkSpec, IntegrationSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec, NavItemSpec, PluginUiManifest
 from radd.kernel import ConsumerResume, RaddPlugin
 from radd.kernel import SettingSpec
+from radd.kernel.sockets import Socket
 
 from . import dispatcher, registry, seeding
 from .config_router import router as config_router
@@ -10,7 +11,8 @@ from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .rules_router import router as rules_router
 from .automation import RESOLUTION_NODE
-from .types import MailEvent, OUTBOUND_CONSUMER_NAME
+from .notify_transport import NotificationMailTransport
+from .types import MAIL_TRANSPORT_NAME, MailEvent, OUTBOUND_CONSUMER_NAME
 
 plugin = RaddPlugin(
     name="mailintake",
@@ -27,13 +29,15 @@ plugin = RaddPlugin(
     description="Email in and out: turns incoming mail into issues and comments, and replies to requesters.",
     # attachments: mail parts become item attachments through the spec-102
     # polymorphic seam (RADD-956).
-    # notify is GONE from this list (RADD-968): outbound used to mail notify's
-    # watcher set, a second fan-out beside the one deciding the inbox. Users are
-    # mailed by notify now, which reaches this module the other way — a deferred,
-    # feature-detected call to `service.send_item_mail`.
+    # notify (RADD-1385): this plugin SERVES notify's `MAIL_TRANSPORT` socket
+    # (`notify_transport.py`) in notify's vocabulary (`NotificationMail`,
+    # `MailFailureReport`), so the edge points from the optional plugin to the
+    # core module. RADD-968 had removed it when outbound stopped mailing
+    # notify's watcher set; notify then reached in here by a deferred import a
+    # runtime disable could not switch off — the direction this reverses.
     depends_on=(
         "projects", "auth", "items", "comments", "automations", "events",
-        "attachments", "settings", "workflow",
+        "attachments", "settings", "workflow", "notify",
     ),
     # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
     # the module is optional and disableable, and a missing one must fall through
@@ -47,6 +51,11 @@ plugin = RaddPlugin(
     # The resolution notice as a node too, for rules that want it on their own
     # conditions; it shares `resolved.py`'s guards and wording.
     automation_nodes=(RESOLUTION_NODE,),
+    # RADD-1385: notification email rides this plugin through the kernel socket;
+    # disabling it withdraws the transport and notify records email undeliverable.
+    integrations=(
+        IntegrationSpec(Socket.MAIL_TRANSPORT, MAIL_TRANSPORT_NAME, impl=NotificationMailTransport()),
+    ),
     # RADD-1368: what the desk sends a requester on its own. Settings on the
     # Email page, run by this module, OFF until someone switches them on.
     # `section="email"` lands them on Settings → Email (RADD-930); the project

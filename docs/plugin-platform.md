@@ -355,6 +355,17 @@ These are named "sockets": a plugin declares it *provides* or *consumes* a socke
 - **SemanticCandidateSource** (built, RADD-1384) — meaning-ranked `(id, distance)` candidates per
   entity type. `ai` provides from its embeddings; search fuses them by RRF, time-budgeted, and
   falls back to full-text only on any failure — or when no provider is loaded.
+- **NotificationSubjectProvider** (built, RADD-1385) — a non-item thing notifications are about,
+  keyed by entity type: where it lives (`locate` → notify's `SubjectRef`), who watches it, who may
+  read it (the one gate for fan-out and the mail re-check), and its container's subscription
+  picker and labels. `pages` provides `page`. A withdrawn provider notifies nobody and its queued
+  rows stop being mailed.
+- **NotificationAudienceSource** (built, RADD-1385) — more people participating in an issue than
+  its watchers; every source UNIONs. `participants` provides the current members of an item's
+  participant teams.
+- **MailTransport** (built, RADD-1385) — carries notify's `NotificationMail` (its kind and failure
+  vocabulary are notify's). `mailintake` provides it. None registered ⇒ email is unavailable and
+  recorded as such; the inbox is untouched.
 
 Sockets are just a small typed registry: `register_provider(socket, name, impl)` +
 `get_provider(socket, name)` + a settings key that picks the active provider. This is how "add S3 as

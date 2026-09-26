@@ -51,41 +51,21 @@ class SentMailKind(StrEnum):
 
     Required of every caller, so a new sender cannot forget to say: a rule on
     "Email sent" that means "we replied to the customer" should not also fire on
-    the nightly digest.
+    the nightly digest. These are this module's senders and its dependents';
+    notify names its own two (`notify.transport.NotificationMailKind`:
+    notification | digest, RADD-1385), which is why the transport takes any
+    StrEnum rather than this one.
     """
 
     REPLY = "reply"  # a public comment relayed to the requester
-    NOTIFICATION = "notification"  # one notification mailed to a user
-    DIGEST = "digest"  # a batch of notifications
     SURVEY = "survey"  # a CSAT survey
     AUTOMATION = "automation"  # an automation's Send email
     RECEIPT = "receipt"  # the desk's receipt for a new email ticket (RADD-1368)
     RESOLUTION = "resolution"  # the desk's resolution notice (RADD-1368)
 
 
-class MailFailureReport(StrEnum):
-    """What the transport should do with a delivery failure (RADD-997/1036).
-
-    It replaces the `emit_failure` boolean, which could say "emit" or "don't"
-    and had no way to say the third thing an operator actually needs to know:
-    that a retry ladder RAN OUT and nobody will hear from us. Settings →
-    Monitoring counts those separately from the first blip of a send that
-    recovered a minute later, and a second boolean beside the first would have
-    made "silent AND terminal" expressible, which is nonsense.
-
-    * `REPORT` — emit `mail.failed`. The send is over the moment it fails: a
-      reply, an acknowledgement, a survey, an automation's email. The default,
-      and right for everyone who is not running a ladder.
-    * `SILENT` — a retry is coming, so the question the event answers ("did
-      this person hear from us?") is not settled yet. The live incident wrote
-      one event per recipient per five seconds into a stream every consumer
-      reads.
-    * `TERMINAL` — the last rung. Emitted, and marked given-up in the payload.
-    """
-
-    REPORT = "report"
-    SILENT = "silent"
-    TERMINAL = "terminal"
+#: RADD-1385: this plugin's provider name on the kernel MAIL_TRANSPORT socket.
+MAIL_TRANSPORT_NAME = "mailintake"
 
 
 class MailSourceKind(StrEnum):

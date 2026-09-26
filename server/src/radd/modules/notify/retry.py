@@ -33,14 +33,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-# The mail module's vocabulary for "what does this failure mean", declared in
-# notify's `weak_depends`. A wire enum, no runtime coupling: it is the value
-# this module hands BACK to the transport, and inventing a second name for the
-# same three answers is how two files come to disagree about what "silent"
-# means.
-from radd.modules.mailintake.types import MailFailureReport
-
 from .models import Notification
+
+# "What does this failure mean" — notify's own vocabulary since RADD-1385 (it
+# was mailintake's, imported across a plugin boundary): the value this ladder
+# hands the transport, defined beside the socket contract it travels over.
+from .transport import MailFailureReport
 
 #: How long to wait after the first, second and third consecutive failure. A
 #: fourth failure exhausts the ladder and the row is given up on.
