@@ -1,12 +1,5 @@
-/** Theme + density preferences (spec 39) — per-browser, applied on <html>.
- *
- * RADD-1238: a STORE, not just two localStorage setters. The account menu
- * computed its "Light theme"/"Dark theme" entry from `getTheme()` at render
- * and nothing re-rendered it when the theme changed, so the second click ran
- * the FIRST click's action again — the reported "cannot switch back without a
- * refresh". Every reader goes through `useAppearance()` now, so a change
- * anywhere re-renders everywhere.
- */
+/** Theme + density preferences — per-browser, applied on <html>. A STORE (RADD-1238): readers go
+ *  through `useAppearance()`, so a change anywhere re-renders every reader. */
 
 import { useSyncExternalStore } from "react";
 
@@ -14,10 +7,10 @@ const THEME_KEY = "radd.theme";
 const DENSITY_KEY = "radd.density";
 
 export const Theme = { dark: "dark", light: "light" } as const;
-export type ThemeValue = (typeof Theme)[keyof typeof Theme];
+type ThemeValue = (typeof Theme)[keyof typeof Theme];
 
 export const Density = { normal: "normal", compact: "compact" } as const;
-export type DensityValue = (typeof Density)[keyof typeof Density];
+type DensityValue = (typeof Density)[keyof typeof Density];
 
 export interface Appearance {
   theme: ThemeValue;
@@ -61,10 +54,6 @@ export function getTheme(): ThemeValue {
   return snapshot.theme;
 }
 
-export function getDensity(): DensityValue {
-  return snapshot.density;
-}
-
 export function setTheme(theme: ThemeValue): void {
   write(THEME_KEY, theme);
   publish({ ...snapshot, theme });
@@ -75,12 +64,12 @@ export function setDensity(density: DensityValue): void {
   publish({ ...snapshot, density });
 }
 
-export function subscribeAppearance(listener: () => void): () => void {
+function subscribeAppearance(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
-export function getAppearance(): Appearance {
+function getAppearance(): Appearance {
   return snapshot;
 }
 

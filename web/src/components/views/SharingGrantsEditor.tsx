@@ -12,14 +12,10 @@ import { TextField } from "../TextField";
 import { AddSharingGrantDialog, SHARE_LEVEL_OPTIONS } from "./AddSharingGrantDialog";
 
 /**
- * Who a view/dashboard is shared with, edited in place and saved with the
- * containing dialog — nothing here writes on its own.
- *
- * Only explicit changes are submitted; paging never turns unseen rows into
- * deletions. The saved list is a 50-row server window (RADD-1115), so a share
- * added in this dialog has no server row yet: it renders at the TOP of the
- * same list, marked New (RADD-1179) — the old "Unsaved changes" tab parked
- * additions out of sight and read as a staging step that never existed.
+ * Who a view/dashboard is shared with, edited in place and saved with the containing dialog. Only
+ * explicit changes are submitted, so paging never turns unseen rows into deletions. The saved list is
+ * a 50-row server window; a share added here has no server row yet, so it renders at the TOP of the
+ * same list, marked New.
  */
 export function SharingGrantsEditor({ resourceType, resourceId, draft, onChange }: {
   resourceType: "view" | "dashboard"; resourceId: string; draft: SharingDraft; onChange: (value: SharingDraft) => void;

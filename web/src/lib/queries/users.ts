@@ -33,18 +33,8 @@ import type {
   UserSummary,
 } from "../types";
 
-/**
- * Who exists, for naming them (RADD-769).
- *
- * Points at the member-floor directory, NOT `GET /users` — that one is gated on
- * `user.manage`, and this query is mounted by the assignee and reporter pickers,
- * the create modal, the bulk bar, `@`-mention autocomplete, the `/` quick
- * actions and page-history bylines. Every one of those fired a 403 for an
- * ordinary member, which is most of the toasts a member ever saw.
- *
- * The admin Users table keeps `usersAdminQuery` below, with the full shape and
- * the spec-84 filters.
- */
+/** Who exists, for naming them (RADD-769): the member-floor directory, NOT `GET /users`, which is
+ *  gated on `user.manage` and 403s for ordinary members. The admin table uses `usersAdminQuery`. */
 export const usersQuery = queryOptions({
   queryKey: queryKeys.users,
   queryFn: ({ signal }) => api.get<UserSummary[]>(ApiPath.userDirectory, { signal }),
@@ -54,26 +44,13 @@ export const usersQuery = queryOptions({
 export type { PeopleChoice };
 
 /**
- * The same directory, annotated for ONE project (RADD-938).
+ * The same directory, annotated for ONE project (RADD-938): each row gains `has_access`, so a
+ * person picker can put entitled people first. Annotation, never filtering — adding a no-access
+ * person as a participant is what grants them the project (RADD-937).
  *
- * For the controls that attach a person TO work — assignee, reporter,
- * participants — where "who exists" is not enough: each row gains `has_access`,
- * so a picker can put entitled people first and mark the rest instead of
- * offering everyone identically and letting you assign an issue to someone who
- * will never see it.
- *
- * Annotation, not filtering. The server marks; the UI groups. Adding a
- * no-access person as a participant is precisely what makes the project visible
- * to them (RADD-937), so the pick has to stay possible.
- *
- * `includeRequesters` (RADD-1034): the directory excludes `UserSource.EMAIL`
- * accounts by default — email intake provisions one, active, for every
- * unrecognized sender, and without the exclusion a forged message made
- * "Stranger <...@evil.example>" pickable by everyone. Pass `true` only for a
- * surface that genuinely means to offer them (the reporter picker on a
- * mail-born ticket); those rows come back with `external: true`. Folded into
- * the query key so the assignee picker's (filtered) cache and the reporter
- * picker's (opted-in) cache never collide on the same project.
+ * `includeRequesters` (RADD-1034): EMAIL-source accounts (one per unrecognized sender) are excluded
+ * by default, or a forged message would make its sender pickable by everyone. Opt in only where
+ * that is meant (the reporter picker on a mail-born ticket); it is part of the query key.
  */
 export const projectDirectoryQuery = (
   projectId: string | undefined,
@@ -224,8 +201,8 @@ export const teamByIdQuery = (id: string) => queryOptions({
   enabled: Boolean(id),
 });
 
-export interface TeamStewardPerson extends PeopleChoice { active: boolean }
-export interface TeamStewardshipData { owner: TeamStewardPerson | null; managers: TeamStewardPerson[]; total: number }
+interface TeamStewardPerson extends PeopleChoice { active: boolean }
+interface TeamStewardshipData { owner: TeamStewardPerson | null; managers: TeamStewardPerson[]; total: number }
 export const TEAM_STEWARDS_PAGE_SIZE = 50;
 export const teamStewardshipQuery = (teamId: string, page: number) => queryOptions({
   queryKey: [...queryKeys.teams, "stewardship", teamId, page] as const,
@@ -234,12 +211,6 @@ export const teamStewardshipQuery = (teamId: string, page: number) => queryOptio
     limit: String(TEAM_STEWARDS_PAGE_SIZE), offset: String(page * TEAM_STEWARDS_PAGE_SIZE),
   } }),
 });
-
-export const teamMembersQuery = (teamId: string) =>
-  queryOptions({
-    queryKey: queryKeys.teamMembers(teamId),
-    queryFn: ({ signal }) => api.get<TeamMember[]>(apiTeamMembersPath(teamId), { signal }),
-  });
 
 export const TEAM_MEMBERS_PAGE_SIZE = 50;
 export const teamMembersPageQuery = (teamId: string, q: string, page: number) => queryOptions({
@@ -257,7 +228,7 @@ export const groupsQuery = () =>
     staleTime: 60_000,
   });
 
-export interface TeamGroupChoice extends TeamGroup { direct_member_count: number; transitive_member_count: number }
+interface TeamGroupChoice extends TeamGroup { direct_member_count: number; transitive_member_count: number }
 export const TEAM_GROUPS_PAGE_SIZE = 50;
 const teamGroupWindow = <T extends TeamGroup>(teamId: string, q: string, page: number, candidates: boolean) => queryOptions({
   queryKey: [...queryKeys.teams, teamId, "groups", candidates ? "candidates" : "directory", q.trim(), page] as const,
@@ -281,13 +252,6 @@ export const groupReachQuery = (groupId: string) =>
     queryKey: ["groups", groupId, "reach"] as const,
     queryFn: ({ signal }) => api.get<GroupReach>(apiGroupReachPath(groupId), { signal }),
     staleTime: 60_000,
-  });
-
-/** A team's GROUP members (RADD-829). */
-export const teamGroupsQuery = (teamId: string) =>
-  queryOptions({
-    queryKey: [...queryKeys.teams, teamId, "groups"] as const,
-    queryFn: ({ signal }) => api.get<TeamGroup[]>(apiTeamGroupsPath(teamId), { signal }),
   });
 
 /** The caller's personal access tokens. */

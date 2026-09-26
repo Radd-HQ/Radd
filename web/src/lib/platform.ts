@@ -1,17 +1,5 @@
-/**
- * What to CALL the modifier key (RADD-906).
- *
- * Every shortcut handler in the SPA already accepts both — `event.metaKey ||
- * event.ctrlKey` — so the shortcuts have always worked everywhere. Only the
- * LABELS were wrong: ten places rendered a literal `⌘`, so a Windows or Linux
- * user was told to press a key their keyboard does not have, for a shortcut that
- * would have worked if they had guessed Ctrl. Reported from studio dogfooding, where the
- * artists are on Linux and the leads are on Macs.
- *
- * Resolved ONCE at module load. The platform cannot change mid-session, and a
- * hook would make every label a re-render's worth of work for an answer that is
- * already known.
- */
+/** What to CALL the modifier key (handlers already accept metaKey || ctrlKey).
+ *  Resolved once at module load — the platform cannot change mid-session. */
 
 /** Apple platforms use ⌘; everything else uses Ctrl. */
 function detectApple(): boolean {
@@ -26,13 +14,13 @@ function detectApple(): boolean {
   return /mac os x/i.test(navigator.userAgent ?? "");
 }
 
-export const IS_APPLE = detectApple();
+const IS_APPLE = detectApple();
 
 /** The modifier's NAME: `⌘` or `Ctrl`. */
 export const MOD_KEY = IS_APPLE ? "⌘" : "Ctrl";
 
 /** The shift modifier's name: `⇧` or `Shift`. */
-export const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift";
+const SHIFT_KEY = IS_APPLE ? "⇧" : "Shift";
 
 /**
  * A rendered shortcut: `⌘K` on a Mac, `Ctrl+K` elsewhere.

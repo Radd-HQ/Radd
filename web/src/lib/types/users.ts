@@ -1,9 +1,7 @@
 /** Auth, profile, users + admin, and personal access tokens (specs 01/34/48/84/86/89). */
 import type { PermissionValue } from "./permissions";
 import type { InstanceRoleValue } from "./settings";
-/** GET /auth/me (spec 01). Spec 86 stage 3: flat shape — `global_role` plus the
- * caller's GLOBAL permission union top-level (the synthetic `workspaces` array
- * is gone). */
+/** GET /auth/me: `global_role` plus the caller's GLOBAL permission union, top-level. */
 export interface Me {
   /** Spec 121: the request carried no credential — this is the Anyone
    *  principal's payload, not a person's. */
@@ -82,7 +80,7 @@ export interface ProjectUpdate {
  * module that owns it (`mail_source`, `mail_rule`); `hint` says where to fix it.
  * `url` is that owner's page for the row, from its declared entity links
  * (RADD-1378) — null when it has none, so the host never names the owner. */
-export interface ProjectBlocker {
+interface ProjectBlocker {
   kind: string;
   id: string;
   label: string;
@@ -139,17 +137,8 @@ export interface User {
   mfa_enabled?: boolean;
 }
 
-/**
- * One person as the member-floor directory returns them (RADD-769) —
- * `GET /users/directory`.
- *
- * Everything that only needs to NAME somebody reads this: assignee and reporter
- * pickers, `@`-mention autocomplete, "edited by" bylines. It is deliberately not
- * a `User`: no email, no instance role, no source. Those are administrative
- * facts, they are why `GET /users` is gated on `user.manage`, and requiring that
- * atom to draw an assignee dropdown is what put a 403 toast on nearly every
- * issue and page an ordinary member opened.
- */
+/** One person from the member-floor directory, `GET /users/directory` (RADD-769): enough to NAME
+ *  somebody. Deliberately not a `User` — email, role and source are admin facts behind `user.manage`. */
 export interface UserSummary {
   id: string;
   name: string;
@@ -189,7 +178,7 @@ export const DuplicateKind = {
   emailLocalPart: "email_local_part",
   name: "name",
 } as const;
-export type DuplicateKindValue = (typeof DuplicateKind)[keyof typeof DuplicateKind];
+type DuplicateKindValue = (typeof DuplicateKind)[keyof typeof DuplicateKind];
 
 export interface DuplicateUserGroup {
   kind: DuplicateKindValue;
@@ -203,7 +192,7 @@ export interface DuplicateUserGroup {
 /** RADD-784: one scope where a successor candidate holds less than the account
  * being deleted. Access never transfers on delete, so the candidate must
  * already hold at least what the account holds. */
-export interface SuccessorGap {
+interface SuccessorGap {
   scope_type: "instance" | "global" | "project" | "space";
   label: string;
   scope_id: string | null;

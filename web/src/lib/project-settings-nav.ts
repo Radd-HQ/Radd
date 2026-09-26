@@ -26,9 +26,9 @@ import { Permission } from "./types";
 import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Where a contributed nav entry lists itself when it is a project-settings page. */
-export const PROJECT_SETTINGS_NAV_SECTION = "project_settings";
+const PROJECT_SETTINGS_NAV_SECTION = "project_settings";
 
-export interface ProjectSettingsEntry {
+interface ProjectSettingsEntry {
   /** A route template (`/p/$projectKey/settings/…`); links pass `{ projectKey }`. */
   to: string;
   label: string;

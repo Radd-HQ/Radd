@@ -1,8 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { DEFLECT_DEBOUNCE_MS, DEFLECT_MIN_QUERY_CHARS } from "../../lib/constants";
-import { deflectQuery } from "../../lib/queries";
-import { DeflectPagesSection, DeflectItemsSection } from "../items/DeflectionPanel";
-import { Slot, SlotId, useDebounced } from "@radd/plugin-sdk";
+import { DeflectPagesSection, DeflectItemsSection, useDeflection } from "../items/DeflectionPanel";
+import { Slot, SlotId } from "@radd/plugin-sdk";
 
 interface FormAssistPanelProps {
   /** The draft title — seeds deflection alone (FTS wants short, dense text). */
@@ -24,13 +21,8 @@ interface FormAssistPanelProps {
  * dedupe on their keys, so the second mount is free.
  */
 export function FormAssistPanel({ title, description, projectId, className = "" }: FormAssistPanelProps) {
-  const debouncedTitle = useDebounced(title, DEFLECT_DEBOUNCE_MS);
-  const deflect = useQuery(deflectQuery(debouncedTitle, projectId));
-  const docs = deflect.data?.docs ?? [];
-  const resolved = deflect.data?.items ?? [];
-
-  // Gate on the LIVE title too — kept-previous data must not outlive a cleared draft.
-  if (title.trim().length < DEFLECT_MIN_QUERY_CHARS) return null;
+  const { docs, items: resolved, ready } = useDeflection(title, projectId);
+  if (!ready) return null;
 
   return (
     <div className={"flex flex-col gap-2.5 rounded-md border border-subtle bg-surface/40 p-2.5 empty:hidden " + className}>

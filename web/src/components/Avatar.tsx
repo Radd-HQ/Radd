@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { AvatarUser } from "@radd/plugin-sdk";
 import { initials } from "../lib/meta";
 import { usePersonIndicators } from "./PersonName";
 
@@ -31,15 +32,6 @@ function fallbackColor(id: string): string {
   let hash = 5381;
   for (const char of id) hash = (hash * 33 + char.charCodeAt(0)) >>> 0;
   return `hsl(${hash % 360} 45% 38%)`;
-}
-
-export interface AvatarUser {
-  id: string;
-  name: string;
-  avatar_color?: string | null;
-  avatar_emoji?: string | null;
-  /** RADD-1295: an uploaded picture, else the identity provider's (server-decided). */
-  avatar_url?: string | null;
 }
 
 export function Avatar({

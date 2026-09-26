@@ -90,7 +90,7 @@ export interface TeamRef {
 
 /** The ACTOR's per-row verdict (RADD-842) — writability is per-ROW once
  * relations exist (`item.update@own`). Absent = fall back to project-level. */
-export interface ItemCapabilities {
+interface ItemCapabilities {
   can_update: boolean;
   can_transition: boolean;
   can_comment: boolean;
@@ -240,7 +240,7 @@ export interface BulkUpdateResult {
   skipped: BulkSkipped[];
 }
 
-export interface BulkMovedItem {
+interface BulkMovedItem {
   item_id: string;
   old_key: string;
   new_key: string;

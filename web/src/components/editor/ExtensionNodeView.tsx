@@ -7,17 +7,8 @@ import { ExtensionError, UnknownExtension, lookupPageExtension, parseExtensionPa
 import { ExtensionConfig } from "./ExtensionConfig";
 
 /**
- * An extension block, rendered LIVE inside the editor (RADD-746).
- *
- * The same registry, the same `render`, the same failure cards as read mode —
- * `PageBody` and this view disagreeing about what a block looks like would
- * defeat the point of showing it while editing. What edit mode adds is the
- * chrome: a hover row to reconfigure or remove the block, because the
- * alternative was editing raw JSON inside a fence.
- *
- * `data-extension` mirrors the read-mode attribute deliberately: it is what
- * lets a headless check assert a fence became an ELEMENT rather than staying
- * source, and the assertion should read the same on both surfaces.
+ * An extension block rendered live in the editor: the same registry, `render` and failure cards as
+ * read mode, plus hover chrome to reconfigure or remove it. `data-extension` mirrors read mode for proofs.
  */
 export function ExtensionNodeView() {
   const { node, view, getPos, setAttrs, selected, decorations } = useNodeViewContext();
@@ -60,17 +51,8 @@ export function ExtensionNodeView() {
         (selected ? "outline-2 outline-offset-2 outline-focus" : "")
       }
     >
-      {/* Hover chrome, INSIDE the wrapper's box on purpose.
-
-          It sat at `-top-3` first, which looked better and did not work: an
-          absolutely-positioned child above its parent's box is outside the
-          area that triggers `group-hover`, so moving the pointer from the block
-          toward the button dismissed the button on the way. The proof caught it
-          by hit-testing the click point — what was painted there was the H1
-          above, not the button. Keep the chrome within the group it belongs to.
-
-          The card's own header is left-aligned, so the top-right corner is
-          empty and nothing is covered. */}
+      {/* Chrome stays INSIDE the wrapper's box: above it (`-top-3`) it leaves the `group-hover` area,
+          and moving toward the button dismissed it. */}
       <div className="radd-extension-chrome pointer-events-none absolute top-1.5 right-1.5 z-10 flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
         <button
           type="button"

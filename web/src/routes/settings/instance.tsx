@@ -66,12 +66,8 @@ const CATEGORY_ORDER = ["infra", "auth", "storage", "ai", "feature"];
 const CONNECTOR = "connector";
 const HOST_OWNED: Record<string, string> = { attachments: RoutePath.settingsStorage };
 
-/**
- * Every capability the loaded plugins report (RADD-1389). The page used to render a fixed schema
- * that named SSO, LDAP, SMTP and AI, so the core had to know every optional plugin and a mail
- * setup made of sender rows read Off. Now each plugin says what it is and how it is doing; the row
- * links wherever its plugin's settings live, and a disabled plugin has no row at all.
- */
+/** Every capability the loaded plugins report (RADD-1389), each row linking to its plugin's
+ *  settings; a disabled plugin has no row. */
 function StatusGrid({ manifest }: { manifest: CapabilitiesManifest }) {
   const rows = manifest.capabilities
     .filter((cap) => cap.category !== CONNECTOR)
@@ -106,11 +102,8 @@ function rank(category: string): number {
   return index === -1 ? CATEGORY_ORDER.length : index;
 }
 
-/**
- * Server status (spec 50; status-only since spec 67; generic since RADD-1389) — instance-admin
- * only (the tab is hidden otherwise). Shows what each loaded plugin reports as set up. The editable
- * product defaults live on the General tab; secrets are configured via environment variables only.
- */
+/** Server status (instance admin): what each loaded plugin reports as set up. Editable defaults
+ *  live on General; secrets come from the environment only. */
 export function InstanceSettingsPage() {
   // Fresh on every visit: a plugin page's write cannot name this query, and a status page that
   // lags the change you just made reads as the change not working.

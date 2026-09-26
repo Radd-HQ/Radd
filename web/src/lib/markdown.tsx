@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { jiraToMarkdown } from "./jira-markup";
 import { MermaidDiagram } from "../components/editor/MermaidDiagram";
+import { nodeText } from "../components/Select";
 import { isMermaid } from "../components/editor/mermaid";
 import { useOpenIssueRef } from "./hooks";
 import {
@@ -92,7 +93,7 @@ const HEADING = {
 const heading = (cls: string, level: number) =>
   function Heading({ children }: { children?: ReactNode }) {
     const seen = useContext(HeadingIdCtx);
-    const text = textOf(children);
+    const text = nodeText(children);
     const id = useMemo(() => headingAnchorId(text, seen), [text, seen]);
     const Tag = `h${level}` as "h1";
     return (
@@ -101,15 +102,6 @@ const heading = (cls: string, level: number) =>
       </Tag>
     );
   };
-
-/** Flatten a React children tree to its text, for the anchor id. */
-function textOf(node: ReactNode): string {
-  if (node === null || node === undefined || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(textOf).join("");
-  const props = (node as { props?: { children?: ReactNode } }).props;
-  return props ? textOf(props.children) : "";
-}
 
 /** Per-render duplicate counter, so `## Setup` twice yields setup / setup-2. */
 const HeadingIdCtx = createContext<Map<string, number>>(new Map());
@@ -247,7 +239,7 @@ function extensionBlockOf(
   if (!props) return null;
   const name = extensionNameOf(props.className);
   if (!name) return null;
-  return { name, body: textOf(props.children) };
+  return { name, body: nodeText(props.children) };
 }
 
 /**
@@ -261,7 +253,7 @@ function mermaidSourceOf(children: ReactNode): string | null {
   const props = (only as { props?: { className?: string; children?: ReactNode } })?.props;
   if (!props) return null;
   const language = /language-([\w-]+)/.exec(props.className ?? "")?.[1] ?? "";
-  return isMermaid(language) ? textOf(props.children) : null;
+  return isMermaid(language) ? nodeText(props.children) : null;
 }
 
 

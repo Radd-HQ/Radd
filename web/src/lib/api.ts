@@ -89,9 +89,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (await response.json()) as T;
 }
 
-/** Rows + the pre-pagination total from X-Total-Count (RADD-883). `total` is
- * null when the server didn't send the header — an unpaged request. */
-
 export interface CursorPage<T> { rows: T[]; next: string | null }
 
 async function cursorRequest<T>(path: string, options: Omit<RequestOptions, "method" | "body"> = {}): Promise<CursorPage<T>> {
@@ -189,17 +186,9 @@ export function customFieldErrors(error: unknown): Record<string, string> {
   return result;
 }
 
-/**
- * Intake-validation findings from a spec-119 422
- * (`{detail: "item validation failed", findings: [{message, field}], mode}`).
- * Empty for any other error shape.
- *
- * Separate from `customFieldErrors` even though both end up highlighting a
- * control, because the payloads are different contracts and conflating them is
- * how a client starts guessing: `errors` is a list of `"key: message"` strings
- * about values the API could not accept, and `findings` are objects about things
- * a person should go and fix, addressed at builtin fields as well as custom ones.
- */
+/** Intake-validation findings from a spec-119 422 (`{findings: [{message, field}], …}`); empty
+ *  otherwise. Not `customFieldErrors`: those are `"key: message"` strings about unacceptable values,
+ *  findings are advice addressed at builtin fields too — different contracts. */
 export function validationFindings(error: unknown): Finding[] {
   if (!(error instanceof ApiError) || !error.detail || typeof error.detail !== "object") {
     return [];
@@ -220,18 +209,9 @@ export function validationFindings(error: unknown): Finding[] {
   });
 }
 
-/**
- * Whether a spec-119 error's findings REFUSE the creation (`{…, blocking:
- * true}`), or null when the error is not one of those at all.
- *
- * The server's own `verdict.blocks` — the same property that decides the 409 on
- * `commit: always` — read from the same payload as the findings, and never
- * derived here. `mode === "required"` is NOT this: a draft governed by a
- * required graph and an advisory one, tripping only the advisory, is advised and
- * not refused, and a client computing the affordance itself would hide a button
- * the server would have honoured. One fact, computed once, on the side that
- * enforces it.
- */
+/** Whether a spec-119 error's findings REFUSE the creation, or null for any other error. The
+ *  server's own `verdict.blocks`, never derived from `mode === "required"`: a draft tripping only
+ *  an advisory graph beside a required one is advised, not refused. */
 export function validationBlocking(error: unknown): boolean | null {
   if (!(error instanceof ApiError) || !error.detail || typeof error.detail !== "object") {
     return null;
@@ -257,12 +237,8 @@ export function findingsByField(findings: Finding[]): Record<string, string> {
 /** Backend detail prefix for a field-grant write rejection (spec 07). */
 const DENIED_FIELDS_PREFIX = "no permission to write custom fields: ";
 
-/**
- * Field keys named by a fields-grant 403
- * (`"no permission to write custom fields: a, b"`). Empty for any other error —
- * the client can't predict writability up front (grants + the user's subjects
- * aren't exposed), so denial is surfaced inline per field after the fact.
- */
+/** Field keys named by a fields-grant 403 (`"no permission to write custom fields: a, b"`); empty
+ *  otherwise. A backstop: `/fields/writable` disables these up front, but a grant can change after. */
 export function deniedCustomFieldKeys(error: unknown): string[] {
   if (!(error instanceof ApiError) || error.status !== 403) return [];
   const detail = errorMessage(error);

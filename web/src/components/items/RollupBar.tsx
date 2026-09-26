@@ -10,7 +10,7 @@ import { formatPoints } from "./ItemBadges";
  */
 
 /** "3/8 done · 5 pts of 13" — the shared tooltip/summary line. */
-export function rollupSummary(rollup: ItemRollup, showPoints: boolean): string {
+function rollupSummary(rollup: ItemRollup, showPoints: boolean): string {
   const parts = [`${rollup.done}/${rollup.total} done`];
   if (showPoints && rollup.points_total > 0) {
     parts.push(`${formatPoints(rollup.points_done)} pts of ${formatPoints(rollup.points_total)}`);

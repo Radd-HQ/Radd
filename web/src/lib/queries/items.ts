@@ -2,7 +2,6 @@
 
 import { commentFeedQuery, CommentSection } from "./comment-feed";
 import { queryOptions } from "@tanstack/react-query";
-import { allRelationRows } from "../pagination";
 import { api, type CursorPage } from "../api";
 import { Entity, entityMeta } from "../cache";
 import {
@@ -12,7 +11,7 @@ import {
   apiItemCommentsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
-import type { Attachment, AttachmentTarget, Comment, Item } from "../types";
+import type { Attachment, AttachmentTarget, Item } from "../types";
 import type { ValidationContext } from "@radd-plugin-ui/automations/types";
 
 /**
@@ -29,15 +28,6 @@ export const itemByKeyQuery = (key: string) =>
     retry: false,
   });
 
-/** Comments for an item; other readers refresh through comment event metadata. */
-export const commentsQuery = (itemId: string) =>
-  queryOptions({
-    queryKey: queryKeys.comments(itemId),
-    meta: entityMeta(Entity.comment),
-    queryFn: ({ signal }) => api.get<Comment[]>(apiItemCommentsPath(itemId), { signal }),
-    retry: false,
-  });
-
 /** Files attached to a parent — item or page (spec 29; polymorphic). */
 export const attachmentsQuery = (target: AttachmentTarget) =>
   queryOptions({
@@ -50,27 +40,8 @@ export const attachmentsQuery = (target: AttachmentTarget) =>
     meta: entityMeta(Entity.attachment),
   });
 
-/**
- * One item's DIRECT children (RADD-655): an epic's issues, or an issue's
- * subtasks. Scoped by the same RBAC every other item read uses — the filter is
- * `parent_id`, which the items list already supports.
- */
-export const childItemsQuery = (parentId: string) =>
-  queryOptions({
-    queryKey: queryKeys.childItems(parentId),
-    meta: entityMeta(Entity.item),
-    queryFn: ({ signal }) => allRelationRows<Item>(ApiPath.items, { parent_id: parentId }, signal),
-  });
-
-/**
- * Whether intake validation governs a draft with this shape (spec 119) — and
- * how hard, which is what decides whether "create anyway" is on offer.
- *
- * Re-queried on TYPE change, because a project may validate only its Bug type,
- * and a button that kept saying "Create" after someone switched to it would be
- * lying about what pressing it does. Cheap and cached: it resolves an index, no
- * graph is walked.
- */
+/** Whether (and how hard) intake validation governs a draft of this shape — what decides whether
+ *  "create anyway" is offered. Keyed on TYPE, since a project may validate only its Bug type. */
 export const validationContextQuery = (
   projectId: string | undefined,
   typeId?: string | null,
@@ -98,7 +69,7 @@ export const validationContextQuery = (
 export const itemCommentFeedQuery = (itemId: string, unresolvedOnly = false, through?: string) =>
   commentFeedQuery(queryKeys.comments(itemId), apiItemCommentsPath(itemId), CommentSection.all, unresolvedOnly, through);
 
-/** Incremental direct-child reads; complete-relation callers retain childItemsQuery. */
+/** An item's DIRECT children (an epic's issues, an issue's subtasks), cursor-paged. */
 export const childItemPagesQuery = (parentId: string) => ({
   queryKey: ["child-item-cursors", parentId],
   meta: entityMeta(Entity.item),

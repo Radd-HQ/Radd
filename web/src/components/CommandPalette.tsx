@@ -85,15 +85,8 @@ const STATIC_GOTOS: GotoEntry[] = [
   { label: "Settings", icon: Settings, to: RoutePath.settings },
 ];
 
-/**
- * Snippets arrive with ts_headline's `<b>…</b>` marks. Rendered WITHOUT
- * innerHTML: split on the markers and emit text + <mark> nodes, so hostile
- * text in titles/comments can never execute (worst case a literal "<b>" in
- * a comment reads as a highlight boundary).
- */
-/** ts_headline's <b> markers as React <mark>s — shared with the public KB
- * search (RADD-1099), never innerHTML. */
-export function renderSnippet(snippet: string): ReactNode[] {
+/** ts_headline `<b>` marks as React `<mark>`s — split, never innerHTML, so hostile text cannot execute. */
+function renderSnippet(snippet: string): ReactNode[] {
   return snippet.split("<b>").flatMap((chunk, index) => {
     if (index === 0) return [chunk];
     const [marked, ...rest] = chunk.split("</b>");

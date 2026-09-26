@@ -27,7 +27,6 @@ import type { ConnectorEdge } from "./Connectors";
 import {
   RANK_CHAIN_MIN_ITEMS,
   RoadmapRowKind,
-  cascadePlan,
   cascadePlanMulti,
   childrenDateOrder,
   epicMovePlan,
@@ -35,36 +34,30 @@ import {
   isoDaysBetween,
   isoFromDay,
   roadmapReorderNeighbours,
-  shiftIso,
   type RoadmapModel,
   type RoadmapMove,
-  type RoadmapPlanPatch,
   type RoadmapRow,
   type RoadmapSpan,
 } from "./roadmap-model";
 import { BarDragMode, type CommitModifiers } from "./useBarDrag";
 import type { RoadmapDraft } from "./useRoadmapDraft";
-import { todayIso } from "@radd/plugin-sdk";
+import { shiftIsoDay, todayIso } from "@radd/plugin-sdk";
 
 /**
- * Everything stateful about roadmap EDITING (specs 77 + 78 + 79 + 82), so
- * RoadmapSurface stays chrome: the date-PATCH mutation (with the dependency
- * cascade + the union-deduped parent-epic auto-stretch), tray drop scheduling,
- * the link popover (create after a ○-drop, retype/remove from a connector
- * click), the per-VIEW epic collapse set (localStorage, spec 79 — roadmaps are
- * saved views), the context-menu anchor, and the spec-82 rank writes: the
- * sibling row reorder and the sequential rank chain (date-order verb +
- * auto-schedule's appended chain).
+ * Everything stateful about roadmap EDITING, so RoadmapSurface stays chrome:
+ * gesture commits (cascade + epic stretch) and plan patches into the draft,
+ * Save, tray-drop scheduling, the link popover, the per-VIEW epic collapse set
+ * (localStorage), the context-menu anchor, and the rank writes.
  */
 
-export interface RoadmapMenuAnchor {
+interface RoadmapMenuAnchor {
   row: RoadmapRow;
   x: number;
   y: number;
 }
 
 /** The link popover's subject: `linkId` present = editing an existing link. */
-export interface RoadmapLinkAnchor {
+interface RoadmapLinkAnchor {
   x: number;
   y: number;
   sourceId: string;
@@ -135,11 +128,9 @@ export function useRoadmapEditing(
     [viewId],
   );
 
-  /** Record a patch list as ONE draft op (menu verbs, plans) — nothing hits
-   *  the server until Save (draft wave). `onSuccess` fires synchronously so
-   *  the existing toast/chain call sites keep working unchanged. */
+  /** Record a patch list as ONE draft op (menu verbs, plans); nothing hits the server until Save. */
   const applyPatches = useCallback(
-    (patches: RoadmapDatePatch[], onSuccess?: () => void, label?: string) => {
+    (patches: RoadmapDatePatch[], label?: string) => {
       if (patches.length === 0) return;
       draft.pushOp({
         kind: "patch",
@@ -151,7 +142,6 @@ export function useRoadmapEditing(
           insert: entry.insert,
         })),
       });
-      onSuccess?.();
     },
     [draft],
   );
@@ -163,9 +153,7 @@ export function useRoadmapEditing(
     if (!draft.dirty || saving) return;
     setSaving(true);
     try {
-      const patches = draft
-        .netPatches(baseItems)
-        .map((entry) => ({ itemId: entry.itemId, patch: entry.patch, optimistic: { ...entry.patch } }));
+      const patches = draft.netPatches(baseItems);
       if (patches.length > 0) await patchItems.mutateAsync({ patches });
       for (const intent of draft.intents()) {
         if (intent.kind === "reorder") {
@@ -194,27 +182,22 @@ export function useRoadmapEditing(
   }, [draft, baseItems, saving, patchItems, reorderItem, queryClient]);
 
   /**
-   * Commit a move/resize (specs 78 + 81): PATCH the changed date(s); when the
-   * target date changed, run the dependency cascade over the loaded rows
-   * (skipped with Alt held at drop, aborted past the cap) — every push joins
-   * the SAME optimistic unit. A BODY move of a non-derived epic is a CONTAINER
-   * move: every loaded scheduled child shifts by the same delta and the whole
-   * moved set seeds the (multi-seed) cascade; Alt = "just this bar" skips the
-   * children too. Union-deduped parent-epic outward stretches ride along for
-   * every moved item; one rollback + toast on failure.
+   * Commit a move/resize as ONE draft op (specs 78 + 81): the changed date(s),
+   * then — when the target changed and Alt wasn't held — the dependency
+   * cascade (skipped past the cap). A BODY move of a non-derived epic is a
+   * CONTAINER move: its loaded scheduled children shift by the same delta and
+   * the whole set seeds the cascade. Parent-epic outward stretches ride along.
    */
   const commitSpan = useCallback(
     (row: RoadmapRow, span: RoadmapSpan, modifiers: CommitModifiers) => {
       if (!model.domainStart) return;
       const start = isoFromDay(model.domainStart, span.startIndex);
       const target = isoFromDay(model.domainStart, span.endIndex);
-      const patches: RoadmapDatePatch[] = [];
-      const append = (planned: RoadmapPlanPatch[]) => {
-        for (const entry of planned) {
-          patches.push({ itemId: entry.itemId, patch: entry.patch, optimistic: { ...entry.patch } });
-        }
-      };
-      let onSuccess: (() => void) | undefined;
+      let patches: RoadmapDatePatch[];
+      let seeds: RoadmapMove[];
+      let cascade: boolean;
+      let label: string;
+      let moved: string;
 
       // Epic container move (spec 81): the epic + its loaded scheduled
       // children shift together (RESIZE and Alt keep the single-bar path).
@@ -225,60 +208,43 @@ export function useRoadmapEditing(
         !row.derived;
       if (containerMove) {
         const deltaDays = isoDaysBetween(row.item.start_date!, start);
-        const plan = epicMovePlan(model.rows, row.item.id, deltaDays);
-        if (plan.patches.length === 0) return;
-        append(plan.patches);
-        const seeds: RoadmapMove[] = plan.patches.map((entry) => ({
+        const container = epicMovePlan(model.rows, row.item.id, deltaDays);
+        if (container.patches.length === 0) return;
+        patches = [...container.patches];
+        seeds = container.patches.map((entry) => ({
           itemId: entry.itemId,
           start: entry.patch.start_date!,
           target: entry.patch.target_date!,
         }));
-        const cascade = cascadePlanMulti(model.rows, seeds);
-        if (cascade.truncated) {
-          pushToast(
-            `More than ${ROADMAP_CASCADE_MAX_ITEMS} dependent items — cascade skipped, only ${row.item.key} and its children were moved.`,
-          );
-          append(epicStretchPatches(model.rows, seeds));
-        } else {
-          append(cascade.patches);
-          if (cascade.cascadedCount > 0) {
-            const count = cascade.cascadedCount;
-            onSuccess = () =>
-              pushToast(`Rescheduled ${count} dependent issue${count === 1 ? "" : "s"}`);
-          }
-        }
-        applyPatches(patches, onSuccess, `Move ${row.item.key} + children`);
-        return;
-      }
-
-      const patch: ItemUpdate = {};
-      if (start !== row.item.start_date) patch.start_date = start;
-      if (target !== row.item.target_date) patch.target_date = target;
-      if (patch.start_date === undefined && patch.target_date === undefined) return;
-      patches.push({ itemId: row.item.id, patch, optimistic: { ...patch } });
-      const move: RoadmapMove = { itemId: row.item.id, start, target };
-
-      // The cascade fires only on commits that CHANGE the target date; Alt at
-      // drop is the escape hatch (documented on the Dependencies toggle).
-      if (patch.target_date === undefined || modifiers.alt) {
-        append(epicStretchPatches(model.rows, [move]));
+        cascade = true;
+        label = `Move ${row.item.key} + children`;
+        moved = `${row.item.key} and its children were`;
       } else {
-        const plan = cascadePlan(model.rows, row.item.id, { start, target });
-        if (plan.truncated) {
-          pushToast(
-            `More than ${ROADMAP_CASCADE_MAX_ITEMS} dependent items — cascade skipped, only ${row.item.key} was moved.`,
-          );
-          append(epicStretchPatches(model.rows, [move]));
-        } else {
-          append(plan.patches);
-          if (plan.cascadedCount > 0) {
-            const count = plan.cascadedCount;
-            onSuccess = () =>
-              pushToast(`Rescheduled ${count} dependent issue${count === 1 ? "" : "s"}`);
-          }
-        }
+        const patch: ItemUpdate = {};
+        if (start !== row.item.start_date) patch.start_date = start;
+        if (target !== row.item.target_date) patch.target_date = target;
+        if (patch.start_date === undefined && patch.target_date === undefined) return;
+        patches = [{ itemId: row.item.id, patch }];
+        seeds = [{ itemId: row.item.id, start, target }];
+        // The cascade fires only on commits that CHANGE the target date; Alt at
+        // drop is the escape hatch (documented on the Dependencies toggle).
+        cascade = patch.target_date !== undefined && !modifiers.alt;
+        label = `Reschedule ${row.item.key}`;
+        moved = `${row.item.key} was`;
       }
-      applyPatches(patches, onSuccess, `Reschedule ${row.item.key}`);
+
+      const plan = cascade ? cascadePlanMulti(model.rows, seeds) : null;
+      if (plan && plan.truncated) {
+        pushToast(
+          `More than ${ROADMAP_CASCADE_MAX_ITEMS} dependent items — cascade skipped, only ${moved} moved.`,
+        );
+      }
+      patches.push(...(plan && !plan.truncated ? plan.patches : epicStretchPatches(model.rows, seeds)));
+      applyPatches(patches, label);
+      if (plan && !plan.truncated && plan.cascadedCount > 0) {
+        const count = plan.cascadedCount;
+        pushToast(`Rescheduled ${count} dependent issue${count === 1 ? "" : "s"}`);
+      }
     },
     [model, applyPatches],
   );
@@ -296,7 +262,7 @@ export function useRoadmapEditing(
           : todayIso();
       const spanDays =
         item.kind === ItemKind.epic ? ROADMAP_EPIC_SPAN_DAYS : ROADMAP_LEAF_SPAN_DAYS;
-      const target = shiftIso(start, spanDays);
+      const target = shiftIsoDay(start, spanDays);
       // Direct draft push: the tray item is not in the roadmap's base fetch,
       // so the op carries the full Item (draft-wave INSERT) for drawing.
       draft.pushOp({
@@ -384,14 +350,9 @@ export function useRoadmapEditing(
     setLinkAnchor(null);
   }, [linkAnchor, deleteLink]);
 
-  /**
-   * Vertical row reorder (spec 82): a label drop on the top/bottom half of a
-   * SIBLING persists through the spec-24 global rank PATCH, anchored on the
-   * adjacent siblings from the model's row order — optimistic against the
-   * view's paged item cache (`useReorderItem`, the ViewList idiom; the same
-   * `viewItems` key `useRoadmapItemPatch` paints). Non-sibling drops resolve
-   * to null and do nothing.
-   */
+  /** Vertical row reorder (spec 82): a drop on the top/bottom half of a
+   *  SIBLING records a rank intent anchored on the adjacent siblings;
+   *  non-sibling drops do nothing. */
   const reorderRow = useCallback(
     (moved: RoadmapRow, target: RoadmapRow, before: boolean) => {
       const neighbours = roadmapReorderNeighbours(model.rows, moved, target, before);
@@ -407,26 +368,17 @@ export function useRoadmapEditing(
     [model.rows, draft],
   );
 
-  /**
-   * Rewrite ranks to match `orderedIds` via a SEQUENTIAL after_id chain
-   * (spec 82): item[i] ranks after item[i-1], each PATCH anchoring on the
-   * previous item's fresh rank — so the awaits must be sequential. The first
-   * item stays put; ranks are global, so the chain deliberately touches ONLY
-   * the ordered set (epics/children interleave — no epic anchor). One error
-   * toast + stop on failure; ONE item-entity invalidation at the end either
-   * way (no optimistic paint — the refetch snaps the rows over).
-   */
+  /** Record a rank chain (spec 82) as one draft op: at Save item[i] ranks
+   *  after item[i-1], sequentially. Ranks are global, so the chain touches
+   *  ONLY the ordered set. */
   const applyRankChain = useCallback(
-    // Draft wave: the chain is recorded as one op (the sequential rank PATCHes
-    // replay at Save).
-    (orderedIds: string[], onSuccess?: () => void) => {
+    (orderedIds: string[]) => {
       if (orderedIds.length < RANK_CHAIN_MIN_ITEMS) return;
       draft.pushOp({
         kind: "chain",
         label: `Order ${orderedIds.length} rows by date`,
         orderedIds,
       });
-      onSuccess?.();
     },
     [draft],
   );
@@ -437,11 +389,9 @@ export function useRoadmapEditing(
     (row: RoadmapRow) => {
       const ordered = childrenDateOrder(row.children);
       if (ordered.length < RANK_CHAIN_MIN_ITEMS) return;
-      applyRankChain(
-        ordered.map((child) => child.id),
-        // Always >= RANK_CHAIN_MIN_ITEMS here, so plural is safe.
-        () => pushToast(`Ordered ${ordered.length} children by date`),
-      );
+      applyRankChain(ordered.map((child) => child.id));
+      // Always >= RANK_CHAIN_MIN_ITEMS here, so plural is safe.
+      pushToast(`Ordered ${ordered.length} children by date`);
     },
     [applyRankChain],
   );

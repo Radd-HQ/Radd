@@ -1,20 +1,20 @@
 import { ItemLinkType } from "../../lib/types";
-import { barRenderRightX, isBlocksViolation, type RoadmapRow } from "./roadmap-model";
+import {
+  ROADMAP_ROW_H,
+  barRenderRightX,
+  isBlocksViolation,
+  rowWindowIso,
+  type RoadmapRow,
+} from "./roadmap-model";
 
 /**
- * SVG overlay for the roadmap (specs 77 + 78): elbow connectors for existing
- * manual links (`blocks`/`relates`/`duplicates` — mentions are noise) whose
- * BOTH endpoints render as visible bars (filtered-out endpoints keep the red
- * "depends on" chip fallback), plus the live rubber band while a link drag is
- * in flight. `blocks` draws danger red — dashed warning amber when the edge is
- * VIOLATED (dependent starts on/before the blocker's end); `relates`/
- * `duplicates` draw a neutral grey. The overlay itself passes pointer events
- * through, but each elbow carries a wide invisible hit path — clicking one
- * opens the link popover (retype/remove) when the caller wires `onEdgeClick`.
- *
- * Colors are `var()` references (RADD-900) so the SVG strokes follow the theme
- * — the old hexes were theme-blind, and one comment still called indigo "the
- * app's interaction accent" a full wave after the accent went periwinkle.
+ * SVG overlay (specs 77 + 78): elbow connectors for manual links whose BOTH
+ * endpoints are visible bars (otherwise the "depends on" chip covers it), plus
+ * the live rubber band during a link drag. `blocks` draws danger red, dashed
+ * warning amber when VIOLATED; `relates`/`duplicates` neutral. The overlay
+ * passes pointer events through; each elbow carries a wide invisible hit path
+ * that opens the link popover when `onEdgeClick` is wired. Colours are theme
+ * `var()`s so strokes follow light/dark.
  */
 
 /** Matches the "depends on" chip the connectors replace. */
@@ -56,7 +56,7 @@ interface Edge extends ConnectorEdge {
 }
 
 /** Source right edge → target left edge, orthogonal segments only. */
-function elbowPath(edge: Edge, rowHeight: number): string {
+function elbowPath(edge: Edge): string {
   const { sx, sy, tx, ty } = edge;
   if (tx - STUB_PX >= sx) {
     // Forward: out of the source, turn just before the target, drop in.
@@ -64,27 +64,21 @@ function elbowPath(edge: Edge, rowHeight: number): string {
     return `M ${sx} ${sy} H ${tx - STUB_PX} V ${ty} H ${tx}`;
   }
   // Backward: duck into the gutter between rows, run left, come back in.
-  const gutterY = ty > sy ? ty - rowHeight / 2 : ty + rowHeight / 2;
+  const gutterY = ty > sy ? ty - ROADMAP_ROW_H / 2 : ty + ROADMAP_ROW_H / 2;
   return `M ${sx} ${sy} H ${sx + STUB_PX} V ${gutterY} H ${tx - STUB_PX} V ${ty} H ${tx}`;
 }
-
-/** A row's effective window ISO — derived epics fall back to their children. */
-const startIsoOf = (row: RoadmapRow) => row.item.start_date ?? row.childrenBounds?.minStart;
-const targetIsoOf = (row: RoadmapRow) => row.item.target_date ?? row.childrenBounds?.maxTarget;
 
 export function Connectors({
   rows,
   dayWidth,
-  rowHeight,
   width,
   showEdges,
   rubber,
   onEdgeClick,
 }: {
-  /** VISIBLE rows in render order — index i sits at y = i * rowHeight. */
+  /** VISIBLE rows in render order — index i sits at y = i * ROADMAP_ROW_H. */
   rows: RoadmapRow[];
   dayWidth: number;
-  rowHeight: number;
   width: number;
   showEdges: boolean;
   rubber: RubberBand | null;
@@ -93,7 +87,7 @@ export function Connectors({
 }) {
   // One spare row of height so the rubber band isn't clipped over the open
   // drop lane below the last row.
-  const height = (rows.length + 1) * rowHeight;
+  const height = (rows.length + 1) * ROADMAP_ROW_H;
   const posById = new Map(rows.map((row, index) => [row.item.id, { row, index }] as const));
 
   const edges: Edge[] = [];
@@ -103,8 +97,8 @@ export function Connectors({
         if (link.link_type === ItemLinkType.mentions) continue; // auto-derived noise
         const target = posById.get(link.item.id);
         if (!target) continue; // endpoint filtered out — the chip covers it
-        const dependentStart = startIsoOf(target.row);
-        const blockerTarget = targetIsoOf(row);
+        const dependentStart = rowWindowIso(target.row).start;
+        const blockerTarget = rowWindowIso(row).target;
         edges.push({
           linkId: link.id,
           linkType: link.link_type,
@@ -115,9 +109,9 @@ export function Connectors({
           // Off the CLAMPED right edge — min-width bars are wider than their
           // logical span, and the elbow must start at the visible edge.
           sx: barRenderRightX(row.startIndex, row.endIndex, dayWidth),
-          sy: index * rowHeight + rowHeight / 2,
+          sy: index * ROADMAP_ROW_H + ROADMAP_ROW_H / 2,
           tx: target.row.startIndex * dayWidth,
-          ty: target.index * rowHeight + rowHeight / 2,
+          ty: target.index * ROADMAP_ROW_H + ROADMAP_ROW_H / 2,
           violated:
             link.link_type === ItemLinkType.blocks &&
             Boolean(dependentStart && blockerTarget) &&
@@ -143,7 +137,7 @@ export function Connectors({
           : edge.linkType === ItemLinkType.blocks
             ? BLOCKS_COLOR
             : NEUTRAL_COLOR;
-        const path = elbowPath(edge, rowHeight);
+        const path = elbowPath(edge);
         return (
           <g key={edge.linkId} stroke={color} strokeOpacity={0.55}>
             <path

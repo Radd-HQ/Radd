@@ -1,12 +1,7 @@
 /**
- * Client-side duration formatting (spec 22). The API returns formatted strings
- * on individual worklogs/summaries, but the timesheet grid sums seconds locally,
- * so it needs to format its own totals. The working day/week lengths are NOT
- * hardcoded here: `GET /instance` reports the server's effective
- * `timelog_hours_per_day` / `timelog_days_per_week` (spec 67 instance-scope
- * settings), `useDurationConfig()` (lib/hooks.ts) reads them off the instance
- * query, and callers pass the pair in. The 8h/5d defaults only cover the brief
- * window before the instance query resolves (and mirror the server defaults).
+ * Client-side duration formatting, for totals summed locally (the timesheet grid). Callers pass
+ * the working day/week lengths from `useDurationConfig()`; the 8h/5d defaults (the server's) only
+ * cover the moment before `GET /instance` resolves.
  */
 
 export interface DurationConfig {

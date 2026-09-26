@@ -1,32 +1,51 @@
 /**
- * What the checks said about a draft (spec 119).
- *
- * Shared by the New Item modal and both intake form pages, so the wording, the
- * ordering and the advisory/required distinction cannot drift between the three
- * surfaces someone can create an issue from.
- *
- * Every finding appears here, INCLUDING the ones already highlighted against a
- * control. A field-addressed finding sits next to an input the person may not
- * have scrolled to, and a panel that showed only the leftovers would tell them
- * "two problems" while listing one. The field-addressed ones carry their field's
- * name so the panel reads as a checklist rather than a wall of sentences.
+ * What the intake checks said about a draft, shared by the New Item modal and both form pages. Every
+ * finding is listed, including those already shown against a control (it may be off-screen); field
+ * findings carry the field's name.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Info } from "lucide-react";
 import type { Finding } from "@radd-plugin-ui/automations/types";
+import { validationBlocking, validationFindings } from "../../lib/api";
+
+interface IntakeVerdict {
+  findings: Finding[];
+  blocking: boolean;
+}
+
+/**
+ * The last verdict a surface saw: the findings and whether they REFUSE the draft, in one piece of
+ * state off the same answer. `blocking` is the server's `verdict.blocking` (what it decides a
+ * `commit: always` 409 by), never `mode === "required"` from the context read: that read predates
+ * the submission, and a required graph merely watching a draft that tripped only an advisory one is
+ * advice. An error carrying no findings of its own (a 409 refusing "anyway", a 503 while the checks
+ * are down, a field-registry 422) leaves the list alone — blanking it hid the panel at the moment it
+ * was being argued with.
+ */
+export function useIntakeVerdict() {
+  const [verdict, setVerdict] = useState<IntakeVerdict>({ findings: [], blocking: false });
+  return {
+    findings: verdict.findings,
+    blocking: verdict.blocking,
+    absorb: ({ findings, blocking }: IntakeVerdict) => setVerdict({ findings, blocking }),
+    clear: () => setVerdict({ findings: [], blocking: false }),
+    absorbError: (error: unknown) => {
+      const refused = validationFindings(error);
+      const answered = validationBlocking(error);
+      if (refused.length > 0 || answered !== null) {
+        setVerdict((previous) => ({
+          findings: refused.length > 0 ? refused : previous.findings,
+          blocking: answered ?? previous.blocking,
+        }));
+      }
+    },
+  };
+}
 
 interface FindingsPanelProps {
   findings: Finding[];
-  /**
-   * Decides the voice: a refusal you cannot proceed past, or advice you may.
-   *
-   * The SERVER's `verdict.blocking`, never `mode === "required"` computed here.
-   * The two differ exactly when a draft is governed by a required graph and an
-   * advisory one and trips only the advisory: the mode is still "required"
-   * because something required is watching, and the creation is not refused.
-   * Deciding it locally made the panel say "fix this before it can be created"
-   * about advice, next to a bypass the caller then hid.
-   */
+  /** The SERVER's `verdict.blocking`, never `mode === "required"`: a required graph merely watching a
+   *  draft that tripped only an advisory one is advice, not a refusal. */
   blocking: boolean;
   /** Human label for a field key — the form knows its own controls' names. */
   labelFor?: (field: string) => string | undefined;
@@ -34,18 +53,7 @@ interface FindingsPanelProps {
 
 export function FindingsPanel({ findings, blocking, labelFor }: FindingsPanelProps) {
   const ref = useRef<HTMLDivElement>(null);
-  // Scroll itself into view when it appears.
-  //
-  // Caught by a SCREENSHOT, not by the measurements: `getBoundingClientRect`
-  // reported the panel present, sized and positive-y, and every numeric check
-  // passed — while the panel sat below the fold of a long New Item modal. The
-  // person pressed Validate and, unless they happened to scroll, saw nothing
-  // change. Answering a click somewhere the eye is not is the same failure as
-  // not answering it (RADD-762, from the other direction).
-  //
-  // Here rather than in each surface: both the modal and the two form pages
-  // would otherwise carry the same effect, and the third one added later would
-  // forget it.
+  // Scroll into view on appear: below the fold of a long modal, "Validate" otherwise looks like it did nothing.
   useEffect(() => {
     if (findings.length > 0) ref.current?.scrollIntoView({ block: "nearest" });
   }, [findings]);

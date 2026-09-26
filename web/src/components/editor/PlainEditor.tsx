@@ -84,7 +84,7 @@ function caretCoords(textarea: HTMLTextAreaElement, caret: number) {
 }
 
 /**
- * Plain-markdown editing surface — the feature-parity twin of the rich (Crepe) mode:
+ * Plain-markdown editing surface — the feature-parity twin of the rich mode:
  * same toolbar actions (as markdown syntax edits), same `@`/`#`/`/` popups, same
  * image paste/upload. Only the RENDERING is plain text.
  */

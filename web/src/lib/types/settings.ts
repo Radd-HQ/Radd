@@ -31,15 +31,9 @@ export interface ScopedSetting {
 }
 
 /**
- * Placing a setting by the surface it declares (RADD-930).
- *
- * A `section` is a dotted path: its ROOT names the page, and anything deeper names a card within
- * it (`directory.connection` vs `directory.groups`), so one page can lay its own rows out in groups
- * without a second vocabulary. `inSection` matches a section and everything under it.
- *
- * A General page renders the REMAINDER: every row whose plugin has not declared a page of its own
- * for it at this scope (`homed`, RADD-1390 — it used to be a host list of section names that every
- * plugin page had to be added to). A row nobody homes still lands on General, never nowhere.
+ * Placing a setting by the surface it declares (RADD-930). A `section` is a dotted path: its ROOT
+ * names the page, deeper parts a card within it; `inSection` matches a section and everything
+ * under it. A General page renders the REMAINDER (rows no page `homed`), so a row lands somewhere.
  */
 export function inSection(rows: readonly ScopedSetting[], section: string): ScopedSetting[] {
   return rows.filter((row) => {

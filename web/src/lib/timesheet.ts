@@ -104,7 +104,7 @@ export interface TimesheetRow {
 }
 
 /** Label for an entry's category, with the item-log fallback bucket. */
-export const UNCATEGORIZED = "Uncategorized";
+const UNCATEGORIZED = "Uncategorized";
 
 function categoryName(entry: TimesheetEntry): string {
   return entry.category?.name ?? UNCATEGORIZED;

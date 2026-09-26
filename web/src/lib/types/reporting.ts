@@ -42,7 +42,7 @@ export interface TimeInStateRow {
 }
 
 /** Compact cycle ref carried by a velocity row. */
-export interface CycleBrief {
+interface CycleBrief {
   id: string;
   name: string;
 }
@@ -62,7 +62,7 @@ export interface ReportScope {
 }
 
 /** One row of GET /reports/velocity — items completed in a finished cycle. */
-export interface VelocityRow {
+interface VelocityRow {
   cycle: CycleBrief;
   completed: number;
 }
@@ -74,7 +74,7 @@ export interface VelocityReport {
 }
 
 /** The cycle window a burnup series ranges over. */
-export interface CycleWindow {
+interface CycleWindow {
   id: string;
   name: string;
   start_date: string;
@@ -82,7 +82,7 @@ export interface CycleWindow {
 }
 
 /** One day of a burnup: scope (items in the cycle) vs completed to date. */
-export interface BurnupPoint {
+interface BurnupPoint {
   date: string;
   scope: number;
   completed: number;

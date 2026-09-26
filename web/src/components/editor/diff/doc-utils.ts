@@ -48,7 +48,7 @@ export function hasBlockContent(doc: Node, from: number, to: number): boolean {
   return found;
 }
 
-/** Is [from, to) only the doc's trailing run of empty paragraphs? (Crepe keeps
+/** Is [from, to) only the doc's trailing run of empty paragraphs? (The `trailing` plugin keeps
  * an empty paragraph at the end — deleting it isn't a real change.) */
 export function coversOnlyTrailingEmptyParagraphs(
   doc: Node,
@@ -89,7 +89,7 @@ export function snapToBlockBoundary(doc: Node, pos: number): number {
 }
 
 /** Iterate top-level nodes overlapping [from, to). */
-export function forEachTopLevelNodeInRange(
+function forEachTopLevelNodeInRange(
   doc: Node,
   from: number,
   to: number,

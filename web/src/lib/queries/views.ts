@@ -21,13 +21,8 @@ import type {
   ViewListSurface,
 } from "../types";
 
-/**
- * Batched view membership counts (spec 64) — the badges of a view type listed in a sidebar
- * section of its own (RADD-1396): ONE POST /views/counts per section, re-polled every minute.
- * Invisible/unknown
- * ids are omitted by the server (never errored); ids are sorted for a stable
- * key and sliced to the backend's 50-view cap.
- */
+/** Batched view counts for a view type's own sidebar section: ONE POST /views/counts, re-polled
+ *  every minute. Ids sorted for a stable key, sliced to the server's cap; unknown ids are omitted. */
 export const viewCountsQuery = (viewIds: readonly string[], extraQ?: string) => {
   const ids = [...viewIds].sort().slice(0, VIEW_COUNTS_MAX_VIEWS);
   return queryOptions({
@@ -67,18 +62,6 @@ export const itemsCountQuery = (scope: Record<string, string>, q: string) =>
     staleTime: 15_000,
   });
 
-/**
- * Items of a saved view: the view's pre-composed `query_string` is appended
- * VERBATIM (spec 08 contract — zero client-side translation), plus the page
- * limit the plain board/list also use. Accepts undefined while the view is
- * still resolving — pair with `enabled: Boolean(view)`.
- */
-/**
- * A saved view's items, paged (spec 55): the view's `query_string` (SLQ `q=` +
- * scope) does the filtering/ordering server-side; pages of the API cap with
- * offset-based Load more. Same cache key as the old single-page query — the
- * view-page mutations (`item-mutations.ts`) patch this paged shape.
- */
 /** Ids + true count of everything matching a view's filter (spec 68) — the
  *  "select all N matching" seam; ids are capped server-side. */
 export const itemIdsQuery = (queryString: string) =>
@@ -90,12 +73,8 @@ export const itemIdsQuery = (queryString: string) =>
     staleTime: 15_000,
   });
 
-/**
- * ONE page of a view's items (pagination wave): classic paged
- * navigation — the page is part of the key, `placeholderData` keeps the old
- * page on screen while the next loads. Roadmaps keep the infinite variant
- * below (they auto-stream their whole match set).
- */
+/** ONE page of a view's items: the page is part of the key, and `placeholderData` keeps the old page
+ *  on screen while the next loads. Roadmaps use the infinite variant below. */
 export const pagedViewItemsQuery = (
   view: Pick<View, "id" | "query_string"> | undefined,
   page: number,
@@ -123,6 +102,8 @@ export const pagedViewItemsQuery = (
   });
 };
 
+/** A saved view's items, streamed page by page (roadmaps). The view's `query_string` is appended
+ *  VERBATIM (spec 08: no client-side translation); the view-page mutations patch this paged shape. */
 export const infiniteViewItemsQuery = (view: Pick<View, "id" | "query_string"> | undefined) => ({
   queryKey: queryKeys.viewItems(view?.id ?? "", view?.query_string ?? ""),
   meta: projectEntityMeta(new URLSearchParams(view?.query_string).get("project_id"), Entity.item),
@@ -136,12 +117,8 @@ export const infiniteViewItemsQuery = (view: Pick<View, "id" | "query_string"> |
     lastPage.length === ITEMS_PAGE_LIMIT ? lastOffset + ITEMS_PAGE_LIMIT : undefined,
 });
 
-/**
- * The roadmap's Unscheduled tray (perf wave; classic pages since the
- * pagination wave): its own bounded pool — the main roadmap fetch no longer
- * carries unscheduled leaves. `q` arrives fully composed (view query + tray
- * clause + chips + search).
- */
+/** The roadmap's Unscheduled tray: its own bounded, paged pool (the main roadmap fetch carries no
+ *  unscheduled leaves). `q` arrives fully composed (view query + tray clause + chips + search). */
 export const roadmapTrayItemsQuery = (
   viewId: string,
   q: string,
@@ -164,11 +141,8 @@ export const roadmapTrayItemsQuery = (
       }),
   });
 
-/**
- * A roadmap view's curated member set (roadmap wave) — read through the item
- * dialect's registry-contributed `roadmap` field, so the result is hydrated
- * AND item-RBAC-scoped. Fetch every page of this curated relation.
- */
+/** A roadmap view's curated member set, read through the item dialect's `roadmap` field (hydrated
+ *  and item-RBAC-scoped); every page of it. */
 export const roadmapMembersQuery = (viewId: string) =>
   queryOptions({
     queryKey: queryKeys.roadmapMembers(viewId),
@@ -178,13 +152,8 @@ export const roadmapMembersQuery = (viewId: string) =>
     staleTime: 15_000,
   });
 
-/**
- * Items matching a COMMITTED ad-hoc SLQ query in a scope (spec 10 `q=` param):
- * one page at the API cap — the page filter bars' match set (spec 55: fetched
- * on Enter, never per keystroke — live feedback is `slqValidateQuery`). A parse
- * error rejects with a 422 `{detail, position}` payload (`slqErrorOf` in
- * lib/slq.ts), so `retry: false` — retrying a parse error is noise.
- */
+/** Items matching a COMMITTED ad-hoc SLQ query (one page at the API cap), fetched on Enter — live
+ *  feedback is `slqValidateQuery`. A parse error is a 422, so `retry: false`. */
 export const slqItemsQuery = (scope: Record<string, string>, q: string) =>
   queryOptions({
     queryKey: queryKeys.slqItems(scope, q),

@@ -8,22 +8,10 @@ import { Spinner } from "../Spinner";
 import { ErrorText } from "@radd/plugin-sdk";
 
 /**
- * A board card's children, listed in place (RADD-698).
- *
- * The count chip was a dead end: it told you there were five subtasks and made
- * you open the parent to learn what they were. Expanding answers that where the
- * question is asked, and a click opens the child in PEEK — so inspecting a
- * subtask never costs you the board.
- *
- * Deliberately NOT the issue page's `ChildRow`: that row carries a tick box, an
- * assignee and a per-project states query, which on a 200-card board would be
- * 200 idle queries. What the two surfaces share is what would actually drift if
- * written twice — the server-side workflow ORDERING RULE (`childItemPagesQuery`) and the CLICK
- * RULE (`useOpenIssueRef`, RADD-699). The rows are real links for the same
- * reason the issue page's are: a child should be cmd-clickable into a new tab.
- *
- * Children are fetched only once expanded: a listed item carries `child_count`,
- * not its children.
+ * A board card's children, listed in place; a click opens the child in PEEK. Deliberately not the
+ * issue page's `ChildRow` (tick box + per-project states query = 200 idle queries on a big board);
+ * shared with it: the server ordering (`childItemPagesQuery`) and the click rule (`useOpenIssueRef`).
+ * Fetched only once expanded.
  */
 export function CardChildren({ parentId }: { parentId: string }) {
   const openRef = useOpenIssueRef();

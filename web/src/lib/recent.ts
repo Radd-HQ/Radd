@@ -4,7 +4,7 @@ import { accountStorageKey } from "./account-storage";
 const STORAGE_KEY = "radd.recent-items";
 const MAX_ENTRIES = 12;
 
-export interface RecentItem {
+interface RecentItem {
   key: string;
   title: string;
   at: number;

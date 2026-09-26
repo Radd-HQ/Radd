@@ -34,7 +34,7 @@ import { InstanceRole, Permission, type PermissionValue, type CapabilitiesManife
 interface NavGate {
   fieldSettings?: boolean;
   /** The viewer holds `permission` at global scope (or is admin). */
-  ws: (permission: PermissionValue) => boolean;
+  global: (permission: PermissionValue) => boolean;
   /** The viewer holds `permission` on at least one accessible project. */
   any: (permission: PermissionValue) => boolean;
   anySpace: (permission: PermissionValue) => boolean;
@@ -51,37 +51,19 @@ interface SettingsNavItem {
   label: string;
   icon: LucideIcon;
   show: (g: NavGate) => boolean;
-  /**
-   * The plugin this tab is a surface OF (RADD-928). A `core=False` plugin can be
-   * disabled at runtime, which unmounts its router — so a tab left behind
-   * renders a page whose every fetch 404s. Naming the owner here is what lets
-   * the gate below withdraw the tab with the plugin.
-   *
-   * Only optional plugins need it: a core plugin cannot be disabled, so
-   * omitting it means "always mounted", not "unknown". A LIST means the tab
-   * is a surface of several plugins and stays while any one is mounted
-   * (Version control, RADD-1262).
-   */
-  plugin?: string | readonly string[];
+  /** The optional plugin this tab is a surface OF (RADD-928): disabling it unmounts its router, so
+   *  the tab is withdrawn with it. Omitted = always mounted. */
+  plugin?: string;
 }
 
-/**
- * The settings nav, GROUPED (reorg): Account (personal), Issues
- * (work-item configuration), People (accounts + access), Server (operator +
- * deploy). A group header renders only when the viewer can see at least one
- * of its items; `show` gates each tab by scope (spec 50) and the backend
- * enforces the same gates (403). Section URLs are unchanged — this regroups
- * navigation, it does not move pages.
- */
+/** The settings nav, grouped; a group header renders only when one of its items does. `show` gates
+ *  each tab by scope (spec 50); the backend enforces the same gates. */
 const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNavItem[] }[] = [
   {
     label: "Account",
     items: [
       { to: RoutePath.settingsProfile, label: "Profile", icon: CircleUserRound, show: () => true },
       {
-        // Spec 118 — the kind × scope matrix and its subscriptions. Its own tab
-        // rather than a Profile section: it is a grid plus a list, and a
-        // preference nobody can find is a preference nobody changes.
         to: RoutePath.settingsNotifications,
         label: "Notifications",
         icon: Bell,
@@ -97,10 +79,10 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsFields,
         label: "Fields",
         icon: SlidersHorizontal,
-        show: (g) => Boolean(g.fieldSettings) || g.ws(Permission.fieldManage) || g.any(Permission.fieldManage),
+        // deliberately-global: instance-wide field.manage opens the tab even with no visible project.
+        show: (g) => Boolean(g.fieldSettings) || g.global(Permission.fieldManage) || g.any(Permission.fieldManage),
       },
       {
-        // Issue link types (spec 91) — instance admins manage the catalog.
         to: RoutePath.settingsLinkTypes,
         label: "Link types",
         icon: Link2,
@@ -110,27 +92,25 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         to: RoutePath.settingsLabels,
         label: "Labels",
         icon: Tags,
-        show: (g) => g.ws(Permission.labelUpdate),
+        show: (g) => g.global(Permission.labelUpdate),
       },
       {
         to: RoutePath.settingsCycles,
         label: "Cycles",
         icon: CalendarRange,
-        show: (g) => g.ws(Permission.cycleUpdate),
+        show: (g) => g.global(Permission.cycleUpdate),
       },
       {
-        // RADD-932: was "Work categories" — a tab named after one of its
-        // sections. Now every instance-scope time policy, holidays included.
         to: RoutePath.settingsTimelogging,
         label: "Time logging",
         icon: Clock,
-        show: (g) => g.ws(Permission.globalManage),
+        show: (g) => g.global(Permission.globalManage),
       },
       {
         to: RoutePath.settingsCanned,
         label: "Canned responses",
         icon: MessageSquareQuote,
-        show: (g) => g.ws(Permission.cannedUpdate),
+        show: (g) => g.global(Permission.cannedUpdate),
       },
     ],
   },
@@ -138,34 +118,29 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
     label: "People",
     items: [
       {
-        // THE people page (spec 84; instance_role ladder since spec 86):
-        // accounts + the server-wide role. Visible to global-manage holders
-        // and instance admins (everything).
         to: RoutePath.settingsUsers,
         label: "Users",
         icon: UserRoundCog,
-        show: (g) => g.ws(Permission.globalManage) || g.instanceAdmin,
+        show: (g) => g.global(Permission.globalManage) || g.instanceAdmin,
       },
       {
-        // Spec 113 — principals that authenticate by API key only.
         to: RoutePath.settingsServiceAccounts,
         label: "Service accounts",
         icon: Bot,
-        show: (g) => g.ws(Permission.globalManage),
+        show: (g) => g.global(Permission.globalManage),
       },
       {
         to: RoutePath.settingsTeams,
         label: "Teams",
         icon: UsersRound,
-        // Spec 87: a team leader holds no global team atom — `manages_teams`
-        // says they own or manage one, so their page stays reachable.
-        show: (g) => g.ws(Permission.teamUpdate) || g.ws(Permission.teamCreate) || g.ws(Permission.teamDelete) || g.managesTeams,
+        // A team leader holds no global team atom; `manages_teams` keeps the page reachable (spec 87).
+        show: (g) => g.global(Permission.teamUpdate) || g.global(Permission.teamCreate) || g.global(Permission.teamDelete) || g.managesTeams,
       },
       {
         to: RoutePath.settingsRoles,
         label: "Roles",
         icon: ShieldCheck,
-        show: (g) => g.ws(Permission.roleUpdate),
+        show: (g) => g.global(Permission.roleUpdate),
       },
     ],
   },
@@ -173,7 +148,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
     label: "Server",
     items: [
       {
-        // Deploy status (spec 50; status-only since spec 67).
         to: RoutePath.settingsInstance,
         order: 0,
         label: "Server status",
@@ -181,8 +155,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // Instance-scope product defaults (spec 67): writes are instance-scope,
-        // so the tab is admin-only like the rest of the group.
         to: RoutePath.settingsGeneral,
         order: 10,
         label: "General",
@@ -198,7 +170,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.anySpace(Permission.pageManage),
       },
       {
-        // Attachment storage hosts + delivery modes (spec 102).
         to: RoutePath.settingsStorage,
         order: 40,
         label: "Storage",
@@ -206,9 +177,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // The instance MFA policy (core auth), plus whatever sign-in methods
-        // plugins contribute as sections — sso's providers (RADD-1380). The
-        // page outlives any one of them, so it names no owner.
+        // The MFA policy (core auth) plus contributed sign-in sections; it names no owner plugin.
         to: RoutePath.settingsSignIn,
         order: 70,
         label: "Sign-in",
@@ -216,16 +185,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // Backups (spec 99) — schedules, artifacts, restore.
         to: RoutePath.settingsBackups,
         order: 80,
         label: "Backups",
         icon: DatabaseBackup,
         show: (g) => g.instanceAdmin,
       },
-
       {
-        // Outbound webhooks (RADD-1096): endpoints, secrets, the delivery log.
         to: RoutePath.settingsWebhooks,
         order: 90,
         label: "Webhooks",
@@ -243,22 +209,9 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
   },
 ];
 
-/**
- * Where a plugin's own settings tab lives, if it has one (RADD-928).
- *
- * Derived from the SAME table the sidebar renders, so the Plugins page and the
- * sidebar cannot disagree about which surface belongs to which plugin — the
- * failure mode a second hardcoded map would have. This is what makes every
- * plugin's configuration reachable FROM its plugin, per `docs/plugin-ui.md`,
- * without duplicating the page into an accordion row.
- *
- * A plugin with no page of its own may still contribute SECTIONS into pages
- * the host (or another plugin) owns — Leave into Time logging, sso into
- * Sign-in (RADD-1380). A section's key is its page's route segment, so
- * `sectionKeys` (the `settings.section` matches the plugin has registered)
- * finds that page with no plugin named here. Checked last: a plugin's own page
- * outranks a page it merely adds to.
- */
+/** Where a plugin's settings live, for the Plugins page: its contributed settings page, else the
+ *  host tab naming it as `plugin`, else a page it contributes a `settings.section` to (a section's
+ *  key is its page's segment). Derived from the table the nav renders, so the two cannot disagree. */
 export function settingsPathForPlugin(
   name: string,
   manifest?: CapabilitiesManifest,
@@ -267,9 +220,7 @@ export function settingsPathForPlugin(
   const contributed = manifest?.nav.find(n => n.plugin === name && n.section === "settings");
   if (contributed) return { to: contributed.path, label: contributed.label };
   for (const group of SETTINGS_NAV_GROUPS) {
-    const match = group.items.find((item) =>
-      typeof item.plugin === "string" ? item.plugin === name : (item.plugin ?? []).includes(name),
-    );
+    const match = group.items.find((item) => item.plugin === name);
     if (match) return { to: match.to, label: match.label };
   }
   for (const key of sectionKeys) {
@@ -300,22 +251,16 @@ export function SettingsLayout() {
 
   const gate: NavGate = {
     fieldSettings: fields.data?.can_access,
-    // "ws" is historical shorthand — this is the GLOBAL-scope check (spec 67).
-    ws: (permission) => perms.global(permission),
+    global: (permission) => perms.global(permission),
     any: perms.anyProject,
     anySpace: perms.anySpace,
     instanceAdmin: user?.instance_role === InstanceRole.admin,
     managesTeams: Boolean(user?.manages_teams),
   };
-  // RADD-928: a tab whose owning plugin is disabled is withdrawn. `plugins` is
-  // the manifest's list of what is actually MOUNTED right now, so this tracks a
-  // hot enable/disable without a reload — and while the manifest is in flight
-  // every gated tab is hidden, which is the right way round: a tab that appears
-  // a beat late reads as loading, one that vanishes reads as a bug.
+  // `plugins` is what is MOUNTED now; while the manifest is in flight every gated tab is hidden —
+  // a tab that appears late reads as loading, one that vanishes reads as a bug.
   const mounted = new Set(manifest?.plugins ?? []);
-  const isMounted = (item: SettingsNavItem) =>
-    !item.plugin ||
-    (typeof item.plugin === "string" ? mounted.has(item.plugin) : item.plugin.some((name) => mounted.has(name)));
+  const isMounted = (item: SettingsNavItem) => !item.plugin || mounted.has(item.plugin);
   // Builtin rows fall back to index × 10; the Server group pins its numbers instead, because
   // plugins slot their pages between them by `order` (AI 25, Email 45, Directory 55, Automations
   // 90…) and a row that moved out would otherwise renumber everything after it.

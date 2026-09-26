@@ -1,50 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { renderMermaid } from "./mermaid";
-import { getTheme } from "../../lib/theme";
+import { useAppearance } from "../../lib/theme";
 
-/**
- * A rendered mermaid diagram.
- *
- * `dangerouslySetInnerHTML` is how mermaid returns its work — an SVG string —
- * and it is safe here for the reason the name asks about: mermaid is initialised
- * with `securityLevel: "strict"`, which strips script and event handlers from
- * the graph it builds. The alternative, parsing the SVG back into React
- * elements, would be a second renderer for something mermaid has already done.
- */
+/** A rendered mermaid diagram. `dangerouslySetInnerHTML` is safe here: mermaid runs with
+ *  `securityLevel: "strict"`, which strips scripts and handlers from the SVG. */
 export function MermaidDiagram({ source }: { source: string }) {
   const [svg, setSvg] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(true);
   // Re-render when the theme flips: mermaid bakes colours INTO the svg, so a
   // diagram drawn in dark stays dark on a white page until it is drawn again.
-  const [theme, setTheme] = useState(getTheme);
-  const alive = useRef(true);
-
-  useEffect(() => {
-    alive.current = true;
-    return () => {
-      alive.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    // The theme lives as a class on <html>, set by `applyAppearance`. Watching
-    // the attribute is what makes this react to the toggle without every
-    // diagram subscribing to a store that does not exist yet.
-    const observer = new MutationObserver(() => setTheme(getTheme()));
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
+  const { theme } = useAppearance();
 
   useEffect(() => {
     let current = true;
     setPending(true);
     renderMermaid(source).then((result) => {
-      if (!current || !alive.current) return;
+      if (!current) return;
       setSvg(result.svg);
       setError(result.error);
       setPending(false);

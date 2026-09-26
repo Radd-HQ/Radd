@@ -62,22 +62,10 @@ const EMOTICON_RE = new RegExp(
   "gm",
 );
 
-// A quick gate: only touch text that actually looks like Jira markup. The ambiguous
-// rules (bold, `#` lists, strike, emoticons) are safe to run *because* of this gate —
-// a gated text is Jira-origin, where `# x` is a list item, never a Markdown heading.
-//
-// RADD-1006: `\{\{` used to be one of the alternatives, and it broke that
-// invariant. Two braces is not evidence of Jira origin — it is Radd's OWN
-// template syntax (`{{variable}}` in a canned response, `{{token}}` in an
-// automation action) and it appears in any JSX or templating sample. A native
-// markdown body containing `{{` anywhere, a fenced code block included, was
-// therefore run through the Jira rules, and `convertLines` rewrote every
-// `## Heading` into `····1. Heading` — four leading spaces, which markdown then
-// renders as an indented code block. The page kept its prose and lost every
-// heading, with nothing logged and nothing to see in the stored body.
-//
-// Jira monospace still converts for genuinely Jira-origin text: such a body
-// carries at least one of the unambiguous signals below.
+// Only text that looks like Jira markup is converted: the ambiguous rules (bold,
+// `#` lists, strike, emoticons) are safe only behind this gate. `{{` is NOT a
+// signal — it is Radd's own template syntax (RADD-1006: it turned every
+// `## Heading` of a native page into an indented code block).
 const HAS_JIRA_RE =
   /\{code|\{noformat[:}]|\{quote\}|\{panel[:}]|\{color[:}]|\{anchor:|^\{toc|\[[^\]\n]*\||\[(?:https?|mailto):|\[~|^h[1-6]\.|^\s*\|\|[^|]|!\S+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\|[^!\n]*)?!/m;
 
@@ -140,21 +128,9 @@ function convertLines(text: string): string {
   return out.join("\n");
 }
 
-/**
- * Fenced blocks and inline spans, for holding CODE out of the Jira gate.
- *
- * RADD-1006, second pass. Dropping `{{` fixed four pages and left nine broken,
- * because the other alternatives misfire on ordinary technical writing just as
- * badly. `\[[^\]\n]*\|` matches a Python union — `list[str | None]`,
- * `dict[str, Any | None]` — so every developer page quoting a real signature
- * was classified as Jira. `\{code` matches a sentence about a `{code}` macro,
- * and `^h[1-6]\.` matches a line that begins `h2.` in a sample.
- *
- * The common shape is that a CODE SAMPLE decided how the PROSE around it was
- * parsed. It never should: a fenced block is quoted material, and what it
- * quotes says nothing about the document quoting it. So the gate now runs on
- * the text with code removed.
- */
+/** Code (fences, inline spans) is removed before the gate runs: a quoted
+ *  sample (`list[str | None]`, a `{code}` mention, a line starting `h2.`) must
+ *  never decide how the prose around it is parsed (RADD-1006). */
 const CODE_RE = /^\s{0,3}(`{3,}|~{3,})[\s\S]*?^\s{0,3}\1[ \t]*$|`[^`\n]+`/gm;
 
 export function jiraToMarkdown(text: string): string {

@@ -11,7 +11,7 @@ import type { Cycle } from "@radd-plugin-ui/cycles/types";
  */
 
 /** Everything a move planner needs to resolve a target bucket to concrete values. */
-export interface AxisDndContext {
+interface AxisDndContext {
   /** True when the view is project-scoped — state buckets are then keyed by id.
    *  All-projects state buckets are keyed by NAME and resolve per item:
    *  `states` must then span every project in the view (allStatesQuery). */
@@ -53,7 +53,7 @@ export function dragEnabledForAxis(axis: string | null | undefined): boolean {
   }
 }
 
-export interface MovePlan {
+interface MovePlan {
   patch: ItemUpdate;
   /** Partial Item merged into the cache for the optimistic re-bucket. */
   optimistic: Partial<Item>;

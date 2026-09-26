@@ -2,24 +2,10 @@ import type { QueryClient } from "@tanstack/react-query";
 import { invalidateEntities as invalidateTagged } from "@radd/plugin-sdk";
 
 /**
- * Cross-cache invalidation by ENTITY (not by query key).
- *
- * The problem: one entity (e.g. an item) is cached under many separate query
- * keys — `["items"]`, `["viewItems"]`, `["slqItems"]`, `["item"]`,
- * `["itemByKey"]` — so a mutation has to remember to invalidate every one of
- * them, and a NEW query that caches items is silently missed by existing
- * mutations (the exact bug that made edits not appear live).
- *
- * The fix: decouple queries from mutations.
- *   • A read query DECLARES which entities its data holds:
- *       useQuery({ ..., meta: entityMeta(Entity.item) })
- *   • A mutation INVALIDATES by entity, never by key:
- *       onSettled: () => invalidateEntities(queryClient, Entity.item)
- *
- * Now any query tagged with an entity is refreshed by every mutation that
- * touches that entity — including queries added later by other modules. Neither
- * side needs to know about the other. This is the convention every module
- * follows (see docs/modules.md → "Cache invalidation").
+ * Invalidation by ENTITY, not query key: a read declares what it caches
+ * (`meta: entityMeta(Entity.item)`), a mutation invalidates by entity
+ * (`invalidateEntities(qc, Entity.item)`), so queries added later are covered
+ * automatically. See docs/modules.md → "Cache invalidation".
  */
 
 /** One tag per cacheable domain entity — extend this as modules are added. */
@@ -79,12 +65,8 @@ export function projectEntityMeta(projectId: string | null | undefined, ...entit
   return {entities, projectId: projectId || undefined};
 }
 
-/**
- * Invalidate every query whose `meta.entities` includes any of `entities` —
- * across all cache families. Active queries refetch immediately (reads "live").
- * A mutation lists every entity it can change, e.g. commenting touches the
- * comment AND the item (its `comment_count`): `invalidateEntities(qc, Entity.comment, Entity.item)`.
- */
+/** The SDK's invalidation, typed to the host's entity tags. List every entity a mutation changes
+ *  (a comment also changes its item's `comment_count`). */
 export function invalidateEntities(queryClient: QueryClient, ...entities: EntityTag[]) {
   return invalidateTagged(queryClient, ...entities);
 }

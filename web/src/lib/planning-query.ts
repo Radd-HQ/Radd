@@ -4,7 +4,7 @@ import type { Item, View } from "./types";
 import type { Cycle } from "@radd-plugin-ui/cycles/types";
 
 export const RESCHEDULING_KEY = "__rescheduling__";
-export type BacklogOrder = "priority" | "recent" | "manual";
+type BacklogOrder = "priority" | "recent" | "manual";
 export interface PlanningOptions {
   showCompleted: boolean;
   backlogOrder: BacklogOrder;

@@ -3,7 +3,7 @@
  * nav items. The shell renders the nav alongside its builtin nav, gating each item
  * by `requires` against the user's atoms — so an enabled plugin's nav appears with
  * no edit to the shell (chokepoint 3). */
-export interface PluginNavItem {
+interface PluginNavItem {
   key: string;
   label: string;
   path: string;
@@ -17,7 +17,7 @@ export interface PluginNavItem {
   capability: string;
   order: number;
 }
-export interface CapabilityFlag {
+interface CapabilityFlag {
   key: string;
   label: string;
   category: string;
@@ -41,7 +41,7 @@ export interface CapabilitiesManifest {
 }
 
 /** A plugin-contributed view/widget type: its stored key + the label a create-UI shows (spec 94). */
-export interface PluginTypeOption {
+interface PluginTypeOption {
   key: string;
   label: string;
 }
@@ -64,7 +64,7 @@ export interface ViewTypeOption extends PluginTypeOption {
 }
 
 /** A plugin UI remote the host runtime loader imports (spec 94). */
-export interface PluginRemoteRef {
+interface PluginRemoteRef {
   name: string;
   remote_entry: string;
   ui_api_version: string;
@@ -75,7 +75,7 @@ export interface PluginRemoteRef {
  * discovered → installed → enabled ⇄ disabled → uninstalled. */
 /** One evaluated CapabilitySpec on a plugin row — `enabled` is runtime
  * configured-ness (a connector's env token present), not lifecycle state. */
-export interface PluginCapability {
+interface PluginCapability {
   key: string;
   label: string;
   category: string;
@@ -100,7 +100,6 @@ export interface Plugin {
   dependencies: string[];
   problems: string[];
   managed: boolean;
-  live_supported: boolean;
   capabilities: PluginCapability[];
 }
 

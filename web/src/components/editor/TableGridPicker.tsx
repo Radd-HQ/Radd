@@ -1,19 +1,8 @@
 import { useState } from "react";
 
-/**
- * Pick a table's size by dragging across a grid (RADD-750).
- *
- * The complaint this answers is that inserting gave you a fixed default you
- * then had to correct — add a column, delete two rows — which is several edits
- * to reach the shape you already knew you wanted. Sweeping a grid says it once.
- *
- * The grid GROWS as you approach its edge, so a 2×2 is one small gesture and a
- * 6×8 is still reachable without a scrollbar or a number field.
- */
+/** Pick a table's size by sweeping a grid; the grid grows as you near its edge (5×5 up to 10×10). */
 const MIN = 5;
 const MAX = 10;
-/** The header row is always one of them, so 1×1 is the smallest real table. */
-const MIN_ROWS = 1;
 
 export function TableGridPicker({
   at,
@@ -58,9 +47,7 @@ export function TableGridPicker({
                     data-on={on ? "" : undefined}
                     onMouseEnter={() => setHover({ rows: row, cols: col })}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() =>
-                      onPick(Math.max(MIN_ROWS, row + 1), col + 1)
-                    }
+                    onClick={() => onPick(row + 1, col + 1)}
                     className={
                       "h-4 w-4 cursor-pointer rounded-[3px] border transition-colors " +
                       (on

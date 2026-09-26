@@ -12,11 +12,8 @@ import { TextField } from "../../components/TextField";
 import { pushToast } from "../../lib/toast";
 import { ChangeHistoryPanel } from "../../components/history/ChangeHistoryPanel";
 
-/** Settings → Webhooks (RADD-1096). The management API existed since spec 25
- * with the SPA never calling it — endpoints were created by curl and a failing
- * delivery was invisible. This is the door: endpoint CRUD with the signing
- * secret revealed (the receiver must be configured with it), the per-endpoint
- * delivery log, and replay for dead deliveries. */
+/** Settings → Webhooks (RADD-1096): endpoint CRUD with the signing secret revealed (the receiver
+ *  must be configured with it), the per-endpoint delivery log, and replay for dead deliveries. */
 
 const endpointsKey = ["webhooks", "endpoints"] as const;
 

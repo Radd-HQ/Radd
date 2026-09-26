@@ -13,23 +13,8 @@ import type {
   ServiceAccountKey,
 } from "../types";
 
-/** Spec 113: service accounts and the keys they hold (admin). */
-export const serviceAccountsQuery = () =>
-  queryOptions({
-    queryKey: queryKeys.serviceAccounts,
-    queryFn: ({ signal }) => api.get<ServiceAccount[]>(ApiPath.serviceAccounts, { signal }),
-    meta: entityMeta(Entity.serviceAccount),
-  });
-
-export const serviceAccountKeysQuery = (accountId: string) =>
-  queryOptions({
-    queryKey: queryKeys.serviceAccountKeys(accountId),
-    queryFn: ({ signal }) => api.get<ServiceAccountKey[]>(apiServiceAccountKeysPath(accountId), { signal }),
-    meta: entityMeta(Entity.serviceAccount),
-  });
-
 export const SERVICE_ACCOUNT_PAGE_SIZE = 50;
-export interface ServiceKeySummary extends Omit<ServiceAccountKey, "scopes"> {
+interface ServiceKeySummary extends Omit<ServiceAccountKey, "scopes"> {
   restricted: boolean; global_count: number; project_count: number;
 }
 const accountMeta = entityMeta(Entity.serviceAccount, Entity.role, Entity.member, Entity.team, Entity.group);

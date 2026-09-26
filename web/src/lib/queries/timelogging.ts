@@ -51,7 +51,7 @@ export const projectTimeloggingQuery = (projectId: string) =>
     staleTime: 60_000,
   });
 
-export interface TimesheetParams {
+interface TimesheetParams {
   start: string;
   end: string;
   userId?: string;

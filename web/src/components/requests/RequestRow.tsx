@@ -3,16 +3,8 @@ import { formatDateTime, relativeTime } from "@radd/plugin-sdk";
 import { StateCategory, type PortalRequest } from "../../lib/types";
 
 /**
- * One request, as its requester sees it (RADD-797).
- *
- * ONE definition, rendered by both `/portal` and My Work (RADD-799). They used
- * to draw the same row two different ways, which is how they drifted apart in
- * the first place.
- *
- * Everything here is inside the relationship boundary the portal is built on: a
- * NAME from the member-floor directory, a version string, and a count derived
- * from PUBLIC comments only. No description, no labels, no fields — opening the
- * request is a separate, deliberate act.
+ * One request as its requester sees it (shared by `/portal` and My Work): a directory NAME, a version
+ * string and a PUBLIC-comment count — no description, labels or fields.
  */
 
 /** Category → the workflow palette the rest of the app uses. */

@@ -31,19 +31,10 @@ import { RoleGrantsSection } from "../../components/settings/RoleGrantsSection";
 import { settingsPathForPlugin } from "./layout";
 
 /**
- * THE people page (spec 84; spec 86 collapsed the membership layer): every
- * account with its auth source, activity, last sign-in — and the server-wide
- * role ladder inline: `users.instance_role` (admin|member) via
- * PATCH /users/{id}.
- *
- * Gating:
- * - Viewing needs global manage or instance admin; GET /users itself is gated
- *   `user.manage`.
- * - Role changes + activate/deactivate are instance admin, enforced by the API
- *   (403; self-demotion 409) and hidden here, incl. the client-side self-row
- *   guard (locking yourself out via your own row is a footgun — block it).
- * - Duplicates/merge stay instance admin. The AD import affordances live in
- *   Settings → Directory (spec 85), the ldap plugin's page — pointer only.
+ * THE people page: every account with its source, activity and last sign-in, and the
+ * `instance_role` ladder inline. Role changes, activation and merges are instance-admin (the API
+ * enforces: 403, self-demotion 409); the self-row is guarded client-side so you cannot lock
+ * yourself out. AD import lives on the ldap plugin's Directory page — a pointer only.
  */
 export function UsersSettingsPage() {
   const me = useCurrentUser();

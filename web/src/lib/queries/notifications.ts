@@ -54,17 +54,9 @@ export const notificationsBadgeQuery = queryOptions({
   refetchInterval: NOTIFICATIONS_POLL_MS,
 });
 
-/**
- * The caller's whole notification policy (spec 118): the kind VOCABULARY and the
- * relationship columns to render, what an unset cell inherits per scope, the
- * scoped rules they saved, and the digest flag. Everything the settings page
- * needs to draw an inheritance-aware matrix without a table of its own — the
- * panel this replaced kept its own label map in TypeScript, so a kind added on
- * the server had no row in the UI and nothing failed.
- *
- * (It was `muted_types` + `email_types`, two per-type lists, until spec 118
- * dropped both columns for `notification_rules`.)
- */
+/** The caller's whole notification policy (spec 118): the kind vocabulary, the columns, what an
+ *  unset cell inherits per scope, the saved rules and the digest flag — so the settings page draws
+ *  its matrix without a table of its own. */
 export const notificationPrefsQuery = () =>
   queryOptions({
     queryKey: queryKeys.notificationPrefs,

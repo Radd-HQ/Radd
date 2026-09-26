@@ -6,6 +6,19 @@
  */
 import { Suspense, lazy } from "react";
 import { provideHostComponents, TokenMultiSelect } from "@radd/plugin-sdk";
+import { DirectoryPager } from "./components/DirectoryPager";
+import { ListSearchInput } from "./components/ListSearchInput";
+import { Modal } from "./components/Modal";
+import { Avatar } from "./components/Avatar";
+import { SettingsPage } from "./components/settings/SettingsPage";
+import { Button } from "./components/Button";
+import { TextField } from "./components/TextField";
+import { SelectField } from "./components/SelectField";
+import { Callout } from "./components/Callout";
+import { QueryError } from "./components/QueryError";
+import { ScopedSettingsEditor } from "./components/settings/ScopedSettingsEditor";
+import { RoleGrantsSection } from "./components/settings/RoleGrantsSection";
+import { pushToast } from "./lib/toast";
 
 const CodeEditor = lazy(() =>
   import("./components/CodeEditor").then((module) => ({ default: module.CodeEditor })),
@@ -27,24 +40,7 @@ provideHostComponents({
       allowCreate
     />
   ),
-});
-
-import { DirectoryPager } from "./components/DirectoryPager";
-import { ListSearchInput } from "./components/ListSearchInput";
-import { Modal } from "./components/Modal";
-
-// Page frames and generic form primitives are platform-owned, shared by every remote.
-import { Avatar } from "./components/Avatar";
-import { SettingsPage } from "./components/settings/SettingsPage";
-import { Button } from "./components/Button";
-import { TextField } from "./components/TextField";
-import { SelectField } from "./components/SelectField";
-import { Callout } from "./components/Callout";
-import { QueryError } from "./components/QueryError";
-import { ScopedSettingsEditor } from "./components/settings/ScopedSettingsEditor";
-import { RoleGrantsSection } from "./components/settings/RoleGrantsSection";
-import { pushToast } from "./lib/toast";
-provideHostComponents({
+  // Page frames and generic form primitives are platform-owned, shared by every remote.
   DirectoryPager, ListSearchInput,
   Modal: props => <Modal {...props} title={props.title ?? ""} />,
   SettingsPage, Avatar, Button, SelectField, Callout, QueryError,

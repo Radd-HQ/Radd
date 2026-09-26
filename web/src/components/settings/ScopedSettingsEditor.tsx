@@ -21,16 +21,8 @@ interface Props {
   scope: SettingScopeValue;
   /** Omit for instance scope; the project id otherwise. */
   scopeId?: string;
-  /**
-   * Which rows this surface owns (RADD-930) — the `section` the owning plugin
-   * declared, matching that section and anything under it. Pass
-   * `general` instead on a General page.
-   *
-   * This replaces the hand-maintained key arrays each surface used to carry
-   * (`DIRECTORY_CONNECTION_KEYS`, `AI_FEATURE_SETTING_KEYS`, …): those had to be
-   * edited in two repos' worth of places whenever a plugin added a key, and a
-   * key nobody remembered to list silently landed on General.
-   */
+  /** Which rows this surface owns (RADD-930): the `section` the owning plugin declared, and
+   *  anything under it. Pass `general` instead on a General page. */
   section?: string;
   /** General pages only: render the rows no plugin page claims at this scope (RADD-1390). */
   general?: boolean;

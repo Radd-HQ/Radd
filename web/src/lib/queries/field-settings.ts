@@ -8,9 +8,9 @@ import type { DirectoryOption } from "@radd/plugin-sdk";
 
 export const FIELD_DIRECTORY_PAGE_SIZE = 50;
 export type FieldScopePermission = "field.create" | "field.update" | "field.manage";
-export interface FieldSummary { id: string; key: string; name: string; type: FieldDef["type"]; project_count: number; restricted: boolean }
+interface FieldSummary { id: string; key: string; name: string; type: FieldDef["type"]; project_count: number; restricted: boolean }
 export interface ManagedField extends FieldDef { can_update: boolean; can_delete: boolean; can_manage: boolean; option_count: number }
-export interface FieldSettingsSummary { can_access: boolean; can_create: boolean; can_create_global: boolean; can_update_global: boolean; can_manage_builtin: boolean; can_manage_builtin_projects: boolean }
+interface FieldSettingsSummary { can_access: boolean; can_create: boolean; can_create_global: boolean; can_update_global: boolean; can_manage_builtin: boolean; can_manage_builtin_projects: boolean }
 const meta = entityMeta(Entity.field, Entity.project, Entity.role, Entity.member, Entity.team, Entity.group, Entity.accessGrant);
 export const fieldSettingsSummaryQuery = () => queryOptions({
   queryKey: [...queryKeys.fields, "settings-summary"] as const, meta,

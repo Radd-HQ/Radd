@@ -19,12 +19,8 @@ export function GeneralSettingsPage() {
       description="Defaults for every project — each project can override these under its own settings."
     >
       {isAdmin ? (
-        // RADD-930: the REMAINDER — every key whose owner didn't claim a
-        // surface that exists at instance scope. Directory keys land on the
-        // Directory tab, AI toggles on AI, time policy on Time logging, all by
-        // their own declaration; the release/workflow/plugin defaults have tabs
-        // only per PROJECT, so their instance-wide values belong here, which is
-        // exactly what this page is for.
+        // RADD-930: the REMAINDER — every key whose owner claimed no instance-scope surface (keys
+        // whose tabs exist only per project land here too).
         <ScopedSettingsEditor
           scope={SettingScope.instance}
           general

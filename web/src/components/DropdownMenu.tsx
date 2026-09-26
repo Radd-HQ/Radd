@@ -21,7 +21,7 @@ export type DropdownMenuItem =
     }
   | { kind: "separator" };
 
-export interface DropdownMenuTriggerProps {
+interface DropdownMenuTriggerProps {
   ref: Ref<HTMLButtonElement>;
   open: boolean;
   toggle: () => void;

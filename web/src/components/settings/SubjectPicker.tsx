@@ -16,12 +16,9 @@ export const SUBJECT_ICON = {
 } as const;
 
 /**
- * Searchable role / team / user picker (spec 92) — the one control for choosing a
- * grant subject, used everywhere grants are edited. Shows a removable chip once
- * chosen; otherwise a combobox on TokenMultiSelect's mechanics (RADD-901): type
- * to filter, ↑/↓ move the highlight, Enter commits, Escape closes, rows are
- * real listbox options. The old list was `onMouseDown`-only — a keyboard user
- * could not grant access to anyone.
+ * Searchable role / team / user picker — the one control for choosing a grant subject. A removable
+ * chip once chosen; otherwise a keyboard-operable combobox on TokenMultiSelect's mechanics (type to
+ * filter, ↑/↓, Enter, Escape; real listbox options).
  */
 export function SubjectPicker({
   subjects,

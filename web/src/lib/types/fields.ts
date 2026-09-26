@@ -27,9 +27,3 @@ export interface EffectiveScreen {
   fields: EffectiveFieldRow[];
 }
 
-/** One stored placement row for the screen editor (`GET/PUT /screens`). */
-export interface ScreenFieldRow {
-  field: string;
-  placement: ScreenPlacementValue;
-}
-

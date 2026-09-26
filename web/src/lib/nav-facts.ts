@@ -8,16 +8,11 @@ import { Permission } from "./types";
 import { projectSummaryQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
- * ONE source of area visibility for the shell nav (RADD-843), consumed by the
- * Sidebar, the collapsed rail, the command palette and the pins bar — four
- * surfaces, one truth, so the rail can never drift from the sidebar again.
- *
- * Hiding is presentation: every area still enforces its own authz on direct
- * navigation. Facts come from lists the shell already loads (zero extra
- * requests) plus two server booleans on the /auth/me payload (`nav`), and
- * every unknown answers TRUE — failing open here costs a link, never a leak.
+ * ONE source of area visibility for the shell nav (RADD-843): the sidebar, the rail, the palette
+ * and the pins bar. Presentation only — every area enforces its own authz. Built from lists the
+ * shell already loads plus `/auth/me`'s `nav`; every unknown answers TRUE (a link, never a leak).
  */
-export interface NavFacts {
+interface NavFacts {
   projects: boolean;
   reports: boolean;
   timesheet: boolean;

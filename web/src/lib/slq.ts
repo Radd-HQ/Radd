@@ -9,7 +9,7 @@ import type { FieldDef, FieldTypeValue } from "@radd-plugin-ui/fields/types";
  * `docs/specs/10-slq-views2.md` (`server/src/radd/modules/items/slq/`).
  */
 
-export interface SlqFieldHelp {
+interface SlqFieldHelp {
   /** Field name as typed in a query (case-sensitive). */
   field: string;
   /** Accepted values, human form. */
@@ -47,7 +47,7 @@ export const SLQ_BUILTIN_FIELDS: readonly SlqFieldHelp[] = [
   { field: "starred", values: "true | false (your personal stars)", example: "starred = true" },
 ];
 
-export interface SlqOperatorHelp {
+interface SlqOperatorHelp {
   op: string;
   meaning: string;
 }
@@ -109,7 +109,7 @@ export function cheatSheetFields(fields: FieldDef[], projectId: string | null): 
 
 
 
-export interface SlqErrorContext {
+interface SlqErrorContext {
   /** The query line containing the offending offset. */
   line: string;
   /** Same-length whitespace run ending in `^` under the offending column. */
@@ -157,14 +157,8 @@ export function splitQueryOrder(query: string): { where: string; order: string }
   };
 }
 
-/**
- * Compose the COMMITTED ad-hoc bar query INTO a view's effective query
- * (pagination wave): conditions AND in like a quick filter, and
- * the bar's ORDER BY (when present) REPLACES the view's. This is what makes
- * `ORDER BY updated DESC` in the bar actually re-sort the view — the old
- * intersect-with-one-page semantics read as "4 cards out of 1800 loaded"
- * on a big instance.
- */
+/** Compose the COMMITTED bar query INTO a view's query: conditions AND in like a quick filter, and
+ *  the bar's ORDER BY (when present) REPLACES the view's. */
 export function composeQueryWithBar(viewQuery: string, barQuery: string): string {
   const bar = splitQueryOrder(barQuery);
   const base = splitQueryOrder(viewQuery);

@@ -31,13 +31,13 @@ import {
 } from "@radd/plugin-sdk";
 import { STATIC_PLUGINS } from "../plugins/static.generated";
 
-export const RemoteStatus = {
+const RemoteStatus = {
   loading: "loading",
   loaded: "loaded",
   errored: "errored",
   incompatible: "incompatible",
 } as const;
-export type RemoteStatusValue = (typeof RemoteStatus)[keyof typeof RemoteStatus];
+type RemoteStatusValue = (typeof RemoteStatus)[keyof typeof RemoteStatus];
 
 interface LoadedRemote {
   name: string;
@@ -57,7 +57,7 @@ const statics = new Map<string, LoadedRemote>();
 let synced = false;
 let queryClient: QueryClient | null = null;
 
-export interface RemoteState { name: string; status: RemoteStatusValue; error?: string }
+interface RemoteState { name: string; status: RemoteStatusValue; error?: string }
 let states: RemoteState[] = [];
 const listeners = new Set<() => void>();
 function publish() {

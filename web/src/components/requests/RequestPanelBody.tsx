@@ -11,23 +11,9 @@ import { ContentBody } from "../editor/ContentBody";
 import { Spinner } from "../Spinner";
 
 /**
- * A requester's view of one request, rendered INSIDE the ordinary peek drawer
- * (RADD-803).
- *
- * The first version of this was a centred modal, which was a mistake worth
- * recording: RADD-796 asked for "a peek-shaped surface", and a modal is a NEW
- * interaction pattern in an app where every other "open this row" is the
- * right-hand drawer. It was chosen because `IssuePanel` resolves through
- * `item.read` — the thing a requester lacks — and a modal was the shortest path
- * to something that opened. Shorter was not the requirement.
- *
- * So this is a BODY, not a panel: `IssuePanel` owns the drawer, and picks
- * between `ItemDetailBody` and this by what the reader may actually see. One
- * `?peek=` param, one drawer, one implementation of "open a row".
- *
- * Content is the requester's entitlement and no more — state, who holds it,
- * what shipped it, the PUBLIC thread, and a way to reply. A requester who
- * cannot answer a question asked of them is stuck.
+ * A requester's view of one request, rendered as a BODY inside the ordinary peek drawer (`IssuePanel`
+ * picks this or `ItemDetailBody` by what the reader may see). Only the requester's entitlement: state,
+ * holder, release, the PUBLIC thread, and a reply box.
  */
 export function RequestPanelBody({ requestKey }: { requestKey: string }) {
   const queryClient = useQueryClient();

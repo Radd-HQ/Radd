@@ -27,7 +27,7 @@ export interface EntityHit {
   snippet: string | null;
 }
 
-export interface EntitySearchGroup {
+interface EntitySearchGroup {
   entity_type: string;
   label: string;
   hits: EntityHit[];

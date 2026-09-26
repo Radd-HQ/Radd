@@ -1,6 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-export interface HorizontalDragOptions {
+interface HorizontalDragOptions {
   start: number;
   min: number;
   max: number;

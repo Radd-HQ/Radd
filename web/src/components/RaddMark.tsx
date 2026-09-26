@@ -2,7 +2,7 @@
  * Radd brand mark — honey-badger paw with claw swipes, drawn in currentColor
  * (inline copy of web/public/brand/mark-solid.svg; keep the two in sync).
  */
-export function RaddMark({ className }: { className?: string }) {
+function RaddMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden focusable="false">
       <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">

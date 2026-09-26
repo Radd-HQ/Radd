@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent } from "react";
 import { CircleAlert, CircleCheck, CornerDownLeft, LoaderCircle } from "lucide-react";
-import { SlqProbeStatus, useSlqAutocomplete, type SlqProbe } from "../../lib/hooks";
+import { SlqProbeStatus, type SlqProbe } from "../../lib/hooks";
+import { useSlqAutocomplete } from "../../lib/useSlqAutocomplete";
 import { slqErrorContext } from "../../lib/slq";
 import { applySuggestion, type SlqSuggestion } from "../../lib/slq-suggest";
 import { SlqSuggestDropdown } from "./SlqSuggestDropdown";
@@ -256,7 +257,7 @@ interface SlqErrorBlockProps {
 }
 
 /** Parse-error rendering: message + the offending line with a caret under it. */
-export function SlqErrorBlock({ query, message, position }: SlqErrorBlockProps) {
+function SlqErrorBlock({ query, message, position }: SlqErrorBlockProps) {
   const context = position === null ? null : slqErrorContext(query, position);
   return (
     <div className="flex flex-col gap-1" role="alert">

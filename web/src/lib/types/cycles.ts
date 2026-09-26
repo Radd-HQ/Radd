@@ -154,7 +154,7 @@ export const ItemLinkType = {
 export type ItemLinkTypeValue = (typeof ItemLinkType)[keyof typeof ItemLinkType];
 
 /** The item on the far end of a dependency link. */
-export interface LinkItem {
+interface LinkItem {
   id: string;
   key: string;
   title: string;

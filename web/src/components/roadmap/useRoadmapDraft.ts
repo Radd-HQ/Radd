@@ -1,30 +1,19 @@
-/** The roadmap DRAFT buffer (draft wave, 2026-08-01): scheduling edits no
- *  longer hit the server as they happen — every gesture pushes an OP here,
- *  the surface renders `applyTo(serverItems)`, and only the explicit Save
- *  replays the net result against the DB. Ops are COMPOUND (one auto-schedule
- *  of 30 children = one op), so undo/redo move in user-sized steps.
- *
- *  Op kinds mirror the three mutation seams they defer:
- *  - `patch`   — item field changes (dates/flagged), incl. INSERTS: an
- *                unscheduled item drafted onto the timeline — a tray drop, or
- *                a child a plan verb brings in (RADD-1151) — carries its full
- *                Item so the model can draw it before it ever existed in the
- *                roadmap fetch;
- *  - `reorder` — one row's spec-82 rank intent (anchor ids, server computes
- *                the rank at save);
+/** The roadmap DRAFT buffer: every gesture pushes an OP here, the surface
+ *  renders `applyTo(serverItems)`, and only Save replays the net result.
+ *  Ops are COMPOUND, so undo/redo move in user-sized steps:
+ *  - `patch`   — field changes (dates/flagged); an item not in the roadmap
+ *                fetch (tray drop, a child a plan verb brings in) carries its
+ *                full Item as an INSERT so it draws before Save;
+ *  - `reorder` — one row's rank intent (anchor ids; the server ranks at save);
  *  - `chain`   — a sequential rank chain (date-order verb, auto-schedule).
- *
- *  Derivation is recompute-from-base on every change — a few dozen ops over
- *  a few thousand items is nothing, and it makes undo trivially correct.
- *  Link edits and membership pins deliberately stay immediate: both pass
- *  through an explicit popover/menu step, so they are acts, not slips.
+ *  Derivation recomputes from base on every change, which keeps undo trivially
+ *  correct. Link edits and membership pins stay immediate: both pass an
+ *  explicit popover/menu step, so they are acts, not slips.
  */
 
 import { useCallback, useMemo, useState } from "react";
 import type { Item, ItemUpdate } from "../../lib/types";
 import { DRAFT_FIELDS, applyOp, type DraftOp } from "./model/draft-ops";
-
-export type { DraftFieldPatch, DraftOp } from "./model/draft-ops";
 
 export interface RoadmapDraft {
   dirty: boolean;

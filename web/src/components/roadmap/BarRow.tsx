@@ -1,7 +1,6 @@
-/** One roadmap bar row: the label cell (sibling drag-to-reorder handle, spec 82)
- *  plus the positioned bar with its ghost chip, resize zones, ○ link handle,
- *  progress tint, and depends chip. Props in, JSX out — extracted from
- *  RoadmapTimeline.tsx verbatim. */
+/** One roadmap row: the sticky label cell (sibling drag-to-reorder handle,
+ *  spec 82) and the positioned bar with its ghost chip, resize zones, ○ link
+ *  handle, progress tint and depends chip. */
 
 import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
 import {
@@ -152,23 +151,15 @@ export function BarRow({
   const preview = drag.previewSpan(row) ?? containerSpan;
   const span = preview ?? { startIndex: row.startIndex, endIndex: row.endIndex };
   const left = span.startIndex * dayWidth;
-  // Rendered width IS the logical width (one-day minimum by construction),
-  // floored at the absolute grab minimum — presentation only; the logical
-  // span and every commit stay on the true day indices.
   const width = barRenderWidth(span.startIndex, span.endIndex, dayWidth);
-  // Tiered hit layout: normal bars keep inside resize zones; narrow bars get
-  // slim inside slices extended OUTSIDE; tiny (one-day) bars move the zones
-  // fully outside so the whole bar stays clean body-move area.
   const zones = barHitZones(width);
   const color = CATEGORY_CHART_COLORS[item.state.category];
   const barHeight = roadmapBarHeight(isEpic);
   // In-bar info needs room; narrower bars rely on the hover card instead.
   const showInBarInfo = width >= ROADMAP_BAR_INFO_MIN_PX;
-  // Leaf bars are SOLID category fills — dark text reads on the three ACTED-ON
-  // categories (yellow/blue/green), but the terminal states are dark slate and
-  // need light text; epic fills stay translucent, so light text too. The same
-  // split picks the progress-tint band color: a black band on the light fills,
-  // a white band on the dark ones.
+  // Leaf bars are SOLID category fills: acted-on categories are light and take
+  // dark text; terminal states (slate) and translucent epics take light text.
+  // The same split picks the progress band colour.
   const darkFill = isEpic || DARK_FILL_CATEGORIES.has(item.state.category);
   // `text-black` is a fixed literal on purpose: a zinc tier would invert with
   // the theme, and these fills do not — a light bar would end up with
@@ -400,11 +391,8 @@ export function BarRow({
             touchAction: draggable ? "none" : undefined,
           }}
         >
-          {/* Progress tint: a left-anchored overlay band — logged/estimate on
-              leaves, done/total children on epics. Black-tinted on the light
-              category fills, white on the dark ones (epics, canceled), so it
-              reads on both without fighting the category color. Overlogged
-              leaves draw the full band plus a thin red right edge. */}
+          {/* Progress band — black on light fills, white on dark ones; an
+              overlogged leaf adds a thin red right edge. */}
           {progress && progress.fraction > 0 && (
             <span
               className={`pointer-events-none absolute inset-y-0 left-0 rounded-l-md ${
@@ -440,13 +428,8 @@ export function BarRow({
               </span>
             </span>
           )}
-          {/* Edge resize zones — tiered by rendered width (barHitZones):
-              normal = 6px inside; narrow = 4px inside + 6px OUTSIDE; tiny
-              (one-day bars at any zoom) = fully outside, so even a 10px bar
-              keeps its whole body as clean move area. The zones' own
-              pointerdown handlers classify the gesture (begin() stops
-              propagation), so hit layout and classification can never
-              disagree. */}
+          {/* Edge resize zones (tiers: barHitZones). Their own pointerdown
+              classifies the gesture, so hit layout and mode never disagree. */}
           {draggable && (
             <>
               <span
@@ -510,12 +493,9 @@ export function BarRow({
           </span>
         )}
 
-        {/* Depends-on chip past the bar end — the fallback signal when the
-            blocker's bar isn't on the surface (filtered out) or connectors
-            are toggled off; the elbow lines + violation styling carry the
-            signal otherwise. The old outside trailing TITLE is gone — the
-            hover card replaces it — so the chip hangs alone off the clamped
-            edge, past the ○ handle's hit box in edit mode. */}
+        {/* Depends-on chip — the fallback when the blocker's bar isn't drawn
+            or connectors are off. Hangs off the clamped edge, past the ○
+            handle's hit box in edit mode. */}
         {dependsOn.length > 0 && (
           <span
             className="absolute top-1/2 flex -translate-y-1/2 items-center gap-0.5 whitespace-nowrap rounded bg-red-500/15 px-1 py-px text-[10px] font-medium text-red-300"

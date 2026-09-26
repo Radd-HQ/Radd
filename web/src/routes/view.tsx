@@ -89,6 +89,7 @@ import {
   clearViewDisplayState,
   hasUrlState,
   readUrlState,
+  useUrlChipSet,
   writeUrlState,
 } from "../lib/url-state";
 import { ViewBoard } from "../components/views/ViewBoard";
@@ -101,6 +102,21 @@ import { CycleModal } from "./settings/cycles";
 import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
 import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 import { FieldType } from "@radd-plugin-ui/fields/types";
+
+/** A localStorage-backed on/off flag ("1"/"0"), re-read when the key changes. */
+function useStoredFlag(storageKey: string): [boolean, () => void] {
+  const [on, setOn] = useState(() => window.localStorage.getItem(storageKey) === "1");
+  useEffect(() => {
+    setOn(window.localStorage.getItem(storageKey) === "1");
+  }, [storageKey]);
+  const toggle = () => {
+    setOn((current) => {
+      window.localStorage.setItem(storageKey, current ? "0" : "1");
+      return !current;
+    });
+  };
+  return [on, toggle];
+}
 
 /**
  * Saved-view page (specs 09/11): `/p/$projectKey/v/$viewId` and the
@@ -144,61 +160,29 @@ export function ViewPage() {
   const projectLookup = useQuery(projectByIdQuery(view?.project_id ?? ""));
   const project = projectLookup.data ?? null;
 
-  // Quick filters (Jira-style chips): active ones AND into the query, and the
-  // whole machinery (fetch, optimistic drag/star/reorder caches) targets the
-  // FILTERED dataset via this effective view. Reset when the view changes.
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(
-    () => new Set(readUrlState().f?.split(",").filter(Boolean) ?? []),
-  );
-  // Re-seed from the URL on view change: a fresh navigation carries no state
-  // and lands clean, a refresh or a pasted link restores what was applied.
-  useEffect(() => {
-    setActiveFilters(new Set(readUrlState().f?.split(",").filter(Boolean) ?? []));
-  }, [viewId]);
-  const toggleFilter = (name: string) => {
-    setActiveFilters((current) => {
-      const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      writeUrlState({ f: next.size ? [...next].join(",") : null });
-      return next;
-    });
-  };
-  // PERSONAL saved-filter chips (top-bar redesign): the user's own SLQ chips
-  // from the profile preferences — same AND-into-the-fetch semantics as the
-  // view's shared quick filters, URL-synced under `pf`.
+  // Quick filters (the view's shared chips, URL `f`) and the user's PERSONAL saved-filter chips
+  // (URL `pf`): active ones AND into the query, and the whole machinery (fetch, optimistic
+  // drag/star/reorder caches) targets the FILTERED dataset via this effective view.
+  const quickChips = useUrlChipSet("f", viewId);
+  const activeFilters = quickChips.active;
+  const toggleFilter = quickChips.toggle;
   const savedFilters = useSavedFilters();
   const navPins = useNavPins();
-  const [activePersonal, setActivePersonal] = useState<Set<string>>(
-    () => new Set(readUrlState().pf?.split(",").filter(Boolean) ?? []),
-  );
-  useEffect(() => {
-    setActivePersonal(new Set(readUrlState().pf?.split(",").filter(Boolean) ?? []));
-  }, [viewId]);
-  const togglePersonal = (name: string) => {
-    setActivePersonal((current) => {
-      const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      writeUrlState({ pf: next.size ? [...next].join(",") : null });
-      return next;
-    });
-  };
+  const personalChips = useUrlChipSet("pf", viewId);
+  const activePersonal = personalChips.active;
+  const togglePersonal = personalChips.toggle;
   const resetView = () => {
     clearUrlState();
     if (viewId) clearViewDisplayState(viewId);
-    setActiveFilters(new Set());
-    setActivePersonal(new Set());
+    quickChips.clear();
+    personalChips.clear();
     slqFilter.runQuery("");
     // Display prefs are read at mount, so a reload is the honest way to show
     // the restored defaults rather than half-applying them.
     window.location.reload();
   };
-  // Ad-hoc SLQ bar: since the pagination wave the COMMITTED bar
-  // query COMPOSES into the fetch below like a quick filter — conditions AND
-  // in, its ORDER BY replaces the view's — instead of intersecting one probe
-  // page with the loaded rows (which at 503k items read as "4 cards out of
-  // 1800 loaded" and silently ignored the bar's ORDER BY).
+  // The COMMITTED bar query composes into the fetch like a quick filter: conditions AND in, its
+  // ORDER BY replaces the view's.
   const slqFilter = useSlqPageFilter(view?.project_id ? { project_id: view.project_id } : {});
   const effectiveView = useMemo(() => {
     if (!view) return view;
@@ -220,14 +204,8 @@ export function ViewPage() {
     return { ...view, query: combined, query_string: params.toString() };
   }, [view, activeFilters, savedFilters.filters, activePersonal, slqFilter.committed]);
 
-  // Roadmap perf wave: a roadmap draws epics and dated bars —
-  // nothing else — so its fetch narrows to exactly that instead of streaming
-  // the whole match set (fetch-all on a 100k-item project was 505 sequential
-  // pages / ~200 MB). Unscheduled leaves live in the tray's own bounded query;
-  // date-less children are fetched per epic when a verb needs them. The
-  // default-on recency clause additionally drops closed items whose bar ended
-  // more than ~3 months ago ("Show closed" in the surface toolbar lifts it,
-  // persisted per view).
+  // A roadmap fetches only epics and dated bars (the constants explain why);
+  // "Show closed" off hides every closed item.
   const isRoadmap = view?.view_type === ViewType.roadmap;
   const isPlanning = view?.view_type === ViewType.planning;
   const planningStorage = accountStorageKey(`radd.planning:${viewId}`);
@@ -249,37 +227,12 @@ export function ViewPage() {
   });
   const backlogSearch = useDebounced(planningOptions.search, 250);
 
-  const [showClosed, setShowClosed] = useState(
-    () => window.localStorage.getItem(roadmapShowClosedStorageKey(viewId)) === "1",
-  );
-  useEffect(() => {
-    setShowClosed(window.localStorage.getItem(roadmapShowClosedStorageKey(viewId)) === "1");
-  }, [viewId]);
-  const toggleShowClosed = () => {
-    setShowClosed((current) => {
-      window.localStorage.setItem(roadmapShowClosedStorageKey(viewId), current ? "0" : "1");
-      return !current;
-    });
-  };
-  // "Epics only" (default off): everything scheduled draws; the toggle swaps
-  // in the tighter epics-and-their-children clause to drown out the noise.
-  const [epicsOnly, setEpicsOnly] = useState(
-    () => window.localStorage.getItem(roadmapEpicsOnlyStorageKey(viewId)) === "1",
-  );
-  useEffect(() => {
-    setEpicsOnly(window.localStorage.getItem(roadmapEpicsOnlyStorageKey(viewId)) === "1");
-  }, [viewId]);
-  const toggleEpicsOnly = () => {
-    setEpicsOnly((current) => {
-      window.localStorage.setItem(roadmapEpicsOnlyStorageKey(viewId), current ? "0" : "1");
-      return !current;
-    });
-  };
-  // Curated membership (roadmap wave): the member set is read through the
-  // item dialect's `roadmap` field, so it arrives hydrated + RBAC-scoped.
-  // Members/All: with members and no stored override, the roadmap opens
-  // members-only — pinning the first item is what flips a roadmap into
-  // curated mode, no configuration step.
+  const [showClosed, toggleShowClosed] = useStoredFlag(roadmapShowClosedStorageKey(viewId));
+  // "Epics only" (default off) swaps in the tighter epics-and-their-children clause.
+  const [epicsOnly, toggleEpicsOnly] = useStoredFlag(roadmapEpicsOnlyStorageKey(viewId));
+  // Curated membership: read through the item dialect's `roadmap` field (hydrated + RBAC-scoped).
+  // With members and no stored override the roadmap opens members-only, so pinning the first item
+  // is what makes a roadmap curated.
   const members = useQuery({ ...roadmapMembersQuery(viewId), enabled: Boolean(viewId) && isRoadmap });
   const memberItems = useMemo(() => members.data ?? [], [members.data]);
   const memberIds = useMemo(() => new Set(memberItems.map((m) => m.id)), [memberItems]);
@@ -356,7 +309,6 @@ export function ViewPage() {
   const planning = useMemo(() => planningQueries(fetchQueryView, cycles.data, {...planningOptions, search: backlogSearch}), [fetchQueryView, cycles.data, planningOptions, backlogSearch]);
   const isBoard = view?.view_type === ViewType.board;
   const boardItems = useBoardItems(fetchQueryView, columnAxis, isBoard ? laneAxis : null, cycles.data, isGrouped && (!(columnAxis === "cycle" || (isBoard && laneAxis === "cycle")) || cycles.isSuccess));
-  const groupedItems = boardItems;
   const pagedFetchView = isPlanning ? planning.backlog : fetchQueryView;
   const sprintItems = usePlanningSprints(planning.sprints, isPlanning && cycles.isSuccess && planning.cycleCount > 0);
   const recoveryItems = usePlanningSprints(planning.recovery, isPlanning && cycles.isSuccess, 1);
@@ -367,9 +319,8 @@ export function ViewPage() {
     enabled: isPlanning && cycles.isSuccess && planning.cycleCount > 0,
   });
 
-  // Roadmaps auto-stream their whole (narrowed) match set below; every OTHER
-  // view type pages its result (Planning pages only its backlog) CLASSICALLY since the pagination wave — one page at a
-  // time behind a first/prev/numbers/next/last Pager, page carried in the URL.
+  // Roadmaps auto-stream their (narrowed) match set below; every other view type pages its result
+  // behind a Pager, the page carried in the URL (Planning pages only its backlog).
   const itemPages = useInfiniteQuery({
     ...infiniteViewItemsQuery(fetchQueryView),
     enabled: Boolean(view) && isRoadmap,
@@ -446,18 +397,16 @@ export function ViewPage() {
   );
   const roadmapFlat = useMemo(() => itemPages.data?.pages.flat(), [itemPages.data]);
   const items = {
-    data: isBoard ? boardItems.items : isGrouped ? groupedItems.items : isRoadmap ? roadmapFlat : isPlanning ? sectionSearch.displayItems([
+    data: isBoard || isGrouped ? boardItems.items : isRoadmap ? roadmapFlat : isPlanning ? sectionSearch.displayItems([
       ...planning.scheduled.filter(g => !view?.hidden_columns?.includes(g.key)).map(g => ({key: g.key, items: sprintItems.items.filter(i => i.cycle?.id === g.key)})),
       {key: RESCHEDULING_KEY, items: recoveryItems.items},
       {key: BACKLOG_KEY, items: pagedItems.data ?? []},
       ...(planningOptions.history && planning.historyId ? [{key: `history:${planning.historyId}`, items: historyItems.items}] : []),
     ]) : pagedItems.data,
-    isPending: isPlanning ? false : isBoard ? boardItems.isPending && !cycles.isError : isGrouped ? groupedItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending,
-    isError: isPlanning ? false : isBoard ? (boardItems.isError && !boardItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isGrouped ? (groupedItems.isError && !groupedItems.data) || (columnAxis === "cycle" && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError,
-    error: isBoard ? boardItems.error ?? cycles.error : isGrouped ? groupedItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? recoveryItems.error ?? sprintItems.error : null),
+    isPending: isPlanning ? false : isBoard || isGrouped ? boardItems.isPending && !cycles.isError : isRoadmap ? itemPages.isPending : pagedItems.isPending,
+    isError: isPlanning ? false : isBoard ? (boardItems.isError && !boardItems.data) || ((columnAxis === "cycle" || laneAxis === "cycle") && cycles.isError) : isGrouped ? (boardItems.isError && !boardItems.data) || (columnAxis === "cycle" && cycles.isError) : isRoadmap ? itemPages.isError : pagedItems.isError,
+    error: isBoard || isGrouped ? boardItems.error ?? cycles.error : isRoadmap ? itemPages.error : pagedItems.error ?? (isPlanning ? cycles.error ?? recoveryItems.error ?? sprintItems.error : null),
   };
-  // Since the pagination wave the bar COMPOSES into the fetch (see
-  // effectiveView above) — the loaded page already IS the filtered page.
   const pageItems = useMemo(() => [...new Map((items.data ?? []).map(item => [item.id, item])).values()], [items.data]);
 
   // Per-view card display (slots/labels/scale) — persisted under the view's id.
@@ -549,15 +498,13 @@ export function ViewPage() {
     ...allStatesQuery(),
     enabled: Boolean(view) && !view?.project_id,
   });
-  // Story points (spec 70): resolved per project (all-projects views fall
-  // back to the instance default) — drives the board columns' Σ pts header.
+  // Story points, resolved per project (the instance default on all-projects views): Σ pts headers.
   const pointsEnabled = usePointsEnabled(view?.project_id ?? undefined);
 
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  // New-item affordance on project-scoped views (the old builtin board/list
-  // pages carried this; views ARE the surfaces now). `c` = create.
+  // New-item affordance on project-scoped views. `c` = create.
   const canCreate = Boolean(project) && perms.project(project, Permission.itemCreate);
   // Board quick-add (spec-24 axis semantics, reversed): the + / "Add issue"
   // affordances seed the modal with the column's bucket value. Cleared on
@@ -673,10 +620,10 @@ export function ViewPage() {
 
     // RADD-855: the view's own bucket order, over the axis's natural order.
     return applyBucketOrder(
-      (isGrouped ? boardGroups(groupItemsForView(orderedItems, columnAxis, axisContext), columnAxis, boardItems.first, false, allStates.data, groupItemsForView([], columnAxis, axisContext).map(g=>g.key)) : groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.column_totals[g.key] ?? 0 : undefined, totalPoints:isGrouped ? groupedItems.first?.column_points?.[g.key] : undefined}))),
+      (isGrouped ? boardGroups(groupItemsForView(orderedItems, columnAxis, axisContext), columnAxis, boardItems.first, false, allStates.data, groupItemsForView([], columnAxis, axisContext).map(g=>g.key)) : groupItemsForView(orderedItems, columnAxis, axisContext).map(g => ({...g,total:isGrouped ? boardItems.first?.column_totals[g.key] ?? 0 : undefined, totalPoints:isGrouped ? boardItems.first?.column_points?.[g.key] : undefined}))),
       view.column_order,
     );
-  }, [isBoard, boardItems.first, view, orderedItems, columnAxis, axisContext, isGrouped, groupedItems.first, isPlanning, planning, sprintItems.items, recoveryItems.items, pagedItems.data, historyItems.items, cycles.data, planningOptions, fetchQueryView, recoveryItems.total, totalCount, historyItems.total, sprintItems.more, pagedItems.isPending, pagedItems.isError, recoveryItems.isPending, recoveryItems.isError, historyItems.isPending, historyItems.isError, sprintItems.isPending, sprintItems.isError]);
+  }, [isBoard, boardItems.first, view, orderedItems, columnAxis, axisContext, isGrouped, isPlanning, planning, sprintItems.items, recoveryItems.items, pagedItems.data, historyItems.items, cycles.data, planningOptions, fetchQueryView, recoveryItems.total, totalCount, historyItems.total, sprintItems.more, pagedItems.isPending, pagedItems.isError, recoveryItems.isPending, recoveryItems.isError, historyItems.isPending, historyItems.isError, sprintItems.isPending, sprintItems.isError]);
   // RADD-1175: presence. `columns` stays the FULL set (the Order menu must be
   // able to bring a hidden one back); the surfaces get the visible subset.
   const hiddenKeys = useMemo(() => new Set(view?.hidden_columns ?? []), [view?.hidden_columns]);
@@ -689,11 +636,11 @@ export function ViewPage() {
     () =>
       view && laneAxis
         ? applyBucketOrder(
-            (isBoard ? boardGroups(groupItemsForView(orderedItems, laneAxis, axisContext), laneAxis, boardItems.first, true, allStates.data, groupItemsForView([], laneAxis, axisContext).map(g=>g.key)) : groupItemsForView(orderedItems, laneAxis, axisContext).map(g => ({...g,total:isGrouped ? groupedItems.first?.lane_totals[g.key] ?? 0 : undefined}))),
+            (isBoard ? boardGroups(groupItemsForView(orderedItems, laneAxis, axisContext), laneAxis, boardItems.first, true, allStates.data, groupItemsForView([], laneAxis, axisContext).map(g=>g.key)) : groupItemsForView(orderedItems, laneAxis, axisContext).map(g => ({...g,total:isGrouped ? boardItems.first?.lane_totals[g.key] ?? 0 : undefined}))),
             view.swimlane_order,
           )
         : [],
-    [isBoard, boardItems.first, view, orderedItems, laneAxis, axisContext, isGrouped, groupedItems.first],
+    [isBoard, boardItems.first, view, orderedItems, laneAxis, axisContext, isGrouped],
   );
 
   // Cross-bucket drag (spec 24): dropping an item on a bucket sets the field the
@@ -714,11 +661,8 @@ export function ViewPage() {
   const rankOrdered =
     !/\border\s+by\b/i.test(viewQuery) || /\border\s+by\s+rank\b/i.test(viewQuery);
   const projectScoped = Boolean(view?.project_id);
-  // An ALL-PROJECTS view has no single project to resolve against. It asked the
-  // GLOBAL atom, which a project-scoped grant never satisfies (RADD-788), so
-  // drag-to-rank was dead on every cross-project view for ordinary members.
-  // "Holds it somewhere" is the honest client-side bar; the server re-checks the
-  // item's own project on every reorder.
+  // All-projects views have no single project: ask "held anywhere" (RADD-788); the server
+  // re-checks each reorder.
   const canUpdate = projectScoped
     ? Boolean(project) && perms.project(project, Permission.itemUpdate)
     : perms.anyProject(Permission.itemUpdate);
@@ -788,10 +732,8 @@ export function ViewPage() {
     if (!event.shiftKey) setAnchor(item.id);
   };
 
-  // "Select all N matching" (spec 68): the view's true match count via
-  // GET /items/ids — fetched lazily once a selection exists. The ad-hoc bar
-  // now composes into the fetch query, so select-all means exactly what the
-  // page shows even while the bar is active (pagination wave).
+  // "Select all N matching": GET /items/ids over the same composed query the page shows, fetched
+  // lazily once a selection exists.
   const matchingIds = useQuery({
     ...itemIdsQuery(effectiveView?.query_string ?? ""),
     enabled: Boolean(view) && selected.size > 0 && !isPlanning && !isGrouped,
@@ -846,10 +788,7 @@ export function ViewPage() {
         <QueryBar filter={slqFilter} projectId={view.project_id ?? undefined} />
       </TopBarQuery>
 
-      {/* ONE header row (was two bands): identity, the SAVED chips, then
-          count/knobs at the right edge. The old second band's project tabs
-          (a one-item "Reports" nav) moved into the ⋯ menu — nav lives in the
-          sidebar/top bar, not repeated per page. */}
+      {/* ONE header row: identity, the SAVED chips, then count/knobs at the right edge. */}
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-subtle px-5 py-2">
         <span className="rounded bg-elevated px-1.5 py-0.5 font-mono text-xs text-fg">
           {project ? project.key : "All projects"}
@@ -893,8 +832,7 @@ export function ViewPage() {
           </span>
         )}
 
-        {/* SAVED chips — the view's shared quick filters plus the user's
-            personal saved filters (moved up from the old second band). */}
+        {/* SAVED chips — the view's shared quick filters plus the user's personal saved filters. */}
         {(view.quick_filters.length > 0 || savedFilters.filters.length > 0) && (
           <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-faint">
             Saved
@@ -969,8 +907,8 @@ export function ViewPage() {
           <button
             type="button"
             onClick={() => {
-              setActiveFilters(new Set());
-              setActivePersonal(new Set());
+              quickChips.clear();
+              personalChips.clear();
               writeUrlState({ f: null, pf: null });
             }}
             className="text-xs text-fg-muted hover:text-fg cursor-pointer"
@@ -983,7 +921,7 @@ export function ViewPage() {
           <span className="text-xs text-fg-faint">
             {isGrouped
               ? // RADD-1293: the total, not paging internals ("100 loaded · … matching items").
-                `${Object.values((isBoard ? boardItems.first : groupedItems.first)?.column_totals ?? {}).reduce((a,b)=>a+b,0).toLocaleString()} issues`
+                `${Object.values(boardItems.first?.column_totals ?? {}).reduce((a,b)=>a+b,0).toLocaleString()} issues`
               : isPlanning
               ? `${planning.cycleCount ? openSprintCount.data?.total.toLocaleString() ?? "…" : "0"} open sprint issues · ${totalCount?.toLocaleString() ?? "…"} backlog · ${recoveryItems.total?.toLocaleString() ?? "…"} need rescheduling`
               : isRoadmap
@@ -1098,8 +1036,7 @@ export function ViewPage() {
               {deleteView.isPending ? "Deleting…" : "Confirm delete?"}
             </Button>
           )}
-          {/* RADD-1290: the project's other pages, one click from any of its
-              views — Reports used to hide behind ⋯, Releases behind settings. */}
+          {/* The project's other pages, one click from any of its views (RADD-1290). */}
           {project && (
             <nav aria-label="Project pages" className="flex items-center gap-0.5">
               <Link to={RoutePath.projectReports} params={{ projectKey: project.key }} data-view-link="reports"
@@ -1120,24 +1057,6 @@ export function ViewPage() {
             label="View actions"
             align="end"
             items={[
-              // The old second band's one-tab "Reports" nav, folded in here.
-              // Open to a visitor too (RADD-1150): every report folds over the
-              // same row filter as the lists, so the numbers match what they see.
-              ...(project
-                ? [
-                    {
-                      kind: "action" as const,
-                      label: "Project reports",
-                      icon: BarChart3,
-                      onSelect: () =>
-                        void navigate({
-                          to: RoutePath.projectReports,
-                          params: { projectKey: project.key },
-                        }),
-                    },
-                    { kind: "separator" as const },
-                  ]
-                : []),
               {
                 kind: "action",
                 label: "Export CSV",
@@ -1200,8 +1119,8 @@ export function ViewPage() {
         // items arrive fetched (fetch-all) + quick-filtered + SLQ-bar-filtered.
         <RoadmapSurface
           key={view.id}
-          // The NARROWED view (perf wave): its query_string keys the item
-          // cache the editing gestures paint, so it must match the fetch.
+          // The NARROWED view: its query_string keys the item cache the
+          // editing gestures paint, so it must match the fetch.
           view={fetchQueryView ?? view}
           project={project}
           items={pageItems}
@@ -1284,7 +1203,7 @@ export function ViewPage() {
             )
           ) : (
             <ViewList
-              loading={isGrouped ? groupedItems : undefined}
+              loading={isGrouped ? boardItems : undefined}
               groups={isPlanning ? sectionSearch.apply(visibleColumns) : isGrouped ? visibleColumns : columns}
               sectionSearch={isPlanning ? sectionSearch.control : undefined}
               sectionStatus={isPlanning ? group => {
@@ -1329,7 +1248,7 @@ export function ViewPage() {
           <span className="ml-2">Issue rows are still loading; sprint statistics cover the whole sprint.</span>
         </div>
       )}
-      {/* Classic pagination (pagination wave) — roadmaps auto-stream instead. */}
+      {/* Classic pagination — roadmaps auto-stream instead. */}
       {/* RADD-1177: also shown whenever a SMALLER page would paginate — otherwise
           the size picker is unreachable exactly when someone wants a smaller page. */}
       {!isRoadmap && !isGrouped && !(isPlanning && sectionSearch.backlogFiltered) &&

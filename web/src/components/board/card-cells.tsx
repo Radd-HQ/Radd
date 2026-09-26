@@ -15,6 +15,7 @@ import {
   ChildCount,
   CycleChip,
   DueBadge,
+  LabelChips,
   PointsChip,
   ReleaseChip,
   StatePill,
@@ -35,7 +36,7 @@ import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /** Priority as a compact mono tag (board cards): text reads faster than an
  * icon at card scale, and severity carries in the color. */
-export function PriorityTag({ priority }: { priority: PriorityValue }) {
+function PriorityTag({ priority }: { priority: PriorityValue }) {
   const meta = PRIORITY_META[priority];
   return (
     <span
@@ -49,7 +50,7 @@ export function PriorityTag({ priority }: { priority: PriorityValue }) {
 
 /** Parent epic as a pastel chip carrying the epic's NAME (its key in the
  * tooltip) — purple is the app's epic hue. Board-local: rows keep ParentTag. */
-export function EpicChip({ parent }: { parent: ItemParentRef }) {
+function EpicChip({ parent }: { parent: ItemParentRef }) {
   return (
     <span
       title={`Parent: ${parent.key} ${parent.title}`}
@@ -57,33 +58,6 @@ export function EpicChip({ parent }: { parent: ItemParentRef }) {
     >
       <CornerDownRight size={11} className="shrink-0" aria-hidden />
       <span className="truncate">{parent.title || parent.key}</span>
-    </span>
-  );
-}
-
-/** Quiet label chips for cards — labels are context, not signal, so they sit
- * a step back from the colored meta chips (board-local; rows keep LabelChips). */
-export function QuietLabels({ labels, max }: { labels: string[]; max: number }) {
-  const shown = max > 0 ? labels.slice(0, max) : [];
-  const hidden = labels.slice(shown.length);
-  return (
-    <span className="flex min-w-0 flex-wrap items-center gap-1">
-      {shown.map((label) => (
-        <span
-          key={label}
-          className="inline-flex items-center rounded border border-subtle/70 bg-surface/70 px-1.5 py-px font-mono text-[10.5px] leading-4 text-fg-secondary"
-        >
-          {label}
-        </span>
-      ))}
-      {hidden.length > 0 && (
-        <span
-          title={hidden.join(", ")}
-          className="inline-flex shrink-0 items-center rounded border border-subtle/70 bg-surface/70 px-1.5 py-px font-mono text-[10.5px] leading-4 text-fg-muted"
-        >
-          +{hidden.length}
-        </span>
-      )}
     </span>
   );
 }
@@ -146,7 +120,7 @@ export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
       return item.parent ? <EpicChip parent={item.parent} /> : null;
     case "labels":
       return item.labels.length > 0 ? (
-        <QuietLabels labels={item.labels} max={ctx.maxLabels} />
+        <LabelChips labels={item.labels} max={ctx.maxLabels} variant="quiet" />
       ) : null;
     case "cycle":
       return item.cycle ? <CycleChip cycle={item.cycle} /> : null;

@@ -23,7 +23,7 @@ const SITE_PATH_RE = /^\/(?!\/)/;
 const ISSUE_URL_RE = /^(?:https?:\/\/[^/]+)?\/issues\/([A-Za-z][A-Za-z0-9]{0,9}-\d+)(?:[?#].*)?$/;
 
 /** The issue key a href addresses, or null. Covers both forms. */
-export function issueKeyOf(href: string, origin = ""): string | null {
+function issueKeyOf(href: string, origin = ""): string | null {
   if (ISSUE_KEY_RE.test(href)) return href;
   const match = ISSUE_URL_RE.exec(href);
   if (!match) return null;
@@ -33,7 +33,7 @@ export function issueKeyOf(href: string, origin = ""): string | null {
   return match[1];
 }
 
-export interface ChipOptions {
+interface ChipOptions {
   /** Open an issue by key (router navigation). */
   openIssue: (key: string) => void;
   /** Read mode: external links open in a new tab; issue chips navigate. In edit

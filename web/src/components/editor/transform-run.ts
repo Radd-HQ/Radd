@@ -60,11 +60,7 @@ function scopeOf(ctx: Ctx, range?: EditorRange): RunScope {
 export const reviewPending = (ctx: Ctx): boolean =>
   diffPluginKey.getState(ctx.get(editorViewCtx).state) != null;
 
-/**
- * How a run ended — the three outcomes the progress surface has to tell apart (RADD-762). They
- * used to be indistinguishable: `done` resolved `void` for both "there is a review waiting" and
- * "nothing came back", and REJECTED for a cancel, so pressing Stop reported a failure.
- */
+/** How a run ended; a cancel is `aborted`, never a failure. */
 export const TransformOutcome = {
   /** A diff review is open and waiting to be accepted or rejected. */
   review: "review",
@@ -74,9 +70,9 @@ export const TransformOutcome = {
   aborted: "aborted",
 } as const;
 
-export type TransformOutcomeValue = (typeof TransformOutcome)[keyof typeof TransformOutcome];
+type TransformOutcomeValue = (typeof TransformOutcome)[keyof typeof TransformOutcome];
 
-export interface TransformHandle {
+interface TransformHandle {
   /** Resolves with the outcome once the run ends and any diff is handed over; rejects only on a
    *  real failure (never on cancel). */
   done: Promise<TransformOutcomeValue>;

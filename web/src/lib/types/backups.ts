@@ -52,7 +52,7 @@ export interface BackupRun {
 }
 
 /** {kind, minutes | time, weekdays} — shared with automations' scheduled rules. */
-export interface BackupScheduleConfig {
+interface BackupScheduleConfig {
   kind: "interval" | "daily" | "weekly";
   minutes?: number;
   time?: string;
@@ -73,7 +73,7 @@ export interface BackupSchedule {
   last_error: string | null;
 }
 
-export interface BackupTool {
+interface BackupTool {
   path: string | null;
   version: string | null;
 }

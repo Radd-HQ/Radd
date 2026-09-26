@@ -14,10 +14,6 @@ export function cycleLabel(name: string): string | null {
   return parseCycleName(name)?.label ?? null;
 }
 
-export function sameLabel(a: string | null, b: string | null): boolean {
-  return a !== null && b !== null && a.toLowerCase() === b.toLowerCase();
-}
-
 /** Weekday labels indexed by the backend's Python convention: 0 = Monday. */
 export const WEEKDAY_LABELS = [
   "Monday",

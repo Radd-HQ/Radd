@@ -10,9 +10,9 @@ export interface SlqSuggestion {
   detail: string;
 }
 
-export type SlqSuggestContext = "field" | "operator" | "value" | "keyword";
+type SlqSuggestContext = "field" | "operator" | "value" | "keyword";
 
-export interface SlqSuggestResponse {
+interface SlqSuggestResponse {
   context: SlqSuggestContext;
   replace_from: number;
   field: string | null;
@@ -21,7 +21,7 @@ export interface SlqSuggestResponse {
 
 /** Where a dialect's SLQ endpoints live. Items is the default; the timesheet
  *  passes the worklog dialect (spec 98), which serves the same contract. */
-export const SlqDialect = {
+const SlqDialect = {
   items: ApiPath.items,
   worklogs: ApiPath.timesheet,
 } as const;

@@ -1,17 +1,8 @@
 /**
- * The permission inspector (RADD-779 → RADD-809): both halves of the access
- * system explained from one place.
- *
- * `EffectivePermissions` — the ATOM half, now resolvable at instance / project
- * / SPACE scope, each row carrying its channel (membership, team, grant) and a
- * backlink to the supplying role. `ResourceAccessSection` — the spec-92 half:
- * which grant rows reach this person, through what, at what scope, plus the
- * default-open distinction ("readable because nothing restricts it" is a
- * different fact from "granted"). `TeamAccessSection` — the same treatment for
- * "what does membership of this team confer".
- *
- * Everything is resolved server-side; this file only renders. A second opinion
- * computed in the client would be the one that disagrees with the resolver.
+ * The permission inspector: `EffectivePermissions` (atoms, per scope, each with its channel and
+ * supplying role), `ResourceAccessSection` (the spec-92 grant rows that reach a person, and
+ * default-open vs granted) and `TeamAccessSection` (what a team's membership confers). Everything
+ * is resolved server-side; this file only renders.
  */
 
 import { useState } from "react";
@@ -211,11 +202,8 @@ export function ResourceAccessSection({ userId }: { userId: string }) {
       <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-faint">
         Resource access
       </p>
-      {/* RADD-933: full reach and own-items-only reach are DIFFERENT answers.
-          Counted together, an account holding nothing but the Baseline's
-          `item.read@own` reported "can read issues in 97 of 97 projects", which
-          reads as "sees everything" and is why a correctly-revoked account
-          looked like it was still leaking. */}
+      {/* Full reach and own-items-only reach are DIFFERENT answers (RADD-933): counted together,
+          `item.read@own` alone read as "can read issues in 97 of 97 projects". */}
       <p className="text-xs text-fg-secondary">
         Can read <strong>every issue</strong> in {summary.readable_projects} and edit in{" "}
         {summary.updatable_projects} of {summary.total_projects} projects
@@ -242,16 +230,8 @@ export function ResourceAccessSection({ userId }: { userId: string }) {
   );
 }
 
-/**
- * The carriers between "granted to" and "held by" (RADD-933).
- *
- * The Users page could list a person's DIRECT grants and the atoms they end up
- * with, and nothing in between — so "which teams is this person on, and what do
- * they confer?" had no answer on the page that answers every other access
- * question. A carrier that confers nothing is still listed, and says so: it is
- * exactly the row that will explain the change when someone later grants a role
- * to that team.
- */
+/** The carriers between "granted to" and "held by" (RADD-933): the teams and groups a person is
+ *  on and what each confers. One that confers nothing is still listed — it explains a later grant. */
 function MembershipsSection({ memberships }: { memberships: Membership[] }) {
   if (memberships.length === 0) {
     return (
@@ -303,7 +283,7 @@ function MembershipsSection({ memberships }: { memberships: Membership[] }) {
 }
 
 /** Shared renderer: per-type grant rows + the default-open statement. */
-export function ResourceSections({
+function ResourceSections({
   sections,
   subject,
 }: {

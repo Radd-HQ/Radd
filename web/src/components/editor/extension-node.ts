@@ -6,25 +6,11 @@ import type { Node as UnistNode, Parent } from "unist";
 import { extensionNameOfInfo } from "@radd/plugin-sdk";
 
 /**
- * `radd:*` fences as a real editor node (RADD-746).
- *
- * **The correction worth recording.** Overriding the editor's `code_block` node
- * view to catch these does collide — ProseMirror's `someProp` resolves node
- * views by FIRST match, and the preset registers first — but the right move is
- * **not to be a code block at all**. A `$remark` transform claims the fence
- * during markdown PARSING and hands back a distinct mdast type, so the
- * code-block view never sees it and no registration race decides the outcome.
- *
- * The race is real, not theoretical: the transformer resolves an mdast node to
- * a schema type with `Object.values(schema.nodes).find(spec.parseMarkdown.match)`
- * — insertion order. A second node also matching `type === "code"` would win or
- * lose depending on which plugin was `use()`d first. Matching a type nobody else
- * emits removes the question.
- *
- * **The wire format does not change.** The serializer writes the fence back
- * from the verbatim body it parsed, so a block nobody edited round-trips
- * byte-identically and FTS, the embedder, the export and the public surface
- * (RADD-709) keep reading the markdown they always did.
+ * `radd:*` fences as a real editor node. A `$remark` transform claims the fence during PARSING and
+ * emits its own mdast type, so the `code_block` view never sees it. Overriding `code_block`'s view
+ * instead would race: ProseMirror resolves node views by FIRST match and the transformer maps
+ * mdast→schema in insertion order, so whichever plugin was `use()`d first would win. The serializer
+ * writes the fence back from the verbatim body, so an untouched block round-trips byte-identically.
  */
 
 /** The mdast node type this transform emits. Deliberately not `code`. */

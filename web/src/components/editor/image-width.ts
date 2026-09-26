@@ -1,20 +1,10 @@
 /**
- * The image-width convention (RADD-751).
- *
- * Markdown cannot express an image size — `![alt](url)` has nowhere to put one.
- * Of the three ways out, this is the one that keeps the body pure markdown AND
- * fixes the bandwidth problem: `?w=640` is a URL, so FTS, the embedder, the
- * export, MCP and the public surface all keep reading exactly what they read
- * before, and the attachment endpoint serves fewer bytes rather than the browser
- * scaling a 4 MB screenshot down to 600px.
- *
- * The alternatives, recorded so they are not re-argued: raw `<img width>` HTML
- * makes the body stop being markdown; a `radd:image` fence is the heaviest
- * possible answer for something as ordinary as a picture.
+ * The image-width convention: markdown has nowhere for a size, so the width rides in our attachment
+ * URLs as `?w=` — the body stays pure markdown and the server serves a smaller bucket.
  */
 
 /** Widths the server will actually serve. Mirrors `thumbnails.WIDTH_BUCKETS`. */
-export const WIDTH_BUCKETS = [160, 320, 480, 640, 800, 1024, 1280, 1600, 1920];
+const WIDTH_BUCKETS = [160, 320, 480, 640, 800, 1024, 1280, 1600, 1920];
 
 /** Below this, an image is a decoration nobody can see; above it, unbounded. */
 export const MIN_WIDTH = 80;

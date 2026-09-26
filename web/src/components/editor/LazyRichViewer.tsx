@@ -1,5 +1,6 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps } from "react";
+import { useNearViewport } from "../../lib/useNearViewport";
 import type { RichViewer } from "./RichViewer";
 
 // Same heavy Milkdown/ProseMirror chunk as the editor — loaded on demand.
@@ -35,9 +36,8 @@ function ReadyViewer(props: ComponentProps<typeof RichViewer>) {
 }
 
 /**
- * Drop-in for RichViewer that (a) code-splits the engine and (b) only mounts a
- * Crepe instance once the content nears the viewport — an issue can carry
- * hundreds of comments, and hundreds of eager ProseMirror instances would jank
+ * Drop-in for RichViewer that (a) code-splits the engine and (b) mounts the engine only once the
+ * content nears the viewport — hundreds of eager ProseMirror instances on a long thread would jank
  * the page. Until then the raw markdown holds the layout.
  */
 export function LazyRichViewer({
@@ -51,22 +51,8 @@ export function LazyRichViewer({
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(eager);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host || eager) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "600px" }, // mount a screen ahead so scrolling feels seamless
-    );
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, [eager]);
+  // Mount a screen ahead so scrolling feels seamless.
+  useNearViewport(hostRef, () => setVisible(true), { margin: "600px", enabled: !eager && !visible });
 
   return (
     <div ref={hostRef}>

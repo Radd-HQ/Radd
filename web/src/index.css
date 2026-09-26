@@ -30,18 +30,10 @@
 }
 
 /*
- * Design-token foundation (UI modernization, phase A).
- *
- * Theming is a variable remap: the semantic tokens below consume the zinc and
- * indigo scales (components use only the semantic utilities — `web/src` carries
- * zero raw zinc-* or indigo-* classes), and Tailwind v4 compiles the scales to
- * `var(--color-zinc-*)` references that resolve against the per-theme values on
- * `html` / `html.light` below. On top of that remap sit three token layers:
- *   1. Semantic aliases (@theme inline) — bg-surface, text-fg-secondary,
- *      border-subtle, shadow-pop, … — inlined as var() references so they
- *      track the remap automatically in both themes.
- *   2. Intermediate zinc steps (850/825) for elevated/overlay surfaces.
- *   3. Motion + radius tokens shared by every overlay.
+ * Theming is a variable remap: semantic tokens (@theme inline below) point at
+ * the zinc/indigo scales, and Tailwind compiles those to var(--color-zinc-*)
+ * resolved per theme on `html` / `html.light`. Components use only the
+ * semantic utilities — `web/src` carries zero raw zinc-* / indigo-* classes.
  */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
@@ -52,10 +44,7 @@
   --color-zinc-850: #26262a;
   --color-zinc-825: #2d2d32;
 
-  /* Radii: intentionally shifts every rounded-md/lg/xl/2xl app-wide. Dialed
-     DOWN from the Dusk bump (9/12/16px read as too round in daily use) to a
-     squarer scale at-or-below the Tailwind defaults; rounded-full pills,
-     avatars and dots are deliberately untouched. */
+  /* Radii shift every rounded-md/lg/xl/2xl app-wide; rounded-full is untouched. */
   --radius-md: 0.375rem; /* 6px  — buttons, inputs, tabs, menu rows */
   --radius-lg: 0.5rem; /* 8px  — menus, popovers, panels */
   --radius-xl: 0.625rem; /* 10px — modals, cards */
@@ -146,31 +135,12 @@
   --color-accent-text-strong: var(--accent-text-strong);
   --color-focus: var(--accent-focus);
 
-  /* Workflow-state colors — ONE source of truth for the state dots, the state
-     pills, the roadmap bar fills and every report series (they are supposed to
-     mirror each other; before this they were Tailwind palette classes on one
-     side and loose hexes on the other, and had drifted).
-     The scheme is the TRAFFIC LIGHT, read literally — green means go:
-       triage      yellow      caution, nobody has judged it yet
-       backlog     light grey  dormant, still ahead of you
-       todo        blue        queued, waiting for the light
-       in_progress GREEN       moving
-       done        dark slate  out of play
-       canceled    dark slate  out of play — DELIBERATELY the same as done
-     Only three states earn a hue, because only three are things you act on.
-     Everything terminal or dormant is a neutral, separated by lightness: what
-     is ahead of you is light, what is behind you is dark. done and canceled
-     being identical is a product decision, not an oversight — at a glance both
-     mean "not my problem any more". The cost is that a stacked chart cannot
-     tell them apart by colour, and only done counts as delivered; charts that
-     need the split must label or exclude, which is the status-palette rule
-     anyway (never colour alone).
-     Stepped per theme and validated with the dataviz six-checks. The pair that
-     matters most is todo↔in_progress, and collapsing the terminal states freed
-     enough hue budget to put it on blue↔green — deutan ΔE 18.1, the strongest
-     separation available. Neutrals sit below the categorical chroma floor by
-     design; a grey is near the centre of the colour space and can never be far
-     from a hue, which is exactly why the receding states are grey. */
+  /* Workflow-state colours: ONE source for dots, pills, roadmap bars and report
+     series. A literal traffic light — triage yellow, todo blue, in_progress
+     GREEN; backlog light grey, done and canceled the SAME dark slate (a product
+     decision: both mean "out of play"; charts that need the split must label
+     or exclude). Validated per theme with the dataviz six-checks; todo↔
+     in_progress on blue↔green gives deutan ΔE 18.1. */
   --color-chart-triage: var(--chart-triage);
   --color-chart-backlog: var(--chart-backlog);
   --color-chart-todo: var(--chart-todo);
@@ -187,17 +157,8 @@
   --color-chart-progress-ink: var(--chart-progress-ink);
   --color-chart-done-ink: var(--chart-done-ink);
 
-  /* Status tier (RADD-900). Danger/warning/success as SEMANTIC tokens, so the
-     kit's error rings, the danger button, chart series and one-off pills stop
-     re-deriving "red" from raw palette shades that the light remap may or may
-     not cover. Two roles, mirroring --chart-*:
-       base  the FILL — buttons, rings, washes, chart marks (>= 3:1 on its
-             backdrop; light values computed against white)
-       ink   the colour as TEXT — error paragraphs, tinted-pill text (>= 4.5:1
-             on the surface AND on a 10% tint of its own fill)
-     Dark values are the shades the app already rendered (red-500 fill /
-     red-400 ink, amber-400/300, emerald-400/300), so dark is visually
-     unchanged; light values are the computed deep steps. */
+  /* Status tier (RADD-900): `base` is the FILL (>= 3:1 on its backdrop), `ink`
+     the TEXT (>= 4.5:1 on the surface AND on a 10% tint of its own fill). */
   --color-status-danger: var(--status-danger);
   --color-status-danger-ink: var(--status-danger-ink);
   --color-status-warning: var(--status-warning);
@@ -205,13 +166,8 @@
   --color-status-success: var(--status-success);
   --color-status-success-ink: var(--status-success-ink);
 
-  /* Callout panels (RADD-715). A separate scale from --chart-*, which encodes
-     WORKFLOW STATE: reusing "in progress" green to mean "success" would make a
-     board legend and a page callout claim the same colour means two things.
-     Computed, not eyeballed — ink clears 4.5:1 on its OWN fill in both themes
-     (text, not a fill), border clears 3:1 on the surface, and the ink keeps its
-     hue rather than collapsing to near-white, which is what a naive search for
-     "passes contrast" returns. */
+  /* Callouts (RADD-715): a separate scale from --chart-* so "success" never
+     borrows the "in progress" green. Ink >= 4.5:1 on its own fill, border >= 3:1. */
   --color-callout-info-fill: var(--callout-info-fill);
   --color-callout-info-border: var(--callout-info-border);
   --color-callout-info-ink: var(--callout-info-ink);
@@ -241,18 +197,9 @@
   body {
     @apply bg-base text-fg antialiased;
   }
-  /* RADD-1231: ONE scrollbar for every browser, big enough to grab. Without
-     a rule each engine draws its own — Chrome a wide square-cornered bar,
-     Firefox a thin one. Chrome, Safari and Edge are fully stylable through
-     the -webkit- pseudo-elements: a 12px rail with a rounded 8px thumb.
-     Firefox (and Zen) only offers the standard properties, and its width is
-     a choice between `thin` (~8px, too small to grab) and `auto` (the
-     platform's ~12px) — so it gets `auto` plus our colours, which also
-     switches it to non-native rendering with a rounded thumb. The Gecko
-     block is scoped with @supports, because Chrome 121+ honours the
-     standard properties too and then IGNORES the -webkit- rules; unscoped,
-     the first version made Chrome thin as well. Tokens, so the light theme
-     remaps the thumb. */
+  /* One 12px scrollbar everywhere. Firefox only has the standard properties
+     (`thin` is too small to grab, so `auto`); they are scoped with @supports
+     because Chrome 121+ honours them too and then IGNORES the -webkit- rules. */
   *::-webkit-scrollbar {
     width: 12px;
     height: 12px;
@@ -278,12 +225,7 @@
   }
 }
 
-/*
- * Dark theme (retuned): neutral lifted grays, now with real
- * surface separation — page #171718, panel #202022, and two intermediate
- * steps (850 elevated, 825 overlay) between panel and borders. Text shades
- * unchanged. These unlayered rules override the layered `:root` theme vars.
- */
+/* Dark theme values (unlayered: they override the layered :root theme vars). */
 html {
   /* One monospace stack for every code surface (RADD-752). */
   --radd-code-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -322,17 +264,13 @@ html {
   --chart-progress-ink: #569c72;
   --chart-done-ink: #89909b;
 
-  /* Priority chip fills (dark) — RADD-875: the rail chips carried a second,
-     drifted copy of these as hardcoded hexes. One scale per theme, like
-     --chart-*; every fill carries the chip's dark glyph at >=3:1. */
+  /* Priority chip fills (dark); every fill carries the chip's dark glyph at >= 3:1. */
   --priority-blocker: #ef4444;
   --priority-high: #f97316;
   --priority-normal: #64748b;
   --priority-low: #71717a;
 
-  /* Status tier (dark) — RADD-900. The shades the app already rendered, named:
-     fills are red-500 / amber-400 / emerald-400, inks the 400/300 text steps
-     everything red/amber/emerald already used on dark surfaces. */
+  /* Status tier (dark). */
   --status-danger: #ef4444; /* red-500 — 4.5:1 on --color-surface */
   --status-danger-ink: #f87171; /* red-400 — 6.8:1 on the page */
   --status-warning: #fbbf24; /* amber-400 */
@@ -530,16 +468,9 @@ html.compact body {
 }
 
 
-/*
- * Inline comment highlights (RADD-726). Painted through the CSS Custom Highlight
- * API rather than by wrapping text in <mark>: the page body is a ProseMirror
- * document, and inserting elements into it invites the editor to reconcile them
- * away or serialise them into the content. ::highlight() tints ranges without
- * touching the tree.
- *
- * Amber rather than the accent: the accent means "interactive" everywhere else,
- * and a commented passage is not a link.
- */
+/* Inline comment highlights via the CSS Custom Highlight API: wrapping text in
+   <mark> would be reconciled away or serialised by ProseMirror. Amber, because
+   the accent means "interactive". */
 ::highlight(radd-inline-comment) {
   background-color: var(--callout-warning-fill);
   text-decoration: underline;

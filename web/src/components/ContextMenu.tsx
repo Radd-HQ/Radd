@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, ChevronRight, type LucideIcon } from "lucide-react";
+import { usePointAnchoredPanel } from "../lib/floating-position";
 
 /**
  * Generic right-click context menu (spec 24): a fixed popover at the cursor with
@@ -32,36 +33,7 @@ const MENU_WIDTH = 224;
 
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
-
-  // Clamp into the viewport once measured.
-  useLayoutEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const left = Math.min(x, window.innerWidth - rect.width - 8);
-    const top = Math.min(y, window.innerHeight - rect.height - 8);
-    setPos({ left: Math.max(8, left), top: Math.max(8, top) });
-  }, [x, y]);
-
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) onClose();
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onClose, true);
-    window.addEventListener("resize", onClose);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onClose, true);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose]);
+  const pos = usePointAnchoredPanel(rootRef, x, y, onClose);
 
   return (
     <div

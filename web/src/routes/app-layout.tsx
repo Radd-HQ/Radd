@@ -14,18 +14,10 @@ import { useIsAuthenticated } from "../lib/hooks";
 import { useRealtime } from "../lib/realtime";
 
 /**
- * Authenticated app shell (Cairn-inspired bands): two FULL-WIDTH bars — the
- * top bar (brand, query slot, avatar) then the pins row (pinned tabs + the
- * always-there New item button) — with the sidebar + content split UNDER
- * them. Plus the global toast stack (403 permission surprises surface here
- * from the api client).
- * The auth gate lives in this route's beforeLoad (see router.tsx).
- * One realtime socket per shell keeps every surface live (spec 27).
- * StorageChoiceProvider hosts the one "where should this file be stored?"
- * modal every upload seam awaits (spec 102).
- * Routes size themselves with `h-full` against the outlet wrapper — the two
- * bars own the top of the viewport, so `h-screen` inside a route would
- * overflow by exactly their height.
+ * The app shell: two FULL-WIDTH bars (top bar, pins row) above the sidebar + content split, the
+ * toast stack, one realtime socket, and the storage-choice modal every upload awaits. The auth
+ * gate is the route's beforeLoad. Routes size with `h-full` against the outlet — `h-screen`
+ * would overflow by exactly the two bars' height.
  */
 /** The live-update socket, mounted only for a signed-in account (spec 121:
  *  the server closes an unauthenticated socket, and a visitor would otherwise

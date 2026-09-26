@@ -1,30 +1,12 @@
 /**
- * Page state that belongs in the URL (spec: "my filters shouldn't vanish on
- * refresh").
- *
- * The split: anything that changes WHICH ITEMS YOU SEE lives here, in the URL.
- * Pure display state (collapsed groups, card display, panel widths) stays in
- * localStorage. That line matters — persisting an ad-hoc query into a saved
- * view's own storage would make the view quietly stop meaning what its
- * definition says, whereas a URL is explicitly "this screen, right now": a
- * refresh keeps it, a link reproduces it, and a fresh navigation gives you the
- * clean view back.
- *
- * SHORTENING. Short state stays inline and readable (`?q=priority+%3D+high`) so
- * the URL is still something you can eyeball, edit and paste to someone. Past
- * `MAX_INLINE` characters it is stashed under a content hash and the URL
- * collapses to `?s=<hash>` — a client-side short link.
- *
- * The cost of that, stated plainly: a `?s=` link only resolves in the browser
- * that made it. Opening one elsewhere finds no entry and falls back to the
- * view's defaults rather than erroring. Inline links (the common case — most
- * SLQ queries are well under the threshold) travel fine. A server-side
- * shortener would fix the portability, at the price of a table, an endpoint and
- * a garbage-collection story; this buys the short URL for none of that.
- *
- * Writes use replaceState, not pushState: toggling a filter chip should not
- * stack up history entries you have to press Back through.
+ * Page state that belongs in the URL: what changes WHICH ITEMS you see lives
+ * here; pure display state stays in localStorage. Past `MAX_INLINE` chars the
+ * state is stashed under a content hash and the URL becomes `?s=<hash>` — a
+ * client-side short link that only resolves in the browser that made it
+ * (elsewhere it falls back to the view's defaults). Writes use replaceState so
+ * toggling a chip does not stack history entries.
  */
+import { useEffect, useState } from "react";
 
 const SHORT_PARAM = "s";
 const SHORT_PREFIX = "radd.url.";
@@ -37,7 +19,7 @@ const MAX_INLINE = 180;
  *  its project/team/person filters. */
 const OWNED = ["q", "f", "pf", "p", "d", "g", "pr", "tm", "u", "pg"] as const;
 
-export type UrlState = Partial<Record<(typeof OWNED)[number], string>>;
+type UrlState = Partial<Record<(typeof OWNED)[number], string>>;
 
 function hash(input: string): string {
   // FNV-1a — short, stable, and collision-tolerable: a miss falls back to
@@ -139,6 +121,29 @@ export function clearUrlState(): void {
 }
 
 /** True when the URL currently carries any state this module owns. */
+/**
+ * A set of chip names carried in the URL under `key` (comma-joined). Re-seeded from the URL when
+ * `scope` changes: a fresh navigation carries no state and lands clean, a refresh or a pasted
+ * link restores what was applied.
+ */
+export function useUrlChipSet(key: keyof UrlState, scope: string) {
+  const read = () => new Set(readUrlState()[key]?.split(",").filter(Boolean) ?? []);
+  const [active, setActive] = useState<Set<string>>(read);
+  useEffect(() => {
+    setActive(read());
+  }, [scope]);
+  const toggle = (name: string) => {
+    setActive((current) => {
+      const next = new Set(current);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      writeUrlState({ [key]: next.size ? [...next].join(",") : null });
+      return next;
+    });
+  };
+  return { active, toggle, clear: () => setActive(new Set()) };
+}
+
 export function hasUrlState(): boolean {
   const state = readUrlState();
   return OWNED.some((key) => Boolean(state[key]));

@@ -10,7 +10,7 @@ import type { Cycle } from "@radd-plugin-ui/cycles/types";
 
 const PAGE_SIZE = 25;
 const BOARD_STALE_MS = 30_000;
-export const BOARD_ALL_LANE = "__all__";
+const BOARD_ALL_LANE = "__all__";
 type Page = { cells: {column:string;lane:string;items:Item[];next_cursor:string|null}[];
   column_totals:Record<string,number>;lane_totals:Record<string,number>;
   column_points:Record<string,number>|null;column_labels:Record<string,string>;

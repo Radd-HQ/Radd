@@ -1,15 +1,7 @@
 /**
- * Markdown flattened to prose (RADD-924).
- *
- * A description is markdown, and a preview whose whole job is being skimmable
- * must not show `##`, fenced code, or `](https://…)`. This is deliberately a
- * FLATTENER, not a renderer: fences and images go, link URLs go and their TEXT
- * stays (it is usually the meaningful noun), and blank runs collapse.
- *
- * Its own module so it can be unit-tested directly. Proving it through the
- * browser meant hovering whatever the similar-issues ranker happened to return,
- * and on a 500k-item database that was an issue with no description at all —
- * which made the "no raw markdown" assertion pass by describing nothing.
+ * Markdown flattened to prose for previews (RADD-924) — a FLATTENER, not a renderer: fences and
+ * images go, link URLs go and their TEXT stays, blank runs collapse. Its own module so it can be
+ * unit-tested directly (a browser proof passed vacuously on an issue with no description).
  */
 
 /** Longest prefix to keep; callers append an ellipsis when they cut. */

@@ -5,28 +5,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only AND MIT
  */
 /**
- * Per-block AI diff review — a fork of Crepe's diff decoration plugin
- * (`@milkdown/components/src/diff/diff-decoration-plugin.ts`), swapped in by
- * RichEditor via `editor.remove(diffDecorationPlugin).use(raddDiffDecoration)`.
+ * Per-block diff review — a fork of Milkdown's diff decoration plugin, swapped in by RichEditor
+ * (`editor.remove(diffDecorationPlugin).use(raddDiffDecoration)`). Inline changes group per
+ * textblock (see `word-groups.ts`); block-level changes keep upstream's rendering. It reads
+ * upstream's `diffComponentConfig` slice and emits the `milkdown-diff-*` classes `editor.css` styles.
  *
- * Why a fork: upstream renders one Accept/Reject pair per raw changeset chunk
- * (character-granular — see `word-groups.ts`), which turns an AI rewrite into
- * a wall of buttons with mid-word fragments. Here inline changes group per
- * textblock: word-expanded strike/insert runs, ONE controls pair at the end of
- * each changed block. Block-level and custom-block changes keep upstream's
- * rendering (they were already one pair per change).
- *
- * It reuses upstream's ctx slices and CSS contract: `diffComponentConfig`
- * still carries labels + customBlockTypes (Crepe's AI feature keeps populating
- * it), and all decorations emit `milkdown-diff-*` classes so Crepe's theme
- * diff.css styles them untouched.
- *
- * One deliberate behavior fix: upstream's reject bookkeeping tests
- * `change.fromB < r.toB && change.toB > r.fromB`, which can NEVER match a
- * pure deletion (fromB === toB) — its Reject button is a silent no-op. Every
- * reject here dispatches the range padded by one position on each side; the
- * padding only reaches into the ≥1-token unchanged gap that always separates
- * changes, so it can't capture a neighbour.
+ * Deliberate fix: upstream's reject test `change.fromB < r.toB && change.toB > r.fromB` never matches
+ * a pure deletion (fromB === toB), so its Reject is a no-op. Rejects here pad the range by one
+ * position each side — only into the unchanged gap that always separates changes.
  */
 
 import type { CommandManager } from "@milkdown/kit/core";
@@ -65,17 +51,9 @@ import { groupInlineChanges } from "./word-groups";
 
 export const raddDiffDecorationKey = new PluginKey<DecorationSet>("RADD_DIFF_DECORATION");
 
-/**
- * Marks a decoration as one of the Accept/Reject pairs (RADD-762).
- *
- * The run panel counts REVIEW UNITS — what a person has to click through — and
- * that is not the pending-change count: the whole point of this fork is that it
- * merges a changeset's chunks into one pair per changed block. Counting the
- * decorations we actually emit is the only number that matches the screen, and
- * a flag on the spec says so out loud where a `key.startsWith("controls-")`
- * test would be a naming coincidence waiting to break.
- */
-export const DIFF_CONTROLS_SPEC = "raddDiffControls";
+/** Marks a decoration as an Accept/Reject pair. The run panel counts the pairs actually rendered
+ *  (the fork merges chunks per block), so a spec flag, not a key-name convention. */
+const DIFF_CONTROLS_SPEC = "raddDiffControls";
 
 /** The rendered pairs, for chrome that scrolls between them. */
 export const DIFF_CONTROLS_SELECTOR = `.${DIFF_CLASS_PREFIX}-controls`;

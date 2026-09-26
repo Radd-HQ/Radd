@@ -5,19 +5,8 @@ import { $prose } from "@milkdown/kit/utils";
 
 import { countReviewUnits, raddDiffDecorationKey } from "./decoration-plugin";
 
-/**
- * The pending review, published to React (RADD-762).
- *
- * The diff lives in ProseMirror state, so the chrome that offers Accept all /
- * Reject all had no way to know a review was open, how much was left in it, or
- * when it ended. A plugin view is the same seam `selection-state.ts` and
- * `toolbar-state.ts` already use for that: it runs on exactly the updates that
- * can change the answer, rather than being polled.
- *
- * `changes` counts the Accept/Reject pairs the decoration fork RENDERS, not the
- * changeset's chunks — those differ by an order of magnitude on a rewrite, and
- * the number worth showing someone is the number of decisions in front of them.
- */
+/** The pending review, published to React from a plugin view (the same seam as `toolbar-state.ts`);
+ *  `changes` is the number of Accept/Reject pairs on screen, not changeset chunks. */
 export interface ReviewState {
   /** A diff review is open; the editor rejects document edits until it ends. */
   active: boolean;

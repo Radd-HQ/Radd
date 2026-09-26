@@ -31,7 +31,7 @@ import { openCommandPalette } from "../CommandPalette";
 import { modShortcut } from "../../lib/platform";
 
 /** Icon-button geometry, shared by rail links and the rail's own buttons. */
-export const railButtonClasses =
+const railButtonClasses =
   "relative flex size-9 items-center justify-center rounded-lg text-fg-secondary " +
   "hover:bg-overlay hover:text-heading focus-visible:outline-2 focus-visible:outline-focus " +
   "[&.active]:bg-elevated [&.active]:text-heading " +

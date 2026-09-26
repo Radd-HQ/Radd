@@ -18,25 +18,10 @@ import { ChannelCell } from "./ChannelCell";
 import { SCOPE_HINTS, SCOPE_LABELS, SUBSCRIPTION_SCOPES, resolveSubscriptionCell, subscriptions } from "./matrix";
 import type { DirectoryOption } from "@radd/plugin-sdk";
 
-/**
- * Subscriptions: "tell me about everything in this project / space / team".
- *
- * The reach the whole spec exists for, and it needs no new machinery — a
- * subscription is a rule row with a target, and its per-kind cells are the same
- * control as the matrix above.
- *
- * **An unset cell here reads `off`, not your "Mine" value.** Your own columns
- * still outrank a subscription — for items you have a relationship WITH. A
- * subscription is for the ones you do not, and for those it is the only
- * applicable scope, so the resolver falls to the subscription scope's default,
- * which is `off`. Showing the "Mine" value would describe a notification that
- * never arrives.
- *
- * Only ambient kinds get a cell. A personal kind resolves through `own` alone
- * whatever scope you are looking at, so offering it here would be offering a
- * control that cannot do anything — the failure this codebase already fixed once
- * for un-writable fields (spec 96).
- */
+/** Subscriptions: "tell me about everything in this project / space / team" —
+ *  a rule row with a target, using the matrix's cell control. Unset cells read
+ *  `off` (see `resolveSubscriptionCell`); only ambient kinds get a cell, since a
+ *  personal kind resolves through `own` alone. */
 export function SubscriptionList({
   prefs,
   disabled,
@@ -188,26 +173,10 @@ function AddSubscription({
   );
 }
 
-/**
- * A brand-new subscription starts with ONE kind switched on: the arrival of a
- * new thing in the place you just subscribed to.
- *
- * It has to start with something — an empty channel map is the same statement as
- * having no row, the server drops it on save, and a page that silently discards
- * what you just added is worse than one that guesses. But the guess was every
- * ambient kind, which is eight rows per click: subscribe to a busy project to
- * hear about new issues and you also asked for every comment, every state
- * change, every field edit, both SLA timers and the whole wiki. That is the
- * shape of a notification system people turn off.
- *
- * So: the kind a subscription is FOR, and the rest left at their `off` default,
- * one click each away. `page_created` for a space, `created` for a project or a
- * team — because they are different kinds and only one of them can ever fire for
- * a given scope. A space subscription seeded with `created` would be a row that
- * looks configured and delivers nothing (`created` is planned from item events,
- * which carry no space), which is the same class of lie the greyed personal
- * cells exist to avoid.
- */
+/** A new subscription starts with ONE kind on — the arrival of a new thing in
+ *  that place (`page_created` for a space, `created` for a project/team). An
+ *  empty map is dropped by the server; every ambient kind would be eight rows
+ *  of noise; `created` on a space would never fire. */
 export function seedChannels(
   scope: RuleScopeValue,
 ): Partial<Record<NotificationKindKey, ChannelValue>> {

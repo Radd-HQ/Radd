@@ -1,13 +1,10 @@
 /** Roadmap edit planners: epic stretch, dependency cascade, epic container move (specs 77/78/81). */
 
+import { shiftIsoDay } from "@radd/plugin-sdk";
 import { ROADMAP_CASCADE_MAX_ITEMS } from "../../../lib/constants";
 import { ItemLinkType, type Item, type ItemUpdate } from "../../../lib/types";
-import { isoDaysBetween, isScheduled, shiftIso } from "./dates";
+import { isoDaysBetween, isScheduled } from "./dates";
 import type { RoadmapRow } from "./rows";
-
-// ---------------------------------------------------------------------------
-// Epic verbs (specs 77 + 78): outward stretch, fit to children, auto-schedule
-// ---------------------------------------------------------------------------
 
 /**
  * OUTWARD-only union patch for a parent epic after a child's move/resize
@@ -16,7 +13,7 @@ import type { RoadmapRow } from "./rows";
  * own (derived spans track their children automatically). ISO `YYYY-MM-DD`
  * strings order lexicographically, so `<`/`>` compare calendar days.
  */
-export function epicStretchPatch(
+function epicStretchPatch(
   epic: Item,
   childStartIso: string,
   childTargetIso: string,
@@ -72,7 +69,28 @@ export function epicStretchPatches(rows: RoadmapRow[], moves: RoadmapMove[]): Ro
   return patches;
 }
 
-export interface CascadePlan {
+/** `source` blocks `target`. */
+export interface BlocksEdge {
+  sourceId: string;
+  targetId: string;
+}
+
+/** Every `blocks` edge on `items`' loaded links, outgoing then incoming per
+ *  item — unfiltered and not deduped (each planner applies its own rule). */
+export function blocksEdges(items: Item[]): BlocksEdge[] {
+  const edges: BlocksEdge[] = [];
+  for (const item of items) {
+    for (const link of item.links?.outgoing ?? []) {
+      if (link.link_type === ItemLinkType.blocks) edges.push({ sourceId: item.id, targetId: link.item.id });
+    }
+    for (const link of item.links?.incoming ?? []) {
+      if (link.link_type === ItemLinkType.blocks) edges.push({ sourceId: link.item.id, targetId: item.id });
+    }
+  }
+  return edges;
+}
+
+interface CascadePlan {
   /** Dependent pushes first, then the deduped parent-epic stretches. The
    *  seed bars' own patches are NOT included — the caller commits them. */
   patches: RoadmapPlanPatch[];
@@ -83,35 +101,22 @@ export interface CascadePlan {
 }
 
 /**
- * Multi-seed dependency cascade (specs 78 + 81): after the gesture commits the
- * `seeds` (one bar for a plain drag, an epic + its children for a container
- * drag), BFS over `blocks` edges among the LOADED rows pushes every dependent
- * whose start is on/before its blocker's new target to `blocker.target + 1d`
- * (duration preserved), recursively against the working copy of spans.
- * Push-forward ONLY — moving a blocker earlier just grows slack. Seeds are
- * deduped and NEVER re-pushed: their spans are the user's statement, and the
- * moved set's relative layout stays intact. Fan-in re-pushes on cascaded items
- * take the max naturally. Capped at `ROADMAP_CASCADE_MAX_ITEMS` CASCADED items
- * (seeds don't count; beyond → `truncated`, empty patches). Parent-epic
- * outward stretches for every moved item ride along, union-deduped per epic
- * (epics that themselves moved are skipped inside `epicStretchPatches`).
+ * Multi-seed dependency cascade (specs 78 + 81): BFS over `blocks` edges among
+ * the LOADED rows, pushing every dependent whose start is on/before its
+ * blocker's new target to `blocker.target + 1d` (duration preserved).
+ * Push-forward only. Seeds are never re-pushed — their spans are the user's
+ * statement. Capped at `ROADMAP_CASCADE_MAX_ITEMS` cascaded items (seeds
+ * excluded; beyond → `truncated`). Parent-epic stretches ride along via
+ * `epicStretchPatches`.
  */
 export function cascadePlanMulti(rows: RoadmapRow[], seeds: RoadmapMove[]): CascadePlan {
   const rowById = new Map(rows.map((row) => [row.item.id, row] as const));
   const dependents = new Map<string, Set<string>>();
-  const addEdge = (blockerId: string, dependentId: string) => {
-    if (!rowById.has(blockerId) || !rowById.has(dependentId)) return;
-    const bucket = dependents.get(blockerId);
-    if (bucket) bucket.add(dependentId);
-    else dependents.set(blockerId, new Set([dependentId]));
-  };
-  for (const row of rows) {
-    for (const link of row.item.links?.outgoing ?? []) {
-      if (link.link_type === ItemLinkType.blocks) addEdge(row.item.id, link.item.id);
-    }
-    for (const link of row.item.links?.incoming ?? []) {
-      if (link.link_type === ItemLinkType.blocks) addEdge(link.item.id, row.item.id);
-    }
+  for (const { sourceId, targetId } of blocksEdges(rows.map((row) => row.item))) {
+    if (!rowById.has(sourceId) || !rowById.has(targetId)) continue;
+    const bucket = dependents.get(sourceId);
+    if (bucket) bucket.add(targetId);
+    else dependents.set(sourceId, new Set([targetId]));
   }
 
   const truncated: CascadePlan = { patches: [], cascadedCount: 0, truncated: true };
@@ -138,8 +143,8 @@ export function cascadePlanMulti(rows: RoadmapRow[], seeds: RoadmapMove[]): Casc
       const target = pending?.target ?? dependentRow.item.target_date;
       if (!start || !target) continue;
       if (start > blockerTarget) continue; // slack — push-forward only
-      const nextStart = shiftIso(blockerTarget, 1);
-      const nextTarget = shiftIso(nextStart, isoDaysBetween(start, target));
+      const nextStart = shiftIsoDay(blockerTarget, 1);
+      const nextTarget = shiftIsoDay(nextStart, isoDaysBetween(start, target));
       moved.set(dependentId, { start: nextStart, target: nextTarget });
       if (moved.size - seedSpans.size > ROADMAP_CASCADE_MAX_ITEMS) return truncated;
       queue.push(dependentId);
@@ -156,15 +161,6 @@ export function cascadePlanMulti(rows: RoadmapRow[], seeds: RoadmapMove[]): Casc
   const cascadedCount = patches.length;
   patches.push(...epicStretchPatches(rows, moves));
   return { patches, cascadedCount, truncated: false };
-}
-
-/** Single-seed cascade (spec 78) — the plain move/resize commit path. */
-export function cascadePlan(
-  rows: RoadmapRow[],
-  movedId: string,
-  newSpan: { start: string; target: string },
-): CascadePlan {
-  return cascadePlanMulti(rows, [{ itemId: movedId, start: newSpan.start, target: newSpan.target }]);
 }
 
 /**
@@ -186,8 +182,8 @@ export function epicMovePlan(
   const shifted = (item: Item): RoadmapPlanPatch => ({
     itemId: item.id,
     patch: {
-      start_date: shiftIso(item.start_date!, deltaDays),
-      target_date: shiftIso(item.target_date!, deltaDays),
+      start_date: shiftIsoDay(item.start_date!, deltaDays),
+      target_date: shiftIsoDay(item.target_date!, deltaDays),
     },
   });
   const patches: RoadmapPlanPatch[] = [shifted(epicRow.item)];
@@ -196,10 +192,6 @@ export function epicMovePlan(
   }
   return { patches };
 }
-
-// ---------------------------------------------------------------------------
-// Dependency health (spec 78)
-// ---------------------------------------------------------------------------
 
 /**
  * A `blocks` edge is VIOLATED when the dependent starts on/before its

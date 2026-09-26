@@ -15,6 +15,7 @@ import {
   ROADMAP_BAND_THRESHOLD_PX,
   ROADMAP_HOVER_CARD_DELAY_MS,
 } from "../../lib/constants";
+import type { CardAnchor } from "../../lib/floating-position";
 import type { Item, RollupResponse, TimelogBatchResponse } from "../../lib/types";
 import { BarRow } from "./BarRow";
 import { Connectors, type ConnectorEdge, type RubberBand } from "./Connectors";
@@ -46,9 +47,12 @@ import {
  *  card flips above via anchor.top when the viewport bottom is near). */
 const HOVER_CURSOR_OFFSET_PX = 14;
 
-type HoverAnchor = { left: number; top: number; bottom: number };
+const EXTEND_CAPS = [
+  { direction: ExtendDirection.before, when: "earlier", side: "left-0", border: "border-r" },
+  { direction: ExtendDirection.after, when: "later", side: "right-0", border: "border-l" },
+] as const;
 
-export interface RoadmapTimelineProps {
+interface RoadmapTimelineProps {
   model: RoadmapModel;
   /** Rows with collapsed epics' children filtered out, in render order. */
   visibleRows: RoadmapRow[];
@@ -147,13 +151,8 @@ export function RoadmapTimeline({
     setRowDrop(null);
   }, []);
 
-  // Bar-body vertical reorder (spec 82 follow-up): a reorder-mode pointer
-  // drag maps its body-local y to the visible row under it — rows are fixed
-  // ROADMAP_ROW_H pitch and bodyRef starts at the FIRST row (the axis header
-  // is a sibling), so `rowDropFromY` needs no offset math. ONE resolver feeds
-  // both the live indicator and the drop, so they can never disagree. Only
-  // SIBLING rows resolve (isRoadmapSibling, self excluded): anything else is
-  // null → no indicator, drop is a no-op.
+  // Bar-body reorder: ONE resolver (sibling rows only, self excluded) feeds
+  // both the live indicator and the drop, so they never disagree.
   const resolveReorderDrop = useCallback(
     (moved: RoadmapRow, y: number): { target: RoadmapRow; before: boolean } | null => {
       const hit = rowDropFromY(y, visibleRows.length);
@@ -200,14 +199,10 @@ export function RoadmapTimeline({
     rowDrop ??
     (barReorderHit ? { id: barReorderHit.target.item.id, before: barReorderHit.before } : null);
 
-  // Hover card (bar-presentation polish): a ~350ms dwell on a bar opens the
-  // floating info card; ANY live gesture state (move/resize/link rubber band
-  // — even the pre-threshold pointerdown) suppresses it, as do leave, scroll,
-  // and click/context-menu. The anchor rect is captured at fire time so the
-  // card lands where the bar actually is.
-  // The card anchors to the CURSOR (bottom-right), not the bar rect — a long
-  // bar would otherwise drop the card far from where the user is pointing.
-  const [hover, setHover] = useState<{ row: RoadmapRow; anchor: HoverAnchor } | null>(null);
+  // Hover card: a dwell on a bar opens it, anchored to the CURSOR (a long bar
+  // would otherwise drop it far from the pointer). Any live gesture — even a
+  // pre-threshold pointerdown — suppresses it, as do leave, scroll and click.
+  const [hover, setHover] = useState<{ row: RoadmapRow; anchor: CardAnchor } | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
   const dragStateRef = useRef(drag.state);
@@ -223,7 +218,7 @@ export function RoadmapTimeline({
   }, []);
 
   const cursorAnchor = useCallback(
-    (): HoverAnchor => ({
+    (): CardAnchor => ({
       left: pointerRef.current.x + HOVER_CURSOR_OFFSET_PX,
       top: pointerRef.current.y - HOVER_CURSOR_OFFSET_PX,
       bottom: pointerRef.current.y + HOVER_CURSOR_OFFSET_PX,
@@ -317,11 +312,9 @@ export function RoadmapTimeline({
         }
       : null;
 
-  // Child-container regions (bar-presentation polish): one translucent box
-  // behind each EXPANDED epic and its scheduled child rows — horizontal span
-  // is the union of the epic and its children, vertical span runs from the
-  // epic row's top to the last child row's bottom. Child rows sit directly
-  // after their epic in visibleRows, so a forward scan finds each block.
+  // Child-container regions: one translucent box behind each EXPANDED epic and
+  // its child rows (children follow their epic in visibleRows, so a forward
+  // scan finds each block).
   const containerRegions = useMemo(() => {
     const regions: {
       epicId: string;
@@ -509,24 +502,18 @@ export function RoadmapTimeline({
             </span>
           ))}
           {/* "+1 month" extend caps at both axis ends (spec 78). */}
-          <button
-            type="button"
-            onClick={() => onExtend(ExtendDirection.before)}
-            title="Extend the timeline one month earlier"
-            aria-label="Extend the timeline one month earlier"
-            className="absolute inset-y-0 left-0 z-10 flex w-5 items-center justify-center border-r border-dashed border-strong/70 bg-surface/80 text-fg-muted hover:bg-surface hover:text-accent-text cursor-pointer"
-          >
-            <Plus size={12} aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={() => onExtend(ExtendDirection.after)}
-            title="Extend the timeline one month later"
-            aria-label="Extend the timeline one month later"
-            className="absolute inset-y-0 right-0 z-10 flex w-5 items-center justify-center border-l border-dashed border-strong/70 bg-surface/80 text-fg-muted hover:bg-surface hover:text-accent-text cursor-pointer"
-          >
-            <Plus size={12} aria-hidden />
-          </button>
+          {EXTEND_CAPS.map(({ direction, when, side, border }) => (
+            <button
+              key={direction}
+              type="button"
+              onClick={() => onExtend(direction)}
+              title={`Extend the timeline one month ${when}`}
+              aria-label={`Extend the timeline one month ${when}`}
+              className={`absolute inset-y-0 ${side} z-10 flex w-5 items-center justify-center ${border} border-dashed border-strong/70 bg-surface/80 text-fg-muted hover:bg-surface hover:text-accent-text cursor-pointer`}
+            >
+              <Plus size={12} aria-hidden />
+            </button>
+          ))}
         </div>
       </div>
 
@@ -661,7 +648,6 @@ export function RoadmapTimeline({
             <Connectors
               rows={visibleRows}
               dayWidth={dayWidth}
-              rowHeight={ROADMAP_ROW_H}
               width={innerWidth}
               showEdges={showConnectors}
               rubber={rubber}
@@ -677,6 +663,7 @@ export function RoadmapTimeline({
         <RoadmapHoverCard
           row={hover.row}
           anchor={hover.anchor}
+          progress={rowBarProgress(hover.row, timelogByItem, rollupByItem)}
           timelog={timelogByItem?.[hover.row.item.id]}
           rollup={rollupByItem?.[hover.row.item.id]}
         />

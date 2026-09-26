@@ -19,18 +19,9 @@ import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEd
 import { SettingsPage } from "../../components/settings/SettingsPage";
 
 /**
- * Instance-wide time-logging admin (spec 50; RADD-932).
- *
- * Was "Work categories" — a tab named after one of its sections. It now holds
- * every instance-scope answer to "what is a working day here, and how much of
- * one": the shared categories, what a `1d` duration means, the timesheet's
- * under/over-logged thresholds, the default working week, and per-team public
- * holidays (previously a separate People-group tab).
- *
- * Holidays belong at THIS scope, not under a project's Time logging tab: they
- * are per-TEAM and feed both the timesheet's away cells and business-day SLA
- * resolution, so a project is the wrong axis for them entirely. Per-project
- * ENABLEMENT stays under each project.
+ * Instance-wide time-logging policy: work categories, what `1d` means, the timesheet thresholds,
+ * the working week and per-team holidays. Holidays are per-TEAM (they feed the timesheet and
+ * business-day SLAs), so they live here, not under a project; per-project enablement does not.
  */
 export function TimeloggingSettingsPage() {
   return (

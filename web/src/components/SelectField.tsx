@@ -7,7 +7,7 @@ import {
   type ChangeEventHandler,
   type ReactNode,
 } from "react";
-import { Select, type SelectOption } from "./Select";
+import { Select, nodeText, type SelectOption } from "./Select";
 
 interface SelectFieldProps {
   label: string;
@@ -30,15 +30,6 @@ interface SelectFieldProps {
   className?: string;
   /** `<option>` children (plain, in arrays, or in fragments), as with a native select. */
   children?: ReactNode;
-}
-
-/** Plain text of an option's label — the native fallback for a value-less `<option>`. */
-function textOf(node: ReactNode): string {
-  if (node === null || node === undefined || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(textOf).join("");
-  if (isValidElement(node)) return textOf((node.props as { children?: ReactNode }).children);
-  return "";
 }
 
 /** Translate `<option>` children (arrays/fragments included) into Select options.
@@ -81,7 +72,7 @@ function optionsFrom(children: ReactNode): SelectOption[] {
         children?: ReactNode;
       };
       options.push({
-        value: props.value !== undefined ? String(props.value) : textOf(props.children),
+        value: props.value !== undefined ? String(props.value) : nodeText(props.children),
         label: props.children,
         disabled: props.disabled || undefined,
         title: props.title,

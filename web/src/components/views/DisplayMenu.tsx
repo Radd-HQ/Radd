@@ -17,14 +17,14 @@ export const LABEL_CAP_OPTIONS = [1, 2, 3, 5, 99] as const;
 
 /** Board views (spec 109): the card layout lives on the VIEW and is edited in
  * the full designer modal — this popover only opens it. */
-export interface CardDesignerEntry {
+interface CardDesignerEntry {
   onOpen: () => void;
   canEdit: boolean;
 }
 
 /** Table-column editing for list surfaces (spec 108): the column SET is part
  * of the saved view (shared, view-edit gated); this popover edits it. */
-export interface ColumnsEditor {
+interface ColumnsEditor {
   /** Everything offerable: builtins + custom fields in the view's scope. */
   catalog: ColumnDef[];
   /** The view's current (or default) ordered column ids. */

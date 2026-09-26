@@ -14,7 +14,7 @@ export function usePersonStatusSuffixes(): Map<string, string> {
   }
   return result;
 }
-export const STATUS_TONES = {
+const STATUS_TONES = {
   neutral: "bg-elevated text-fg-secondary",
   warning: "bg-status-warning/15 text-status-warning-ink",
   danger: "bg-status-danger/15 text-status-danger-ink",

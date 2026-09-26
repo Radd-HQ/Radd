@@ -60,24 +60,10 @@ import {
 } from "lucide-react";
 
 /**
- * Lucide icons a SERVER-declared `icon` name can resolve to (RADD-748).
- *
- * A registry rather than a dynamic import, and the reason is measured rather
- * than assumed. `lucide-react/dynamic` resolves any of ~1500 icons by name, and
- * using it took the production build from **127 chunks / 5.6 MB to 1876 chunks /
- * 13 MB** — Vite emits a chunk per lazy icon. A 15× chunk explosion and 2.3× the
- * assets, to put a 14px glyph beside seven menu entries, is not a trade worth
- * making.
- *
- * So the set is curated and the fallback is honest: a name nobody here knows
- * renders the neutral placeholder rather than nothing at all, which is a visible
- * "this icon is not shipped" instead of a silently missing glyph. Adding one is
- * a single line, and that is deliberately the cost — the alternative is paying
- * 7 MB for icons nobody has asked for.
- *
- * It is shared on purpose. `ValueChip` had its own six-entry copy for issue
- * types, so an issue type and a page extension declaring the same icon name
- * would agree only by coincidence.
+ * Lucide icons a SERVER-declared `icon` name may resolve to. A curated map, not
+ * `lucide-react/dynamic`, which took the build from 127 chunks / 5.6 MB to
+ * 1876 chunks / 13 MB. Unknown names render the neutral fallback. Shared with
+ * ValueChip so issue types and extensions agree on a name.
  */
 const ICONS: Record<string, LucideIcon> = {
   // Issue types (seeded by the backend).
@@ -145,7 +131,7 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 /** What an unrecognised name renders as — visibly a placeholder, not a gap. */
-export const FALLBACK_ICON = Puzzle;
+const FALLBACK_ICON = Puzzle;
 
 /** The component for a server-declared icon name, or undefined. */
 export const iconFor = (name: string | null | undefined): LucideIcon | undefined =>

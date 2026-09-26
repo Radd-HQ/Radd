@@ -11,7 +11,6 @@ import type {
   AccessGrant,
   GrantResourceSpec,
   LinkTypeDef,
-  RoleGrant,
 } from "../types";
 import type { Paged } from "@radd/plugin-sdk";
 
@@ -45,41 +44,6 @@ export const resourceGrantsPageQuery = (resourceType: string, resourceId: string
     queryFn: ({ signal }) => api.getPaged<AccessGrantDirectoryRow>(`${ApiPath.grants}/directory`, {
       query: { resource_type: resourceType, resource_id: resourceId, project_id: projectId ?? undefined, global_only: projectId === null ? "true" : undefined, q, limit: String(RESOURCE_GRANTS_PAGE_SIZE), offset: String(page * RESOURCE_GRANTS_PAGE_SIZE) }, signal,
     }),
-  });
-};
-
-/** Role grants (spec 91) held by one subject — the team/user Roles section. */
-/**
- * Role grants by SUBJECT (a team/user/group's Roles tab) or by SCOPE — a space
- * (RADD-793) or a project (RADD-929). The scope directions are the question an
- * admin actually asks: "who was given access to this?"
- *
- * The parameter name is the server's, so adding a direction is one entry here.
- * The previous shape spelled the same choice out three times — a ternary chain,
- * a query key and an `enabled` guard — and the guard had dropped `groupId`,
- * which meant every group's grants query was permanently disabled and the
- * `groupId` subject the API supports was unreachable no matter who called it.
- */
-const GRANT_QUERY_PARAM = {
-  teamId: "team_id",
-  userId: "user_id",
-  groupId: "group_id",
-  spaceId: "space_id",
-  projectId: "project_id",
-} as const;
-
-export const roleGrantsQuery = (subject: Partial<Record<keyof typeof GRANT_QUERY_PARAM, string>>) => {
-  const named = (Object.keys(GRANT_QUERY_PARAM) as (keyof typeof GRANT_QUERY_PARAM)[]).find(
-    (field) => subject[field],
-  );
-  const id = named ? subject[named] : undefined;
-  return queryOptions({
-    queryKey: [...queryKeys.roleGrants, named ?? "", id ?? ""] as const,
-    meta: entityMeta(Entity.role),
-    queryFn: ({ signal }) =>
-      api.get<RoleGrant[]>(`${ApiPath.roleGrants}?${GRANT_QUERY_PARAM[named!]}=${id!}`, { signal }),
-    enabled: Boolean(id),
-    staleTime: 30_000,
   });
 };
 

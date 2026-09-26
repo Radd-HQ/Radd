@@ -13,9 +13,9 @@ import type { Editor } from "@milkdown/kit/core";
 
 /** Which line a handle addresses. */
 export const TableAxis = { row: "row", column: "column" } as const;
-export type TableAxisValue = (typeof TableAxis)[keyof typeof TableAxis];
+type TableAxisValue = (typeof TableAxis)[keyof typeof TableAxis];
 
-export type CellAlignment = "left" | "center" | "right";
+type CellAlignment = "left" | "center" | "right";
 
 /**
  * The table operations, as the node view needs them (RADD-750).

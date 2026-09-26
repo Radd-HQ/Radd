@@ -1,30 +1,10 @@
-/* The editor's app-facing styling (RADD-754).
- *
- * This file used to be a RETINT: it remapped Crepe's `--crepe-color-*` scale
- * onto the app palette and then corrected the chrome Crepe drew on top of it —
- * an 18px/8:1 pass over its toolbar glyphs, an accent pill for an `.active`
- * state it styled not at all. Every one of those surfaces is now a React
- * component of ours, so the remap and the corrections are gone with them, and
- * this is the styling rather than a layer over someone else's.
- *
- * `editor.css` carries what Crepe's stylesheets provided (the editable surface,
- * lists, quotes, tables, the diff decorations); this carries what the app
- * decided (typography scale, chips, the AI diff reading).
- *
- * The CLAUDE.md exception letting this file read raw `--color-zinc-*` existed
- * only because Crepe's variables had to be fed from somewhere. It is no longer
- * used: every value below is a semantic token.
- */
+/* App-decided editor styling: typography scale, chips, diff reading. Semantic tokens only. */
 .radd-rich-editor .milkdown {
   background: transparent;
 }
 
-/* Unified AI diff review (the code-diff reading): per changed paragraph, the
-   OLD text stacks above as a red "− line", the paragraph itself is the NEW
-   text as a green "+ line" — word-level emphasis INSIDE each, never the two
-   texts interleaved. Semantic tokens, not the `--crepe-color-diff-*` bases these
-   used to read: RADD-754 deleted the block that DEFINED those, which left every
-   colour here undefined — a rule that still parses and paints nothing. */
+/* Unified diff reading: per changed paragraph the OLD text stacks above as a red "− line" and the
+   paragraph itself is the NEW text as a green "+ line" — never the two interleaved. */
 .radd-rich-editor .milkdown .radd-diff-old-block {
   background: color-mix(in srgb, var(--color-red-400) 9%, transparent);
   border-left: 3px solid var(--color-red-400);
@@ -48,18 +28,13 @@
   display: none;
 }
 
-/* The editable surface: comfortable measure + padding, no focus ring (the wrapper
-   div carries the app's border/focus treatment). */
+/* The editable surface: comfortable measure + padding. No focus ring of its own (`editor.css`
+   removes it): the wrapper div carries the app's border/focus treatment. */
 .radd-rich-editor .milkdown .ProseMirror {
   min-height: 6rem;
   padding: 0.6rem 0.85rem;
   font-size: 14px;
   line-height: 1.6;
-  outline: none;
-}
-
-.radd-rich-editor .milkdown .ProseMirror:focus {
-  outline: none;
 }
 
 /* Tighter default block spacing so it reads like the rest of the UI, not an essay. */
@@ -137,23 +112,13 @@
   pointer-events: none; /* task lists are display-only in read mode */
 }
 
-/* Tables: the default borders are near-invisible on our dark
-   bg, so draw explicit visible cell lines + a distinct header row. */
 /* A selected cell's wash rides the accent, like every other selection. */
 .radd-rich-editor .milkdown .ProseMirror .selectedCell::after {
   background: color-mix(in srgb, var(--accent-fill) 22%, transparent);
 }
 
-/* Extension-block chrome (RADD-746).
-   Kept after Crepe's reset.css went (RADD-754): a fixed 24px box is the right
-   target size whatever the surrounding stylesheet does, and stating it here
-   rather than in utilities is what stopped it being a 13x13 hit area once.
-   The original reason — an UNLAYERED `.milkdown button { border: none }` that
-   — unlayered normal declarations outrank anything in @layer utilities. Our
-   node-view chrome is React we own, so its styling lives here rather than in a
-   class the reset silently strips.
-   A fixed 24px box, not padding around a 13px icon: `p-1` resolved to 0 inside
-   the editor and left a 13x13 target, which the proof now asserts against. */
+/* Extension-block chrome: a fixed 24px box, stated here rather than in utilities — unlayered CSS
+   outranks @layer utilities, and `p-1` once resolved to 0 here, leaving a 13x13 target (proof-asserted). */
 .radd-rich-editor .milkdown .radd-extension-chrome button {
   width: 24px;
   height: 24px;

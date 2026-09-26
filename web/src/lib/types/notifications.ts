@@ -30,7 +30,7 @@ export const NotificationType = {
   updated: "updated",
   pageCreated: "page_created",
 } as const;
-export type NotificationTypeValue = (typeof NotificationType)[keyof typeof NotificationType];
+type NotificationTypeValue = (typeof NotificationType)[keyof typeof NotificationType];
 /** RADD-1326: a kind is a REGISTRY key — the core ones above, or one a plugin
  *  contributed (rendered from `detail.headline` / `detail.link`). */
 export type NotificationKindKey = NotificationTypeValue | (string & {});
@@ -65,7 +65,7 @@ export type ChannelValue = (typeof Channel)[keyof typeof Channel];
 /** One row of the matrix, served from the SERVER's vocabulary (spec 118) — the
  *  SPA no longer carries its own label map, which could disagree with the enum
  *  it was describing with nothing to catch it. */
-export interface NotificationKind {
+interface NotificationKind {
   kind: NotificationKindKey;
   label: string;
   description: string;
@@ -98,12 +98,6 @@ export interface NotificationPrefs {
   /** {scope: {kind: channel}} for the relationship columns — the inherited value. */
   defaults: Partial<Record<RuleScopeValue, Partial<Record<NotificationKindKey, ChannelValue>>>>;
   rules: NotificationRule[];
-  email_digest: boolean;
-}
-
-/** PUT body — `scope_label` is a read-only display value and is not sent back. */
-export interface NotificationPrefsUpdate {
-  rules: { scope: RuleScopeValue; scope_id: string | null; channels: Partial<Record<NotificationKindKey, ChannelValue>> }[];
   email_digest: boolean;
 }
 

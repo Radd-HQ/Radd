@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Trash2 } from "lucide-react";
+import { usePointAnchoredPanel } from "../../lib/floating-position";
 import { ItemLinkType } from "../../lib/types";
 
 /**
@@ -20,7 +21,7 @@ const TYPE_CHOICES: { type: string; label: string }[] = [
 
 const POPOVER_WIDTH = 208;
 
-export interface LinkPopoverProps {
+interface LinkPopoverProps {
   x: number;
   y: number;
   sourceKey: string;
@@ -45,43 +46,21 @@ export function LinkPopover({
   onClose,
 }: LinkPopoverProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ left: x, top: y });
+  const pos = usePointAnchoredPanel(rootRef, x, y, onClose);
   const creating = currentType === undefined;
   const highlighted = currentType ?? ItemLinkType.blocks;
 
-  // Clamp into the viewport once measured (ContextMenu idiom).
-  useLayoutEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const left = Math.min(x, window.innerWidth - rect.width - 8);
-    const top = Math.min(y, window.innerHeight - rect.height - 8);
-    setPos({ left: Math.max(8, left), top: Math.max(8, top) });
-  }, [x, y]);
-
+  // Enter = the default choice while creating (spec 78).
   useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) onClose();
-    };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-      // Enter = the default choice while creating (spec 78).
       if (event.key === "Enter" && creating) {
         event.preventDefault();
         onPick(ItemLinkType.blocks);
       }
     };
-    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onClose, true);
-    window.addEventListener("resize", onClose);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onClose, true);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose, onPick, creating]);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onPick, creating]);
 
   return (
     <div

@@ -58,7 +58,7 @@ export const TransitionMode = {
   guards: "guards",
   strict: "strict",
 } as const;
-export type TransitionModeValue = (typeof TransitionMode)[keyof typeof TransitionMode];
+type TransitionModeValue = (typeof TransitionMode)[keyof typeof TransitionMode];
 
 /** The scoped-settings key the mode select reads/writes (spec 50 cascade). */
 export const WORKFLOW_TRANSITION_MODE_KEY = "workflow_transition_mode";
@@ -75,7 +75,7 @@ export const TransitionCheck = {
 
 /** What a require_field condition addresses (spec 107). */
 export const ConditionKind = { builtin: "builtin", custom: "custom" } as const;
-export type ConditionKindValue = (typeof ConditionKind)[keyof typeof ConditionKind];
+type ConditionKindValue = (typeof ConditionKind)[keyof typeof ConditionKind];
 
 /** Operators a require_field condition may use (subset per field — spec 107). */
 export const ConditionOp = {
@@ -100,7 +100,7 @@ export interface FieldConditionParams {
 }
 
 /** A rule over one of workflow's own checks. */
-export type OwnTransitionRule =
+type OwnTransitionRule =
   | { check: typeof TransitionCheck.requireResolvedThreads; params: Record<string, never> }
   | { check: typeof TransitionCheck.requireRelease; params: Record<string, never> }
   | { check: typeof TransitionCheck.requireField; params: FieldConditionParams };
@@ -145,7 +145,7 @@ export interface TransitionUpdate {
 }
 
 /** GET /items/{id}/allowed-transitions — per-target allow/deny + failure list. */
-export interface AllowedTarget {
+interface AllowedTarget {
   state_id: string;
   allowed: boolean;
   failures: string[];

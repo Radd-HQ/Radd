@@ -14,32 +14,19 @@ import {
 } from "./image-width";
 
 /** Uploads a file and resolves to its URL — the surface's `onUploadImage`. */
-export type ImageUploader = (file: File) => Promise<string>;
+type ImageUploader = (file: File) => Promise<string>;
 
 /** `ApiError` already carries the server's `detail` as its message. */
 const errorText = (cause: unknown) =>
   cause instanceof Error && cause.message ? cause.message : "Upload failed. Try again.";
 
 /**
- * An image you can resize, in pages and in comments (RADD-751).
- *
- * The size lives in the URL (`?w=640`), so the body stays markdown and the
- * attachment endpoint can serve fewer bytes rather than the browser scaling a
- * 4 MB screenshot down. See `image-width.ts` for why that beats the other two
- * options.
- *
- * One node view for both surfaces on purpose: a comment and a page body run the
- * same editor, and an image that resizes in one and not the other would be a
- * difference nobody could explain.
- *
- * It owns EVERY state the node has, including "no source yet" (RADD-760). That
- * state is not an edge case: it is what the toolbar's Image button produces, and
- * what an imported body containing `![](…)` already contains. Rendering it as a
- * bare `<img src="">` drew a 0x0 element, so the button read as broken and the
- * import read as empty — with no file picker anywhere in the document.
+ * A resizable image, in pages and comments (one node view for both). The width rides in the URL
+ * (`?w=640`, see `image-width.ts`). It also owns the "no source yet" state — what the Image button
+ * and an imported `![](…)` produce; a bare `<img src="">` draws 0x0 with no way to fill it.
  */
 export function ImageNodeView({ upload }: { upload?: ImageUploader }) {
-  const { node, view, getPos, setAttrs, selected } = useNodeViewContext();
+  const { node, view, setAttrs, selected } = useNodeViewContext();
   const src = String(node.attrs.src ?? "");
   const alt = String(node.attrs.alt ?? "");
   const title = String(node.attrs.title ?? "");
@@ -92,7 +79,6 @@ export function ImageNodeView({ upload }: { upload?: ImageUploader }) {
     // thing someone later has to explain.
     const full = natural > 0 && next >= natural;
     setAttrs({ src: withWidth(src, full ? null : bucketFor(next)) });
-    void getPos;
   };
 
   const reset = () => setAttrs({ src: withWidth(src, null) });
@@ -169,15 +155,8 @@ export function ImageNodeView({ upload }: { upload?: ImageUploader }) {
 }
 
 /**
- * The "no source yet" card: pick a file, or paste a URL.
- *
- * Both routes are offered because they are genuinely different jobs — a
- * screenshot from disk, and an image already hosted somewhere. Crepe's uploader
- * offered both, and removing it removed both.
- *
- * `data-image-chrome` is what the node view's `stopEvent` looks for: without it
- * ProseMirror interprets every keystroke aimed at the URL field as a keystroke
- * on the document, and typing a URL edits the doc instead of the input.
+ * The "no source yet" card: pick a file or paste a URL. `data-image-chrome` is what the node view's
+ * `stopEvent` looks for — without it every keystroke in the URL field edits the document.
  */
 function ImageEmptyState({
   upload,

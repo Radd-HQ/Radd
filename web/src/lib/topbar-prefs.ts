@@ -12,11 +12,11 @@ import { mePreferencesQuery, queryKeys } from "./queries";
  */
 
 /** Personal saved SLQ filters (global — they compose with any item view). */
-export const SAVED_FILTERS_PREF_KEY = "slq.saved_filters";
+const SAVED_FILTERS_PREF_KEY = "slq.saved_filters";
 /** Pinned favorite views, rendered as top-bar tabs. */
-export const NAV_PINS_PREF_KEY = "nav.pins";
+const NAV_PINS_PREF_KEY = "nav.pins";
 
-export interface SavedFilter {
+interface SavedFilter {
   name: string;
   query: string;
 }
@@ -143,17 +143,12 @@ export function useNavPins(): {
 }
 
 /**
- * RADD-1041: whether the sidebar's Projects tree shows RELATED projects — ones
- * visible only because the person's own work makes a QUALIFIED `item.read`
- * count (a ticket they filed, e.g.), as opposed to ENTITLED ones held by an
- * actual grant (`ProjectRead.via` from `GET /projects`, sourced from
- * `auth.authz_batch.visible_projects`). This is DISPLAY only: `"never"` hides
- * related rows from the tree, it does not touch access — a hidden project's
- * items still open by URL, by search, and on My Work exactly as before, and
- * flipping back to `"always"` (the default — today's behavior) costs nothing.
+ * Whether the sidebar's Projects tree shows RELATED projects (RADD-1041) — visible only through
+ * the person's own qualified `item.read` (`ProjectRead.via`), not a grant. DISPLAY only: `"never"`
+ * hides the rows, access is untouched. Default `"always"`.
  */
-export const RELATED_PROJECTS_PREF_KEY = "sidebar.related_projects";
-export type RelatedProjectsVisibility = "always" | "never";
+const RELATED_PROJECTS_PREF_KEY = "sidebar.related_projects";
+type RelatedProjectsVisibility = "always" | "never";
 
 function readRelatedProjectsVisibility(
   prefs: Record<string, unknown> | undefined,

@@ -3,25 +3,11 @@ import { DropdownMenu } from "../../DropdownMenu";
 import { Channel, type ChannelValue } from "../../../lib/types";
 
 /**
- * One cell of the notification matrix: four states plus "inherit".
- *
- * **Why a menu and not two checkboxes.** Two boxes can say off / inbox / email /
- * both — but they cannot say UNSET, and unset is most of this grid. Every cell a
- * person has not touched resolves to something, from somewhere, and a control
- * that renders inheritance as "unchecked" is a control that lies about the two
- * cases a notification preference exists to distinguish: "I turned this off" and
- * "I never said". So the trigger shows what the cell RESOLVES to, dimmed when
- * that answer was inherited, and names the source in its tooltip.
- *
- * The trigger is two channel pills rather than a word, because the reader's
- * question is "does this reach my inbox / my mailbox", and two lit-or-unlit
- * icons answer it at a glance across thirteen rows in a way "Both" does not.
- *
- * `data-channel` and `data-inherited` are on the trigger for the CDP proof:
- * "the cell says email-only" is a computed-style question otherwise, and a proof
- * that reads colours would break on a palette change rather than a bug.
+ * One cell of the notification matrix: four states plus "inherit". A menu, not two checkboxes,
+ * because UNSET must be expressible: the trigger shows what the cell RESOLVES to, dimmed when
+ * inherited, with the source in its tooltip. `data-channel`/`data-inherited` are proof hooks.
  */
-export interface ChannelCellProps {
+interface ChannelCellProps {
   /** What this cell resolves to right now — the saved value or the inherited one. */
   resolved: ChannelValue;
   /** Null when the person has set this cell explicitly. */
@@ -30,17 +16,9 @@ export interface ChannelCellProps {
   disabled?: boolean;
   /** Why it is disabled — shown on hover, the spec-96 posture. */
   disabledReason?: string;
-  /**
-   * Fill the grid column (the matrix) rather than shrink to the icons (the
-   * inline subscription rows).
-   *
-   * Not cosmetic. A disabled cell renders ONE mark and a live one renders two,
-   * so a shrink-to-fit control centres the two at different x — and a matrix
-   * whose columns wobble by ten pixels between rows has stopped reading as a
-   * grid. The CDP proof measured exactly that and failed; filling the column
-   * makes every cell start at the column's x by construction, with no width
-   * constant to keep in step.
-   */
+  /** Fill the grid column (the matrix) rather than shrink to the icons (subscription rows): a
+   *  disabled cell draws one mark and a live one two, so shrink-to-fit cells wobble between rows
+   *  (the CDP proof measured it). */
   fill?: boolean;
   onChange: (channel: ChannelValue | null) => void;
 }

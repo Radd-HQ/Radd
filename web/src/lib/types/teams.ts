@@ -1,9 +1,7 @@
 /** Teams, their directory-group reconcile, and global grants (specs 84/87). The directory
  * import vocabulary is the ldap plugin's own (RADD-1381). */
 
-/** One instance-wide role grant (spec 87): exactly one of user_id/team_id.
- * Roles otherwise only attach to projects, which is why every global-scope atom
- * was ungrantable to a non-admin before this existed. */
+/** One instance-wide role grant (spec 87): exactly one subject. */
 export interface GlobalGrant {
   id: string;
   role_id: string;
@@ -13,9 +11,7 @@ export interface GlobalGrant {
   group_id: string | null;
 }
 
-/** GET /teams (spec 01; ownership — spec 87). RADD-829 retired the directory
- * link: a team is always local, and reaches the directory by holding a GROUP
- * as a member (see RaddGroup / TeamGroup). */
+/** GET /teams. A team is always local; it reaches the directory by holding a GROUP as a member. */
 export interface Team {
   id: string;
   name: string;
@@ -31,11 +27,6 @@ export interface Team {
 export interface TeamCreate {
   name: string;
   owner_id?: string;
-}
-
-/** PUT /teams/{id}/managers (spec 87) — full replace, owner-gated. */
-export interface TeamManagersUpdate {
-  user_ids: string[];
 }
 
 /** GET /teams/{id}/members (RADD-829): direct rows plus group-carried people —

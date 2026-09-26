@@ -11,7 +11,6 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { describeLanguage } from "../../lib/code-languages";
-export { describeLanguage, languageOptions } from "../../lib/code-languages";
 import { codeHighlight } from "../../lib/code-highlight";
 import { exitCode } from "@milkdown/kit/prose/commands";
 import { Selection, TextSelection } from "@milkdown/kit/prose/state";
@@ -19,24 +18,11 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { EditorView as PmView } from "@milkdown/kit/prose/view";
 
 /**
- * A CodeMirror 6 instance living inside a ProseMirror `code_block` (RADD-752).
- *
- * The two editors each believe they own their text, so the whole job is keeping
- * them agreeing without either one's echo starting a loop. The shape is the one
- * from ProseMirror's own guide, with the parts that matter written out rather
- * than inherited:
- *
- *  - CodeMirror → ProseMirror on every user edit, as a single replacement of the
- *    block's text;
- *  - ProseMirror → CodeMirror only for the part that actually differs, so an
- *    undo from outside does not reset the cursor to the top of the block;
- *  - `updating` guards the seam, because each direction's write triggers the
- *    other's listener.
- *
- * Owning this also owns its TIMING, which is the reason it is on this epic's
- * list at all: a code block is a `<pre>` only until the mode finishes loading,
- * after which it is a `.cm-editor` with no `<pre>`. An assertion that read the
- * page before the swap passed and the same one failed after.
+ * A CodeMirror 6 instance inside a ProseMirror `code_block`. Both editors think they own the text:
+ *  - CodeMirror → ProseMirror on every user edit, as one replacement of the block's text;
+ *  - ProseMirror → CodeMirror only for the range that differs, so an outside undo keeps the cursor;
+ *  - `updating` guards the seam, because each direction's write triggers the other's listener.
+ * Language modes load async: a block is a `<pre>` until its mode loads, then a `.cm-editor`.
  */
 
 /** Layout only — colours come from the stylesheet so both themes follow. */

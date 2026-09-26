@@ -1,30 +1,19 @@
 /**
- * A collapsible side panel — the one pattern for anything docked to the edge of
- * a work surface (the roadmap's Unscheduled tray, the issue properties rail, …).
+ * A collapsible side panel — the one pattern for anything docked to the edge of a work surface.
+ * Collapsed it is a slim strip with the panel's icon, rotated label and badge. State is per-panel
+ * and persisted (a standing preference, not a per-visit one).
  *
- * Collapsed it becomes a slim vertical strip carrying the panel's icon, its
- * label rotated to read bottom-up, and its badge, so you can still tell what is
- * behind it. That is the same bargain the main sidebar's icon rail makes: give
- * back the width, keep the affordance.
- *
- * State is per-panel and persisted, because "I want more room on the roadmap"
- * is a standing preference, not a per-visit one.
- *
- * Narrow layouts: a panel that STACKS below its content instead of sitting
- * beside it has no width to give back, so pass `sideAt` with the container-query
- * breakpoint where it docks — below that the panel renders plain and the toggle
- * disappears.
+ * A panel that STACKS below its content on narrow layouts has no width to give back: pass `sideAt`,
+ * the container-query breakpoint where it docks; below that it renders plain, with no toggle.
  */
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { PanelLeftClose, PanelLeftOpen, type LucideIcon } from "lucide-react";
 import { sidePanelStorageKey } from "../lib/constants";
 
-/** Tailwind only generates classes it can SEE — `\`${sideAt}:block\`` builds a
- * name at runtime that never enters the stylesheet (this was a live bug: the
- * docked issue rail's collapse toggle rendered `display: none` forever). Every
- * docked breakpoint therefore gets its static class set; add a row when a new
- * `sideAt` value appears. */
+/** Tailwind only generates classes it can SEE: a runtime-built `\`${sideAt}:block\`` never enters the
+ * stylesheet (the docked rail's toggle once rendered `display: none` forever). So every docked
+ * breakpoint has its static class set; add a row when a new `sideAt` value appears. */
 const DOCKED_CLASSES = {
   "@3xl": {
     /** Collapsed aside: full width while stacked, the slim strip when docked. */
@@ -41,7 +30,7 @@ const DOCKED_CLASSES = {
     toggle: "hidden @3xl/page:block",
   },
 } as const;
-export type SidePanelSideAt = keyof typeof DOCKED_CLASSES;
+type SidePanelSideAt = keyof typeof DOCKED_CLASSES;
 
 const SidePanelContext = createContext<{ toggle: () => void; sideAt?: SidePanelSideAt } | null>(
   null,

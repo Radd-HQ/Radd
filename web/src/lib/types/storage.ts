@@ -20,7 +20,7 @@ export const StorageHostSource = {
   env: "env",
   user: "user",
 } as const;
-export type StorageHostSourceValue = (typeof StorageHostSource)[keyof typeof StorageHostSource];
+type StorageHostSourceValue = (typeof StorageHostSource)[keyof typeof StorageHostSource];
 
 /** One host row from GET /storage/hosts — the secret never leaves the server. */
 export interface StorageHostRead {
@@ -160,7 +160,7 @@ export const MoveJobState = {
 export type MoveJobStateValue = (typeof MoveJobState)[keyof typeof MoveJobState];
 
 /** One file the move couldn't complete — the job keeps going past it. */
-export interface MoveJobProblem {
+interface MoveJobProblem {
   attachment_id: string;
   filename: string;
   detail: string;

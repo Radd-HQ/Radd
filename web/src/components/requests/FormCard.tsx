@@ -3,17 +3,7 @@ import { ClipboardList } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import type { PortalFormCard, PortalProjectRef } from "../../lib/types";
 
-/**
- * One request form, as a card (RADD-804).
- *
- * ONE definition, rendered by the Submission Portal and by My Work. The Portal
- * had cards, My Work had bare rows — the same thing drawn two ways on two pages
- * a requester moves between, which is exactly the complaint RADD-799 fixed one
- * section higher up the page. Hussein preferred the cards, so the cards won.
- *
- * The project key only earns its place when several projects are in view; a
- * requester with one project does not need every card stamped with it.
- */
+/** One request form as a card (Portal and My Work); the project key shows only when several projects are in view. */
 export function FormCard({
   form,
   project,

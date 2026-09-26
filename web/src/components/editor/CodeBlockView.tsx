@@ -2,24 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNodeViewContext } from "@prosemirror-adapter/react";
 import { Check, Copy } from "lucide-react";
 import { Select } from "../Select";
-import {
-  describeLanguage,
-  languageOptions,
-  mountCodeMirror,
-  type CodeMirrorHost,
-} from "./code-block";
+import { mountCodeMirror, type CodeMirrorHost } from "./code-block";
+import { describeLanguage, languageOptions } from "../../lib/code-languages";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { isMermaid } from "./mermaid";
 
-/**
- * The code block, ours (RADD-752).
- *
- * Chrome — the language picker and copy — in React, the text in CodeMirror,
- * and the same component in read mode with editing off. That last part is the
- * property `RichViewer` exists to preserve: code has to look identical in both,
- * and it will not if the two are different components that happen to agree
- * today.
- */
+/** The code block: language picker + copy in React, text in CodeMirror; the same component
+ *  read-only in RichViewer, so code looks identical in both modes. */
 export function CodeBlockView() {
   const { node, view, getPos, setAttrs, contentRef } = useNodeViewContext();
   const hostRef = useRef<HTMLDivElement>(null);

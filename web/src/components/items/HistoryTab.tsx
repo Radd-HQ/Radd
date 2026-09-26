@@ -9,15 +9,8 @@ import { formatDuration, type DurationConfig } from "../../lib/duration";
 import { Spinner } from "../Spinner";
 
 /**
- * The History tab: the item's chronological, actor-attributed activity feed
- * (`GET /items/{id}/history`) — field changes with old→new values, plus comment,
- * worklog, link and MAIL events. Oldest first, matching the composer-at-bottom flow.
- *
- * Mail joined the feed in RADD-984, and the failure leg is why: `mail.failed`
- * was emitted per message and read by nothing, so "the customer never got your
- * reply" existed only in the event table. A failed row is rendered LOUD and
- * carries the relay's own error; a send is rendered like every other row,
- * because the timeline is a ledger, not an alert.
+ * The item's chronological, actor-attributed ledger (`GET /items/{id}/history`): field changes, comments,
+ * worklogs, links and mail events, oldest first. A failed send is the one row rendered loud.
  */
 export function HistoryTab({ itemId }: { itemId: string }) {
   const history = useQuery(itemHistoryQuery(itemId));

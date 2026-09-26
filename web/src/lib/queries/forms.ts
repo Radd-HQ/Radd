@@ -79,7 +79,7 @@ export const portalStagingAreaQuery = queryOptions({
 });
 
 export const FORM_SHARING_PAGE_SIZE = 50;
-export interface FormSharingRow { id: string; user_id: string | null; team_id: string | null; created_at: string; subject_name: string | null; active: boolean | null }
+interface FormSharingRow { id: string; user_id: string | null; team_id: string | null; created_at: string; subject_name: string | null; active: boolean | null }
 export const FormShareKind = { user: "user", team: "team" } as const;
 export type FormShareKindValue = typeof FormShareKind[keyof typeof FormShareKind];
 export const formSharingQuery = (id: string, q = "", page = 0) => queryOptions({

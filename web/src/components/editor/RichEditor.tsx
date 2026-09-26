@@ -46,6 +46,7 @@ import {
   type EditorHandle,
   type EditorRange,
   type EditorTransform,
+  type RichEditorProps as SdkRichEditorProps,
 } from "@radd/plugin-sdk";
 import { entitySearchQuery, searchQuery, usersQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
@@ -56,7 +57,7 @@ import { SelectionActions } from "./SelectionActions";
 import { ToolbarExtraButton } from "./ToolbarExtraButton";
 import { TransformRunPanel, TransformRunStatus, type TransformRunView } from "./TransformRunPanel";
 import { TransformOutcome, reviewPending, runTransform } from "./transform-run";
-import { detachedComments, type InlineAnchorRef } from "./detached-comments";
+import { detachedComments } from "./detached-comments";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { makeEditor } from "./create-editor";
 import { bindableEditor, documentChangePlugin } from "./bindable";
@@ -88,50 +89,27 @@ import type { PageExtensionSpec } from "@radd-plugin-ui/pages/types";
 import "./editor.css";
 import "./rich-editor.css";
 
-interface RichEditorProps {
-  /** Show the "Insert extension" toolbar button (RADD-709). Pages only: an
-   *  extension block is page-relative — a `toc` inside an issue comment has no
-   *  page whose headings it could list — so the button is opt-in rather than
-   *  everywhere. */
-  extensions?: boolean;
-  /** Initial markdown — the editor is uncontrolled after mount. To reseed with new
-   * content (switch doc / clear after submit), remount via a changing `key`. */
-  value: string;
-  /** Fires on every edit with the current markdown. */
-  onChange: (markdown: string) => void;
-  placeholder?: string;
+/** The SDK's contract (its docs cover the shared props), minus `attachTo`: the host bridge turns
+ *  that into `onUploadImage`. */
+interface RichEditorProps extends Omit<SdkRichEditorProps, "attachTo"> {
   /** Cmd/Ctrl+Enter (composer submit). */
   onSubmitShortcut?: () => void;
-  /** Upload a pasted/inserted image and resolve to its URL (wires Crepe's ImageBlock
-   * to the app's attachment upload). Omit to disable image insertion entirely. */
+  /** Upload a pasted/inserted image and resolve to its URL; omit to disable images. */
   onUploadImage?: (file: File) => Promise<string>;
   /** `/` quick-action menu entries (assign, state, labels, manual automations…) —
    * actions on the issue in context, NOT text inserts (the toolbar covers those).
    * Omit where there's no issue context (pages, new-item modal): `/` stays inert. */
   quickActions?: QuickAction[];
-  /** Run this transform over the whole document as soon as the editor is ready
-   * (a read action's hand-off → edit-with-pending-diff, RADD-1395). Consumed once. */
-  initialTransform?: EditorTransform;
   /** The page has NO session (the public tokened form): skip every authed
    * affordance wholesale — the contributed toolbar and selection actions
    * (their gates query authenticated endpoints, and the api client answers a
    * 401 by bouncing the visitor to /login) and the `@`/`#`/`/` triggers (the
    * user directory and issue search are logged-in surfaces). Formatting only. */
   anonymous?: boolean;
-  /** RADD-1397: bind the document to a copy that lives elsewhere (an
-   *  `EditorBinding` a plugin supplies). The binding brings its own undo, the
-   *  plain-text mode is unavailable (a textarea cannot bind), typing waits for
-   *  the bind, and `value` is what the binding may seed from. Fixed for the
-   *  instance's life — a new binding means a new `key`. */
+  /** The binding brings its own undo, the plain-text mode is unavailable (a textarea cannot
+   *  bind), and typing waits for the bind. Fixed for the instance's life — a new binding means a
+   *  new `key`. */
   binding?: EditorBinding;
-  /** RADD-1274: the open inline comments anchored to this document, so a
-   *  review can say how many passages it is about to remove. Pages only. */
-  inlineAnchors?: InlineAnchorRef[];
-  /** Called when a review ends with those passages gone and the person chose
-   *  to resolve the comments that pointed at them. */
-  onDetachedComments?: (ids: string[]) => void;
-  className?: string;
-  autoFocus?: boolean;
 }
 
 /**
@@ -179,23 +157,11 @@ const MENTION_LIMIT = 6;
 const SOURCE_DEBOUNCE_MS = 300;
 
 /**
- * Obsidian-style WYSIWYG editor (Milkdown/ProseMirror): you type markdown and it renders
- * live, but the value in and out is always **markdown** — so nothing else in the app
- * (storage, rendering, search) has to change. A fixed TopBar toolbar inserts blocks;
- * `@` autocompletes people, `#` autocompletes issues (emitting the same
- * `@[Name](uuid)` / `#[KEY](KEY)` tokens the reader renders). Reused by pages + comments.
- *
- * The provider is the React half of the node-view bridge (RADD-746): a
- * ProseMirror node view rendered as a PORTAL into this tree keeps the router,
- * the query client and the page context it would otherwise lose crossing into
- * editor-owned DOM. It renders no element of its own — four context providers
- * and the portal list — so it costs nothing on a surface with no node views.
- *
- * `MarkdownSourceContext` sits ABOVE it on purpose, and the reason is easy to get
- * wrong: the adapter renders its portals as a SIBLING of `children`, so a
- * provider inside the inner component would not reach them. A live `radd:toc`
- * reads its headings from that context, so it has to wrap the portal list, not
- * the editor.
+ * WYSIWYG markdown editor (Milkdown/ProseMirror): markdown in, markdown out, so storage,
+ * rendering and search never change. `@` people, `#` issues/entities, `/` quick actions.
+ * `ProsemirrorAdapterProvider` renders node views as portals into this React tree.
+ * `MarkdownSourceContext` must sit ABOVE it: the adapter renders its portals as a SIBLING of
+ * `children`, and a live `radd:toc` reads its headings from that context.
  */
 export function RichEditor(props: RichEditorProps) {
   // The live markdown, for extensions that read the document they sit in.
@@ -297,10 +263,6 @@ function RichEditorInner({
   const boundRef = useRef(!binding);
   // Builds a ProseMirror node view whose body is a React portal into this tree.
   const nodeViewFactory = useNodeViewFactory();
-  // Publishing the live markdown is only worth it on surfaces that HAVE
-  // extensions: elsewhere it would re-render the chrome on every keystroke to
-  // feed nothing. Debounced for the same reason — a toc rebuilding per
-  // character is work nobody can see.
   const onSourceChangeRef = useRef(onSourceChange);
   onSourceChangeRef.current = onSourceChange;
   // What the toolbar lights up. Published by a plugin view only when it CHANGES,
@@ -393,16 +355,7 @@ function RichEditorInner({
   const onHeading = (level: number) =>
     level === 0 ? run(turnIntoTextCommand.key) : run(wrapInHeadingCommand.key, level);
 
-  /**
-   * Run a contributed transform and land it as a reviewable diff (RADD-753,
-   * RADD-1395).
-   *
-   * A direct call, not a command dispatched by NAME. That workaround existed
-   * because importing Crepe's `runAICmd` from its subpath bound a second, dead
-   * copy of the feature module — and a `$command`'s `.key` is only assigned when
-   * its plugin instance runs. Owning the orchestration removed the reason for
-   * the trick; RADD-1395 moved what the run IS to the contribution.
-   */
+  /** Run a contributed transform and land it as a reviewable diff. */
   const dispatchTransform = (transform: EditorTransform, range?: EditorRange) => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -476,12 +429,8 @@ function RichEditorInner({
     setCurrent(at);
   };
 
-  // The review ending is what closes the panel — including when it ends because
-  // someone accepted the last pair by hand rather than pressing Accept all.
-  //
-  // A changed COUNT invalidates where `current` pointed, in the DOM as well as
-  // in state: every accept or reject rebuilds the decoration set from scratch,
-  // so the marked element is not the one the number now refers to.
+  // The review ending closes the panel, including when the last pair was accepted by hand.
+  // Any count change rebuilds every decoration, so the marked "current" element is stale.
   useEffect(() => {
     setCurrent(-1);
     rootRef.current
@@ -602,9 +551,6 @@ function RichEditorInner({
   useEffect(() => {
     const root = rootRef.current;
     if (!root || plain) return; // plain mode: the textarea below, no editor instance
-    // Crepe's BlockEdit slash menu stays OFF: it only duplicated the toolbar's
-    // inserts — our own `/` menu (mention.ts trigger + `quickActions`) acts on
-    // the ISSUE instead.
     const extensionsOn = extensionsRef.current;
     const bindingOn = bindingRef.current;
     // A recreate (a switch back from plain mode) binds again; typing is
@@ -615,13 +561,12 @@ function RichEditorInner({
     const publish = (markdown: string) => {
       contentRef.current = markdown;
       onChangeRef.current(markdown);
+      // Only surfaces with extensions publish the live markdown, debounced (a toc per keystroke is wasted work).
       if (extensionsOn) {
         clearTimeout(sourceTimer);
         sourceTimer = setTimeout(() => onSourceChangeRef.current(markdown), SOURCE_DEBOUNCE_MS);
       }
     };
-    // Milkdown directly (RADD-755). Every feature this used to switch off is a
-    // React component of ours now, so the wrapper was configuring nothing.
     const editor = makeEditor({
       root,
       value: contentRef.current,
@@ -657,7 +602,6 @@ function RichEditorInner({
         }, BOUND_SERIALIZE_MS);
       })));
     }
-    // The chrome Crepe used to wrap, taken from the kit directly (RADD-754).
     editor
       .use(cursor)
       .use(linkTooltipPlugin)
@@ -758,18 +702,10 @@ function RichEditorInner({
     const bindAbort = new AbortController();
     let unbind: (() => void) | undefined;
     const created = (async () => {
-      // The review machinery (RADD-1395: the editor's own, whoever runs the
-      // transform): the diff STATE plugin plus our own decoration fork (see
-      // diff/decoration-plugin.ts). Registered on every instance — inert until a
-      // review opens — so a contribution arriving mid-edit needs no recreate,
-      // and one leaving cannot take an open review with it. The upstream
-      // decoration component is removed first; `remove` on something
-      // unregistered is a no-op, so this stays correct either way.
-      // `diffComponent` carries the ctx slice our fork reads (labels +
-      // customBlockTypes) — reaching for that slice without it raises "Context
-      // not found" before the editor can even create. Its defaults are already
-      // Accept/Reject, so it is registered for the SLICE and then has its
-      // decoration plugin swapped for ours.
+      // The review machinery, on every instance (inert until a review opens), so a contribution
+      // arriving or leaving mid-edit needs no recreate. `diffComponent` is registered only for the
+      // ctx slice our fork reads (labels + customBlockTypes) — without it create raises "Context
+      // not found" — then its decoration plugin is swapped for ours.
       editor.use(diff).use(diffComponent);
       await editor.remove(diffDecorationPlugin);
       editor

@@ -120,11 +120,8 @@ export function ProjectGeneralSettings() {
             project={project}
             canManage={perms.project(project, Permission.projectManage)}
           />
-          {/* RADD-930: the REMAINDER, not everything. The release states, the
-              working week and plugins' own opt-ins now declare their own tabs, and the
-              enforcement mode declares Workflow — which also retires the
-              hand-written `key !== WORKFLOW_TRANSITION_MODE_KEY` exclude that used
-              to keep a second, free-text copy of that dropdown off this page. */}
+          {/* RADD-930: the REMAINDER — keys that declare their own tab (release states, working
+              week, plugin opt-ins, the workflow mode) render there, not here. */}
           <ScopedSettingsEditor
             scope={SettingScope.project}
             scopeId={project.id}

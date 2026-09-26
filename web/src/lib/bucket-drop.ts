@@ -1,23 +1,14 @@
 import { useState, type DragEvent as ReactDragEvent } from "react";
 
 /**
- * Shared drop-TARGET wiring for bucket surfaces (spec 24): board columns
- * (ViewBoard), swimlane cells (ViewSwimlanes), and list sections (ViewList).
- * Owns the state every surface used to duplicate — the dragged payload and
- * which bucket is hovered — and builds the per-bucket dragover / dragleave /
- * drop handlers, including the two easy-to-get-wrong details:
- * - dragover only reacts to drags that STARTED here (`dragging` set), so
- *   foreign drags (files, text) are never accepted;
- * - dragleave ignores moves into a CHILD of the target (relatedTarget still
- *   contained), otherwise the highlight would flicker over every card.
- *
- * What a drop MEANS stays with the caller (the axis-dnd planners); ViewList's
- * within-section row REORDER wiring (rows capturing the drop with
- * stopPropagation) is a different gesture and stays local to ViewList.
+ * Drop-TARGET wiring for bucket surfaces (board columns, swimlane cells, list sections): the
+ * dragged payload, the hovered bucket, and per-bucket handlers that get two details right —
+ * dragover accepts only drags that STARTED here (never files/text), and dragleave ignores moves
+ * into a CHILD (or the highlight flickers over every card). What a drop MEANS is the caller's.
  */
 
 /** Spreadable handler trio for one bucket element ({} when drag is disabled). */
-export interface BucketTargetProps {
+interface BucketTargetProps {
   onDragOver?: (event: ReactDragEvent<HTMLElement>) => void;
   onDragLeave?: (event: ReactDragEvent<HTMLElement>) => void;
   onDrop?: (event: ReactDragEvent<HTMLElement>) => void;

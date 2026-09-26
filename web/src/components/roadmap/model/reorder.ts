@@ -1,16 +1,10 @@
-/** Roadmap vertical reorder + date ordering (spec 82): sibling-scoped rank helpers. */
+/** Roadmap vertical reorder + date ordering (spec 82). Ranks are GLOBAL
+ *  (spec 24, shared with lists), so a roadmap rank PATCH only ever anchors
+ *  on SIBLINGS from its own row order. */
 
 import type { Item } from "../../../lib/types";
 import { ROADMAP_ROW_H } from "./geometry";
 import { RoadmapRowKind, type RoadmapRow } from "./rows";
-
-// ---------------------------------------------------------------------------
-// Vertical reorder + date ordering (spec 82): rows are rank-stable, so order
-// becomes user-owned — these helpers resolve the sibling scope for the
-// label drag-to-rank gesture and the "Order children by date" verb. Ranks
-// are GLOBAL (spec 24, shared with lists); the roadmap only ever anchors a
-// rank PATCH on SIBLINGS from its own row order.
-// ---------------------------------------------------------------------------
 
 /** A rank chain needs at least two members to change anything. */
 export const RANK_CHAIN_MIN_ITEMS = 2;
@@ -26,18 +20,14 @@ export function isRoadmapSibling(a: RoadmapRow, b: RoadmapRow): boolean {
 
 /** The adjacent-sibling anchors for one rank PATCH (spec 24 semantics: null
  *  afterId = top of the sibling run, null beforeId = bottom). */
-export interface RoadmapReorderNeighbours {
+interface RoadmapReorderNeighbours {
   afterId: string | null;
   beforeId: string | null;
 }
 
-/**
- * Resolve a label drop: `moved` lands on the top (`before` = true) or bottom
- * half of sibling `target` → the adjacent-sibling {afterId, beforeId} for the
- * rank PATCH, computed against the model's row order with `moved` excluded
- * (the ViewList idiom). Null when the pair aren't siblings — the drop is a
- * no-op, never a cross-scope move.
- */
+/** Resolve a label drop of `moved` on the top (`before`) or bottom half of
+ *  sibling `target` into rank-PATCH anchors against the row order with
+ *  `moved` excluded. Null when not siblings — never a cross-scope move. */
 export function roadmapReorderNeighbours(
   rows: RoadmapRow[],
   moved: RoadmapRow,
@@ -60,7 +50,7 @@ export function roadmapReorderNeighbours(
 }
 
 /** A bar-body reorder drag's hovered row half (spec 82 follow-up). */
-export interface RowDropTarget {
+interface RowDropTarget {
   /** Index into the VISIBLE rows (fixed ROADMAP_ROW_H pitch). */
   index: number;
   /** True in the row's top half — insert BEFORE it (the ViewList idiom). */

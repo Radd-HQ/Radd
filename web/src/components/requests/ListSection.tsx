@@ -1,19 +1,8 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
-/**
- * One titled block of rows — the section chrome My Work and Portal share
- * (RADD-799).
- *
- * Hussein's read was that My Work looked messy while Portal's grouped sections
- * read well, and the difference was not the content: My Work's headings were
- * 14px semibold body text, Portal's were 11px uppercase muted labels. Two
- * heading styles on two pages showing the same kind of list is what "messy"
- * meant. This is Portal's, extracted, so both pages use the one object.
- *
- * `count` is rendered as a plain number rather than a badge; `badge` is for a
- * count that means something is WAITING on the reader, which earns the accent.
- */
+/** One titled block of rows, shared by My Work and Portal. `count` is a plain number; `badge` is for a
+ *  count WAITING on the reader, which earns the accent. */
 export function ListSection({
   icon: Icon,
   title,

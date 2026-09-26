@@ -63,20 +63,20 @@ const SEARCHABLE_THRESHOLD = 15;
  * nodes; past the cap a tail row says how many more are hiding. */
 const MAX_RENDERED_OPTIONS = 200;
 
-/** Plain text of an option label, for type-ahead + filter matching. */
-function labelText(node: ReactNode): string {
+/** Plain text of a React node (an option label, a heading), flattened through its children. */
+export function nodeText(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === "boolean") return "";
   if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(labelText).join("");
+  if (Array.isArray(node)) return node.map(nodeText).join("");
   if (typeof node === "object" && "props" in node) {
-    return labelText((node.props as { children?: ReactNode }).children);
+    return nodeText((node.props as { children?: ReactNode }).children);
   }
   return "";
 }
 
 /** The text an option is searched by: declared `text` first, extracted second. */
 function optionText(option: SelectOption): string {
-  return option.text ?? labelText(option.label);
+  return option.text ?? nodeText(option.label);
 }
 
 /**

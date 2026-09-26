@@ -7,7 +7,7 @@ import { Slot, SlotId } from "@radd/plugin-sdk";
  * 123, RADD-1171): the entity types it edits and, for a project's settings,
  * the project. The link opens the audit log with exactly those filters.
  */
-export interface SettingsHistoryContext {
+interface SettingsHistoryContext {
   /** Entity types this page edits (`role`, `field`, `storage_host`…). */
   entities?: string[];
   /** The project a per-project settings page belongs to. */
@@ -45,7 +45,7 @@ export function SettingsPage({ title, description, actions, info, history, child
 }
 
 /** Dismissible info callout — explains what a settings section does. */
-export function InfoBanner({ children }: { children: ReactNode }) {
+function InfoBanner({ children }: { children: ReactNode }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
   return (

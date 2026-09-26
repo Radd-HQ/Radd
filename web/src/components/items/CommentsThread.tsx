@@ -1,18 +1,17 @@
 import { ContentBody } from "../editor/ContentBody";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useThreadExpansion } from "../comments/useThreadExpansion";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueries, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { EyeOff, MessageSquare, MessagesSquare, Pencil, Send, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { sendTaskToggle } from "../../lib/task-toggle";
-import { useAttachmentUploader } from "../../lib/useAttachmentUploader";
+import { useImageUploader } from "../../lib/useAttachmentUploader";
 import {
   apiCannedRenderPath,
   apiCommentPath,
   apiCommentTasksPath,
   apiItemCommentsPath,
-  attachmentUrl,
 } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { Avatar } from "../Avatar";
@@ -39,23 +38,6 @@ import { teamReferencesQuery } from "@radd-plugin-ui/teams/references";
 import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
 import type { CommentVisibilityValue } from "@radd-plugin-ui/comments/visibility";
 import type { Project } from "@radd-plugin-ui/projects/types";
-
-/** Upload a pasted/inserted image to the item and resolve its served URL —
- * through the storage-choice seam (spec 102); a dismissed prompt rejects, so
- * the editor insert aborts cleanly. */
-function useCommentImageUploader(itemId: string) {
-  const upload = useAttachmentUploader({
-    entityType: AttachmentParentType.item,
-    entityId: itemId,
-  });
-  return useCallback(
-    async (file: File) => {
-      const [attachment] = await upload([file]);
-      return attachmentUrl(attachment.id);
-    },
-    [upload],
-  );
-}
 
 interface CommentsThreadProps {
   item: Item;
@@ -117,7 +99,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   // handed to the editor as its initial whole-document run.
   const [pendingTransform, setPendingTransform] = useState<EditorTransform | null>(null);
   const canManageProject = perms.project(project, Permission.projectManage);
-  const uploadCommentImage = useCommentImageUploader(itemId);
+  const uploadCommentImage = useImageUploader({ entityType: AttachmentParentType.item, entityId: itemId });
   // RADD-1296: tick a checklist box in a comment without opening its editor —
   // offered exactly where editing the comment is.
   const toggleCommentTask = async (comment: Comment, toggle: { index: number; checked: boolean }) => {
@@ -523,7 +505,7 @@ function CommentEditForm({
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(comment.body);
-  const uploadCommentImage = useCommentImageUploader(itemId);
+  const uploadCommentImage = useImageUploader({ entityType: AttachmentParentType.item, entityId: itemId });
   const save = useMutation({
     mutationFn: () => api.patch<Comment>(apiCommentPath(comment.id), { body: draft }),
     onSuccess: () => {

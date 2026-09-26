@@ -1,25 +1,16 @@
 /** Permissions + roles-as-data (spec 06). */
-// ---------------------------------------------------------------------------
-// Permissions + roles-as-data (spec 06)
-// ---------------------------------------------------------------------------
 
 /** Mirror of the backend `Permission` enum (GET /permissions catalog keys). */
 export const Permission = {
   globalManage: "global.manage",
   serviceAccountCreate: "service_account.create",
-  serviceAccountUpdate: "service_account.update",
   projectCreate: "project.create",
   projectManage: "project.manage",
   /** RADD-1174: delete a project outright. GLOBAL on purpose — never part of
-   * the builtin project Manager role (RADD-1302: was Admin), so a delegated admin cannot destroy the
+   * the builtin project Manager role, so a delegated admin cannot destroy the
    * project they were handed. `global.manage` implies it. */
   projectDelete: "project.delete",
-  /**
-   * RADD-826: delegated project entitlement — grant/revoke a role ON this
-   * project without global `role.update`. `project.manage` implies both. Named
-   * here rather than spelled as a bare string at each call site, which is how
-   * the project-settings nav had been gating its Access tab.
-   */
+  /** Delegated project entitlement: grant/revoke a role on THIS project; project.manage implies both. */
   memberCreate: "member.create",
   memberUpdate: "member.update",
   memberDelete: "member.delete",
@@ -35,7 +26,6 @@ export const Permission = {
    *  that may discuss an issue without editing it can still add the crash log.
    *  `item.update` implies it, so nothing that could attach before cannot now. */
   attachmentCreate: "attachment.create",
-  attachmentDelete: "attachment.delete",
   commentReadInternal: "comment.read_internal",
   viewCreate: "view.create",
   /** Spec 87: administering ANY team. Per-team leaders are granted separately —
@@ -47,64 +37,43 @@ export const Permission = {
   roleRead: "role.read",
   roleUpdate: "role.update",
   userManage: "user.manage",
-  /** RADD-816: the deleted manage umbrellas' work rides the CRUD atoms now. */
-  cycleRead: "cycle.read",
   cycleCreate: "cycle.create",
   cycleUpdate: "cycle.update",
   cycleDelete: "cycle.delete",
   releaseUpdate: "release.update",
-  labelRead: "label.read",
   labelUpdate: "label.update",
   labelDelete: "label.delete",
-  cannedRead: "canned.read",
   cannedUpdate: "canned.update",
-  /** Spec 20: manage automation rules (global). */
-  automationManage: "automation.manage",
   stateManage: "state.manage",
   fieldManage: "field.manage",
-  webhookManage: "webhook.manage",
   /** Spec 109: the shared card-layout preset library (global). */
-  cardPresetRead: "cardpreset.read",
   cardPresetCreate: "cardpreset.create",
-  cardPresetUpdate: "cardpreset.update",
   cardPresetDelete: "cardpreset.delete",
   /** Spec 20: manage a project's intake forms (project-scoped). */
   formManage: "form.manage",
-  /** Spec 43 (pages) — SPACE-scoped since RADD-791. They were global because a
-   *  page had no scope to be checked against, which made per-space access
-   *  inexpressible. Asking `perms.global(pageRead)` is therefore always wrong. */
-  pageRead: "page.read",
+  /** SPACE-scoped (RADD-791): `perms.global(pageWrite)` is always wrong — ask `perms.space`/`anySpace`. */
   pageWrite: "page.write",
   pageManage: "page.manage",
-  pageDelete: "page.delete",
   /** Spec 75: the server-wide-broadcast gate on dashboard sharing (global). */
   dashboardCreate: "dashboard.create",
-  dashboardUpdate: "dashboard.update",
-  dashboardDelete: "dashboard.delete",
 } as const;
 // Spec 50: permissions are open-ended data now (77 CRUD atoms + custom roles).
 // The named `Permission` const above still autocompletes the ones used in gating;
 // `(string & {})` keeps that autocomplete while accepting any catalog key.
 export type PermissionValue = (typeof Permission)[keyof typeof Permission] | (string & {});
 
-/** Mirrors `PermissionScope` in `server/src/radd/modules/auth/types.py`.
- *
- * RADD-808: this drifted in BOTH directions and neither side noticed — the
- * server grew `space` (RADD-791) and never appeared here, so the four page
- * atoms were silently dropped from the roles matrix and could not be granted
- * at all. A scope the client does not know is not a type error; it is a row
- * that renders nowhere. `test_permission_scope_contract.py` now pins the two
- * lists together so the next scope fails a test instead of a screen. */
+/** Mirrors `PermissionScope` in `server/src/radd/modules/auth/types.py`; `test_permission_scope_contract.py`
+ *  pins the two (a scope the client does not know renders nowhere, silently). */
 export const PermissionScope = {
   project: "project",
   global: "global",
   /** RADD-791 — checked against a wiki space. */
   space: "space",
 } as const;
-export type PermissionScopeValue = (typeof PermissionScope)[keyof typeof PermissionScope];
+type PermissionScopeValue = (typeof PermissionScope)[keyof typeof PermissionScope];
 
 /** One qualifier an atom may carry (RADD-939): own, team, assigned, participant. */
-export interface RelationOption {
+interface RelationOption {
   key: string;
   /** The relation's own prose — "they reported", "shared with them". */
   label: string;
@@ -127,23 +96,9 @@ export interface PermissionInfo {
 /** The unqualified form — "anything", the widest reading of an atom. */
 export const RELATION_ANY = "any";
 
-/**
- * Which forms of `atom` a role holds (RADD-939).
- *
- * A SET, not one value, because that is the server's model: `relations_held`
- * returns a frozenset and the gate passes when ANY held relation contains the
- * one being checked. The seeded Baseline depends on it — `item.read@own` AND
- * `item.read@participant` together mean "items they reported, or were shared
- * into", which no single qualifier expresses.
- *
- * Worth stating because the single-valued version of this function was written
- * first and was wrong in the quiet way: it returned the first match, so editing
- * the Baseline would have dropped its second qualifier with nothing on screen
- * to show it had gone.
- *
- * `[]` = not held. `[RELATION_ANY]` = the bare atom, which subsumes every
- * qualifier.
- */
+/** Which forms of `atom` a role holds — a SET, as on the server
+ *  (`relations_held`): the Baseline holds `item.read@own` AND `@participant`.
+ *  `[]` = not held; `[RELATION_ANY]` = the bare atom. */
 export function heldRelations(
   selected: readonly PermissionValue[],
   atom: PermissionValue,
@@ -156,13 +111,8 @@ export function heldRelations(
   return held;
 }
 
-/**
- * Replace every form of `atom` with exactly `relations` (empty = drop it).
- *
- * `RELATION_ANY` is exclusive by construction: it subsumes every qualifier, so
- * keeping one beside it would be redundant and would read as though the
- * narrowing still meant something.
- */
+/** Replace every form of `atom` with exactly `relations` (empty drops it);
+ *  RELATION_ANY subsumes, so it never sits beside a qualifier. */
 export function withRelations(
   selected: readonly PermissionValue[],
   atom: PermissionValue,
@@ -176,15 +126,7 @@ export function withRelations(
   return [...without, ...relations.map((relation) => `${atom}@${relation}`)];
 }
 
-/** GET /roles (spec 06) — global role registry. Builtin rows are immutable. */
-/**
- * The Baseline role's key (RADD-773).
- *
- * The one builtin whose permission set is editable, because it is what every
- * active user holds without being granted anything. It used to be two hardcoded
- * frozensets in the server's `authz.py`, which is why a member could edit any
- * wiki page and delete any cycle while Settings showed nothing to explain it.
- */
+/** The Baseline role: the one builtin with editable permissions — what every active user holds ungranted. */
 export const BASELINE_ROLE_KEY = "baseline";
 
 /** One atom a person holds, and where it came from (RADD-779; provenance
@@ -212,7 +154,7 @@ export interface PermissionSource {
 }
 
 /** One spec-92 grant row reaching the inspected subject (RADD-809). */
-export interface ResourceAccessRow {
+interface ResourceAccessRow {
   resource_type: string;
   resource_id: string;
   resource_label: string | null;
@@ -239,7 +181,7 @@ export interface ResourceTypeAccess {
   rows: ResourceAccessRow[];
 }
 
-export interface AccessSummary {
+interface AccessSummary {
   /** RADD-933: projects where the atom is held UNQUALIFIED — real full reach. */
   readable_projects: number;
   updatable_projects: number;
@@ -254,7 +196,7 @@ export interface AccessSummary {
 }
 
 /** One role a team/group confers on its members, and where (RADD-933). */
-export interface CarrierGrant {
+interface CarrierGrant {
   role_name: string;
   scope: string;
   scope_label: string | null;
@@ -281,6 +223,7 @@ export interface TeamAccess {
   resources: ResourceTypeAccess[];
 }
 
+/** GET /roles (spec 06) — global role registry. Builtin rows are immutable. */
 export interface Role {
   id: string;
   key: string;
@@ -308,7 +251,7 @@ export interface RoleUpdate {
 
 /** RADD-825: the Baseline pre-flight report — the consequence of storing a
     proposed floor, computed server-side through the real resolvers. */
-export interface BaselinePreflightRow {
+interface BaselinePreflightRow {
   user_id: string;
   name: string;
   email: string;

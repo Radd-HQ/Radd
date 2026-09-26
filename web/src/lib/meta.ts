@@ -45,7 +45,7 @@ import type { FieldTypeValue } from "@radd-plugin-ui/fields/types";
  * to labels, icons, ordering, and accent classes. No component hardcodes these.
  */
 
-export interface PriorityMeta {
+interface PriorityMeta {
   label: string;
   /** Compact mono tag form (board cards). */
   short: string;
@@ -65,7 +65,7 @@ export const PRIORITY_META: Record<PriorityValue, PriorityMeta> = {
 /** Spec 121 — who may read an issue. Labels differ by whether the project is
  * public: the `label` reads right in a public project, `privateLabel` in a
  * private one (where public and internal are the same audience). */
-export interface VisibilityMeta {
+interface VisibilityMeta {
   label: string;
   privateLabel: string;
   description: string;
@@ -118,7 +118,7 @@ export const PRIORITY_FILLS: Record<PriorityValue, string> = {
   [Priority.low]: "var(--priority-low)",
 };
 
-export interface CategoryMeta {
+interface CategoryMeta {
   label: string;
   /** Dot/accent color for column headers and state selects. */
   dotClassName: string;
@@ -176,7 +176,7 @@ export const CATEGORY_ORDER: readonly StateCategoryValue[] = [
   StateCategory.canceled,
 ];
 
-export interface KindMeta {
+interface KindMeta {
   label: string;
   icon: LucideIcon;
   className: string;
@@ -298,7 +298,7 @@ export const VIEW_AXIS_ORDER: readonly ViewAxisValue[] = [
 ];
 
 /** Cycle status display metadata (spec 18) — status is derived from dates. */
-export interface StatusMeta {
+interface StatusMeta {
   label: string;
   /** Dot/accent color. */
   dotClassName: string;
@@ -339,13 +339,8 @@ export const LINK_GROUP_LABELS: Record<
   [ItemLinkType.mentions]: { outgoing: "References", incoming: "Referenced by" },
 };
 
-/**
- * State-category fills for inline-SVG charts (spec 19), as `var()` references
- * so they follow the theme like every other token. `dotClassName` above resolves
- * the SAME `--chart-*` variables through Tailwind utilities, so the dots, pills,
- * roadmap bars and report series are now genuinely one source — they used to be
- * palette classes on one side and loose hexes on the other, and had drifted.
- */
+/** State-category fills for inline-SVG charts, as `var()` references to the same `--chart-*`
+ *  variables `dotClassName` uses — dots, pills, bars and report series share one source. */
 export const CATEGORY_CHART_COLORS: Record<StateCategoryValue, string> = {
   [StateCategory.triage]: "var(--chart-triage)",
   [StateCategory.backlog]: "var(--chart-backlog)",
@@ -366,9 +361,7 @@ export const REPORT_INTERVAL_ORDER: readonly ReportIntervalValue[] = [
   ReportInterval.week,
 ];
 
-/** Burnup line colors (spec 19): scope vs completed. `var()` references like
- * CATEGORY_CHART_COLORS above — the charts were still drawing the retired
- * pre-Dusk indigo as hex, theme-blind (RADD-900). */
+/** Burnup line colours: scope vs completed, as theme `var()`s. */
 export const BURNUP_SCOPE_COLOR = "var(--accent-fill)";
 export const BURNUP_COMPLETED_COLOR = "var(--status-success)";
 
@@ -437,7 +430,7 @@ export const VCS_REF_TYPE_META: Record<VcsRefTypeValue, IconMeta> = {
  * for work in flight (open), `done` for merged, muted for closed. Those tokens
  * already carry a validated ink tier, so the text on them clears contrast.
  */
-export interface VcsRefVisual {
+interface VcsRefVisual {
   icon: LucideIcon;
   label: string;
   /** Tint for the leading glyph. */

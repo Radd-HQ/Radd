@@ -47,11 +47,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const navigate = useNavigate();
   const perms = usePermissions();
 
-  // All-projects scope resolves "anywhere", not globally (RADD-788) — the
-  // server's `_require_scope` makes the same call. Broadcasting/sharing is
-  // gated on view.create, mirroring the server (RADD-824 — view.manage was
-  // never consulted server-side, so a role granted exactly view.create had
-  // no Share section while the API would have accepted the call).
+  // All-projects scope asks "anywhere", not global (RADD-788); sharing gates on view.create. Both mirror the server.
   const canShare = project
     ? perms.project(project, Permission.viewCreate)
     : perms.anyProject(Permission.viewCreate);
@@ -372,13 +368,13 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
 }
 
 /** The chip's label: what was typed, else the condition itself (RADD-1229). */
-export function quickFilterLabel(entry: QuickFilter): string {
+function quickFilterLabel(entry: QuickFilter): string {
   return entry.name.trim() || entry.query.trim().slice(0, 60);
 }
 
 /** Why the quick filters cannot be saved as they stand, or null (RADD-1229):
  * a label without a condition is the one shape that means nothing. */
-export function quickFilterProblem(entries: QuickFilter[]): string | null {
+function quickFilterProblem(entries: QuickFilter[]): string | null {
   const orphan = entries.find((entry) => entry.name.trim() && !entry.query.trim());
   return orphan ? `Quick filter “${orphan.name.trim()}” has no condition.` : null;
 }

@@ -1,20 +1,18 @@
 /**
- * The host's document and comment surfaces, handed to the plugin SDK (RADD-1392) so the wiki —
- * the pages plugin's bundled UI — renders the same editor, viewer, markdown, reading pane and
- * comment kit as the issue page, without importing host code. Heavy surfaces stay lazy: the editor
- * engine and the markdown renderer load when one first renders. What plugins ADD to the editor
- * arrives through its extension points (RADD-1395) — a live copy of a document is a binding one
- * hands the editor (RADD-1397) — not through here.
+ * The host's document and comment surfaces, handed to the plugin SDK so the wiki renders the same
+ * editor, viewer, markdown, reading pane and comment kit as the issue page without importing host
+ * code. Heavy surfaces stay lazy (the editor engine and markdown load on first render). What plugins
+ * ADD to the editor arrives through its extension points, not through here.
  */
-import { Suspense, lazy, useCallback, useMemo, type ComponentProps } from "react";
+import { Suspense, lazy, useMemo, type ComponentProps } from "react";
 import { provideHostComponents, type RichEditorProps } from "@radd/plugin-sdk";
 import { LazyRichEditor } from "./components/editor/LazyRichEditor";
 import { LazyRichViewer } from "./components/editor/LazyRichViewer";
 import { ToolbarExtraButton } from "./components/editor/ToolbarExtraButton";
 import { ReadingPane } from "./components/reading/ReadingPane";
 import type { AttachmentTarget } from "./lib/types";
-import { useAttachmentUploader } from "./lib/useAttachmentUploader";
-import { attachmentUrl, apiParentCommentsPath } from "./lib/constants";
+import { useImageUploader } from "./lib/useAttachmentUploader";
+import { apiParentCommentsPath } from "./lib/constants";
 import { CommentHistory } from "./components/CommentHistory";
 import { CopyCommentLink } from "./components/comments/CopyCommentLink";
 import { ResolveThreadButton, ThreadBadge, ThreadFilter, repliesLabel, threadRuleClass } from "./components/comments/ThreadResolution";
@@ -37,11 +35,7 @@ function Editor(props: EditorProps) {
 
 function UploadingEditor({ attachTo, ...props }: EditorProps & { attachTo: NonNullable<RichEditorProps["attachTo"]> }) {
   // The SDK names the parent by its registered type; the host types it as the wire enum.
-  const upload = useAttachmentUploader(attachTo as AttachmentTarget);
-  const onUploadImage = useCallback(async (file: File) => {
-    const [attachment] = await upload([file]);
-    return attachmentUrl(attachment.id);
-  }, [upload]);
+  const onUploadImage = useImageUploader(attachTo as AttachmentTarget);
   return <Editor {...props} onUploadImage={onUploadImage} />;
 }
 

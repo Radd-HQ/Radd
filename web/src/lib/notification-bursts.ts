@@ -8,7 +8,7 @@ import type { Notification } from "./types";
  * Only NEIGHBOURS merge, so the inbox stays in time order: an edit, a comment,
  * then more edits is three rows, not two.
  */
-export interface NotificationBurst {
+interface NotificationBurst {
   /** The newest of the run — what the row shows and opens. */
   lead: Notification;
   /** Every notification in the run, lead first. */

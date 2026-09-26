@@ -17,18 +17,8 @@ import { Select } from "../Select";
 import type { ToolbarSnapshot } from "./toolbar-state";
 
 /**
- * The editor's fixed toolbar — ours (RADD-749).
- *
- * We were already fighting the one it replaces: retinted 18px/8:1 with an accent
- * pill because it shipped no `.active` styling at all, the AI button injected
- * through a `buildTopBar` builder, and every item acting on `mousedown` rather
- * than `click` — which silently passed a render proof against broken code and
- * would break any keyboard-driven affordance.
- *
- * So: real `<button>`s in the house kit, acting on CLICK, reachable by Tab, with
- * `aria-pressed` saying what is on. The commands are Milkdown's own, dispatched
- * by the caller — this component renders and reports, and knows nothing about
- * the editor beyond the snapshot it is handed.
+ * The editor's fixed toolbar: real `<button>`s acting on CLICK (keyboard-reachable), `aria-pressed` for
+ * active state. It renders and reports; the caller dispatches Milkdown's commands.
  */
 
 /** What a button does, in the caller's vocabulary. */
@@ -91,8 +81,8 @@ export function EditorToolbar({
   onAction: (action: ToolbarActionValue, anchor: DOMRect) => void;
   /** 0 = paragraph, 1–3 = heading level. */
   onHeading: (level: number) => void;
-  /** Image insertion is only offered where an upload handler exists. */
   onInsertSymbol: (text: string) => void;
+  /** Image insertion is only offered where an upload handler exists. */
   images: boolean;
   tables: boolean;
   /** Contributed and extension buttons, which are per-surface. */

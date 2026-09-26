@@ -33,15 +33,10 @@ interface TeamPanelProps {
 }
 
 /**
- * Expanded team row: membership + project attachments with data-driven roles.
- *
- * Two gates, deliberately separate (spec 87). `team.can_manage` is resolved
- * server-side and covers owners, managers and global-atom holders — it decides
- * who edits the roster. Attaching the team to a project needs project.manage
- * THERE (spec 06/09): a team leader decides who is on their team, never what
- * their team is entitled to.
- *
- * Group-derived people are read-only; direct membership remains editable.
+ * Expanded team row. Two gates, deliberately separate (spec 87): `team.can_manage` (server-resolved)
+ * decides who edits the roster; entitling the team on a project needs project.manage THERE — a
+ * leader decides who is on the team, never what it is entitled to. Group-derived people are
+ * read-only.
  */
 export function TeamPanel({ team, onDeleted }: TeamPanelProps) {
   const queryClient = useQueryClient();

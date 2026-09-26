@@ -1,16 +1,8 @@
-/** Viewport navigation for the roadmap pane (DCC-style, 2026-08-01):
- *
- *  - MIDDLE-MOUSE drag pans the scroll pane both axes (grabbing cursor,
- *    pointer-captured so fast drags don't drop).
- *  - CTRL+WHEEL zooms the day width continuously, anchored at the cursor —
- *    the day under the pointer stays put while the axis stretches around it.
- *    Plain wheel keeps native scrolling.
- *  - `zoomBy` backs the toolbar ± buttons (anchored at the viewport center).
- *
- *  Zoom is continuous within [ROADMAP_DAY_WIDTH_MIN, MAX]; the preset Select
- *  keeps working (it just sets exact widths). All listeners live on the pane,
- *  so bars/labels/tray drags are untouched — pan uses a button they never do.
- */
+/** Roadmap pane navigation: MIDDLE-mouse drag pans both axes (pointer-captured);
+ *  CTRL/META+wheel zooms the day width anchored at the cursor (plain wheel still
+ *  scrolls); `zoomBy` backs the toolbar ± buttons, anchored at the viewport
+ *  center. Listeners live on the pane, and pan uses a button bars, labels and
+ *  tray drags never use, so those gestures are untouched. */
 
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import {

@@ -1,42 +1,9 @@
 import { CycleSelect } from "../cycles/CycleSelect";
-import { DateField } from "@radd/plugin-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { RELEASE_STATUS_META } from "../../lib/meta";
 import { releasesQuery } from "../../lib/queries";
 import type { Item, ItemUpdate } from "../../lib/types";
 import { Select } from "../Select";
-
-/**
- * Spec-18 planning pickers for the item detail grid: Cycle + Release selects
- * (each with the selected entity's status dot) and native Start/Target date
- * inputs. An empty value clears the field (PATCH with `null`).
- */
-
-
-interface PlanningFieldsProps {
-  projectId: string;
-  item: Item;
-  onPatch: (patch: ItemUpdate) => void;
-}
-
-export function PlanningFields({ projectId, item, onPatch }: PlanningFieldsProps) {
-  return (
-    <>
-      <CyclePicker item={item} onPatch={onPatch} />
-      <ReleasePicker projectId={projectId} item={item} onPatch={onPatch} />
-      <DateField
-        label="Start date"
-        value={item.start_date ?? null}
-        onChange={(value) => onPatch({ start_date: value })}
-      />
-      <DateField
-        label="Target date"
-        value={item.target_date ?? null}
-        onChange={(value) => onPatch({ target_date: value })}
-      />
-    </>
-  );
-}
 
 export function CyclePicker({
   item,

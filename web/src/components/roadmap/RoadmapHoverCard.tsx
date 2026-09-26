@@ -1,40 +1,28 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { shortDate } from "@radd/plugin-sdk";
 import { formatDuration } from "../../lib/duration";
+import { useAnchoredCardPosition, type CardAnchor } from "../../lib/floating-position";
 import { useDurationConfig } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";
 import type { ItemRollup, ItemTimelogBatchEntry } from "../../lib/types";
 import { AssigneeAvatar, PriorityIcon, StatePill, TeamBadge } from "../items/ItemBadges";
-import {
-  RoadmapRowKind,
-  epicBarProgress,
-  leafBarProgress,
-  type BarProgress,
-  type RoadmapRow,
-} from "./roadmap-model";
+import { RoadmapRowKind, rowWindowIso, type BarProgress, type RoadmapRow } from "./roadmap-model";
 
 /**
- * Floating info card over a hovered roadmap bar (bar-presentation polish):
- * key + title, state/priority/assignee/team, the span dates, and — when the
- * data exists — the SAME progress fraction the bar tint draws (leaves:
- * logged/estimate off the timelog batch; epics: done/total children off the
- * rollup batch). One shared component for both bar kinds. Pointer-events-none
- * and purely presentational: the owner (RoadmapTimeline) opens it after a
- * hover dwell, suppresses it during any drag, and closes it on
- * leave/pointerdown/scroll. Replaces both the bars' old native `title`
- * tooltip and the outside trailing title label.
+ * Floating info card over a hovered bar: key, title, state/priority/assignee/
+ * team, span dates, and the SAME progress fraction the bar tint draws.
+ * Pointer-events-none and purely presentational — RoadmapTimeline owns the
+ * dwell, the drag suppression and closing.
  */
 
 const CARD_WIDTH_PX = 288;
-/** Gap between the bar and the card. */
-const CARD_GAP_PX = 8;
-/** Minimum clearance the card keeps from every viewport edge. */
-const CARD_VIEWPORT_MARGIN_PX = 8;
 
-export interface RoadmapHoverCardProps {
+interface RoadmapHoverCardProps {
   row: RoadmapRow;
-  /** The hovered bar's viewport rect, captured when the dwell timer fired. */
-  anchor: { left: number; top: number; bottom: number };
+  /** Cursor-derived anchor box; the card sits below `bottom`, or above `top` near the viewport bottom. */
+  anchor: CardAnchor;
+  /** The row's progress (`rowBarProgress`) — null = no line/tint. */
+  progress: BarProgress | null;
   /** This item's timelog batch entry (leaves) — undefined = no line/tint. */
   timelog: ItemTimelogBatchEntry | undefined;
   /** This item's rollup (epics) — undefined = no line/tint. */
@@ -55,39 +43,13 @@ function ProgressTrack({ progress, isEpic }: { progress: BarProgress; isEpic: bo
   );
 }
 
-export function RoadmapHoverCard({ row, anchor, timelog, rollup }: RoadmapHoverCardProps) {
+export function RoadmapHoverCard({ row, anchor, progress, timelog, rollup }: RoadmapHoverCardProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const durationConfig = useDurationConfig();
   const { item } = row;
   const isEpic = row.rowKind === RoadmapRowKind.epic;
-  const progress = isEpic ? epicBarProgress(rollup) : leafBarProgress(timelog);
-
-  // Below the bar by default; flip above when the viewport bottom is near.
-  // LinkPopover idiom: render at the raw anchor, correct pre-paint once the
-  // card's real size is measurable.
-  const [pos, setPos] = useState({ left: anchor.left, top: anchor.bottom + CARD_GAP_PX });
-  useLayoutEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    let top = anchor.bottom + CARD_GAP_PX;
-    if (top + rect.height > window.innerHeight - CARD_VIEWPORT_MARGIN_PX) {
-      top = anchor.top - rect.height - CARD_GAP_PX;
-    }
-    top = Math.max(
-      CARD_VIEWPORT_MARGIN_PX,
-      Math.min(top, window.innerHeight - rect.height - CARD_VIEWPORT_MARGIN_PX),
-    );
-    const left = Math.max(
-      CARD_VIEWPORT_MARGIN_PX,
-      Math.min(anchor.left, window.innerWidth - rect.width - CARD_VIEWPORT_MARGIN_PX),
-    );
-    setPos({ left, top });
-  }, [anchor]);
-
-  // Derived epics have no dates of their own — show the children union.
-  const startIso = item.start_date ?? row.childrenBounds?.minStart ?? null;
-  const targetIso = item.target_date ?? row.childrenBounds?.maxTarget ?? null;
+  const pos = useAnchoredCardPosition(rootRef, anchor);
+  const { start: startIso, target: targetIso } = rowWindowIso(row);
 
   return (
     <div

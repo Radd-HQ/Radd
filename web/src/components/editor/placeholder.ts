@@ -3,16 +3,9 @@ import { Plugin } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 
 /**
- * Per-surface placeholder text (RADD-754).
- *
- * The smallest of the pieces Crepe supplied, and the one least worth a
- * dependency: a widget decoration on the first block when the document is
- * empty, with the text on a `::before` so it can never be selected, copied, or
- * counted by anything reading `textContent` — which a real element would be.
- *
- * "Empty" means ONE empty textblock, not `doc.textContent === ""`. A document
- * holding an image and nothing else is not empty, and neither is one whose only
- * paragraph sits below a heading someone already typed.
+ * Per-surface placeholder: a node decoration while the document is ONE empty textblock (an image-only
+ * doc, or a paragraph under a typed heading, is not empty), with the text on a `::before` so it is never
+ * selected, copied or counted in `textContent`.
  */
 export const placeholderPlugin = (text: string) =>
   $prose(

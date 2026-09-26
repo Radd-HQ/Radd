@@ -92,31 +92,6 @@ interface AxisContext {
   includeCompletedCycles?: boolean;
 }
 
-/**
- * Cycles a user can still move work INTO — everything except completed.
- * Completed cycles are available in Planning history and Settings → Cycles;
- * a scheduling picker offering them invites moving live work into a finished
- * sprint. Shared by the sidebar, the item context menu and bulk edit so the
- * three cannot drift.
- */
-export function selectableCycles(cycles: Cycle[] | undefined): Cycle[] {
-  return (cycles ?? []).filter((cycle) => cycle.status !== CycleStatus.completed);
-}
-
-/**
- * Child ordering: open work first, then done/canceled, key-numeric within a
- * tier. `CATEGORY_META.order` already encodes the workflow's own sequence, so
- * this borrows it rather than inventing a second opinion. Shared by the issue
- * page's children list and the board card's expansion (RADD-698) — the rule
- * "what is left, at the top" should not differ by surface.
- */
-export function compareChildrenOpenFirst(a: Item, b: Item): number {
-  return (
-    CATEGORY_META[a.state.category].order - CATEGORY_META[b.state.category].order ||
-    a.key.localeCompare(b.key, undefined, { numeric: true })
-  );
-}
-
 /** True for a `cf.<key>` custom-field axis token. */
 function isCfAxis(axis: string): boolean {
   return axis.startsWith(CF_AXIS_PREFIX);
@@ -205,9 +180,9 @@ export function groupItemsForView(
       }));
     }
     case ViewAxis.assignee:
-      return groupByAssignee(items);
+      return groupByRef(items, (item) => item.assignee, UNASSIGNED_KEY, UNASSIGNED_LABEL);
     case ViewAxis.team:
-      return groupByTeam(items);
+      return groupByRef(items, (item) => item.team, NO_TEAM_KEY, NO_TEAM_LABEL);
     case ViewAxis.priority:
       return PRIORITY_ORDER.map((priority) => ({
         key: priority,
@@ -446,36 +421,22 @@ function groupByState(items: Item[], states: State[] | undefined): ViewGroup[] {
   );
 }
 
-function groupByAssignee(items: Item[]): ViewGroup[] {
+/** One bucket per referenced person/team (by id), the unset bucket last. */
+function groupByRef(
+  items: Item[],
+  pick: (item: Item) => { id: string; name: string } | null | undefined,
+  unsetKey: string,
+  unsetLabel: string,
+): ViewGroup[] {
   const buckets = new Map<string, ViewGroup>();
   for (const item of items) {
-    const key = item.assignee?.id ?? UNASSIGNED_KEY;
+    const ref = pick(item);
+    const key = ref?.id ?? unsetKey;
     const bucket = buckets.get(key);
-    if (bucket) {
-      bucket.items.push(item);
-    } else {
-      buckets.set(key, {
-        key,
-        label: item.assignee?.name ?? UNASSIGNED_LABEL,
-        items: [item],
-      });
-    }
+    if (bucket) bucket.items.push(item);
+    else buckets.set(key, { key, label: ref?.name ?? unsetLabel, items: [item] });
   }
-  return withUnsetLast(buckets, UNASSIGNED_KEY, UNASSIGNED_LABEL);
-}
-
-function groupByTeam(items: Item[]): ViewGroup[] {
-  const buckets = new Map<string, ViewGroup>();
-  for (const item of items) {
-    const key = item.team?.id ?? NO_TEAM_KEY;
-    const bucket = buckets.get(key);
-    if (bucket) {
-      bucket.items.push(item);
-    } else {
-      buckets.set(key, { key, label: item.team?.name ?? NO_TEAM_LABEL, items: [item] });
-    }
-  }
-  return withUnsetLast(buckets, NO_TEAM_KEY, NO_TEAM_LABEL);
+  return withUnsetLast(buckets, unsetKey, unsetLabel);
 }
 
 /** Named buckets alphabetical, then the always-present unset bucket last. */

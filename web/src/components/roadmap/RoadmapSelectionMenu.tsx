@@ -1,7 +1,7 @@
-/** Right-click menu over a MULTI-selection (viewport wave): bulk verbs on the
- *  rubber-band/ctrl-click selection. Date/flag verbs ride the same
- *  one-optimistic-unit `applyPatches` the row menu uses; membership verbs go
- *  through the bulk pin seam (one invalidation, not N). */
+/** Right-click menu over a MULTI-selection: bulk verbs on the rubber-band/
+ *  ctrl-click selection. Date/flag verbs ride the same draft `applyPatches`
+ *  the row menu uses; membership verbs go through the bulk pin seam (one
+ *  invalidation, not N). */
 
 import { BookmarkPlus, BookmarkX, CalendarX, Flag, FlagOff, X } from "lucide-react";
 import type { RoadmapDatePatch } from "../../lib/item-mutations";
@@ -61,13 +61,7 @@ export function RoadmapSelectionMenu({
     icon: CalendarX,
     hint: "Every selected issue returns to the Unscheduled tray.",
     onSelect: () =>
-      onPatch(
-        items.map((item) => ({
-          itemId: item.id,
-          patch: { start_date: null, target_date: null },
-          optimistic: { start_date: null, target_date: null },
-        })),
-      ),
+      onPatch(items.map((item) => ({ itemId: item.id, patch: { start_date: null, target_date: null } }))),
   });
   const unflagged = items.filter((item) => !item.flagged);
   nodes.push(
@@ -76,27 +70,13 @@ export function RoadmapSelectionMenu({
           kind: "action",
           label: `Flag ${unflagged.length} ${unflagged.length === 1 ? "item" : "items"}`,
           icon: Flag,
-          onSelect: () =>
-            onPatch(
-              unflagged.map((item) => ({
-                itemId: item.id,
-                patch: { flagged: true },
-                optimistic: { flagged: true },
-              })),
-            ),
+          onSelect: () => onPatch(unflagged.map((item) => ({ itemId: item.id, patch: { flagged: true } }))),
         }
       : {
           kind: "action",
           label: `Unflag ${n} ${plural}`,
           icon: FlagOff,
-          onSelect: () =>
-            onPatch(
-              items.map((item) => ({
-                itemId: item.id,
-                patch: { flagged: false },
-                optimistic: { flagged: false },
-              })),
-            ),
+          onSelect: () => onPatch(items.map((item) => ({ itemId: item.id, patch: { flagged: false } }))),
         },
   );
   nodes.push({ kind: "separator" });

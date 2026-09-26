@@ -70,10 +70,6 @@ export const apiTeamGroupsPath = (teamId: string) => `${ApiPath.teams}/${teamId}
 export const apiTeamGroupPath = (teamId: string, groupId: string) =>
   `${ApiPath.teams}/${teamId}/groups/${groupId}`;
 export const apiViewPath = (viewId: string) => `${ApiPath.views}/${viewId}`;
-/** PUT — replace the view's full sharing state (spec 57). */
-export const apiViewSharingPath = (viewId: string) => `${ApiPath.views}/${viewId}/sharing`;
-/** POST — reassign the view's owner (spec 57). */
-export const apiViewTransferPath = (viewId: string) => `${ApiPath.views}/${viewId}/transfer`;
 /** PATCH/DELETE one card-layout preset (spec 109). */
 export const apiCardLayoutPresetPath = (presetId: string) =>
   `${ApiPath.cardLayoutPresets}/${presetId}`;

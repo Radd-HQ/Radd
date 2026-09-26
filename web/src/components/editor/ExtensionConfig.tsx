@@ -17,18 +17,8 @@ import {
 import { ErrorText } from "@radd/plugin-sdk";
 
 /**
- * Configure one `radd:<name>` block, with a form GENERATED from its schema
- * (RADD-746 / RADD-747).
- *
- * That it is generated is the whole point. A plugin that contributes a
- * `PageExtensionSpec` gets a proper editing experience with no UI code of its
- * own, which is the difference between an extension mechanism people use and
- * one only we can use.
- *
- * The raw-JSON view stays, and is not a debug affordance: an extension whose
- * plugin has been DISABLED has no schema on the wire any more, and a page that
- * still contains its block must remain editable rather than becoming read-only
- * because the form could not be built.
+ * Configure one `radd:<name>` block with a form generated from its schema. The raw-JSON view stays:
+ * a block whose plugin is disabled has no schema on the wire, and its page must remain editable.
  */
 export function ExtensionConfig({
   name,

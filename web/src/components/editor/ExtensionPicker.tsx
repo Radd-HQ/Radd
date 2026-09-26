@@ -5,18 +5,7 @@ import { pageExtensionsQuery } from "@radd-plugin-ui/pages/queries";
 import type { PageExtensionSpec } from "@radd-plugin-ui/pages/types";
 import { configOnInsertKey, RADD_EXTENSION_NODE } from "./extension-node";
 
-/**
- * The entries, grouped by the plugin that contributed them.
- *
- * By CONTRIBUTOR, not "built in versus plugin". That split was the first cut and
- * it was wrong twice over: `core` means "cannot be disabled" rather than "ships
- * with Radd" (`pages` is itself `core=false`, so every first-party extension
- * landed under a plugin heading), and development rule 1 says everything IS a
- * plugin — so the distinction was being manufactured rather than reported.
- *
- * Headings appear only once there is more than one contributor. With a single
- * one they would label the entire list, which tells nobody anything.
- */
+/** Entries grouped by contributing plugin; headings only once there is more than one contributor. */
 function groupsOf(specs: PageExtensionSpec[]) {
   const byPlugin = new Map<string, PageExtensionSpec[]>();
   for (const spec of specs) {
@@ -31,25 +20,16 @@ function groupsOf(specs: PageExtensionSpec[]) {
   }));
 }
 
-/**
- * The editor's insert menu for page extensions (RADD-709).
- *
- * The list comes from `GET /pages/extensions`, i.e. from the kernel registry —
- * not from a constant in the SPA. That is the whole point: a plugin that
- * contributes a `PageExtensionSpec` appears here in a running Radd with no
- * frontend change, and disabling that plugin removes it again.
- */
+/** The insert menu for page extensions, from `GET /pages/extensions` (the kernel registry). */
 export function ExtensionPicker({
   at,
   onPick,
 }: {
   at: { left: number; top: number };
-  /** Dispatched through the live editor by the caller — the same route the AI
-   *  popover takes, rather than holding a view reference here. */
+  /** Dispatched by the caller through the live editor. */
   onPick: (spec: PageExtensionSpec) => void;
 }) {
   const { data, isLoading } = useQuery(pageExtensionsQuery);
-  const insert = onPick;
 
   return (
     <div
@@ -87,7 +67,7 @@ export function ExtensionPicker({
                       <button
                         type="button"
                         role="menuitem"
-                        onClick={() => insert(spec)}
+                        onClick={() => onPick(spec)}
                         title={spec.description}
                         className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-elevated cursor-pointer"
                       >
@@ -116,16 +96,8 @@ export function ExtensionPicker({
 }
 
 /**
- * Insert `radd:<name>` at the cursor, pre-filled with the schema's defaults.
- *
- * Pre-filling matters more than it looks: an empty block is valid but tells the
- * author nothing about what they may set. Since RADD-746 the block also RENDERS
- * where it is inserted, so the defaults are visible as a result rather than as
- * JSON — which is what makes "insert, then adjust" a reasonable order of work.
- *
- * The `code_block` fallback is not dead code: it is what a surface WITHOUT the
- * extension node (the picker is opt-in per surface) would produce, and it emits
- * the identical fence — the same honest degradation the wire format has.
+ * Insert `radd:<name>` at the cursor, pre-filled with the schema's defaults, and ask the new block
+ * to open its form. The `code_block` fallback is what a surface without the extension node emits.
  */
 export function insertExtensionBlock(view: EditorView, spec: PageExtensionSpec): void {
   const { state } = view;

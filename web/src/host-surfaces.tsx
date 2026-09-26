@@ -1,10 +1,6 @@
-/**
- * The shell surfaces the SDK hands to plugin UI (RADD-1393): the SLQ editor and top-bar filter,
- * the saved-view picker, the sharing editor, the report cards, and issue links, suggestions + the
- * peek panel — what the bundled dashboards package, the approvals remote and the ai remote's
- * similar-issue lists (RADD-1395) draw with but cannot import. The
- * heavy ones load when a plugin first renders them, never with the app shell.
- */
+/** Shell surfaces handed to plugin UI through the SDK (RADD-1393): SLQ editor and filter, view
+ *  picker, sharing editor, report cards, issue links/suggestions and the peek. The heavy ones load
+ *  when a plugin first renders them, never with the app shell. */
 import { Suspense, lazy } from "react";
 import { provideHostComponents, type ItemPeekProps, type PageQueryFilterProps } from "@radd/plugin-sdk";
 import { ItemKeyLink } from "./components/items/ItemBadges";

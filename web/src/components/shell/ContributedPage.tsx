@@ -10,13 +10,9 @@ import { Callout } from "../Callout";
 import { MissingPluginType } from "./MissingPluginType";
 
 /**
- * The shell renders contributed pages; no feature names or implementations live here.
- *
- * `match` is the key the page's contribution and nav entry carry — the pathname for a
- * `route.page`/`settings.page`/`public.page`, the segment under a project's settings for a
- * `project.settings.page` (RADD-1396). A contribution's `match` may be a PATTERN whose `$name`
- * segments capture (RADD-1401); the page receives the captures as `params`. `props` are handed to
- * the page beside `path` and `params`.
+ * Renders a contributed page. `match` is the key its contribution carries — the pathname, or the
+ * segment under a project's settings for `project.settings.page`; a PATTERN's `$name` segments
+ * arrive as `params` (RADD-1401). `props` are handed on beside `path` and `params`.
  */
 export function ContributedPage({ slot, match: matchKey, props }: {
   slot: SlotIdValue;

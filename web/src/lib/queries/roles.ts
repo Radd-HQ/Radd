@@ -55,7 +55,7 @@ export const subjectGrantsPageQuery = (subject: GrantSubject, page: number) => q
 });
 
 
-export interface SpaceGrantDirectoryRow extends RoleGrant {
+interface SpaceGrantDirectoryRow extends RoleGrant {
   role_name: string | null;
   subject_name: string | null;
   subject_active: boolean | null;

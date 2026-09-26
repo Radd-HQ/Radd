@@ -3,14 +3,10 @@ import { CycleSelect } from "../cycles/CycleSelect";
 import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import {
-  customFieldErrors,
-  findingsByField,
-  validationBlocking,
-  validationFindings,
-} from "../../lib/api";
+import { customFieldErrors, findingsByField, validationFindings } from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { fieldInScope } from "../../lib/field-scope";
+import { CUSTOM_COLUMN_PREFIX } from "../../lib/columns";
 import { PARENT_SEARCH_LIMIT, RoutePath } from "../../lib/constants";
 import { pushToast, ToastKind } from "../../lib/toast";
 import { useItemWritability, usePointsEnabled } from "../../lib/hooks";
@@ -32,7 +28,7 @@ import { PersonName } from "../PersonName";
 import { TextField } from "../TextField";
 import { CustomFieldsForm } from "./CustomFieldsForm";
 import { DeflectionPanel } from "./DeflectionPanel";
-import { FindingsPanel } from "./FindingsPanel";
+import { FindingsPanel, useIntakeVerdict } from "./FindingsPanel";
 import { LabelsEditor } from "./LabelsEditor";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { IconButton, ErrorText, CollapsibleCard, useDebounced } from "@radd/plugin-sdk";
@@ -40,7 +36,7 @@ import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
 import type { CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
 import type { Project } from "@radd-plugin-ui/projects/types";
 import { IntakeCommit } from "@radd-plugin-ui/automations/types";
-import type { Finding, IntakeCommitValue } from "@radd-plugin-ui/automations/types";
+import type { IntakeCommitValue } from "@radd-plugin-ui/automations/types";
 
 interface NewItemModalProps {
   project: Project;
@@ -49,10 +45,6 @@ interface NewItemModalProps {
   initial?: BucketCreatePreset;
   onClose: () => void;
 }
-
-/** How a finding names a custom field (spec 119) — the same `cf.<key>` form the
- * card-layout attribute catalogue uses. */
-const CUSTOM_FIELD_PREFIX = "cf.";
 
 /** Builtin field keys as a person would name them, for the findings panel.
  * Mirrors the server's `BuiltinItemField`; anything not listed simply shows the
@@ -183,23 +175,10 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   // someone switched to it would misdescribe what pressing it does.
   const validation = useQuery(validationContextQuery(project.id, typeId || defaultTypeId));
   const governed = validation.data?.governed ?? false;
-  // THE LAST VERDICT this modal saw — the findings and whether they REFUSE the
-  // creation, held together in one piece of state.
-  //
-  // They have to travel together, and `blocking` has to come from the server.
-  // It decides the panel's voice and whether "Create anyway" is offered, and it
-  // is the same property the server answers a `commit: always` 409 by — so
-  // computing it here from the cached context read (`mode === "required"`) got
-  // it wrong twice over: the read is a minute old, and a required graph merely
-  // WATCHING a draft that only tripped an advisory one is not a refusal. Both
-  // the 200 verdict and the 422 body carry it. The context read survives only
-  // as what the button should SAY before anything has been submitted.
-  const [verdict, setVerdict] = useState<{ findings: Finding[]; blocking: boolean }>({
-    findings: [],
-    blocking: false,
-  });
-  const findings = verdict.findings;
-  const blocking = verdict.blocking;
+  // The last verdict: `blocking` comes from the server's answer, never from this context read, which
+  // survives only as what the button SAYS before anything has been submitted.
+  const verdict = useIntakeVerdict();
+  const { findings, blocking } = verdict;
 
   const fieldErrors = createItem.isError ? customFieldErrors(createItem.error) : {};
   // Findings addressed at a control merge into the same per-field error map the
@@ -210,14 +189,14 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const customFieldFindings = useMemo(() => {
     const out: Record<string, string> = {};
     for (const [key, message] of Object.entries(findingErrors)) {
-      if (key.startsWith(CUSTOM_FIELD_PREFIX)) out[key.slice(CUSTOM_FIELD_PREFIX.length)] = message;
+      if (key.startsWith(CUSTOM_COLUMN_PREFIX)) out[key.slice(CUSTOM_COLUMN_PREFIX.length)] = message;
     }
     return out;
   }, [findingErrors]);
   /** A finding's field key as a person would name it, for the panel. */
   const labelForField = (key: string): string | undefined => {
-    if (key.startsWith(CUSTOM_FIELD_PREFIX)) {
-      const bare = key.slice(CUSTOM_FIELD_PREFIX.length);
+    if (key.startsWith(CUSTOM_COLUMN_PREFIX)) {
+      const bare = key.slice(CUSTOM_COLUMN_PREFIX.length);
       return projectFields.find((definition) => definition.key === bare)?.name ?? bare;
     }
     return BUILTIN_FIELD_LABELS[key];
@@ -261,10 +240,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
       { body, commit },
       {
         onSuccess: (result) => {
-          setVerdict({
-            findings: result.verdict.findings,
-            blocking: result.verdict.blocking,
-          });
+          verdict.absorb(result.verdict);
           // `created` is null exactly when the draft did not survive — the
           // checks refused it. Keeping the modal open is the point: the person
           // is about to fix what it says.
@@ -280,27 +256,9 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             onClose();
           }
         },
-        // This endpoint answers with a VERDICT, so findings normally arrive
-        // above. Parsed here too because the same draft can also be refused by
-        // the enforcement path's spec-119 422 (a graph bound after this modal
-        // read its context), and a surface that showed "request failed" for
-        // that would hide the very list it exists to show.
-        //
-        // An error that carries NO findings — a 409 from "create anyway" under
-        // a required binding, a 503 while the checks are down, a field-registry
-        // 422 — leaves the list alone. Blanking it was the bug: the 409 is a
-        // refusal to bypass the very findings it then erased, so the panel
-        // vanished at the exact moment it was being argued with.
-        onError: (error) => {
-          const refused = validationFindings(error);
-          const answered = validationBlocking(error);
-          if (refused.length > 0 || answered !== null) {
-            setVerdict((previous) => ({
-              findings: refused.length > 0 ? refused : previous.findings,
-              blocking: answered ?? previous.blocking,
-            }));
-          }
-        },
+        // Findings normally arrive in the 200 verdict; a graph bound after this modal read its
+        // context refuses through the enforcement path's 422 instead, which carries them too.
+        onError: verdict.absorbError,
       },
     );
   };
@@ -640,11 +598,7 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          {/* Offered exactly when the server would honour it. `blocking` IS the
-              condition `commit: always` is refused by (409), read off the answer
-              rather than recomputed here — a button that is refused on press is
-              worse than one that is absent, and a button that is absent where
-              the server would have accepted it is a rule nobody wrote. */}
+          {/* Offered exactly when the server would honour it (`blocking` is what refuses `commit: always`). */}
           {findings.length > 0 && !blocking && (
             <Button
               variant={ButtonVariant.secondary}

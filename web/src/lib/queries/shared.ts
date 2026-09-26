@@ -1,13 +1,9 @@
 import { cycleDirectoryKeys } from "@radd-plugin-ui/cycles/query-keys";
 import { projectQueryKeys } from "@radd-plugin-ui/projects/query-keys";
 import type { CycleStatusValue } from "@radd-plugin-ui/cycles/types";
-/** Query keys — the single source of truth; never inline key arrays elsewhere. */
-
 
 /** Query keys — the single source of truth; never inline key arrays elsewhere. */
 export const queryKeys = {
-  optionsPage: (resource: string, q: string, page: number) => ["directory-options", resource, { q, page }] as const,
-  optionByValue: (resource: string, value: string) => ["directory-options", resource, "value", value] as const,
   authState: ["auth", "me"] as const,
   ...projectQueryKeys,
   states: (projectId: string) => ["states", { projectId }] as const,
@@ -103,7 +99,6 @@ export const queryKeys = {
   attachments: (entityType: string, entityId: string) =>
     ["attachments", { entityType, entityId }] as const,
   cannedResponses: ["cannedResponses"] as const,
-  childItems: (parentId: string) => ["items", "children", parentId] as const,
   serviceAccounts: ["serviceAccounts"] as const,
   serviceAccountKeys: (id: string) => ["serviceAccounts", id, "keys"] as const,
   rollupBatch: (itemIds: readonly string[]) => ["rollupBatch", { itemIds }] as const,

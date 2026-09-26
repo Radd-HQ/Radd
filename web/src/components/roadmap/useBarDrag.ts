@@ -11,31 +11,14 @@ import {
 } from "./roadmap-model";
 
 /**
- * The roadmap's pointer-event gesture machine (specs 77 + 78): one hook
- * instance per timeline owns the single live drag — bar MOVE (day-snapped
- * ghost, duration preserved), edge RESIZE (either edge, target >= start), and
- * LINK creation (rubber band from the ○ handle to another bar). Pointer capture
- * keeps the stream on the pressed element; a 4px threshold separates click
- * (open the peek panel — the caller's onClick consumes `consumeDragClick`)
- * from drag. All day math delegates to the pure model helpers.
- *
- * Spec 78: drags near the scroll pane's horizontal edges auto-scroll via a
- * requestAnimationFrame loop, and once the pane is pinned at an end the loop
- * asks the owner to EXTEND the domain that direction — deltas are
- * scroll-compensated so the ghost tracks the pointer through both. When a
- * before-extension shifts the domain start, the owner calls `shiftDomain` so
- * the live drag's day indices stay anchored to the same calendar dates.
- * Alt held at drop is reported to `onCommitSpan` along with the gesture mode:
- * "just this bar" — it skips an epic's children (spec 81) AND the dependency
- * cascade. Alt is also tracked LIVE in the state so an epic container drag's
- * child translation can collapse to just the bar while Alt is down.
- *
- * Spec 82 follow-up: a bar-BODY drag is AXIS-AWARE — the instant it crosses
- * the threshold, the dominant axis locks the gesture: |dx| >= |dy| stays the
- * horizontal date move, a vertical win becomes a row REORDER (only when
- * `reorderEnabled`). In reorder mode the bar holds its x, the state carries
- * the body-local pointer, and the drop reports through `onReorderDrop` — the
- * owner maps it to a sibling row half and persists via the label-drag path.
+ * The roadmap's pointer-event gesture machine (specs 77/78/81/82): one live
+ * drag per timeline — bar MOVE, edge RESIZE, ○-handle LINK, and a vertical
+ * bar-body REORDER (axis-locked at the threshold). Pointer capture keeps the
+ * stream on the pressed element; a 4px threshold separates click from drag
+ * (`consumeDragClick`). Near a pane edge the drag auto-scrolls, then asks the
+ * owner to EXTEND the domain; deltas are scroll-compensated and `shiftDomain`
+ * re-anchors a live drag when the start moves. Alt at drop = "just this bar"
+ * (no epic children, no cascade), also tracked live for the container preview.
  */
 
 export const BarDragMode = {
@@ -47,7 +30,7 @@ export const BarDragMode = {
    *  begun directly — a `move` re-classifies at the threshold. */
   reorder: "reorder",
 } as const;
-export type BarDragModeValue = (typeof BarDragMode)[keyof typeof BarDragMode];
+type BarDragModeValue = (typeof BarDragMode)[keyof typeof BarDragMode];
 
 /** Movement below this (px, either axis) is a click, not a drag. */
 const DRAG_THRESHOLD_PX = 4;
@@ -59,7 +42,7 @@ const AUTOEXTEND_HOLD_MS = 600;
 /** Bars carry their item id here — link drops resolve targets through it. */
 export const BAR_ITEM_ATTR = "data-bar-item";
 
-export interface BarDragState {
+interface BarDragState {
   mode: BarDragModeValue;
   row: RoadmapRow;
   /** True once the pointer moved past the click threshold. */
@@ -111,7 +94,7 @@ export interface CommitModifiers {
   mode: BarDragModeValue;
 }
 
-export interface BarDragOptions {
+interface BarDragOptions {
   enabled: boolean;
   dayWidth: number;
   domainDays: number;
@@ -127,12 +110,9 @@ export interface BarDragOptions {
   onCreateLink: (row: RoadmapRow, targetItemId: string, x: number, y: number) => void;
   /** The drag is pinned at a pane end — grow the domain that direction. */
   onAutoExtend: (direction: ExtendDirectionValue) => void;
-  /** Spec 82 follow-up: a vertical bar-body drag becomes a sibling row
-   *  reorder. False = today's horizontal-only body gesture, exactly. */
+  /** A vertical bar-body drag becomes a sibling row reorder (spec 82). */
   reorderEnabled: boolean;
-  /** Reorder drop at body-local y — the owner resolves the sibling row half
-   *  (pure `rowDropFromY`) and persists via the SAME path as the label drag.
-   *  An invalid target commits nothing. */
+  /** Reorder drop at body-local y; the owner resolves the row half. */
   onReorderDrop: (row: RoadmapRow, bodyY: number) => void;
 }
 
@@ -195,11 +175,8 @@ export function useBarDrag(options: BarDragOptions): BarDrag {
       current.started ||
       (allowStart && (Math.abs(dx) >= DRAG_THRESHOLD_PX || Math.abs(dy) >= DRAG_THRESHOLD_PX));
     if (!started) return;
-    // Axis lock (spec 82 follow-up): the instant a bar-BODY drag crosses the
-    // threshold, the dominant axis classifies it — |dx| >= |dy| stays the
-    // horizontal date move, a vertical win becomes a row REORDER (only when
-    // the surface enables it). The mode then holds for the whole gesture (no
-    // mid-drag switching); resize and link gestures never re-classify.
+    // Axis lock: at the threshold a body MOVE whose |dy| wins becomes a
+    // REORDER (when enabled) and stays one; resize/link never re-classify.
     const mode =
       !current.started &&
       current.mode === BarDragMode.move &&
@@ -264,9 +241,6 @@ export function useBarDrag(options: BarDragOptions): BarDrag {
     // onClick so a completed drag never opens the peek panel.
     wasDragRef.current = true;
     if (current.mode === BarDragMode.reorder) {
-      // Hand the drop's body-local y to the owner — it resolves the sibling
-      // row half and persists via the SAME path as the label drag; an invalid
-      // target commits nothing (the bar never left its x anyway).
       const rect = bodyRef.current?.getBoundingClientRect();
       if (rect) onReorderDrop(current.row, event.clientY - rect.top);
       return;

@@ -17,18 +17,13 @@ import { CommentHistory } from "../CommentHistory";
 import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
 
 /**
- * The replies under one comment, on every surface (RADD-1246): an issue
- * comment, a page's discussion, an inline annotation. Fetched only when
- * opened; posted with an audience the server bounds by the thread's:
- *
- * - `internalLocked` — the thread is internal, so every reply is; the form
- *   says so and sends nothing about visibility (the server inherits);
- * - `canInternal` — the thread is public and this reader may write internal
- *   comments, so the form offers an Internal switch per reply.
- *
- * The composer is the SAME rich editor a top-level comment gets — `@` people,
- * `#` issues, `/` quick actions where there is an issue, the AI toolbar — a
- * reply is a comment, not a lesser thing (Hussein, on the first cut's textarea).
+ * The replies under one comment, on every surface (RADD-1246). Fetched only when opened; posted
+ * with an audience the server bounds by the thread's:
+ * - `internalLocked` — the thread is internal, so every reply is; the form sends nothing about
+ *   visibility (the server inherits);
+ * - `canInternal` — the thread is public and this reader may write internal comments, so the form
+ *   offers an Internal switch per reply.
+ * The composer is the same rich editor a top-level comment gets: a reply is a comment.
  */
 export function CommentReplies({
   row,
@@ -123,7 +118,7 @@ export function CommentReplies({
             Retry replies
           </Button>
         )}
-        {chronologicalComments(query.data?.pages).map((reply) => {
+        {replies.map((reply) => {
           const isInternal = reply.visibility === CommentVisibility.internal;
           return (
             <div

@@ -35,7 +35,7 @@ export const CardSlot = {
   loggedTime: "logged_time",
   state: "state",
 } as const;
-export type CardSlotValue = (typeof CardSlot)[keyof typeof CardSlot];
+type CardSlotValue = (typeof CardSlot)[keyof typeof CardSlot];
 
 /** Canonical slot order — surfaces render enabled slots in this sequence
  *  (state intentionally last: it sits at the far right edge of rows). */

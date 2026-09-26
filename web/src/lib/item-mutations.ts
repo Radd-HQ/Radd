@@ -137,19 +137,13 @@ export interface RoadmapDatePatch {
    *  unscheduled child a plan verb brings in), so the draft can DRAW it
    *  before Save — the tray drop's INSERT, for plans. */
   insert?: Item;
-  /** Merged into every cached copy of the item for the optimistic paint. */
-  optimistic: Partial<Item>;
 }
 
 /**
- * Sequential multi-PATCH for roadmap gestures (spec 77): a bar move/resize —
- * optionally paired with its parent epic's auto-stretch — commits as ONE
- * optimistic unit against the roadmap VIEW's item cache (spec 79: roadmaps are
- * saved views, so the paged `viewItems` cache is the one on screen). Either
- * PATCH failing rolls the whole set back and toasts once; the settle
- * invalidation refetches server truth either way (a child that landed before
- * the epic PATCH failed stays valid server-side — an epic narrower than a
- * child is legal).
+ * The roadmap draft's Save: the net patches as sequential PATCHes, painted
+ * optimistically into the view's paged `viewItems` cache. A failure rolls the
+ * whole set back and toasts once; the settle invalidation refetches server
+ * truth either way (a PATCH that landed before a later one failed stays valid).
  */
 export function useRoadmapItemPatch(view: Pick<View, "id" | "query_string"> | undefined) {
   const queryClient = useQueryClient();
@@ -166,10 +160,10 @@ export function useRoadmapItemPatch(view: Pick<View, "id" | "query_string"> | un
     onMutate: async ({ patches }) => {
       await queryClient.cancelQueries({ queryKey: listKey });
       const previous = queryClient.getQueryData<ItemPages>(listKey);
-      const byId = new Map(patches.map((entry) => [entry.itemId, entry.optimistic]));
+      const byId = new Map(patches.map((entry) => [entry.itemId, entry.patch]));
       const apply = (item: Item): Item => {
-        const optimistic = byId.get(item.id);
-        return optimistic ? { ...item, ...optimistic } : item;
+        const patch = byId.get(item.id);
+        return patch ? { ...item, ...patch } : item;
       };
       queryClient.setQueryData<ItemPages>(listKey, mapPages(apply));
       return { previous };
@@ -348,18 +342,8 @@ export function useRemoveItemLink(_projectId: string) {
   });
 }
 
-/**
- * Create through intake validation (spec 119) — one round trip that both checks
- * and creates.
- *
- * It REPLACED `useCreateItem` rather than taking a flag on it, because the
- * result shape differs: this one can answer "nothing was created, and here is
- * why", which a caller has to handle, and hiding that behind an option is how a
- * surface ends up silently discarding a verdict. `created` is null exactly when
- * the draft did not survive. (`useCreateItem` had exactly one caller, the New
- * Item modal, and kept compiling with none — deleted here rather than left as a
- * second way to create an item that skips the checks by construction.)
- */
+/** Create through intake validation (spec 119): `created` is null exactly when the draft did not
+ *  survive — callers must handle the verdict. */
 export function useValidateItem() {
   const queryClient = useQueryClient();
 

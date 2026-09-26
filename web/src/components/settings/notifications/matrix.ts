@@ -1,19 +1,13 @@
 /**
- * Reading and editing one person's notification matrix (spec 118).
- *
- * Pure functions over the wire shape, mirroring `notify/rules.py` on the client
- * side — NOT a second copy of the resolver. The server resolves for DELIVERY;
- * this resolves for DISPLAY, and the two answer different questions: delivery
- * knows which relation produced a given event, and a settings page is looking at
- * a column with no event in front of it. So this is the simpler half — one
- * scope, its own rule or the server's default — and the defaults themselves come
- * down the wire so the SPA never carries that table.
+ * Reading and editing one person's notification matrix (spec 118): a DISPLAY-side
+ * resolver (one scope, its own rule or the server's default), NOT a copy of the
+ * delivery resolver in `notify/rules.py`. The defaults come down the wire.
  */
 
 import { Channel, RuleScope, type ChannelValue, type NotificationPrefs, type NotificationRule, type NotificationKindKey, type RuleScopeValue } from "../../../lib/types";
 
 /** What one relationship column shows for one kind, and where it came from. */
-export interface ResolvedCell {
+interface ResolvedCell {
   channel: ChannelValue;
   /** Null when the person set this cell; otherwise the human name of the source. */
   inheritedFrom: string | null;
@@ -42,7 +36,7 @@ export const SCOPE_HINTS: Record<RuleScopeValue, string> = {
 export const PERSONAL_ONLY_REASON =
   "This one is addressed at you personally, so it always follows the “Mine” column.";
 
-export function findRule(
+function findRule(
   rules: NotificationRule[],
   scope: RuleScopeValue,
   scopeId: string | null = null,
@@ -64,23 +58,9 @@ export function resolveCell(
   };
 }
 
-/**
- * A subscription cell. Unset resolves to the SUBSCRIPTION scope's own default,
- * which is `off`.
- *
- * It is tempting to show the "Mine" value here, on the reasoning that a
- * relationship outranks a subscription so your own columns still apply. They do
- * — to items you have a relationship WITH. A subscription exists for the ones
- * you do not: for those, the subscription is the only applicable scope, so the
- * resolver falls to `DEFAULT_MATRIX[project|space|team]` and delivers nothing.
- * Showing "both, inherited from Mine" on a cell that delivers nothing is a
- * settings page describing a notification that never arrives, which is worse
- * than showing `off` — the person turns the feature off looking for the noise.
- *
- * The default comes from the server (`prefs.defaults` carries every scope, not
- * just the three columns), so this stays a lookup rather than a second copy of
- * the table.
- */
+/** A subscription cell. Unset resolves to the subscription scope's default
+ *  (`off`), never the "Mine" value: for items you have no relationship with,
+ *  the subscription is the only applicable scope. Defaults come from the server. */
 export function resolveSubscriptionCell(
   prefs: NotificationPrefs,
   rule: NotificationRule,

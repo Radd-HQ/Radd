@@ -2,29 +2,21 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2 } from "lucide-react";
-import {
-  customFieldErrors,
-  errorMessage,
-  findingsByField,
-  validationBlocking,
-  validationFindings,
-} from "../../lib/api";
+import { customFieldErrors, errorMessage, findingsByField, validationFindings } from "../../lib/api";
+import { CUSTOM_COLUMN_PREFIX } from "../../lib/columns";
 import { RoutePath } from "../../lib/constants";
 import { Button, ButtonVariant } from "../Button";
 import { ErrorText } from "@radd/plugin-sdk";
 import { TextField } from "../TextField";
-import { FindingsPanel } from "../items/FindingsPanel";
+import { FindingsPanel, useIntakeVerdict } from "../items/FindingsPanel";
 import { FormAssistPanel } from "./FormAssistPanel";
 import { FormDescriptionArea, collectValues } from "./PublicFormFields";
 import type { CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
 import { IntakeCommit } from "@radd-plugin-ui/automations/types";
-import type { Finding, IntakeCommitValue, ValidationModeValue } from "@radd-plugin-ui/automations/types";
-
-/** How a finding names a custom field (spec 119) — mirrors the server. */
-const CUSTOM_FIELD_PREFIX = "cf.";
+import type { IntakeCommitValue, ValidationModeValue } from "@radd-plugin-ui/automations/types";
 
 /** The subset of a form both submit pages share (Form and PortalForm each carry it). */
-export interface IntakeFormShape {
+interface IntakeFormShape {
   name: string;
   description: string | null;
   title_prompt: string;
@@ -34,7 +26,7 @@ export interface IntakeFormShape {
 }
 
 /** What the caller's submit resolves with — enough for the success panel. */
-export interface IntakeSubmitResult {
+interface IntakeSubmitResult {
   key: string;
   title: string;
 }
@@ -85,13 +77,7 @@ interface IntakeSubmitShellProps {
   onReset?: () => void;
 }
 
-/**
- * The intake submit page, shared (RADD-901): `routes/form-submit.tsx` and
- * `routes/portal-form.tsx` had drifted ~150 identical lines — header layout,
- * title field, description area, assist-panel placement, error split, the
- * success panel. This shell owns that; the two routes keep only what actually
- * differs (auth context, field source, team/attachment extras, wording).
- */
+/** The intake submit page shared by `form-submit` and `portal-form`; the routes keep only what differs. */
 export function IntakeSubmitShell({
   form,
   projectId,
@@ -111,20 +97,8 @@ export function IntakeSubmitShell({
   const [description, setDescription] = useState("");
   const [values, setValues] = useState<CustomFields>({});
   const [created, setCreated] = useState<IntakeSubmitResult | null>(null);
-  // WHAT THE CHECKS SAID last time (spec 119) — the findings and whether they
-  // REFUSE the submission, in one piece of state, both off the same answer.
-  //
-  // `blocking` is the server's own `verdict.blocks`: the property it answers a
-  // `commit: always` 409 by, so the button and the answer to pressing it cannot
-  // disagree. Deriving it from the render payload's `mode` was wrong twice —
-  // the payload predates the submission, and a required graph merely watching a
-  // draft that tripped only an advisory one is advice, not a refusal.
-  const [verdict, setVerdict] = useState<{ findings: Finding[]; blocking: boolean }>({
-    findings: [],
-    blocking: false,
-  });
-  const findings = verdict.findings;
-  const blocking = verdict.blocking;
+  const verdict = useIntakeVerdict();
+  const { findings, blocking } = verdict;
   const governed = validation?.governed ?? false;
 
   const mutation = useMutation({
@@ -136,24 +110,10 @@ export function IntakeSubmitShell({
         commit,
       }),
     onSuccess: (result) => {
-      setVerdict({ findings: [], blocking: false });
+      verdict.clear();
       setCreated(result);
     },
-    // Only an answer ABOUT the draft touches the list. A 409 refusing "submit
-    // anyway" under a required binding carries no findings of its own, and
-    // blanking on it made the panel disappear at the moment it was being argued
-    // with — the same for a 503 while the checks are down, or a field-registry
-    // 422 about one value.
-    onError: (error) => {
-      const refused = validationFindings(error);
-      const answered = validationBlocking(error);
-      if (refused.length > 0 || answered !== null) {
-        setVerdict((previous) => ({
-          findings: refused.length > 0 ? refused : previous.findings,
-          blocking: answered ?? previous.blocking,
-        }));
-      }
-    },
+    onError: verdict.absorbError,
   });
 
   const fieldErrors = mutation.isError ? customFieldErrors(mutation.error) : {};
@@ -163,18 +123,12 @@ export function IntakeSubmitShell({
   // concept. `cf.<key>` is stripped, because a form keys by the bare key.
   const controlErrors: Record<string, string | undefined> = { ...fieldErrors };
   for (const [key, message] of Object.entries(findingErrors)) {
-    const bare = key.startsWith(CUSTOM_FIELD_PREFIX)
-      ? key.slice(CUSTOM_FIELD_PREFIX.length)
-      : key;
+    const bare = key.startsWith(CUSTOM_COLUMN_PREFIX) ? key.slice(CUSTOM_COLUMN_PREFIX.length) : key;
     controlErrors[bare] ??= message;
   }
-  // Non-field-scoped failures (disabled form 409, "submit anyway" refused under
-  // a required binding, the checks unavailable) surface at the top — but never a
-  // findings 422, which the panel below says better.
-  //
-  // Judged on THIS error's shape, not on whether findings are on screen: a 409
-  // arrives while the panel is full, and testing the list meant the one press
-  // that could be refused for a reason of its own said nothing at all.
+  // Non-field failures (disabled form 409, "submit anyway" refused, checks down) show here, never a
+  // findings 422. Judged on THIS error's shape, not on findings being on screen: a 409 arrives while
+  // the panel is full, and testing the list silenced the one press refused for a reason of its own.
   const generalError =
     mutation.isError &&
     Object.keys(fieldErrors).length === 0 &&
@@ -198,7 +152,7 @@ export function IntakeSubmitShell({
     setDescription("");
     setValues({});
     setCreated(null);
-    setVerdict({ findings: [], blocking: false });
+    verdict.clear();
     mutation.reset();
     onReset?.();
   };

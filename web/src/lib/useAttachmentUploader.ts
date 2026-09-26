@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useStorageChoice } from "../components/attachments/StorageChoiceProvider";
 import { uploadAttachment } from "./attachments";
 import { Entity, invalidateEntities } from "./cache";
+import { attachmentUrl } from "./constants";
 import { uploadContextQuery } from "./queries";
 import type { Attachment, AttachmentTarget, UploadContext } from "./types";
 
@@ -63,5 +64,18 @@ export function useAttachmentUploader(
       return uploaded;
     },
     [queryClient, choose, entityType, entityId],
+  );
+}
+
+/** One pasted/inserted image, uploaded through the seam above and resolved to its served URL — an
+ *  editor's `onUploadImage`. A dismissed prompt rejects, so the editor insert aborts cleanly. */
+export function useImageUploader(target: AttachmentTarget): (file: File) => Promise<string> {
+  const upload = useAttachmentUploader(target);
+  return useCallback(
+    async (file: File) => {
+      const [attachment] = await upload([file]);
+      return attachmentUrl(attachment.id);
+    },
+    [upload],
   );
 }

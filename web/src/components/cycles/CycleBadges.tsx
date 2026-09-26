@@ -32,7 +32,7 @@ export function CycleDatesBadge({ start, end }: { start: string | null; end: str
 /** "2/3 done" — success green once everything's finished, neutral while in
  * flight. Status tokens (RADD-900): the old emerald-200 text had no light
  * remap, so the pill's text rendered stock pastel on white. */
-export function DoneCountPill({ done, total }: { done: number; total: number }) {
+function DoneCountPill({ done, total }: { done: number; total: number }) {
   const complete = total > 0 && done === total;
   return (
     <span

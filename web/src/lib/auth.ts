@@ -66,7 +66,7 @@ export function ldapLogin(body: { username: string; password: string }): Promise
  * Backend 401 detail signalling a TOTP-enabled account (spec 48): the password
  * was right but no cookie was set — repeat via /auth/login/totp with a code.
  */
-export const TOTP_REQUIRED_DETAIL = "totp_required";
+const TOTP_REQUIRED_DETAIL = "totp_required";
 
 export function isTotpRequired(error: unknown): boolean {
   return (
@@ -79,7 +79,7 @@ export function isTotpRequired(error: unknown): boolean {
  * cookie was set; the 401 carries a short-lived ticket that opens enrolment
  * (and nothing else) — confirming a code there is what signs the person in.
  */
-export const MFA_ENROLLMENT_REQUIRED_DETAIL = "mfa_enrollment_required";
+const MFA_ENROLLMENT_REQUIRED_DETAIL = "mfa_enrollment_required";
 
 /** The enrolment ticket a refused login carries, or null for any other error. */
 export function enrollmentTicket(error: unknown): string | null {

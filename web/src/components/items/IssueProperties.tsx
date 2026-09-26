@@ -25,12 +25,8 @@ import {
 import { ValueChip } from "./ValueChip";
 import type { UserSummary } from "../../lib/types";
 
-/* State/priority chips consume the theme token scales (RADD-875): the state
- * chip reads `--chart-*` — the declared ONE source for state color, which this
- * file used to shadow with a drifted hex map (In Progress painted yellow where
- * the whole system paints it green) — and the priority chip reads the
- * `--priority-*` scale beside it. Both pair with the non-inverting dark glyph
- * the roadmap category bars use (the documented text-black exception). */
+/* State/priority chips read the `--chart-*`/`--priority-*` scales with the non-inverting dark glyph
+ * (the documented text-black exception). */
 const CHIP_GLYPH = "#18181b";
 
 /** A rail row: a value chip + its picker, side by side (State/Type/Priority). */
@@ -131,9 +127,17 @@ export function IssueProperties({
   const renderField = (row: EffectiveFieldRow): FieldNode | null => {
     switch (row.field) {
       case "assignee":
-        return { node: <AssigneePicker item={item} onPatch={patch} />, selfPadded: false };
+        return {
+          node: <PersonPicker projectId={item.project_id} label="Assignee" emptyLabel="Unassigned"
+            current={item.assignee} onPick={(id) => patch({ assignee_id: id })} />,
+          selfPadded: false,
+        };
       case "reporter":
-        return { node: <ReporterPicker item={item} onPatch={patch} />, selfPadded: false };
+        return {
+          node: <PersonPicker projectId={item.project_id} label="Reporter" emptyLabel="Unknown" includeRequesters
+            current={item.reporter} onPick={(id) => patch({ reporter_id: id })} />,
+          selfPadded: false,
+        };
       case "team":
         return {
           node: <TeamPicker item={item} onPatch={patch} />,
@@ -532,33 +536,15 @@ function PointsField({ item, onPatch }: PickerProps) {
 }
 
 /**
- * People options grouped by whether they can actually reach this project
- * (RADD-938).
- *
- * A plain FUNCTION, not a component, and that is load-bearing. `SelectField`
- * builds its list by walking its own `children` for `<option>`/`<optgroup>`
- * elements (arrays and fragments included) — it cannot see inside a component
- * element, which falls through the walk and is silently dropped. Shipped as
- * `<PeopleOptions/>` in 0.25.0 and the assignee and reporter dropdowns rendered
- * empty on the live instance: same failure mode the optgroup support was added
- * to fix, reached a different way.
- *
- * Everyone is still listed — hiding a colleague gives no reason and reads as a
- * bug — but the ones who cannot see the project are separated and labelled, so
- * assigning work to someone who will never find it is a visible choice rather
- * than an invisible mistake.
- *
- * `has_access === undefined` means the directory was fetched without a project
- * (no project context yet): one flat list, exactly as before.
+ * People options, split by whether they can reach this project (RADD-938). A plain FUNCTION, not a
+ * component: `SelectField` walks its `children` for `<option>`/`<optgroup>` and silently drops a
+ * component element (that shipped once and emptied both dropdowns). Everyone stays listed; those
+ * without access sit in a labelled group. `has_access === undefined` (no project context) = one flat
+ * list. `external` (requester accounts) is annotated, and in `label` too — Select's search reads it.
  */
 function peopleOptions(users: UserSummary[]) {
   const active = users.filter((user) => user.active);
   const asked = active.some((user) => user.has_access !== undefined && user.has_access !== null);
-  // RADD-1034: `external` only ever comes back true when the caller fetched
-  // with `include_requesters: true` (the reporter picker) — a `UserSource.EMAIL`
-  // account, annotated rather than filtered, same as `has_access` above. The
-  // `label` attribute carries the suffix too, since that's what Select's
-  // typeahead search matches (RADD-881), not the rendered children.
   const option = (user: UserSummary) => (
     <option
       key={user.id}
@@ -586,48 +572,29 @@ function peopleOptions(users: UserSummary[]) {
   );
 }
 
-/** Assignee picker — the project-annotated directory (RADD-938). */
-function AssigneePicker({ item, onPatch }: PickerProps) {
+/** A person picker over the project-annotated directory (RADD-938). The reporter's passes
+ * `includeRequesters` (RADD-1034): a mail-born ticket's reporter IS a `UserSource.EMAIL` account and
+ * must stay pickable — `peopleOptions` marks it "external" rather than letting it pass for a colleague. */
+function PersonPicker({ projectId, label, emptyLabel, current, includeRequesters = false, onPick }: {
+  projectId: string;
+  label: string;
+  emptyLabel: string;
+  current: Item["assignee"];
+  includeRequesters?: boolean;
+  onPick: (userId: string | null) => void;
+}) {
   const [requested, setRequested] = useState(false);
-  const users = useQuery({ ...projectDirectoryQuery(item.project_id), enabled: requested });
+  const users = useQuery({ ...projectDirectoryQuery(projectId, { includeRequesters }), enabled: requested });
   return (
     <SelectField
-      label="Assignee"
-      value={item.assignee?.id ?? ""}
+      label={label}
+      value={current?.id ?? ""}
       onOpen={() => { setRequested(true); if (users.isError) void users.refetch(); }}
-      onChange={(event) => onPatch({ assignee_id: event.target.value || null })}
+      onChange={(event) => onPick(event.target.value || null)}
     >
-      <option value="">Unassigned</option>
-      {item.assignee && !users.data?.some(user => user.id === item.assignee!.id && user.active !== false) && (
-        <option value={item.assignee.id}>{item.assignee.name}</option>
-      )}
-      {peopleOptions(users.data ?? [])}
-      {users.isFetching && !users.data && <option disabled>Loading people…</option>}
-      {users.isError && <option disabled>Could not load people. Reopen to retry.</option>}
-    </SelectField>
-  );
-}
-
-/** Reporter/requester picker (spec 30) — who raised the issue; defaults to
- * creator. RADD-1034: fetched with `includeRequesters` — unlike the assignee
- * picker, a mail-born ticket's actual reporter IS a `UserSource.EMAIL`
- * account, and it has to stay pickable here (`peopleOptions` marks it
- * "external" rather than letting it pass for a colleague). */
-function ReporterPicker({ item, onPatch }: PickerProps) {
-  const [requested, setRequested] = useState(false);
-  const users = useQuery({
-    ...projectDirectoryQuery(item.project_id, { includeRequesters: true }), enabled: requested,
-  });
-  return (
-    <SelectField
-      label="Reporter"
-      value={item.reporter?.id ?? ""}
-      onOpen={() => { setRequested(true); if (users.isError) void users.refetch(); }}
-      onChange={(event) => onPatch({ reporter_id: event.target.value || null })}
-    >
-      <option value="">Unknown</option>
-      {item.reporter && !users.data?.some(user => user.id === item.reporter!.id && user.active !== false) && (
-        <option value={item.reporter.id}>{item.reporter.name}</option>
+      <option value="">{emptyLabel}</option>
+      {current && !users.data?.some(user => user.id === current.id && user.active !== false) && (
+        <option value={current.id}>{current.name}</option>
       )}
       {peopleOptions(users.data ?? [])}
       {users.isFetching && !users.data && <option disabled>Loading people…</option>}

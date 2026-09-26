@@ -6,38 +6,17 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { TableAxis, type TableCommandRunner } from "./table-commands";
 
 /**
- * A table, with handles (RADD-750).
- *
- * The engine is untouched: `prosemirror-tables` is what every ProseMirror editor
- * uses, including whichever alternative we might have switched to, so only the
- * chrome is ours. What that chrome has to do is make the operations reachable —
- * add and remove a row or column, set a column's alignment — without a
- * right-click menu nobody discovers.
- *
- * Handles are positioned from MEASURED cell rects rather than from a CSS grid
- * mirroring the table, because a table's columns are resizable and its cells
- * wrap: any layout that duplicates the table's geometry is a copy that goes
- * stale. A `ResizeObserver` re-measures when it changes.
+ * A table with row/column handles; the engine is `prosemirror-tables`, untouched. Handles are
+ * positioned from MEASURED cell rects (a ResizeObserver re-measures) — columns resize and cells
+ * wrap, so any layout mirroring the table's geometry goes stale.
  */
 export function TableNodeView({ run }: { run: TableCommandRunner }) {
   const { node, view, getPos, contentRef, selected } = useNodeViewContext();
   const wrapRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  /**
-   * The `<table>` takes BOTH refs, and that is the whole of RADD-759.
-   *
-   * `contentRef` does not turn the element it is placed on into the content DOM
-   * — it APPENDS the adapter's own content element into it. Placed on a
-   * `<tbody>`, it therefore nested `<div data-node-view-content>` inside that
-   * tbody and put every `<tr>` in the div, which is not a valid table child: the
-   * rows formed their own anonymous, shrink-to-fit table and inherited neither
-   * the colgroup nor `width: 100%`. Cells measured 20px under 213px columns.
-   *
-   * Registering `contentAs: "tbody"` makes the appended element a real tbody, so
-   * putting the ref here yields `table > colgroup + tbody` — byte-for-byte the
-   * structure `prosemirror-tables`' own TableView builds. The colgroup is
-   * React's and stays first; the adapter appends after it.
-   */
+  /** The `<table>` takes BOTH refs. `contentRef` APPENDS the adapter's content element rather than
+   *  becoming it; registered with `contentAs: "tbody"` that element is a real tbody, giving
+   *  `table > colgroup + tbody` — the structure prosemirror-tables' own view builds (RADD-759). */
   const setTable = useCallback(
     (element: HTMLTableElement | null) => {
       tableRef.current = element;
@@ -116,15 +95,8 @@ export function TableNodeView({ run }: { run: TableCommandRunner }) {
         </>
       )}
       <table ref={setTable} className="w-full border-collapse">
-        {/* prosemirror-tables' resizing plugin writes widths into cell
-            `colwidth` attrs and expects a <colgroup> to apply them — its own
-            table view renders one, and replacing that view meant the plugin had
-            nowhere to put the width it was computing. Rebuilt here from the same
-            attrs, so dragging a column edge actually moves it.
-
-            The width is NOT stored: GFM cannot express a column width, and this
-            body is markdown by design. It is a per-session affordance, and the
-            markdown round-trips untouched because `colwidth` never serialises. */}
+        {/* prosemirror-tables' resizing writes `colwidth` attrs and needs a <colgroup> to apply them.
+            Session-only: GFM cannot store a width, so `colwidth` never serialises. */}
         <colgroup>
           {columnWidths(node).map((width, index) => (
             <col key={index} style={width ? { width: `${width}px` } : undefined} />
@@ -150,13 +122,7 @@ function columnWidths(table: ProseNode): number[] {
   return widths;
 }
 
-/**
- * One row or column handle: a thin bar that selects its line and opens its menu.
- *
- * Selecting first is not decoration — `addColumnBefore`, `deleteRow` and
- * `setCellAttr` all act on the CURRENT cell selection, so the menu's entries
- * would apply to wherever the cursor happened to be otherwise.
- */
+/** One row/column handle: selects its line (every op acts on the cell selection), then opens its menu. */
 function Handle({
   axis,
   index,

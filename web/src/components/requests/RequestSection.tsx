@@ -8,18 +8,8 @@ import { ListSection } from "./ListSection";
 import { RequestRow } from "./RequestRow";
 import { ErrorText } from "@radd/plugin-sdk";
 
-/**
- * The grouped request list, shared by `/portal` and My Work (RADD-799).
- *
- * Hussein's note was that My Work read as messy while Portal's grouped sections
- * read well, so this is Portal's shape extracted rather than a third design. One
- * component means a fix to either page is a fix to both — the two drifted apart
- * precisely because they each drew this themselves.
- *
- * Grouping is MINE first, then one section per team (RADD-798). A team section
- * only exists once something has been shared with it, so the page does not grow
- * a row of empty headings for every team someone happens to belong to.
- */
+/** The grouped request list shared by `/portal` and My Work: MINE first, then one section per team that
+ *  has something shared with it (no empty team headings). */
 export function MyRequests({ compact = false }: { compact?: boolean }) {
   const requests = useQuery(portalRequestsQuery);
   // The app's ONE way to open a row (RADD-803): `?peek=<key>`, the same drawer

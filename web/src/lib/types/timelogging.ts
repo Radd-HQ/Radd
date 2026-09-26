@@ -4,12 +4,12 @@ import type { UserRef } from "./items";
 // Time logging + timesheets (spec 22)
 // ---------------------------------------------------------------------------
 
-export interface CategoryRef {
+interface CategoryRef {
   id: string;
   name: string;
 }
 
-export interface ItemRef {
+interface ItemRef {
   id: string;
   key: string;
   title: string;

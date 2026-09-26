@@ -4,18 +4,9 @@ import { ChannelCell } from "./ChannelCell";
 import { PERSONAL_ONLY_REASON, SCOPE_HINTS, SCOPE_LABELS, resolveCell } from "./matrix";
 
 /**
- * The defaults matrix: one row per notification kind, one column per
- * relationship.
- *
- * Rows come from the SERVER's vocabulary (`prefs.kinds`), not a table in this
- * file. The panel this replaces held its own `Record<NotificationType, string>`,
- * so a kind added on the server had no row here and nothing failed — it simply
- * could not be configured, which is the quietest kind of broken.
- *
- * A PERSONAL kind's other two columns are greyed rather than hidden. Hiding them
- * would leave a ragged grid and no explanation; the disabled cell says why on
- * hover, which is the spec-96 posture applied to a preference rather than a
- * field.
+ * The defaults matrix: one row per notification kind, one column per relationship. Rows come from
+ * the server's vocabulary (`prefs.kinds`), so a new kind is configurable with no edit here. A
+ * personal kind's other columns are greyed, with the reason on hover (the spec-96 posture).
  */
 export function NotificationMatrix({
   prefs,
@@ -32,9 +23,7 @@ export function NotificationMatrix({
 }) {
   return (
     <>
-      {/* The column hints used to live only in `title=` tooltips — invisible on
-          touch, undiscoverable everywhere else, and the one thing a first-time
-          visitor actually needs. A three-line legend costs almost nothing. */}
+      {/* Column hints as a visible legend: `title=` tooltips are invisible on touch. */}
       <div className="mb-3 flex flex-col gap-1" data-matrix-legend>
         {prefs.scopes.map((scope) => (
           <p key={scope} className="text-[12px] leading-snug text-fg-muted">
@@ -45,11 +34,8 @@ export function NotificationMatrix({
         ))}
       </div>
       <div
-      // `inline-grid` and a BOUNDED label column, not `1fr`. Stretched across a
-      // 48rem settings column, the labels sat 700px from their own cells and the
-      // row stopped being a row — you were reading a name on the left and
-      // guessing which line of marks on the right belonged to it. A matrix is
-      // only a matrix while the eye can travel across one.
+      // `inline-grid` and a BOUNDED label column, not `1fr`: stretched across the settings column,
+      // labels sat 700px from their own cells.
       className="inline-grid items-center gap-x-3 gap-y-1"
       style={{
         gridTemplateColumns: `minmax(0,15rem) repeat(${prefs.scopes.length}, minmax(4.5rem, auto))`,

@@ -174,8 +174,7 @@ function NewTokenForm({ onCreated }: { onCreated: (token: ApiTokenCreated) => vo
   const perms = usePermissions();
   const [name, setName] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
-  // null = the owner's full authority — what every personal token was until
-  // RADD-1009 let the browser narrow one (spec 113 shape, server-intersected).
+  // null = the owner's full authority (the server intersects any narrowing).
   const [scopes, setScopes] = useState<TokenScopes | null>(null);
 
   const createToken = useMutation({

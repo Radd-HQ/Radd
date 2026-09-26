@@ -33,7 +33,7 @@ export function viewTypeIcon(viewType: string, option?: ViewTypeOption): LucideI
   return BUILTIN_ICONS[viewType] ?? iconFor(option?.icon) ?? List;
 }
 
-export interface ViewTypes {
+interface ViewTypes {
   /** False until `/capabilities` answers — a plugin type cannot be told from a missing one yet. */
   loaded: boolean;
   byKey: ReadonlyMap<string, ViewTypeOption>;

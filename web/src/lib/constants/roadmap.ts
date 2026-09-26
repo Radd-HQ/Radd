@@ -2,7 +2,6 @@
 
 /** Minimum pixel width per day column on the roadmap time axis (drives horizontal scroll). */
 export const ROADMAP_DAY_WIDTH = 9;
-/** Fixed width of the roadmap's left label gutter (item rows + axis spacer align to it). */
 /** Default width of the roadmap's row-label gutter. Resizable at runtime
  *  (persisted per view) — read the LIVE value from props, never this constant,
  *  anywhere geometry depends on it: it feeds pointer→day hit-testing, so a
@@ -33,8 +32,8 @@ export const ROADMAP_FRAME_FILL = 0.8;
 /**
  * Default bar length when an unscheduled item is dragged onto the roadmap
  * (spec 77): start = the drop day, target = start + N days (inclusive spans —
- * 6 extra days = a one-week bar, 20 = about three weeks). The leaf span also
- * paces "Bring children into roadmap" (each child gets a week-long bar).
+ * 6 extra days = a one-week bar, 20 = about three weeks). The leaf span is also
+ * Auto-schedule's length for a child with no estimate.
  */
 export const ROADMAP_LEAF_SPAN_DAYS = 6;
 export const ROADMAP_EPIC_SPAN_DAYS = 20;
@@ -54,14 +53,9 @@ export const ROADMAP_HOVER_CARD_DELAY_MS = 350;
  *  through the query meta. No polling. */
 export const ROADMAP_PROGRESS_STALE_MS = 5 * 60_000;
 
-/**
- * Scale guardrails (perf wave): a roadmap only ever draws epics
- * and dated bars, so the fetch narrows to exactly that instead of streaming
- * the whole match set — on a 100k-item project that is the difference between
- * 505 sequential pages (~200 MB) and ~10. Unscheduled leaves come from the
- * tray's own bounded query; an epic's date-less children are fetched only
- * when a verb needs them (`parent = KEY`).
- */
+/** A roadmap draws only epics and dated bars, so the fetch narrows to exactly
+ *  that (on a 100k-item project: ~10 pages instead of 505). Unscheduled items
+ *  come from the tray's own query; an epic's date-less children on demand. */
 export const ROADMAP_STRUCTURE_QUERY =
   "kind = epic OR (start IS NOT EMPTY AND target IS NOT EMPTY)";
 /** The "Epics only" toggle: epics + their scheduled DIRECT children, nothing
@@ -71,16 +65,7 @@ export const ROADMAP_STRUCTURE_QUERY =
 export const ROADMAP_EPICS_ONLY_QUERY =
   "kind = epic OR (kind = issue AND epic IS NOT EMPTY AND " +
   "start IS NOT EMPTY AND target IS NOT EMPTY)";
-/** What "Show closed" OFF means, and it means what it says (RADD-946).
- *
- *  It used to be a recency policy — `… OR target >= today-12w` — so closed work
- *  kept drawing until its bar was about three months old. On any project
- *  younger than that, which is most of them, turning the toggle off changed
- *  nothing a reader could see, and the control read as broken.
- *
- *  Recently-finished context beside live work is genuinely useful; it is what
- *  turning the toggle ON is for. It cannot also be the OFF behaviour, or OFF
- *  has no observable meaning. */
+/** "Show closed" OFF hides every closed item (RADD-946); recent context is what ON is for. */
 export const ROADMAP_RECENT_CLOSED_QUERY = "category NOT IN (done, canceled)";
 /** The tray pool: open items missing a full start+target window. Epics with
  *  a derived (children-union) bar are deduped out client-side. */

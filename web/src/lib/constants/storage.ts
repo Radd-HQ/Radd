@@ -37,8 +37,7 @@ export const sidePanelStorageKey = (panelKey: string) => `radd.panel.${panelKey}
 export const roadmapLabelWidthStorageKey = (viewId: string) =>
   `radd.roadmap.${viewId}.labelWidth`;
 
-/** Roadmap "Show closed" toggle (perf wave): off = the default recency filter
- *  (closed items drop out ~3 months after their bar ends) applies. */
+/** Roadmap "Show closed" toggle: off = done/canceled items are not drawn (RADD-946). */
 export const roadmapShowClosedStorageKey = (viewId: string) =>
   `radd.roadmap.${viewId}.showClosed`;
 

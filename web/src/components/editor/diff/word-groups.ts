@@ -27,7 +27,7 @@ import type { DiffSpan, MergedChange } from "./merge-changes";
  * a non-space char, so word expansion crosses leaves like any word character. */
 const LEAF_CHAR = "￼";
 
-export interface InlineGroup {
+interface InlineGroup {
   /** Exact union of the members' changeset ranges — what accept/reject applies. */
   range: DiffSpan;
   /** Word-expanded visual runs (strike + inserted-widget per run). */

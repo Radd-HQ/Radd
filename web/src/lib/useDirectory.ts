@@ -4,7 +4,7 @@ import { SEARCH_DEBOUNCE_MS } from "./constants";
 import type { Paged } from "@radd/plugin-sdk";
 import { useDebounced } from "@radd/plugin-sdk";
 
-export interface DirectoryOptions {
+interface DirectoryOptions {
   /** Spec 121: a caller may hold the directory back (a visitor has no dashboards);
    * a factory's own `enabled` still counts. */
   enabled?: boolean;

@@ -1,15 +1,6 @@
 /**
- * Mermaid diagrams from a ```` ```mermaid ```` fence.
- *
- * The fence, not a `radd:mermaid` extension, deliberately: ```` ```mermaid ```` is
- * what GitHub, GitLab, Obsidian and Notion all render, so a page body written
- * here stays a diagram everywhere else it is pasted. An extension would make it
- * ours and nobody else's.
- *
- * **Loaded on demand.** Mermaid is megabytes; importing it at module scope would
- * put all of it in the main bundle for every page that has no diagram at all.
- * The dynamic import means Vite splits it out and the network only pays for it
- * on a page that actually draws something.
+ * Mermaid diagrams from a ```` ```mermaid ```` fence — the fence GitHub/GitLab/Obsidian render, not a
+ * `radd:` extension, so the body stays a diagram wherever it is pasted. Mermaid is loaded on demand.
  */
 
 import { Theme, getTheme } from "../../lib/theme";
@@ -70,7 +61,7 @@ async function api(): Promise<MermaidApi> {
 
 let counter = 0;
 
-export interface MermaidResult {
+interface MermaidResult {
   svg: string;
   error: string;
 }

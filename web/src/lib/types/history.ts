@@ -4,16 +4,9 @@ import type { ItemKindValue } from "./items";
 // Item history / activity feed (audit) — GET /items/{id}/history
 // ---------------------------------------------------------------------------
 
-export interface HistoryActor {
+interface HistoryActor {
   id: string;
   name: string;
-}
-
-/** A far-item reference inside a `links` change (added/removed dependency). */
-export interface LinkChangeRef {
-  link_type: string;
-  key: string;
-  title: string;
 }
 
 /**

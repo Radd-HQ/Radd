@@ -4,14 +4,10 @@ import { Slot, SlotId, type EditorHandle } from "@radd/plugin-sdk";
 import type { SelectionRect } from "./selection-state";
 
 /**
- * The `editor.selection.action` anchor (RADD-1395): contributions' chrome over a text selection.
- *
- * The host PLACES it — above the selection's midpoint, where the first of these (RADD-753) sat —
- * and keeps it mounted while the editor is idle, so a contribution that opened a popover keeps its
- * state after the selection collapses (opening a prompt field moves focus out of the editor). A
- * contribution reads `selection`, null while nothing is selected or the editor is unfocused, and
- * decides for itself whether to show a trigger. Nothing is offered while a transform owns the
- * editor.
+ * The `editor.selection.action` anchor: contributions' chrome over a text selection. The host places
+ * it above the selection's midpoint and keeps it mounted while idle, so a contribution's open popover
+ * survives the selection collapsing. A contribution reads `selection` (null while nothing is selected
+ * or the editor is unfocused) and decides whether to show a trigger; nothing while a transform runs.
  */
 export function SelectionActions({ rect, editor }: { rect: SelectionRect; editor: EditorHandle }) {
   // Where the last real selection was: a contribution's trigger is in-flow here, and an open

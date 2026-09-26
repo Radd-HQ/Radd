@@ -4,6 +4,7 @@ import { makeEditor } from "./create-editor";
 import { codeBlockSchema, imageSchema } from "@milkdown/kit/preset/commonmark";
 import { listItemBlockComponent } from "@milkdown/kit/component/list-item-block";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
+import type { RichViewerProps, TaskToggle } from "@radd/plugin-sdk";
 import { jiraToMarkdown } from "../../lib/jira-markup";
 import { useOpenIssueRef } from "../../lib/hooks";
 import { mentionChipsPlugin } from "./chips";
@@ -12,23 +13,15 @@ import { ImageNodeView } from "./ImageNodeView";
 import "./editor.css";
 import "./rich-editor.css";
 
-/**
- * Read-mode renderer = the SAME engine as `RichEditor`, not editable — so
- * content looks identical in read and edit (headings,
- * tables, code blocks with copy button, images, chips). No toolbar/menu chrome;
- * `@`/`#` chips + link routing come from the shared `mentionChipsPlugin`.
- */
-/** RADD-1296: a checklist box the reader ticked — its index among the task
- *  items in document order, and the state they asked for. */
-export type TaskToggleRequest = { index: number; checked: boolean };
+type ViewerProps = Omit<RichViewerProps, "eager">;
 
-export function RichViewer(props: {
-  text: string;
-  className?: string;
-  onReady?: () => void;
-  onToggleTask?: (toggle: TaskToggleRequest) => Promise<unknown>;
-  taskScope?: () => HTMLElement | null;
-}) {
+/**
+ * Read mode: the SAME engine as `RichEditor`, not editable, so read and edit look identical; chips and
+ * link routing come from the shared `mentionChipsPlugin`. The editor creates ASYNCHRONOUSLY, so
+ * whatever reads the rendered output (heading anchors, printing) waits for `onReady`. Without a
+ * `taskScope`, task indexes count across this viewer (which then carries `data-task-scope`).
+ */
+export function RichViewer(props: ViewerProps) {
   return (
     <ProsemirrorAdapterProvider>
       <RichViewerInner {...props} />
@@ -42,23 +35,7 @@ function RichViewerInner({
   onReady,
   onToggleTask,
   taskScope,
-}: {
-  text: string;
-  className?: string;
-  /** Fires once the editor has actually rendered into the DOM.
-   *
-   *  The editor creates ASYNCHRONOUSLY, so anything that reads the rendered output —
-   *  assigning heading anchors (RADD-710), printing (RADD-736) — sees an empty
-   *  container if it runs on mount. This is that signal. */
-  onReady?: () => void;
-  /** RADD-1296: present only when the reader may write this text. The surface
-   *  sends it to its `…/tasks` endpoint and re-renders with the stored result. */
-  onToggleTask?: (toggle: TaskToggleRequest) => Promise<unknown>;
-  /** The element whose boxes the index counts across, when this viewer is one
-   *  segment of a larger document (a wiki page split around `radd:*` blocks).
-   *  Default: this viewer. The scope element carries `data-task-scope`. */
-  taskScope?: () => HTMLElement | null;
-}) {
+}: ViewerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const taskScopeStable = useRef(taskScope);
   taskScopeStable.current = taskScope;
@@ -69,10 +46,7 @@ function RichViewerInner({
   const toggleable = Boolean(onToggleTask) && jiraToMarkdown(text) === text;
   const onReadyStable = useRef(onReady);
   onReadyStable.current = onReady;
-  // RADD-711: an issue chip opens the PEEK panel over what you are reading
-  // rather than navigating away. A wiki page is usually the thing you were
-  // reading FOR the references, and the issue view already works this way for
-  // its own child rows (RADD-699) — same helper, so one rule covers both.
+  // An issue chip opens the PEEK over what you are reading (same helper as the issue view).
   const openRef = useOpenIssueRef();
   const openRefStable = useRef(openRef);
   openRefStable.current = openRef;
@@ -81,8 +55,6 @@ function RichViewerInner({
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    // Milkdown directly (RADD-755), NOT editable — the same engine as the
-    // editor, which is the whole reason read and edit look identical.
     const editor = makeEditor({
       root,
       // Backwards-compat: old Jira pages markup renders as markdown (no-op on native).
@@ -110,7 +82,7 @@ function RichViewerInner({
     // Read mode renders lists through the same component as the editor, or the
     // two disagree about what a list looks like (RADD-754).
     editor.use(listItemBlockComponent);
-        let live = true;
+    let live = true;
     const created = editor.create().then(() => {
       // `live` guards the unmount race: create resolving after teardown must not
       // announce a viewer that is no longer on the page.
@@ -149,7 +121,7 @@ const TASK_LABEL = ".label.checked, .label.unchecked";
 function useTaskToggle(
   rootRef: React.RefObject<HTMLDivElement | null>,
   toggleable: boolean,
-  onToggle: React.RefObject<((toggle: TaskToggleRequest) => Promise<unknown>) | undefined>,
+  onToggle: React.RefObject<((toggle: TaskToggle) => Promise<unknown>) | undefined>,
   text: string,
   taskScope: React.RefObject<(() => HTMLElement | null) | undefined>,
 ) {

@@ -8,6 +8,7 @@ import {
   useState,
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -22,6 +23,7 @@ import {
   Undo2,
   ZoomIn,
   ZoomOut,
+  type LucideIcon,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { startHorizontalDrag } from "../../lib/drag";
@@ -59,10 +61,10 @@ import {
   ROADMAP_ROW_H,
   RoadmapRowKind,
   autoSchedulePlan,
+  blocksEdges,
   buildRoadmapModel,
   durationDaysFromEstimate,
   importChildrenPlan,
-  intraEpicBlocksEdges,
   parseDay,
   type RoadmapExtension,
   type RoadmapRow,
@@ -74,7 +76,7 @@ import { ExtendDirection, type ExtendDirectionValue } from "./useBarDrag";
 import { MOD_KEY, modShortcut, shiftModShortcut } from "../../lib/platform";
 import type { Project } from "@radd-plugin-ui/projects/types";
 
-export interface RoadmapSurfaceProps {
+interface RoadmapSurfaceProps {
   /** The saved view being rendered (spec 79): `id` keys the per-view
    *  localStorage state, `query_string` keys the item cache gestures paint. */
   view: Pick<View, "id" | "query_string">;
@@ -96,8 +98,7 @@ export interface RoadmapSurfaceProps {
   /** Tray base SLQ (view query + tray clause) — the tray pages it itself. */
   trayQuery: string;
   trayProjectId: string | null;
-  /** "Show closed": false = done/canceled items are not drawn at all (RADD-946
-   *  — it was a ~3-month recency window, which made the control look dead). */
+  /** "Show closed": false = done/canceled items are not drawn at all (RADD-946). */
   showClosed: boolean;
   onToggleShowClosed: () => void;
   /** "Epics only": only epics + their scheduled children draw (standalone
@@ -120,23 +121,13 @@ export interface RoadmapSurfaceProps {
 }
 
 /**
- * Roadmap / timeline / Gantt (specs 19 + 77 + 78 + 79 + 81): dated items
- * render as bars on a week/month axis; epics are expandable rows over their
- * children. With item.update in scope the surface is a planning editor — drag
- * to move/schedule (an epic body-drag carries its scheduled children like a
- * container, dependents cascade along, Alt = just that bar), stretch edges to
- * resize, ○-drag between bars to create typed links (popover at drop),
- * click a connector to retype/remove it, right-click for the epic/leaf verbs
- * incl. estimate/assignee-aware "Auto-schedule children" and its as-is
- * counterpart "Bring children into roadmap" — otherwise it stays the
- * read-only timeline. Rows are RANK-STABLE (spec 82): the fetch order is
- * the row order, row labels drag-to-reorder among siblings (rank-ordered
- * views only), and date order is an explicit verb rather than a re-sort. The
- * domain extends a month at a time via the axis +caps or by holding a drag at
- * the pane's edge. Every gesture persists through the existing item PATCH and
- * item-links endpoints. Since spec 79 this is a VIEW surface
- * (routes/view.tsx) — mount with `key={view.id}` so zoom, extension, and the
- * collapse/tray state re-initialize per view.
+ * Roadmap / Gantt view surface (specs 19/77/78/79/81/82): dated items as bars
+ * on a week/month axis, epics as expandable rows over their children. With
+ * item.update it is a planning editor whose gestures edit a local DRAFT that
+ * only Save writes (useRoadmapDraft); otherwise the read-only timeline. Rows
+ * are RANK-STABLE (spec 82): fetch order is row order and date order is an
+ * explicit verb. Mount with `key={view.id}` so zoom, extension, collapse and
+ * tray state re-initialize per view.
  */
 export function RoadmapSurface({
   view,
@@ -171,12 +162,7 @@ export function RoadmapSurface({
     );
   }, []);
 
-  // Solo (focus-scheduling): with a non-empty solo set, the model is built
-  // from ONLY the soloed epics + their loaded children — rows AND the time
-  // domain collapse to what's being scheduled. Session-only by design: a
-  // persisted solo would read as data loss on the next visit.
-  // Draft wave: gestures edit a LOCAL draft; the model renders drafted items
-  // and only the explicit Save writes to the DB (undo/redo in op-sized steps).
+  // Gestures edit a LOCAL draft (useRoadmapDraft); only Save writes.
   const draft = useRoadmapDraft();
   const draftedItems = useMemo(() => draft.applyTo(items), [draft, items]);
   useEffect(() => {
@@ -186,16 +172,16 @@ export function RoadmapSurface({
     return () => window.removeEventListener("beforeunload", warn);
   }, [draft.dirty]);
 
+  // Solo: a non-empty set builds the model from ONLY the soloed epics + their
+  // children (rows AND domain). Session-only — a persisted solo reads as data loss.
   const [soloIds, setSoloIds] = useState<ReadonlySet<string>>(() => new Set());
   const modelItems = useMemo(() => {
     const epicIds = new Set(
       draftedItems.filter((item) => item.kind === ItemKind.epic).map((item) => item.id),
     );
     return draftedItems.filter((item) => {
-      // Epics-only mode: a non-epic renders only NESTED under its loaded
-      // epic — never promoted to a standalone row. The fetch clause already
-      // says this; the belt catches stranded children (e.g. the recency
-      // clause dropped a done epic while its child stays recent).
+      // Epics-only: a non-epic draws only NESTED under a loaded epic, never as a
+      // standalone row (a belt to the fetch clause).
       if (
         epicsOnly &&
         item.kind !== ItemKind.epic &&
@@ -251,15 +237,10 @@ export function RoadmapSurface({
   const [trayDragItem, setTrayDragItem] = useState<Item | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Timelog seconds (spec 78 + progress-tint polish): ONE chunked batch over
-  // every loaded LEAF row id (bars tint at logged/estimate) unioned with every
-  // epic's loaded children (auto-schedule durations — includes the date-less
-  // ones) — fetched lazily when the project has timelogging enabled, viewers
-  // included since the tints are read UI. All-projects roadmaps
-  // (project null, spec 79) just attempt the batch: items span projects, and
-  // failures/disabled/estimate-less projects all degrade quietly to no
-  // tint/default durations (retry: false, no toast). Generous staleTime, no
-  // polling — roadmaps can be huge.
+  // Timelog seconds: ONE chunked batch over every leaf row plus every epic's
+  // loaded children (tints + auto-schedule durations). Viewers included; any
+  // failure/disabled/estimate-less project degrades quietly to no tint and
+  // default durations. Generous staleTime, no polling — roadmaps can be huge.
   const durationConfig = useDurationConfig();
   const timelogging = useQuery({
     ...projectTimeloggingQuery(project?.id ?? ""),
@@ -367,7 +348,6 @@ export function RoadmapSurface({
       return patches.map(({ itemId, patch }) => ({
         itemId,
         patch,
-        optimistic: { ...patch },
         insert: loaded.has(itemId) ? undefined : byId.get(itemId),
       }));
     },
@@ -379,43 +359,27 @@ export function RoadmapSurface({
       const loaded = await loadChildrenWithEstimates(row);
       if (!loaded) return;
       const { children, durations } = loaded;
-      // Auto-schedule wants a duration for EVERY child — no-estimate children
-      // fall back to the plan's default length.
-      const allDurations = new Map(
-        children.map((child) => [
-          child.id,
-          durations.get(child.id) ??
-            durationDaysFromEstimate(undefined, durationConfig.hoursPerDay),
-        ]),
-      );
+      // No-estimate children take the plan's default length.
       const plan = autoSchedulePlan(
         children,
-        intraEpicBlocksEdges(children),
+        blocksEdges(children),
         row.item.start_date ?? todayIso(),
-        allDurations,
+        durations,
         row.item,
       );
       editing.applyPatches(
         withInserts(plan.patches, children),
-        () => {
-          pushToast(`Scheduled ${plan.scheduledCount} item${plan.scheduledCount === 1 ? "" : "s"}`);
-          // Spec 82: once the date unit has landed, rewrite ranks to the
-          // plan's schedule order so the fresh schedule reads top-to-bottom
-          // by date. Chain failure toasts on its own — the committed dates
-          // stand (deliberately not part of the optimistic unit).
-          editing.applyRankChain(plan.orderedIds);
-        },
         `Auto-schedule ${row.item.key}'s children`,
       );
+      pushToast(`Scheduled ${plan.scheduledCount} item${plan.scheduledCount === 1 ? "" : "s"}`);
+      // Spec 82: rank the children in schedule order so the result reads top-to-bottom.
+      editing.applyRankChain(plan.orderedIds);
     },
-    [loadChildrenWithEstimates, durationConfig.hoursPerDay, editing, withInserts],
+    [loadChildrenWithEstimates, editing, withInserts],
   );
 
-  // "Bring children into roadmap" — the AS-IS counterpart to Auto-schedule:
-  // same anchor (epic start ?? today) and same duration source (timelog batch
-  // + hours/day), but only children WITH an estimate enter the map — the plan
-  // gives the rest its 1-day import default, and already-dated children are
-  // untouched. One optimistic unit; no rank chain.
+  // "Bring children into roadmap": Auto-schedule's anchor and estimate source,
+  // but only MISSING dates fill (no-estimate children take the 1-day default).
   const handleImportChildren = useCallback(
     async (row: RoadmapRow) => {
       const loaded = await loadChildrenWithEstimates(row);
@@ -431,11 +395,8 @@ export function RoadmapSurface({
         return;
       }
       const count = plan.importedCount;
-      editing.applyPatches(
-        withInserts(plan.patches, loaded.children),
-        () => pushToast(`Brought ${count} ${count === 1 ? "child" : "children"} into the roadmap`),
-        `Bring ${row.item.key}'s children in`,
-      );
+      editing.applyPatches(withInserts(plan.patches, loaded.children), `Bring ${row.item.key}'s children in`);
+      pushToast(`Brought ${count} ${count === 1 ? "child" : "children"} into the roadmap`);
     },
     [loadChildrenWithEstimates, editing, withInserts],
   );
@@ -570,14 +531,10 @@ export function RoadmapSurface({
     return () => document.removeEventListener("keydown", onKey);
   }, [frameSelection, draft]);
 
-  // Keep TODAY in view: the domain begins at the earliest loaded bar — often
-  // years back — so an unanchored mount dropped the viewport at the oldest end
-  // of history. Anchor today ~1/3 into the visible timeline, re-applied while
-  // pages stream in (each page can shift the domain start, which would change
-  // what a raw scrollLeft means) and on zoom, but DISENGAGED the moment the
-  // user scrolls or drags the pane themselves so it never fights a human.
-  // Today outside the domain clamps to the nearest end. The Today button
-  // re-engages the anchor.
+  // Keep TODAY in view: the domain begins at the earliest loaded bar (often
+  // years back). Anchor today ~1/3 into the timeline, re-applied as pages
+  // stream in and on zoom, but DISENGAGED once the user scrolls or drags so it
+  // never fights a human. The Today button re-engages it.
   const anchoredRef = useRef(true);
   const anchorToToday = useCallback(
     (behavior: ScrollBehavior = "auto") => {
@@ -635,24 +592,18 @@ export function RoadmapSurface({
               : [{ value: String(dayWidth), label: `${dayWidth.toFixed(1)}px` }]),
           ]}
         />
-        <button
-          type="button"
-          onClick={() => zoomBy(1 / 1.4)}
-          aria-label="Zoom out"
+        <ToolbarIconButton
+          icon={ZoomOut}
+          label="Zoom out"
           title="Zoom out (or ctrl+wheel on the timeline)"
-          className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer"
-        >
-          <ZoomOut size={13} aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={() => zoomBy(1.4)}
-          aria-label="Zoom in"
+          onClick={() => zoomBy(1 / 1.4)}
+        />
+        <ToolbarIconButton
+          icon={ZoomIn}
+          label="Zoom in"
           title="Zoom in (or ctrl+wheel on the timeline)"
-          className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer"
-        >
-          <ZoomIn size={13} aria-hidden />
-        </button>
+          onClick={() => zoomBy(1.4)}
+        />
         <button
           type="button"
           onClick={scrollToToday}
@@ -662,58 +613,42 @@ export function RoadmapSurface({
         >
           Today
         </button>
-        <button
-          type="button"
+        <ToolbarToggle
+          pressed={showConnectors}
           onClick={() => setShowConnectors((value) => !value)}
-          aria-pressed={showConnectors}
           title="Draw dependency lines between visible bars — click one to retype or remove it. Moving a bar pushes its blocks-dependents along; moving an epic slides its scheduled children with it. Hold Alt while dropping to move just that bar — no children, no cascade."
-          className={`h-7 rounded-md border px-2 text-xs cursor-pointer ${
-            showConnectors
-              ? "border-accent/60 bg-accent/15 text-accent-text"
-              : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg"
-          }`}
         >
           Dependencies
-        </button>
-        <button
-          type="button"
+        </ToolbarToggle>
+        <ToolbarIconButton
+          icon={ChevronsDownUp}
+          label="Collapse all epics"
+          title="Collapse all epics"
           onClick={() => editing.setAllCollapsed(collapsibleEpicIds)}
           disabled={collapsibleEpicIds.length === 0}
-          aria-label="Collapse all epics"
-          title="Collapse all epics"
-          className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-        >
-          <ChevronsDownUp size={13} aria-hidden />
-        </button>
-        <button
-          type="button"
+          disabledClass="disabled:opacity-50 disabled:pointer-events-none"
+        />
+        <ToolbarIconButton
+          icon={ChevronsUpDown}
+          label="Expand all epics"
+          title="Expand all epics"
           onClick={() => editing.setAllCollapsed([])}
           disabled={editing.collapsedIds.size === 0}
-          aria-label="Expand all epics"
-          title="Expand all epics"
-          className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
-        >
-          <ChevronsUpDown size={13} aria-hidden />
-        </button>
+          disabledClass="disabled:opacity-50 disabled:pointer-events-none"
+        />
         {(membersCount > 0 || membersOnly) && (
-          <button
-            type="button"
+          <ToolbarToggle
+            pressed={membersOnly}
             onClick={onToggleMembersOnly}
-            aria-pressed={membersOnly}
+            icon={Bookmark}
             title={
               membersOnly
                 ? "Showing only this roadmap's pinned members (and their children) — click for everything."
                 : "Show only the issues pinned to this roadmap."
             }
-            className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs cursor-pointer ${
-              membersOnly
-                ? "border-accent/60 bg-accent/15 text-accent-text"
-                : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg"
-            }`}
           >
-            <Bookmark size={12} aria-hidden />
             Members · {membersCount}
-          </button>
+          </ToolbarToggle>
         )}
         {soloIds.size > 0 && (
           <button
@@ -726,34 +661,22 @@ export function RoadmapSurface({
             Solo · {soloIds.size} — clear
           </button>
         )}
-        <button
-          type="button"
+        <ToolbarToggle
+          pressed={epicsOnly}
           onClick={onToggleEpicsOnly}
-          aria-pressed={epicsOnly}
+          icon={Gem}
           title="Drown out the noise: only epics and their scheduled children draw — standalone scheduled issues and subtasks are hidden."
-          className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs cursor-pointer ${
-            epicsOnly
-              ? "border-accent/60 bg-accent/15 text-accent-text"
-              : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg"
-          }`}
         >
-          <Gem size={12} aria-hidden />
           Epics only
-        </button>
-        <button
-          type="button"
+        </ToolbarToggle>
+        <ToolbarToggle
+          pressed={showClosed}
           onClick={onToggleShowClosed}
-          aria-pressed={showClosed}
+          icon={History}
           title="Done and canceled issues are hidden — toggle to draw finished work alongside what is live."
-          className={`flex h-7 items-center gap-1 rounded-md border px-2 text-xs cursor-pointer ${
-            showClosed
-              ? "border-accent/60 bg-accent/15 text-accent-text"
-              : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg"
-          }`}
         >
-          <History size={12} aria-hidden />
           Show closed
-        </button>
+        </ToolbarToggle>
         {truncated && (
           <span className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-fg-secondary">
             Showing the first {items.length.toLocaleString()} matches — refine the query, or
@@ -769,26 +692,22 @@ export function RoadmapSurface({
         <div className="ml-auto flex items-center gap-1.5">
           {canUpdate && (
             <>
-              <button
-                type="button"
+              <ToolbarIconButton
+                icon={Undo2}
+                label="Undo"
+                title={draft.undoLabel ? `Undo: ${draft.undoLabel} (${modShortcut("Z")})` : "Nothing to undo"}
                 onClick={draft.undo}
                 disabled={!draft.canUndo}
-                aria-label="Undo"
-                title={draft.undoLabel ? `Undo: ${draft.undoLabel} (${modShortcut("Z")})` : "Nothing to undo"}
-                className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <Undo2 size={13} aria-hidden />
-              </button>
-              <button
-                type="button"
+                disabledClass="disabled:opacity-40 disabled:pointer-events-none"
+              />
+              <ToolbarIconButton
+                icon={Redo2}
+                label="Redo"
+                title={draft.redoLabel ? `Redo: ${draft.redoLabel} (${shiftModShortcut("Z")})` : "Nothing to redo"}
                 onClick={draft.redo}
                 disabled={!draft.canRedo}
-                aria-label="Redo"
-                title={draft.redoLabel ? `Redo: ${draft.redoLabel} (${shiftModShortcut("Z")})` : "Nothing to redo"}
-                className="flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
-              >
-                <Redo2 size={13} aria-hidden />
-              </button>
+                disabledClass="disabled:opacity-40 disabled:pointer-events-none"
+              />
               {draft.dirty && (
                 <Button variant="ghost" size="sm" onClick={() => void discardDraft()}>
                   Discard
@@ -938,5 +857,70 @@ export function RoadmapSurface({
         />
       )}
     </div>
+  );
+}
+
+const TOOLBAR_ICON_BUTTON =
+  "flex h-7 items-center rounded-md border border-strong px-1.5 text-fg-secondary hover:border-emphasis hover:text-fg cursor-pointer";
+
+/** A bordered icon-only toolbar button; `disabledClass` styles its disabled state. */
+function ToolbarIconButton({
+  icon: Icon,
+  label,
+  title,
+  onClick,
+  disabled,
+  disabledClass,
+}: {
+  icon: LucideIcon;
+  label: string;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  disabledClass?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={title}
+      className={disabledClass ? `${TOOLBAR_ICON_BUTTON} ${disabledClass}` : TOOLBAR_ICON_BUTTON}
+    >
+      <Icon size={13} aria-hidden />
+    </button>
+  );
+}
+
+/** An aria-pressed toolbar toggle, accent-filled while pressed. */
+function ToolbarToggle({
+  pressed,
+  onClick,
+  title,
+  icon: Icon,
+  children,
+}: {
+  pressed: boolean;
+  onClick: () => void;
+  title: string;
+  icon?: LucideIcon;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      title={title}
+      className={`${Icon ? "flex h-7 items-center gap-1" : "h-7"} rounded-md border px-2 text-xs cursor-pointer ${
+        pressed
+          ? "border-accent/60 bg-accent/15 text-accent-text"
+          : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg"
+      }`}
+    >
+      {Icon && <Icon size={12} aria-hidden />}
+      {children}
+    </button>
   );
 }

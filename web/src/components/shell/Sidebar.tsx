@@ -106,16 +106,11 @@ export function Sidebar() {
   /** Project the "New issue" modal was opened for (from its sidebar row). */
   const [newItemProject, setNewItemProject] = useState<Project | null>(null);
   const [viewModalScope, setViewModalScope] = useState<ViewModalScope | null>(null);
-  // RADD-1133: on an instance with NO projects the section used to vanish, and
-  // with it the only path to "New project" — the first admin of a fresh install
-  // had nowhere to start. project.create is global-scope (spec 06).
+  // The projects section stays (with "New project") even with NO projects (RADD-1133).
   const canCreateProject = perms.global(Permission.projectCreate);
   const [creatingProject, setCreatingProject] = useState(false);
   const [newDashboardOpen, setNewDashboardOpen] = useState(false);
-  // Completed cycles are hidden by default to keep the rail focused
-  // on what's live/upcoming; revealed on demand ("only explicitly ask for previous").
-  // Spec 60: sections fold (persisted); project trees default COLLAPSED, with the
-  // current route's project auto-expanded unless explicitly folded.
+  // Sections fold (persisted); project trees default COLLAPSED, the current project auto-expands.
   const { prefs, toggleSection, toggleProject } = useSidebarPrefs();
   const { projectKey: currentProjectKey } = useParams({ strict: false });
   const currentProject = useQuery(projectByKeyQuery(currentProjectKey ?? ""));
@@ -124,11 +119,8 @@ export function Sidebar() {
     prefs.expandedProjects.includes(project.id) ||
     (project.key === currentProjectKey && !prefs.collapsedProjects.includes(project.id));
 
-  // RADD-1041: the rail's own "related projects" preference — DISPLAY only.
-  // `via: "related"` rows are exactly the ones `visible_projects` (RADD-937)
-  // shows only because the person's own work makes a qualified item.read
-  // count, never because of a grant; hiding them from this tree changes
-  // nothing about whether they can still open one by URL, search, or My Work.
+  // The rail's "related projects" preference (RADD-1041) is DISPLAY only: hiding the `via:
+  // "related"` rows changes nothing about opening one by URL, search or My Work.
   const relatedProjectsPref = useRelatedProjectsVisibility();
   const directory = useProjectDirectory(relatedProjectsPref.mode === "never");
   const railProjects = directory.rows;
@@ -195,8 +187,6 @@ export function Sidebar() {
         (railed ? "w-14" : "w-60")
       }
     >
-      {/* Brand + the collapse toggle moved to the full-width top bar (row 1);
-          the sidebar starts directly with nav under the two bars. */}
       {railed && <SidebarRail pluginNav={pluginNav} />}
 
       {!railed && (
@@ -261,12 +251,7 @@ export function Sidebar() {
           </Link>
         )}
 
-        {/* Plugin-contributed nav (spec 93 / A7), routed CLIENT-SIDE through the
-            `$` splat that spec 94 added for `route.page` (router.tsx). These were
-            plain <a> until then, which meant a full document reload — bundle
-            re-download, white flash, every query refetched — on Notes/Milestones
-            and nothing else. `to` is typed against the route tree and these
-            paths are only known at runtime, hence the cast. */}
+        {/* Plugin nav routes client-side through the `$` splat; runtime paths, hence the cast. */}
         {pluginNav.map((n) => (
           <Link
             key={n.key}

@@ -1,13 +1,9 @@
 import type { EditorToolbarButtonProps } from "@radd/plugin-sdk";
 
 /**
- * A toolbar button that opens a popover rather than running a command — the host's own
- * (extensions) and every `editor.toolbar.action` contribution's, through the SDK's
- * `EditorToolbarButton` (RADD-1395).
- *
- * The icon carries the class its popover's proofs look for — `svg.radd-extension-toolbar-icon`
- * here, a contribution's own for its button — which is what let the render proofs assert the same
- * output across the move from raw SVG strings to React.
+ * A toolbar button that opens a popover rather than running a command — the host's own (extensions)
+ * and every `editor.toolbar.action` contribution's, through the SDK's `EditorToolbarButton`. The icon
+ * carries the class its proofs look for (`svg.radd-extension-toolbar-icon` here).
  */
 export function ToolbarExtraButton({ icon, title, onPick, disabled = false }: EditorToolbarButtonProps) {
   return (

@@ -1,6 +1,7 @@
 /** Roadmap row model: epic grouping, week-snapped domain, axis ticks (spec 82). */
 
-import { ItemKind, StateCategory, type Item } from "../../../lib/types";
+import { toISODate } from "../../../lib/timesheet";
+import { ItemKind, type Item } from "../../../lib/types";
 import {
   ROADMAP_DOMAIN_PAD_DAYS,
   addDays,
@@ -8,20 +9,15 @@ import {
   isScheduled,
   parseDay,
   startOfWeek,
-  toIsoDay,
 } from "./dates";
 import { formatIso, todayIso } from "@radd/plugin-sdk";
-
-// ---------------------------------------------------------------------------
-// Row model
-// ---------------------------------------------------------------------------
 
 export const RoadmapRowKind = {
   epic: "epic",
   child: "child",
   standalone: "standalone",
 } as const;
-export type RoadmapRowKindValue = (typeof RoadmapRowKind)[keyof typeof RoadmapRowKind];
+type RoadmapRowKindValue =(typeof RoadmapRowKind)[keyof typeof RoadmapRowKind];
 
 export interface RoadmapRow {
   item: Item;
@@ -44,14 +40,13 @@ export interface RoadmapRow {
   scheduledChildCount: number;
 }
 
-export interface AxisTick {
+interface AxisTick {
   index: number;
   label: string;
 }
 
 export interface RoadmapModel {
   rows: RoadmapRow[];
-  unscheduled: Item[];
   domainStart: Date | null;
   domainDays: number;
   weeks: AxisTick[];
@@ -60,7 +55,15 @@ export interface RoadmapModel {
   todayIndex: number | null;
 }
 
-const MONTH_SHORT = (date: Date) => formatIso(toIsoDay(date), { month: "short" });
+/** A row's effective window — a derived epic has no dates of its own, so it falls back to its children's union. */
+export function rowWindowIso(row: RoadmapRow): { start: string | null; target: string | null } {
+  return {
+    start: row.item.start_date ?? row.childrenBounds?.minStart ?? null,
+    target: row.item.target_date ?? row.childrenBounds?.maxTarget ?? null,
+  };
+}
+
+const MONTH_SHORT =(date: Date) => formatIso(toISODate(date), { month: "short" });
 
 function minDate(dates: Date[]): Date {
   return dates.reduce((a, b) => (a.getTime() <= b.getTime() ? a : b));
@@ -123,12 +126,8 @@ export function buildRoadmapModel(
     }
   }
 
-  // Spec 82: NO date sorts — the fetch order IS the row order (the server's
-  // default list order is the global manual rank; an explicit view ORDER BY
-  // yields that order instead). One pass interleaves epic groups and
-  // standalone leaves as encountered; children keep their fetch order within
-  // each epic. Rows are therefore STABLE: date edits only move bars
-  // horizontally, never reshuffle rows.
+  // Spec 82: NO date sorts — fetch order (global manual rank by default) IS the
+  // row order, so date edits move bars horizontally and never reshuffle rows.
   const groups: EpicGroup[] = [];
   const standalone: Item[] = [];
   const topLevel: TopLevelEntry[] = [];
@@ -151,8 +150,8 @@ export function buildRoadmapModel(
       const childrenBounds =
         scheduledChildren.length > 0
           ? {
-              minStart: toIsoDay(minDate(scheduledChildren.map((c) => parseDay(c.start_date!)))),
-              maxTarget: toIsoDay(maxDate(scheduledChildren.map((c) => parseDay(c.target_date!)))),
+              minStart: toISODate(minDate(scheduledChildren.map((c) => parseDay(c.start_date!)))),
+              maxTarget: toISODate(maxDate(scheduledChildren.map((c) => parseDay(c.target_date!)))),
             }
           : null;
       const group: EpicGroup = {
@@ -172,24 +171,6 @@ export function buildRoadmapModel(
     }
   }
 
-  const placed = new Set<string>();
-  for (const group of groups) {
-    placed.add(group.epic.id);
-    for (const child of group.scheduledChildren) placed.add(child.id);
-  }
-  for (const item of standalone) placed.add(item.id);
-  // The tray is a "to be planned" pool — finished/killed work isn't
-  // schedulable, so done/canceled items stay out of it (they still DRAW on
-  // the timeline when scheduled: history + progress tints depend on them).
-  const unscheduled = items
-    .filter(
-      (item) =>
-        !placed.has(item.id) &&
-        item.state.category !== StateCategory.done &&
-        item.state.category !== StateCategory.canceled,
-    )
-    .sort((a, b) => b.number - a.number);
-
   // Domain: the union of every drawable window, snapped out to whole weeks,
   // plus ~a month of open space at BOTH ends (drag room — specs 77 + 78) and
   // any session "+1 month" extensions.
@@ -198,7 +179,6 @@ export function buildRoadmapModel(
   if (spanStarts.length === 0) {
     return {
       rows: [],
-      unscheduled,
       domainStart: null,
       domainDays: 0,
       weeks: [],
@@ -217,8 +197,6 @@ export function buildRoadmapModel(
   const domainDays = daysBetween(domainStart, domainEnd) + 1;
   const indexOf = (date: Date) => daysBetween(domainStart, date);
 
-  // Rows in fetch order (spec 82): epics + standalone leaves interleave as
-  // encountered; each epic's scheduled children follow it directly.
   const rows: RoadmapRow[] = [];
   for (const entry of topLevel) {
     if ("leaf" in entry) {
@@ -264,5 +242,5 @@ export function buildRoadmapModel(
   const todayDate = parseDay(today);
   const todayIndex = todayDate >= domainStart && todayDate <= domainEnd ? indexOf(todayDate) : null;
 
-  return { rows, unscheduled, domainStart, domainDays, weeks, months, todayIndex };
+  return { rows, domainStart, domainDays, weeks, months, todayIndex };
 }

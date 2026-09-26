@@ -147,13 +147,7 @@ function RecentlyViewedSection() {
   );
 }
 
-/**
- * My Work's sections are the SAME object as Portal's now (RADD-799).
- *
- * This used to be a local component with a 14px semibold heading while Portal
- * used an 11px uppercase muted one — same kind of list, two looks, on two pages
- * a requester moves between. That difference was most of what "messy" meant.
- */
+/** My Work's sections are Portal's (RADD-799): one list look on both pages. */
 const Section = ListSection;
 
 function ItemRow({ item, showDue = false }: { item: Item; showDue?: boolean }) {

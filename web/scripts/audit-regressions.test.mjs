@@ -22,7 +22,7 @@ const pageQueries = evaluate(pagesSource("queries.ts"), {
 }, ["pageSearchQuery", "pageSpaceSummaryQuery", "pageSpacesPageQuery", "pageSpaceByIdentityQuery"]);
 let factories = source("queries/shared.ts");
 for (const [file, names] of [
-  ["items", ["commentsQuery"]], ["activity", ["linkSearchQuery"]],
+  ["activity", ["linkSearchQuery"]],
   ["search", ["searchQuery"]],
 ]) {
   const code = source(`queries/${file}.ts`);
@@ -33,7 +33,7 @@ for (const [file, names] of [
 }
 const { Entity, entityMeta } = evaluate(source("cache.ts"), {}, ["Entity", "entityMeta"]);
 const { invalidateEntities } = evaluate(readFileSync(new URL("../packages/plugin-sdk/src/cache.ts", import.meta.url), "utf8"), {}, ["invalidateEntities"]);
-const names = ["commentsQuery", "linkSearchQuery", "searchQuery"];
+const names = ["linkSearchQuery", "searchQuery", "queryKeys"];
 // Similar issues for a text seed are the ai plugin's own read (RADD-1395).
 const aiQueries = evaluate(readFileSync(new URL("../../server/src/radd/modules/ai/ui/src/queries.ts", import.meta.url), "utf8"),
   { queryOptions: x => x, api: {}, AiEndpoint: {}, AiEntity: {}, itemSimilarPath: () => "" }, ["similarToTextQuery"]);
@@ -48,7 +48,8 @@ for (const [name, a, b] of [
 ]) assert.notDeepEqual(queries[name](...a).queryKey, queries[name](...b).queryKey, name);
 
 const client = new QueryClient();
-const comments = queries.commentsQuery("issue");
+const feed = evaluate(source("queries/comment-feed.ts"), { infiniteQueryOptions: x => x, api: {}, Entity, entityMeta }, ["commentFeedQuery", "CommentSection"]);
+const comments = feed.commentFeedQuery(queries.queryKeys.comments("issue"), "/items/issue/comments", feed.CommentSection.all);
 await client.fetchQuery({ ...comments, queryFn: async () => ["old comment"] });
 await invalidateEntities(client, Entity.comment);
 assert(client.getQueryState(comments.queryKey).isInvalidated, "another reader's comment event invalidates this thread");

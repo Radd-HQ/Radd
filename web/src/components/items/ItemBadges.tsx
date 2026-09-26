@@ -213,12 +213,15 @@ export function TypeChip({ type, withLabel = false }: { type: TypeRef; withLabel
   );
 }
 
+/** A label chip's skin per variant: `quiet` sits a step back from the coloured meta chips (board
+ *  cards, where labels are context, not signal). */
+const LABEL_SKIN = {
+  pill: "rounded-full border border-strong bg-elevated/60 px-1.5 py-px text-[11px] leading-4",
+  quiet: "rounded border border-subtle/70 bg-surface/70 px-1.5 py-px font-mono text-[10.5px] leading-4",
+} as const;
+
 export function LabelChip({ name }: { name: string }) {
-  return (
-    <span className="inline-flex items-center rounded-full border border-strong bg-elevated/60 px-1.5 py-px text-[11px] leading-4 text-fg">
-      {name}
-    </span>
-  );
+  return <span className={`inline-flex items-center ${LABEL_SKIN.pill} text-fg`}>{name}</span>;
 }
 
 /**
@@ -229,29 +232,34 @@ export function LabelChips({
   labels,
   max,
   nowrap = false,
+  variant = "pill",
 }: {
   labels: string[];
   max: number;
   /** Row surfaces: single line, clipped — chips must never wrap a row taller. */
   nowrap?: boolean;
+  variant?: keyof typeof LABEL_SKIN;
 }) {
   const shown = max > 0 ? labels.slice(0, max) : [];
   const hidden = labels.slice(shown.length);
+  const skin = LABEL_SKIN[variant];
   return (
     <span
       className={
-        "flex min-w-0 items-center gap-1 " +
-        (nowrap ? "flex-nowrap overflow-hidden" : "flex-wrap")
+        nowrap ? "flex min-w-0 items-center gap-1 flex-nowrap overflow-hidden" : "flex min-w-0 flex-wrap items-center gap-1"
       }
     >
-      {shown.map((label) => (
-        <LabelChip key={label} name={label} />
-      ))}
+      {shown.map((label) =>
+        variant === "pill" ? (
+          <LabelChip key={label} name={label} />
+        ) : (
+          <span key={label} className={`inline-flex items-center ${skin} text-fg-secondary`}>
+            {label}
+          </span>
+        ),
+      )}
       {hidden.length > 0 && (
-        <span
-          title={hidden.join(", ")}
-          className="inline-flex shrink-0 items-center rounded-full border border-strong bg-elevated/60 px-1.5 py-px text-[11px] leading-4 text-fg-muted"
-        >
+        <span title={hidden.join(", ")} className={`inline-flex shrink-0 items-center ${skin} text-fg-muted`}>
           +{hidden.length}
         </span>
       )}

@@ -1,33 +1,15 @@
 /*
- * The editor's own stylesheet (RADD-754).
- *
- * Replaces the two Crepe stylesheets this used to import. Those shipped
- * fifteen files of chrome — a top bar, a floating toolbar, a table
- * block, an image block, a code-mirror skin, an AI panel, a block-edit menu, a
- * LaTeX widget — and this build renders none of them: every one is now a React
- * component of ours. What remains is the editable SURFACE and the parts of the
- * content Crepe styled that `rich-editor.css` never covered.
- *
- * Deliberately NOT a second copy of the typography. `rich-editor.css` already
- * owns headings, paragraphs and links; duplicating them here produced 116 moved
- * values on the first attempt, because two files disagreed and load order
- * decided the winner. The split is: this file is what Crepe used to provide,
- * `rich-editor.css` is what we always decided.
- *
- * ProseMirror's own stylesheets are IMPORTED from `@milkdown/kit`, not copied.
- * They are upstream's contract for the editable surface (selection, gap cursor,
- * table column resizing); reimplementing them would be forking ProseMirror
- * rather than owning our chrome.
- *
- * `scripts/editor-style-proof.mjs` records every value this affects in BOTH
- * themes, so a change here reports what moved instead of being taken on trust.
+ * The editor's own stylesheet: the editable surface and the content the kit components render.
+ * Typography lives in `rich-editor.css` — never duplicate it here (two files disagreeing lets load
+ * order pick the winner). ProseMirror's own sheets are imported, not copied.
+ * `scripts/editor-style-proof.mjs` records every value this affects, in both themes.
  */
 
 @import "@milkdown/kit/prose/view/style/prosemirror.css";
 @import "@milkdown/kit/prose/gapcursor/style/gapcursor.css";
 @import "@milkdown/kit/prose/tables/style/tables.css";
 
-/* --- the surface (Crepe's reset.css) -------------------------------------- */
+/* --- the surface ---------------------------------------------------------- */
 
 .radd-rich-editor .milkdown {
   position: relative;
@@ -53,7 +35,7 @@
   border-radius: 4px;
 }
 
-/* --- content Crepe styled and rich-editor.css does not -------------------- */
+/* --- content -------------------------------------------------------------- */
 
 /* Lists carry NO padding or marker of their own: `listItemBlockComponent`
    renders the bullet or number itself. Adding a list-style here indents twice
@@ -86,9 +68,7 @@
   background: color-mix(in srgb, var(--accent-fill) 28%, transparent);
 }
 
-/* Plain links. `rich-editor.css` styles only CHIP links (`a:has(> .radd-chip)`),
-   so an ordinary link's colour and underline came from Crepe and had to come
-   back — the style proof caught them turning into body text. */
+/* Plain links (`rich-editor.css` styles only CHIP links). */
 .radd-rich-editor .milkdown .ProseMirror a {
   color: var(--accent-text);
   text-decoration: underline;
@@ -158,9 +138,6 @@
   background: var(--accent-fill);
   width: 2px;
 }
-.radd-rich-editor .milkdown .ProseMirror .selectedCell::after {
-  background: color-mix(in srgb, var(--accent-fill) 20%, transparent);
-}
 
 /* --- placeholder ---------------------------------------------------------- */
 
@@ -174,15 +151,10 @@
   float: left;
 }
 
-/* --- AI diff review (Crepe's diff.css) ------------------------------------ */
+/* --- diff review ---------------------------------------------------------- */
 
-/* Our fork emits upstream's `milkdown-diff-*` classes (see
-   diff/decoration-plugin.ts + diff/doc-utils.ts: -added/-added-block/
-   -removed/-removed-block). Green for what a run proposes, slate struck
-   through for what it removes — the traffic-light reading the rest of the app
-   uses, over the chart tokens so both themes stay legible. These rules styled
-   upstream's OLD -insert/-delete names for two releases (RADD-879), so pure
-   deletions rendered with no treatment at all. */
+/* Our fork emits upstream's `milkdown-diff-*` classes: green for what a run proposes, slate struck
+   through for what it removes, over the chart tokens so both themes stay legible. */
 .radd-rich-editor .milkdown .milkdown-diff-added,
 .radd-rich-editor .milkdown .milkdown-diff-added-block {
   background: color-mix(in srgb, var(--chart-progress) 22%, transparent);
@@ -200,13 +172,9 @@
   margin-left: 6px;
   vertical-align: middle;
 }
-/* Per-block Accept/Reject is the EXCEPTION path (RADD-762): the run panel
-   offers Accept all / Reject all, and these are for the one paragraph you
-   disagree with. So at rest they lose the chip — no fill, no border — and take
-   it back when the block is hovered, when one of them holds focus, or when the
-   panel has stepped to this pair. The text colour does NOT change at rest: a
-   quieter button still has to be readable, which is why this is a weight
-   change rather than an opacity one. */
+/* Per-block Accept/Reject is the exception path (the panel has Accept/Reject all): at rest they lose
+   the chip, back on block hover, focus or the panel's current pair. Dim is not quiet: the text colour
+   never changes, so contrast holds — a weight change, not an opacity one. */
 .radd-rich-editor .milkdown .milkdown-diff-controls button {
   font-family: inherit;
   font-size: 11px;
@@ -260,11 +228,8 @@
   outline: none;
   min-width: 14rem;
 }
-/* RADD-849: the block renders as BOTH the custom element (edit chrome) and a
-   plain `div.milkdown-list-item-block` (the node view's actual wrapper — what
-   the read view shows), and an element selector alone missed the second form:
-   the label and content were block siblings, so every marker sat on its own
-   line above its text. Match both. */
+/* The block renders as BOTH the custom element (edit chrome) and a plain `div.milkdown-list-item-block`
+   (the read view's wrapper); matching only one put every marker on its own line (RADD-849). */
 .radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .list-item {
   display: flex;
   align-items: baseline;
@@ -303,11 +268,8 @@
   margin: 2px 0;
 }
 
-/* RADD-1296 — task-list checkboxes you can read at a glance. The component
-   draws a literal ☑ / □ text glyph (13px, the same weight either way — "hard
-   to tell whether they're checked", GitHub #20). Hide the glyph and draw a
-   real 16px box: an outline when open, an accent fill with a check when done.
-   Same rules in the editor and the read-only viewer. */
+/* Task-list checkboxes (RADD-1296): the component's ☑ / □ glyphs look alike, so hide the glyph and
+   draw a real 16px box — outline when open, accent fill + check when done. Editor and viewer alike. */
 .radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block) .label:is(.checked, .unchecked) {
   display: inline-block;
   position: relative;

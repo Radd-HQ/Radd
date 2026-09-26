@@ -1,20 +1,14 @@
 /** Roadmap geometry: bar sizes, hit zones, px ↔ day-index conversion (spec 77). */
 
-// ---------------------------------------------------------------------------
-// Geometry: px ↔ day-index conversion (zoom = configurable day width, spec 77)
-// ---------------------------------------------------------------------------
-
-// Vertical bar/row geometry (bar-presentation polish): ONE source
-// shared by the bar rows, the connector overlay, the drag ghosts/slabs, and
-// the child-container region so nothing misaligns. Bar heights are fixed px —
-// independent of the day-width zoom.
+// Vertical bar/row geometry — ONE source for bar rows, connectors, drag ghosts
+// and container regions so nothing misaligns. Fixed px, independent of zoom.
 
 /** Leaf (issue/subtask) bar height. */
-export const ROADMAP_LEAF_BAR_H = 30;
+const ROADMAP_LEAF_BAR_H = 30;
 /** Epic bar height — a touch taller than leaves so containers read as such. */
-export const ROADMAP_EPIC_BAR_H = 34;
+const ROADMAP_EPIC_BAR_H = 34;
 /** Breathing room above/below the tallest bar in a row. */
-export const ROADMAP_ROW_PAD_Y = 5;
+const ROADMAP_ROW_PAD_Y = 5;
 /** Row pitch — label cells, lanes, connector Y math, and the drop lane. */
 export const ROADMAP_ROW_H = ROADMAP_EPIC_BAR_H + ROADMAP_ROW_PAD_Y * 2;
 /** Bars at least this wide draw their info (title + priority + assignee)
@@ -26,39 +20,34 @@ export function roadmapBarHeight(isEpic: boolean): number {
   return isEpic ? ROADMAP_EPIC_BAR_H : ROADMAP_LEAF_BAR_H;
 }
 
-// Narrow-bar rendering (revised in the progress/hover-card pass):
-// a bar's rendered width IS its logical width — the minimum is ONE DAY by
-// construction (endIndex >= startIndex), so short tasks are never exaggerated.
-// ONE clamp remains: an absolute grab floor of `ROADMAP_BAR_MIN_PX` that only
-// engages when dayWidth < that floor (the 6px compact and 9px default zooms'
-// one-day bars). The floor is PRESENTATION ONLY (logical day indices/dates are
-// untouched, and drag commits compute from snapped pointer DELTAS, never the
-// rendered width, so a clamped bar moves and resizes correctly). Everything
-// hanging off a bar's right edge (the depends chip, the ○ link handle,
-// connector sources, the rubber-band anchor) positions off the CLAMPED edge
-// via `barRenderWidth`/`barRenderRightX`.
+// A bar's rendered width IS its logical width (>= one day). The one clamp is
+// the grab floor `ROADMAP_BAR_MIN_PX`, which engages only when a day is
+// narrower than it and is PRESENTATION ONLY: commits compute from snapped
+// pointer deltas, never the rendered width. Everything hanging off a bar's
+// right edge (depends chip, ○ handle, connector sources, rubber band)
+// positions off the CLAMPED edge via `barRenderWidth`/`barRenderRightX`.
 
 /** Absolute grab floor — bars never render narrower than this even when one
  *  day is fewer px (compact zooms). Below ~10px even a bar whose resize zones
  *  sit fully outside is too small to click or grab. */
-export const ROADMAP_BAR_MIN_PX = 10;
+const ROADMAP_BAR_MIN_PX = 10;
 /** Rendered widths below this get the narrow-bar hit treatment: slimmer
  *  inside resize zones that extend OUTSIDE the bar, and the ○ link handle
  *  pushed fully clear of the bar + its outside zone. */
-export const ROADMAP_NARROW_BAR_PX = 48;
+const ROADMAP_NARROW_BAR_PX = 48;
 /** Edge resize grab-zone width INSIDE a normal-width bar (spec 77). */
-export const ROADMAP_RESIZE_EDGE_PX = 6;
+const ROADMAP_RESIZE_EDGE_PX = 6;
 /** Narrow bars: the inside slice of each edge zone shrinks to this. */
-export const ROADMAP_RESIZE_EDGE_NARROW_PX = 4;
+const ROADMAP_RESIZE_EDGE_NARROW_PX = 4;
 /** Narrow bars: each edge zone also extends this far OUTSIDE the bar
  *  (invisible hit area, ew-resize cursor). */
-export const ROADMAP_RESIZE_EDGE_OUTSET_PX = 6;
+const ROADMAP_RESIZE_EDGE_OUTSET_PX = 6;
 /** Minimum clean body-move area a bar must keep between its resize zones. */
-export const ROADMAP_BAR_MIN_BODY_PX = 16;
+const ROADMAP_BAR_MIN_BODY_PX = 16;
 /** Below this rendered width even the slim inside slices would eat into the
  *  minimum body area — the resize zones move FULLY outside the bar instead,
  *  leaving the whole bar as body (one-day bars at every zoom land here). */
-export const ROADMAP_TINY_BAR_PX =
+const ROADMAP_TINY_BAR_PX =
   ROADMAP_RESIZE_EDGE_NARROW_PX * 2 + ROADMAP_BAR_MIN_BODY_PX;
 /** The ○ link handle's square hit target — the visible dot is smaller,
  *  centered inside it. */
@@ -73,7 +62,7 @@ export function barRenderWidth(startIndex: number, endIndex: number, dayWidth: n
 /** A bar's edge resize-zone layout: each zone covers `insidePx` inside the
  *  bar edge plus `outsidePx` beyond it (the ○ handle and the depends chip
  *  shift right by `outsidePx` to stay clear). */
-export interface BarHitZones {
+interface BarHitZones {
   insidePx: number;
   outsidePx: number;
 }

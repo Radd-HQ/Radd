@@ -14,7 +14,7 @@ export const AttachmentParentType = {
    *  before the item they will hang off exists. */
   formSubmission: "form_submission",
 } as const;
-export type AttachmentParentTypeValue =
+type AttachmentParentTypeValue =
   (typeof AttachmentParentType)[keyof typeof AttachmentParentType];
 
 /** The parent an upload/list addresses on the canonical /attachments API. */

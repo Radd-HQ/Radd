@@ -21,15 +21,9 @@ import { ContextMenu, type MenuNode } from "../ContextMenu";
 import { RANK_CHAIN_MIN_ITEMS, RoadmapRowKind, type RoadmapRow } from "./roadmap-model";
 
 /**
- * Right-click verbs for a roadmap bar (specs 77 + 78 + 82). EPIC bars: Fit to
- * children / Bring children into roadmap / Auto-schedule children / Order
- * children by date / Expand-collapse / Clear dates / Open. LEAF bars: Clear
- * dates / Open / Flag.
- * Every bar carries a "Dependencies" submenu listing its manual links with
- * per-link Remove. Disabled entries carry the reason as the ContextMenu hint.
- * Date mutations flow through the roadmap patch unit (`onPatch`), so
- * optimistic paint + rollback behave like the drag gestures; the date-order
- * verb rewrites the global manual rank instead (spec 82).
+ * Right-click verbs for one roadmap bar (specs 77 + 78 + 82): epic verbs, the
+ * membership pin, a "Dependencies" submenu with per-link Remove, Clear dates,
+ * Open, and Flag on leaves. Disabled entries carry the reason as the hint.
  */
 
 interface RoadmapContextMenuProps {
@@ -119,14 +113,7 @@ export function RoadmapContextMenu({
     hint: row.derived
       ? "The epic has no dates of its own — this span is derived from its children."
       : "Remove both dates — the issue returns to the Unscheduled tray.",
-    onSelect: () =>
-      onPatch([
-        {
-          itemId: item.id,
-          patch: { start_date: null, target_date: null },
-          optimistic: { start_date: null, target_date: null },
-        },
-      ]),
+    onSelect: () => onPatch([{ itemId: item.id, patch: { start_date: null, target_date: null } }]),
   };
 
   const open: MenuNode = {
@@ -142,6 +129,20 @@ export function RoadmapContextMenu({
     icon: Link2,
     items: dependencyNodes(item, onRemoveLink),
   };
+
+  const membership: MenuNode | null = canCurate
+    ? {
+        kind: "action",
+        label: isMember ? "Remove from this roadmap" : "Add to this roadmap",
+        icon: isMember ? BookmarkX : BookmarkPlus,
+        hint: isMember
+          ? "Unpin — the Members toggle stops showing it."
+          : `Pin to this roadmap's curated set — the Members toggle shows only pinned issues${
+              row.rowKind === RoadmapRowKind.epic ? " (an epic brings its children along)" : ""
+            }.`,
+        onSelect: () => onToggleMember(item.id, !isMember),
+      }
+    : null;
 
   if (row.rowKind === RoadmapRowKind.epic) {
     const bounds = row.childrenBounds;
@@ -159,17 +160,11 @@ export function RoadmapContextMenu({
           {
             itemId: item.id,
             patch: { start_date: bounds.minStart, target_date: bounds.maxTarget },
-            optimistic: { start_date: bounds.minStart, target_date: bounds.maxTarget },
           },
         ]);
       },
     });
 
-    // The AS-IS counterpart to Auto-schedule: fill only the missing dates of
-    // the epic's children (existing dates untouched), fit the epic around
-    // the result — no reflow, no rank rewrite. The full child list (date-less
-    // ones included) is fetched when the verb runs (perf wave) — the roadmap
-    // itself only ever loads the scheduled children.
     nodes.push({
       kind: "action",
       label: "Bring children into roadmap",
@@ -221,35 +216,14 @@ export function RoadmapContextMenu({
       onSelect: () => onToggleSolo(item.id),
     });
 
-    if (canCurate) {
-      nodes.push({
-        kind: "action",
-        label: isMember ? "Remove from this roadmap" : "Add to this roadmap",
-        icon: isMember ? BookmarkX : BookmarkPlus,
-        hint: isMember
-          ? "Unpin — the Members toggle stops showing it."
-          : "Pin to this roadmap's curated set — the Members toggle shows only pinned issues (an epic brings its children along).",
-        onSelect: () => onToggleMember(item.id, !isMember),
-      });
-    }
-
+    if (membership) nodes.push(membership);
     nodes.push(dependencies);
     nodes.push({ kind: "separator" });
     nodes.push(clearDates);
     nodes.push(open);
   } else {
     const flagged = Boolean(item.flagged);
-    if (canCurate) {
-      nodes.push({
-        kind: "action",
-        label: isMember ? "Remove from this roadmap" : "Add to this roadmap",
-        icon: isMember ? BookmarkX : BookmarkPlus,
-        hint: isMember
-          ? "Unpin — the Members toggle stops showing it."
-          : "Pin to this roadmap's curated set — the Members toggle shows only pinned issues.",
-        onSelect: () => onToggleMember(item.id, !isMember),
-      });
-    }
+    if (membership) nodes.push(membership);
     nodes.push(dependencies);
     nodes.push(clearDates);
     nodes.push(open);
@@ -258,10 +232,7 @@ export function RoadmapContextMenu({
       label: flagged ? "Unflag" : "Flag",
       icon: Flag,
       checked: flagged,
-      onSelect: () =>
-        onPatch([
-          { itemId: item.id, patch: { flagged: !flagged }, optimistic: { flagged: !flagged } },
-        ]),
+      onSelect: () => onPatch([{ itemId: item.id, patch: { flagged: !flagged } }]),
     });
   }
 

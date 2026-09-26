@@ -7,14 +7,9 @@ import { ScopePicker } from "./ScopePicker";
 import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
- * ONE editor for a key's spec-113 scope, shared by personal tokens and
- * service-account keys (RADD-1009). `null` is full authority — the default,
- * and what every key minted before this editor existed carries. "Restrict
- * this key" reveals the permission atoms and the project scope; the wire shape
- * is `{global: [atoms]}` for everywhere, `{projects: {id: [atoms]}}` per
- * project, and the server intersects it with the account (a key can never
- * exceed its account), which is why `allowedAtoms` is a courtesy filter, not
- * a gate.
+ * ONE editor for a key's spec-113 scope (personal tokens and service-account keys). `null` is full
+ * authority. The wire shape is `{global: [atoms]}` or `{projects: {id: [atoms]}}`; the server
+ * intersects it with the account, so `allowedAtoms` is a courtesy filter, not a gate.
  */
 export function TokenScopeEditor({
   value,
@@ -95,7 +90,7 @@ export function TokenScopeEditor({
 }
 
 /** The atoms + project ids a stored scope expresses (project atoms unioned). */
-export function scopeParts(value: TokenScopes | null): { atoms: string[]; projectIds: string[] } {
+function scopeParts(value: TokenScopes | null): { atoms: string[]; projectIds: string[] } {
   if (value === null) return { atoms: [], projectIds: [] };
   const projectIds = Object.keys(value.projects ?? {});
   const atoms = projectIds.length

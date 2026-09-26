@@ -23,7 +23,7 @@ export interface CommentLocation {
   anchored: boolean;
 }
 
-export const COMMENT_PARAM = "comment";
+const COMMENT_PARAM = "comment";
 
 /** The linked comment's id from the address, if any. */
 export function useLinkedCommentId(): string | undefined {

@@ -4,21 +4,8 @@ import { portalFormsQuery } from "../../lib/queries";
 import { FormCard, FormCardGrid } from "../requests/FormCard";
 
 /**
- * The request forms this person may submit (RADD-786).
- *
- * On My Work, because that is where everyone lands — `RoutePath.home` renders
- * it, and both the password login and the spec-110 SSO callback redirect there.
- * For someone whose whole relationship with Radd is "file a request", My Work
- * otherwise shows nothing they can act on, and the forms sit behind a Portal
- * entry they have no reason to have found.
- *
- * Renders NOTHING when the list is empty. For a staffer with no shared forms
- * this would be a permanent empty card on the busiest page in the product; for
- * a requester it is the only thing on the page that does anything.
- *
- * Fed by `GET /portal/forms`, which already answers by ELIGIBILITY rather than
- * membership — public forms plus those shared with the actor or their teams —
- * so there is no new endpoint and no second opinion about who may see what.
+ * The request forms this person may submit, on My Work (where every login lands). Renders nothing when
+ * empty. `GET /portal/forms` already answers by eligibility, so no second visibility rule lives here.
  */
 export function MyForms() {
   const groups = useQuery(portalFormsQuery);

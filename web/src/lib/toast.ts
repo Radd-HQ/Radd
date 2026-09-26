@@ -18,7 +18,7 @@ export interface ToastAction {
   params?: Record<string, string>;
 }
 
-export interface Toast {
+interface Toast {
   id: number;
   kind: ToastKindValue;
   message: string;
@@ -26,7 +26,7 @@ export interface Toast {
 }
 
 /** How long a toast stays on screen. */
-export const TOAST_TTL_MS = 6000;
+const TOAST_TTL_MS = 6000;
 
 /** Shown for a 403 whose body carries no usable message. */
 export const FORBIDDEN_FALLBACK_MESSAGE = "You don't have permission to do that.";

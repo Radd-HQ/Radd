@@ -22,7 +22,7 @@ import type { ItemAttribute } from "@radd/plugin-sdk";
  * translating a span-handle drag into columns. */
 const COL_PX = 296 / CARD_GRID_COLS;
 
-export interface PreviewProps {
+interface PreviewProps {
   draft: CardLayout;
   /** Plugin-contributed attributes; each previews its declared `sample`. */
   attributes: readonly ItemAttribute[];

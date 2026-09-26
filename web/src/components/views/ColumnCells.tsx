@@ -50,7 +50,7 @@ export const ITEM_ZONE_CLASS = "flex items-center gap-2 overflow-hidden";
 const SLACK_SPACER_CLASS = "min-w-0 flex-1";
 
 /** A cell's flex style: preferred width as the basis, shrinkable to its min. */
-export function cellStyle(column: ColumnDef, width: number): React.CSSProperties {
+function cellStyle(column: ColumnDef, width: number): React.CSSProperties {
   return { flexBasis: width, minWidth: Math.min(column.minWidth, width) };
 }
 
@@ -184,54 +184,26 @@ export function ListColumnHeader({
   );
 }
 
-/** One fixed-width, typed cell. `usersById` resolves custom user-field ids
- * (fetched by the surface only while such a column is visible). */
-export function ColumnCell({
-  column,
-  item,
-  width,
-  maxLabels,
-  rollup,
-  loggedSeconds,
-  usersById,
-}: {
+interface CellProps {
   column: ColumnDef;
   item: Item;
-  width: number;
   maxLabels: number;
   rollup?: ItemRollup;
   loggedSeconds?: number;
   usersById?: Map<string, string>;
-}) {
+}
+
+/** One fixed-width, typed cell. `usersById` resolves custom user-field ids
+ * (fetched by the surface only while such a column is visible). */
+export function ColumnCell({ width, ...props }: CellProps & { width: number }) {
   return (
-    <span style={cellStyle(column, width)} className="flex items-center overflow-hidden">
-      <CellContent
-        column={column}
-        item={item}
-        maxLabels={maxLabels}
-        rollup={rollup}
-        loggedSeconds={loggedSeconds}
-        usersById={usersById}
-      />
+    <span style={cellStyle(props.column, width)} className="flex items-center overflow-hidden">
+      <CellContent {...props} />
     </span>
   );
 }
 
-function CellContent({
-  column,
-  item,
-  maxLabels,
-  rollup,
-  loggedSeconds,
-  usersById,
-}: {
-  column: ColumnDef;
-  item: Item;
-  maxLabels: number;
-  rollup?: ItemRollup;
-  loggedSeconds?: number;
-  usersById?: Map<string, string>;
-}) {
+function CellContent({ column, item, maxLabels, rollup, loggedSeconds, usersById }: CellProps) {
   const durations = useDurationConfig();
   const attributes = useItemAttributeData();
   if (column.attribute) {

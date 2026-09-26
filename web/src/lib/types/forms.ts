@@ -65,22 +65,11 @@ export interface Form {
 }
 
 /** One portal grant row (spec 73): exactly one of user_id/team_id, no levels. */
-export interface FormShare {
+interface FormShare {
   id: string;
   user_id: string | null;
   team_id: string | null;
   created_at: string;
-}
-
-/** One subject in the PUT /forms/{id}/sharing payload. */
-export interface FormShareEntry {
-  user_id?: string;
-  team_id?: string;
-}
-
-/** PUT /forms/{id}/sharing — the FULL share list, replaced wholesale. */
-export interface FormSharingUpdate {
-  shares: FormShareEntry[];
 }
 
 export interface FormCreate {
@@ -147,7 +136,7 @@ export interface PublicFormField {
 
 /** The trimmed render payload (portal base shape — the anonymous tokened
     path went with RADD-828). */
-export interface PublicForm {
+interface PublicForm {
   name: string;
   description: string;
   title_prompt: string;
@@ -245,7 +234,7 @@ export interface PortalRequestDetail extends PortalRequest {
 }
 
 /** A team the SUBMITTER belongs to — the only teams a form may offer. */
-export interface PortalTeamOption {
+interface PortalTeamOption {
   id: string;
   name: string;
 }

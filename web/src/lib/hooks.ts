@@ -14,12 +14,17 @@ import {
   RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_LIMIT, ITEMS_PAGE_LIMIT_PHONE, ITEMS_PAGE_SIZES,
   ITEMS_PAGE_SIZE_STORAGE_KEY,
 } from "./constants";
-import { allowedTransitionsQuery, authStateQuery, capabilitiesQuery, fieldWritabilityQuery, effectiveScreenQuery, statesQuery, instanceConfigQuery, itemByKeyQuery, resolvedSettingQuery, slqValidateQuery } from "./queries";
+import { allowedTransitionsQuery, authStateQuery, fieldWritabilityQuery, effectiveScreenQuery, statesQuery, instanceConfigQuery, itemByKeyQuery, resolvedSettingQuery, slqValidateQuery } from "./queries";
 import { DEFAULT_DURATION_CONFIG, type DurationConfig } from "./duration";
 import { AuthStatus, type AuthState, currentPath } from "./auth";
 import { InstanceRole, Permission, SettingKey, type Item, type Me, type PermissionValue } from "./types";
 import { pageSpaceSummaryQuery } from "@radd-plugin-ui/pages/queries";
 import type { PageSpace } from "@radd-plugin-ui/pages/types";
+import { useDebounced, positionedErrorOf } from "@radd/plugin-sdk";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import { projectSummaryQuery, projectByKeyQuery, projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { PositionedError } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Auth state from the boot query; the app-layout gate guarantees it resolved. */
 export function useAuthState(): AuthState | undefined {
@@ -36,11 +41,8 @@ function readStoredPageSize(): number | null {
   }
 }
 
-/** RADD-1154: how many items a paged view fetches — the phone breakpoint the
- *  shell's mobile navigation already uses, so "phone" means one thing.
- *  RADD-1177: a size the person chose on the pager wins over the viewport
- *  default and is remembered per browser — ergonomics, like column widths,
- *  never part of the shared view. */
+/** Items per page: a size chosen on the pager (remembered per browser, never part of the shared
+ *  view) wins over the phone/desktop default — the shell's own phone breakpoint. */
 export function useItemsPageLimit(): [number, (size: number) => void] {
   const { mobile } = useMobileNavigation();
   const [stored, setStored] = useState<number | null>(readStoredPageSize);
@@ -62,7 +64,7 @@ export function useIsAuthenticated(): boolean {
 }
 
 /** Spec 121: the visitor is browsing as the Anyone principal. */
-export function useIsAnonymous(): boolean {
+function useIsAnonymous(): boolean {
   return useAuthState()?.status === AuthStatus.anonymous;
 }
 
@@ -86,12 +88,8 @@ export function useCurrentUser(): Me | null {
   return authState?.status === AuthStatus.authenticated ? authState.user : null;
 }
 
-/**
- * Issue side panel (spec 25): the `?peek=<itemKey>` search param opens the
- * detail drawer over the CURRENT view. Because it's just a search param on the
- * current route, the browser Back button closes the panel (returning you to the
- * view) and the URL is shareable. `expand` swaps to the full `/issues/$key` page.
- */
+/** `?peek=<itemKey>` opens the issue drawer over the current route: Back closes it, the URL is
+ *  shareable, `expand` swaps to the full `/issues/$key` page. */
 export function usePeek() {
   const navigate = useNavigate();
   const peekKey = useRouterState({
@@ -114,28 +112,13 @@ export function usePeek() {
   };
 }
 
-/**
- * True inside the peek panel's subtree (IssuePanel provides it). The full
- * issue page and the peek share ItemDetailBody, so components that must
- * behave differently per surface — e.g. issue-reference cards, which can't
- * open a second peek from inside the first — ask this instead of a prop
- * threaded through every layer.
- */
+/** True inside the peek panel's subtree, so reference cards (which cannot open a second peek)
+ *  can behave differently without prop threading. */
 export const PeekSurfaceContext = createContext(false);
 
-/**
- * Click behavior for issue REFERENCE cards (similar issues, deflection):
- * a plain click opens the peek panel over whatever the user is doing, so the
- * half-typed form or the issue being read survives the detour. From INSIDE
- * the peek — where a second panel can't stack — it promotes the peeked issue
- * to the full page and peeks the clicked one in a single navigation, so the
- * reading thread is never lost. Rows keep their real /issues/$key href:
- * modified clicks (cmd/ctrl/shift/alt, middle-click) return false untouched
- * so the browser's new-tab behavior still works.
- *
- * Returns whether it consumed the click — callers with extra UI to tear down
- * (a popover hosting the list) close it only on true.
- */
+/** Click handler for issue REFERENCE cards: a plain click opens the peek; from inside the peek it
+ *  promotes the peeked issue to the page and peeks the clicked one. Modified/middle clicks return
+ *  false untouched so new-tab still works. Returns whether it consumed the click. */
 export function useOpenIssueRef() {
   const navigate = useNavigate();
   const inPeek = useContext(PeekSurfaceContext);
@@ -165,42 +148,19 @@ export function useOpenIssueRef() {
   };
 }
 
-/**
- * Effective-permission checks for the current user (spec 09):
- * - `global(p)` — the caller's GLOBAL permission union off `/auth/me`
- *   (spec 86 stage 3: the flat top-level `permissions` array). Instance
- *   admins pass everything.
- * - `project(project, p)` — from `ProjectRead.permissions`, the backend's
- *   per-project union for the CURRENT user.
- * The backend remains authoritative; these checks control affordances.
- */
+/** Effective-permission checks for affordances (the backend stays authoritative). `global` reads
+ *  `/auth/me` permissions; `project` reads `ProjectRead.permissions`. Instance admins pass all. */
 export interface PermissionChecks {
   global: (permission: PermissionValue) => boolean;
   project: (
     project: Pick<Project, "permissions"> | null | undefined,
     permission: PermissionValue,
   ) => boolean;
-  /**
-   * The caller holds `permission` on AT LEAST ONE project they can see — the
-   * client mirror of `authz.require_anywhere` (RADD-788).
-   *
-   * Use it for surfaces that span projects, where there is no single project to
-   * resolve against: an all-projects view, the New-view affordance for the
-   * all-projects scope. `global` is the wrong question there and looked like the
-   * right one — a grant on this instance is normally SCOPED to a project, which
-   * contributes nothing to the global union, so every such gate was false for
-   * ordinary members the moment the Baseline role was emptied.
-   *
-   * The server still enforces per row; this only decides whether the affordance
-   * is offered at all.
-   */
+  /** Held on at least one visible project — the client mirror of `authz.require_anywhere`
+   *  (RADD-788). Use it on cross-project surfaces: project-scoped grants never reach the global
+   *  union, so `global` is the wrong question there. The server still enforces per row. */
   anyProject: (permission: PermissionValue) => boolean;
-  /**
-   * The caller holds `permission` IN THIS SPACE (RADD-814): the space leg of
-   * the scope ladder, resolved from the per-space union the direct space read
-   * carries — the RADD-810 class was space-scoped atoms asked as global
-   * questions because no space-shaped question existed to ask.
-   */
+  /** Held IN this space (RADD-814) — the space leg of the scope ladder. */
   space: (
     space: Pick<PageSpace, "permissions"> | null | undefined,
     permission: PermissionValue,
@@ -245,12 +205,8 @@ export function usePermissions(): PermissionChecks {
   }, [authState, projectSummary, spaceSummary]);
 }
 
-/**
- * The instance's working day/week lengths for client-side duration formatting
- * (spec 67): `timelog_hours_per_day` / `timelog_days_per_week` off the cached
- * `GET /instance` query. Falls back to the server-mirroring 8h/5d defaults
- * only while that query is in flight. Pass the result to `formatDuration`.
- */
+/** The instance's working day/week lengths for `formatDuration`; the 8h/5d defaults only while
+ *  `GET /instance` is in flight. */
 export function useDurationConfig(): DurationConfig {
   const { data } = useQuery(instanceConfigQuery);
   return useMemo(
@@ -262,41 +218,15 @@ export function useDurationConfig(): DurationConfig {
   );
 }
 
-/**
- * Whether story points are enabled in a scope (spec 70): the cascade-RESOLVED
- * `estimation_points` value — the project override when `projectId` is given,
- * else the instance default. EVERY points surface gates on this; false while
- * loading, so a project that hasn't opted in never flashes points UI.
- */
+/** Story points on in this scope (the cascade-resolved `estimation_points`). Every points surface
+ *  gates on it; false while loading, so points UI never flashes. */
 export function usePointsEnabled(projectId?: string): boolean {
   const { data } = useQuery(resolvedSettingQuery(SettingKey.estimationPoints, projectId));
   return data?.value === true;
 }
 
-/**
- * Is this plugin currently enabled (RADD-928)?
- *
- * The backing field — `plugins` on the capabilities manifest — has existed
- * since spec 93 and was read by nothing: every optional plugin's host-side UI
- * was hardcoded, so disabling one left its settings tab and its sections in
- * place, pointed at endpoints the loader had just unmounted.
- *
- * Loading answers `false`, deliberately: a surface that flashes in and then
- * vanishes reads as a bug, whereas one that appears a beat late reads as
- * loading. Anything gated on this must therefore be additive — never the
- * disabled half of a switch.
- */
-export function usePluginEnabled(name: string): boolean {
-  const { data } = useQuery(capabilitiesQuery);
-  return (data?.plugins ?? []).includes(name);
-}
-
-/**
- * Allowed workflow transitions for an item's state pickers (spec 61): which
- * target states are reachable from the item's current state, and why not.
- * Shared by the detail rail and the peek panel (both render IssueProperties).
- * While loading — or when enforcement is off — nothing is disabled.
- */
+/** Which target states an item's state pickers may reach, and why not (spec 61). While loading, or
+ *  with enforcement off, nothing is disabled. */
 export function useAllowedTransitions(itemId: string | undefined) {
   const query = useQuery({
     ...allowedTransitionsQuery(itemId ?? ""),
@@ -327,18 +257,12 @@ interface ItemWritability {
   reasonFor: (nameOrKey: string) => string;
 }
 
-/**
- * Per-item edit writability (spec 92 access resolution): the coarse `item.update` gate plus the
- * per-field grant restrictions resolved server-side (`GET /fields/writable`). Every editable field
- * surface consults this to DISABLE controls the user can't write — dimmed, with a reason — instead
- * of letting the edit fail on save. Item-independent per project, so it's cached.
- */
+/** Per-item edit writability: `item.update` plus the per-field grant restrictions from
+ *  `GET /fields/writable`. Editable surfaces DISABLE what the user cannot write, never edit-then-error. */
 export function useItemWritability(
   project: Pick<Project, "id" | "permissions"> | null | undefined,
-  /** RADD-842: the row itself, when the surface has one. Relations make
-   * writability per-ROW (`item.update@own`), and the server's per-item
-   * verdict OVERRIDES the project-level answer — a false here means this
-   * specific issue is not theirs to edit. Absent capabilities fall back. */
+  /** The row, when the surface has one: relations make writability per-ROW (`item.update@own`), so
+   *  the server's per-item verdict overrides the project-level answer (RADD-842). */
   item?: Pick<Item, "capabilities"> | null,
 ): ItemWritability {
   const perms = usePermissions();
@@ -389,13 +313,6 @@ export function useKeyboardShortcut(key: string, onTrigger: () => void) {
   }, [key, onTrigger]);
 }
 
-/** `value`, trailing-debounced. */
-import { useDebounced, positionedErrorOf } from "@radd/plugin-sdk";
-import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
-import { projectSummaryQuery, projectByKeyQuery, projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
-import type { PositionedError } from "@radd/plugin-sdk";
-import type { Project } from "@radd-plugin-ui/projects/types";
-
 /** Live SLQ probe outcome (specs 11/55) — drives the editor's validation line. */
 export const SlqProbeStatus = {
   /** Query empty — nothing to validate; an empty query matches everything. */
@@ -424,13 +341,8 @@ export interface SlqProbe {
   atCap?: boolean;
 }
 
-/**
- * Debounced live validation for an SLQ draft (spec 55): parse + compile via
- * `GET /items/slq/validate` — the server NEVER executes the query, so this is
- * safe on every settled keystroke at any project size. Execution (and match
- * counts) happen only when a surface commits the query (`useSlqPageFilter`) or
- * fetches its saved result. Empty drafts skip the request entirely.
- */
+/** Debounced live validation of an SLQ draft: `GET /items/slq/validate` parses and compiles but
+ *  NEVER executes, so it is safe on every settled keystroke at any size. Empty drafts skip it. */
 export function useSlqValidation(
   projectId: string | null,
   draft: string,
@@ -488,12 +400,8 @@ interface ItemByKey {
   isError: boolean;
 }
 
-/**
- * Resolve a canonical issue key (`TD-25`) to its item via the server's by-key
- * resolver (spec 21) — no client-side number→id list scan. The item carries
- * `project_id`; we resolve its project (the scope the detail editor needs for
- * states/fields/teams) through a direct project lookup.
- */
+/** Resolve an issue key (`TD-25`) through the server's by-key resolver, then its project (the scope
+ *  the detail editor needs). */
 export function useItemByKey(itemKey: string): ItemByKey {
   const itemByKey = useQuery({ ...itemByKeyQuery(itemKey), enabled: itemKey !== "" });
   const item = itemByKey.data;
@@ -517,5 +425,3 @@ export function useItemByKey(itemKey: string): ItemByKey {
     isError: itemByKey.isError || projectQuery.isError,
   };
 }
-
-export { useSlqAutocomplete } from "./useSlqAutocomplete";

@@ -20,8 +20,7 @@ import { DropdownMenu } from "../components/DropdownMenu";
 import { WatchButton } from "../components/items/WatchButton";
 import { AttachmentsSection } from "../components/items/AttachmentsSection";
 import { LazyRichEditor as RichEditor } from "../components/editor/LazyRichEditor";
-import { useAttachmentUploader } from "../lib/useAttachmentUploader";
-import { attachmentUrl } from "../lib/constants";
+import { useImageUploader } from "../lib/useAttachmentUploader";
 import { ActivityPanel } from "../components/items/ActivityPanel";
 import { useRollupBatch } from "../components/items/RollupBar";
 import { ChildrenSection } from "../components/items/ChildrenSection";
@@ -46,15 +45,9 @@ interface ItemDetailBodyProps {
 }
 
 /**
- * The shared item-detail editor. Rendered by the canonical issue page
- * (`/issues/$itemKey`, spec 21) and the side panel (spec 25).
- *
- * Layout (issue-view redesign): a reading column — summary, description,
- * dependencies, comments — beside a right-hand properties rail
- * (`IssueProperties`) holding every metadata field. A container query splits
- * the two once there's room (the full page); the narrow side panel stacks them,
- * properties first. This keeps the content the user reads and writes clear of
- * the field clutter that previously sat between the description and comments.
+ * The shared item-detail editor, rendered by the issue page (`/issues/$itemKey`) and the peek panel:
+ * a reading column (summary, description, dependencies, comments) beside the `IssueProperties` rail.
+ * A container query splits the two once there is room; the narrow panel stacks them, properties first.
  */
 export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   // Recently-viewed trail for the My Work dashboard (spec 37) — both the full
@@ -72,10 +65,8 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const toggleStar = useToggleStarOnItem();
   const perms = usePermissions();
   const can = useCan();
-  // Attaching is its own atom (RADD-790): a commenter who may not retitle the
-  // issue may still attach to it, and `item.update` implies it either way. This
-  // was the page's only remaining use of a bare `item.update` check — everything
-  // else on it goes through `useItemWritability` (spec 96).
+  // Attaching is its own atom (RADD-790): a commenter who may not retitle the issue may still attach
+  // to it; `item.update` implies it.
   const canAttach = perms.project(project, Permission.attachmentCreate);
   const canManageProject = perms.project(project, Permission.projectManage);
   // Per-field writability (spec 92): title/description/flag are grant-restrictable builtins, so gate
@@ -91,12 +82,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const cloneItem = useCloneItem();
   const convertItem = useConvertItem();
   const deleteItem = useDeleteItem();
-  // Pasted/inserted description images go through the storage-choice seam
-  // (spec 102); a dismissed prompt rejects, so the editor insert aborts.
-  const uploadFiles = useAttachmentUploader({
-    entityType: AttachmentParentType.item,
-    entityId: item.id,
-  });
+  const uploadImage = useImageUploader({ entityType: AttachmentParentType.item, entityId: item.id });
   const navigate = useNavigate();
   // Delete asks through the kit dialog (RADD-1290), from the ⋯ menu.
   const [deleteDialog, confirmDelete] = useConfirm();
@@ -162,9 +148,8 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
     }, CUSTOM_FIELD_SAVE_DELAY_MS);
   };
 
-  // Registry 422s map per key; a field-grant 403 (spec 07) names the denied
-  // keys in its detail — surface both inline on the matching controls. Grants
-  // aren't knowable client-side up front, so inputs stay enabled until then.
+  // Registry 422s map per key. Backstop: a field-grant 403 (a grant changed after /fields/writable
+  // answered) names the denied keys — both surface inline on the matching controls.
   const fieldErrors = useMemo(() => {
     if (!updateItem.isError) return {};
     const errors = customFieldErrors(updateItem.error);
@@ -394,10 +379,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                 <RichEditor
                   value={description}
                   onChange={setDescription}
-                  onUploadImage={async (file) => {
-                    const [attachment] = await uploadFiles([file]);
-                    return attachmentUrl(attachment.id);
-                  }}
+                  onUploadImage={uploadImage}
                   placeholder="Add a description… (toolbar above, or type markdown)"
                   autoFocus
                   quickActions={quickActions}
@@ -491,11 +473,8 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             <AttachmentsSection item={item} canEdit={canAttach} />
             </section>
 
-            {/* Epic progress (spec 76) is now the HEADER of an expandable list
-                (RADD-655): the bar answers "how much is left", and one click
-                answers "which issues" — previously that meant leaving the page
-                and filtering a board by parent. Subtask children render as a
-                checklist instead of rows (RADD-660). */}
+            {/* Epic progress heads an expandable list of the children (RADD-655); subtask
+                children render as a checklist (RADD-660). */}
             {item.kind !== ItemKind.subtask && (
               <ChildrenSection
                 item={item}

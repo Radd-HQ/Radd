@@ -31,12 +31,12 @@ export function dropKey(target: DropTarget): string {
   return "newRowAfter" in target ? `new:${target.newRowAfter}` : `${target.row}:${target.col}`;
 }
 
-export function defaultSpanFor(attr: string): number {
+function defaultSpanFor(attr: string): number {
   return CARD_GROWABLE_ATTRS.has(attr) ? CARD_GRID_COLS : 1;
 }
 
 /** Compress row numbers to 0..n (order kept), sort cells row-major. */
-export function normalize(layout: CardLayout): CardLayout {
+function normalize(layout: CardLayout): CardLayout {
   const rows = [...new Set(layout.cells.map((cell) => cell.row))].sort((a, b) => a - b);
   const rowIndex = new Map(rows.map((row, index) => [row, index]));
   const cells = layout.cells

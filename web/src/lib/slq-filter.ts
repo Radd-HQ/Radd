@@ -164,7 +164,7 @@ export function useSlqPageFilter(
  * `q`, My Work's section queries). Same two-phase contract — typing only
  * validates, Enter commits, URL-synced under `q`, clearing the draft clears
  * the filter — but no match-set request and no client intersection. */
-export interface SlqQueryState extends SlqPageFilter {
+interface SlqQueryState extends SlqPageFilter {
   /** The committed query text — AND it into the page's fetches
    *  (`combineQueryWithFilters(base, [committed])`). */
   committed: string;

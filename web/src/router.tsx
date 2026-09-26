@@ -71,16 +71,10 @@ const PageSpacePage = lazyRouteComponent(() => import("@radd-plugin-ui/pages/spa
 const PagePrintPage = lazyRouteComponent(() => import("@radd-plugin-ui/pages/print-page"), "PagePrintPage");
 const DashboardPage = lazyRouteComponent(() => import("@radd-plugin-ui/dashboards/page"), "DashboardPage");
 
-/**
- * Code-based route tree. In-app routes are children of `appLayoutRoute` so
- * they inherit the shell and the auth gate. Issues are addressed by their
- * canonical key at the top-level `/issues/$itemKey` (spec 21) — the board no
- * longer nests a side-panel item route; a card navigates to the full page.
- * Settings sections nest under `settingsRoute` (secondary-nav layout);
- * /settings itself redirects to the first section.
- */
+/** Code-based route tree: in-app routes are children of `appLayoutRoute` (shell + auth gate);
+ *  splats are registered LAST so explicit routes win. */
 
-export interface RouterContext {
+interface RouterContext {
   queryClient: QueryClient;
 }
 
@@ -147,9 +141,7 @@ const legacyKbPageRoute = createRoute({
 const appLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "app",
-  // `?peek=<itemKey>` opens the issue side panel over ANY in-app route (spec 25).
-  // Inherited by every child route, so clicking an issue stays on the current
-  // view and the browser Back button just closes the panel.
+  // `?peek=<itemKey>` opens the issue panel over ANY in-app route; every child inherits it.
   validateSearch: (search: Record<string, unknown>): { peek?: string } => ({
     peek: typeof search.peek === "string" && search.peek ? search.peek : undefined,
   }),
@@ -188,7 +180,6 @@ async function visitorToProjects({ context }: { context: { queryClient: QueryCli
   }
 }
 
-/** "My Work" — the personal landing dashboard (spec 32). */
 const myWorkRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.home,
@@ -225,7 +216,6 @@ function withCommentLink(search: Record<string, unknown>): Record<string, unknow
   };
 }
 
-/** Canonical, key-addressed issue page (`/issues/TD-1234`) — spec 21. */
 const issueRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.issue,
@@ -248,7 +238,6 @@ const pluginPageRoute = createRoute({
   component: PluginPage,
 });
 
-/** Saved views (spec 09): project-scoped and all-projects. */
 const projectViewRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.projectView,
@@ -261,14 +250,12 @@ const allProjectsViewRoute = createRoute({
   component: ViewPage,
 });
 
-/** A cycle's items page (spec 18) — cycles span projects. */
 const cycleRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.cycle,
   component: CyclePage,
 });
 
-/** Intake form submit page (spec 20) — `/p/$projectKey/forms/$formId`. */
 const formSubmitRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.formSubmit,
@@ -284,28 +271,24 @@ const roadmapRoute = createRoute({
   component: RoadmapPage,
 });
 
-/** Project reporting dashboard (spec 19). */
 const projectReportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.projectReports,
   component: ReportsPage,
 });
 
-/** A project's releases (RADD-1290). */
 const projectReleasesRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.projectReleases,
   component: ProjectReleasesPage,
 });
 
-/** Server-wide reporting — velocity across cycles (spec 19). */
 const globalReportsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.reports,
   component: GlobalReportsPage,
 });
 
-/** The timesheet — day/week/month time reports (spec 22). */
 const timesheetRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.timesheet,
@@ -313,7 +296,6 @@ const timesheetRoute = createRoute({
   component: TimesheetPage,
 });
 
-/** Personal notification inbox (spec 26). */
 const inboxRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.inbox,
@@ -321,7 +303,6 @@ const inboxRoute = createRoute({
   component: InboxPage,
 });
 
-/** Requester portal (spec 73): the intake-form directory + a form's submit page. */
 const portalRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.portal,
@@ -336,14 +317,12 @@ const portalFormRoute = createRoute({
   component: PortalFormPage,
 });
 
-/** A composable dashboard's widget grid (spec 75). */
 const dashboardRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: RoutePath.dashboard,
   component: DashboardPage,
 });
 
-/** Pages (spec 43): spaces index, a space's two-pane tree, the canonical page URL. */
 const docsIndexRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: PageRoute.pages,
@@ -391,10 +370,8 @@ const pagePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: PageRoute.print,
   component: PagePrintPage,
-  // The router JSON-parses search values, so `?subpages=1` arrives as the
-  // NUMBER 1 — comparing against the string silently dropped the key and the
-  // router then rewrote the address bar without it, so "export with subpages"
-  // exported one page. Normalise to a boolean and accept every spelling.
+  // The router JSON-parses search values: `?subpages=1` arrives as the NUMBER 1 (a string compare
+  // dropped it, and the page exported alone). Normalise to a boolean, accepting every spelling.
   validateSearch: (search: Record<string, unknown>) => ({
     subpages:
       search.subpages === true || search.subpages === 1 || search.subpages === "1"
@@ -423,29 +400,23 @@ const settingsIndexRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "/",
   beforeLoad: () => {
-    // Profile, not Fields (RADD-788). Fields is gated on `field.manage`, which
-    // most people do not hold — so the first click into Settings answered with a
-    // permission toast. Profile is the one section every signed-in account can
-    // open, which is what an index redirect has to land on.
+    // Profile, not Fields (RADD-788): the one section every account can open.
     throw redirect({ to: RoutePath.settingsProfile });
   },
 });
 
-/** Personal profile (spec 34). */
 const settingsProfileRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.profile,
   component: ProfileSettingsPage,
 });
 
-/** Instance settings (spec 50) — instance-admin only (nav-gated + API 403). */
 const settingsInstanceRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.instance,
   component: InstanceSettingsPage,
 });
 
-/** Instance-scope scalar defaults (spec 50). */
 const settingsGeneralRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.general,
@@ -482,7 +453,6 @@ const settingsTeamsRoute = createRoute({
   component: TeamsSettingsPage,
 });
 
-/** Instance user administration (spec 84) — instance-admin only (nav-gated + API 403). */
 const settingsUsersRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.users,
@@ -501,7 +471,6 @@ const settingsTokensRoute = createRoute({
   component: TokensSettingsPage,
 });
 
-/** Per-user notification rules (spec 118) — every signed-in account. */
 const settingsNotificationsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.notifications,
@@ -526,35 +495,30 @@ const settingsPluginsRoute = createRoute({
   component: PluginsSettingsPage,
 });
 
-/** Canned responses admin (spec 30). */
 const settingsCannedRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.canned,
   component: CannedSettingsPage,
 });
 
-/** Service accounts + scoped keys (spec 113). */
 const settingsServiceAccountsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.serviceAccounts,
   component: ServiceAccountsSettingsPage,
 });
 
-/** Attachment storage hosts (spec 102) — instance-admin only. */
 const settingsStorageRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.storage,
   component: StorageSettingsPage,
 });
 
-/** SSO providers + signup domain allowlists (spec 110) — instance-admin only. */
 const settingsSignInRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.signIn,
   component: SignInSettingsPage,
 });
 
-/** Outbound webhooks (RADD-1096): endpoint CRUD + the delivery log. */
 const settingsWebhooksRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.webhooks,

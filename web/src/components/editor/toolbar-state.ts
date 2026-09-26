@@ -2,15 +2,8 @@ import { $prose } from "@milkdown/kit/utils";
 import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorState } from "@milkdown/kit/prose/state";
 
-/**
- * What the toolbar needs to know about the selection (RADD-749).
- *
- * A compact SNAPSHOT rather than the editor state itself, and that is the whole
- * design. Putting `EditorState` into React state re-renders the chrome on every
- * keystroke; putting a small derived object there and only publishing it when it
- * CHANGES means the toolbar re-renders when the answer changes — typing inside a
- * paragraph produces one snapshot for the whole paragraph.
- */
+/** What the toolbar needs about the selection: a small SNAPSHOT, published only when it CHANGES,
+ *  so typing inside one paragraph re-renders nothing. */
 export interface ToolbarSnapshot {
   /** Active inline marks, by schema name. */
   marks: string[];
@@ -21,9 +14,6 @@ export interface ToolbarSnapshot {
   /** Enclosing list type, if any. */
   list: "bullet_list" | "ordered_list" | "";
   inBlockquote: boolean;
-  inTable: boolean;
-  /** No selected range — the AI and link affordances care. */
-  empty: boolean;
 }
 
 export const EMPTY_SNAPSHOT: ToolbarSnapshot = {
@@ -32,8 +22,6 @@ export const EMPTY_SNAPSHOT: ToolbarSnapshot = {
   level: 0,
   list: "",
   inBlockquote: false,
-  inTable: false,
-  empty: true,
 };
 
 /**
@@ -54,25 +42,23 @@ function activeMarks(state: EditorState): string[] {
     .map((type) => type.name);
 }
 
-export function snapshotOf(state: EditorState): ToolbarSnapshot {
-  const { $from, empty } = state.selection;
+function snapshotOf(state: EditorState): ToolbarSnapshot {
+  const { $from } = state.selection;
   let block = $from.parent.type.name;
   let level = Number($from.parent.attrs.level ?? 0);
   let list: ToolbarSnapshot["list"] = "";
   let inBlockquote = false;
-  let inTable = false;
   for (let depth = $from.depth; depth > 0; depth--) {
     const name = $from.node(depth).type.name;
     if (name === "bullet_list" || name === "ordered_list") list ||= name;
     if (name === "blockquote") inBlockquote = true;
-    if (name === "table") inTable = true;
   }
   // A list ITEM's paragraph is still a paragraph; report the list separately so
   // the heading picker does not claim the cursor is "just a paragraph" when the
   // list buttons are the ones lit.
   if (block === "text") block = "paragraph";
   if ($from.parent.type.name !== "heading") level = 0;
-  return { marks: activeMarks(state), block, level, list, inBlockquote, inTable, empty };
+  return { marks: activeMarks(state), block, level, list, inBlockquote };
 }
 
 const same = (a: ToolbarSnapshot, b: ToolbarSnapshot) =>
@@ -80,8 +66,6 @@ const same = (a: ToolbarSnapshot, b: ToolbarSnapshot) =>
   a.level === b.level &&
   a.list === b.list &&
   a.inBlockquote === b.inBlockquote &&
-  a.inTable === b.inTable &&
-  a.empty === b.empty &&
   a.marks.length === b.marks.length &&
   a.marks.every((mark) => b.marks.includes(mark));
 

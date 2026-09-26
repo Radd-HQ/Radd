@@ -18,14 +18,10 @@ import { SelectField } from "../components/SelectField";
 import { Spinner } from "../components/Spinner";
 
 /**
- * Portal submit page (spec 73) — route `/portal/forms/$formId`, authed. The
- * submit-page body is the shared IntakeSubmitShell (RADD-901); this route
- * contributes the portal specifics: the back link + project chip header,
- * INLINED field definitions (the visitor may not read the registry), the
- * share-with-a-team picker (RADD-798), and pre-item image staging (RADD-800).
- * Submits run server-side as the SYSTEM actor with the visitor as reporter —
- * the share is the grant, no item.create needed. Ineligible forms are a
- * plain 404.
+ * Portal submit page (`/portal/forms/$formId`, authed) on the shared IntakeSubmitShell. The portal
+ * specifics: INLINED field definitions (the visitor may not read the registry), the share-with-a-team
+ * picker and pre-item image staging. Submits run as the SYSTEM actor with the visitor as reporter —
+ * the share is the grant, no item.create needed. Ineligible forms are a plain 404.
  */
 export function PortalFormPage() {
   const { formId = "" } = useParams({ strict: false });

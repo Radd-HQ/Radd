@@ -21,16 +21,9 @@ import {
 import { toUpdate, withCell } from "../../components/settings/notifications/matrix";
 
 /**
- * Settings → Notifications (spec 118).
- *
- * Two sections and a toggle: the defaults MATRIX (kind × relationship), the
- * SUBSCRIPTIONS that reach past your own work, and the digest.
- *
- * Every write is a full-replace PUT of the whole rule set, and the response is
- * written straight into the cache — so what the page shows after a save is what
- * the server stored, normalisation included, rather than what the click
- * intended. That distinction is the whole reason the old panel's two checkboxes
- * could quietly disagree with the row behind them.
+ * Settings → Notifications (spec 118): the defaults MATRIX, the SUBSCRIPTIONS and the digest.
+ * Every write is a full-replace PUT whose RESPONSE is written into the cache, so the page shows
+ * what the server stored (normalisation included), not what the click intended.
  */
 export function NotificationSettingsPage() {
   const queryClient = useQueryClient();

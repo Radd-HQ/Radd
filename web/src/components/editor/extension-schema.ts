@@ -1,16 +1,8 @@
 import type { PageExtensionSpec } from "@radd-plugin-ui/pages/types";
 
 /**
- * Reading a `PageExtensionSpec.params_schema` as a form (RADD-747).
- *
- * The information was already on the wire — types, enums, defaults, `required`,
- * descriptions — and `GET /pages/extensions` already served it. What was missing
- * was anything that read it, so people found out that a callout accepts `title`
- * and `text` by guessing.
- *
- * Kept apart from the dialog on purpose: this is the only place that knows what
- * a JSON Schema property means, so a new widget is one entry here rather than a
- * branch in a component.
+ * `PageExtensionSpec.params_schema` read as form fields. The only place that knows what a JSON Schema
+ * property means, so a new widget is one entry here rather than a branch in a component.
  */
 
 export const FieldKind = {
@@ -20,7 +12,7 @@ export const FieldKind = {
   integer: "integer",
   enum: "enum",
 } as const;
-export type FieldKindValue = (typeof FieldKind)[keyof typeof FieldKind];
+type FieldKindValue = (typeof FieldKind)[keyof typeof FieldKind];
 
 export interface SchemaField {
   key: string;

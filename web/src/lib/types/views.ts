@@ -12,10 +12,10 @@ export const ViewType = {
    *  the page auto-fetches EVERY page of the view query (no Load-more). */
   roadmap: "roadmap",
 } as const;
-export type ViewTypeValue = (typeof ViewType)[keyof typeof ViewType];
+type ViewTypeValue = (typeof ViewType)[keyof typeof ViewType];
 /** What `views.view_type` holds: a builtin above, or a key an enabled plugin contributes
  *  (`/capabilities` `view_types`, spec 94 — the spec-64 queue is the slas plugin's, RADD-1396). */
-export type StoredViewType = ViewTypeValue | (string & {});
+type StoredViewType = ViewTypeValue | (string & {});
 
 /** Builtin grouping axes for a view (board columns / list sections / swimlanes). */
 export const ViewAxis = {
@@ -58,26 +58,19 @@ export const ShareLevel = {
 } as const;
 export type ShareLevelValue = (typeof ShareLevel)[keyof typeof ShareLevel];
 
-export interface ShareSubjectRef {
+interface ShareSubjectRef {
   id: string;
   name: string;
 }
 
 /** One sharing grant on a view — exactly one of user/team is set. */
-export interface ViewShare {
+interface ViewShare {
   id: string;
   level: ShareLevelValue;
   user: ShareSubjectRef | null;
   team: ShareSubjectRef | null;
   /** A directory group the view is shared with (RADD-832). */
   group: ShareSubjectRef | null;
-}
-
-/** PUT /views/{id}/sharing — the public access level.
- * `global_access` means "everyone on this server" (spec 86). */
-export interface ViewSharingUpdate {
-  // Spec 92: the public level only; per-subject shares are access grants now.
-  global_access: ShareLevelValue | null;
 }
 
 /** One placed card attribute (spec 109): `title`, a builtin column id, or

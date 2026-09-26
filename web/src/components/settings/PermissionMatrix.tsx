@@ -25,32 +25,11 @@ function byResource(rows: PermissionInfo[]): [string, PermissionInfo[]][] {
 }
 
 /**
- * Permission checkbox matrix for the roles admin UI (spec 09/50), grouped by
- * RESOURCE (RADD-815): one block per resource listing its verbs, because
- * "what may they do to issues" is the question an admin is asking.
- *
- * Two axes hang off an atom, drawn differently on purpose:
- *
- * - **Scope** (project / global / space) is METADATA — a chip, not a control.
- *   The atom is a capability and WHERE it applies is a property of the GRANT
- *   (RADD-814): the role says what, the grant says where.
- * - **Relation** (`@own`, `@team`, `@assigned`, `@participant`) is the ATOM's
- *   own axis (RADD-823), so it is the role's business and gets controls.
- *
- * Before RADD-939 the second had no representation at all: the catalog carried
- * no qualifiers and this matched by exact string, so every qualified atom drew
- * as an unchecked box. The Baseline reported 11 permissions above a grid that
- * could express 4, and a qualified atom could be added only through the API and
- * removed not at all.
- *
- * Relations are a SET per atom, matching the server (`relations_held` returns a
- * frozenset; the gate passes if ANY held relation contains the one checked).
- * The Baseline needs it: `item.read@own` + `item.read@participant` is "items
- * they reported, or were shared into".
- *
- * Every catalog atom renders unconditionally — grouping never filters, so the
- * RADD-808 class (a scope value with no bucket silently dropping its atoms)
- * cannot recur here.
+ * Role permission matrix, grouped by RESOURCE. Scope (project/global/space) is
+ * a chip — WHERE is the grant's business (RADD-814); the relation (`@own`,
+ * `@team`, …) is the atom's own axis and gets controls, as a SET per atom like
+ * the server's `relations_held`. Every catalog atom renders — grouping never
+ * filters (the RADD-808 class).
  */
 export function PermissionMatrix({ catalog, selected, onChange }: PermissionMatrixProps) {
   return (

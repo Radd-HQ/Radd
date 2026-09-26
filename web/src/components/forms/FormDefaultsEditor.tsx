@@ -31,15 +31,8 @@ interface FormDefaultsEditorProps {
 }
 
 /**
- * Defaults applied to the item a submission creates (spec 20 → RADD-801).
- *
- * Names and versions resolve at submit; every field is optional (null = leave
- * the item's own default).
- *
- * KIND and TYPE are two different axes and both are here, which is the fix
- * RADD-801 exists for: `kind` is the epic/issue/subtask ladder, spec 51's TYPE
- * is Bug/Feature/Story. The form used to offer only `kind`, labelled in a way
- * that read as "type", so the control you reached for set the wrong thing.
+ * Defaults applied to the item a submission creates; null = the item's own default. KIND (epic/issue/
+ * subtask) and TYPE (Bug/Feature/…) are different axes — both are offered, labelled as such.
  */
 export function FormDefaultsEditor({
   projectId,

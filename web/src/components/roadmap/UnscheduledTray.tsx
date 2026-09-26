@@ -13,11 +13,11 @@ import { Pager } from "@radd/plugin-sdk";
 
 /** Tray filter chips (spec 79): everything, or unscheduled epics only (the
  * "populate the roadmap top-down" flow). Persisted per view in localStorage. */
-export const TrayFilter = {
+const TrayFilter = {
   all: "all",
   epics: "epics",
 } as const;
-export type TrayFilterValue = (typeof TrayFilter)[keyof typeof TrayFilter];
+type TrayFilterValue = (typeof TrayFilter)[keyof typeof TrayFilter];
 
 function loadTrayFilter(viewId: string): TrayFilterValue {
   return window.localStorage.getItem(roadmapTrayFilterStorageKey(viewId)) === TrayFilter.epics
@@ -29,16 +29,11 @@ function loadTrayFilter(viewId: string): TrayFilterValue {
 const slqString = (text: string) => `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
 /**
- * Items without a full start+target window (spec 19) — parked here where they
- * can be picked up and scheduled. Chips open the issue in the side panel;
- * with item.update (spec 77) they also DRAG onto the timeline, which schedules
- * them at the drop day with a default-length bar.
- *
- * Perf wave: the tray fetches its OWN bounded pages (the main
- * roadmap fetch carries only epics + dated bars, never the unscheduled pool —
- * which is ~93k items on a 100k-item project). Chips and the search box narrow
- * server-side through SLQ; "Load more" extends the pool a page at a time.
- * Epics already drawing a derived (children-union) bar are deduped out.
+ * Items without a full start+target window (spec 19). Chips open the peek;
+ * with item.update they also DRAG onto the timeline to schedule at the drop
+ * day. The tray pages its OWN bounded query — the main roadmap fetch carries
+ * only epics + dated bars — narrowed server-side by the chips and search.
+ * Epics already drawing a derived bar are deduped out.
  */
 export function UnscheduledTray({
   viewId,
@@ -80,7 +75,6 @@ export function UnscheduledTray({
       ]),
     [query, filter, search],
   );
-  // Classic pages (pagination wave): compact ‹ page/of › pager + a true total.
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [trayQ]);
   const pageQuery = useQuery(roadmapTrayItemsQuery(viewId, trayQ, projectId, page));

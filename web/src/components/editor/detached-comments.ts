@@ -1,5 +1,5 @@
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { locateAnchor, type TextAnchor } from "@radd/plugin-sdk";
+import { locateAnchor, type InlineAnchorRef } from "@radd/plugin-sdk";
 
 /**
  * Which inline comments a transform review would strand (RADD-1274).
@@ -14,11 +14,6 @@ import { locateAnchor, type TextAnchor } from "@radd/plugin-sdk";
  * runs joined with nothing between them (the SDK's `dom-text.ts::renderedText`), so
  * a quote that located there locates here.
  */
-export interface InlineAnchorRef {
-  id: string;
-  anchor: TextAnchor;
-}
-
 const textOf = (doc: ProseNode): string => doc.textBetween(0, doc.content.size, "", "");
 
 /** Ids of the anchors that locate in `before` and no longer locate in `after`. */

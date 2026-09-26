@@ -3,25 +3,9 @@ import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles, Undo2, X } from "l
 import { Button } from "../Button";
 
 /**
- * The transform run band (RADD-762) — one surface for the whole life of a run, whichever
- * contribution started it (RADD-1395).
- *
- * What it replaces was a 224px strip positioned at `selection.left - 110`, which for a run with
- * no selection (a document-wide toolbar run, and the read-mode hand-off) meant `x: -110`: painted,
- * correct, and off the left edge of the screen. That is why a document-wide transform read as no
- * feedback at all.
- *
- * The fix is not a better offset. A floating panel was tried first and the screenshot settled it:
- * anchored to the editor's bottom-right it covered the second and third paragraphs of the very diff
- * it was asking about, and no clamp fixes that — an editor as tall as the viewport leaves a
- * floating box nowhere to go. So this is not floating at all. It is a band in the editor's own
- * chrome, directly under the toolbar, which takes layout space instead of borrowing it: it cannot
- * cover the document, it needs no measurement, no viewport clamp and no scroll listener, and it is
- * on screen exactly when the editor is.
- *
- * It also carries the two things a per-block review cannot: what is happening while nothing has
- * arrived yet, and a way out of a twenty-button review in one click. The per-block pairs stay —
- * granular review is the point of the decoration fork — but they stop being the only exit.
+ * The transform run band: streaming progress, then Accept all / Reject all and a stepper over the
+ * per-block pairs. It is editor chrome under the toolbar, not a floating panel: a document-wide run
+ * has no selection to anchor to, and a floating box over a viewport-tall editor covers the diff.
  */
 
 /** What the run is doing. Whether any text has arrived is the only progress signal a stream
@@ -31,7 +15,7 @@ export const TransformRunStatus = {
   reviewing: "reviewing",
 } as const;
 
-export type TransformRunStatusValue = (typeof TransformRunStatus)[keyof typeof TransformRunStatus];
+type TransformRunStatusValue = (typeof TransformRunStatus)[keyof typeof TransformRunStatus];
 
 export interface TransformRunView {
   /** The transform's label — an action's name, or the typed instruction. */

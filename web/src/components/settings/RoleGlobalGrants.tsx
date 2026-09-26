@@ -8,15 +8,8 @@ import { groupsQuery, queryKeys, roleGlobalGrantsQuery, teamsQuery, usersQuery }
 import type { GlobalGrant } from "../../lib/types";
 import { TokenMultiSelect, type TokenOption, ErrorText } from "@radd/plugin-sdk";
 
-/**
- * Who holds this role INSTANCE-WIDE (spec 87).
- *
- * Roles could only ever be attached to a project, so the ~47 global-scope atoms
- * in the matrix above (label.create, team.update, sla.*, …) were ungrantable:
- * ticking one changed nothing for anyone but an instance admin. A grant here is
- * what delivers them — and it applies on every project too, so a globally
- * granted role's project atoms are live as well.
- */
+/** Who holds this role INSTANCE-WIDE (spec 87): the only way a role's global-scope atoms reach
+ *  anyone; its project atoms then apply on every project too. */
 export function RoleGlobalGrants({ roleId, editable }: { roleId: string; editable: boolean }) {
   const queryClient = useQueryClient();
   const grants = useQuery(roleGlobalGrantsQuery(roleId));

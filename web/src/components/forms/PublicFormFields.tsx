@@ -13,7 +13,7 @@ import type { CustomFieldValue, CustomFields, FieldDef } from "@radd-plugin-ui/f
 
 /** FieldDef synthesized from the inlined public definition, so the shared
  * CustomFieldControl renders the right widget (ids/grants don't apply here). */
-export function toFieldDef(field: PublicFormField): FieldDef {
+function toFieldDef(field: PublicFormField): FieldDef {
   return {
     id: field.field_key,
     project_ids: [],

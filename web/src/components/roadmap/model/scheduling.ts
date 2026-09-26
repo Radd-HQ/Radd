@@ -1,41 +1,9 @@
 /** Roadmap schedulers: estimate/dependency/assignee-aware auto-schedule + import-children (spec 78). */
 
+import { shiftIsoDay } from "@radd/plugin-sdk";
 import { ROADMAP_LEAF_SPAN_DAYS } from "../../../lib/constants";
-import { ItemLinkType, type Item, type ItemUpdate } from "../../../lib/types";
-import { shiftIso } from "./dates";
-import type { RoadmapPlanPatch } from "./planning";
-
-// ---------------------------------------------------------------------------
-// Auto-schedule (spec 78): estimate/dependency/assignee-aware epic layout
-// ---------------------------------------------------------------------------
-
-/** `source` blocks `target` — an intra-epic dependency for the scheduler. */
-export interface AutoScheduleEdge {
-  sourceId: string;
-  targetId: string;
-}
-
-/** The `blocks` edges among one epic's loaded children (scheduler input). */
-export function intraEpicBlocksEdges(children: Item[]): AutoScheduleEdge[] {
-  const ids = new Set(children.map((child) => child.id));
-  const seen = new Set<string>();
-  const edges: AutoScheduleEdge[] = [];
-  const add = (sourceId: string, targetId: string) => {
-    const key = `${sourceId}>${targetId}`;
-    if (seen.has(key) || !ids.has(sourceId) || !ids.has(targetId)) return;
-    seen.add(key);
-    edges.push({ sourceId, targetId });
-  };
-  for (const child of children) {
-    for (const link of child.links?.outgoing ?? []) {
-      if (link.link_type === ItemLinkType.blocks) add(child.id, link.item.id);
-    }
-    for (const link of child.links?.incoming ?? []) {
-      if (link.link_type === ItemLinkType.blocks) add(link.item.id, child.id);
-    }
-  }
-  return edges;
-}
+import type { Item, ItemUpdate } from "../../../lib/types";
+import type { BlocksEdge, RoadmapPlanPatch } from "./planning";
 
 /**
  * Calendar-day duration for one child (spec 78): ceil(estimate / working day)
@@ -51,7 +19,7 @@ export function durationDaysFromEstimate(
   return Math.max(1, Math.ceil(estimateSeconds / (hoursPerDay * 3600)));
 }
 
-export interface AutoSchedulePlan {
+interface AutoSchedulePlan {
   /** Child date patches in schedule order, then the epic fit patch. */
   patches: RoadmapPlanPatch[];
   scheduledCount: number;
@@ -62,7 +30,8 @@ export interface AutoSchedulePlan {
 
 /**
  * "Auto-schedule children" (spec 78 §4): Kahn topological order over the
- * intra-epic `blocks` edges with rank (input-order) tie-breaking — a cyclic
+ * `blocks` edges among `children` (deduped here; other endpoints and
+ * self-loops ignored) with rank (input-order) tie-breaking — a cyclic
  * remainder falls back to rank order. Each child starts at
  * `max(anchor, blockers' end + 1d, same-assignee last end + 1d)`: different or
  * missing assignees parallelize freely, a shared assignee serializes in
@@ -72,7 +41,7 @@ export interface AutoSchedulePlan {
  */
 export function autoSchedulePlan(
   children: Item[],
-  edges: AutoScheduleEdge[],
+  edges: BlocksEdge[],
   anchorIso: string,
   durations: ReadonlyMap<string, number>,
   epic: Item,
@@ -127,19 +96,19 @@ export function autoSchedulePlan(
     for (const blockerId of blockersOf.get(child.id) ?? []) {
       const blockerEnd = endOf.get(blockerId);
       if (!blockerEnd) continue; // cycle fallback — the blocker isn't placed yet
-      const candidate = shiftIso(blockerEnd, 1);
+      const candidate = shiftIsoDay(blockerEnd, 1);
       if (candidate > start) start = candidate;
     }
     const assigneeId = child.assignee?.id ?? null;
     if (assigneeId) {
       const lastEnd = lastEndByAssignee.get(assigneeId);
       if (lastEnd) {
-        const candidate = shiftIso(lastEnd, 1);
+        const candidate = shiftIsoDay(lastEnd, 1);
         if (candidate > start) start = candidate;
       }
     }
     const duration = Math.max(1, durations.get(child.id) ?? ROADMAP_LEAF_SPAN_DAYS);
-    const end = shiftIso(start, duration - 1);
+    const end = shiftIsoDay(start, duration - 1);
     endOf.set(child.id, end);
     if (assigneeId) lastEndByAssignee.set(assigneeId, end);
     patches.push({ itemId: child.id, patch: { start_date: start, target_date: end } });
@@ -154,9 +123,9 @@ export function autoSchedulePlan(
 
 /** Date-less children imported AS-IS with no estimate span a single day —
  *  the bar exists; sizing it is left to the user (or Auto-schedule). */
-export const ROADMAP_IMPORT_SPAN_DAYS = 1;
+const ROADMAP_IMPORT_SPAN_DAYS = 1;
 
-export interface ImportChildrenPlan {
+interface ImportChildrenPlan {
   /** Fill patches for children missing a date, then the epic fit patch. */
   patches: RoadmapPlanPatch[];
   /** How many children had a date filled in (drives the toast). */
@@ -165,18 +134,11 @@ export interface ImportChildrenPlan {
 
 /**
  * "Bring children into roadmap" — the AS-IS counterpart to `autoSchedulePlan`:
- * no reflow, no topo/assignee serialization, no rank chain. Children that
- * already have BOTH dates are untouched. A missing start fills with the epic
- * anchor (`epic.start ?? today`, resolved by the caller — the same anchor rule
- * the auto-scheduler uses), clamped back to the child's existing target when
- * there is one (the server rejects inverted spans). A missing target fills
- * with `start + duration − 1` (inclusive spans — 1 day means target == start)
- * anchored at the child's EFFECTIVE start; `durations` carries the
- * estimate-derived day counts and children absent from it (no estimate) span
- * `ROADMAP_IMPORT_SPAN_DAYS`. The epic's fit-to-children patch (inward AND
- * outward — this verb owns the span, like Auto-schedule) is appended last,
- * unioned over EVERY child's effective window. Nothing missing → an empty
- * plan (the menu disables the verb then anyway).
+ * no reflow, no serialization, no rank chain. Only MISSING dates fill: a start
+ * gets the caller's anchor, clamped to an existing target (the server rejects
+ * inverted spans); a target gets start + estimate days − 1, or
+ * `ROADMAP_IMPORT_SPAN_DAYS`. The epic fit (inward AND outward) over every
+ * child's effective window is appended last.
  */
 export function importChildrenPlan(
   children: Item[],
@@ -199,7 +161,7 @@ export function importChildrenPlan(
     }
     if (!target) {
       const duration = Math.max(1, durations.get(child.id) ?? ROADMAP_IMPORT_SPAN_DAYS);
-      target = shiftIso(start, duration - 1);
+      target = shiftIsoDay(start, duration - 1);
       patch.target_date = target;
     }
     if (patch.start_date !== undefined || patch.target_date !== undefined) {

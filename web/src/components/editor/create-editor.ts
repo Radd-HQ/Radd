@@ -14,20 +14,11 @@ import { trailing } from "@milkdown/kit/plugin/trailing";
 import { upload } from "@milkdown/kit/plugin/upload";
 
 /**
- * The editor, composed from Milkdown directly (RADD-755).
- *
- * This is what `new Crepe(...)` was doing underneath: `Editor.make()` plus
- * commonmark, gfm, and six small plugins — listener, history, indent, trailing,
- * clipboard, upload. Everything else Crepe added was CHROME, and by the time
- * this landed the epic had replaced all of it, so the constructor was wrapping
- * a list we could write ourselves in a dozen lines.
- *
- * Keeping the list here rather than inline in two components is the point: the
- * editor and the read-only viewer must be the same engine, or "read and edit
- * look identical" becomes a coincidence that holds until someone adds a plugin
- * to one of them.
+ * The editor engine: Milkdown commonmark + gfm with listener, history, indent, trailing, clipboard,
+ * upload. In ONE place because the editor and the read-only viewer must be the same engine, or "read
+ * and edit look identical" holds only until someone adds a plugin to one of them.
  */
-export interface EditorOptions {
+interface EditorOptions {
   root: HTMLElement;
   /** Initial markdown. The editor is uncontrolled after creation. */
   value: string;
