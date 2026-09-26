@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 /** A data-only contribution. The owner defines its opaque key, wire shape and transport. */
 export interface QuerySource<T = unknown> {
@@ -7,13 +7,17 @@ export interface QuerySource<T = unknown> {
   meta?: Record<string, unknown>;
   /** How long a result stays fresh across consumers (default 30 s). */
   staleTime?: number;
+  /** Re-ask while observed — for values that change with the clock (an SLA countdown). */
+  refetchInterval?: number;
   fetch: (args: Record<string, unknown>, signal: AbortSignal) => Promise<T>;
 }
 interface Entry { plugin: string; generation: number; source: QuerySource }
 const entries = new Map<string, Entry>();
 const listeners = new Set<() => void>();
 let generation = 0;
-function changed() { for (const listener of listeners) listener(); }
+/** Bumped on every change: a stable snapshot for consumers that read several keys. */
+let version = 0;
+function changed() { version++; for (const listener of listeners) listener(); }
 function subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
 
 /** The loader scopes registration to an activation; another owner cannot replace its contract. */
@@ -31,6 +35,25 @@ export function unregisterQuerySources(plugin: string): void {
   if (removed) changed();
 }
 
+/** ONE query identity per (owner activation, key, args) — shared by every consumer below, and the
+ * `["plugin-query", owner]` prefix is what the host loader drops when the owner withdraws. */
+function sourceQuery<T>(key: string, args: Record<string, unknown>, entry: Entry | undefined, enabled: boolean) {
+  return {
+    queryKey: ["plugin-query", entry?.plugin ?? null, entry?.generation ?? 0, key, args],
+    meta: entry?.source.meta,
+    enabled,
+    staleTime: entry?.source.staleTime ?? 30_000,
+    refetchInterval: entry?.source.refetchInterval,
+    // Consumers of one source+arguments share this query, and TanStack keeps ONE queryFn per
+    // query — whichever consumer rendered last. So it must not depend on a consumer's `enabled`:
+    // a disabled consumer's function would otherwise fail the enabled one on the next invalidation.
+    queryFn: ({ signal }: { signal: AbortSignal }) => {
+      if (!entry) throw new Error("This query source is unavailable");
+      return entry.source.fetch(args, signal) as Promise<T>;
+    },
+  };
+}
+
 /** Consumers of the same source and arguments share one cached result (RADD-1373 — a
  * per-mount identity used to refetch the 2,305-label catalog on every automation-editor mount).
  * The owner's registration generation is in the key, so a re-registered source starts fresh; the
@@ -39,20 +62,32 @@ export function unregisterQuerySources(plugin: string): void {
 export function useContributedQuery<T>(key: string, args: Record<string, unknown> = {}, { enabled = true } = {}) {
   const entry = useSyncExternalStore(subscribe, () => entries.get(key));
   const active = enabled && Boolean(entry);
-  const result = useQuery<T>({
-    queryKey: ["plugin-query", entry?.plugin ?? null, entry?.generation ?? 0, key, args],
-    meta: entry?.source.meta,
-    enabled: active,
-    staleTime: entry?.source.staleTime ?? 30_000,
-    // Consumers of one source+arguments share this query, and TanStack keeps ONE queryFn per
-    // query — whichever consumer rendered last. So it must not depend on a consumer's `enabled`:
-    // a disabled consumer's function would otherwise fail the enabled one on the next invalidation.
-    queryFn: ({ signal }) => {
-      if (!entry) throw new Error("This query source is unavailable");
-      return entry.source.fetch(args, signal) as Promise<T>;
-    },
-  });
+  const result = useQuery<T>(sourceQuery<T>(key, args, entry, active));
   // A disabled consumer neither shows the shared result nor asks for a new one.
   const refetch: typeof result.refetch = (options) => active ? result.refetch(options) : Promise.resolve(result);
   return { ...result, refetch, available: Boolean(entry), data: active && !result.isError ? result.data : undefined };
+}
+
+export interface ContributedQueryRequest { key: string; args: Record<string, unknown> }
+export interface ContributedQueryResult<T> { available: boolean; data: T | undefined; isPending: boolean; isError: boolean }
+
+/** Several sources (or one source over several argument sets) at once, each with exactly the
+ * identity `useContributedQuery` gives it — so the two share results — and the same lifetime: an
+ * absent source asks nothing, a withdrawn owner's in-flight read is aborted (RADD-1394, the item
+ * attribute batches). Callers pass distinct requests; results are aligned with them. */
+export function useContributedQueries<T>(requests: readonly ContributedQueryRequest[]): ContributedQueryResult<T>[] {
+  useSyncExternalStore(subscribe, () => version);
+  const resolved = requests.map((request) => entries.get(request.key));
+  const results = useQueries({
+    queries: requests.map((request, index) => sourceQuery<T>(request.key, request.args, resolved[index], Boolean(resolved[index]))),
+  });
+  return results.map((result, index) => {
+    const available = Boolean(resolved[index]);
+    return {
+      available,
+      data: available && !result.isError ? result.data : undefined,
+      isPending: available && result.isPending,
+      isError: available && result.isError,
+    };
+  });
 }

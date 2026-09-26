@@ -205,8 +205,12 @@ function ColumnsSection({ editor }: { editor: ColumnsEditor }) {
           <li key={id} className="flex items-center gap-1 text-xs text-fg">
             <span className="min-w-0 flex-1 truncate">
               {byId.get(id)?.label ?? (
-                <span className="text-amber-400" title="No longer in the field registry">
-                  {id}
+                <span
+                  className="text-status-warning-ink"
+                  data-unavailable-column={id}
+                  title="Unavailable — its field was deleted or its plugin is off. The view keeps it."
+                >
+                  {id} (unavailable)
                 </span>
               )}
             </span>

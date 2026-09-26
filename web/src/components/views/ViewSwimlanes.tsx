@@ -8,7 +8,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import type { CardLayout } from "../../lib/card-layout";
 import { swimlaneCollapseStorageKey } from "../../lib/constants";
-import type { Item, RollupResponse, SlaBatchResponse, TimelogBatchResponse } from "../../lib/types";
+import type { Item, RollupResponse, TimelogBatchResponse } from "../../lib/types";
 import type { BucketRef } from "../../lib/axis-dnd";
 import type { ViewGroup } from "../../lib/view-utils";
 import { BoardCard } from "../board/BoardCard";
@@ -28,8 +28,6 @@ interface ViewSwimlanesProps {
   /** Directory names + field defs for placed `cf.<key>` cells. */
   usersById?: Map<string, string>;
   cfByKey?: Map<string, FieldDef>;
-  /** Batch SLA timers by item id (spec 63) — set while the sla slot is on. */
-  slaByItem?: SlaBatchResponse;
   /** Epic-progress rollups by item id (spec 76) — set while the progress slot
    *  is on and epic-kind items are on the page. */
   rollupByItem?: RollupResponse;
@@ -80,7 +78,6 @@ export function ViewSwimlanes({
   layout,
   usersById,
   cfByKey,
-  slaByItem,
   rollupByItem,
   timelogByItem,
   onMoveToCell,
@@ -235,7 +232,6 @@ export function ViewSwimlanes({
                             layout={layout}
                             usersById={usersById}
                             cfByKey={cfByKey}
-                            sla={slaByItem?.[item.id]}
                             rollup={rollupByItem?.[item.id]}
                             timelog={timelogByItem?.[item.id]}
                             onDragStart={dnd ? drop.startDrag : noDrag}

@@ -14,8 +14,9 @@ import { cellStyle, laneMargin } from "../../board/BoardCard";
 import { renderCardCell, type CardCellCtx } from "../../board/card-cells";
 import { FlagBadge, ItemKeyLink, KindBadge, StarBadge, TypeChip } from "../../items/ItemBadges";
 import { dropKey, type DesignerDrag, type DropTarget } from "./layout-ops";
-import { SAMPLE_ITEM, SAMPLE_ROLLUP, SAMPLE_SLA, SAMPLE_TIMELOG, sampleCustomValue } from "./sample-item";
+import { SAMPLE_ITEM, SAMPLE_ROLLUP, SAMPLE_TIMELOG, sampleCustomValue } from "./sample-item";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
+import type { ItemAttribute } from "@radd/plugin-sdk";
 
 /** ~296px card content (w-80 minus p-3) → one grid column's pixel width, for
  * translating a span-handle drag into columns. */
@@ -23,6 +24,8 @@ const COL_PX = 296 / CARD_GRID_COLS;
 
 export interface PreviewProps {
   draft: CardLayout;
+  /** Plugin-contributed attributes; each previews its declared `sample`. */
+  attributes: readonly ItemAttribute[];
   cfByKey: Map<string, FieldDef>;
   drop: BucketDrop<DesignerDrag>;
   canEdit: boolean;
@@ -165,6 +168,7 @@ function DesignerCell({
  */
 export function CardPreview({
   draft,
+  attributes,
   cfByKey,
   drop,
   canEdit,
@@ -182,9 +186,16 @@ export function CardPreview({
     return { ...SAMPLE_ITEM, custom_fields };
   }, [cfByKey]);
 
+  const attributeData = useMemo(
+    () => ({
+      byId: new Map(attributes.map((attribute) => [attribute.id, attribute])),
+      valueOf: (attribute: ItemAttribute) => attribute.sample,
+    }),
+    [attributes],
+  );
   const ctx: CardCellCtx = {
     item: sampleItem,
-    sla: SAMPLE_SLA,
+    attributes: attributeData,
     rollup: SAMPLE_ROLLUP,
     timelog: SAMPLE_TIMELOG,
     maxLabels: draft.max_labels,
@@ -202,7 +213,11 @@ export function CardPreview({
     <DesignerCell
       key={cell.attr}
       cell={cell}
-      node={renderCardCell(cell.attr, ctx) ?? <EmptyCellTag attr={cell.attr} />}
+      node={
+        renderCardCell(cell.attr, ctx) ?? (
+          <EmptyCellTag attr={attributeData.byId.get(cell.attr)?.label ?? cell.attr} />
+        )
+      }
       canEdit={canEdit}
       isSelected={selected === cell.attr}
       onSelect={() => onSelect(selected === cell.attr ? null : cell.attr)}

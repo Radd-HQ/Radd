@@ -1,4 +1,4 @@
-import { ItemKind, Priority, StateCategory, ReleaseStatus, SlaKind, type Item, type ItemRollup, type ItemTimelogBatchEntry, type SlaBatchTimer } from "../../../lib/types";
+import { ItemKind, Priority, StateCategory, ReleaseStatus, type Item, type ItemRollup, type ItemTimelogBatchEntry } from "../../../lib/types";
 import { CycleStatus } from "@radd-plugin-ui/cycles/types";
 import { FieldType } from "@radd-plugin-ui/fields/types";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
@@ -52,19 +52,6 @@ export const SAMPLE_TIMELOG: ItemTimelogBatchEntry = {
   logged_seconds: 5 * 3600 + 20 * 60,
   estimate_seconds: 8 * 3600,
 };
-
-/** One healthy response timer so a placed SLA cell shows a real chip. */
-export const SAMPLE_SLA: SlaBatchTimer[] = [
-  {
-    policy_name: "Standard support",
-    kind: SlaKind.response,
-    due_at: "2026-08-01T17:00:00Z",
-    met_at: null,
-    breached: false,
-    paused: false,
-    remaining_seconds: 4 * 3600,
-  },
-];
 
 /** A plausible value for a custom field, keyed by its type — select fields
  * use their first real option so chips carry genuine text. */

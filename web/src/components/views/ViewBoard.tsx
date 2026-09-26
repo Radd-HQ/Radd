@@ -7,7 +7,7 @@ import { Plus } from "lucide-react";
 import type { BucketRef } from "../../lib/axis-dnd";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import type { CardLayout } from "../../lib/card-layout";
-import type { Item, RollupResponse, SlaBatchResponse, TimelogBatchResponse } from "../../lib/types";
+import type { Item, RollupResponse, TimelogBatchResponse } from "../../lib/types";
 import type { ViewGroup } from "../../lib/view-utils";
 import { BoardCard } from "../board/BoardCard";
 import { formatPoints } from "../items/ItemBadges";
@@ -24,8 +24,6 @@ interface ViewBoardProps {
   /** Directory names + field defs for placed `cf.<key>` cells. */
   usersById?: Map<string, string>;
   cfByKey?: Map<string, FieldDef>;
-  /** Batch SLA timers by item id (spec 63) — set while the sla slot is on. */
-  slaByItem?: SlaBatchResponse;
   /** Epic-progress rollups by item id (spec 76) — set while the progress slot
    *  is on and epic-kind items are on the page. */
   rollupByItem?: RollupResponse;
@@ -86,7 +84,6 @@ export function ViewBoard({
   layout,
   usersById,
   cfByKey,
-  slaByItem,
   rollupByItem,
   timelogByItem,
   onQuickAdd,
@@ -240,7 +237,6 @@ export function ViewBoard({
                   layout={layout}
                   usersById={usersById}
                   cfByKey={cfByKey}
-                  sla={slaByItem?.[item.id]}
                   rollup={rollupByItem?.[item.id]}
                   timelog={timelogByItem?.[item.id]}
                   onDragStart={dnd ? drop.startDrag : noop}

@@ -5,7 +5,9 @@ import { CUSTOM_COLUMN_PREFIX } from "../../lib/columns";
 import { formatSeconds } from "@radd/plugin-sdk";
 import type { formatDuration } from "../../lib/duration";
 import { PRIORITY_META } from "../../lib/meta";
-import { type Item, type ItemParentRef, type ItemRollup, type ItemTimelogBatchEntry, type PriorityValue, type SlaBatchTimer } from "../../lib/types";
+import { type Item, type ItemParentRef, type ItemRollup, type ItemTimelogBatchEntry, type PriorityValue } from "../../lib/types";
+import type { ItemAttributeData } from "../../lib/item-attribute-data";
+import { ItemAttributeCell, ItemAttributeSurface } from "@radd/plugin-sdk";
 import { isOverdue } from "../items/CardSlots";
 import { CustomCell, DateText, isEmptyCustomValue } from "../items/CustomFieldValue";
 import {
@@ -21,7 +23,6 @@ import {
   VisibilityBadge,
 } from "../items/ItemBadges";
 import { RollupRowBar } from "../items/RollupBar";
-import { SlaRowChip } from "../items/SlaChips";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
@@ -89,8 +90,9 @@ export function QuietLabels({ labels, max }: { labels: string[]; max: number }) 
 
 export interface CardCellCtx {
   item: Item;
+  /** Plugin-contributed attributes and their values (RADD-1394). */
+  attributes?: ItemAttributeData;
   /** Batch data — undefined while the attr isn't placed (the batch is gated). */
-  sla?: SlaBatchTimer[];
   rollup?: ItemRollup;
   timelog?: ItemTimelogBatchEntry;
   maxLabels: number;
@@ -108,6 +110,14 @@ export interface CardCellCtx {
 
 export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
   const { item } = ctx;
+  const attribute = ctx.attributes?.byId.get(attr);
+  if (attribute) {
+    // A plugin's cell: drawn by its owner, and absent when the item has no value.
+    const value = ctx.attributes?.valueOf(attribute, item.id);
+    return value == null ? null : (
+      <ItemAttributeCell attribute={attribute} item={item} value={value} surface={ItemAttributeSurface.card} />
+    );
+  }
   if (attr.startsWith(CUSTOM_COLUMN_PREFIX)) {
     const field = ctx.cfByKey?.get(attr.slice(CUSTOM_COLUMN_PREFIX.length));
     if (!field) return null; // stale id — the field left the registry
@@ -170,8 +180,6 @@ export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
           <span className="truncate text-xs text-fg-secondary">{item.reporter.name}</span>
         </span>
       ) : null;
-    case "sla":
-      return ctx.sla && ctx.sla.length > 0 ? <SlaRowChip timers={ctx.sla} /> : null;
     case "points":
       return item.estimate_points != null ? <PointsChip points={item.estimate_points} /> : null;
     case "progress": {
@@ -243,6 +251,6 @@ export function renderCardCell(attr: string, ctx: CardCellCtx): ReactNode {
     case "state":
       return <StatePill state={item.state} />;
     default:
-      return null; // unknown attr (a future id or plugin leftovers) — skip
+      return null; // unknown attr (a withdrawn plugin's, or a future id) — skip
   }
 }

@@ -30,10 +30,6 @@ export const VELOCITY_DEFAULT_LAST = 5;
 
 /** The "Service desk SLA" dashboard widget's window choices, in weeks (spec 63; GET /sla-report caps at 26). */
 export const SLA_REPORT_WEEKS_OPTIONS: readonly number[] = [4, 8, 12, 26];
-/** List/board SLA chips re-poll cadence — timers tick server-side (spec 63). */
-export const SLA_BATCH_REFETCH_MS = 60_000;
-/** Backend cap on one batch request — surfaces slice their visible ids to it. */
-export const SLA_BATCH_MAX_ITEMS = 200;
 /** Backend cap on one POST /items/rollup batch (spec 76). */
 export const ROLLUP_MAX_ITEMS = 200;
 /** Backend cap on one POST /items/timelog/batch (spec 78). */

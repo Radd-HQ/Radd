@@ -120,7 +120,8 @@ export { usePagedDirectory, type PagedDirectoryQuery } from "./paged-directory";
 export { TokenMultiSelect, type TokenOption, type TokenMultiSelectProps } from "./token-multi-select";
 export { ErrorText, type ErrorTextProps } from "./error-text";
 
-export { registerQuerySource, unregisterQuerySources, useContributedQuery, type QuerySource } from "./query-sources";
+export { registerQuerySource, unregisterQuerySources, useContributedQuery, useContributedQueries, type QuerySource, type ContributedQueryRequest, type ContributedQueryResult } from "./query-sources";
+export { itemAttribute, useItemAttributes, ItemAttributeCell, ItemAttributeSurface, ITEM_ATTRIBUTE_BATCH_MAX, type ItemAttribute, type ItemAttributeSpec, type ItemAttributeCellProps, type ItemAttributeBatchArgs, type ItemAttributeSurfaceValue } from "./item-attributes";
 
 export { ScheduleKind, defaultSchedule, isScheduleValid, type ScheduleKindValue, type ScheduleConfig, type SchedulePreview } from "./schedule";
 export { ScheduleEditor, type ScheduleEditorProps } from "./schedule-editor";

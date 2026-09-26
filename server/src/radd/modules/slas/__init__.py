@@ -37,8 +37,10 @@ plugin = RaddPlugin(
     weak_depends=("csat",),
     routers=(router,),
     # RADD-1386: the SLA report's UI (a reports-page section and the
-    # "Service desk SLA" dashboard widget) is this plugin's own remote.
-    ui=PluginUiManifest(remote="/plugins/slas/remoteEntry.js", ui_api_version="1.14.0"),
+    # "Service desk SLA" dashboard widget) is this plugin's own remote; RADD-1394
+    # added the timers — the issue rail section and the `slas.timer` list column
+    # / board-card cell (an SDK 1.15 item attribute over `slas.timers`).
+    ui=PluginUiManifest(remote="/plugins/slas/remoteEntry.js", ui_api_version="1.15.0"),
     on_startup=(engine.start,),
     on_shutdown=(engine.stop,),
     event_types=(

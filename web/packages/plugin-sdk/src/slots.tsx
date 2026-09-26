@@ -77,6 +77,10 @@ export const SlotId = {
   dashboardWidget: "dashboard.widget",
   /** An entry in an item's action menu. Props: { item }. */
   itemAction: "item.action",
+  /** A list column + board-card cell (RADD-1394), keyed by `match` = the attribute id. Build the
+   *  contribution with `itemAttribute(spec)`; the host reads its `meta` for the column and renders it
+   *  through `ItemAttributeCell` with { item, value, surface }. */
+  itemAttribute: "item.attribute",
   // --- automations (RADD-1325) ---
   /** The inspector form for ONE automation node type (matched by `match` = the node type, e.g.
    *  "ai.classify"). Props: { node, params, onChange } — `params` is the node's stored params,
@@ -108,6 +112,10 @@ export interface SlotContribution<P = Record<string, unknown>> {
    *  `false` for a plugin's own control surfaces (its `pluginManagerSection`/`profileSection`
    *  widgets) so they don't list — or hide — themselves. */
   toggleable?: boolean;
+  /** What the anchor's host reads WITHOUT rendering — a column's label, widths and data source.
+   *  Its shape belongs to the slot, and the SDK helper that builds the contribution writes it
+   *  (`itemAttribute`). Readers validate it; a malformed one is skipped, never rendered. */
+  meta?: Readonly<Record<string, unknown>>;
 }
 
 /** One row of a plugin's contribution list, for the enable/disable toggles UI. `enabled` reflects
@@ -729,6 +737,7 @@ function Contribution({ entry, props }: { entry: Entry; props: Record<string, un
 export function Slot({
   id,
   match,
+  owner,
   fallback = null,
   pending = null,
   errorFallback = null,
@@ -738,6 +747,9 @@ export function Slot({
   /** When set, only contributions whose `match` equals this render — for keyed slots like
    *  `view.type`/`settings.page` where exactly one plugin owns a value. */
   match?: string;
+  /** When set, only this plugin's contributions render — for a keyed slot whose key names its
+   *  owner (`item.attribute`), so another plugin registering the same key cannot draw into it. */
+  owner?: string;
   /** Rendered when nothing contributes and no plugin bundle is still loading. */
   fallback?: ReactNode;
   /** Rendered when nothing contributes YET: a plugin bundle is still loading (RADD-1373). */
@@ -746,7 +758,8 @@ export function Slot({
 } & Record<string, unknown>): ReactNode {
   const all = useSlot(id);
   const loading = useRemotesLoading();
-  const entries = match === undefined ? all : all.filter((e) => e.contribution.match === match);
+  const entries = all.filter((e) =>
+    (match === undefined || e.contribution.match === match) && (owner === undefined || e.plugin === owner));
   if (entries.length === 0) return loading ? pending : fallback;
   return entries.map((entry) => (
     <SlotErrorBoundary key={`${entry.plugin}:${entry.contribution.id}:${entry.generation}`} plugin={entry.plugin} fallback={errorFallback}>

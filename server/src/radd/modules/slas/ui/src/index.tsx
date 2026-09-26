@@ -1,12 +1,23 @@
-import { definePlugin, SlotId } from "@radd/plugin-sdk";
+import { definePlugin, itemAttribute, SlotId, type Item } from "@radd/plugin-sdk";
 import { REPORT_SECTION_SLOT, type ReportSectionProps } from "@radd-plugin-ui/reporting/report-contract";
 import { SLA_WIDGET_TYPE, type SlaWidgetConfig } from "./report";
 import { SlaReportCard } from "./SlaReportCard";
+import { SlaPanel } from "./SlaPanel";
+import { SlaRowChip } from "./SlaChips";
+import { SlaKind, timersSource, type SlaBatchTimer } from "./timers";
 
-/** The slas plugin's UI remote (RADD-1386): the SLA report, on the reports pages (one project, or
- * every readable project on the global page) and as the "Service desk SLA" dashboard widget.
- * Disabling the plugin withdraws both — its endpoint is gone with it. */
+/** The card designer's stand-in: one healthy response timer, so a placed cell shows a real chip. */
+const SAMPLE_TIMERS: SlaBatchTimer[] = [
+  { policy_name: "Standard support", kind: SlaKind.response, due_at: null, met_at: null,
+    breached: false, paused: false, remaining_seconds: 4 * 3600 },
+];
+
+/** The slas plugin's UI remote: the SLA report (RADD-1386) on the reports pages and as the
+ * "Service desk SLA" dashboard widget, and the timers (RADD-1394) — the issue rail's SLA section
+ * and the SLA list column / board-card cell, fed by its `slas.timers` batch. Disabling the plugin
+ * withdraws all of them; a saved view that names the column keeps the id and skips it. */
 export default definePlugin({
+  querySources: [timersSource],
   contributions: [
     {
       id: "report",
@@ -29,5 +40,21 @@ export default definePlugin({
         );
       },
     },
+    {
+      id: "rail",
+      slot: SlotId.issuePanelSection,
+      order: 40,
+      label: "SLA timers on the issue",
+      render: (props) => <SlaPanel itemId={(props as { item: Item }).item.id} />,
+    },
+    itemAttribute<SlaBatchTimer[]>({
+      id: "slas.timer",
+      label: "SLA",
+      width: 96,
+      minWidth: 56,
+      source: timersSource.key,
+      sample: SAMPLE_TIMERS,
+      render: ({ value }) => <SlaRowChip timers={value} />,
+    }),
   ],
 });

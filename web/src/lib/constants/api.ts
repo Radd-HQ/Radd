@@ -85,8 +85,6 @@ export const ApiPath = {
   // Spec 113 — service accounts and their scoped keys.
   serviceAccounts: "/service-accounts",
   slaPolicies: "/sla-policies",
-  // Batch SLA timers for list/board chips (spec 63).
-  itemsSlaBatch: "/items/sla/batch",
   // Batched epic-progress rollup for board/list progress bars (spec 76).
   itemsRollup: "/items/rollup",
   // Batched estimate/logged seconds for roadmap auto-schedule durations (spec 78).

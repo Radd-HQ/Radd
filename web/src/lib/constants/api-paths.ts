@@ -164,7 +164,6 @@ export const apiCannedResponsePath = (responseId: string) =>
 export const apiCannedRenderPath = (responseId: string) =>
   `${apiCannedResponsePath(responseId)}/render`;
 export const apiSlaPolicyPath = (policyId: string) => `${ApiPath.slaPolicies}/${policyId}`;
-export const apiItemSlaPath = (itemId: string) => `${ApiPath.items}/${itemId}/sla`;
 
 /** Pages paths (spec 43). */
 export const apiPageSpacePath = (spaceId: string) => `${ApiPath.pageSpaces}/${spaceId}`;

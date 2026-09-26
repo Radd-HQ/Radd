@@ -4,12 +4,14 @@ import { fieldInScope } from "./field-scope";
 import { ViewType } from "./types";
 import { FieldType } from "@radd-plugin-ui/fields/types";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
+import type { ItemAttribute } from "@radd/plugin-sdk";
 
 /**
  * List-view table columns (spec 108). The column SET (ids + order) lives on
  * the saved view (`view.columns` — shared, edit-gated, like group_by); WIDTHS
  * are per-user localStorage (ergonomics, swept by "Reset view"). A column id
- * is a builtin name below or `cf.<key>` for a custom field.
+ * is a builtin name below, `cf.<key>` for a custom field, or `<plugin>.<name>`
+ * for an attribute a plugin contributes (RADD-1394 — the SDK's `itemAttribute`).
  */
 
 export interface ColumnDef {
@@ -20,6 +22,8 @@ export interface ColumnDef {
   minWidth: number;
   /** Present on custom-field columns — drives the typed cell renderer. */
   cf?: FieldDef;
+  /** Present on plugin-contributed columns — the owner renders the cell. */
+  attribute?: ItemAttribute;
 }
 
 const COLUMN_MIN_WIDTH = 56;
@@ -71,7 +75,6 @@ const BUILTIN_COLUMNS: ColumnDef[] = [
   { id: "visibility", label: "Visibility", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "assignee", label: "Assignee", width: 72, minWidth: COLUMN_MIN_WIDTH },
   { id: "reporter", label: "Reporter", width: 128, minWidth: COLUMN_MIN_WIDTH },
-  { id: "sla", label: "SLA", width: 96, minWidth: COLUMN_MIN_WIDTH },
   { id: "points", label: "Points", width: 64, minWidth: COLUMN_MIN_WIDTH },
   { id: "progress", label: "Progress", width: 128, minWidth: 80 },
   { id: "logged_time", label: "Logged time", width: 88, minWidth: COLUMN_MIN_WIDTH },
@@ -99,9 +102,21 @@ function customDefaultWidth(type: FieldDef["type"]): number {
   }
 }
 
-/** Every column the picker may offer for a view: builtins + the custom fields
- * in the view's scope (all-projects views get global fields only). */
-export function columnCatalog(fields: FieldDef[], projectId: string | null): ColumnDef[] {
+/** Every column the picker may offer for a view: builtins, the attributes
+ * loaded plugins contribute, then the custom fields in the view's scope
+ * (all-projects views get global fields only). */
+export function columnCatalog(
+  fields: FieldDef[],
+  projectId: string | null,
+  attributes: readonly ItemAttribute[] = [],
+): ColumnDef[] {
+  const contributed = attributes.map((attribute) => ({
+    id: attribute.id,
+    label: attribute.label,
+    width: attribute.width,
+    minWidth: attribute.minWidth,
+    attribute,
+  }));
   const custom = fields
     .filter((field) => (projectId ? fieldInScope(field, projectId) : field.project_ids.length === 0))
     .map((field) => ({
@@ -111,12 +126,12 @@ export function columnCatalog(fields: FieldDef[], projectId: string | null): Col
       minWidth: COLUMN_MIN_WIDTH,
       cf: field,
     }));
-  return [...BUILTIN_COLUMNS, ...custom];
+  return [...BUILTIN_COLUMNS, ...contributed, ...custom];
 }
 
 /** Stored ids -> defs, dropping ids the catalog no longer knows (a custom
- * field can leave the registry; the stored id stays until an editor removes
- * it, and the surface simply doesn't render it). */
+ * field can leave the registry, a plugin can be disabled; the stored id stays
+ * until an editor removes it, and the surface simply doesn't render it). */
 export function resolveColumns(ids: readonly string[], catalog: ColumnDef[]): ColumnDef[] {
   const byId = new Map(catalog.map((column) => [column.id, column]));
   return ids.map((id) => byId.get(id)).filter((column): column is ColumnDef => Boolean(column));
@@ -133,14 +148,16 @@ const DEFAULT_LIST_COLUMNS: readonly string[] = [
   "state",
 ];
 const DEFAULT_PLANNING_COLUMNS: readonly string[] = ["priority", "assignee", "state"];
-/** Queue rows kept their fixed reporter/SLA feel (spec 64) as defaults. */
+/** Queue rows kept their fixed reporter/SLA feel (spec 64) as defaults. The
+ * SLA column is the slas plugin's attribute: while slas is off it is skipped
+ * like any withdrawn column (queue views move to slas in their own issue). */
 const DEFAULT_QUEUE_COLUMNS: readonly string[] = [
   "type",
   "labels",
   "reporter",
   "priority",
   "assignee",
-  "sla",
+  "slas.timer",
   "state",
 ];
 

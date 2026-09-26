@@ -25,6 +25,7 @@ import {
 } from "./layout-ops";
 import { PresetPicker } from "./PresetPicker";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
+import { useItemAttributes } from "@radd/plugin-sdk";
 
 /**
  * The card designer (spec 109): a WYSIWYG editor for the view's board-card
@@ -51,6 +52,8 @@ export function CardDesignerModal({
   const [draft, setDraft] = useState<CardLayout>(() => structuredClone(activeCardLayout(view)));
   const [selected, setSelected] = useState<string | null>(null);
   const drop = useBucketDrop<DesignerDrag>(canEdit);
+  // Plugin-contributed cells (RADD-1394): palette entries, and their samples in the preview.
+  const attributes = useItemAttributes();
 
   const cfByKey = useMemo(
     () =>
@@ -118,6 +121,7 @@ export function CardDesignerModal({
         <div className="flex max-h-[60vh] w-56 shrink-0 flex-col gap-4">
           <AttrPalette
             fields={fields}
+            attributes={attributes}
             projectId={view.project_id}
             draft={draft}
             drop={drop}
@@ -135,6 +139,7 @@ export function CardDesignerModal({
           </p>
           <CardPreview
             draft={draft}
+            attributes={attributes}
             cfByKey={cfByKey}
             drop={drop}
             canEdit={canEdit}

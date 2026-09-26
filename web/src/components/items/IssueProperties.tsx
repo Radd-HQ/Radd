@@ -20,7 +20,6 @@ import {
 import {
   effectiveScreenQuery,
   issueTypesQuery,
-  itemSlaQuery,
   projectDirectoryQuery,
 } from "../../lib/queries";
 import { ValueChip } from "./ValueChip";
@@ -50,7 +49,6 @@ import { PersonName } from "../PersonName";
 import { CustomFieldControl } from "./CustomFieldsForm";
 import { LabelsEditor } from "./LabelsEditor";
 import { CyclePicker, ReleasePicker } from "./PlanningFields";
-import { SlaTimerChip } from "./SlaChips";
 import { TimeTrackingPanel } from "./TimeTrackingPanel";
 import type { CustomFieldValue, CustomFields, FieldDef } from "@radd-plugin-ui/fields/types";
 import type { Project } from "@radd-plugin-ui/projects/types";
@@ -78,7 +76,6 @@ const SCREEN_BUILTIN_ORDER = [
   "start_date",
   "target_date",
   "labels",
-  "sla",
   "time_tracking",
   "points",
 ] as const;
@@ -183,9 +180,6 @@ export function IssueProperties({
         return pointsEnabled
           ? { node: <PointsField item={item} onPatch={patch} />, selfPadded: false }
           : null;
-      case "sla":
-        // Self-renders (with padding) or returns null when no policy applies.
-        return { node: <SlaPanel itemId={item.id} />, selfPadded: true };
       case "time_tracking":
         return timeloggingEnabled
           ? {
@@ -217,11 +211,11 @@ export function IssueProperties({
   const placementOf = (row: EffectiveFieldRow): string =>
     row.custom && fieldErrors[row.field.slice(3)] ? ScreenPlacement.primary : row.placement;
 
-  // Per-row lock: `sla`/`time_tracking` self-render read-only surfaces (never gated); every other
+  // Per-row lock: `time_tracking` self-renders a read-only surface (never gated); every other
   // row (the builtin names — `points` is the `estimate_points` rule field since RADD-834 — plus
   // `cf:<key>` custom fields) resolves through the per-field grant signal.
   const lockFor = (fieldRow: string): { locked: boolean; reason: string } => {
-    if (fieldRow === "sla" || fieldRow === "time_tracking") return { locked: false, reason: "" };
+    if (fieldRow === "time_tracking") return { locked: false, reason: "" };
     const name =
       fieldRow === "points"
         ? "estimate_points"
@@ -338,8 +332,9 @@ export function IssueProperties({
       </div>
 
       {/* Plugin-contributed issue-rail sections (spec 94): federated remotes register here. The
-          mailintake external-requester chip, participants, CSAT and approvals cards all arrive
-          through this slot from their own remotes — the host imports none of them. */}
+          mailintake external-requester chip, participants, CSAT, approvals and SLA timers
+          (RADD-1394) all arrive through this slot from their own remotes — the host imports
+          none of them. */}
       <Slot id={SlotId.issuePanelSection} item={item} project={project} />
 
       {primary.map((row) => {
@@ -419,12 +414,6 @@ function MoreFields({ count, children }: { count: number; children: ReactNode })
         </div>
       )}
     </div>
-  );
-}
-
-function RailHeading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-fg-muted">{children}</h3>
   );
 }
 
@@ -646,36 +635,6 @@ function ReporterPicker({ item, onPatch }: PickerProps) {
       {users.isFetching && !users.data && <option disabled>Loading people…</option>}
       {users.isError && <option disabled>Could not load people. Reopen to retry.</option>}
     </SelectField>
-  );
-}
-
-/**
- * SLA timers (spec 30): rendered only when a policy applies to the item — the
- * item's MATCHED policy since spec 63 (at most one entry). Live server
- * compute; refreshed every minute + on realtime item pushes.
- */
-function SlaPanel({ itemId }: { itemId: string }) {
-  const { data } = useQuery(itemSlaQuery(itemId));
-  if (!data || data.entries.length === 0) return null;
-  return (
-    <div className="p-4">
-      <RailHeading>SLA</RailHeading>
-      <div className="flex flex-col gap-2">
-        {data.entries.map((entry) => (
-          <div key={entry.policy_id}>
-            <p className="mb-1 text-[11px] text-fg-muted">{entry.policy_name}</p>
-            <ul className="flex flex-col gap-1">
-              {entry.timers.map((timer) => (
-                <li key={timer.kind} className="flex items-center gap-2 text-xs">
-                  <span className="capitalize text-fg-secondary">{timer.kind}</span>
-                  <SlaTimerChip timer={timer} className="ml-auto" />
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

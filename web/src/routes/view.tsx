@@ -19,7 +19,8 @@ import {
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, BookmarkPlus, CalendarClock, Download, GanttChartSquare, Globe, List, ListOrdered, Pencil, Pin, Plus, Rocket, RotateCcw, SearchCode, SquareKanban, Trash2, UserRound, X } from "lucide-react";
-import { Slot, SlotId, useDisabledMatches, Pager, useDebounced } from "@radd/plugin-sdk";
+import { Slot, SlotId, useDisabledMatches, Pager, useDebounced, useItemAttributes } from "@radd/plugin-sdk";
+import { ItemAttributeContext, useItemAttributeValues } from "../lib/item-attribute-data";
 import { MissingPluginType } from "../components/shell/MissingPluginType";
 import { api, errorMessage } from "../lib/api";
 import { Entity, invalidateEntities } from "../lib/cache";
@@ -79,7 +80,6 @@ import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { ItemContextMenu } from "../components/items/ItemContextMenu";
 import { NewItemModal } from "../components/items/NewItemModal";
 import { useRollupBatch } from "../components/items/RollupBar";
-import { useSlaBatch } from "../components/items/SlaChips";
 import { BulkActionBar } from "../components/views/BulkActionBar";
 import { BucketOrderMenu } from "../components/views/BucketOrderMenu";
 import { DisplayMenu } from "../components/views/DisplayMenu";
@@ -473,9 +473,11 @@ export function ViewPage() {
     () => view?.columns ?? [...defaultColumnsFor(view?.view_type)],
     [view?.columns, view?.view_type],
   );
+  // Plugin-contributed columns/cells (RADD-1394), withdrawn live with their plugin.
+  const attributes = useItemAttributes();
   const fullColumnCatalog = useMemo(
-    () => columnCatalog(fields.data ?? [], view?.project_id ?? null),
-    [fields.data, view?.project_id],
+    () => columnCatalog(fields.data ?? [], view?.project_id ?? null, attributes),
+    [fields.data, view?.project_id, attributes],
   );
   const listColumns = useMemo(
     () => resolveColumns(listColumnIds, fullColumnCatalog),
@@ -509,12 +511,13 @@ export function ViewPage() {
         : undefined,
     [needsCfUsers, cfUsers.data],
   );
-  // SLA chips (spec 63): one batch call for the page's items (ids capped in
-  // slaBatchQuery) — fetched while the sla slot/column is on, ALWAYS for queues.
+  // Contributed attributes: each one shown as a list column or a placed card
+  // cell asks its owner's source once per page of rows; the rest ask nothing.
   const pageItemIds = useMemo(() => pageItems.map((item) => item.id), [pageItems]);
-  const slaByItem = useSlaBatch(
+  const attributeData = useItemAttributeValues(
+    attributes,
+    isRoadmap ? [] : attributes.filter((attribute) => hasCardAttr(attribute.id) || hasListColumn(attribute.id)),
     pageItemIds,
-    !isRoadmap && (isQueue || hasCardAttr("sla") || hasListColumn("sla")),
   );
   // Epic progress (spec 76): one rollup batch for the page's EPIC-kind items —
   // fetched only while the progress slot/column is on and epics are visible.
@@ -522,7 +525,7 @@ export function ViewPage() {
     () => pageItems.filter((item) => item.kind === ItemKind.epic).map((item) => item.id),
     [pageItems],
   );
-  // Roadmaps draw bars, not cards — no SLA/rollup batches over the full fetch.
+  // Roadmaps draw bars, not cards — no attribute/rollup batches over the full fetch.
   const rollupByItem = useRollupBatch(
     epicIds,
     !isRoadmap && (hasCardAttr("progress") || hasListColumn("progress")),
@@ -1244,6 +1247,7 @@ export function ViewPage() {
           className="flex min-h-0 flex-1 flex-col"
           style={{ zoom: display.scale }}
         >
+          <ItemAttributeContext.Provider value={attributeData}>
           {view.view_type === ViewType.board ? (
             laneAxis ? (
               <ViewSwimlanes
@@ -1258,7 +1262,6 @@ export function ViewPage() {
                 layout={cardLayout}
                 usersById={usersById}
                 cfByKey={cfByKey}
-                slaByItem={slaByItem}
                 rollupByItem={rollupByItem}
                 timelogByItem={timelogByItem}
                 onMoveToCell={columnDraggable || laneDraggable ? moveToCell : undefined}
@@ -1276,7 +1279,6 @@ export function ViewPage() {
                 layout={cardLayout}
                 usersById={usersById}
                 cfByKey={cfByKey}
-                slaByItem={slaByItem}
                 rollupByItem={rollupByItem}
                 timelogByItem={timelogByItem}
                 onQuickAdd={
@@ -1306,7 +1308,6 @@ export function ViewPage() {
               sectionTools={isPlanning ? group => group.key === BACKLOG_KEY ? <Select aria-label="Backlog order" size="sm" value={planningOptions.backlogOrder} onChange={value => changePlanning({backlogOrder: value as PlanningOptions["backlogOrder"]})} options={[{value:"priority",label:"Priority"},{value:"recent",label:"Recently updated"},{value:"manual",label:"Manual"}]} /> : null : undefined}
               viewId={view.id}
               display={display}
-              slaByItem={slaByItem}
               rollupByItem={rollupByItem}
               listColumns={listColumns}
               columnWidths={colWidths.widths}
@@ -1324,6 +1325,7 @@ export function ViewPage() {
               onReorder={(isPlanning || rankOrdered) && canUpdate && !isQueue ? onReorder : undefined}
             />
           )}
+          </ItemAttributeContext.Provider>
         </div>
       )}
 

@@ -5,22 +5,25 @@ import { CARD_EXCLUDED_BUILTINS, type CardLayout } from "../../../lib/card-layou
 import { columnCatalog, type ColumnDef } from "../../../lib/columns";
 import type { DesignerDrag } from "./layout-ops";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
+import type { ItemAttribute } from "@radd/plugin-sdk";
 
 /** Palette grouping — a scan order, not a taxonomy the model knows about. */
 const GROUPS: { label: string; ids: string[] }[] = [
   { label: "Issue", ids: ["parent", "labels", "priority", "state", "points", "progress"] },
   { label: "People", ids: ["assignee", "reporter", "team"] },
   { label: "Dates", ids: ["start_date", "target_date", "created", "updated"] },
-  { label: "Delivery", ids: ["cycle", "release", "sla", "logged_time"] },
+  { label: "Delivery", ids: ["cycle", "release", "logged_time"] },
 ];
 
 /**
- * The card designer's attribute palette (spec 109): every placeable builtin +
- * the custom fields in the view's scope, drag-onto-the-preview (or click to
- * append). Placed attributes dim — one instance each.
+ * The card designer's attribute palette (spec 109): every placeable builtin,
+ * the attributes loaded plugins contribute (RADD-1394) and the custom fields
+ * in the view's scope, drag-onto-the-preview (or click to append). Placed
+ * attributes dim — one instance each.
  */
 export function AttrPalette({
   fields,
+  attributes,
   projectId,
   draft,
   drop,
@@ -28,6 +31,7 @@ export function AttrPalette({
   onAdd,
 }: {
   fields: FieldDef[];
+  attributes: readonly ItemAttribute[];
   projectId: string | null;
   draft: CardLayout;
   drop: BucketDrop<DesignerDrag>;
@@ -38,8 +42,9 @@ export function AttrPalette({
   const [search, setSearch] = useState("");
   const placed = useMemo(() => new Set(draft.cells.map((cell) => cell.attr)), [draft]);
   const catalog = useMemo(
-    () => columnCatalog(fields, projectId).filter((c) => !CARD_EXCLUDED_BUILTINS.has(c.id)),
-    [fields, projectId],
+    () =>
+      columnCatalog(fields, projectId, attributes).filter((c) => !CARD_EXCLUDED_BUILTINS.has(c.id)),
+    [fields, projectId, attributes],
   );
   const byId = new Map(catalog.map((column) => [column.id, column]));
   const matches = (column: ColumnDef) =>
@@ -63,7 +68,7 @@ export function AttrPalette({
         title={
           isPlaced
             ? "Already on the card"
-            : `Drag onto the card (or click to append)${column.cf ? " — custom field" : ""}`
+            : `Drag onto the card (or click to append)${column.cf ? " — custom field" : column.attribute ? " — from a plugin" : ""}`
         }
         className={
           "rounded-md border px-2 py-0.5 text-left text-xs transition-colors " +
@@ -78,6 +83,7 @@ export function AttrPalette({
   };
 
   const customColumns = catalog.filter((column) => column.cf && matches(column));
+  const pluginColumns = catalog.filter((column) => column.attribute && matches(column));
   // Stale placed ids: on the card but no longer in any catalog group.
   const knownIds = new Set(catalog.map((column) => column.id));
   const staleIds = [...placed].filter((attr) => attr !== "title" && !knownIds.has(attr));
@@ -107,6 +113,14 @@ export function AttrPalette({
           </div>
         );
       })}
+      {pluginColumns.length > 0 && (
+        <div data-palette-group="plugins">
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+            From plugins
+          </p>
+          <div className="flex flex-wrap gap-1.5">{pluginColumns.map(chip)}</div>
+        </div>
+      )}
       {customColumns.length > 0 && (
         <div>
           <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
@@ -116,9 +130,9 @@ export function AttrPalette({
         </div>
       )}
       {staleIds.length > 0 && (
-        <p className="text-[11px] text-amber-400">
-          On the card but no longer in the field registry: {staleIds.join(", ")}. They render
-          nothing — remove them from the preview.
+        <p className="text-[11px] text-status-warning-ink" data-stale-attrs>
+          On the card but no longer available (a deleted field or a disabled plugin):{" "}
+          {staleIds.join(", ")}. They render nothing — remove them from the preview.
         </p>
       )}
     </div>

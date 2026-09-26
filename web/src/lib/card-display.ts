@@ -23,17 +23,14 @@ export const CardSlot = {
   team: "team",
   priority: "priority",
   assignee: "assignee",
-  // Nearest-to-breach SLA timer chip (spec 63) — default OFF everywhere; a
-  // surface only fires the batch request while the slot is enabled.
-  sla: "sla",
-  // Story-points "Np" chip (spec 70) — default OFF like sla; renders only on
-  // items that carry points, so non-opted-in projects show nothing.
+  // Story-points "Np" chip (spec 70) — default OFF; renders only on items
+  // that carry points, so non-opted-in projects show nothing.
   points: "points",
   // Epic progress bar (spec 76) — default ON for board/list presets; renders
   // only on epic-kind items, fed by the POST /items/rollup batch.
   progress: "progress",
-  // Logged time ("5h 20m") from the POST /items/timelog/batch — like sla, the
-  // surface only fires the batch while the slot is on; items with nothing
+  // Logged time ("5h 20m") from the POST /items/timelog/batch — the surface
+  // only fires the batch while the slot is on; items with nothing
   // logged render nothing, so timelogging-off projects stay clean.
   loggedTime: "logged_time",
   state: "state",
@@ -52,7 +49,6 @@ export const CARD_SLOT_ORDER: readonly CardSlotValue[] = [
   CardSlot.team,
   CardSlot.priority,
   CardSlot.assignee,
-  CardSlot.sla,
   CardSlot.points,
   CardSlot.progress,
   CardSlot.loggedTime,
@@ -69,7 +65,6 @@ export const CARD_SLOT_LABELS: Record<CardSlotValue, string> = {
   [CardSlot.team]: "Team",
   [CardSlot.priority]: "Priority",
   [CardSlot.assignee]: "Assignee",
-  [CardSlot.sla]: "SLA",
   [CardSlot.points]: "Points",
   [CardSlot.progress]: "Progress",
   [CardSlot.loggedTime]: "Logged time",
@@ -113,8 +108,7 @@ export const DEFAULT_BOARD_SLOTS: readonly CardSlotValue[] = [
 ];
 
 /** Queues (spec 64) have a FIXED column set — no DisplayMenu. Reporter and
- *  the always-on SLA chip are queue table columns (spec 108), so `sla` is
- *  deliberately not in this list. */
+ *  the SLA timer are queue table columns (spec 108), not slots. */
 export const DEFAULT_QUEUE_SLOTS: readonly CardSlotValue[] = [
   CardSlot.type,
   CardSlot.labels,

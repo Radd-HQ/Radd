@@ -1,21 +1,12 @@
-/** Service desk: canned responses + SLA policies/timers (specs 30/63). */
+/** Service desk: canned responses + SLA policies (specs 30/63). The timers are the slas
+ * plugin's remote (RADD-1394). */
 
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
-import {
-  ApiPath,
-  SLA_BATCH_MAX_ITEMS,
-  SLA_BATCH_REFETCH_MS,
-  apiItemSlaPath,
-} from "../constants";
+import { ApiPath } from "../constants";
 import { queryKeys } from "./shared";
-import type {
-  CannedResponse,
-  ItemSla,
-  SlaBatchResponse,
-  SlaPolicy,
-} from "../types";
+import type { CannedResponse, SlaPolicy } from "../types";
 
 /** Canned responses (spec 30) — readable by any member. */
 export const cannedResponsesQuery = () =>
@@ -33,26 +24,3 @@ export const slaPoliciesQuery = (projectId: string) =>
       api.get<SlaPolicy[]>(ApiPath.slaPolicies, { signal, query: { project_id: projectId } }),
     meta: entityMeta(Entity.slaPolicy),
   });
-
-/** Live SLA timer status for one item (spec 30; matched policy since spec 63). */
-export const itemSlaQuery = (itemId: string) =>
-  queryOptions({
-    queryKey: queryKeys.itemSla(itemId),
-    queryFn: ({ signal }) => api.get<ItemSla>(apiItemSlaPath(itemId), { signal }),
-    meta: entityMeta(Entity.slaPolicy, Entity.item),
-    // Timers tick server-side; refresh the readout periodically while open.
-    refetchInterval: SLA_BATCH_REFETCH_MS,
-  });
-
-/** Batch SLA timers for a surface's visible items (spec 63) — one POST per
- * loaded page, re-polled every minute. Callers gate with `enabled` so an
- * off slot fetches nothing; ids are sorted for a stable query key. */
-export const slaBatchQuery = (itemIds: readonly string[]) => {
-  const ids = [...itemIds].sort().slice(0, SLA_BATCH_MAX_ITEMS);
-  return queryOptions({
-    queryKey: queryKeys.slaBatch(ids),
-    queryFn: ({ signal }) => api.post<SlaBatchResponse>(ApiPath.itemsSlaBatch, { item_ids: ids }, { signal }),
-    meta: entityMeta(Entity.slaPolicy, Entity.item),
-    refetchInterval: SLA_BATCH_REFETCH_MS,
-  });
-};

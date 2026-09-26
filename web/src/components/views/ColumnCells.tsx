@@ -9,12 +9,9 @@ import {
 import { startHorizontalDrag } from "../../lib/drag";
 import { formatDuration } from "../../lib/duration";
 import { useDurationConfig } from "../../lib/hooks";
-import {
-  ItemKind,
-  type Item,
-  type ItemRollup,
-  type SlaBatchTimer,
-} from "../../lib/types";
+import { ItemKind, type Item, type ItemRollup } from "../../lib/types";
+import { useItemAttributeData } from "../../lib/item-attribute-data";
+import { ItemAttributeCell, ItemAttributeSurface } from "@radd/plugin-sdk";
 import { isOverdue } from "../items/CardSlots";
 import { CustomCell, Dash, DateText } from "../items/CustomFieldValue";
 import {
@@ -32,7 +29,6 @@ import {
   UnassignedSlot,
 } from "../items/ItemBadges";
 import { RollupRowBar } from "../items/RollupBar";
-import { SlaRowChip } from "../items/SlaChips";
 import { PRIORITY_META } from "../../lib/meta";
 
 /**
@@ -195,7 +191,6 @@ export function ColumnCell({
   item,
   width,
   maxLabels,
-  sla,
   rollup,
   loggedSeconds,
   usersById,
@@ -204,7 +199,6 @@ export function ColumnCell({
   item: Item;
   width: number;
   maxLabels: number;
-  sla?: SlaBatchTimer[];
   rollup?: ItemRollup;
   loggedSeconds?: number;
   usersById?: Map<string, string>;
@@ -215,7 +209,6 @@ export function ColumnCell({
         column={column}
         item={item}
         maxLabels={maxLabels}
-        sla={sla}
         rollup={rollup}
         loggedSeconds={loggedSeconds}
         usersById={usersById}
@@ -228,7 +221,6 @@ function CellContent({
   column,
   item,
   maxLabels,
-  sla,
   rollup,
   loggedSeconds,
   usersById,
@@ -236,12 +228,20 @@ function CellContent({
   column: ColumnDef;
   item: Item;
   maxLabels: number;
-  sla?: SlaBatchTimer[];
   rollup?: ItemRollup;
   loggedSeconds?: number;
   usersById?: Map<string, string>;
 }) {
   const durations = useDurationConfig();
+  const attributes = useItemAttributeData();
+  if (column.attribute) {
+    // A plugin's column (RADD-1394): the owner draws a value; no value is the host's dash.
+    const value = attributes.valueOf(column.attribute, item.id);
+    return value == null ? <Dash /> : (
+      <ItemAttributeCell attribute={column.attribute} item={item} value={value}
+        surface={ItemAttributeSurface.list} fallback={<Dash />} />
+    );
+  }
   if (column.cf) {
     return (
       <CustomCell
@@ -297,8 +297,6 @@ function CellContent({
       ) : (
         <Dash />
       );
-    case "sla":
-      return sla && sla.length > 0 ? <SlaRowChip timers={sla} /> : <Dash />;
     case "points":
       return item.estimate_points != null ? <PointsChip points={item.estimate_points} /> : <Dash />;
     case "progress":

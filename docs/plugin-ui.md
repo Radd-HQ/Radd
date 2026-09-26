@@ -48,6 +48,7 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `sidebarNav` | Left sidebar nav | `{}` | today driven by the backend nav manifest | `components/shell/Sidebar.tsx` |
 | `dashboardWidget` | A dashboard widget type | `{config, widget, filterQuery}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry; `filterQuery` = the dashboard-wide SLQ filter (plugin widgets decide how to honor it) | `components/dashboards/WidgetCard.tsx` |
 | `itemAction` | An item's action menu | `{item}` | | *menu host* |
+| `itemAttribute` | A list COLUMN and a board-card CELL (RADD-1394) | `{item, value, surface}` | `match` = the attribute id; build it with `itemAttribute(spec)` — see "Item attributes" below | `components/views/ColumnCells.tsx`, `components/board/card-cells.tsx` |
 | `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `{node, params, schema, onChange}` | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `components/automations/GraphInspector.tsx` |
 
 **Host components (RADD-1325).** An inspector should look and behave like the host's own forms
@@ -137,6 +138,61 @@ Two typed contracts are currently available:
 The feature owns `fetch(args, signal)`, endpoints, interpretation and refresh intervals. The host calls `usePluginData(kind, args, actorId)`. Query keys include plugin ownership, activation generation and actor id: data is shared between consumers without surviving as a visible contribution after disable or leaking between account identities. The query signal aborts an unused request when its source withdraws. Re-enabling gets a fresh query identity; a failed source contributes no initial data and cannot fail the surrounding host page. Mutation handlers call `invalidatePluginData(queryClient, pluginName)` to refresh their data consumers.
 
 The Leave remote (`modules/leave/ui/src/data.ts`) is the first implementation. The host contains no Leave endpoint, label, date interpretation or enablement check. This is a data contract, not an invisible rendering component pretending to be a service.
+
+## Item attributes: list columns and card cells (SDK 1.15)
+
+A plugin adds a column to every list view and a cell to the board card designer with ONE
+declaration. It is not a new registry: `itemAttribute(spec)` returns an ordinary contribution to
+`SlotId.itemAttribute` (so plugin tagging, withdrawal, the per-contribution toggles and the error
+boundary come with it), and its data is one of the plugin's own `querySources` (so shared query
+keys, activation generations and abort-on-withdrawal come with that).
+
+```tsx
+import { definePlugin, itemAttribute, api, type QuerySource } from "@radd/plugin-sdk";
+
+const timers: QuerySource<Record<string, Timer[]>> = {
+  key: "slas.timers",                                   // `<plugin>.<name>`, like every query source
+  meta: { entities: ["item", "slaPolicy"] },            // refreshed with the entities it caches
+  refetchInterval: 60_000,                              // a countdown changes with the clock
+  fetch: ({ ids }, signal) => api.post("/items/sla/batch", { item_ids: ids }, { signal }),
+};
+
+export default definePlugin({
+  querySources: [timers],
+  contributions: [
+    itemAttribute<Timer[]>({
+      id: "slas.timer",          // what saved views and card layouts store
+      label: "SLA", width: 96, minWidth: 56,
+      source: timers.key,        // one of THIS plugin's query sources
+      sample: [aHealthyTimer],   // what the card designer's preview draws
+      render: ({ value, item, surface }) => <SlaRowChip timers={value} />,
+    }),
+  ],
+});
+```
+
+The contract:
+
+- **The id is `<plugin>.<name>`** of the registering plugin, and so is `source`. Anything else —
+  a builtin name, a `cf.<key>`, a bare word, another plugin's prefix — is skipped by
+  `useItemAttributes()`, and cells render through `<Slot owner=…>`, so a second plugin that
+  registers the same key cannot draw into the owner's cells.
+- **The host asks once per page of rows.** For each attribute shown as a list column or placed on
+  the card, the page's items are cut into stable batches of at most `ITEM_ATTRIBUTE_BATCH_MAX`
+  (200) ids; `fetch({ids}, signal)` resolves to `{[itemId]: value}` for the ids that HAVE a value.
+  One request per (source, batch) is shared by the list, the board and swimlanes (and by
+  attributes that share a source); appending a page asks only for the new ids.
+- **`render` only sees a value.** An item the batch did not answer shows the host's empty
+  treatment — a dash in lists, no cell on cards — so a lane of empty cells collapses exactly as it
+  does for builtins. `surface` (`"list"`/`"card"`) lets a chip size itself.
+- **Withdrawal degrades like a deleted custom field.** Disabling the plugin removes the column,
+  the card cell and the palette entry live and aborts an in-flight batch; the saved view keeps the
+  id, the list skips it, the Columns editor shows `<id> (unavailable)`, and the card designer's
+  stale note names it. Re-enabling reads afresh.
+
+The slas plugin is the first adopter (`modules/slas/ui`): the SLA column, the card cell and the
+issue rail's SLA section are its own; the host holds no SLA code. Remotes that use this declare
+`ui_api_version="1.15.0"`.
 
 ## Logic & data access — where computation goes and what a plugin can see
 

@@ -23,8 +23,6 @@ import type {
   ItemRollup,
   ItemTimelogBatchEntry,
   RollupResponse,
-  SlaBatchResponse,
-  SlaBatchTimer,
   TimelogBatchResponse,
 } from "../../lib/types";
 import type { ViewGroup } from "../../lib/view-utils";
@@ -51,8 +49,6 @@ interface ViewListProps {
   sectionStatus?: (group: ViewGroup) => ReactNode;
   /** Card display config (slots/labels/scale) — defaults to the list preset. */
   display?: CardDisplayConfig;
-  /** Batch SLA timers by item id (spec 63) — set while the sla slot is on. */
-  slaByItem?: SlaBatchResponse;
   /** Epic-progress rollups by item id (spec 76) — set while the progress slot
    *  is on and epic-kind items are on the page. */
   rollupByItem?: RollupResponse;
@@ -122,7 +118,6 @@ export function ViewList({
   sectionTools,
   sectionStatus,
   display = defaultCardDisplay(DEFAULT_LIST_SLOTS),
-  slaByItem,
   rollupByItem,
   listColumns,
   columnWidths,
@@ -344,7 +339,6 @@ export function ViewList({
                       onReorderOver={(before) => setDropRow({ id: item.id, before })}
                       onReorderDrop={(before) => reorderInto(group, item, before)}
                       display={display}
-                      sla={slaByItem?.[item.id]}
                       rollup={rollupByItem?.[item.id]}
                       listColumns={listColumns}
                       columnWidths={columnWidths}
@@ -370,8 +364,6 @@ interface ListRowProps {
   item: Item;
   sourceCycle?: string;
   display: CardDisplayConfig;
-  /** Batch SLA timers for the sla slot (spec 63). */
-  sla?: SlaBatchTimer[];
   /** Epic-progress aggregates for the progress slot (spec 76). */
   rollup?: ItemRollup;
   /** Table columns (spec 108). */
@@ -397,7 +389,6 @@ function ListRow({
   item,
   sourceCycle,
   display,
-  sla,
   rollup,
   listColumns,
   columnWidths,
@@ -496,7 +487,6 @@ function ListRow({
           item={item}
           width={columnWidths?.[column.id] ?? column.width}
           maxLabels={display.maxLabels}
-          sla={sla}
           rollup={rollup}
           loggedSeconds={timelog?.logged_seconds}
           usersById={usersById}

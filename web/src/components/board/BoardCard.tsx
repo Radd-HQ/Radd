@@ -10,7 +10,8 @@ import {
   type CardLayoutCell,
 } from "../../lib/card-layout";
 import { useDurationConfig, usePeek } from "../../lib/hooks";
-import type { Item, ItemRollup, ItemTimelogBatchEntry, SlaBatchTimer } from "../../lib/types";
+import { useItemAttributeData } from "../../lib/item-attribute-data";
+import type { Item, ItemRollup, ItemTimelogBatchEntry } from "../../lib/types";
 import {
   FlagBadge,
   VisibilityBadge,
@@ -31,8 +32,6 @@ interface BoardCardProps {
   onContextMenu?: (item: Item, event: ReactMouseEvent) => void;
   /** Card layout (spec 109) — defaults to the faithful pre-109 board card. */
   layout?: CardLayout;
-  /** Batch SLA timers for a placed sla cell (spec 63); omitted renders nothing. */
-  sla?: SlaBatchTimer[];
   /** Epic-progress aggregates for a placed progress cell (spec 76). */
   rollup?: ItemRollup;
   /** Logged/estimate seconds for a placed logged-time cell. */
@@ -131,7 +130,6 @@ export function BoardCard({
   onDragEnd,
   onContextMenu,
   layout = DEFAULT_BOARD_CARD_LAYOUT,
-  sla,
   rollup,
   timelog,
   usersById,
@@ -141,6 +139,8 @@ export function BoardCard({
 }: BoardCardProps) {
   const { open: openPeek } = usePeek();
   const durations = useDurationConfig();
+  // Plugin-contributed cells (RADD-1394) read the surface's attribute data.
+  const attributes = useItemAttributeData();
   const open = () => openPeek(item.key);
   // RADD-698: children expand IN the card. Collapsed is the default and is
   // byte-identical to the pre-698 card, so a board at rest is unchanged.
@@ -148,7 +148,7 @@ export function BoardCard({
 
   const ctx: CardCellCtx = {
     item,
-    sla,
+    attributes,
     rollup,
     timelog,
     maxLabels: layout.max_labels,

@@ -282,6 +282,33 @@ test('the SLA report is the slas plugin\'s and the chart kit is reporting\'s (RA
   assert.deepEqual(violations,[]);
 });
 
+test('SLA timers are the slas plugin\'s: lists, cards, the designer and the rail name none of it (RADD-1394)',()=>{
+  assert(!existsSync('web/src/components/items/SlaChips.tsx'));
+  // Anywhere in the host: no timer component, batch threading, query, wire type or endpoint.
+  const vocabulary=/^(?:SlaRowChip|SlaTimerChip|SlaPanel|nearestToBreach|slaByItem|useSlaBatch|slaBatchQuery|itemSlaQuery|ItemSla|ItemSlaEntry|SlaTimer|SAMPLE_SLA)$/;
+  const violations=[];
+  // Queue views (`lib/queue.ts`) move to slas in their own issue; everything else is done.
+  for (const file of files('web/src').filter(f=>f!=='web/src/lib/queue.ts')) for (const node of nodes(file)) {
+    if (node.type==='Identifier' && vocabulary.test(node.name)) violations.push(`${file}:${node.loc.start.line}: ${node.name}`);
+    if (node.type==='StringLiteral' && /^\/items\/sla\/batch$/.test(node.value)) violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
+    if (node.type==='TemplateElement' && /\/sla$/.test(node.value.raw)) violations.push(`${file}:${node.loc.start.line}: ${node.value.raw}`);
+  }
+  // On the column/cell surfaces, not even the old bare `sla` id: the column is `slas.timer` now.
+  const surfaces=['web/src/lib/columns.ts','web/src/lib/card-display.ts','web/src/lib/card-layout.ts','web/src/routes/view.tsx',
+    'web/src/components/board/card-cells.tsx','web/src/components/board/BoardCard.tsx','web/src/components/views/ColumnCells.tsx',
+    'web/src/components/views/ViewList.tsx','web/src/components/views/ViewBoard.tsx','web/src/components/views/ViewSwimlanes.tsx',
+    'web/src/components/items/IssueProperties.tsx',...files('web/src/components/views/carddesigner')];
+  for (const file of surfaces) for (const node of nodes(file)) {
+    if (node.type==='StringLiteral' && node.value==='sla') violations.push(`${file}:${node.loc.start.line}: "sla"`);
+  }
+  assert.deepEqual(violations,[]);
+  // …and the owner really does contribute them, so the absence above is not vacuous.
+  const remote=readFileSync('server/src/radd/modules/slas/ui/src/index.tsx','utf8');
+  assert.match(remote,/itemAttribute<[^>]*>\(\{\s*id: "slas\.timer"/);
+  assert.match(remote,/slot: SlotId\.issuePanelSection/);
+  assert.match(readFileSync('server/src/radd/modules/slas/ui/src/timers.ts','utf8'),/key: "slas\.timers"/);
+});
+
 test('VCS settings and connector transport are owned by plugins',()=>{
   const violations=[];
   for (const file of files('web/src')) for (const node of nodes(file)) {

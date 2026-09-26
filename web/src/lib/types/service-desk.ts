@@ -115,27 +115,8 @@ export const WRITE_ONLY_BUILTIN_FIELDS: ReadonlySet<BuiltinRuleField> = new Set(
   "priority",
 ]);
 
-export interface SlaTimer {
-  kind: SlaKindValue;
-  target_minutes: number;
-  due_at: string | null;
-  met_at: string | null;
-  breached: boolean;
-  paused: boolean;
-  remaining_seconds: number | null;
-}
-
-export interface ItemSlaEntry {
-  policy_id: string;
-  policy_name: string;
-  timers: SlaTimer[];
-}
-
-export interface ItemSla {
-  entries: ItemSlaEntry[];
-}
-
-/** One timer of an item's MATCHED policy (spec 63 batch endpoint). */
+/** One timer of an item's MATCHED policy (spec 63 batch endpoint) — only the queue
+ * helpers (`lib/queue.ts`) still read it; the timers' UI is the slas plugin's (RADD-1394). */
 export interface SlaBatchTimer {
   policy_name: string;
   kind: SlaKindValue;
