@@ -24,7 +24,7 @@ import { ContextMenu } from "../ContextMenu";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { RoutePath } from "../../lib/constants";
-import { pageLink } from "@radd-plugin-ui/pages/links";
+import { PageRoute, pageLink } from "@radd-plugin-ui/pages/links";
 import { PageApi } from "@radd-plugin-ui/pages/endpoints";
 import { usePermissions, useIsAuthenticated } from "../../lib/hooks";
 import { viewQuery } from "../../lib/queries";
@@ -57,7 +57,7 @@ const LINK_ICONS: [prefix: string, icon: LucideIcon][] = [
   ["/starred", Star],
   ["/timesheet", Clock],
   ["/reports", BarChart3],
-  ["/docs", BookOpen],
+  [PageRoute.pages, BookOpen],
   ["/dashboards", LayoutDashboard],
   ["/cycles", CalendarRange],
   ["/portal", ConciergeBell],
