@@ -236,6 +236,7 @@ async function main() {
   const { session } = await openBrowser({ port: PORT, profile: PROFILE });
   const checks = {};
   let seeded = null;
+  let failed = 1;
 
   await session.navigate(baseUrl + "/", 1200);
   await session.login(baseUrl, email, password);
@@ -322,21 +323,23 @@ async function main() {
     await session.screenshot("/tmp/mail-routing-rule-editor.png");
     checks["no console errors"] = session.consoleErrors.length === 0;
 
-    const failed = report(checks, {
+    failed = report(checks, {
       trace,
       orphan: { reason: orphan.reason },
       editor,
       consoleErrors: session.consoleErrors.slice(0, 5),
     });
     console.log("shots: /tmp/mail-routing-trace.png, /tmp/mail-routing-rule-editor.png");
-    process.exit(failed ? 1 : 0);
   } finally {
     // Leave the instance as it was found; the rules cascade with the source.
+    // (The exit used to sit inside the try, so this never ran and every run
+    // left its two sources behind — RADD-1378 found them on the settings page.)
     if (seeded) {
       await apiCall(session, "DELETE", `/mail/sources/${seeded.sourceId}`);
       await apiCall(session, "DELETE", `/mail/sources/${seeded.orphanId}`);
     }
   }
+  process.exit(failed ? 1 : 0);
 }
 
 main().catch((error) => {

@@ -1,17 +1,13 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { api } from "../../../lib/api";
-import { apiMailSourcePreviewPath } from "../../../lib/constants";
+import { api, Button, ErrorText, Modal, TextField } from "@radd/plugin-sdk";
+import { MailPath } from "./api";
 import {
   MailRuleStatus,
   type MailRuleStatusValue,
   type MailSource,
   type RoutingPreviewResult,
-} from "../../../lib/types";
-import { Button } from "../../Button";
-import { ErrorText } from "@radd/plugin-sdk";
-import { Modal } from "../../Modal";
-import { TextField } from "../../TextField";
+} from "./types";
 
 /** Per-status chrome for the rule trace. Errored is deliberately the loudest
  * thing on the panel: it is the outcome the destination line cannot express.
@@ -66,7 +62,7 @@ export function PreviewDialog({
   });
   const run = useMutation({
     mutationFn: () =>
-      api.post<RoutingPreviewResult>(apiMailSourcePreviewPath(source.id), form),
+      api.post<RoutingPreviewResult>(MailPath.sourcePreview(source.id), form),
   });
 
   return (

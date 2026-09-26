@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Inbox, Plus } from "lucide-react";
-import { mailKindsQuery, mailSourcesQuery } from "../../../lib/queries";
-import { MailSourceKind, type MailSource } from "../../../lib/types";
-import { Button } from "../../Button";
-import { EmptyState, TableSkeleton } from "@radd/plugin-sdk";
-import { QueryError } from "../../QueryError";
+import { Button, EmptyState, QueryError, TableSkeleton } from "@radd/plugin-sdk";
+import { mailKindsQuery, mailSourcesQuery } from "./api";
+import { MailSourceKind, type MailSource } from "./types";
 import { RuleChainDialog } from "./RuleChainDialog";
 import { SourceDialog } from "./SourceDialog";
 import { Chip, connectionLine, kindLabel } from "./shared";
@@ -59,7 +57,7 @@ export function SourcesPanel() {
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((source) => (
-            <li key={source.id} className="rounded-lg border border-subtle bg-surface px-4 py-3">
+            <li key={source.id} data-mail-source={source.id} className="rounded-lg border border-subtle bg-surface px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[13px] text-heading">{source.name}</span>
                 <Chip>{kindLabel(kinds.data?.sources, source.kind)}</Chip>

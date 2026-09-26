@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../../lib/api";
-import { Button } from "../../Button";
-import { ErrorText } from "@radd/plugin-sdk";
+import { api, Button, ErrorText } from "@radd/plugin-sdk";
+import { MailPath, mailKeys } from "./api";
 interface Rule { domain: string; include_subdomains: boolean; pattern: string; enabled: boolean }
 interface Settings { rules: Rule[]; ai_enabled: boolean }
 export function SignaturesPanel() {
   const client = useQueryClient();
-  const query = useQuery({ queryKey: ["mail-signatures"], queryFn: () => api.get<Settings>("/mail/signatures") });
+  const query = useQuery({ queryKey: mailKeys.signatures, queryFn: ({ signal }) => api.get<Settings>(MailPath.signatures, { signal }) });
   const [draft, setDraft] = useState<Settings | null>(null);
   const [sender, setSender] = useState("");
   const [body, setBody] = useState("");
   const value = draft ?? query.data;
-  const save = useMutation({ mutationFn: () => api.put<Settings>("/mail/signatures", value), onSuccess: data => { client.setQueryData(["mail-signatures"], data); setDraft(null); } });
-  const preview = useMutation({ mutationFn: () => api.post<{ body: string; signature: string | null; method: string }>("/mail/signatures/preview", { settings: value, sender, body }) });
+  const save = useMutation({ mutationFn: () => api.put<Settings>(MailPath.signatures, value), onSuccess: data => { client.setQueryData(mailKeys.signatures, data); setDraft(null); } });
+  const preview = useMutation({ mutationFn: () => api.post<{ body: string; signature: string | null; method: string }>(MailPath.signaturesPreview, { settings: value, sender, body }) });
   if (query.isError) return <ErrorText error={query.error} />;
   if (!value) return <p>Loading signature settings…</p>;
   const update = (i: number, patch: Partial<Rule>) => { setDraft({ ...value, rules: value.rules.map((rule, index) => index === i ? { ...rule, ...patch } : rule) }); preview.reset(); };

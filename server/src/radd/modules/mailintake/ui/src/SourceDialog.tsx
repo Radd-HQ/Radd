@@ -1,17 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
-import { api } from "../../../lib/api";
-import { ApiPath, apiMailSourcePath } from "../../../lib/constants";
-import { mailKindsQuery, mailSendersQuery, queryKeys } from "../../../lib/queries";
-import { MailSourceKind, type MailSourceKindValue, type MailSource } from "../../../lib/types";
-import { Button, ButtonVariant } from "../../Button";
-import { useConfirm, ErrorText } from "@radd/plugin-sdk";
-import { Modal } from "../../Modal";
-import { SelectField } from "../../SelectField";
-import { TextField } from "../../TextField";
-import { CheckboxField, KindGuidance, findKind, kindLabel } from "./shared";
-import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
+import { api, Button, ButtonVariant, ErrorText, Modal, SelectField, TextField, useConfirm } from "@radd/plugin-sdk";
+import { MailPath, mailKeys, mailKindsQuery, mailSendersQuery } from "./api";
+import { MailSourceKind, type MailSourceKindValue, type MailSource } from "./types";
+import { CheckboxField, KindGuidance, ProjectField, findKind, kindLabel } from "./shared";
 
 /**
  * Create or edit one mail source (RADD-958; presets RADD-969).
@@ -32,7 +25,6 @@ export function SourceDialog({
 }) {
   const queryClient = useQueryClient();
   const kinds = useQuery(mailKindsQuery());
-  const projects = useQuery(projectsQuery());
   const senders = useQuery(mailSendersQuery());
   const [confirmDialog, confirm] = useConfirm();
   const [form, setForm] = useState({
@@ -70,7 +62,7 @@ export function SourceDialog({
     (s) => s.enabled || s.id === form.sender_id,
   );
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.mailSources });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: mailKeys.sources });
   const save = useMutation({
     mutationFn: () => {
       const body: Record<string, unknown> = {
@@ -89,8 +81,8 @@ export function SourceDialog({
       // Omitted = unchanged, so editing a port never re-types a password.
       if (!form.secret) delete body.secret;
       return source
-        ? api.patch(apiMailSourcePath(source.id), body)
-        : api.post(ApiPath.mailSources, body);
+        ? api.patch(MailPath.source(source.id), body)
+        : api.post(MailPath.sources, body);
     },
     onSuccess: async () => {
       await invalidate();
@@ -98,7 +90,7 @@ export function SourceDialog({
     },
   });
   const remove = useMutation({
-    mutationFn: () => api.delete(apiMailSourcePath(source!.id)),
+    mutationFn: () => api.delete(MailPath.source(source!.id)),
     onSuccess: async () => {
       await invalidate();
       onClose();
@@ -201,19 +193,13 @@ export function SourceDialog({
           value={form.secret}
           onChange={(e) => set("secret", e.target.value)}
         />
-        <SelectField
-          label="Default project"
+        <ProjectField
           value={form.default_project_id}
-          onChange={(e) => set("default_project_id", e.target.value)}
+          onChange={(projectId) => set("default_project_id", projectId)}
+          label="Default project"
+          emptyLabel="— none —"
           hint="Where a message lands when no routing rule matches. Without one, mail that matches nothing cannot open a ticket at all."
-        >
-          <option value="">— none —</option>
-          {(projects.data ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.key} · {p.name}
-            </option>
-          ))}
-        </SelectField>
+        />
         <SelectField
           label="Send replies from"
           value={form.sender_id}

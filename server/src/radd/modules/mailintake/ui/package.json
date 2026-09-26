@@ -8,6 +8,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@radd/plugin-sdk": "*"
+    "@radd/plugin-sdk": "*",
+    "@radd-plugin-ui/projects": "*"
   }
 }

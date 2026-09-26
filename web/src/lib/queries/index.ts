@@ -26,7 +26,6 @@ export * from "./pages";
 export * from "./ai-search";
 export * from "./sso-admin";
 export * from "./storage-admin";
-export * from "./mail-admin";
 export * from "./jira";
 export * from "./confluence";
 export * from "./integrations";

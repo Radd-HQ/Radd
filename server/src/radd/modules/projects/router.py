@@ -8,12 +8,14 @@ from radd.config import settings
 from radd.db import get_session
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.kernel import capabilities as kcaps
+from radd.kernel.entity_links import resolve_entity_link
 from radd.modules.auth import authz
 from radd.modules.auth.principals import ANYONE_ID, SIGNED_IN_ID
 from radd.modules.auth.types import Permission
 from radd.modules.auth.deps import Actor, CurrentUser
 
 from . import service, directory
+from .types import Blocker
 from .schemas import (
     BlockerRead,
     ProjectContentRead,
@@ -193,8 +195,16 @@ async def project_content(project_id: uuid.UUID, session: Session, user: Current
     inspection = await service.inspect_project(session, project)
     return ProjectContentRead(
         counts=inspection.counts,
-        blockers=[BlockerRead(**vars(blocker)) for blocker in inspection.blockers],
+        blockers=[_blocker_read(blocker) for blocker in inspection.blockers],
     )
+
+
+def _blocker_read(blocker: Blocker) -> BlockerRead:
+    """A blocker's `kind` is its owner's entity type, so the owner's declared
+    entity link says where it is fixed (RADD-1378) — this module never learns
+    which plugin that is, and a withdrawn plugin simply links nowhere."""
+    destination = resolve_entity_link(blocker.kind, blocker.id, refs={})
+    return BlockerRead(**vars(blocker), url=destination.url if destination else None)
 
 
 @project_router.delete("/{project_id}", status_code=204)

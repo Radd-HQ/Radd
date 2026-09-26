@@ -1,5 +1,22 @@
 import type { ReactNode } from "react";
-import type { MailKindInfo } from "../../../lib/types";
+import { Slot } from "@radd/plugin-sdk";
+import { PROJECT_SELECT_SLOT, type ProjectSelectProps } from "@radd-plugin-ui/projects/picker-contract";
+import type { MailKindInfo } from "./types";
+
+/**
+ * A project picker, as the projects plugin contributes it (a contract, never
+ * its source): it resolves the selected project and loads a bounded catalog
+ * only when opened, so no dialog here downloads every project up front.
+ */
+export function ProjectField(props: ProjectSelectProps) {
+  return (
+    <Slot
+      id={PROJECT_SELECT_SLOT}
+      {...props}
+      fallback={<span className="text-xs text-fg-muted">Projects are unavailable.</span>}
+    />
+  );
+}
 
 /** Small uppercase tag — a kind, a "default" marker, a disabled state. */
 export function Chip({ children, tone }: { children: ReactNode; tone?: "muted" }) {

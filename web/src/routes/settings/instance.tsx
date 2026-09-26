@@ -61,9 +61,10 @@ function StatusPill({
 }
 
 function StatusGrid({ status }: { status: InstanceStatus }) {
-  // Plugin pages (AI RADD-1379, Directory RADD-1381) take their links from the plugin's
-  // manifest, so a disabled plugin leaves a plain status row, not a dead link.
+  // Plugin pages (AI RADD-1379, Email RADD-1378, Directory RADD-1381) take their links from the
+  // plugin's manifest, so a disabled plugin leaves a plain status row, not a dead link.
   const { data: manifest } = useQuery(capabilitiesQuery);
+  const mailSettings = settingsPathForPlugin("mailintake", manifest);
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       <StatusPill label="OIDC SSO" on={status.sso_enabled} />
@@ -81,7 +82,7 @@ function StatusGrid({ status }: { status: InstanceStatus }) {
       <StatusPill
         label="Email"
         on={status.smtp_configured}
-        to={RoutePath.settingsEmail}
+        to={mailSettings?.to}
       />
       {/* RADD-1279: the "TOTP MFA" pill is gone — it reported that the feature
           ships, which read like enforcement. The policy switch and who is

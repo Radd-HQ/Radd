@@ -150,11 +150,6 @@ export const queryKeys = {
   aiEditorActions: ["aiEditorActions"] as const,
   ssoProviders: ["ssoProviders"] as const,
   ssoKinds: ["ssoKinds"] as const,
-  // Mail configuration (RADD-958/969) — Settings → Email.
-  mailSources: ["mailSources"] as const,
-  mailSenders: ["mailSenders"] as const,
-  mailKinds: ["mailKinds"] as const,
-  mailRules: (sourceId: string) => ["mailRules", { sourceId }] as const,
   // Storage host registry + routing chain + move jobs (spec 102).
   storageHosts: ["storageHosts"] as const,
   storageRules: ["storageRules"] as const,

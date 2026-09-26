@@ -1,5 +1,5 @@
 from radd.kernel import EntityLinkSpec
-from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
+from radd.kernel import CapabilitySpec, EventTypeSpec, NavItemSpec, PluginUiManifest
 from radd.kernel import ConsumerResume, RaddPlugin
 from radd.kernel import SettingSpec
 
@@ -138,7 +138,13 @@ plugin = RaddPlugin(
             )
         ),
     ),
-    # Federated UI (spec 94): the external-requester chip in the issue rail
-    # (web/remotes/mailintake), rendered by the host via the issue.panel.section slot.
-    ui=PluginUiManifest(remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.3.0"),
+    # Federated UI (spec 94, `ui/`): Settings → Email (RADD-1378 — the page and
+    # this nav entry withdraw with the plugin; 1.14.0 is the SDK that carries
+    # ScopedSettings), the Monitoring mail card, and the external-requester chip
+    # in the issue rail.
+    ui=PluginUiManifest(
+        remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.14.0",
+        nav=(NavItemSpec(key="email", label="Email", path="/settings/email", section="settings",
+                         group="Server", icon="Mail", order=45, requires_admin=True),),
+    ),
 )

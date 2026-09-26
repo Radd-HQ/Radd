@@ -79,12 +79,15 @@ export interface ProjectUpdate {
 }
 
 /** RADD-1174: one thing that stops a project being deleted, named by the
- * module that owns it (`mail_source`, `mail_rule`); `hint` says where to fix it. */
+ * module that owns it (`mail_source`, `mail_rule`); `hint` says where to fix it.
+ * `url` is that owner's page for the row, from its declared entity links
+ * (RADD-1378) — null when it has none, so the host never names the owner. */
 export interface ProjectBlocker {
   kind: string;
   id: string;
   label: string;
   hint: string;
+  url: string | null;
 }
 
 /** GET /projects/{id}/content (RADD-1174): what deleting the project destroys

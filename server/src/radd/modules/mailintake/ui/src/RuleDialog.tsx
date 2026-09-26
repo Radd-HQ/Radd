@@ -1,22 +1,16 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
-import { api } from "../../../lib/api";
-import { apiMailRulePath, apiMailSourceRulesPath } from "../../../lib/constants";
+import { api, Button, ErrorText, IconButton, Modal, SelectField, TextField, TokenMultiSelect } from "@radd/plugin-sdk";
+import { MailPath } from "./api";
 import {
   MAIL_NO_MATCH_ANSWER,
   MailRuleType,
   type MailRule,
   type MailRuleTypeValue,
   type MailSource,
-} from "../../../lib/types";
-import { Button } from "../../Button";
-import { ErrorText, IconButton, TokenMultiSelect } from "@radd/plugin-sdk";
-import { Modal } from "../../Modal";
-import { Select } from "../../Select";
-import { SelectField } from "../../SelectField";
-import { TextField } from "../../TextField";
-import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
+} from "./types";
+import { ProjectField } from "./shared";
 
 /** What each rule kind matches on, in the operator's words. */
 export const RULE_LABELS: Record<MailRuleTypeValue, string> = {
@@ -50,7 +44,6 @@ export function RuleDialog({
   rule: MailRule | null;
   onClose: () => void;
 }) {
-  const projects = useQuery(projectsQuery());
   const [name, setName] = useState(rule?.name ?? "");
   const [type, setType] = useState<MailRuleTypeValue>(rule?.rule_type ?? MailRuleType.recipient);
   const [projectId, setProjectId] = useState(rule?.project_id ?? "");
@@ -67,7 +60,8 @@ export function RuleDialog({
       [],
   );
 
-  const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: p.key }));
+  const setAnswer = (index: number, patch: Partial<{ answer: string; project_id: string }>) =>
+    setAnswers((prev) => prev.map((row, j) => (j === index ? { ...row, ...patch } : row)));
 
   const configFor = (): Record<string, unknown> => {
     if (type === MailRuleType.recipient) return { addresses: values };
@@ -86,8 +80,8 @@ export function RuleDialog({
         project_id: type === MailRuleType.llm ? null : projectId || null,
       };
       return rule
-        ? api.patch(apiMailRulePath(rule.id), body)
-        : api.post(apiMailSourceRulesPath(source.id), body);
+        ? api.patch(MailPath.rule(rule.id), body)
+        : api.post(MailPath.sourceRules(source.id), body);
     },
     onSuccess: onClose,
   });
@@ -124,32 +118,23 @@ export function RuleDialog({
             <div className="flex flex-col gap-2">
               <span className="text-xs font-medium text-fg-secondary">Categories → project</span>
               {answers.map((a, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
+                <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                  <TextField
+                    label="Category"
                     value={a.answer}
-                    onChange={(e) =>
-                      setAnswers((prev) =>
-                        prev.map((x, j) => (j === i ? { ...x, answer: e.target.value } : x)),
-                      )
-                    }
+                    onChange={(e) => setAnswer(i, { answer: e.target.value })}
                     placeholder="build failure"
-                    aria-label="Category"
-                    className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading focus:outline-2 focus:outline-focus"
                   />
-                  <Select
+                  <ProjectField
                     value={a.project_id}
-                    onChange={(value) =>
-                      setAnswers((prev) =>
-                        prev.map((x, j) => (j === i ? { ...x, project_id: value } : x)),
-                      )
-                    }
-                    options={projectOptions}
-                    placeholder="— project —"
-                    aria-label="Category project"
+                    onChange={(projectId) => setAnswer(i, { project_id: projectId })}
+                    label="Project"
+                    emptyLabel="— project —"
                   />
                   <IconButton
                     danger
                     aria-label="Remove category"
+                    className="mb-1.5"
                     onClick={() => setAnswers((prev) => prev.filter((_, j) => j !== i))}
                   >
                     <Trash2 size={13} />
@@ -193,18 +178,12 @@ export function RuleDialog({
                 ariaLabel="Rule values"
               />
             </div>
-            <SelectField
-              label="Opens in project"
+            <ProjectField
               value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              <option value="">— none —</option>
-              {(projects.data ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.key} · {p.name}
-                </option>
-              ))}
-            </SelectField>
+              onChange={setProjectId}
+              label="Opens in project"
+              emptyLabel="— none —"
+            />
           </>
         )}
 

@@ -281,6 +281,17 @@ test('Directory settings and directory administration transport are owned by the
   assert(page.some(n=>n.type==='StringLiteral'&&n.value==='/settings/directory'),'the ldap remote contributes the page');
 });
 
+test('Settings → Email and mail configuration transport are owned by mailintake (RADD-1378)',()=>{
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    const text=node.type==='StringLiteral'?node.value:node.type==='TemplateElement'?node.value.raw:null;
+    if (text!==null && /^(?:\/mail\/(?:sources|senders|rules|kinds)|\/settings\/email)(?:\/|$)/.test(text)) violations.push(`${file}:${node.loc.start.line}: ${text}`);
+    if (node.type==='ImportDeclaration' && /(?:settings\/email|mail-admin)/.test(node.source.value)) violations.push(file+': '+node.source.value);
+  }
+  assert.deepEqual(violations,[]);
+  for(const file of ['web/src/routes/settings/email.tsx','web/src/components/settings/email','web/src/lib/queries/mail-admin.ts'])assert(!existsSync(file),file);
+});
+
 test('the host never imports plugin source by relative path, only declared package exports (RADD-1373)',()=>{
   const root=new URL('../src',import.meta.url).pathname;
   const violations=[];

@@ -1,15 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
-import { api } from "../../../lib/api";
-import { ApiPath, apiMailSenderPath } from "../../../lib/constants";
-import { mailKindsQuery, queryKeys } from "../../../lib/queries";
-import { MailSenderKind, type MailSenderKindValue, type MailSender } from "../../../lib/types";
-import { Button, ButtonVariant } from "../../Button";
-import { useConfirm, ErrorText } from "@radd/plugin-sdk";
-import { Modal } from "../../Modal";
-import { SelectField } from "../../SelectField";
-import { TextField } from "../../TextField";
+import { api, Button, ButtonVariant, ErrorText, Modal, SelectField, TextField, useConfirm } from "@radd/plugin-sdk";
+import { MailPath, mailKeys, mailKindsQuery } from "./api";
+import { MailSenderKind, type MailSenderKindValue, type MailSender } from "./types";
 import { CheckboxField, KindGuidance, findKind, kindLabel } from "./shared";
 
 /**
@@ -52,7 +46,7 @@ export function SenderDialog({
   // An untouched name takes the kind's — see `SourceDialog`.
   const name = form.name.trim() || info?.name || "";
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.mailSenders });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: mailKeys.senders });
   const save = useMutation({
     mutationFn: () => {
       const body: Record<string, unknown> = {
@@ -64,8 +58,8 @@ export function SenderDialog({
       };
       if (!form.secret) delete body.secret;
       return sender
-        ? api.patch(apiMailSenderPath(sender.id), body)
-        : api.post(ApiPath.mailSenders, body);
+        ? api.patch(MailPath.sender(sender.id), body)
+        : api.post(MailPath.senders, body);
     },
     onSuccess: async () => {
       await invalidate();
@@ -73,7 +67,7 @@ export function SenderDialog({
     },
   });
   const remove = useMutation({
-    mutationFn: () => api.delete(apiMailSenderPath(sender!.id)),
+    mutationFn: () => api.delete(MailPath.sender(sender!.id)),
     onSuccess: async () => {
       await invalidate();
       onClose();

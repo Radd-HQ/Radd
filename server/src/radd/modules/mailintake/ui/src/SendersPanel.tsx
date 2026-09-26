@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Send } from "lucide-react";
-import { mailKindsQuery, mailSendersQuery } from "../../../lib/queries";
-import type { MailSender } from "../../../lib/types";
-import { Button } from "../../Button";
-import { EmptyState, TableSkeleton } from "@radd/plugin-sdk";
-import { QueryError } from "../../QueryError";
+import { Button, EmptyState, QueryError, TableSkeleton } from "@radd/plugin-sdk";
+import { mailKindsQuery, mailSendersQuery } from "./api";
+import type { MailSender } from "./types";
 import { SenderDialog } from "./SenderDialog";
 import { TestDialog } from "./TestDialog";
 import { Chip, connectionLine, kindLabel } from "./shared";
@@ -48,7 +46,7 @@ export function SendersPanel() {
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((sender) => (
-            <li key={sender.id} className="rounded-lg border border-subtle bg-surface px-4 py-3">
+            <li key={sender.id} data-mail-sender={sender.id} className="rounded-lg border border-subtle bg-surface px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[13px] text-heading">{sender.name}</span>
                 <Chip>{kindLabel(kinds.data?.senders, sender.kind)}</Chip>

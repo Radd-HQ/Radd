@@ -9,8 +9,9 @@
  * one comment over the API, then checks in a REAL browser that:
  *   1. the Danger zone renders on General and opens the dialog;
  *   2. with a mail source defaulting to the project, the dialog shows the
- *      blocker, links to Settings → Email, and the danger button stays disabled
- *      even with the key typed;
+ *      blocker, links to Settings → Email (the owner's entity link, resolved by
+ *      the server since RADD-1378), and the danger button stays disabled even
+ *      with the key typed;
  *   3. with the source repointed, the dialog reports the server's counts
  *      (1 issue, 1 comment), the button is disabled until the KEY is typed, and
  *      clicking it deletes the project — the browser lands on /projects and the
@@ -104,7 +105,7 @@ async function main() {
     let dialog = await session.eval(DIALOG);
     context.blocked = dialog && dialog.text.slice(0, 200);
     checks.dialogOpened = Boolean(dialog);
-    checks.blockerNamed = Boolean(dialog && dialog.text.includes("Proof source " + KEY) && dialog.text.includes("routes mail"));
+    checks.blockerNamed = Boolean(dialog && dialog.text.includes("Proof source " + KEY) && dialog.text.includes("still depends on"));
     checks.blockerLinksToEmailSettings = Boolean(dialog && dialog.emailLink);
     checks.blockedInputDisabled = Boolean(dialog && dialog.inputDisabled === true);
     checks.blockedButtonDisabled = Boolean(dialog && dialog.dangerDisabled === true);
@@ -129,7 +130,7 @@ async function main() {
     dialog = await session.eval(DIALOG);
     context.counts = dialog && dialog.text.slice(0, 240);
     checks.countsShown = Boolean(dialog && /1 issues/.test(dialog.text) && /1 comments/.test(dialog.text));
-    checks.noBlockerNow = Boolean(dialog && !dialog.text.includes("routes mail"));
+    checks.noBlockerNow = Boolean(dialog && !dialog.text.includes("still depends on"));
     checks.buttonOffUntilKeyTyped = Boolean(dialog && dialog.dangerDisabled === true && dialog.inputDisabled === false);
     await typeKey(session, "WRONG");
     checks.wrongKeyKeepsButtonOff = (await session.eval(DIALOG)).dangerDisabled === true;

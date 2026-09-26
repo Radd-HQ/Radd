@@ -1,15 +1,14 @@
-import { SignaturesPanel } from "../../components/settings/email/SignaturesPanel";
 import { Inbox } from "lucide-react";
-import { usePermissions } from "../../lib/hooks";
-import { Permission } from "../../lib/types";
-import { EmptyState } from "@radd/plugin-sdk";
-import { AutomaticMessagesPanel } from "../../components/settings/email/AutomaticMessagesPanel";
-import { SendersPanel } from "../../components/settings/email/SendersPanel";
-import { SettingsPage } from "../../components/settings/SettingsPage";
-import { SourcesPanel } from "../../components/settings/email/SourcesPanel";
+import { EmptyState, SettingsPage, usePermissions } from "@radd/plugin-sdk";
+import { AutomaticMessagesPanel } from "./AutomaticMessagesPanel";
+import { SendersPanel } from "./SendersPanel";
+import { SignaturesPanel } from "./SignaturesPanel";
+import { SourcesPanel } from "./SourcesPanel";
 
 /**
- * Settings → Email (RADD-958; presets RADD-969).
+ * Settings → Email (RADD-958; presets RADD-969; the mailintake plugin's own
+ * page since RADD-1378, so disabling the plugin withdraws the page and its nav
+ * entry together).
  *
  * Mail was the last subsystem configured only by environment variables, which
  * meant changing a password was an operator with `sops` rather than an admin
@@ -25,7 +24,7 @@ import { SourcesPanel } from "../../components/settings/email/SourcesPanel";
  *    unanswerable — the lesson Settings → Storage already paid for.
  */
 export function EmailSettingsPage() {
-  const canManage = usePermissions().global(Permission.globalManage);
+  const canManage = usePermissions().global("global.manage");
 
   return (
     <SettingsPage history={{ entities: ["mail_source", "mail_sender", "mail_rule"] }}
@@ -47,7 +46,7 @@ export function EmailSettingsPage() {
       {!canManage ? (
         <EmptyState icon={Inbox} message="You need instance-admin access to configure email." />
       ) : (
-        <div className="flex flex-col gap-10">
+        <div className="flex flex-col gap-10" data-email-settings>
           <SourcesPanel />
           <SendersPanel />
           <SignaturesPanel />

@@ -1,17 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, Wand2 } from "lucide-react";
-import { api } from "../../../lib/api";
-import { apiMailRulePath, apiMailSourceRulesOrderPath } from "../../../lib/constants";
-import { mailRulesQuery, queryKeys } from "../../../lib/queries";
-import type { MailRule, MailSource } from "../../../lib/types";
-import { Button } from "../../Button";
-import { EmptyState, IconButton, TableSkeleton } from "@radd/plugin-sdk";
-import { Modal } from "../../Modal";
+import { api, Button, EmptyState, IconButton, Modal, TableSkeleton, useProjectsQuery } from "@radd/plugin-sdk";
+import { MailPath, mailKeys, mailRulesQuery } from "./api";
+import type { MailRule, MailSource } from "./types";
 import { PreviewDialog } from "./PreviewDialog";
 import { RULE_LABELS, RuleDialog } from "./RuleDialog";
 import { Chip } from "./shared";
-import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * One source's ordered routing chain (RADD-958/961): first enabled match wins,
@@ -26,23 +21,24 @@ export function RuleChainDialog({
 }) {
   const queryClient = useQueryClient();
   const rules = useQuery(mailRulesQuery(source.id));
-  const projects = useQuery(projectsQuery());
+  // Only to print each rule's project key beside it.
+  const projects = useProjectsQuery();
   const [editing, setEditing] = useState<MailRule | "new" | null>(null);
   const [preview, setPreview] = useState(false);
 
   const invalidate = () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.mailRules(source.id) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.mailSources }),
+      queryClient.invalidateQueries({ queryKey: mailKeys.rules(source.id) }),
+      queryClient.invalidateQueries({ queryKey: mailKeys.sources }),
     ]);
 
   const reorder = useMutation({
     mutationFn: (ids: string[]) =>
-      api.put(apiMailSourceRulesOrderPath(source.id), { rule_ids: ids }),
+      api.put(MailPath.sourceRulesOrder(source.id), { rule_ids: ids }),
     onSuccess: invalidate,
   });
   const remove = useMutation({
-    mutationFn: (id: string) => api.delete(apiMailRulePath(id)),
+    mutationFn: (id: string) => api.delete(MailPath.rule(id)),
     onSuccess: invalidate,
   });
 

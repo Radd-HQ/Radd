@@ -42,8 +42,6 @@ export const SettingsSection = {
   backups: "backups",
   // Attachment storage hosts + delivery (spec 102) — admin only.
   storage: "storage",
-  // Mail sources/senders + the routing chain (RADD-958) — admin only.
-  email: "email",
   // SSO provider registry + signup domain allowlists (spec 110) — admin only.
   signIn: "sign-in",
   // Outbound webhooks: endpoints, secrets, the delivery log (RADD-1096).
@@ -163,8 +161,6 @@ export const RoutePath = {
   settingsBackups: `${SETTINGS_SEGMENT}/${SettingsSection.backups}`,
   /** Attachment storage hosts + delivery modes (spec 102, admin). */
   settingsStorage: `${SETTINGS_SEGMENT}/${SettingsSection.storage}`,
-  /** Mail sources, senders and routing rules (RADD-958, admin). */
-  settingsEmail: `${SETTINGS_SEGMENT}/${SettingsSection.email}`,
   /** SSO providers + per-provider signup domain allowlists (spec 110, admin). */
   settingsSignIn: `${SETTINGS_SEGMENT}/${SettingsSection.signIn}`,
   settingsWebhooks: `${SETTINGS_SEGMENT}/${SettingsSection.webhooks}`,

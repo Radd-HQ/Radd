@@ -105,17 +105,24 @@ function DeleteProjectDialog({ project, onClose }: { project: Project; onClose: 
           <>
             {blocked && (
               <Callout kind={CalloutKind.warning}>
-                <p className="font-medium">Something still routes mail into this project.</p>
+                <p className="font-medium">Something still depends on this project.</p>
                 <ul className="mt-1 flex flex-col gap-0.5">
                   {summary?.blockers.map((blocker) => (
-                    <li key={`${blocker.kind}-${blocker.id}`}>
+                    <li key={`${blocker.kind}-${blocker.id}`} data-blocker={blocker.kind}>
                       {blocker.label}
+                      {/* Where to fix it is the OWNER's page, resolved server-side
+                          from its entity links (RADD-1378): the host names no
+                          plugin route, and a blocker without one stays text. */}
                       {blocker.hint ? (
                         <>
                           {" — "}
-                          <Link to={RoutePath.settingsEmail} className="underline">
-                            {blocker.hint}
-                          </Link>
+                          {blocker.url ? (
+                            <Link to={blocker.url} className="underline">
+                              {blocker.hint}
+                            </Link>
+                          ) : (
+                            blocker.hint
+                          )}
                         </>
                       ) : null}
                     </li>

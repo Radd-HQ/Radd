@@ -60,7 +60,6 @@ const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/p
 const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
 const ServiceAccountsSettingsPage = lazyRouteComponent(() => import("./routes/settings/service-accounts"), "ServiceAccountsSettingsPage");
 const StorageSettingsPage = lazyRouteComponent(() => import("./routes/settings/storage"), "StorageSettingsPage");
-const EmailSettingsPage = lazyRouteComponent(() => import("./routes/settings/email"), "EmailSettingsPage");
 const SignInSettingsPage = lazyRouteComponent(() => import("./routes/settings/sign-in"), "SignInSettingsPage");
 const WebhooksSettingsPage = lazyRouteComponent(() => import("./routes/settings/webhooks"), "WebhooksSettingsPage");
 const NotificationSettingsPage = lazyRouteComponent(() => import("./routes/settings/notifications"), "NotificationSettingsPage");
@@ -574,13 +573,6 @@ const settingsStorageRoute = createRoute({
   component: StorageSettingsPage,
 });
 
-/** Mail sources, senders and the routing chain (RADD-958) — instance-admin only. */
-const settingsEmailRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.email,
-  component: EmailSettingsPage,
-});
-
 /** SSO providers + signup domain allowlists (spec 110) — instance-admin only. */
 const settingsSignInRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -744,7 +736,6 @@ const routeTree = rootRoute.addChildren([
       settingsServiceAccountsRoute,
       settingsDocsRoute,
       settingsStorageRoute,
-  settingsEmailRoute,
       settingsSignInRoute,
     settingsWebhooksRoute,
       settingsHolidaysRoute,

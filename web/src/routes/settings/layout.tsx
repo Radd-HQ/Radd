@@ -210,15 +210,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // Mail sources/senders + the routing chain (RADD-958). Configuration
-        // that used to be environment-only, which meant an operator with sops
-        // rather than an admin with a form.
-        to: RoutePath.settingsEmail,
-        label: "Email",
-        icon: Mail,
-        show: (g) => g.instanceAdmin,
-      },
-      {
         // SSO providers + per-provider signup domain allowlists (spec 110).
         to: RoutePath.settingsSignIn,
         label: "Sign-in",
@@ -325,7 +316,7 @@ export function SettingsLayout() {
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles, FolderTree };
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles, FolderTree, Mail };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);

@@ -114,12 +114,17 @@ class ProjectSummaryRead(BaseModel):
 
 class BlockerRead(BaseModel):
     """RADD-1174: one thing that stops a project being deleted, as the owner
-    module named it — the SPA prints `label` and links by `hint`."""
+    module named it — the SPA prints `label`, and `hint` as a link to `url`.
+
+    `url` is the OWNER's page for that kind of row (RADD-1378), resolved from
+    the entity links it declared; None when it declares none or is not
+    mounted. The SPA never knows which plugin a blocker came from."""
 
     kind: str
     id: str
     label: str
     hint: str = ""
+    url: str | None = None
 
 
 class ProjectContentRead(BaseModel):

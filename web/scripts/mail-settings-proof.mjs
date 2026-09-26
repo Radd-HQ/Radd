@@ -5,7 +5,8 @@
  * "it works". Four things are asserted because each has already been a bug in
  * this codebase, or would be invisible to `tsc`:
  *
- *  - the nav entry and route resolve (a page nobody can reach is not shipped);
+ *  - the nav entry and route resolve (a page nobody can reach is not shipped) —
+ *    since RADD-1378 both come from the mailintake plugin's manifest and remote;
  *  - the Server overview's Email row LINKS here — the ask that started this;
  *  - a secret never appears in the DOM. `has_secret` is a boolean by design,
  *    and the day someone adds `value={source.secret}` nothing would fail;
@@ -57,9 +58,9 @@ async function main() {
         incoming: /Incoming/.test(text),
         outgoing: /Outgoing/.test(text),
         addSource: Boolean([...document.querySelectorAll("button")]
-          .find((b) => /add source/i.test(b.textContent || ""))),
+          .find((b) => /^new source$/i.test((b.textContent || "").trim()))),
         addSender: Boolean([...document.querySelectorAll("button")]
-          .find((b) => /add sender/i.test(b.textContent || ""))),
+          .find((b) => /^new sender$/i.test((b.textContent || "").trim()))),
         denied: /instance-admin access/i.test(text),
       };
     })()`);
@@ -110,7 +111,7 @@ async function main() {
   let hook = { hasSenderBinding: false };
   let presetShot = null;
   if (page.addSource) {
-    await session.click("button", (t) => /add source/i.test(t));
+    await session.click("button", (t) => /^new source$/i.test(t.trim()));
     await sleep(900);
     form = await readForm();
     presetShot = await session.send("Page.captureScreenshot", { format: "png" });
