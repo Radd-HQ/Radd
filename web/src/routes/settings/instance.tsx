@@ -9,11 +9,11 @@ import { Spinner } from "../../components/Spinner";
 import { QueryError } from "../../components/QueryError";
 import { settingsPathForPlugin } from "./layout";
 
-/** A read-only enabled/disabled (or value) badge for one deploy subsystem
- * (shared with the Directory page's status card, spec 85). `detail` adds a
- * muted sub-status; `to` makes the row a link to its settings surface — the
- * status rows ARE the navigation for deploy-level config (user direction). */
-export function StatusPill({
+/** A read-only enabled/disabled (or value) badge for one deploy subsystem.
+ * `detail` adds a muted sub-status; `to` makes the row a link to its settings
+ * surface — the status rows ARE the navigation for deploy-level config (user
+ * direction). */
+function StatusPill({
   label,
   on,
   value,
@@ -61,19 +61,20 @@ export function StatusPill({
 }
 
 function StatusGrid({ status }: { status: InstanceStatus }) {
-  // The AI page is the ai plugin's (RADD-1379): its link comes from the plugin's
+  // Plugin pages (AI RADD-1379, Directory RADD-1381) take their links from the plugin's
   // manifest, so a disabled plugin leaves a plain status row, not a dead link.
   const { data: manifest } = useQuery(capabilitiesQuery);
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       <StatusPill label="OIDC SSO" on={status.sso_enabled} />
       {/* ONE directory row (bind account folded in as detail); clicking opens
-          the consolidated Directory settings (spec 85). */}
+          the ldap plugin's Directory page — wherever its manifest puts it, and
+          only while it is enabled (RADD-1381). */}
       <StatusPill
         label="LDAP / AD"
         on={status.ldap_enabled}
         detail={status.ldap_bind_account ? "bind account on" : "no bind account"}
-        to={RoutePath.settingsDirectory}
+        to={settingsPathForPlugin("ldap", manifest)?.to}
       />
       {/* RADD-958: clicking opens Settings → Email. Mail is configured in the
           product now, not only in the environment. */}

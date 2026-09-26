@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { ApiError, api } from "../../lib/api";
-import { ApiPath, RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath, apiUserTotpPath } from "../../lib/constants";
+import { ApiPath, SEARCH_DEBOUNCE_MS, apiUserPath, apiUserTotpPath } from "../../lib/constants";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
-import { USERS_PAGE_SIZE, queryKeys, usersAdminPageQuery, usersAdminQuery } from "../../lib/queries";
+import { USERS_PAGE_SIZE, capabilitiesQuery, queryKeys, usersAdminPageQuery, usersAdminQuery } from "../../lib/queries";
 import {
   InstanceRole,
   Permission,
@@ -28,6 +28,7 @@ import { DeleteUserDialog } from "../../components/settings/DeleteUserDialog";
 import { DuplicatesSection } from "../../components/settings/UserDuplicates";
 import { SOURCE_LABELS, SourceBadge } from "../../components/settings/UserSourceBadge";
 import { RoleGrantsSection } from "../../components/settings/RoleGrantsSection";
+import { settingsPathForPlugin } from "./layout";
 
 /**
  * THE people page (spec 84; spec 86 collapsed the membership layer): every
@@ -42,13 +43,16 @@ import { RoleGrantsSection } from "../../components/settings/RoleGrantsSection";
  *   (403; self-demotion 409) and hidden here, incl. the client-side self-row
  *   guard (locking yourself out via your own row is a footgun — block it).
  * - Duplicates/merge stay instance admin. The AD import affordances live in
- *   Settings → Directory (spec 85) — pointer only.
+ *   Settings → Directory (spec 85), the ldap plugin's page — pointer only.
  */
 export function UsersSettingsPage() {
   const me = useCurrentUser();
   const perms = usePermissions();
   const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
   const canView = isInstanceAdmin || perms.global(Permission.globalManage);
+  // The AD import is the ldap plugin's page (RADD-1381): pointed at only while it is enabled.
+  const manifest = useQuery(capabilitiesQuery);
+  const directoryPage = settingsPathForPlugin("ldap", manifest.data);
   const queryClient = useQueryClient();
   const [q, setQ] = useState("");
   const debouncedQ = useDebounced(q, SEARCH_DEBOUNCE_MS);
@@ -112,12 +116,12 @@ export function UsersSettingsPage() {
       title="Users"
       description="Every account on this server — auth source, activity, last sign-in — plus the server-wide role. Deactivating revokes sessions and blocks all sign-in paths."
       actions={
-        isInstanceAdmin ? (
+        isInstanceAdmin && directoryPage ? (
           <Link
-            to={RoutePath.settingsDirectory}
+            to={directoryPage.to}
             className="flex items-center gap-1 text-[13px] text-accent-text hover:text-accent-text-strong"
           >
-            Import from AD → Directory settings
+            Import from AD → {directoryPage.label} settings
             <ArrowRight size={13} aria-hidden />
           </Link>
         ) : undefined

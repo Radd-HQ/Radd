@@ -22,12 +22,8 @@ export const SettingsSection = {
   labels: "labels",
   cycles: "cycles",
   teams: "teams",
-  // Directory-mirrored groups (RADD-833) — read-only, admin-facing.
-  groups: "groups",
   // The people page (spec 84; role ladder = instance_role since spec 86) — admins.
   users: "users",
-  // Consolidated Directory/LDAP settings (spec 85) — admin only.
-  directory: "directory",
   // Jira import wizard (spec 90) — admin only.
   importData: "import-data",
   jiraImport: "jira-import",
@@ -153,8 +149,6 @@ export const RoutePath = {
   /** THE people page (spec 84): accounts + the instance_role ladder (spec 86),
    * dedupe/merge. */
   settingsUsers: `${SETTINGS_SEGMENT}/${SettingsSection.users}`,
-  /** Consolidated Directory/LDAP settings (spec 85): user sync + group import/links. */
-  settingsDirectory: `${SETTINGS_SEGMENT}/${SettingsSection.directory}`,
   settingsImportData: `${SETTINGS_SEGMENT}/${SettingsSection.importData}`,
   settingsJiraImport: `${SETTINGS_SEGMENT}/${SettingsSection.jiraImport}`,
   settingsConfluenceImport: `${SETTINGS_SEGMENT}/${SettingsSection.confluenceImport}`,

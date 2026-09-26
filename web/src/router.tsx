@@ -48,7 +48,6 @@ const FieldsSettingsPage = lazyRouteComponent(() => import("./routes/settings/fi
 const LinkTypesSettingsPage = lazyRouteComponent(() => import("./routes/settings/link-types"), "LinkTypesSettingsPage");
 const LabelsSettingsPage = lazyRouteComponent(() => import("./routes/settings/labels"), "LabelsSettingsPage");
 const UsersSettingsPage = lazyRouteComponent(() => import("./routes/settings/users"), "UsersSettingsPage");
-const DirectorySettingsPage = lazyRouteComponent(() => import("./routes/settings/directory"), "DirectorySettingsPage");
 const ImportDataPage = lazyRouteComponent(() => import("./routes/settings/import-data"), "ImportDataPage");
 const JiraImportPage = lazyRouteComponent(() => import("./routes/settings/jira-import"), "JiraImportPage");
 const ConfluenceImportPage = lazyRouteComponent(() => import("./routes/settings/confluence-import"), "ConfluenceImportPage");
@@ -478,16 +477,6 @@ const settingsCyclesRoute = createRoute({
   component: CyclesSettingsPage,
 });
 
-/** RADD-931: the mirror table folded into Settings → Directory, where the live
- *  browse already was — and gained the role-grant control it never had. */
-const settingsGroupsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.groups,
-  beforeLoad: () => {
-    throw redirect({ to: RoutePath.settingsDirectory, replace: true });
-  },
-});
-
 const settingsTeamsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.teams,
@@ -499,13 +488,6 @@ const settingsUsersRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.users,
   component: UsersSettingsPage,
-});
-
-/** Consolidated Directory/LDAP settings (spec 85) — instance-admin only. */
-const settingsDirectoryRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.directory,
-  component: DirectorySettingsPage,
 });
 
 /** Jira import wizard (spec 90) — instance-admin only. */
@@ -747,10 +729,8 @@ const routeTree = rootRoute.addChildren([
       settingsLinkTypesRoute,
       settingsLabelsRoute,
       settingsCyclesRoute,
-      settingsGroupsRoute,
       settingsTeamsRoute,
       settingsUsersRoute,
-      settingsDirectoryRoute,
       settingsImportDataRoute,
       settingsJiraImportRoute,
       settingsConfluenceImportRoute,

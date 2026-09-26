@@ -12,8 +12,9 @@
  *   2. A cascade setting renders on the surface its owner DECLARED, and project
  *      → General is the REMAINDER rather than a dump (RADD-930).
  *   3. Settings → Time logging holds every instance-scope time answer, and
- *      Holidays / Groups are gone as separate tabs, their paths redirecting
- *      rather than 404ing (RADD-931, RADD-932).
+ *      Holidays / Groups are gone as separate tabs, the Holidays path
+ *      redirecting rather than 404ing (RADD-931, RADD-932; the Groups redirect
+ *      was retired by RADD-1381).
  *   4. A project's Access screen is ONE list of role grants over three subject
  *      kinds, and the Teams panel no longer offers a second way to write the
  *      same row (RADD-929).
@@ -76,11 +77,11 @@ const timeloggingPage = await session.eval(
   ` settings:${SETTING_LABELS}})`,
 );
 
-// The retired tabs' paths land somewhere real instead of a not-found.
+// The retired tabs' paths land somewhere real instead of a not-found. (The
+// /settings/groups redirect went with RADD-1381: Directory is the ldap plugin's
+// page, and the host keeps no route naming it.)
 await session.navigate(`${baseUrl}/settings/holidays`, 1800);
 const holidaysLandsOn = await session.eval(`location.pathname`);
-await session.navigate(`${baseUrl}/settings/groups`, 1800);
-const groupsLandsOn = await session.eval(`location.pathname`);
 
 // --- 2b. a project's General is the remainder, not the dump -----------------
 const projects = await session.eval(api("/projects?limit=1"));
@@ -182,7 +183,6 @@ const failed = report(
     "Directory is a real tab now": navRestored.includes("Directory"),
     "/settings/holidays redirects to Time logging":
       holidaysLandsOn === "/settings/timelogging",
-    "/settings/groups redirects to Directory": groupsLandsOn === "/settings/directory",
 
     "instance General sheds the directory keys": !instanceGeneral.some((l) =>
       l.startsWith("Bind account"),

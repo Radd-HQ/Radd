@@ -28,17 +28,6 @@ export const ApiPath = {
   userDirectory: "/users/directory",
   // Duplicate-account candidates for the merge UI (spec 84, instance admin).
   usersDuplicates: "/users/duplicates",
-  // Directory administration (spec 84, instance admin + bind account).
-  ldapGroups: "/ldap/groups",
-  ldapGroupsImport: "/ldap/groups/import",
-  ldapDirectoryUsers: "/ldap/directory-users",
-  ldapDirectoryUsersImport: "/ldap/directory-users/import",
-  // Spec 88: dry run — classify the selection against existing accounts first.
-  ldapDirectoryUsersImportPreview: "/ldap/directory-users/import/preview",
-  // Spec 85: sync status rows + the on-demand user-sync pass (instance admin).
-  ldapSyncStatus: "/ldap/sync-status",
-  ldapSyncUsers: "/ldap/sync/users",
-  ldapSyncGroups: "/ldap/sync/groups",
   stateCategories: "/state-categories",
   // Jira import wizard (spec 90) — instance admin.
   // Spec 100: connections are admin-managed rows, not environment variables.

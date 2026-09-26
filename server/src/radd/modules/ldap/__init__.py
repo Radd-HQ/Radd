@@ -1,4 +1,4 @@
-from radd.kernel import CapabilitySpec, EventTypeSpec
+from radd.kernel import CapabilitySpec, EventTypeSpec, NavItemSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
 from radd.kernel import SettingSpec
 
@@ -17,6 +17,13 @@ plugin = RaddPlugin(
     core=False,  # optional plugin — disableable via the plugin manager
     description="Sign-in and user sync with Active Directory or LDAP.",
     depends_on=("events", "projects", "auth", "settings", "groups", "teams"),
+    # RADD-1381: Settings → Directory is this plugin's own remote; disabling the
+    # plugin withdraws the page and its nav entry with it.
+    ui=PluginUiManifest(
+        remote="/plugins/ldap/remoteEntry.js", ui_api_version="1.14.0",
+        nav=(NavItemSpec(key="directory", label="Directory", path="/settings/directory",
+                         section="settings", group="Server", icon="FolderTree", order=55, requires_admin=True),),
+    ),
     # Per-plugin deps (§14): AD/LDAP bind needs ldap3. Maps to the `radd[ldap]` extra.
     # RADD-891: the connection + sync tunables (RADD-846/848: env is seed-only,
     # each key matches its `config.Settings` attribute so an existing deploy

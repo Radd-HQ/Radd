@@ -1,4 +1,4 @@
-/** Users + admin, directory (LDAP), teams, and personal access tokens. */
+/** Users + admin, teams, and personal access tokens. */
 
 import type { DirectoryChoice as PeopleChoice } from "@radd/plugin-sdk";
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
@@ -19,9 +19,6 @@ import {
 import { queryKeys } from "./shared";
 import type {
   ApiToken,
-  DirectoryGroup,
-  DirectorySyncStatus,
-  DirectoryUser,
   DuplicateUserGroup,
   GroupReach,
   RaddGroup,
@@ -204,33 +201,7 @@ export const userDuplicatesQuery = queryOptions({
   retry: false,
 });
 
-/** AD group search (spec 84) — needs an instance admin + a bind account (409). */
-export const ldapGroupsQuery = (q: string) =>
-  queryOptions({
-    queryKey: queryKeys.ldapGroups(q),
-    queryFn: ({ signal }) => api.get<DirectoryGroup[]>(ApiPath.ldapGroups, { signal, query: { q } }),
-    retry: false,
-    placeholderData: keepPreviousData,
-  });
-
-/** AD user search for the import picker (spec 84). */
-export const ldapDirectoryUsersQuery = (q: string) =>
-  queryOptions({
-    queryKey: queryKeys.ldapDirectoryUsers(q),
-    queryFn: ({ signal }) => api.get<DirectoryUser[]>(ApiPath.ldapDirectoryUsers, { signal, query: { q } }),
-    retry: false,
-    placeholderData: keepPreviousData,
-  });
-
-/** Directory sync status rows (spec 85, instance admin) — the Directory page's
- * last-run lines. */
-export const ldapSyncStatusQuery = queryOptions({
-  queryKey: queryKeys.ldapSyncStatus,
-  queryFn: ({ signal }) => api.get<DirectorySyncStatus>(ApiPath.ldapSyncStatus, { signal }),
-  retry: false,
-});
-
-/** The server-wide team list — every surface (pickers, settings, Directory). */
+/** The server-wide team list — every surface (pickers, settings). */
 export const teamsQuery = () =>
   queryOptions({
     queryKey: queryKeys.teams,

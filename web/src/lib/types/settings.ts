@@ -96,18 +96,6 @@ export const PROJECT_HOMED_SECTIONS: readonly string[] = [
  * `SettingKey` — only the ones with a client-side gate are listed). */
 export const SettingKey = {
   estimationPoints: "estimation_points",
-  // Directory settings (spec 85 + RADD-846) — instance-only; Settings → Directory.
-  ldapUrl: "ldap_url",
-  ldapUserDomain: "ldap_user_domain",
-  ldapBindDn: "ldap_bind_dn",
-  ldapBindPassword: "ldap_bind_password",
-  ldapAdminGroups: "ldap_admin_groups",
-  ldapGroupSyncSeconds: "ldap_group_sync_seconds",
-  ldapUserSyncBase: "ldap_user_sync_base",
-  ldapUserSyncEnabled: "ldap_user_sync_enabled",
-  ldapExcludeDisabled: "ldap_exclude_disabled",
-  ldapUserSyncDeactivateMissing: "ldap_user_sync_deactivate_missing",
-  ldapGroupSearchBase: "ldap_group_search_base",
   // AI feature toggles (spec 101) — instance-only; edited on Settings → AI.
   aiEditorActions: "ai_editor_actions",
   aiSemanticSearch: "ai_semantic_search",

@@ -219,16 +219,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // RADD-931: the directory is CONFIGURATION — connection, sync schedules,
-        // group mirror — and was reachable only by clicking a status row on
-        // Overview, a hangover from when it was status.
-        to: RoutePath.settingsDirectory,
-        label: "Directory",
-        icon: FolderTree,
-        plugin: "ldap",
-        show: (g) => g.instanceAdmin,
-      },
-      {
         // SSO providers + per-provider signup domain allowlists (spec 110).
         to: RoutePath.settingsSignIn,
         label: "Sign-in",
@@ -335,7 +325,7 @@ export function SettingsLayout() {
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles };
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles, FolderTree };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);

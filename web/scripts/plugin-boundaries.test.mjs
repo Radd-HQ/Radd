@@ -270,6 +270,17 @@ test('VCS settings and connector transport are owned by plugins',()=>{
   for(const file of ['web/src/routes/settings/vcs.tsx','web/src/components/settings/vcs-hosts.ts','web/src/components/settings/VcsHostSettings.tsx','web/src/components/settings/VcsIdentityMap.tsx'])assert(!existsSync(file),file);
 });
 
+test('Directory settings and directory administration transport are owned by the ldap plugin (RADD-1381)',()=>{
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    if (node.type==='StringLiteral' && /^\/(?:ldap|settings\/directory)(?:\/|$)/.test(node.value)) violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
+  }
+  assert.deepEqual(violations,[]);
+  for(const file of ['web/src/routes/settings/directory.tsx','web/src/components/settings/DirectoryGroupsSection.tsx','web/src/components/settings/MirroredGroupsSection.tsx','web/src/components/settings/DirectoryImportDialogs.tsx','web/src/components/settings/DirectoryImportReview.tsx'])assert(!existsSync(file),file);
+  const page=nodes('server/src/radd/modules/ldap/ui/src/index.tsx');
+  assert(page.some(n=>n.type==='StringLiteral'&&n.value==='/settings/directory'),'the ldap remote contributes the page');
+});
+
 test('the host never imports plugin source by relative path, only declared package exports (RADD-1373)',()=>{
   const root=new URL('../src',import.meta.url).pathname;
   const violations=[];
