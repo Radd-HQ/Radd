@@ -14,21 +14,23 @@ place would dirty the events row and rewrite history on the next flush.
 
 from typing import Any
 
-# Dict-level mirror of visibility._BLANK_BUILTIN: the same shapes a blanked
-# API read serves, so a webhook receiver sees the identical degraded form.
-_BLANKED: dict[str, Any] = {
-    "description": "",
-    "assignee": None,
-    "reporter": None,
-    "team": None,
-    "parent": None,
-    "start_date": None,
-    "target_date": None,
-    "cycle": None,
-    "release": None,
-    "labels": [],
-    "flagged": False,
-    "estimate_points": None,
+# A read-restricted builtin field (spec 50) -> the attributes it blanks, and to
+# what. ONE map for the API read (`visibility._filter_read`) and the webhook
+# payload, so both serve the identical degraded form. Only READ_RESTRICTABLE_BUILTINS
+# appear (title/state/priority are never restrictable — see fields.types).
+BLANK_BUILTIN: dict[str, dict[str, Any]] = {
+    "description": {"description": "", "email_signature": None},
+    "assignee": {"assignee": None},
+    "reporter": {"reporter": None},
+    "team": {"team": None},
+    "parent": {"parent": None},
+    "start_date": {"start_date": None},
+    "target_date": {"target_date": None},
+    "cycle": {"cycle": None},
+    "release": {"release": None},
+    "labels": {"labels": []},
+    "flagged": {"flagged": False},
+    "estimate_points": {"estimate_points": None},
 }
 
 
@@ -54,8 +56,9 @@ def redact_item_payload(
                 k: v for k, v in custom_fields.items() if k not in custom_keys
             }
         for name in builtin_names:
-            if name in _BLANKED and name in item:
-                item[name] = _BLANKED[name]
+            for key, blank in BLANK_BUILTIN.get(name, {}).items():
+                if key in item:
+                    item[key] = blank
         out["item"] = item
     changes = out.get("changes")
     if isinstance(changes, list):

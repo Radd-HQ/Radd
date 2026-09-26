@@ -70,6 +70,16 @@ def test_redaction_strips_restricted_and_keeps_the_rest():
     assert out["changes"][1]["key"] == "component"
 
 
+def test_restricted_description_withholds_the_email_signature():
+    """RADD-1414: the API read blanks `email_signature` with `description`; a
+    webhook delivery must serve the same degraded form, never the signature."""
+    payload = _item_payload()
+    payload["item"]["email_signature"] = "Maya Kovac, Head of Payroll, +44 20 7946 0000"
+    out = _outbound_payload(payload, (frozenset(), frozenset({"description"})))
+    assert out["item"]["description"] == ""
+    assert out["item"]["email_signature"] is None
+
+
 def test_redaction_is_copy_on_write():
     """The input is the events row's JSONB — mutating it would rewrite history."""
     payload = _item_payload()

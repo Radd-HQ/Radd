@@ -19,6 +19,7 @@ from radd.modules.projects.models import Project
 
 from ..enums import ItemVisibility
 from ..models import WorkItem
+from ..redaction import BLANK_BUILTIN
 from ..schemas import ItemRead
 
 # --- relations (RADD-823): what @own / @team MEAN for an item -----------------
@@ -270,25 +271,6 @@ async def ensure_item_relation(
 # --- field-level visibility (spec 07: per-role/team grants) ---
 
 
-# A read-restricted builtin field (spec 50) is blanked out of the representation
-# for non-granted principals. Only fields in READ_RESTRICTABLE_BUILTINS appear here
-# (title/state/priority are never restrictable — see fields.types).
-_BLANK_BUILTIN: dict[str, dict[str, Any]] = {
-    "description": {"description": "", "email_signature": None},
-    "assignee": {"assignee": None},
-    "reporter": {"reporter": None},
-    "team": {"team": None},
-    "parent": {"parent": None},
-    "start_date": {"start_date": None},
-    "target_date": {"target_date": None},
-    "cycle": {"cycle": None},
-    "release": {"release": None},
-    "labels": {"labels": []},
-    "flagged": {"flagged": False},
-    "estimate_points": {"estimate_points": None},
-}
-
-
 def _filter_read(
     read: ItemRead,
     definitions: Sequence[FieldDefinition],
@@ -302,7 +284,7 @@ def _filter_read(
         "custom_fields": {k: v for k, v in read.custom_fields.items() if k in allowed}
     }
     for field in builtin_denied:
-        update.update(_BLANK_BUILTIN.get(field, {}))
+        update.update(BLANK_BUILTIN.get(field, {}))
     return read.model_copy(update=update)
 
 
