@@ -10,6 +10,13 @@
   "dependencies": {
     "@radd/plugin-sdk": "*",
     "@xyflow/react": "^12.11.2",
-    "lucide-react": "^1.25.0"
+    "lucide-react": "^1.25.0",
+    "@radd-plugin-ui/projects": "*",
+    "@radd-plugin-ui/cycles": "*",
+    "@radd-plugin-ui/fields": "*",
+    "@radd-plugin-ui/labels": "*",
+    "@radd-plugin-ui/items": "*",
+    "@radd-plugin-ui/comments": "*",
+    "@radd-plugin-ui/pages": "*"
   }
 }

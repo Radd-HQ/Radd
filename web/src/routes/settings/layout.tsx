@@ -31,7 +31,6 @@ import {
   UserRoundCog,
   UsersRound,
   Webhook,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
@@ -262,14 +261,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         icon: DatabaseBackup,
         show: (g) => g.instanceAdmin,
       },
-      {
-        // RADD-1272: automations are instance machinery, not issue
-        // configuration — they moved here from the Issues group.
-        to: RoutePath.settingsAutomations,
-        label: "Automations",
-        icon: Zap,
-        show: (g) => g.ws(Permission.automationManage),
-      },
+
       {
         // Outbound webhooks (RADD-1096): endpoints, secrets, the delivery log.
         to: RoutePath.settingsWebhooks,

@@ -62,3 +62,42 @@ def test_a_template_naming_a_missing_node_type_is_not_available():
                {"id": "a", "kind": "action", "type": "uninstalled.node", "params": {}}),
     )
     assert templates.available(ghost) is False
+
+
+async def test_catalog_and_templates_report_actual_registry_owners(db, admin):
+    """Display groups and key prefixes are not ownership contracts."""
+    load_plugins(settings.modules)
+    event_owners = {
+        event.event_type: plugin.name
+        for plugin in registries.plugins.values()
+        for event in plugin.event_types
+    }
+    template_owners = {
+        template.key: plugin.name
+        for plugin in registries.plugins.values()
+        for template in plugin.automation_templates
+    }
+    result = await router.get_catalog(db, admin)
+    assert result.triggers
+    for trigger in result.triggers:
+        assert trigger.plugin == event_owners[trigger.event_type]
+    listed = await router.list_templates(db, admin)
+    assert listed
+    for template in listed:
+        assert template.plugin == template_owners[template.key]
+    # The real mail plugin's display group has a different name.
+    assert any(template.plugin == "mailintake" and template.group == "Email" for template in listed)
+
+
+async def test_withdrawn_owner_disappears_from_catalog_and_templates(db, admin):
+    load_plugins(settings.modules)
+    plugin = registries.plugins["github"]
+    before = await router.get_catalog(db, admin)
+    assert any(trigger.plugin == "github" for trigger in before.triggers)
+    registries.unregister_plugin(plugin)
+    try:
+        after = await router.get_catalog(db, admin)
+        assert not any(trigger.plugin == "github" for trigger in after.triggers)
+        assert not any(template.plugin == "github" for template in await router.list_templates(db, admin))
+    finally:
+        registries.register_plugin(plugin)

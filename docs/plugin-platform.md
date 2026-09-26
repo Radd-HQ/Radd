@@ -938,3 +938,53 @@ instance-wide view.
 Audit and Items retain their existing core declarations. Browser tests simulate
 missing/failed remote contributions, and do not claim those core plugins became
 administratively disableable. The wider backend ownership audit remains open.
+
+## Automations editor and contextual commands (RADD-1365)
+
+Automations owns its settings page/navigation, rule and integration editors,
+inspectors, token assistance, reports, version restoration, preview requests and
+transport paths in `modules/automations/ui`. The host settings catch-all mounts
+its page contribution. Integration settings expose the generic
+`integration.settings` slot with `{integration, label}`; the contributing owner
+chooses its content. Automation templates and event catalog entries carry their
+actual registry `plugin`, so display groups and event-name prefixes are not used
+as ownership identifiers. Counts describe shared trigger/action types, not proof
+that another rule has the template's conditions.
+
+SDK 1.12 adds nonvisual contextual commands. A `PluginModule.commandSources` entry
+provides `{id, entityType, meta?, list(context, signal), execute(id, context,
+signal)}`, where context contains `{entityType, entityId, projectId?}`. Consumers
+call `useContributedCommands(context, enabled)`. The loader scopes registration
+and rollback to one activation, including asynchronous activation and failure.
+Discovery is canceled/disposed with its observer; retained command callbacks
+refuse after withdrawal/replacement, and removal aborts active execution.
+Successful commands invalidate visible queries. Owners can call
+`invalidatePluginCommands(client, plugin)` after their own configuration changes.
+Automations uses this contract for manual actions; the item editor contains no
+Automation discovery or execution endpoint. This does not migrate the remaining
+built-in item quick actions into Items yet.
+
+An Automations contribution shares its catalog reads within its mounted scope.
+Capability changes create fresh keys, denied reads hide cached content, and the
+last observer removes its cache. Mutation transports and continuations are
+scoped to the mounted editor; preview input changes advance a generation so an
+A→B→A edit cannot revive an obsolete result. Aborting transport is not a rollback
+of a write already accepted by the server: reopening reads server state again.
+
+Items, Pages and Projects supply search/default-project queries through their
+own `querySources` and exported result contracts. Project/cycle/field controls
+use public owner contracts and slots. Saved IDs, values and unknown trigger
+names remain visible while providers are unavailable. Pages and Projects now
+require SDK 1.9 for their query contributions. Public contract packages may have
+no Vite entry or executable remote (Comments' visibility vocabulary is one such
+package). The build links these packages, builds only executable remotes and
+refuses to replace real dependency directories with toolchain links.
+
+Generic confirmation, icon buttons, clipboard, debounce, list filtering and
+positioned error presentation are shared SDK primitives; host callers use the
+same implementation. Pending confirmation promises settle false on unmount.
+`EmptyState` supports both its existing children and optional icon/message/action.
+This migration leaves Automations' core status intact. Browser withdrawal tests
+simulate unavailable remotes; they do not add an administrative disable switch
+for a core module. Complete backend/action dependency review remains in the
+per-artifact inventory.

@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import path from 'node:path';
 import {stripTypeScriptTypes} from 'node:module';
-const load=async file=>import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(readFileSync(file,'utf8'))).toString('base64')}`);
+function moduleUrl(file){let source=stripTypeScriptTypes(readFileSync(file,'utf8'));source=source.replace(/from "(\.[^"]+)"/g,(_match,relative)=>'from '+JSON.stringify(moduleUrl(path.resolve(path.dirname(file),relative+'.ts'))));return `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;}
+const load=file=>import(moduleUrl(file));
 const {itemChange}=await load('server/src/radd/modules/items/ui/src/change-format.ts');
 test('Items change presentation preserves absent keys, collection members and saved unknown values',()=>{
  assert.deepEqual(itemChange({field:'links'}),{field:'links',name:'Dependencies'});

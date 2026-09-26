@@ -2,7 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from .types import CONSUMER_NAME, AutomationEvent
-from radd.kernel import EntityLinkSpec
+from radd.kernel import EntityLinkSpec, NavItemSpec
 from radd.kernel import EventTypeSpec, RaddPlugin, PluginUiManifest
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
@@ -68,7 +68,9 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('automation_rule', ('/settings/automations',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/automations/remoteEntry.js", ui_api_version="1.10.0"),
+    ui=PluginUiManifest(remote="/plugins/automations/remoteEntry.js", ui_api_version="1.12.0",
+        nav=(NavItemSpec(key="automations", label="Automations", path="/settings/automations",
+            section="settings", group="Server", icon="Zap", order=90, requires=("automation.manage",)),)),
     # RADD-1322: the built-in nodes are registered exactly as a plugin's are.
     automation_nodes=(*ROUTER_NODES, *ACTION_NODES, *VERDICT_NODES),
     # RADD-1323: the button, the clock and the draft check, as registered kinds.
@@ -122,7 +124,7 @@ plugin = RaddPlugin(
         "Automations: rules that react to events or run on a schedule and change issues, notify people or call out."
     ),
     depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields", "itemtypes",),
-    weak_depends=("mailintake", "notify", "leave", "participants"),
+    weak_depends=("mailintake", "notify", "leave", "participants", "pages", "forms"),
     routers=(router, intake_router),
     exception_handlers=(
         (ValidationBlocked, _validation_blocked_handler),

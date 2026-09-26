@@ -28,7 +28,7 @@ const server=http.createServer(async(req,res)=>{
    if(refuse===kind){res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({detail:kind+' denied'}));return;}
   }else if(p.endsWith('/fields/settings-summary')){summaryReads.push(p);data={};}
   else if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.9.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/query-proof',section:'settings',label:'Query proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.9.0'})),nav:[{key:'automations',plugin:'automations',path:'/settings/automations',section:'settings',label:'Automations',requires:[]},{key:'fixture',plugin:'fixture',path:'/settings/query-proof',section:'settings',label:'Query proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/automations/catalog'))data=catalog;else if(p.endsWith('/automations'))data=[rule];
   else if(p.endsWith('/summary'))data={total:0,related_count:0,permissions:[]};else if(p.includes('notifications'))data={items:[],notifications:[],unread_count:0,total:0};else if(p.includes('preferences'))data={};
   res.setHeader('content-type','application/json');res.end(JSON.stringify(data));return;

@@ -506,9 +506,9 @@
     "issue": null
   },
   "docs/modules.md": {
-    "sha256": "664bbef136045290821ca1427b8d454605f3f609a90b1eb1ccb8b2415ab9d8c8",
+    "sha256": "dbfb5ec882e9687d98baffce5f424eb97c3a5c487e5a8ac0cd61e71163a94d5f",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -520,9 +520,12 @@
       "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "docs/performance-safety-audit.md": {
     "sha256": "103b850cbfe71ea293d998895fd8449ee03f8a4764199133d84bf080dcbda7d9",
@@ -560,9 +563,9 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "1f7d72e28ecf7f2aaeb780973ebfd2d8343641dbb553638a3b8d960381ae9aff",
+    "sha256": "84aabab781dec394a9cbc1fb113f40736f9fb54e6b6e2530e0f636dccc031fa7",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -574,9 +577,12 @@
       "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2070,9 +2076,9 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "a201f62360054a6283ba1aad8decff61ec41402db3813795e6b09f29da636ea2",
+    "sha256": "98fe607918ec8c6c9ee3c811078df99be02ffd4ecab146ffee7f2459b5eefc57",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -2084,9 +2090,12 @@
       "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "research/review-2026-09-25/FIXES.md": {
     "sha256": "247e2f0759a2a12cb87c1e1d28fd6baefb175deb7f2d58bff79200f4d80925c2",
@@ -5501,7 +5510,7 @@
     "issue": null
   },
   "server/src/radd/modules/automations/__init__.py": {
-    "sha256": "18f3921f1594928800c904b6c43c8e9f2955c9186d9e5c3aa128c5370de45aca",
+    "sha256": "62263e2f48034dc5ad10f3aaa31c95c7cabca7cf20e9261ba0ccc25a2f4a4e85",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
@@ -5512,9 +5521,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/builtin_actions.py": {
     "sha256": "b0dc0a159b098e0498d48eddb7bb985915b02af94ae11a1ce4ed0aac549247ca",
@@ -5636,7 +5648,7 @@
     "issue": null
   },
   "server/src/radd/modules/automations/router.py": {
-    "sha256": "71e9405edece85a757f551eb70aef0bd5c49c503eb8c81f7c66cd6404d62b36d",
+    "sha256": "1ea0d20107ca63a386cfcda20f2a6469d8b64e842d35b25a69d64f90ba995cf1",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
@@ -5644,9 +5656,12 @@
       "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/runs.py": {
     "sha256": "acefd0e438a5d5431384a1e26fc5e66ad0c64552f37eb685c448b97b4f5f111a",
@@ -5670,7 +5685,7 @@
     "issue": null
   },
   "server/src/radd/modules/automations/schemas.py": {
-    "sha256": "639a9a28d4998ad384af81e918e18a3df15cd3c0a39ad87202a038a00aba5c87",
+    "sha256": "9caada78b32b48f1d6c79b671e0795ade6c0ab55910e96279c636fbc491553bc",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
@@ -5678,9 +5693,12 @@
       "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/search.py": {
     "sha256": "b6d03f339dfe40c5f506c73131f873e3369e48f1405d058a4aa9f26179fe4331",
@@ -5732,11 +5750,81 @@
     "issue": null
   },
   "server/src/radd/modules/automations/ui/package.json": {
-    "sha256": "222223b59fda92551d00ba734c97b812e517e5eb843a3c3447567ebd0d1c7a54",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6b540483b59e2bf0f758f41df8545f6cbea8142eb91ec3e1457f4b1b8efe26f5",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/ActionParams.tsx": {
+    "sha256": "f8b3a882e06c376273fa6313c6d70cce8bafacf149f43e13bd7f0e3e5c250a3b",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/ActionsBuilder.tsx": {
+    "sha256": "9d87aeb0c3195237e995fc9b8098bb27cc84012d887a7cec362341c26c67df5c",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/ArityField.tsx": {
+    "sha256": "2b967794b14db034d095a22d05e1ff6e9782e8a7dda26d6c608e4c125fe4af9c",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/CreateItemFields.tsx": {
+    "sha256": "a9dca7bb295e454bdc0cc0a3dfe678cfdfce3047c58de9010cb33c0852dd44b0",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/EventSamples.tsx": {
+    "sha256": "0025940200c242ed4b32bb98ef0f49d18153a3dc6cbad1612c0ce4d3b4b2fef3",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/GateFields.tsx": {
+    "sha256": "dc3f696ae662e2e166ac8a1b02660daac2e669d87d3699cbd331b651992b79fc",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/ui/src/GraphCanvas.tsx": {
     "sha256": "ad39f6b297db70fb27a196ef0adc0346800692047d62aaa59c2372fceef90ba4",
@@ -5748,6 +5836,105 @@
     ],
     "issue": "RADD-1354"
   },
+  "server/src/radd/modules/automations/ui/src/GraphEditor.tsx": {
+    "sha256": "a21070d395a6c5d9e2ff042237179def962594e7a41129983e3ea53dfd9af4af",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/GraphInspector.tsx": {
+    "sha256": "331de3a49337a32184caeb2d1d5102ccf4fc9883e455a515ea1e5f9ed8372c48",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/IntegrationAutomations.tsx": {
+    "sha256": "cf0dc90f1e6e81af425fdf0b37b9dc972106caf884b14ea01e3fbe2b83cd65fd",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/LazyGraphCanvas.tsx": {
+    "sha256": "183db17284f1657f5b0436cf158b905f6282fb1d4943d663d37228fb32849309",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/NodePanel.tsx": {
+    "sha256": "cc712762e7024bbd5c6e863e44dda73be1b5c5259e72ce608a4378de30247f38",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/NodeSearchMenu.tsx": {
+    "sha256": "43bb29169d43b0168aefb6a0a3eb8786c794b058d8d75d014cfacd87ca75d796",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/RuleEditor.tsx": {
+    "sha256": "2727670ddcaa792e4649038a5dc39d92064ee556bd09ff23e7bf71bcb7774927",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/RuleTestPanel.tsx": {
+    "sha256": "a189096ab02382404ffc727c0f5bd8c9e093e4e7b6d5f645d3a790bbb2ca4ef3",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/RunsPanel.tsx": {
+    "sha256": "fc6778884b462acc8fada09b29a8759a504118696ad609188066a47789cabb8e",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
   "server/src/radd/modules/automations/ui/src/ScheduleEditor.tsx": {
     "sha256": "977f806d4f263a9ece09440d04b5688d9db587598aace254575c4e24c716c560",
     "status": "reviewed",
@@ -5757,6 +5944,61 @@
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
     ],
     "issue": "RADD-1362"
+  },
+  "server/src/radd/modules/automations/ui/src/SearchFields.tsx": {
+    "sha256": "0a942b4aa2947029b3f521b663d282894395b0c5e92dff10a18e3bdc84364bd5",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/SettingsPage.tsx": {
+    "sha256": "0582ec765b5cd38b7031bb724ee7e86d3814a5ee48ab899989de328e8691e1fd",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/TokenReference.tsx": {
+    "sha256": "d346a6575ab56bf281e07b5e4ad8a817ad118806f238d9cbcfdafb3786837b71",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/ValidationFields.tsx": {
+    "sha256": "0201c91972f5ec8fa9e381be90e6fa42cc1879a3e66bd2c1e8ee829e257be237",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/VersionsPanel.tsx": {
+    "sha256": "0e18cab5ac49cf678a5667436b06706fc37eba385b630416f6dcecc08efb39d6",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/ui/src/automation-layout.ts": {
     "sha256": "20fb04121ee9af6804f3df1af09f693f173fd366dedf644e3977f43f98022ac2",
@@ -5808,17 +6050,75 @@
     ],
     "issue": "RADD-1354"
   },
-  "server/src/radd/modules/automations/ui/src/index.tsx": {
-    "sha256": "79c9d7179e6b688631d97d61ed04e63a83361b078376204be244acef7b85868d",
+  "server/src/radd/modules/automations/ui/src/commands.ts": {
+    "sha256": "cc8d56988c0bd9cefa8f4b3fe0f66e0fd9d1d527f1132ebe084bc6584ddadf0f",
     "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/constants.ts": {
+    "sha256": "172af674f05eda785082bb1d0b33c40df8fc76306236b5af78d33268554504d6",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/controls.tsx": {
+    "sha256": "f8d252cd2abe99e2b5070ff32d500041ae6a80ca633bc8f01e24c4c34680da7c",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/index.tsx": {
+    "sha256": "daecc01efe2a8acc58dc9640a2b05831323731e4fc4384e2f7b782dba7b21521",
+    "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
       "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
       "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
-      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/meta.ts": {
+    "sha256": "757c3c6b5bec96a458f75595afe5fd5196a46a6cffd7963c395d35e07660dd8f",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/mutation-lifetime.ts": {
+    "sha256": "3d6ad9c50e08a803dd273b795f35bbd5492b877d315953e3152a4ca99c31c310",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/ui/src/node-shapes.ts": {
     "sha256": "7f11680996148efd0d4944af2b0dcc9f11e009e9701bc47802585833428f6abe",
@@ -5839,6 +6139,39 @@
       "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
     ],
     "issue": "RADD-1354"
+  },
+  "server/src/radd/modules/automations/ui/src/options.ts": {
+    "sha256": "a785ccbd59525330cd6273ce6c188199dccacb60b84e2e4eb7b3f0a0b9b93241",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/queries.ts": {
+    "sha256": "f82386a1a7c2c9a09c2f211219b58b982ea43b0a9b3745c3c555166ec1fef8d8",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/query-lifetime.ts": {
+    "sha256": "a414e2506b759a0cf7318d803e1c3c44b60acfcdf0cbf6a3598eceade3ff9aeb",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/ui/src/schedule-contract.ts": {
     "sha256": "0f17f66038882b53cbbf4d0f4cffd66c7b7d6d98a25e6405859a478ef2cf08e7",
@@ -5861,7 +6194,7 @@
     "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/ui/src/types.ts": {
-    "sha256": "97988340912169cbce5df76796150d88cafc4ba1cdfb40579f71cf458b10436c",
+    "sha256": "151da71d1d529c79ad9e5e2e87bcea14ad8fe9139d524066e6bff9c73c0034f4",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
@@ -5869,9 +6202,23 @@
       "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/automations/ui/src/useTokenTarget.ts": {
+    "sha256": "27de747ab88a24950f3d24e560c5195c5d25560b72d1dafce833bcfc0d50fa0b",
+    "status": "partially_reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/automations/ui/tsconfig.json": {
     "sha256": "efb528691060367101ec4110e27ba4409776f044ff16b4d2a8edb309fbb900a8",
@@ -6285,6 +6632,28 @@
     "evidence": [],
     "issue": null
   },
+  "server/src/radd/modules/comments/ui/package.json": {
+    "sha256": "6258145ba9ee6b44d3aac22ea8f6e56e6e0227662a3497ff5a0c823bff709e61",
+    "status": "partially_reviewed",
+    "owner": "comments",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/comments/ui/src/visibility.ts": {
+    "sha256": "e38e9cec0451f0e7f2cbb07beb01d7ae1f6d2071e408bdd19b5905528935af4c",
+    "status": "partially_reviewed",
+    "owner": "comments",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
   "server/src/radd/modules/comments/visibility.py": {
     "sha256": "9ad79d32c5b241af67558d7bb8a6fa019a1f0bbfa43b333fc655744db357fcbd",
     "status": "unreviewed",
@@ -6669,14 +7038,17 @@
     "issue": null
   },
   "server/src/radd/modules/cycles/ui/package.json": {
-    "sha256": "bc791ac13e96cb574566164deb704ce233cc5f7f202b50e5498e6b97898309bd",
-    "status": "reviewed",
+    "sha256": "c79a234a86ed2ea957e1d1693c7007ee4bf4204b26b8542aa1d7eabcaa9a1351",
+    "status": "partially_reviewed",
     "owner": "cycles",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
-      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/cycles/ui/src/CycleSelect.tsx": {
     "sha256": "ffe7e0103adabd5e9afc3a9ae5cd7cb4aea21e3e3945b2f51c8048fa8f91e551",
@@ -6996,14 +7368,17 @@
     "issue": null
   },
   "server/src/radd/modules/fields/ui/package.json": {
-    "sha256": "f8fd393b00ec39a7ecc9d2b4474f35575b200b924ce13c9e66c142084b33619d",
-    "status": "reviewed",
+    "sha256": "983d607c28f8d78ad570d3c7f940c70faec67b2e47190fb0dad20c1adb38a2dd",
+    "status": "partially_reviewed",
     "owner": "fields",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1360-verification",
-      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds."
+      "Actual owner bundle and generic input implementation reviewed and verified with 13 focused browser groups, 56 frontend tests and host + 22 remote builds.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1360"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/fields/ui/src/CustomFieldsForm.tsx": {
     "sha256": "7e44d667051be49301d367c1e9f27ca96b095d2ba3eb8e074c67f7cd631a95e3",
@@ -7956,34 +8331,76 @@
     "issue": null
   },
   "server/src/radd/modules/items/ui/package.json": {
-    "sha256": "1a8e04d34e894ba63e32c931f629858ebbf26de30182d6f6472d96eff81d7957",
-    "status": "reviewed",
+    "sha256": "9a9806ac31b4a69a9efd370d43863b0b281ca220624d230eb42dc5807af78a10",
+    "status": "partially_reviewed",
     "owner": "items",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
-      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/items/ui/src/change-format.ts": {
-    "sha256": "e85afdb56d3812bd4f6af5ceaef3e7b2e0a22d434b913e8d760ef4eb27221bc6",
-    "status": "reviewed",
+    "sha256": "ba39aca285b7d6ca3e67b8963de0e4767473558762cf625e1177d4e3b23b7ee3",
+    "status": "partially_reviewed",
     "owner": "items",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
-      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/items/ui/src/index.tsx": {
-    "sha256": "7287c74f807eabc84739e267f7d208dbf5cf1d9cbec56d0adbc62db4391e67e9",
-    "status": "reviewed",
+    "sha256": "3a0376141928088c34b813127e705b6552e213df282407eef8ebc17a99e394c8",
+    "status": "partially_reviewed",
     "owner": "items",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
-      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/items/ui/src/lookup-contract.ts": {
+    "sha256": "45dbdbe86d80c01338ce36e690e18d128795b6947cba1f7c6ec44bfc54a65068",
+    "status": "reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/items/ui/src/lookups.ts": {
+    "sha256": "eab5aaadb95e6d5bd0567c8673a17525f73547d8eb48c794b85948d246a72ac5",
+    "status": "reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/items/ui/src/metadata.ts": {
+    "sha256": "97e5c8863a7a17aca2239b69ebacbc3224d30baa16986ba2da3d2d41be2e916d",
+    "status": "partially_reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/items/ui/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -8457,14 +8874,17 @@
     "issue": null
   },
   "server/src/radd/modules/labels/ui/package.json": {
-    "sha256": "77fd6abed86a5cd2f731ae7c0c58a0279df0ba9f50957b8cddc0e0fd86de9a76",
-    "status": "reviewed",
+    "sha256": "44cea305577016472cc6fd0efd6b81cc925bcfcd293fd69d0a3f1e72ba4896d7",
+    "status": "partially_reviewed",
     "owner": "labels",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Query owner/lifecycle implementation reviewed; 12 actual-bundle query groups, source collision/cancellation/consumer behavior, 59 frontend tests and host + 23 builds verified."
+      "Query owner/lifecycle implementation reviewed; 12 actual-bundle query groups, source collision/cancellation/consumer behavior, 59 frontend tests and host + 23 builds verified.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/labels/ui/src/catalog.ts": {
     "sha256": "852df1ac5c6f6b4ec2a97b08798a526dc599efbd46fd060e2817b3156666d616",
@@ -9414,7 +9834,7 @@
     "issue": null
   },
   "server/src/radd/modules/pages/__init__.py": {
-    "sha256": "c40406a175cd4e6f937cf0df235169f937c1bd7b8aa0892056f2346b2615dad2",
+    "sha256": "2c06819851252618f8d53f3044a853f08f5f4642fa684d6b02daf99f7aacd33c",
     "status": "partially_reviewed",
     "owner": "pages",
     "evidence": [
@@ -9422,9 +9842,12 @@
       "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/pages/access.py": {
     "sha256": "c8e73af778425852ed30df2933502e5bb900be34e027c9f20f2e76aa957144f6",
@@ -9630,24 +10053,52 @@
     "issue": null
   },
   "server/src/radd/modules/pages/ui/package.json": {
-    "sha256": "642ed20f8636cb078286a4db9637f1812cdbfa7f2a2ef86170b03f4d0335c924",
+    "sha256": "c61abd0bbbc33ffac5203146192c645a2e11d519027bd025814d428ad140b6f7",
     "status": "partially_reviewed",
     "owner": "pages",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/pages/ui/src/index.tsx": {
-    "sha256": "71c8ad08f4e9fffcba32a6294bdc3786ea4ace8333acb425348c0d6033eb90ec",
-    "status": "reviewed",
+    "sha256": "e10a3cfc63a457332fcee2fe61ffba3978b8c8752040b44675115bd4a3103579",
+    "status": "partially_reviewed",
     "owner": "pages",
     "evidence": [
       "Registers only its local option contributions; no host imports. Actual remote loading, withdrawal and restore verified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/pages/ui/src/lookup-contract.ts": {
+    "sha256": "b6d72b7a79cefaa17e25b9a8372afa8b559218c2f730548a5d04986273335126",
+    "status": "reviewed",
+    "owner": "pages",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/pages/ui/src/lookups.ts": {
+    "sha256": "0decb825a4872ce446044a079ed9ba2d6268eff9c854cd545c55293ec160ac7e",
+    "status": "reviewed",
+    "owner": "pages",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/pages/ui/src/options.ts": {
     "sha256": "bacbfb89fad290260fc63596102cc02ceff4d16dbabfc169886c3a108696c770",
@@ -9859,7 +10310,7 @@
     "issue": null
   },
   "server/src/radd/modules/projects/__init__.py": {
-    "sha256": "74df57ccacb1df2cb8890814692fd430b85d173e35ae8d2daf85f735a2d88aee",
+    "sha256": "aa4f453d8d6298b53077fe570bd7412279843bcad82ee954da6cdf7a8cb2dba7",
     "status": "partially_reviewed",
     "owner": "projects",
     "evidence": [
@@ -9867,9 +10318,12 @@
       "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/projects/directory.py": {
     "sha256": "f5cc336cc007bcd7b5f2bf3f03c44ec1063bc9ecf74c140521d7821781b09be6",
@@ -9921,7 +10375,7 @@
     "issue": null
   },
   "server/src/radd/modules/projects/ui/package.json": {
-    "sha256": "85aa59df527b42184c66ea46d806849ec48eb346ee66f308ef94c491afdcfe60",
+    "sha256": "b8169a7a5a536b3f772e3bbcf5cc96561cbb928a5e3d2f7b2468ceaa22341350",
     "status": "partially_reviewed",
     "owner": "projects",
     "evidence": [
@@ -9929,9 +10383,12 @@
       "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/projects/ui/src/ProjectPicker.tsx": {
     "sha256": "ddca37c20f38a631860161f3786a34c88663e0b86e9172d991b923028ac1032b",
@@ -9964,14 +10421,39 @@
     "issue": "RADD-1358"
   },
   "server/src/radd/modules/projects/ui/src/index.tsx": {
-    "sha256": "630a85eec32a9506a9ca14352b0ee207a5360b9a4f3eb59738f07378d563a79b",
-    "status": "reviewed",
+    "sha256": "af6ae415fe91a9c8a47b51bac35fb593e5ddba941e377664db64952162bc0747",
+    "status": "partially_reviewed",
     "owner": "projects",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
-      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/projects/ui/src/lookup-contract.ts": {
+    "sha256": "acc162123c4f1a79157693a02d412da68d20c9569bd16161e53527477f865120",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
+  "server/src/radd/modules/projects/ui/src/lookups.ts": {
+    "sha256": "475624c0ae654b3c94c212c131aaf97c042faecd52076bfd99fb1a8850b00bfa",
+    "status": "reviewed",
+    "owner": "projects",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "server/src/radd/modules/projects/ui/src/picker-contract.ts": {
     "sha256": "0288d9d36b8e7f199036bc1fe6d04c4c6e6e9a0fc656e71ae2117f7b1c47c4cb",
@@ -11876,11 +12358,15 @@
     "issue": null
   },
   "server/tests/test_automation_templates.py": {
-    "sha256": "6f3f01ab5228c8ecb7d4dc2f3f0775b060bd383af6ba2ee42c43380877135c8e",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "4a5ee03f8e52aa404b977e81fc1dc7ec7584158af597c4f1df10d7fefa17dfce",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "server/tests/test_automation_versions.py": {
     "sha256": "6aa2ef5bfb2def48a501b712486091e713b3d236dcddeaf3e012ee01a8102edf",
@@ -13779,9 +14265,9 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "41afc91e0096bc82e36a25f1d1bec32ae350cf3da44c88d4c590e2f7854fd8a1",
+    "sha256": "154eef2973d8fd88a09878967126750c381353c2d903d367c68d7988648b57e3",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -13793,9 +14279,12 @@
       "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -13835,6 +14324,17 @@
     ],
     "issue": "RADD-1364"
   },
+  "web/packages/plugin-sdk/src/ConfirmDialog.tsx": {
+    "sha256": "8566fb3367cb7df62b88af11d62f77083cd3df7efffbde061389a85d2de072c9",
+    "status": "reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
   "web/packages/plugin-sdk/src/DateField.tsx": {
     "sha256": "2ff1b6be308ad651ab22d0fe4d2a5c756128a6d40f8b60ab03a7121edba09abc",
     "status": "reviewed",
@@ -13844,6 +14344,17 @@
       "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
     ],
     "issue": "RADD-1364"
+  },
+  "web/packages/plugin-sdk/src/IconButton.tsx": {
+    "sha256": "b37e062e0c4da2fb4c7abbc0f5549cab287184ad51a05cb746d0ea670b8bc77d",
+    "status": "reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/src/Pager.tsx": {
     "sha256": "39d237f4c850812be17c067ef88848b8ab3a88317272e960c72583e802163607",
@@ -13892,6 +14403,28 @@
     ],
     "issue": "RADD-1364"
   },
+  "web/packages/plugin-sdk/src/clipboard.ts": {
+    "sha256": "2e47ee178be30bf67556ed1e4ab749942fa91d85e798d48efbc4b9334e322e69",
+    "status": "reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
+  "web/packages/plugin-sdk/src/commands.ts": {
+    "sha256": "fd586b7d169a81ee7b60b7079366c3d0d005e9c72e6d59e96abdc3297fff09ec",
+    "status": "reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
+  },
   "web/packages/plugin-sdk/src/data.ts": {
     "sha256": "3bc4409e5b45a040a31f7372f015094d6910e8f4b74f115d9be5d73de079c576",
     "status": "reviewed",
@@ -13910,6 +14443,17 @@
       "Generic lifecycle, page chrome, controls or date formatting; no feature-specific UI added. Built-host page fixture: 8 checks; actual Leave remote: 12 checks; frontend tests: 40 pass; host and all remotes type-check/build."
     ],
     "issue": "RADD-1351"
+  },
+  "web/packages/plugin-sdk/src/debounced.ts": {
+    "sha256": "0d573065c95f379955d2bb56d8dcbf07e6ce272bd97ce4dd74cc2c755537395c",
+    "status": "reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/src/directory.tsx": {
     "sha256": "04557b1cd57c66784dc9cfc3ed2405dea4bd02b573b4d46854c30b6d93528f7d",
@@ -13966,9 +14510,9 @@
     "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "91d2f06966bd2ea2640ea0de14816816baa1b0bf037b671a0eea1b0a5873836d",
+    "sha256": "4703191f0a5a162ab848134c028bdb3a1fbb9d0a515cb44fae63ffe96667cc47",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -13977,9 +14521,23 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
+  },
+  "web/packages/plugin-sdk/src/list-filter.ts": {
+    "sha256": "c8ae811b72aad73b24929303ced309a63581aba5d7d05cb31cf0049d6109e1a6",
+    "status": "reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/src/options.tsx": {
     "sha256": "4cbaf0efbf8426e9cd32b3b9875885a93abc0a59de84cca5887c0b7e06d12adc",
@@ -14002,26 +14560,43 @@
     "issue": "RADD-1358"
   },
   "web/packages/plugin-sdk/src/plugin.ts": {
-    "sha256": "6e13d96b32fd8518a8c31d66dc643b374d38632e14e0a33d2c7137acf64907ac",
+    "sha256": "b21cb99a0e2dae3720e26df59bbb93f5581993047e44af96c975d042effb8e20",
     "status": "partially_reviewed",
-    "owner": "platform",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1365"
+  },
+  "web/packages/plugin-sdk/src/positioned-error.ts": {
+    "sha256": "0676e22304e4959ef2784eafaba3427f3ba018b2e905c93251f91f04d8542c83",
+    "status": "reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Entire small artifact read: generic or owner-specific responsibility, public imports, cancellation/cleanup and request contracts inspected; applicable command/query/mutation/confirmation behavior exercised by the listed actual-bundle proofs."
+    ],
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/src/primitives.tsx": {
-    "sha256": "2bcf211f7f87c299e65a0f5531536e4f784d85226872fa26a8cb6716ed534644",
+    "sha256": "5ea65bbaab3ebbc94bf29dd5eb218c98d80374ad5d3139a0e146abcd92f96380",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/src/query-sources.ts": {
     "sha256": "f5ed83f36544ed02a090c29ddde2320b8f333b5263f7271580c128876418ac58",
@@ -14074,16 +14649,19 @@
     "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/slots.tsx": {
-    "sha256": "1cf67ea9a175e33e8e74a5348d60075155cf0fdd24cfbb36e566f980f73b8a27",
+    "sha256": "f2fd676654cbc3749f1b08930afa7e7cc144b024bbfd1bc30adecd33065500a0",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/src/styles/components.css": {
     "sha256": "21574be09e4c37f1109dd626a00bdda9acb8abe589ff5eb3f7d14b730518c80d",
@@ -14145,9 +14723,9 @@
     "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "f476cd6ea393ef9d07ae56193ae632acb85cb3cb280d83b2ba629705a7e43448",
+    "sha256": "c3f171030f248809f55403dddc88ff8890a4cac4bf3589ea556166403bf9eebb",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -14155,9 +14733,12 @@
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/packages/plugin-sdk/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -14233,9 +14814,9 @@
     "issue": null
   },
   "web/public/shared/radd-plugin-sdk.js": {
-    "sha256": "d33337a58c31a3ba5c9e790ded4ce7f4d27edbabc8b16edf641205151e24402c",
+    "sha256": "5000d11c81b4d9db311c6955f3007509a3a58a4f0988f5cdc2445ca9a0f29e6f",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -14244,9 +14825,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/public/shared/react-dom-client.js": {
     "sha256": "7f77c7fcf2095f1ed7fd3c955b4531b8e8bb8fc97c907abd3b8019e0b0157892",
@@ -14368,14 +14952,17 @@
     "issue": null
   },
   "web/scripts/audit-change-format.test.mjs": {
-    "sha256": "e0496f2258642a2bdd85abb76e3a78caf14af7fed6252f1fae3e8dea0a1b57b4",
-    "status": "reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "sha256": "ad624a66f45759186343efca366a42463d96532577d1a2061abf5dd3c2cb93b0",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
-      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/scripts/audit-links.test.mjs": {
     "sha256": "188a8913855b6a8da4e4578e082eb57ac14b25795fc7f91f193b5fe08ff9f1fe",
@@ -14415,6 +15002,17 @@
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
     ],
     "issue": "RADD-1362"
+  },
+  "web/scripts/automation-ui-fixture.py": {
+    "sha256": "232afbd4ce33b27e95f4ec0776796bd832c4d57fd1328aa1017913c56c4dda2e",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/scripts/automations-arity-proof.mjs": {
     "sha256": "dddf14d355e0f1d7a9842eb29a8c32e17116cebf7650e6e614c9af70fc61c0b3",
@@ -14551,11 +15149,26 @@
     "issue": null
   },
   "web/scripts/browser-automation-canvas.mjs": {
-    "sha256": "a9eca6366f14e35840d272c1ddd96ad0c0586c92006e51b6f72d12fb3e70b903",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ad71caa0bd2c99092a3fb80d7070eb1a5cfe6893b850e6a40fa2e00f9d6b5877",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
+  },
+  "web/scripts/browser-automation-editor.mjs": {
+    "sha256": "189567f72dbe96b452bce6c982ffeb2709330fd5c5acdeb93706459059d2fe87",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/scripts/browser-directory-contributions.mjs": {
     "sha256": "dc6fb543097348366da0d8d7b08f556ece7ec08dab3765787af49bd572b79303",
@@ -14644,14 +15257,17 @@
     "issue": null
   },
   "web/scripts/browser-query-contributions.mjs": {
-    "sha256": "baa2d58fb907fddcdb22d8c8b5297ff4bab748ae94190391d11ae727d43593a5",
-    "status": "reviewed",
-    "owner": "mixed/transitional",
+    "sha256": "a8c1c0c5f0fab3277d5d93b7c7302242a0b52d5d65f1fb3c0633d72b123b1804",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Query owner/lifecycle implementation reviewed; 12 actual-bundle query groups, source collision/cancellation/consumer behavior, 59 frontend tests and host + 23 builds verified."
+      "Query owner/lifecycle implementation reviewed; 12 actual-bundle query groups, source collision/cancellation/consumer behavior, 59 frontend tests and host + 23 builds verified.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1365"
   },
   "web/scripts/browser-resolvable-threads.mjs": {
     "sha256": "cab5dd4e9f6141ed40cb5b002433fcf3309f4174f1ef134929aa3d59a308a71d",
@@ -14719,16 +15335,19 @@
     "issue": "RADD-1359"
   },
   "web/scripts/build-all.mjs": {
-    "sha256": "b33f501a2bb8b4484fbd60a09a947e246a58f7b6e22a6830c4d17fa156e18997",
+    "sha256": "b83cedde2c888cbcbb02d4958bc612eded313e1cc4e25090c8c251a365e3635c",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "Source reviewed and host/13 remote builds verified in 6525dce8. Full isolated packaging and dependency resolution still need review; shared local node_modules does not prove external install correctness.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/scripts/code-block-proof.mjs": {
     "sha256": "de1ebcfe5e7a923cd0a164c1f8324726724037fef526d63e4fa00679941445af",
@@ -14750,6 +15369,17 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/scripts/command-contributions.test.mjs": {
+    "sha256": "5bccbcd40d70dd5e3fd7e4da3fa61fa8acac1cbb91697d5589311b3d6db58707",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/scripts/comment-links-proof.mjs": {
     "sha256": "b445fe2538c24d1af85b16683f407f06efb65c81e377466fc4927c984009c1f5",
@@ -14864,9 +15494,9 @@
     "issue": null
   },
   "web/scripts/gen-shared-shims.mjs": {
-    "sha256": "6c6bdfbe4c98987a4a9dfc9fb82d93490d08ec5e8853b353d47e2da0de2c0c10",
+    "sha256": "e93dd497691f0de9beecf6a3d25a8b2e38a127a0ab1e570897b9538e5929f40a",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -14875,9 +15505,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/scripts/grouped-pagination-proof.mjs": {
     "sha256": "0019d9fd3dd43ea4cdcb117f450e1a1c9f4200d550fdac34fe5fe73c334ae93b",
@@ -15139,9 +15772,9 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "54b33eccce7667580bfde33acaceb20097ac7779c03ed5fac0cab1dcc6492e13",
+    "sha256": "f2f1a13140fa1774c4b2af4180f45084bd59ee064380eec76ae1420cb1377b4b",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -15153,9 +15786,12 @@
       "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -15165,14 +15801,17 @@
     "issue": null
   },
   "web/scripts/plugin-loader.test.mjs": {
-    "sha256": "45909f7c79efb7084ebb79e6bdc74e828b2e90a2ab533df6b39318091dcdfd71",
+    "sha256": "b4568b73bfdfc44db3266f2d174ea4dd783f2166deaaa4c50f1f586beee893da",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1365"
   },
   "web/scripts/plugin-management-proof.mjs": {
     "sha256": "d0514e28557b12d11a8031bb5bc575a47ab895c96be261fe4f29f9b6d2cdc3bf",
@@ -15560,11 +16199,15 @@
     "issue": null
   },
   "web/src/components/ConfirmDialog.tsx": {
-    "sha256": "fe9a48121819789797fbd5b66f1768944375368f8e1d1b6236cf39d6970bc856",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "f66fc4d2b726bb9c4ad9a6a12ab413fc4d515055e79c736fe47f032ee63586c7",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/components/ContextMenu.tsx": {
     "sha256": "1cda076a1b6e75484b4ce5a32010dcb11a2e403ff85be454fc9ca77d9649867e",
@@ -15598,11 +16241,15 @@
     "issue": null
   },
   "web/src/components/EmptyState.tsx": {
-    "sha256": "a2425d2ee823984818b53a765d9ec5acf83e2d9f6b1c3d425d9ea28c520ad0ca",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "b1c4b9a2bee10537d613cd55ceee2db377ea0901da0c5b9d86d7e6d8b4bc42c6",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/components/ErrorText.tsx": {
     "sha256": "f3e78c17ac5ce5d11b896a84ba53d23b7ff61a076eb12153900dcf9f25a62921",
@@ -15615,11 +16262,15 @@
     "issue": "RADD-1360"
   },
   "web/src/components/IconButton.tsx": {
-    "sha256": "b37e062e0c4da2fb4c7abbc0f5549cab287184ad51a05cb746d0ea670b8bc77d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "5c240582f1e97fc8f1daa68b07bd033ea35a957532ea104b9ad9c268fdb0f939",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/components/ListSearchInput.tsx": {
     "sha256": "dc20b4ba42ea4dc25d4a090b07139ae844470dfd7ad87a5343c2b4fcdd30cd8c",
@@ -15784,183 +16435,6 @@
   },
   "web/src/components/attachments/StorageChoiceProvider.tsx": {
     "sha256": "66cd3cfb0b83c4285762ae4201d287b5b669f3200306df0ec8eda0d0223e4718",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/ActionParams.tsx": {
-    "sha256": "ebc9726532072ade4247fab0ed9ca4e249ab1668447a96da4d05d539d77baf33",
-    "status": "partially_reviewed",
-    "owner": "mixed/transitional",
-    "evidence": [
-      "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
-    ],
-    "issue": "RADD-1361"
-  },
-  "web/src/components/automations/ActionsBuilder.tsx": {
-    "sha256": "224549e26e7191d45bddea84d6b51a45fc5839e66543850f2af0e0892f787b00",
-    "status": "partially_reviewed",
-    "owner": "mixed/transitional",
-    "evidence": [
-      "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
-    ],
-    "issue": "RADD-1361"
-  },
-  "web/src/components/automations/ArityField.tsx": {
-    "sha256": "6302cd987ef67a4b913d50fb3b6a6b93bb148227d839a32cc002a7391c49aa08",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/CreateItemFields.tsx": {
-    "sha256": "bf2429f188e9e154175eeb1ff54358e016f6cdd1f6788cd6f3bd58da05c094d8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/EventSamples.tsx": {
-    "sha256": "f2b72bdaf442e5aaba611efc145164ad7bbcba07839cd8cc3cf1a7b856e74b5c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/GateFields.tsx": {
-    "sha256": "330a29a247d8a647d704fb14ecee02717ff2abf1d537ade75cf9b18e23f101df",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/GraphEditor.tsx": {
-    "sha256": "20c09752ff8a2d4226679543fc37b03e3845846a7dc10c91c0b7db32bc6d3a44",
-    "status": "partially_reviewed",
-    "owner": "mixed/transitional",
-    "evidence": [
-      "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
-    ],
-    "issue": "RADD-1361"
-  },
-  "web/src/components/automations/GraphInspector.tsx": {
-    "sha256": "01900f461fbc33a5bbd850f8dde88f7310310a39edb67558dac9bcfeb262d749",
-    "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
-    "evidence": [
-      "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
-      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
-      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
-    ],
-    "issue": "RADD-1362"
-  },
-  "web/src/components/automations/LazyGraphCanvas.tsx": {
-    "sha256": "7330ae9f0cb82943a13ae5b49378f608c1728dc59347a28bb94604e80c513a56",
-    "status": "partially_reviewed",
-    "owner": "automations",
-    "evidence": [
-      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
-    ],
-    "issue": "RADD-1354"
-  },
-  "web/src/components/automations/NodePanel.tsx": {
-    "sha256": "997a79ba655e6ca36b0fb2e389fa7c1f95d90405881216462f1ecd8e6391c946",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/NodeSearchMenu.tsx": {
-    "sha256": "61e07a8c691666fa7b84934c1d9981e4381d5f247e0c8ce2f584b2584348c8eb",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/RuleEditor.tsx": {
-    "sha256": "a30ab0750427a8ca5d39d35920621657705d482a1c492ee4536d46ead146d655",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/RuleTestPanel.tsx": {
-    "sha256": "9067787eff0dfc2eaca92eb8209a2f6dd29582e43eb5b4741625b2e0e97e2422",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/RunsPanel.tsx": {
-    "sha256": "1c0c59c35958f031030a0121c42f63f5e265e39dbc4076331fe569972e7700d8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/ScheduleEditor.tsx": {
-    "sha256": "094f8fc038dce351415c82b66d3b3656fce36de4e3350535e3d8c965bee34e13",
-    "status": "reviewed",
-    "owner": "platform tooling and transitional integrations",
-    "evidence": [
-      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
-      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
-    ],
-    "issue": "RADD-1362"
-  },
-  "web/src/components/automations/SearchFields.tsx": {
-    "sha256": "5371c0ce62c840fe24b789db04ac36ca9f0d999de38c641d6f8a09266ece8a87",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/TokenReference.tsx": {
-    "sha256": "773f726c7a57e73ed4143333f72449aca1c7488e565cee4448f1397e4b5086d5",
-    "status": "partially_reviewed",
-    "owner": "automations",
-    "evidence": [
-      "Explicit shape propagation verified; host UI ownership and remaining dependencies still need migration in RADD-1347.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
-    ],
-    "issue": "RADD-1354"
-  },
-  "web/src/components/automations/ValidationFields.tsx": {
-    "sha256": "8bcd61070a9b2d7e87ffa2d554c568f8d1f3fe6ee97e21b0e0b21784b80c9fcc",
-    "status": "partially_reviewed",
-    "owner": "mixed/transitional",
-    "evidence": [
-      "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
-    ],
-    "issue": "RADD-1361"
-  },
-  "web/src/components/automations/VersionsPanel.tsx": {
-    "sha256": "f49ff31285d49854f25e9f5a132ed4dea2152cf55f22d62c8ac31759df14739c",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/automations/node-visuals.ts": {
-    "sha256": "fcd2ce56eb0b80658af0ad36e03f4d7ede54f24249364f611b5f4461bdab95f1",
-    "status": "partially_reviewed",
-    "owner": "automations",
-    "evidence": [
-      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
-    ],
-    "issue": "RADD-1354"
-  },
-  "web/src/components/automations/useTokenTarget.ts": {
-    "sha256": "27de747ab88a24950f3d24e560c5195c5d25560b72d1dafce833bcfc0d50fa0b",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -16859,11 +17333,15 @@
     "issue": null
   },
   "web/src/components/items/quick-actions.ts": {
-    "sha256": "40b566a428f4108a1ca24ada98d040f5e0f96ad5e77513634974af8030693df3",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "98777398e31cf5cd4a13af057a7eb4595791ea545a84b3242e16076683aeb3f1",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/components/notifications/NotificationRow.tsx": {
     "sha256": "41bdb68cec350ad8b833de0074ed4c66ed747b4f530e1cb83d6d3f73b6f317f4",
@@ -17480,13 +17958,6 @@
     "evidence": [],
     "issue": null
   },
-  "web/src/components/settings/IntegrationAutomations.tsx": {
-    "sha256": "b46ac949a23205fad4ef7a564465b8a3f171e50a6e52cc9bb3368a7e01980627",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
   "web/src/components/settings/MirroredGroupsSection.tsx": {
     "sha256": "6a7e60d788bc635f9b3bca6d4dc3418364a9963a28524a370ebb2deb619b1ba3",
     "status": "unreviewed",
@@ -17733,11 +18204,15 @@
     "issue": null
   },
   "web/src/components/settings/VcsHostSettings.tsx": {
-    "sha256": "0e5a0df8f28be1072a3c6c7e9fd04126f70fd3432b17edec4f9a7cfea23e95e8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "cdb410e8a6eaea03cf1545ca4147104fe6b8de8ca5f9858efb28a46d0f8da706",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/components/settings/VcsIdentityMap.tsx": {
     "sha256": "7395c54d9dc03f85ba5194d43ec1ac7b2d1858c9db99d9d60f44a9ae68c594f7",
@@ -17782,11 +18257,15 @@
     "issue": null
   },
   "web/src/components/settings/email/AutomaticMessagesPanel.tsx": {
-    "sha256": "bbf45ef7cdce82fa6a59a56355201c857d3c24b64e81400e71159cc345f5a346",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "b9507bd4bdfd092e5252ffb5d6bb284b982a2469d11e2f2ada743056073b8582",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/components/settings/email/PreviewDialog.tsx": {
     "sha256": "11600eecf6acf3c1f3788b6762eabfa1f3f5251840f28332eb789edb3a3230e1",
@@ -18080,11 +18559,15 @@
     "issue": "RADD-1351"
   },
   "web/src/components/shell/PluginRemotes.tsx": {
-    "sha256": "2dd8a97a90eb89441f5c24000de62c737973fa47a32b695f65df61fe94872371",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "3d9dfabc23c668cf0310b5dd8a86fa02d5f5dc0c18d172d3a448267cad889e8d",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/components/shell/RenamePinDialog.tsx": {
     "sha256": "8b4f354cc1fbd1f54b52431b712568c7dce0083b55e3c446837e1209b3723e91",
@@ -18470,36 +18953,6 @@
     "evidence": [],
     "issue": null
   },
-  "web/src/lib/automation-layout.ts": {
-    "sha256": "b5bd398b7491abb97a10be2beecd76676ee7b21b4bf73144865c4903d6d43ad8",
-    "status": "partially_reviewed",
-    "owner": "automations",
-    "evidence": [
-      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
-    ],
-    "issue": "RADD-1354"
-  },
-  "web/src/lib/automation-nodes.ts": {
-    "sha256": "c04b2b70584c0d58a04e3ff36d38ceec4f3111abeacdfd342b251f226b2febbb",
-    "status": "partially_reviewed",
-    "owner": "automations",
-    "evidence": [
-      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
-    ],
-    "issue": "RADD-1354"
-  },
-  "web/src/lib/automation-outputs.ts": {
-    "sha256": "ebf7918da6a82c97b68fe4719cea31203ba285181b3267abb892fbcaf51462d6",
-    "status": "partially_reviewed",
-    "owner": "automations",
-    "evidence": [
-      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
-    ],
-    "issue": "RADD-1354"
-  },
   "web/src/lib/axis-dnd.ts": {
     "sha256": "893758d7c5e96f1d5096fb947ae825b6c74316a130135b7d1568bf63bae6e3ec",
     "status": "unreviewed",
@@ -18550,11 +19003,15 @@
     "issue": null
   },
   "web/src/lib/clipboard.ts": {
-    "sha256": "2e47ee178be30bf67556ed1e4ab749942fa91d85e798d48efbc4b9334e322e69",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "4754f1d9ede77341da8f0885d404d6d7ec517b17602a3c44027e0c6b41ef08de",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/lib/code-highlight.ts": {
     "sha256": "6f27322dbd88e19f28d33515c613fc228c1c962049fe6229132da7a7ae0cc117",
@@ -18591,25 +19048,31 @@
     "issue": null
   },
   "web/src/lib/constants/api-paths.ts": {
-    "sha256": "3d81a5b27990e69f0013f131813f7b67a60049a033337a353c5eeb8b42bc404f",
+    "sha256": "f1fe372b228a00e53e2190997304374e2ba8e5c232f1a10943916721cff1d67b",
     "status": "partially_reviewed",
-    "owner": "mixed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "Obsolete automation shape endpoint helper removed; remaining feature constants require owner migration.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1365"
   },
   "web/src/lib/constants/api.ts": {
-    "sha256": "5bfa5ba89a3938f4c5c1a4bde019cc9045595b44f5e9b8b44277cb73ba95b19f",
+    "sha256": "d4eaec193e8b1fe35dbcd89b50ee587f7ef76b2c4ed93f4ac26c94b5194a296c",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/src/lib/constants/index.ts": {
     "sha256": "c9862605644555f6920b61c51aac528f2071c25da8e73802b2243c86ea14238f",
@@ -18633,15 +19096,18 @@
     "issue": null
   },
   "web/src/lib/constants/routes.ts": {
-    "sha256": "18e4572b0e01f68312c19b2409d42759a7ab9293533defeeb36ebc09d015c54b",
+    "sha256": "ca94c634b298a79ea2fc06e11cc391649b5426624ea651a73194a25d0e7402db",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/src/lib/constants/storage.ts": {
     "sha256": "9ca32c8d8fd5ae9de7b19ddfc870881af0a6f4113f7f115f3317a58bcc845424",
@@ -18651,11 +19117,15 @@
     "issue": null
   },
   "web/src/lib/constants/ui.ts": {
-    "sha256": "068a1f031ae6f6588c564f1b770f5cbe0bf517ec98d45394569e2a32c3b9caaf",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "9d92a542c6676ae3cdd75bc759f7a22d568648cb27602cb35b8b49d64075a91e",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/lib/csv.ts": {
     "sha256": "c63d28bbe02a2a9a83e8e7187aa19c18b8c887f3f3f44deaf719fac740c41d4b",
@@ -18723,11 +19193,15 @@
     "issue": null
   },
   "web/src/lib/hooks.ts": {
-    "sha256": "d5cd7a480bca75af75dfc78107b53f1536bb45bab72bd120bf1d8cb5a0498947",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "513e95112d4b77c092ae5c8826ada8d7614384306e065d84903046d3ab284503",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/lib/icons.ts": {
     "sha256": "6e944ae88e4e4d81d220d6d2c6ad00886372ec3a19ccd4b7cd78b4539d209ea6",
@@ -18772,11 +19246,15 @@
     "issue": null
   },
   "web/src/lib/list-filter.ts": {
-    "sha256": "c8ae811b72aad73b24929303ced309a63581aba5d7d05cb31cf0049d6109e1a6",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "7287b151f950a277ef0db8ee09d7b0d9f19fc9403e55d7bd0c1f4722228f1fdf",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/lib/markdown-outline.ts": {
     "sha256": "55896943acabe5eb43fc9e50eabfcca8125e16c62535e80abbc4c43437d9bc2c",
@@ -18793,17 +19271,20 @@
     "issue": null
   },
   "web/src/lib/meta.ts": {
-    "sha256": "15857c869800db9aba761e7ba829504a89e868cb33af455aaaeb300d37400d68",
+    "sha256": "778a5e63ef81dbe57622f5814148f44816101ad9651ae4d9605c09c604923a24",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
       "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/src/lib/nav-facts.ts": {
     "sha256": "e4478bafbc944163fc331b152f0f0b3385de5114bdeb683d705e32e94fba3b32",
@@ -18811,16 +19292,6 @@
     "owner": null,
     "evidence": [],
     "issue": null
-  },
-  "web/src/lib/node-shapes.ts": {
-    "sha256": "abd51d8038bde3aef3401340628bed097a26b33ddb7e46966f4273430aa87dba",
-    "status": "partially_reviewed",
-    "owner": "automations",
-    "evidence": [
-      "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
-    ],
-    "issue": "RADD-1354"
   },
   "web/src/lib/notification-bursts.ts": {
     "sha256": "1d801a48538f893b5579498aa5b33a4e0987670c602e219340ecd017fa2328d4",
@@ -18879,14 +19350,17 @@
     "issue": null
   },
   "web/src/lib/plugin-loader.ts": {
-    "sha256": "0ac19543af3d74e30de65c4414a15d5d1b1a194786fbb39c6f12350393ccfc02",
+    "sha256": "0124e4c7e275bbaa7671fd903ecefb8bf3973554dbb0715bd3dcf8a4a3cb340e",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1365"
   },
   "web/src/lib/queries/activity.ts": {
     "sha256": "87e21b3fcf86c20ee4e7601565fb5f2f757a101e2e2fd2ec4e7b39446eb7c144",
@@ -18918,13 +19392,6 @@
   },
   "web/src/lib/queries/approvals.ts": {
     "sha256": "cf1867c5e9f7f72bee3add74e48e5ddc9d937947dcbafc481ce8c07701d9db1a",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/lib/queries/automations.ts": {
-    "sha256": "093cc0fdd13ad09d29dd31544b5472f5fb806839e0b01788b18b28e0d79031b4",
     "status": "unreviewed",
     "owner": null,
     "evidence": [],
@@ -18993,11 +19460,15 @@
     "issue": null
   },
   "web/src/lib/queries/index.ts": {
-    "sha256": "2dfac46c6e76d82965bed2fbc71203c6398b06780174290b07f776071e6a0bb9",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6b45753b916855d626841e859229b7b86c463206abf99eb605b7f29486b872df",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/lib/queries/integrations.ts": {
     "sha256": "33823b522041a008a47c361b596cf53713bd8defa6f8cf14d04eaddd9e419e0f",
@@ -19097,17 +19568,20 @@
     "issue": null
   },
   "web/src/lib/queries/shared.ts": {
-    "sha256": "f2f0baba3b40a531893eed8250bc7e1b0b9ae899551aabc5d9eba6049feaf9b7",
+    "sha256": "467517e0864f28e00f2de263f305757cfd097630d0c19560fc4b98defe1bdac1",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
       "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review.",
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/src/lib/queries/sso-admin.ts": {
     "sha256": "de0903328acce8101e5062719aa238ed6b9ce918cca8a95defd0e4285866299c",
@@ -19190,11 +19664,15 @@
     "issue": null
   },
   "web/src/lib/slq.ts": {
-    "sha256": "78abfb23d3df2df5fe7e942532792afb65a6a1a45358ecb4c2ff380b51017316",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "bfdd88b3c2b258909b556488d43e4bf51413d4be816a4d2daa924b40d59f60d1",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/lib/sse.ts": {
     "sha256": "50b87dc117bd1b6b9b2cf7fc49b3477b7ad49b10caf06014198bbfaf5b3aecc2",
@@ -19277,11 +19755,15 @@
     "issue": null
   },
   "web/src/lib/types/comments.ts": {
-    "sha256": "f74ae4654ec7f2f748d5cddab67ebaded6fcd77f690c46c22a62bc79a13edac9",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "2d22ec6206289e39c4aa15ac2f806d006414353cb16bacdb95227ff37b848c37",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/lib/types/confluence-import.ts": {
     "sha256": "6400ac36dd541785916783734de628cf15701e22f581162a064eec301a82bba2",
@@ -19618,15 +20100,18 @@
     "issue": null
   },
   "web/src/router.tsx": {
-    "sha256": "2fdfa9185857efab261dbb5dacb1a8d92f3d020b5da632bab97af6275fb96bda",
+    "sha256": "2ebd17f5dfed864bcba349b4971d643830d3dc31d4634dc74dccd1ed599b1fa9",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/src/routes/app-layout.tsx": {
     "sha256": "0c22169fe2c7dcb864c49fed945c53fd7e79b5cab5436fba2ce6c0b1953636fa",
@@ -19846,18 +20331,15 @@
     "issue": null
   },
   "web/src/routes/settings/alertmanager.tsx": {
-    "sha256": "d36dbd5aeae087fbca26b4e287fe369cc21375734b3c434c658eba4a9e9e6729",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/routes/settings/automations.tsx": {
-    "sha256": "001b550d029f08a60b9441317b80147c3e56dd13931c1269f630487c5ffb0024",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "797c43f2e40c46acd975fbbc66bf5c934406bd3ddc384601f51ee0ed990e94fd",
+    "status": "partially_reviewed",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
+    "evidence": [
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
+    ],
+    "issue": "RADD-1365"
   },
   "web/src/routes/settings/backups.tsx": {
     "sha256": "f1b91a7209e517d65d11f347d2763590f315ae45680399b9b9f2e69d7d65a4ff",
@@ -19948,15 +20430,18 @@
     "issue": null
   },
   "web/src/routes/settings/layout.tsx": {
-    "sha256": "f40fed9a2ea9ec5cb4444f260fb927a9e7abef89e1c4f012bc98639d6ecdc653",
+    "sha256": "d08d5b0dc0d311df2145f092a7035f35e725a137e8d47c0e4ec673d6e5d679e0",
     "status": "partially_reviewed",
-    "owner": "platform contribution contracts and Audit migration",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
       "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
       "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
-      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1364"
+    "issue": "RADD-1365"
   },
   "web/src/routes/settings/link-types.tsx": {
     "sha256": "77d25738835ef96dc21e38a2f0cf2bd053faac6b50573f410bd2d7ffc315442c",
@@ -19980,13 +20465,16 @@
     "issue": null
   },
   "web/src/routes/settings/plugins.tsx": {
-    "sha256": "365cbbdf0d4d193f5e8cc203e3a877e119a476c2d8f92c714b510d9053db6e4b",
+    "sha256": "8b3eebd6b1771f0e96a92b9dd6b59f1c22576bd5ac12fc591e2cb8f2b2c41995",
     "status": "partially_reviewed",
-    "owner": "platform (residual feature ownership under review)",
+    "owner": "platform contracts, shared primitives and Automations integration boundary",
     "evidence": [
-      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review.",
+      "RADD-1365: Automations editor/settings/transport moved to owner; public lookup/data contracts and generic contextual command/integration contracts replace host imports. See research/plugin-isolation/README.md RADD-1365 for scope and evidence.",
+      "78 frontend and 78 backend tests; actual-bundle browser groups: editor 16, canvas 15, query sources 12, Audit 17. Host + 26 remotes built with seven public contract packages. Final local probe verified six owner bundle bytes and unchanged plugin choices.",
+      "Migration/import boundary and exercised flows reviewed. Full artifact behavioral/ownership audit remains pending; this entry does not certify all existing behavior."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1365"
   },
   "web/src/routes/settings/profile.tsx": {
     "sha256": "c6a4d5724978be5459efafbf64e3622419ae1f46c1600296b45fac19b6226c9b",

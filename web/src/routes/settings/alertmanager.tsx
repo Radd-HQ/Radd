@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, Plus } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { ApiPath, RoutePath } from "../../lib/constants";
+import { ApiPath } from "../../lib/constants";
 import { projectsQuery } from "../../lib/queries";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
@@ -14,7 +14,7 @@ import { SelectField } from "../../components/SelectField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
-import { IntegrationAutomations } from "../../components/settings/IntegrationAutomations";
+import { Slot, SlotId } from "@radd/plugin-sdk";
 
 /**
  * Settings → Alertmanager (RADD-1317). Receivers used to be one env token and
@@ -97,11 +97,11 @@ export function AlertmanagerSettingsPage() {
       history={{ entities: ["alertmanager_receiver"] }}
     >
       {confirmDialog}
-      <IntegrationAutomations group="Alertmanager" />
+      <Slot id={SlotId.integrationSettings} integration="alertmanager" label="Alertmanager" />
       <p className="mb-4 text-[13px] text-fg-muted" data-alertmanager-note>
         A receiver creates the issue and changes nothing else. What a repeat or a resolution should do (comment, move
         the issue, label it) is an automation: start from an Alertmanager template in{" "}
-        <Link to={RoutePath.settingsAutomations} className="text-accent-text hover:underline">
+        <Link to="/settings/$" params={{_splat: "automations"}} className="text-accent-text hover:underline">
           Automations
         </Link>
         .

@@ -8,11 +8,14 @@ async function fixture(importer) {
   const slots = new Set();
   const dataSources = new Set();
   const querySources = new Set();
+  const commandSources = new Set();
   const key = `__pluginLoaderTest${serial++}`;
   globalThis[key] = {
     isUiApiCompatible: () => true,
     registerSlot: (_slot, _contribution, { plugin }) => slots.add(plugin),
     unregisterPlugin: (name) => slots.delete(name),
+    registerCommandSource: name => commandSources.add(name),
+    unregisterCommandSources: name => commandSources.delete(name),
     registerQuerySource: (name) => querySources.add(name),
     unregisterQuerySources: (name) => querySources.delete(name),
     registerDataSource: (name) => dataSources.add(name),
@@ -21,11 +24,11 @@ async function fixture(importer) {
   };
   const source = readFileSync('web/src/lib/plugin-loader.ts', 'utf8')
     .replace(/import \{[\s\S]*?\} from "@radd\/plugin-sdk";/,
-      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources} = globalThis.${key};`)
+      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources} = globalThis.${key};`)
     .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`);
   const js = stripTypeScriptTypes(source, { mode: 'transform' });
   const loader = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
-  return { ...loader, slots, dataSources, querySources };
+  return { ...loader, slots, dataSources, querySources, commandSources };
 }
 const remote = (url = 'v1') => [{ name: 'fixture', remote_entry: url, ui_api_version: '1.0' }];
 const contribution = { slot: 'issue.tab', title: 'Example' };
@@ -152,4 +155,21 @@ test('failed activation rolls back query sources and ignores late registration a
   const loading=pending.syncPluginRemotes(remote());await new Promise(resolve=>setImmediate(resolve));
   assert.equal(pending.querySources.size,1);await pending.syncPluginRemotes([]);assert.equal(pending.querySources.size,0);
   wait.resolve();await loading;assert.equal(pending.querySources.size,0);
+});
+
+test('command-only remotes activate, withdraw and recover without duplicate registrations',async()=>{
+  const source={id:'manual',entityType:'record',list:async()=>[],execute:async()=>{}};
+  const f=await fixture(async()=>({commandSources:[source]}));
+  await f.syncPluginRemotes(remote());assert.equal(f.commandSources.size,1);
+  await f.syncPluginRemotes(remote());assert.equal(f.commandSources.size,1);
+  await f.syncPluginRemotes([]);assert.equal(f.commandSources.size,0);
+  await f.syncPluginRemotes(remote('v2'));assert.equal(f.commandSources.size,1);
+});
+test('failed or late activation cannot retain command registrations',async()=>{
+  const source={id:'manual',entityType:'record',list:async()=>[],execute:async()=>{}};
+  const failed=await fixture(async()=>({commandSources:[source],activate(){throw Error('failure');}}));
+  await failed.syncPluginRemotes(remote());assert.equal(failed.commandSources.size,0);
+  const gate=deferred(),f=await fixture(async()=>({async activate(ctx){await gate.promise;ctx.registerCommandSource(source);}}));
+  const pending=f.syncPluginRemotes(remote());await new Promise(resolve=>setImmediate(resolve));
+  await f.syncPluginRemotes([]);gate.resolve();await pending;assert.equal(f.commandSources.size,0);
 });

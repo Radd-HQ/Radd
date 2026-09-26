@@ -52,6 +52,282 @@
       "AST guard rejects restoration at the former path; actual-bundle lifecycle tests and actual host Backup settings verified under RADD-1362."
     ]
   },
+  "web/src/components/automations/ActionParams.tsx": {
+    "last_sha256": "ebc9726532072ade4247fab0ed9ca4e249ab1668447a96da4d05d539d77baf33",
+    "previous_review": {
+      "sha256": "ebc9726532072ade4247fab0ed9ca4e249ab1668447a96da4d05d539d77baf33",
+      "status": "partially_reviewed",
+      "owner": "mixed/transitional",
+      "evidence": [
+        "research/plugin-isolation/README.md#radd-1361-verification",
+        "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      ],
+      "issue": "RADD-1361"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/ActionParams.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/ActionsBuilder.tsx": {
+    "last_sha256": "224549e26e7191d45bddea84d6b51a45fc5839e66543850f2af0e0892f787b00",
+    "previous_review": {
+      "sha256": "224549e26e7191d45bddea84d6b51a45fc5839e66543850f2af0e0892f787b00",
+      "status": "partially_reviewed",
+      "owner": "mixed/transitional",
+      "evidence": [
+        "research/plugin-isolation/README.md#radd-1361-verification",
+        "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      ],
+      "issue": "RADD-1361"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/ActionsBuilder.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/ArityField.tsx": {
+    "last_sha256": "6302cd987ef67a4b913d50fb3b6a6b93bb148227d839a32cc002a7391c49aa08",
+    "previous_review": {
+      "sha256": "6302cd987ef67a4b913d50fb3b6a6b93bb148227d839a32cc002a7391c49aa08",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/ArityField.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/CreateItemFields.tsx": {
+    "last_sha256": "bf2429f188e9e154175eeb1ff54358e016f6cdd1f6788cd6f3bd58da05c094d8",
+    "previous_review": {
+      "sha256": "bf2429f188e9e154175eeb1ff54358e016f6cdd1f6788cd6f3bd58da05c094d8",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/CreateItemFields.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/EventSamples.tsx": {
+    "last_sha256": "f2b72bdaf442e5aaba611efc145164ad7bbcba07839cd8cc3cf1a7b856e74b5c",
+    "previous_review": {
+      "sha256": "f2b72bdaf442e5aaba611efc145164ad7bbcba07839cd8cc3cf1a7b856e74b5c",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/EventSamples.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/GateFields.tsx": {
+    "last_sha256": "330a29a247d8a647d704fb14ecee02717ff2abf1d537ade75cf9b18e23f101df",
+    "previous_review": {
+      "sha256": "330a29a247d8a647d704fb14ecee02717ff2abf1d537ade75cf9b18e23f101df",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/GateFields.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/GraphEditor.tsx": {
+    "last_sha256": "20c09752ff8a2d4226679543fc37b03e3845846a7dc10c91c0b7db32bc6d3a44",
+    "previous_review": {
+      "sha256": "20c09752ff8a2d4226679543fc37b03e3845846a7dc10c91c0b7db32bc6d3a44",
+      "status": "partially_reviewed",
+      "owner": "mixed/transitional",
+      "evidence": [
+        "research/plugin-isolation/README.md#radd-1361-verification",
+        "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      ],
+      "issue": "RADD-1361"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/GraphEditor.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/GraphInspector.tsx": {
+    "last_sha256": "01900f461fbc33a5bbd850f8dde88f7310310a39edb67558dac9bcfeb262d749",
+    "previous_review": {
+      "sha256": "01900f461fbc33a5bbd850f8dde88f7310310a39edb67558dac9bcfeb262d749",
+      "status": "partially_reviewed",
+      "owner": "platform tooling and transitional integrations",
+      "evidence": [
+        "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
+        "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
+        "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+        "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+        "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      ],
+      "issue": "RADD-1362"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/GraphInspector.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/LazyGraphCanvas.tsx": {
+    "last_sha256": "7330ae9f0cb82943a13ae5b49378f608c1728dc59347a28bb94604e80c513a56",
+    "previous_review": {
+      "sha256": "7330ae9f0cb82943a13ae5b49378f608c1728dc59347a28bb94604e80c513a56",
+      "status": "partially_reviewed",
+      "owner": "automations",
+      "evidence": [
+        "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+        "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      ],
+      "issue": "RADD-1354"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/LazyGraphCanvas.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/NodePanel.tsx": {
+    "last_sha256": "997a79ba655e6ca36b0fb2e389fa7c1f95d90405881216462f1ecd8e6391c946",
+    "previous_review": {
+      "sha256": "997a79ba655e6ca36b0fb2e389fa7c1f95d90405881216462f1ecd8e6391c946",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/NodePanel.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/NodeSearchMenu.tsx": {
+    "last_sha256": "61e07a8c691666fa7b84934c1d9981e4381d5f247e0c8ce2f584b2584348c8eb",
+    "previous_review": {
+      "sha256": "61e07a8c691666fa7b84934c1d9981e4381d5f247e0c8ce2f584b2584348c8eb",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/NodeSearchMenu.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/RuleEditor.tsx": {
+    "last_sha256": "a30ab0750427a8ca5d39d35920621657705d482a1c492ee4536d46ead146d655",
+    "previous_review": {
+      "sha256": "a30ab0750427a8ca5d39d35920621657705d482a1c492ee4536d46ead146d655",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/RuleEditor.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/RuleTestPanel.tsx": {
+    "last_sha256": "9067787eff0dfc2eaca92eb8209a2f6dd29582e43eb5b4741625b2e0e97e2422",
+    "previous_review": {
+      "sha256": "9067787eff0dfc2eaca92eb8209a2f6dd29582e43eb5b4741625b2e0e97e2422",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/RuleTestPanel.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/RunsPanel.tsx": {
+    "last_sha256": "1c0c59c35958f031030a0121c42f63f5e265e39dbc4076331fe569972e7700d8",
+    "previous_review": {
+      "sha256": "1c0c59c35958f031030a0121c42f63f5e265e39dbc4076331fe569972e7700d8",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/RunsPanel.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/ScheduleEditor.tsx": {
+    "last_sha256": "094f8fc038dce351415c82b66d3b3656fce36de4e3350535e3d8c965bee34e13",
+    "previous_review": {
+      "sha256": "094f8fc038dce351415c82b66d3b3656fce36de4e3350535e3d8c965bee34e13",
+      "status": "reviewed",
+      "owner": "platform tooling and transitional integrations",
+      "evidence": [
+        "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+        "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+      ],
+      "issue": "RADD-1362"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/ScheduleEditor.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
   "web/src/components/automations/SchemaFields.tsx": {
     "last_sha256": "b8dd2e66c5e4a068cc19bde0399dcba64f544d54d80fa20144ececd60858c417",
     "previous_review": {
@@ -67,6 +343,117 @@
     "evidence": [
       "Removed former feature-located generic implementation; successor: web/packages/plugin-sdk/src/schema-form.tsx and schema-defaults.ts.",
       "AST boundary check refuses restoration at old locations. Actual Scripts/AI inspectors and automation canvas use the new controls; RADD-1356 browser evidence."
+    ]
+  },
+  "web/src/components/automations/SearchFields.tsx": {
+    "last_sha256": "5371c0ce62c840fe24b789db04ac36ca9f0d999de38c641d6f8a09266ece8a87",
+    "previous_review": {
+      "sha256": "5371c0ce62c840fe24b789db04ac36ca9f0d999de38c641d6f8a09266ece8a87",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/SearchFields.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/TokenReference.tsx": {
+    "last_sha256": "773f726c7a57e73ed4143333f72449aca1c7488e565cee4448f1397e4b5086d5",
+    "previous_review": {
+      "sha256": "773f726c7a57e73ed4143333f72449aca1c7488e565cee4448f1397e4b5086d5",
+      "status": "partially_reviewed",
+      "owner": "automations",
+      "evidence": [
+        "Explicit shape propagation verified; host UI ownership and remaining dependencies still need migration in RADD-1347.",
+        "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      ],
+      "issue": "RADD-1354"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/TokenReference.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/ValidationFields.tsx": {
+    "last_sha256": "8bcd61070a9b2d7e87ffa2d554c568f8d1f3fe6ee97e21b0e0b21784b80c9fcc",
+    "previous_review": {
+      "sha256": "8bcd61070a9b2d7e87ffa2d554c568f8d1f3fe6ee97e21b0e0b21784b80c9fcc",
+      "status": "partially_reviewed",
+      "owner": "mixed/transitional",
+      "evidence": [
+        "research/plugin-isolation/README.md#radd-1361-verification",
+        "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      ],
+      "issue": "RADD-1361"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/ValidationFields.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/VersionsPanel.tsx": {
+    "last_sha256": "f49ff31285d49854f25e9f5a132ed4dea2152cf55f22d62c8ac31759df14739c",
+    "previous_review": {
+      "sha256": "f49ff31285d49854f25e9f5a132ed4dea2152cf55f22d62c8ac31759df14739c",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/VersionsPanel.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/node-visuals.ts": {
+    "last_sha256": "fcd2ce56eb0b80658af0ad36e03f4d7ede54f24249364f611b5f4461bdab95f1",
+    "previous_review": {
+      "sha256": "fcd2ce56eb0b80658af0ad36e03f4d7ede54f24249364f611b5f4461bdab95f1",
+      "status": "partially_reviewed",
+      "owner": "automations",
+      "evidence": [
+        "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+        "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      ],
+      "issue": "RADD-1354"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/node-visuals.ts. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/components/automations/useTokenTarget.ts": {
+    "last_sha256": "27de747ab88a24950f3d24e560c5195c5d25560b72d1dafce833bcfc0d50fa0b",
+    "previous_review": {
+      "sha256": "27de747ab88a24950f3d24e560c5195c5d25560b72d1dafce833bcfc0d50fa0b",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/useTokenTarget.ts. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
     ]
   },
   "web/src/components/history/ChangeLines.tsx": {
@@ -103,6 +490,23 @@
       "AST boundary check refuses restoration at old locations. Actual Scripts/AI inspectors and automation canvas use the new controls; RADD-1356 browser evidence."
     ]
   },
+  "web/src/components/settings/IntegrationAutomations.tsx": {
+    "last_sha256": "b46ac949a23205fad4ef7a564465b8a3f171e50a6e52cc9bb3368a7e01980627",
+    "previous_review": {
+      "sha256": "b46ac949a23205fad4ef7a564465b8a3f171e50a6e52cc9bb3368a7e01980627",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/IntegrationAutomations.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
   "web/src/lib/audit.ts": {
     "last_sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
     "previous_review": {
@@ -124,6 +528,103 @@
       "Current boundary tests refuse host Audit endpoints/pages; actual-bundle lifecycle and structured-value tests verified the successors."
     ]
   },
+  "web/src/lib/automation-layout.ts": {
+    "last_sha256": "b5bd398b7491abb97a10be2beecd76676ee7b21b4bf73144865c4903d6d43ad8",
+    "previous_review": {
+      "sha256": "b5bd398b7491abb97a10be2beecd76676ee7b21b4bf73144865c4903d6d43ad8",
+      "status": "partially_reviewed",
+      "owner": "automations",
+      "evidence": [
+        "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+        "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      ],
+      "issue": "RADD-1354"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/automation-layout.ts. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/lib/automation-nodes.ts": {
+    "last_sha256": "c04b2b70584c0d58a04e3ff36d38ceec4f3111abeacdfd342b251f226b2febbb",
+    "previous_review": {
+      "sha256": "c04b2b70584c0d58a04e3ff36d38ceec4f3111abeacdfd342b251f226b2febbb",
+      "status": "partially_reviewed",
+      "owner": "automations",
+      "evidence": [
+        "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+        "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      ],
+      "issue": "RADD-1354"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/automation-nodes.ts. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/lib/automation-outputs.ts": {
+    "last_sha256": "ebf7918da6a82c97b68fe4719cea31203ba285181b3267abb892fbcaf51462d6",
+    "previous_review": {
+      "sha256": "ebf7918da6a82c97b68fe4719cea31203ba285181b3267abb892fbcaf51462d6",
+      "status": "partially_reviewed",
+      "owner": "automations",
+      "evidence": [
+        "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+        "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      ],
+      "issue": "RADD-1354"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/automation-outputs.ts. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/lib/node-shapes.ts": {
+    "last_sha256": "abd51d8038bde3aef3401340628bed097a26b33ddb7e46966f4273430aa87dba",
+    "previous_review": {
+      "sha256": "abd51d8038bde3aef3401340628bed097a26b33ddb7e46966f4273430aa87dba",
+      "status": "partially_reviewed",
+      "owner": "automations",
+      "evidence": [
+        "Host implementation replaced by transitional owner-contract barrel or slot adapter. Remove host feature dependency when the editor migrates; not a permanent exception.",
+        "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      ],
+      "issue": "RADD-1354"
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/node-shapes.ts. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
+  "web/src/lib/queries/automations.ts": {
+    "last_sha256": "093cc0fdd13ad09d29dd31544b5472f5fb806839e0b01788b18b28e0d79031b4",
+    "previous_review": {
+      "sha256": "093cc0fdd13ad09d29dd31544b5472f5fb806839e0b01788b18b28e0d79031b4",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/queries.ts. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
+    ]
+  },
   "web/src/routes/settings/audit.tsx": {
     "last_sha256": "ad8846c4e389668c78b0738fe15208d597924ce333883445b15164cdd9f2b8b2",
     "previous_review": {
@@ -143,6 +644,23 @@
     "evidence": [
       "Moved implementation to server/src/radd/modules/audit/ui/src/SettingsPage.tsx; former host implementation removed.",
       "Current boundary tests refuse host Audit endpoints/pages; actual-bundle lifecycle and structured-value tests verified the successors."
+    ]
+  },
+  "web/src/routes/settings/automations.tsx": {
+    "last_sha256": "001b550d029f08a60b9441317b80147c3e56dd13931c1269f630487c5ffb0024",
+    "previous_review": {
+      "sha256": "001b550d029f08a60b9441317b80147c3e56dd13931c1269f630487c5ffb0024",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Automations owner implementation",
+    "issue": "RADD-1365",
+    "evidence": [
+      "Former host implementation or forwarding facade removed; implementation now at server/src/radd/modules/automations/ui/src/SettingsPage.tsx. Owner-private callers import locally, external consumers use public contributions.",
+      "Host source no longer contains the automation editor or transport; boundary tests and actual-bundle editor/canvas/query proofs pass. This disposition verifies removal/migration only; the successor has its own independent current-artifact review status."
     ]
   }
 }

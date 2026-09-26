@@ -42,7 +42,6 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
     // The nav/capabilities manifest reflects enabled plugins — refresh it so the
     // sidebar plugin nav appears/disappears immediately.
     queryClient.invalidateQueries({ queryKey: ["capabilities"] });
-    queryClient.invalidateQueries({ queryKey: queryKeys.automationCatalog });
   };
   // RADD-1101: install/uninstall always existed as endpoints; the page offered
   // only enable/disable, leaving the lifecycle's ends to curl.

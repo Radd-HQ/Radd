@@ -2,6 +2,17 @@
 // Re-exports the host singleton for "@radd/plugin-sdk" from the shared federation scope.
 const M = globalThis.__RADD_SHARED__ && globalThis.__RADD_SHARED__["@radd/plugin-sdk"];
 if (!M) throw new Error("radd federation: shared module @radd/plugin-sdk not registered by host");
+export const positionedErrorOf = M["positionedErrorOf"];
+export const registerCommandSource = M["registerCommandSource"];
+export const unregisterCommandSources = M["unregisterCommandSources"];
+export const useContributedCommands = M["useContributedCommands"];
+export const invalidatePluginCommands = M["invalidatePluginCommands"];
+export const IconButton = M["IconButton"];
+export const ConfirmDialog = M["ConfirmDialog"];
+export const useConfirm = M["useConfirm"];
+export const copyText = M["copyText"];
+export const useListFilter = M["useListFilter"];
+export const useDebounced = M["useDebounced"];
 export const UI_API_VERSION = M["UI_API_VERSION"];
 export const isUiApiCompatible = M["isUiApiCompatible"];
 export const ChangeList = M["ChangeList"];

@@ -32,7 +32,7 @@ const server=http.createServer(async(req,res)=>{
  if(p.startsWith('/api/')){
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].filter(n=>n!=='ai').map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${version}`,ui_api_version:'1.4.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/automation-proof',section:'settings',label:'Canvas proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].filter(n=>n!=='ai').map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${version}`,ui_api_version:'1.4.0'})),nav:[{key:'automations',plugin:'automations',path:'/settings/automations',section:'settings',label:'Automations',requires:[]},{key:'fixture',plugin:'fixture',path:'/settings/automation-proof',section:'settings',label:'Canvas proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/automations/catalog'))data=catalog;
   else if(p.endsWith('/automations'))data=[savedRule];
   else if(p.endsWith('/automations/saved/versions'))data=[oldVersion];
@@ -108,15 +108,15 @@ try{
  await change(()=>{broken=true;version++;});await until(()=>text('Canvas unavailable'),'failed remote falls back');
  await change(()=>{broken=false;version++;});await until(()=>s.eval(`document.querySelectorAll('[data-canvas="main"] .react-flow').length===1`),'remote recovered');checks.push('failed remote remains unavailable and a new version recovers');
  const beforeHost=requests.length;
- await s.navigate(`http://127.0.0.1:${server.address().port}/settings/automations`);await until(()=>text('Saved canvas'),'host settings list');
- await s.click('[aria-label="Edit Saved canvas"]');await until(()=>s.eval(`document.querySelector('[data-node-id="a"] [data-handleid="alpha"]')!==null`),'host editor uses actual remote');
+ await s.navigate(`http://127.0.0.1:${server.address().port}/settings/automations`);await until(()=>text('Saved canvas'),'owner settings list');
+ await s.click('[aria-label="Edit Saved canvas"]');await until(()=>s.eval(`document.querySelector('[data-node-id="a"] [data-handleid="alpha"]')!==null`),'owner editor uses actual remote');
  assert.equal(requests.length,beforeHost+1,'host shape results supplied to canvas without a duplicate query');
  await until(()=>s.eval(`getComputedStyle(document.querySelector('[data-node-id="a"]').closest('.react-flow__node')).visibility==='visible'`),'host node visible');
  await s.click('[data-node-id="a"]');await until(()=>text('answer.answer'),'inspector receives dynamic outputs');
  await s.click('button',t=>t.trim()==='Versions');await until(()=>s.eval(`document.querySelector('[data-version-row="1"] button')!==null`),'versions list');
  await s.click('[data-version-row="1"] button');await until(()=>s.eval(`document.querySelector('[data-version-preview="1"] [data-handleid="historic"]')!==null`),'actual VersionsPanel resolves its own historical shape');
  assert(await s.eval(`document.querySelector('[data-node-id="a"] [data-handleid="alpha"]')!==null`));
- await s.screenshot('/tmp/radd-automation-editor-owned.png');checks.push('existing host editor supplies shapes to remote and inspector; actual VersionsPanel resolves independent historical ports');
+ await s.screenshot('/tmp/radd-automation-editor-owned.png');checks.push('owner editor supplies shapes to remote and inspector; actual VersionsPanel resolves independent historical ports');
  assert(!s.consoleErrors.some(e=>e.includes('Invalid hook')||e.includes('not exported')||e.includes('Maximum update depth')));
  console.log(JSON.stringify({passed:true,checks,requests:requests.length,aborted}));
 }finally{for(const release of releases)release();if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}

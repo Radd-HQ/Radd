@@ -598,6 +598,8 @@ class TriggerRead(BaseModel):
 
 
 class TriggerInfo(BaseModel):
+    plugin: str
+
     event_type: str
     label: str
     group: str
@@ -745,6 +747,7 @@ class AutomationTemplateRead(BaseModel):
     """A whole automation offered as a starting point (RADD-1316)."""
 
     key: str
+    plugin: str
     name: str
     description: str
     group: str

@@ -88,7 +88,6 @@ export const ApiPath = {
   cycles: "/cycles",
   releases: "/releases",
   // Spec 20 consumers:
-  automations: "/automations",
   forms: "/forms",
   // Requester portal (spec 73): eligibility-gated form directory, any authed user.
   portalForms: "/portal/forms",

@@ -1,4 +1,3 @@
-import { ApiError, errorMessage } from "./api";
 import { fieldInScope } from "./field-scope";
 import { FieldType, type FieldDef, type FieldTypeValue } from "./types";
 
@@ -107,27 +106,8 @@ export function cheatSheetFields(fields: FieldDef[], projectId: string | null): 
 // Positioned parse errors (422 {detail, position})
 // ---------------------------------------------------------------------------
 
-export interface SlqError {
-  message: string;
-  /** Character offset into the query, or null when the backend gave none. */
-  position: number | null;
-}
+export { positionedErrorOf as slqErrorOf, type PositionedError as SlqError } from "@radd/plugin-sdk";
 
-/** Extract a spec-10 SLQ parse error from a thrown value; null for anything else. */
-export function slqErrorOf(error: unknown): SlqError | null {
-  if (!(error instanceof ApiError) || error.status !== 422) return null;
-  const { detail } = error;
-  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
-    const payload = detail as { detail?: unknown; position?: unknown };
-    if (typeof payload.detail === "string") {
-      return {
-        message: payload.detail,
-        position: typeof payload.position === "number" ? payload.position : null,
-      };
-    }
-  }
-  return { message: errorMessage(error), position: null };
-}
 
 export interface SlqErrorContext {
   /** The query line containing the offending offset. */

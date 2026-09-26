@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "@radd/plugin-sdk": "*"
+  },
+  "exports": {
+    "./types": "./src/types.ts"
   }
 }

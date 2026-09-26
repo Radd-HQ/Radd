@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "@radd/plugin-sdk": "*"
+  },
+  "exports": {
+    "./lookup-contract": "./src/lookup-contract.ts"
   }
 }

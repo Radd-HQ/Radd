@@ -34,7 +34,6 @@ export const SettingsSection = {
   confluenceImport: "confluence-import",
   roles: "roles",
   tokens: "tokens",
-  automations: "automations",
   // Per-project time-logging enablement moved under the project (spec 50);
   // this global section keeps the shared work categories.
   timelogging: "timelogging",
@@ -174,7 +173,6 @@ export const RoutePath = {
   /** Per-user notification rules: the kind × scope matrix + subscriptions (spec 118). */
   settingsNotifications: `${SETTINGS_SEGMENT}/${SettingsSection.notifications}`,
   /** Automation rules admin (spec 20, global, `automation.manage`). */
-  settingsAutomations: `${SETTINGS_SEGMENT}/${SettingsSection.automations}`,
   /** Work-categories admin (spec 22/50, global manage) — the shared category list. */
   settingsTimelogging: `${SETTINGS_SEGMENT}/${SettingsSection.timelogging}`,
   /** Audit log (admin): every attributable change across the server. */

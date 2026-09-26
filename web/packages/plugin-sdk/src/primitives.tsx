@@ -162,8 +162,17 @@ export function Spinner({ className = "" }: { className?: string }) {
   return <span className={`radd-spinner ${className}`} role="status" aria-label="Loading" />;
 }
 
-export function EmptyState({ children }: { children: ReactNode }) {
-  return <div className="radd-empty">{children}</div>;
+export function EmptyState({ children, icon: Icon, message, action }: {
+  children?: ReactNode;
+  icon?: import("react").ComponentType<{size?: number; className?: string; "aria-hidden"?: boolean}>;
+  message?: string;
+  action?: ReactNode;
+}) {
+  if (!Icon && message === undefined && action === undefined) return <div className="radd-empty">{children}</div>;
+  return <div className="flex flex-col items-center gap-3 rounded-lg border border-subtle py-14 text-fg-muted">
+    {Icon && <Icon size={24} aria-hidden className="text-fg-faint" />}
+    {message !== undefined && <p className="text-sm">{message}</p>}{children}{action}
+  </div>;
 }
 
 export interface AvatarUser {

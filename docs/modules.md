@@ -862,3 +862,16 @@ Queries abort on contribution withdrawal, use fresh observer-owned cache keys,
 and participate in permission invalidation. Both new remotes retain their existing
 core-plugin policy. Other Items UI and Audit backend cross-feature seams remain
 in the complete isolation inventory.
+
+### Automations UI ownership — RADD-1365
+
+The complete automation settings/editor frontend now lives under
+`server/src/radd/modules/automations/ui/src`: inspectors, graph editing, previews,
+runs, versions, integration templates and their transport/lifetimes. The host
+uses the generic settings catch-all and integration slot. Manual item commands
+are nonvisual contributions through SDK 1.12. Items/Pages/Projects own preview
+lookup transport; public owner contracts supply picker types and shared metadata.
+Registry owner IDs replace template display-group/prefix inference. Existing
+Automation backend services and action dependency ownership are still under the
+full audit; this change does not certify them or the remaining host VCS/Email UI.
+See `docs/plugin-platform.md` and the RADD-1365 inventory evidence.

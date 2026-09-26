@@ -619,3 +619,62 @@ Final stage evidence:
   25 actual audit rows. The token was discarded. Leave/GitHub/Forgejo remain
   disabled; the before/after enabled-plugin list is identical. No external
   deployment or repository push was performed.
+
+## RADD-1365 — Complete Automations frontend contribution
+
+Moved the remaining rule editor, graph inspector/forms, token assistance,
+dry-run/runs/versions panels, settings and integration policies from the host
+into Automations. Removed executable host automation facades, transport and
+catalog-specific shell invalidation. The settings route/navigation belongs to
+the plugin; VCS/Email/Alertmanager callers now supply generic integration context.
+Actual registry owner IDs travel with templates and trigger catalog entries.
+Manual quick actions use the SDK's nonvisual command contribution contract.
+
+Projects, Items and Pages own lookup requests; public types/data packages connect
+pickers, Fields/Labels catalogs, item vocabulary and comment visibility without
+importing another owner's implementation. A contracts-only UI package does not
+need an empty remote. Generic confirmation/clipboard/filter/debounce/icon/error
+primitives are shared rather than copied. The editor keeps mounted-scope reads,
+fresh capability revisions and cancellable mutation generations. Runs and
+versions expose read failures; obsolete reports and denied cached results are
+hidden. Saved references survive missing dependent owners. Screenshots exposed
+name/note inputs shrinking because a flex item class was applied to the input
+inside a column; sizing now belongs to their outer row wrappers.
+
+Final stage evidence:
+
+- `node web/scripts/build-all.mjs` passed: host plus 26 executable plugin remotes,
+  with seven public contract packages linked before host typechecking. SDK 1.12
+  adds commands and the integration-settings slot; Projects/Pages now declare
+  SDK 1.9 for their query-source contributions.
+- 78 frontend tests passed, including actual command-registry withdrawal,
+  retained callbacks, in-flight cancellation, loader rollback, ownership
+  boundaries and generated-shim parity. 78 backend tests passed across templates,
+  runs, versions, graph, samples, federation, module contracts and plugin workflow.
+  Three existing dependency deprecation warnings remain. Changed Python files
+  passed Ruff.
+- `browser-automation-editor.mjs` passed 16 groups with 156 requests, seven mocked
+  writes and four confirmed aborts. It loads actual host/owner bundles and generates
+  catalog fixtures from the real backend registry. Coverage includes absent owners,
+  explicit integration identity, unsaved template drafts, rich graph/inspector
+  editing, current-draft previews, saved unavailable triggers, dependent lookup
+  withdrawal, version preview/restore, stale or denied reports, A→B→A cancellation,
+  open save withdrawal, authoritative recovery, failed bundle replacement and
+  management permission loss/recovery. Browser writes affect only mocked fixtures.
+- Existing actual-bundle proofs also passed: canvas 15 groups/13 requests/three
+  aborts; query contributions 12 groups/21 requests/four aborts; Audit 17
+  groups/77 requests/three aborts. Light/dark editor screenshots were inspected;
+  the browser asserts the corrected name input is at least 30 pixels high.
+- The local app at `http://localhost:8000` serves byte-identical builds for all
+  six probed owners (Automations, Items, Projects, Pages, Fields, Labels). Its
+  catalog has 50 nodes, 96 triggers and nine templates with enabled registry
+  owners; nine local rules remain. Contributed Automations navigation and SDK
+  declarations were checked. The temporary verification token was discarded.
+  Leave, GitHub and Forgejo remain disabled, and the full enabled-plugin set is
+  unchanged. No external deployment or repository push occurred.
+
+Core owners remain core; missing-bundle fixtures exercise contribution lifetimes,
+not a new ability to disable them in Settings. Backend/action separation,
+remaining VCS/Email/Alertmanager implementation and built-in item quick-action
+ownership stay in the epic's full inventory. Moved files whose entire behavior
+has not been individually audited remain partially reviewed.

@@ -9,5 +9,9 @@
   },
   "dependencies": {
     "@radd/plugin-sdk": "*"
+  },
+  "exports": {
+    "./control-contract": "./src/control-contract.ts",
+    "./types": "./src/types.ts"
   }
 }

@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { RoutePath } from "../../../lib/constants";
-import { IntegrationAutomations } from "../IntegrationAutomations";
+import { Slot, SlotId } from "@radd/plugin-sdk";
 
 /**
  * What the desk sends on its own (RADD-1318): only a person's public reply,
@@ -19,12 +18,12 @@ export function AutomaticMessagesPanel() {
         Public replies are relayed to the issue's external email contacts. A receipt for new email
         tickets and a notice when an issue is resolved are automations you switch on: start from the “Acknowledge
         new email tickets” or “Tell the requester when resolved” template in{" "}
-        <Link to={RoutePath.settingsAutomations} className="text-accent-text hover:underline">
+        <Link to="/settings/$" params={{_splat: "automations"}} className="text-accent-text hover:underline">
           Automations
         </Link>
         .
       </p>
-      <IntegrationAutomations group="Email" />
+      <Slot id={SlotId.integrationSettings} integration="mailintake" label="Email" />
     </section>
   );
 }

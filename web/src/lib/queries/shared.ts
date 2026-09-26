@@ -82,9 +82,7 @@ export const queryKeys = {
     ["report", "velocity", { last, measure }, { q: q ?? "" }] as const,
   reportBurnup: (cycleId: string, measure: string, q?: string) =>
     ["report", "burnup", { cycleId, measure }, { q: q ?? "" }] as const,
-  automations: ["automations"] as const,
   plugins: ["plugins"] as const,
-  automationCatalog: ["automationCatalog"] as const,
   forms: (projectId: string) => ["forms", { projectId }] as const,
   form: (formId: string) => ["form", { formId }] as const,
   portalForms: ["portalForms"] as const,

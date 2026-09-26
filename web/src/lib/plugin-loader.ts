@@ -14,7 +14,7 @@ import {
   isUiApiCompatible,
   registerSlot,
   registerDataSource,
-  registerQuerySource,
+  registerQuerySource, registerCommandSource, unregisterCommandSources,
   unregisterQuerySources,
   unregisterDataSources,
   unregisterPlugin,
@@ -67,6 +67,9 @@ const identity = (remote: PluginRemote) => JSON.stringify([remote.remote_entry, 
 function buildContext(entry: LoadedRemote): PluginContext {
   return {
     plugin: entry.name,
+    registerCommandSource: source => {
+      if (!entry.cancelled && loaded.get(entry.name) === entry) registerCommandSource(entry.name, source);
+    },
     registerQuerySource: source => {
       if (!entry.cancelled && loaded.get(entry.name) === entry) registerQuerySource(entry.name, source);
     },
@@ -103,7 +106,7 @@ async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<vo
     if (entry.cancelled) return;
     const mod = ("default" in imported && imported.default ? imported.default : imported) as PluginModule;
     entry.module = mod;
-    if (!Array.isArray(mod.contributions) && !Array.isArray(mod.dataSources) && !Array.isArray(mod.querySources) && typeof mod.activate !== "function") {
+    if (!Array.isArray(mod.contributions) && !Array.isArray(mod.dataSources) && !Array.isArray(mod.querySources) && !Array.isArray(mod.commandSources) && typeof mod.activate !== "function") {
       throw new Error("remote entry exports no contributions, data sources, query sources or activation");
     }
     const ctx = buildContext(entry);
@@ -111,6 +114,7 @@ async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<vo
       const { slot, id, ...rest } = c;
       ctx.registerSlot(slot, { id: id ?? `${slot}#${i}`, ...rest });
     }
+    for (const source of mod.commandSources ?? []) ctx.registerCommandSource(source);
     for (const source of mod.querySources ?? []) ctx.registerQuerySource(source);
     for (const source of mod.dataSources ?? []) ctx.registerDataSource(source);
     await bounded(Promise.resolve(mod.activate?.(ctx)));
@@ -121,7 +125,7 @@ async function loadRemote(remote: PluginRemote, entry: LoadedRemote): Promise<vo
     entry.status = RemoteStatus.loaded;
     publish();
   } catch (error) {
-    if (loaded.get(name) === entry) { unregisterPlugin(name); unregisterDataSources(name); unregisterQuerySources(name); }
+    if (loaded.get(name) === entry) { unregisterPlugin(name); unregisterDataSources(name); unregisterQuerySources(name); unregisterCommandSources(name); }
     entry.cancelled = true;
     entry.status = RemoteStatus.errored;
     entry.error = error instanceof Error ? error.message : String(error);
@@ -141,7 +145,7 @@ export async function syncPluginRemotes(remotes: PluginRemote[] | undefined): Pr
     if (!next || identity(next) !== entry.identity) {
       entry.cancelled = true;
       unregisterPlugin(name);
-      unregisterDataSources(name); unregisterQuerySources(name);
+      unregisterDataSources(name); unregisterQuerySources(name); unregisterCommandSources(name);
       loaded.delete(name);
       // In-flight activation owns its eventual cleanup; do not deactivate twice.
       if (!entry.pending) cleanup.push(deactivate(entry));

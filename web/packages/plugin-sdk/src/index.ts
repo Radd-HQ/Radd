@@ -123,3 +123,15 @@ export { Pager } from "./Pager";
 export { DateField } from "./DateField";
 export { Table, THead, TBody, Th, Td } from "./Table";
 export { TableSkeleton } from "./TableSkeleton";
+
+export { IconButton } from "./IconButton";
+
+export { ConfirmDialog, useConfirm, type ConfirmOptions } from "./ConfirmDialog";
+
+export { copyText } from "./clipboard";
+
+export { useListFilter } from "./list-filter";
+export { useDebounced } from "./debounced";
+
+export { registerCommandSource, unregisterCommandSources, useContributedCommands, invalidatePluginCommands, type Command, type CommandContext, type CommandSource, type ContributedCommand } from "./commands";
+export { positionedErrorOf, type PositionedError } from "./positioned-error";

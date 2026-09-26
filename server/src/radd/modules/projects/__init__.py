@@ -15,7 +15,7 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('project', ('/p/{project.key}/settings/general',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/projects/remoteEntry.js", ui_api_version="1.7.0"),
+    ui=PluginUiManifest(remote="/plugins/projects/remoteEntry.js", ui_api_version="1.9.0"),
     description="Projects: the containers issues live in.",
     depends_on=("events",),
     weak_depends=("auth", "settings"),

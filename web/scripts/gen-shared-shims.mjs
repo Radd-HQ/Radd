@@ -30,6 +30,9 @@ const NPM_MODULES = [
 // The SDK is TypeScript (no runtime introspection), so its export list is maintained here to match
 // web/packages/plugin-sdk/src/index.ts. A drift shows up as an undefined import at runtime.
 const SDK_EXPORTS = [
+  "positionedErrorOf",
+  "registerCommandSource", "unregisterCommandSources", "useContributedCommands", "invalidatePluginCommands",
+  "IconButton", "ConfirmDialog", "useConfirm", "copyText", "useListFilter", "useDebounced",
   "UI_API_VERSION", "isUiApiCompatible",
   "ChangeList", "ChangeLine", "changeLabel", "humanize", "formatChangeValue", "CollapsibleCard", "Pager", "DateField", "Table", "THead", "TBody", "Th", "Td", "TableSkeleton",
   "ScheduleEditor", "ScheduleKind", "defaultSchedule", "isScheduleValid",

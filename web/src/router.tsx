@@ -43,7 +43,6 @@ const ProjectFormsSettings = lazyRouteComponent(() => import("./routes/project-s
 const ProjectTimeloggingSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectTimeloggingSettings");
 const ProjectSlaSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectSlaSettings");
 const GeneralSettingsPage = lazyRouteComponent(() => import("./routes/settings/general"), "GeneralSettingsPage");
-const AutomationsSettingsPage = lazyRouteComponent(() => import("./routes/settings/automations"), "AutomationsSettingsPage");
 const CyclesSettingsPage = lazyRouteComponent(() => import("./routes/settings/cycles"), "CyclesSettingsPage");
 const FieldsSettingsPage = lazyRouteComponent(() => import("./routes/settings/fields"), "FieldsSettingsPage");
 const LinkTypesSettingsPage = lazyRouteComponent(() => import("./routes/settings/link-types"), "LinkTypesSettingsPage");
@@ -546,12 +545,6 @@ const settingsNotificationsRoute = createRoute({
   component: NotificationSettingsPage,
 });
 
-const settingsAutomationsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.automations,
-  component: AutomationsSettingsPage,
-});
-
 const settingsTimeloggingRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.timelogging,
@@ -816,7 +809,6 @@ const routeTree = rootRoute.addChildren([
       settingsRolesRoute,
       settingsTokensRoute,
       settingsNotificationsRoute,
-      settingsAutomationsRoute,
       settingsTimeloggingRoute,
       settingsBackupsRoute,
       settingsPluginsRoute,

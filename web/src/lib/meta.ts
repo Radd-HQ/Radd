@@ -1,4 +1,4 @@
-import { PRIORITY_LABELS } from "../../../server/src/radd/modules/items/ui/src/change-format";
+import { PRIORITY_LABELS, VISIBILITY_LABELS } from "@radd-plugin-ui/items/metadata";
 import {
   CircleCheck,
   CircleDashed,
@@ -35,9 +35,6 @@ import {
   type ItemVisibilityValue,
 } from "./types";
 import {
-  MANUAL_TRIGGER,
-  SCHEDULE_TRIGGER,
-  CommentVisibility,
   CycleStatus,
   FieldType,
   InstanceRole,
@@ -49,7 +46,6 @@ import {
   StateCategory,
   ViewAxis,
   type BuiltinRuleField,
-  type CommentVisibilityValue,
   type CycleStatusValue,
   type FieldTypeValue,
   type InstanceRoleValue,
@@ -96,7 +92,7 @@ export interface VisibilityMeta {
 
 export const VISIBILITY_META: Record<ItemVisibilityValue, VisibilityMeta> = {
   [ItemVisibility.public]: {
-    label: "Public",
+    label: VISIBILITY_LABELS.public,
     // RADD-1287: in a private project public and members-only are the same
     // audience — say who that is rather than inventing a third word.
     privateLabel: "Project members",
@@ -104,13 +100,13 @@ export const VISIBILITY_META: Record<ItemVisibilityValue, VisibilityMeta> = {
     icon: Globe,
   },
   [ItemVisibility.internal]: {
-    label: "Members only",
+    label: VISIBILITY_LABELS.internal,
     privateLabel: "Project members",
     description: "Members of the project. Hidden from the world even in a public project.",
     icon: Users,
   },
   [ItemVisibility.restricted]: {
-    label: "Restricted",
+    label: VISIBILITY_LABELS.restricted,
     privateLabel: "Restricted",
     description: "Only the reporter, the assignee and participants.",
     icon: Lock,
@@ -406,23 +402,7 @@ export const SLA_BREACHED_COLOR = "var(--status-danger)";
 // Automations + intake forms (spec 20)
 // ---------------------------------------------------------------------------
 
-/** Trigger display name: the catalog's label when known, else the raw event type.
- * (Trigger metadata lives server-side — GET /automations/catalog, spec 58.) */
-export function triggerLabel(
-  trigger: string,
-  catalog: { triggers: { event_type: string; label: string }[] } | undefined,
-): string {
-  if (trigger === MANUAL_TRIGGER) return "Manual (editor / menu)";
-  if (trigger === SCHEDULE_TRIGGER) return "On a schedule";
-  return catalog?.triggers.find((t) => t.event_type === trigger)?.label ?? trigger;
-}
-
-
-/** Comment-visibility labels (add_comment action + form submit is public). */
-export const COMMENT_VISIBILITY_LABELS: Record<CommentVisibilityValue, string> = {
-  [CommentVisibility.public]: "Public",
-  [CommentVisibility.internal]: "Internal",
-};
+export { COMMENT_VISIBILITY_LABELS } from "@radd-plugin-ui/comments/visibility";
 
 /** Initials for avatar chips ("Hussein Jarrar" → "HJ"). */
 export function initials(name: string): string {
@@ -442,7 +422,7 @@ export function initials(name: string): string {
 // ---------------------------------------------------------------------------
 
 /** Human labels for item-history change fields (`custom_field` uses the change's `name`). */
-export { HISTORY_FIELD_LABELS } from "../../../server/src/radd/modules/items/ui/src/change-format";
+export { HISTORY_FIELD_LABELS } from "@radd-plugin-ui/items/metadata";
 
 interface IconMeta {
   label: string;

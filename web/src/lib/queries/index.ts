@@ -15,7 +15,6 @@ export * from "./shared-directories";
 export * from "./roles";
 export * from "./cycles";
 export * from "./reports";
-export * from "./automations";
 export * from "./forms";
 export * from "./approvals";
 export * from "./timelogging";

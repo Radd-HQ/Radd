@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "@radd/plugin-sdk": "*"
+  },
+  "exports": {
+    "./picker-contract": "./src/picker-contract.ts"
   }
 }

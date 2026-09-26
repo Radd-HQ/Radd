@@ -82,11 +82,13 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
         for plugin in registries.plugins.values()
         for node in plugin.automation_nodes
     }
+    event_owners = {event.event_type: plugin.name for plugin in registries.plugins.values() for event in plugin.event_types}
     return CatalogRead(
         max_chain_depth=settings.automation_max_chain_depth,
         triggers=[
             TriggerInfo(
                 event_type=spec.event_type,
+                plugin=event_owners[spec.event_type],
                 label=spec.label,
                 group=spec.group,
                 item_scoped=spec.item_scoped,
@@ -167,13 +169,15 @@ async def list_templates(session: Session, user: CurrentUser) -> list[Automation
     return [
         AutomationTemplateRead(
             key=template.key,
+            plugin=plugin.name,
             name=template.name,
             description=template.description,
             group=template.group,
             nodes=[dict(node) for node in template.nodes],
             edges=[dict(edge) for edge in template.edges],
         )
-        for template in registries.automation_templates.values()
+        for plugin in registries.plugins.values()
+        for template in plugin.automation_templates
         if templates.available(template)
     ]
 

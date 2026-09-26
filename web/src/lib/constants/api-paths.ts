@@ -117,20 +117,6 @@ export const apiVcsLinkPath = (linkId: string) => `/vcs-links/${linkId}`;
 /** ADD options to a select field (additive-only — spec 100/107). */
 export const apiFieldOptionsPath = (fieldId: string) =>
   `${ApiPath.fields}/${fieldId}/options`;
-/** Automation rule paths (spec 20). */
-export const apiAutomationPath = (ruleId: string) => `${ApiPath.automations}/${ruleId}`;
-export const apiAutomationTestPath = (ruleId: string) =>
-  `${ApiPath.automations}/${ruleId}/test`;
-export const apiAutomationRunsPath = (ruleId: string) =>
-  `${ApiPath.automations}/${ruleId}/runs`;
-export const apiAutomationRunPath = (ruleId: string, runId: string) =>
-  `${ApiPath.automations}/${ruleId}/runs/${runId}`;
-export const apiAutomationVersionsPath = (ruleId: string) =>
-  `${ApiPath.automations}/${ruleId}/versions`;
-export const apiAutomationVersionPath = (ruleId: string, version: number) =>
-  `${ApiPath.automations}/${ruleId}/versions/${version}`;
-export const apiAutomationRestorePath = (ruleId: string, version: number) =>
-  `${ApiPath.automations}/${ruleId}/versions/${version}/restore`;
 /** Intake form paths (spec 20). */
 export const apiFormPath = (formId: string) => `${ApiPath.forms}/${formId}`;
 export const apiFormSubmitPath = (formId: string) => `${ApiPath.forms}/${formId}/submit`;

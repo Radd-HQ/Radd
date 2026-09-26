@@ -414,14 +414,8 @@ export function useKeyboardShortcut(key: string, onTrigger: () => void) {
 }
 
 /** `value`, trailing-debounced. */
-export function useDebounced<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(timer);
-  }, [value, delayMs]);
-  return debounced;
-}
+export { useDebounced } from "@radd/plugin-sdk";
+import { useDebounced } from "@radd/plugin-sdk";
 
 /** Live SLQ probe outcome (specs 11/55) — drives the editor's validation line. */
 export const SlqProbeStatus = {

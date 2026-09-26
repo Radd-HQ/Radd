@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tan
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, GitBranch, History, Plus, Server, Trash2, XCircle } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { RoutePath } from "../../lib/constants";
 import { invalidateEntities, type Entity } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter } from "../../lib/list-filter";
@@ -23,7 +22,7 @@ import { QueryError } from "../QueryError";
 import { SelectField } from "../SelectField";
 import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
-import { IntegrationAutomations } from "./IntegrationAutomations";
+import { Slot, SlotId } from "@radd/plugin-sdk";
 import { VcsIdentityMap } from "./VcsIdentityMap";
 
 /**
@@ -162,12 +161,12 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
   return (
     <div>
       <p className="mb-2 text-[13px] text-fg-muted">{config.description}</p>
-      <IntegrationAutomations group={config.title} />
+      <Slot id={SlotId.integrationSettings} integration={config.provider} label={config.title} />
       {/* RADD-1309: the connector acts on nothing itself — say where behaviour lives. */}
       <p className="mb-4 text-[13px] text-fg-muted">
         Enabled repositories link references to issues. What a {config.triggerNoun} should do (move the issue, comment, record a version)
         is an automation: pick a trigger from the “{config.title}” group in{" "}
-        <Link to={RoutePath.settingsAutomations} className="text-accent-text hover:underline">
+        <Link to="/settings/$" params={{_splat: "automations"}} className="text-accent-text hover:underline">
           Automations
         </Link>
         .

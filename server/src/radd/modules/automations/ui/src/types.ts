@@ -1,6 +1,6 @@
 /** Automation rules (specs 20/58/66/69). */
 /** Values accepted by the legacy action wire format. Graph params use unknown. */
-type ActionParamValue = string | number | boolean | string[] | null;
+export type ActionParamValue = string | number | boolean | string[] | null;
 // ---------------------------------------------------------------------------
 // Automations (spec 20 — /automations). Global rules that react to an
 // item event, match an SLQ condition, and apply an ordered list of actions.
@@ -53,6 +53,7 @@ export { ScheduleKind, type ScheduleKindValue, type ScheduleConfig as RuleSchedu
 
 /** One subscribable event type, from GET /automations/catalog (spec 58). */
 export interface TriggerInfo {
+  plugin: string;
   event_type: string;
   label: string;
   group: string;
@@ -139,6 +140,7 @@ export interface OutputFieldInfo {
 /** GET /automations/templates (RADD-1316): a whole automation offered as a
  * starting point. Opening one starts an unsaved, disabled draft. */
 export interface AutomationTemplate {
+  plugin: string;
   key: string;
   name: string;
   description: string;

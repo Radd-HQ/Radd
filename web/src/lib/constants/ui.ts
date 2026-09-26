@@ -40,11 +40,6 @@ export const COLLAB_REJOIN_LIMIT = 3;
  *  the draft the saver writes (Milkdown's listener ignores those changes). */
 export const COLLAB_REMOTE_SERIALIZE_MS = 150;
 
-/**
- * Literal a clearing automation action (set_assignee/team/cycle/release) sends
- * to unset the field — mirror of the backend `CLEAR_VALUE`.
- */
-export const AUTOMATION_CLEAR_VALUE = "none";
 
 /**
  * GET /items caps `limit` at 200 (default 50). The prototype board/list fetch

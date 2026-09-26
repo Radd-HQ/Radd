@@ -36,7 +36,7 @@ plugin = RaddPlugin(
         EntityLinkSpec('page_space', ('/settings/pages',)),
         EntityLinkSpec('page', ('/pages?pageId={refs.page.number}', '/pages?pageId={refs.page.id}')),
     ),
-    ui=PluginUiManifest(remote="/plugins/pages/remoteEntry.js", ui_api_version="1.6.0"),
+    ui=PluginUiManifest(remote="/plugins/pages/remoteEntry.js", ui_api_version="1.9.0"),
     automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
     searchables=(PAGE_SEARCHABLE,),  # RADD-1327
     token_providers=(PAGE_TOKENS,),

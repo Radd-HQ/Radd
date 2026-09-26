@@ -1,7 +1,7 @@
 /** AST boundary checks. Ownership coverage remains in the complete audit ledger. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from '@babel/parser';
 
@@ -85,13 +85,8 @@ test('directory query providers belong to Auth or Teams, not the SDK control',()
 });
 
 test('automation canvas is contributed; graph queries and algorithms belong to Automations',()=>{
-  const adapter=nodes('web/src/components/automations/LazyGraphCanvas.tsx');
-  const imports=adapter.filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
-  assert.deepEqual(imports,['@radd/plugin-sdk','../../../../server/src/radd/modules/automations/ui/src/canvas-contract']);
-  for(const file of ['web/src/lib/node-shapes.ts','web/src/lib/automation-layout.ts','web/src/lib/automation-nodes.ts','web/src/lib/automation-outputs.ts','web/src/lib/types/automations.ts','web/src/components/automations/node-visuals.ts']){
-    assert(nodes(file).every(n=>n.type!=='ImportDeclaration'&&n.type!=='FunctionDeclaration'&&n.type!=='VariableDeclaration'),file+' must remain a transitional barrel only');
-  }
-  assert(!files('web/src').some(f=>f.endsWith('/GraphCanvas.tsx')));
+  assert(!existsSync('web/src/components/automations/LazyGraphCanvas.tsx'));
+  for(const file of ['web/src/lib/node-shapes.ts','web/src/lib/automation-layout.ts','web/src/lib/automation-nodes.ts','web/src/lib/automation-outputs.ts','web/src/components/automations/node-visuals.ts']) assert(!existsSync(file), file);
   const owner=nodes('server/src/radd/modules/automations/ui/src/node-shapes.ts');
   assert(!owner.some(n=>n.type==='CallExpression'&&n.callee?.name==='useSyncExternalStore'),'shapes must not use a global mutable store');
 });
@@ -174,7 +169,7 @@ test('catalog transport belongs to owners and contributed-query registry has no 
   const sdk=nodes('web/packages/plugin-sdk/src/query-sources.ts');
   assert(!sdk.some(n=>n.type==='ImportDeclaration'&&/modules|web\/src/.test(n.source.value)));
   assert(!sdk.some(n=>n.type==='StringLiteral'&&/^(?:fields|labels)(?:\.|$)|^\/(?:fields|labels)/.test(n.value)));
-  const consumer=nodes('web/src/components/automations/ActionsBuilder.tsx');
+  const consumer=nodes('server/src/radd/modules/automations/ui/src/ActionsBuilder.tsx');
   assert(!consumer.some(n=>n.type==='ImportDeclaration'&&n.source.value.includes('/queries')));
   assert(!consumer.some(n=>n.type==='CallExpression'&&n.callee?.name==='useQuery'));
 });
@@ -187,7 +182,7 @@ test('schedule arithmetic UI is generic and both owners supply their own transpo
   }
   assert(!files('web/src').includes('web/src/components/ScheduleEditor.tsx'));
   for(const owner of ['automations','backup']){
-    const ast=nodes(`web/src/components/${owner}/ScheduleEditor.tsx`);
+    const ast=owner === "automations" ? [] : nodes(`web/src/components/${owner}/ScheduleEditor.tsx`);
     assert(ast.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='@radd/plugin-sdk'||n.source.value.endsWith('/schedule-contract')));
     assert(!ast.some(n=>n.type==='CallExpression'&&['useState','useEffect','useQuery'].includes(n.callee?.name)));
     const implementation=nodes(`server/src/radd/modules/${owner}/ui/src/ScheduleEditor.tsx`);
@@ -260,5 +255,18 @@ test('cross-plugin public imports resolve through declared package exports, neve
         if(n.type==='ImportDeclaration')assert.equal(n.importKind,'type',entry+' must not load another implementation');
       }
     }
+  }
+});
+
+test('the host has no automation editor, transport or catalog lifecycle knowledge',()=>{
+  for(const file of ['web/src/routes/settings/automations.tsx','web/src/components/settings/IntegrationAutomations.tsx','web/src/lib/queries/automations.ts']) assert(!existsSync(file),file);
+  const violations=[];
+  for(const file of files('web/src')) for(const node of nodes(file)) {
+    if(node.type==='StringLiteral'&&/^\/automations(?:\/|$)/.test(node.value)) violations.push(file+': '+node.value);
+    if(node.type==='ImportDeclaration'&&/automations\/ui\/src\/(?!types$)/.test(node.source.value)) violations.push(file+': '+node.source.value);
+  }
+  assert.deepEqual(violations,[]);
+  for(const file of ['web/packages/plugin-sdk/src/commands.ts','web/packages/plugin-sdk/src/ConfirmDialog.tsx','web/packages/plugin-sdk/src/positioned-error.ts']) {
+    assert(!nodes(file).some(node=>node.type==='StringLiteral'&&/automations|\/items|\/pages/.test(node.value)),file);
   }
 });

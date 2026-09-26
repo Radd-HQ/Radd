@@ -1,24 +1,9 @@
 import type { HistoryChange } from "@radd/plugin-sdk";
-export const HISTORY_FIELD_LABELS: Record<string, string> = {
-  title: "Title",
-  description: "Description",
-  state: "State",
-  priority: "Priority",
-  assignee: "Assignee",
-  reporter: "Reporter",
-  team: "Team",
-  parent: "Parent",
-  cycle: "Cycle",
-  release: "Release",
-  start_date: "Start date",
-  target_date: "Target date",
-  flagged: "Flag",
-  labels: "Labels",
-  links: "Dependencies",
-  custom_field: "Field",
-};
+import { HISTORY_FIELD_LABELS } from "./metadata";
+export { HISTORY_FIELD_LABELS } from "./metadata";
 
-export const PRIORITY_LABELS: Record<string, string> = { blocker: "Blocker", high: "High", normal: "Normal", low: "Low" };
+import { PRIORITY_LABELS } from "./metadata";
+export { PRIORITY_LABELS } from "./metadata";
 export function itemChange(change: HistoryChange): HistoryChange {
   const label = change.name ?? HISTORY_FIELD_LABELS[change.field];
   if (change.redacted) return { field: change.field, name: label, redacted: true };

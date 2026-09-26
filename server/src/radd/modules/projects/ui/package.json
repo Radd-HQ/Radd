@@ -11,6 +11,7 @@
     "@radd/plugin-sdk": "*"
   },
   "exports": {
-    "./picker-contract": "./src/picker-contract.ts"
+    "./picker-contract": "./src/picker-contract.ts",
+    "./lookup-contract": "./src/lookup-contract.ts"
   }
 }

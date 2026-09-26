@@ -6,7 +6,7 @@
  *
  * A plugin's UI lives IN the plugin's directory (`<plugin>/ui/`), builtin or external, and builds to
  * `<plugin>/ui/dist/` — which Radd serves at /plugins/<name>/ straight from there. This script
- * discovers every `ui/vite.config.mjs` under the server modules and the examples, symlinks each ui's
+ * discovers every `ui/package.json` under the server modules and the examples, symlinks each ui's
  * node_modules to the shared web toolchain (npm-install is unavailable in this sandbox), and builds
  * it. Run: `node web/scripts/build-all.mjs`. Pass `--host-only` to skip the remotes.
  */
@@ -28,14 +28,14 @@ const SCAN_ROOTS = [
   resolve(repoRoot, "examples"),
 ];
 
-/** Find every `<dir>/ui` that has a vite.config.mjs (recursively, shallowly for examples). */
+/** Discover UI packages, including contracts without an executable remote. */
 function findUiDirs(root, depth = 0) {
   if (!existsSync(root) || depth > 4) return [];
   const out = [];
   for (const e of readdirSync(root, { withFileTypes: true })) {
     if (!e.isDirectory() || e.name === "node_modules" || e.name === "dist") continue;
     const child = resolve(root, e.name);
-    if (e.name === "ui" && existsSync(resolve(child, "vite.config.mjs"))) {
+    if (e.name === "ui" && existsSync(resolve(child, "package.json"))) {
       out.push(child);
     } else {
       out.push(...findUiDirs(child, depth + 1));
@@ -46,9 +46,9 @@ function findUiDirs(root, depth = 0) {
 
 function ensureNodeModules(uiDir) {
   const link = resolve(uiDir, "node_modules");
-  try {
-    if (lstatSync(link, { throwIfNoEntry: false })) rmSync(link, { recursive: true, force: true });
-  } catch { /* absent */ }
+  const existing = lstatSync(link, {throwIfNoEntry: false});
+  if (existing && !existing.isSymbolicLink()) throw new Error(`Refusing to overwrite plugin dependencies: ${link}`);
+  if (existing) rmSync(link);
   symlinkSync(sharedNodeModules, link, "dir");
 }
 
@@ -82,11 +82,12 @@ if (process.argv.includes("--host-only")) {
   process.exit(0);
 }
 
-for (const uiDir of uiDirs) {
+const remoteDirs = uiDirs.filter(dir => existsSync(resolve(dir, "vite.config.mjs")));
+for (const uiDir of remoteDirs) {
   const label = uiDir.replace(repoRoot + "/", "");
   console.log(`\n== build remote: ${label} ==`);
   run(bin("tsc"), ["-p", resolve(uiDir, "tsconfig.json")]);
   run(bin("vite"), ["build"], uiDir);
 }
 
-console.log(`\nbuilt host + ${uiDirs.length} plugin UI remote(s).`);
+console.log(`\nbuilt host + ${remoteDirs.length} plugin UI remote(s); ${contractPackages.size} public contract package(s).`);

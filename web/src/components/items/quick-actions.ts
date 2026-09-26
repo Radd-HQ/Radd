@@ -1,13 +1,11 @@
 import { useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { apiAutomationPath } from "../../lib/constants";
+import { useQuery } from "@tanstack/react-query";
+import { useContributedCommands } from "@radd/plugin-sdk";
 import { useCurrentUser } from "../../lib/hooks";
 import { useUpdateItem } from "../../lib/item-mutations";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import {
   labelsQuery,
-  runnableAutomationsQuery,
   statesQuery,
   usersQuery,
 } from "../../lib/queries";
@@ -37,9 +35,8 @@ export function useIssueQuickActions(item: Item, projectId: string, enabled = tr
   const users = useQuery({ ...usersQuery, enabled });
   const states = useQuery({ ...statesQuery(projectId), enabled });
   const labels = useQuery({ ...labelsQuery(), enabled });
-  const automations = useQuery({ ...runnableAutomationsQuery(), enabled });
+  const commands = useContributedCommands({entityType: "item", entityId: item.id, projectId}, enabled);
   const updateItem = useUpdateItem();
-  const queryClient = useQueryClient();
 
   const { mutate } = updateItem;
   return useMemo(() => {
@@ -103,30 +100,17 @@ export function useIssueQuickActions(item: Item, projectId: string, enabled = tr
           }),
       });
     }
-    for (const rule of automations.data ?? []) {
-      actions.push({
-        id: `automation-${rule.id}`,
-        label: rule.name,
-        hint: "automation",
-        keywords: "run automation custom action",
-        run: async () => {
-          await api.post(`${apiAutomationPath(rule.id)}/run`, { item_id: item.id });
-          // The rule ran as the system actor server-side — refetch everything visible.
-          await queryClient.invalidateQueries();
-        },
-      });
-    }
+    actions.push(...commands);
     return actions;
   }, [
     me,
     users.data,
     states.data,
     labels.data,
-    automations.data,
+    commands,
     item.id,
     item.assignee,
     item.labels,
     mutate,
-    queryClient,
   ]);
 }
