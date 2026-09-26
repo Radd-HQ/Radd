@@ -5,7 +5,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -23,7 +22,6 @@ from .schemas import (
     SemanticResponse,
 )
 from .types import MAX_QUERY_CHARS
-from .deflect import DOCS_MODULE as PAGES_MODULE
 
 router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
@@ -105,30 +103,19 @@ async def search_deflect(
     project_id: uuid.UUID,
     q: Annotated[str, Query(max_length=MAX_QUERY_CHARS)] = "",
 ) -> DeflectResponse:
-    """KB deflection for the new-issue flow (spec 66): wiki pages that may
+    """KB deflection for the new-issue flow (spec 66): documents that may
     already answer it + previously RESOLVED items in the project. The docs
-    half only renders for callers who also hold page.read (no title leaks)."""
+    half comes from the SEARCH_DOCUMENTS providers (RADD-1384), each gating
+    what this reader may open (no title leaks); none loaded = no docs."""
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, user, Permission.ITEM_READ, project=project)
     q = q.strip()
     if not q:
         return DeflectResponse(docs=[], items=[])
-    # RADD-791: page.read is SPACE-scoped now, so "does this project's permission
-    # set contain it" is no longer a question that means anything. Deflect into
-    # the spaces this reader may actually open.
-    docs = await deflect.deflect_docs(session, q, space_ids=await _readable_space_ids(session, user), actor=user)
     return DeflectResponse(
-        docs=docs, items=await deflect.deflect_items(session, project, q, actor=user)
+        docs=await deflect.deflect_docs(session, q, actor=user),
+        items=await deflect.deflect_items(session, project, q, actor=user),
     )
-
-
-async def _readable_space_ids(session, user) -> set[uuid.UUID]:
-    """The reader's wiki spaces, or an empty set when the wiki is not mounted."""
-    if PAGES_MODULE not in settings.modules:
-        return set()
-    from radd.modules.pages import access as pages_access
-
-    return set(await pages_access.readable_spaces(session, user))
 
 
 @router.get("/search/semantic", response_model=SemanticResponse)
@@ -138,7 +125,8 @@ async def search_semantic(
     q: Annotated[str, Query(max_length=MAX_QUERY_CHARS)] = "",
 ) -> SemanticResponse:
     """Pure meaning-based retrieval over items + docs (spec 103, the palette's
-    Ask mode). `enabled: false` — never an error — when semantic search is not
-    configured; RBAC scoping matches /search (items) and page.read (docs)."""
+    Ask mode). `enabled: false` — never an error — when no semantic provider
+    is live; RBAC scoping matches /search (items) and each document
+    provider's own gate (docs)."""
     await authz.require_member(session, user)  # RADD-788; results are RBAC-scoped below
     return await semantic.semantic_search(session, user, q)

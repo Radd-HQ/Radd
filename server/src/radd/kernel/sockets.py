@@ -11,7 +11,7 @@ defined now; a concrete second provider arrives when the first consuming plugin 
 actually built. `StorageBackend` and `TaskBackend` already have real providers.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
@@ -26,6 +26,8 @@ class Socket(StrEnum):
     TASK_BACKEND = "task_backend"  # localloop (default) | celery
     NON_WORKING_DAYS = "non_working_days"  # calendar dates nobody works (RADD-1031)
     TRANSITION_CHECK = "transition_check"  # a workflow transition-rule check (RADD-1383)
+    SEARCH_DOCUMENTS = "search_documents"  # non-item hits search shows (RADD-1384)
+    SEMANTIC_CANDIDATES = "semantic_candidates"  # meaning-ranked ids for a query (RADD-1384)
 
 
 # --- interface definitions (the seam contracts) ---
@@ -132,6 +134,68 @@ class TransitionCheckProvider(Protocol):
         self, params: Mapping[str, Any], prepared: Any, to_state_id: str | None
     ) -> str | None: ...
     async def moved(self, session: Any, item_id: Any, to_state_id: Any) -> None: ...
+
+
+@runtime_checkable
+class SearchDocumentSource(Protocol):
+    """A corpus of DOCUMENTS search shows beside issues (RADD-1384).
+
+    Mechanism only: `search` knows there are non-item hits it can rank, fuse
+    with semantic candidates and shape into deflection and Ask-mode answers;
+    `pages` answers with wiki pages. The provider owns its ACL end to end, so
+    search never learns what a space or a page restriction is:
+
+    * `entity_type` — the id space its hits live in; it is what the
+      SEMANTIC_CANDIDATES socket is asked for (register the spec under it);
+    * `search(session, actor, q, limit=)` — the full-text ranking, best-first,
+      of the documents `actor` may read, scoped BEFORE the limit so unreadable
+      hits never eat the budget;
+    * `resolve(session, actor, ids)` — the live, readable subset of `ids`
+      through the same gate, in any order: how a semantic-only candidate
+      becomes a hit.
+
+    Both answer `search.sources.DocumentHit`s — the consumer's shape, which the
+    provider imports (a provider depends on search, never the reverse). No
+    provider registered means no documents: deflection and Ask mode answer with
+    issues alone, and nothing errors.
+    """
+
+    entity_type: str
+
+    async def search(self, session: Any, actor: Any, q: str, *, limit: int) -> list[Any]: ...
+    async def resolve(self, session: Any, actor: Any, ids: Sequence[Any]) -> list[Any]: ...
+
+
+@runtime_checkable
+class SemanticCandidateSource(Protocol):
+    """Meaning-ranked candidates for a query (RADD-1384); `ai` answers from its
+    embeddings.
+
+    * `enabled(session)` — whether it can answer RIGHT NOW (switched on,
+      configured, its store reachable); cheap-first, since every hybrid search
+      asks;
+    * `candidates(session, entity_type, q, limit=, project_ids=)` — `(id, cosine
+      distance)` nearest-first for one entity type, `[]` for a type it does not
+      embed. Item candidates are pre-filtered to `project_ids`; a document type
+      is unscoped, because the document source's `resolve` is its gate.
+
+    A candidate is never a permission answer: the consumer materializes every
+    id through the owner's read gate before a person sees it. `search` fuses
+    each provider's ranking with its full-text one by RRF, time-budgets the
+    hybrid call, and reads any exception as "no candidates" — full-text only
+    is the floor, and switching the provider off lands exactly there.
+    """
+
+    async def enabled(self, session: Any) -> bool: ...
+    async def candidates(
+        self,
+        session: Any,
+        entity_type: str,
+        q: str,
+        *,
+        limit: int,
+        project_ids: Sequence[Any] | None = None,
+    ) -> list[tuple[Any, float]]: ...
 
 
 @runtime_checkable

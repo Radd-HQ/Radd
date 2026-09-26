@@ -24,9 +24,8 @@ MAX_QUERY_CHARS = 200
 # Per-section result cap for GET /search/deflect (spec 66).
 DEFLECT_LIMIT = 5
 
-# Hybrid semantic search (spec 103). The ai module is optional — its candidate
-# seam loads via this deferred module path (the DOCS_MODULE precedent).
-AI_EMBEDDINGS_MODULE = "radd.modules.ai"
+# Hybrid semantic search (spec 103) — candidates arrive through the kernel
+# SEMANTIC_CANDIDATES socket (RADD-1384), so no provider means FTS-only.
 # Below this many characters a query is type-ahead, not meaning — FTS only.
 MIN_SEMANTIC_QUERY_CHARS = 8
 # ANN over-fetch into the fuse (narrow-access users still fill the page).

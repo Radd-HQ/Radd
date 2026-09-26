@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
@@ -12,9 +11,9 @@ from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.fields import service as fields_service
-from radd.modules.items.enums import ItemVisibility
+from radd.modules.items.enums import ItemEntity, ItemVisibility
 
-from . import fusion
+from . import fusion, sources
 from .models import SearchIndexRow
 from .types import (
     KEY_QUERY_RE,
@@ -340,7 +339,7 @@ async def search(
 
     # The hybrid half (spec 103): fuse FTS ranks with vector-ANN ranks by RRF.
     # Key-shaped queries mean "take me to TD-123", not meaning — skip those.
-    semantic_ids: list[uuid.UUID] = []
+    semantic_ids: list[list[uuid.UUID]] = []
     if pattern is None and len(q) >= MIN_SEMANTIC_QUERY_CHARS:
         semantic_ids = await _semantic_ids(session, q, readable)
 
@@ -352,7 +351,7 @@ async def search(
         return hits
 
     rows_by_id = {row.item_id: (row, headline) for row, headline in fts_rows}
-    fused = fusion.rrf_fuse([[row.item_id for row, _ in fts_rows], semantic_ids])
+    fused = fusion.rrf_fuse([[row.item_id for row, _ in fts_rows], *semantic_ids])
     missing = [item_id for item_id, _ in fused if item_id not in rows_by_id]
     if missing:
         extra = await session.execute(
@@ -382,29 +381,23 @@ async def search(
 
 async def _semantic_ids(
     session: AsyncSession, q: str, readable: set[uuid.UUID]
-) -> list[uuid.UUID]:
-    """Vector candidates via the ai module's seam — deferred + feature-detected
-    (the deflect/DOCS_MODULE precedent, direction reversed), time-budgeted, and
+) -> list[list[uuid.UUID]]:
+    """Each semantic provider's item ranking (RADD-1384: the SEMANTIC_CANDIDATES
+    socket), RBAC pre-filtered to the readable projects, time-budgeted, and
     empty on ANY failure so /search never degrades below pure FTS."""
-    from .types import AI_EMBEDDINGS_MODULE
-
-    if AI_EMBEDDINGS_MODULE not in settings.modules:
+    live = await sources.semantic_sources(session)
+    if not live:
         return []
-    from radd.modules.ai.embeddings import candidates
-
-    try:
-        if not await candidates.semantic_enabled(session):
-            return []
-        ranked = await asyncio.wait_for(
-            candidates.item_candidates(
-                session, q, project_ids=list(readable), limit=SEMANTIC_CANDIDATES
-            ),
-            timeout=settings.ai_search_timeout_seconds,
-        )
-    except Exception as exc:  # noqa: BLE001 — FTS-only beats a 500 (incl. timeout)
-        logger.warning("semantic search skipped: %s", exc.__class__.__name__)
-        return []
-    return [item_id for item_id, _distance in ranked]
+    rankings = await sources.semantic_rankings(
+        session,
+        live,
+        ItemEntity.ITEM,
+        q,
+        limit=SEMANTIC_CANDIDATES,
+        project_ids=list(readable),
+        budget=settings.ai_search_timeout_seconds,
+    )
+    return sources.ids_of(rankings)
 
 
 def _hit(row: SearchIndexRow, *, snippet: str | None) -> SearchHit:

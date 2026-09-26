@@ -1,98 +1,80 @@
 """KB deflection (spec 66): "does this already have an answer?" for a
-half-typed issue title — top wiki pages via the docs FTS seam + top RESOLVED
+half-typed issue title — top DOCUMENTS from whichever plugin provides them
+(the SEARCH_DOCUMENTS socket; `pages` answers with wiki pages) + top RESOLVED
 items (the item FTS filtered to done/canceled state categories through the
 workflow seam).
 
-docs is a DEFERRED, feature-detected import (it loads after search in
-RADD_MODULES; disabled = the docs half is empty). Both halves are FTS fused
-with semantic candidates when the ai module is up (specs 103/106) and degrade
-to plain FTS on any failure; the endpoint's shape won't change.
+Both halves are FTS fused with semantic candidates when a SEMANTIC_CANDIDATES
+provider is live (specs 103/106, RADD-1384) and degrade to plain FTS on any
+failure; with no document provider the docs half is empty. The endpoint's
+shape won't change.
 """
 
+import logging
 import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
+from radd.modules.items.enums import ItemEntity
 from radd.modules.items.models import WorkItem
 from radd.modules.workflow import service as workflow
 from radd.modules.workflow.types import StateCategory
 from radd.modules.projects.models import Project
 
+from . import fusion, sources
 from .models import SearchIndexRow
 from .schemas import DeflectDoc, DeflectItem
 from .service import build_tsquery
 from .types import DEFLECT_LIMIT, SEARCH_TS_CONFIG
 
-DOCS_MODULE = "radd.modules.pages"
+logger = logging.getLogger(__name__)
 
 # An item counts as "previously resolved" in these state categories.
 RESOLVED_CATEGORIES = (StateCategory.DONE, StateCategory.CANCELED)
 
 
-async def deflect_docs(
-    session: AsyncSession, q: str, *, space_ids: "set[uuid.UUID] | None" = None, actor=None
-) -> list[DeflectDoc]:
-    """Top wiki pages: docs FTS fused with semantic candidates when available
-    (spec 103) — KB questions rarely reuse the answer's exact words. Empty when
-    docs is disabled; plain FTS when semantic isn't configured.
-
-    `space_ids` is the reader's readable spaces (RADD-791). Deflection is the
-    one page surface an ISSUE reader reaches, so without it a service-desk
-    reply could surface a title out of a space they cannot open.
-    """
-    if DOCS_MODULE not in settings.modules:
+async def deflect_docs(session: AsyncSession, q: str, *, actor) -> list[DeflectDoc]:
+    """Top documents `actor` may open: each provider's FTS fused with its
+    semantic candidates (spec 103) — KB questions rarely reuse the answer's
+    exact words. The provider gates both halves (RADD-791's readable spaces,
+    RADD-792's restricted pages), because deflection is the one page surface an
+    ISSUE reader reaches. A provider that raises is skipped, never a 500."""
+    providers = sources.document_sources()
+    if not providers:
         return []
-    from radd.modules.pages import search as docs_search, spaces as docs_spaces
-
-    results = await docs_search.search_pages(session, q, limit=DEFLECT_LIMIT, space_ids=space_ids)
-    ordered_ids = [result.page_id for result in results]
-    by_id = {result.page_id: result for result in results}
-    semantic_ids = await _semantic_doc_ids(session, q)
-    if semantic_ids:
-        from . import fusion
-
-        fused = fusion.rrf_fuse([ordered_ids, semantic_ids])
-        missing = [page_id for page_id, _ in fused if page_id not in by_id]
-        for page in await docs_search.pages_by_ids(session, missing, space_ids=space_ids):
-            by_id[page.page_id] = page
-        ordered_ids = [page_id for page_id, _ in fused if page_id in by_id]
-    if actor is not None:
-        from radd.modules.pages.service import drop_restricted_results
-        allowed = {row.page_id for row in await drop_restricted_results(session, actor, list(by_id.values()))}
-        ordered_ids = [page_id for page_id in ordered_ids if page_id in allowed]
-    if not ordered_ids:
-        return []
-    space_names = {
-        space.id: space.name for space in await docs_spaces.list_spaces(session)
-    }
-    return [
-        DeflectDoc(
-            id=page_id,
-            space_id=by_id[page_id].space_id,
-            title=by_id[page_id].title,
-            space_name=space_names.get(by_id[page_id].space_id, ""),
-        )
-        for page_id in ordered_ids[:DEFLECT_LIMIT]
-    ]
+    live = await sources.semantic_sources(session)
+    docs: list[DeflectDoc] = []
+    for source in providers:
+        if len(docs) >= DEFLECT_LIMIT:
+            break
+        try:
+            hits = await _fused_documents(session, source, q, actor, live)
+        except Exception:  # noqa: BLE001 — one source's failure must not blank the panel
+            logger.exception("deflect: %s documents failed", source.entity_type)
+            continue
+        docs += [
+            DeflectDoc(id=hit.id, space_id=hit.space_id, title=hit.title, space_name=hit.space_name)
+            for hit in hits
+        ]
+    return docs[:DEFLECT_LIMIT]
 
 
-async def _semantic_doc_ids(session: AsyncSession, q: str) -> list[uuid.UUID]:
-    """Semantic doc candidates via the ai seam (deferred; [] on any failure)."""
-    from .types import AI_EMBEDDINGS_MODULE
-
-    if AI_EMBEDDINGS_MODULE not in settings.modules:
-        return []
-    try:
-        from radd.modules.ai.embeddings import candidates
-
-        if not await candidates.semantic_enabled(session):
-            return []
-        ranked = await candidates.doc_candidates(session, q, limit=DEFLECT_LIMIT * 2)
-    except Exception:  # noqa: BLE001 — deflection degrades to FTS, never 500s
-        return []
-    return [page_id for page_id, _ in ranked]
+async def _fused_documents(session, source, q, actor, live) -> list[sources.DocumentHit]:
+    hits = await source.search(session, actor, q, limit=DEFLECT_LIMIT)
+    by_id = {hit.id: hit for hit in hits}
+    ordered_ids = [hit.id for hit in hits]
+    rankings = await sources.semantic_rankings(
+        session, live, source.entity_type, q, limit=DEFLECT_LIMIT * 2
+    )
+    if rankings:
+        fused = fusion.rrf_fuse([ordered_ids, *sources.ids_of(rankings)])
+        missing = [doc_id for doc_id, _ in fused if doc_id not in by_id]
+        if missing:
+            for hit in await source.resolve(session, actor, missing):
+                by_id[hit.id] = hit
+        ordered_ids = [doc_id for doc_id, _ in fused if doc_id in by_id]
+    return [by_id[doc_id] for doc_id in ordered_ids]
 
 
 async def deflect_items(
@@ -130,9 +112,7 @@ async def deflect_items(
     by_id = {row.item_id: row for row in rows}
     semantic_ids = await _semantic_item_ids(session, project, q)
     if semantic_ids:
-        from . import fusion
-
-        fused = fusion.rrf_fuse([ordered_ids, semantic_ids])
+        fused = fusion.rrf_fuse([ordered_ids, *semantic_ids])
         missing = [item_id for item_id, _ in fused if item_id not in by_id]
         for row in await _resolved_rows_by_ids(session, project, missing, resolved_state_ids):
             by_id[row.item_id] = row
@@ -204,20 +184,13 @@ async def _resolved_rows_by_ids(
 
 async def _semantic_item_ids(
     session: AsyncSession, project: Project, q: str
-) -> list[uuid.UUID]:
-    """Semantic item candidates via the ai seam (deferred; [] on any failure)."""
-    from .types import AI_EMBEDDINGS_MODULE
-
-    if AI_EMBEDDINGS_MODULE not in settings.modules:
+) -> list[list[uuid.UUID]]:
+    """Each live semantic provider's item ranking in this project (RADD-1384:
+    the SEMANTIC_CANDIDATES socket; [] on any failure)."""
+    live = await sources.semantic_sources(session)
+    if not live:
         return []
-    try:
-        from radd.modules.ai.embeddings import candidates
-
-        if not await candidates.semantic_enabled(session):
-            return []
-        ranked = await candidates.item_candidates(
-            session, q, project_ids=[project.id], limit=DEFLECT_LIMIT * 2
-        )
-    except Exception:  # noqa: BLE001 — deflection degrades to FTS, never 500s
-        return []
-    return [item_id for item_id, _ in ranked]
+    rankings = await sources.semantic_rankings(
+        session, live, ItemEntity.ITEM, q, limit=DEFLECT_LIMIT * 2, project_ids=[project.id]
+    )
+    return sources.ids_of(rankings)

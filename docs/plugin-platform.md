@@ -349,6 +349,12 @@ These are named "sockets": a plugin declares it *provides* or *consumes* a socke
   serves (`validate` on write, `prepare` + pure `failure` at evaluation, `moved` after a state
   change). `approvals` provides `require_approval`. A stored rule whose provider is gone FAILS
   CLOSED: disabling a plugin must never silently open a gate an admin configured.
+- **SearchDocumentSource** (built, RADD-1384) — the non-item documents search shows beside issues
+  (`search` = reader-gated FTS ranking, `resolve` = the readable subset of candidate ids).
+  `pages` provides; search's deflection and Ask mode consume. No provider = no documents.
+- **SemanticCandidateSource** (built, RADD-1384) — meaning-ranked `(id, distance)` candidates per
+  entity type. `ai` provides from its embeddings; search fuses them by RRF, time-budgeted, and
+  falls back to full-text only on any failure — or when no provider is loaded.
 
 Sockets are just a small typed registry: `register_provider(socket, name, impl)` +
 `get_provider(socket, name)` + a settings key that picks the active provider. This is how "add S3 as

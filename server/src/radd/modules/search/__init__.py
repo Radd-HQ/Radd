@@ -14,7 +14,6 @@ plugin = RaddPlugin(
     consumer_descriptions=((CONSUMER_NAME, "Keeps full-text search fresh"),),
     description="Search across issues and pages.",
     depends_on=("events", "projects", "auth", "workflow", "items", "comments", "access", "fields", "teams"),
-    weak_depends=("ai", "pages"),
     routers=(router,),
     # RADD-889: find_items (the spec-103 meaning search) lives with its owner.
     mcp_tools=mcptools.MCP_TOOLS,

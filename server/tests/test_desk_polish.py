@@ -269,7 +269,7 @@ async def test_deflect_docs_finds_wiki_pages_with_space_names(db, admin):
         PageCreate(space_id=space.id, title="Printer troubleshooting", body="turn it off and on"),
         admin.id,
     )
-    docs = await deflect.deflect_docs(db, "printer troubleshooting")
+    docs = await deflect.deflect_docs(db, "printer troubleshooting", actor=admin)
     assert [(doc.id, doc.space_id, doc.space_name) for doc in docs] == [
         (page.id, space.id, "Handbook")
     ]

@@ -2,13 +2,15 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from radd.kernel import EntityLinkSpec
-from radd.kernel import CapabilitySpec, EventTypeSpec
+from radd.kernel import CapabilitySpec, EventTypeSpec, IntegrationSpec
 from radd.kernel import NavItemSpec, PluginUiManifest, RaddPlugin
 from radd.kernel import SettingSpec
+from radd.kernel.sockets import Socket
 
 from . import registry
 from .admin_router import router as admin_router
 from .editor_router import router as editor_router
+from .embeddings.candidates import SemanticCandidates
 from .router import router
 from .types import (
     AiConfigError,
@@ -294,4 +296,10 @@ plugin = RaddPlugin(
     on_startup=(_startup,),
     on_shutdown=(_shutdown,),
     capabilities=(CapabilitySpec("ai", "AI features", "ai", check=_chat_capability),),
+    # RADD-1384: meaning-ranked candidates for search (hybrid /search,
+    # deflection, Ask mode), served on the kernel socket — search imports
+    # nothing from here, and disabling this plugin leaves it full-text only.
+    integrations=(
+        IntegrationSpec(Socket.SEMANTIC_CANDIDATES, "ai_embeddings", impl=SemanticCandidates()),
+    ),
 )

@@ -237,12 +237,12 @@ async def test_team_owner_zero_scope_key_cannot_grant_membership(db):
 
 
 async def test_deflection_hides_restricted_page(db, monkeypatch):
-    from radd.modules.search import deflect
+    from radd.modules.search import sources
 
     async def no_semantic(*args, **kwargs):
         return []
 
-    monkeypatch.setattr(deflect, "_semantic_doc_ids", no_semantic)
+    monkeypatch.setattr(sources, "semantic_sources", no_semantic)
     owner = await _admin(db)
     reader = await _user(db)
     space = await _space(db, owner)
@@ -262,29 +262,35 @@ async def test_deflection_hides_restricted_page(db, monkeypatch):
 
 
 async def test_semantic_materialization_enforces_page_restriction_and_space(db, monkeypatch):
-    from radd.modules.search import semantic, deflect
+    from radd.modules.pages.types import PageEntity
+    from radd.modules.search import deflect, semantic, sources
 
     owner = await _admin(db)
     reader = await _user(db)
+    outsider = await _user(db)
     space = await _space(db, owner)
     page = await _page(db, space, owner)
     await _grant_space_read(db, reader, space)
     await _restrict(db, page, owner, user_id=owner.id)
 
     class FakeCandidates:
-        async def doc_candidates(self, *args, **kwargs):
-            return [(page.id, 0.1)]
+        async def enabled(self, session):
+            return True
+
+        async def candidates(self, session, entity_type, q, *, limit, project_ids=None):
+            return [(page.id, 0.1)] if entity_type == PageEntity.PAGE else []
+
+    async def live(session):
+        return [FakeCandidates()]
 
     assert not await page_access.page_access(db, reader, page)
-    hits = await semantic._docs(db, reader, "query", FakeCandidates())
-    assert not hits
-
-    async def candidate_ids(*args, **kwargs):
-        return [page.id]
-
-    monkeypatch.setattr(deflect, "_semantic_doc_ids", candidate_ids)
-    hits = await deflect.deflect_docs(db, "unmatchedxyz", space_ids=set())
-    assert not hits
+    monkeypatch.setattr(sources, "semantic_sources", live)
+    for actor in (reader, outsider):  # restricted page; a space never granted
+        assert not await semantic._docs(db, actor, "query", [FakeCandidates()])
+        assert not await deflect.deflect_docs(db, "unmatchedxyz", actor=actor)
+    # The owner — named on the restriction — is the control: the same
+    # candidate DOES materialize for someone who may open it.
+    assert [d.page_id for d in await semantic._docs(db, owner, "query", [FakeCandidates()])] == [page.id]
 
 
 async def test_mcp_log_work_refuses_read_only_key(db):

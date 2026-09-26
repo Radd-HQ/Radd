@@ -13,10 +13,6 @@ TSQUERY_TOKEN_RE = re.compile(r"[\w][\w.-]*", re.UNICODE)
 # Cap on q length — longer input is truncated, not an error.
 MAX_QUERY_CHARS = 200
 
-# The ai module's dotted name, for the deferred semantic-candidate seam
-# (spec 106 public deflection fusion — same contract as search.types).
-AI_EMBEDDINGS_MODULE = "radd.modules.ai"
-
 # Space slugs are cosmetic (URLs use ids): lowercase, digits, dashes.
 SLUG_MAX_CHARS = 100
 SLUG_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")

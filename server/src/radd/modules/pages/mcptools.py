@@ -34,7 +34,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
 
-from . import page_access, search as pages_search, service as pages_service, spaces
+from . import page_access, service as pages_service, spaces
 from .models import Page
 from .schemas import PageCreate, PageUpdate
 
@@ -86,10 +86,10 @@ async def _get_page(session: AsyncSession, actor: User, args: Mapping[str, Any])
 
 async def _search_pages(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
     limit = limit_arg(args)
-    # Spec 86: docs are global — a single search over every space.
-    from .access import readable_spaces
-    results = await pages_search.search_pages(session, str(args["query"]), limit=limit, space_ids=set(await readable_spaces(session, actor)))
-    results = jsonable(await pages_service.drop_restricted_results(session, actor, results))
+    # Spec 86: docs are global — a single search over every READABLE space.
+    from .search_source import readable_results
+
+    results = jsonable(await readable_results(session, actor, str(args["query"]), limit=limit))
     return (results if isinstance(results, list) else [results])[:limit]
 
 

@@ -53,9 +53,10 @@ FEATURE_SETTING: dict[AiFeature, SettingKey] = {
 def plugin_loaded() -> bool:
     """False once the ai PLUGIN is disabled (kernel registry). Routes unmount
     separately; this is the chokepoint for every CROSS-MODULE seam that calls
-    in sideways — search fusion/semantic/deflection, storage's llm routing
-    rule — which import this module lazily and would otherwise keep working
-    off the still-populated role snapshot after a runtime disable."""
+    in sideways — storage's llm routing rule, mail routing — which import this
+    module lazily and would otherwise keep working off the still-populated
+    role snapshot after a runtime disable. (Search no longer calls in: it asks
+    the SEMANTIC_CANDIDATES socket, which a disable empties — RADD-1384.)"""
     return _PLUGIN_ID in registries.plugins
 
 

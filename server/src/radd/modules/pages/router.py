@@ -22,7 +22,7 @@ from . import (
     labels as page_labels,
     links,
     mentions as page_mentions,
-    search,
+    search_source,
     service,
     spaces,
     templates as page_templates,
@@ -391,15 +391,11 @@ async def search_docs(
     exists, is registered, appears in the OpenAPI schema, and cannot be called
     (RADD-761). Anything added as `/pages/<literal>` belongs in this block.
     """
-    readable = await access.readable_spaces(session, user)
-    if not readable:
-        return PageSearchResponse(results=[])
+    # The reader's spaces before the limit, restricted pages dropped (RADD-791/
+    # 792) — the one gate every page search reads.
     limit = max(1, min(limit, 50))
-    results = await search.search_pages(session, q, limit=limit, space_ids=set(readable))
-    # A restricted page's TITLE is usually the sensitive part, so a search hit
-    # would defeat the restriction on its own (RADD-792).
     return PageSearchResponse(
-        results=await service.drop_restricted_results(session, user, results)
+        results=await search_source.readable_results(session, user, q, limit=limit)
     )
 
 

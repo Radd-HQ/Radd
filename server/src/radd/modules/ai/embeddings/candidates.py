@@ -1,7 +1,9 @@
-"""Semantic candidate retrieval (spec 103) — the seam `search` consumes via a
-deferred, feature-detected import (the deflect/DOCS_MODULE precedent, direction
-reversed: search may not import ai's tables, so ai exposes candidate functions
-over its own).
+"""Semantic candidate retrieval (spec 103) over ai's own embedding tables.
+
+`search` reaches it through the kernel SEMANTIC_CANDIDATES socket
+(`SemanticCandidates`, registered on this plugin's manifest — RADD-1384), never
+an import, so disabling ai withdraws meaning from search in the same breath;
+ai's own features (similar issues) call the functions directly.
 
 Every function degrades to empty rather than raising — the callers fuse with
 FTS and must keep working verbatim when semantic is off, unconfigured, or the
@@ -13,6 +15,9 @@ import uuid
 from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from radd.modules.items.enums import ItemEntity
+from radd.modules.pages.types import PageEntity
 
 from .. import client, features, registry
 from ..types import AiDisabledError, AiFeature, AiRole, AiUpstreamError
@@ -106,3 +111,28 @@ async def doc_candidates(
         return []
     vector, model = embedded
     return await store.nearest_docs(session, vector, model=model, dim=len(vector), limit=limit)
+
+
+class SemanticCandidates:
+    """`kernel.sockets.SemanticCandidateSource`: issues and wiki pages, the two
+    corpora the embedder keeps. Any other entity type has no vectors here."""
+
+    async def enabled(self, session: AsyncSession) -> bool:
+        return await semantic_enabled(session)
+
+    async def candidates(
+        self,
+        session: AsyncSession,
+        entity_type: str,
+        q: str,
+        *,
+        limit: int,
+        project_ids: Sequence[uuid.UUID] | None = None,
+    ) -> list[tuple[uuid.UUID, float]]:
+        if entity_type == ItemEntity.ITEM:
+            if not project_ids:
+                return []  # nothing readable: skip the embed round trip
+            return await item_candidates(session, q, project_ids=project_ids, limit=limit)
+        if entity_type == PageEntity.PAGE:
+            return await doc_candidates(session, q, limit=limit)
+        return []

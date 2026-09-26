@@ -10,11 +10,14 @@ from radd.kernel import EntityLinkSpec
 from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec
 from radd.kernel import EventTypeSpec
+from radd.kernel import IntegrationSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import PermissionSpec
 from radd.kernel import SettingSpec
+from radd.kernel.sockets import Socket
 
 from . import refs
+from .search_source import PageDocuments
 from .searchable import PAGE_SEARCHABLE
 
 from . import attachments_binding as attachments_binding  # registers the page parent (spec 102)
@@ -22,7 +25,7 @@ from . import comments_binding as comments_binding  # registers the page comment
 from .extensions import PAGE_EXTENSIONS
 from .grantscope import SPACE_SCOPE
 from .router import router
-from .types import PageEvent
+from .types import PageEntity, PageEvent
 
 from .page_access import _PAGE_SPEC
 
@@ -39,6 +42,12 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(remote="/plugins/pages/remoteEntry.js", ui_api_version="1.9.0"),
     automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
     searchables=(PAGE_SEARCHABLE,),  # RADD-1327
+    # RADD-1384: the documents search shows beside issues (deflection, Ask
+    # mode), served on the kernel socket so `search` never imports this plugin
+    # and a runtime disable withdraws the wiki's hits with its routes.
+    integrations=(
+        IntegrationSpec(Socket.SEARCH_DOCUMENTS, PageEntity.PAGE.value, impl=PageDocuments()),
+    ),
     token_providers=(PAGE_TOKENS,),
     # RADD-791: SPACE-scoped. They were global because a page had no scope to be
     # checked against, which made per-space access inexpressible.
@@ -82,7 +91,6 @@ plugin = RaddPlugin(
         "The wiki: page spaces, page trees, version history and links to issues."
     ),
     depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams", "settings"),
-    weak_depends=("ai",),
     routers=(router,),
     # RADD-923: a page and a space are subjects other modules name. Spec 118 is
     # what forced them — `notify` scopes a wiki subscription to a SPACE id and
