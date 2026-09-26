@@ -19,7 +19,6 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 
 from . import client, registry
-from .registry import ResolvedModel
 from .schemas import (
     AiPresetCreate,
     AiPresetRead,
@@ -30,7 +29,7 @@ from .schemas import (
     AiRoleAssign,
     AiRoleRead,
 )
-from .types import AiRole, AiUpstreamError, AiWireShape
+from .types import AiRole, AiUpstreamError
 
 router = APIRouter(prefix="/ai", tags=["ai admin"])
 
@@ -90,18 +89,9 @@ async def test_provider(provider_id: uuid.UUID, session: Session, user: CurrentU
     """One max_tokens=1 completion against the row's default model — failures
     come back as data (the admin is diagnosing config), never a 502."""
     _require_instance_admin(user)
-    row = await registry.get_provider(session, provider_id)
-    shape = AiWireShape(row.wire_shape)
-    model = row.default_model
-    if not model and shape is AiWireShape.LOCAL:
-        from .localembed import DEFAULT_LOCAL_MODEL
-
-        model = DEFAULT_LOCAL_MODEL
-    if not model:
+    resolved = registry.resolved_from_row(await registry.get_provider(session, provider_id))
+    if resolved is None:
         return ProbeResult(ok=False, error="set a default model to test this provider")
-    resolved = ResolvedModel(
-        wire_shape=shape, base_url=row.base_url, api_key=row.api_key, model=model
-    )
     try:
         latency = await client.probe(resolved)
     except AiUpstreamError as exc:

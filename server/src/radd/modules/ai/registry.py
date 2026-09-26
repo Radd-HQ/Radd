@@ -333,13 +333,20 @@ async def resolve_role(session: AsyncSession, role: AiRole) -> ResolvedModel | N
     if pair is None:
         return None
     row, provider = pair
-    model = row.model or provider.default_model
+    return resolved_from_row(provider, row.model)
+
+
+def resolved_from_row(provider: AiProviderRow, model: str | None = None) -> ResolvedModel | None:
+    """The callable model on one provider row: `model`, else the row's default, else
+    (LOCAL) the built-in default. None when no model is named anywhere — not callable.
+    The one builder, so the Test button sends what a real call would."""
+    model = model or provider.default_model
     if not model and provider.wire_shape == AiWireShape.LOCAL.value:
         from .localembed import DEFAULT_LOCAL_MODEL
 
         model = DEFAULT_LOCAL_MODEL
     if not model:
-        return None  # assigned but no model named anywhere — not callable
+        return None
     return ResolvedModel(
         wire_shape=AiWireShape(provider.wire_shape),
         base_url=provider.base_url,

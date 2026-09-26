@@ -80,6 +80,44 @@ async def test_provider_preferences_round_trip_and_reach_the_resolved_model(db):
     assert resolved.reasoning is False and resolved.model == "other"
 
 
+async def test_the_test_button_sends_the_rows_reasoning_and_extra_parameters(db):
+    """RADD-1419: the probe built its model without the row's preferences, so it
+    always sent reasoning OFF and none of the extra parameters — a provider that
+    rejects the thinking flag kept failing Test after the admin turned reasoning ON."""
+    import importlib
+    import json
+
+    import httpx
+
+    from radd.modules.ai import client
+    from radd.modules.ai.types import OPENAI_TEMPLATE_KWARGS_KEY
+    from radd.modules.auth.models import User
+    from radd.modules.auth.types import InstanceRole
+
+    provider = await registry.create_provider(
+        db, _create(reasoning=True, request_params={"temperature": 0.1})
+    )
+    # By module path: the package's `admin_router` attribute is the APIRouter.
+    admin_router = importlib.import_module("radd.modules.ai.admin_router")
+    sent: dict = {}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": "pong"}}]})
+
+    admin = User(
+        email="probe@example.com", name="Ada", instance_role=InstanceRole.ADMIN.value, active=True
+    )
+    client.transport = httpx.MockTransport(handle)
+    try:
+        result = await admin_router.test_provider(provider.id, db, admin)
+    finally:
+        client.transport = None
+    assert result.ok, result.error
+    assert OPENAI_TEMPLATE_KWARGS_KEY not in sent, "reasoning ON sends no thinking flag"
+    assert sent["temperature"] == 0.1
+
+
 # --- role resolution ----------------------------------------------------------
 
 
