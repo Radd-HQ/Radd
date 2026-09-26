@@ -38,6 +38,7 @@ from radd.config import settings
 from radd.modules.auth.models import User
 
 from .prose import prose
+from .summarize import _worklog_digest
 
 #: Hard ceiling on how many items are even considered, independent of the
 #: character budget — a 200-item scheduled run should not build a 200-item string
@@ -93,7 +94,7 @@ def _render_item(read: Any, comments: list[Any], options: ContextOptions, worklo
     for comment in comments:
         lines.append(f"  comment by {comment.author.name}: {prose(comment.body)}")
     if worklog is not None:
-        lines.append(f"  time logged: {worklog}")
+        lines.append(f"  time: {worklog}")
     return "\n".join(lines)
 
 
@@ -163,16 +164,8 @@ async def build_context(
     return "\n".join(blocks)
 
 
-async def _worklog_line(session: AsyncSession, item_id: uuid.UUID, read: Any) -> str:
-    """Total logged time, feature-detected — a project that does not track time
-    has no worklogs, and the section should say so rather than read as zero."""
-    try:
-        from radd.modules.timelogging import service as timelogging
-
-        summary = await timelogging.item_summary(session, item_id, read.project_id)
-    except Exception:  # noqa: BLE001 — deliberate: time tracking is per-project
-        # optional, so "no worklog data" is a normal answer, not an error. Reported
-        # as "not tracked" rather than 0h, which would read as "nobody logged time".
-        return "not tracked"
-    total = getattr(summary, "total_seconds", 0) or 0
-    return f"{round(total / 3600, 1)}h" if total else "none"
+async def _worklog_line(session: AsyncSession, item_id: uuid.UUID, read: Any) -> str | None:
+    """The summarize time digest on one line; None (no line at all) when the
+    project does not track time or nothing is logged, as in Summarize."""
+    lines = await _worklog_digest(session, item_id, read.project_id)
+    return "; ".join(lines) if lines else None

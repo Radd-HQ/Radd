@@ -172,3 +172,53 @@ def test_a_choice_that_is_not_a_mapping_falls_back_to_the_defaults():
     assert ContextOptions.from_params({"include": {"description": False, "comments": True}}) == (
         ContextOptions(fields=True, description=False, comments=True, worklogs=False)
     )
+
+
+async def test_logged_time_carries_the_items_total():
+    """RADD-1418: the "Logged time" section passed a UUID where `item_summary`
+    takes a project and read a field that does not exist, so it always said
+    "not tracked". It is now the summarize time digest."""
+    import uuid
+    from datetime import date
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from radd.kernel import load_plugins
+    from radd.modules.auth.models import User
+    from radd.modules.auth.types import InstanceRole
+    from radd.modules.items import service as items_service
+    from radd.modules.items.schemas import ItemCreate
+    from radd.modules.projects import service as projects_service
+    from radd.modules.projects.schemas import ProjectCreate
+    from radd.modules.timelogging import enablement
+    from radd.modules.timelogging.models import Worklog
+
+    load_plugins(settings.modules)
+    engine = create_async_engine(settings.database_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as session:
+        actor = User(
+            email=f"ctx-{uuid.uuid4().hex[:8]}@example.com", name="Ada",
+            instance_role=InstanceRole.ADMIN.value,
+        )
+        session.add(actor)
+        await session.flush()
+        project = await projects_service.create_project(
+            session, ProjectCreate(key=f"CX{uuid.uuid4().hex[:4].upper()}", name="Ctx")
+        )
+        await enablement.set_enabled(session, project.id, True)
+        item = await items_service.create_item(
+            session, ItemCreate(project_id=project.id, title="Timed"), actor
+        )
+        session.add(Worklog(
+            item_id=item.id, author_id=actor.id, worked_on=date(2026, 9, 1),
+            time_spent_seconds=5400,
+        ))
+        await session.flush()
+
+        prompt = await build_context(
+            session, (item.id,), actor, ContextOptions(worklogs=True)
+        )
+        await session.rollback()
+    await engine.dispose()
+    assert "Total logged: 1h 30m" in prompt, prompt
