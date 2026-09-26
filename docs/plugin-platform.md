@@ -944,9 +944,10 @@ administratively disableable. The wider backend ownership audit remains open.
 Automations owns its settings page/navigation, rule and integration editors,
 inspectors, token assistance, reports, version restoration, preview requests and
 transport paths in `modules/automations/ui`. The host settings catch-all mounts
-its page contribution. Integration settings expose the generic
-`integration.settings` slot with `{integration, label}`; the contributing owner
-chooses its content. Automation templates and event catalog entries carry their
+its page contribution. (An `integration.settings` slot embedded an automations
+panel in the Email, VCS and Alertmanager pages until RADD-1367 gave those
+integrations plain settings of their own; the slot is gone.) Automation
+templates and event catalog entries carry their
 actual registry `plugin`, so display groups and event-name prefixes are not used
 as ownership identifiers. Counts describe shared trigger/action types, not proof
 that another rule has the template's conditions.

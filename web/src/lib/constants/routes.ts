@@ -42,8 +42,6 @@ export const SettingsSection = {
   pages: "pages",
   // Plugin manager (spec 93 / A4) — install/enable/disable non-core plugins. Admin.
   plugins: "plugins",
-  // Alertmanager receivers (RADD-1317) — admin, withdrawn with the plugin.
-  alertmanager: "alertmanager",
   // Backups (spec 99) — schedules, artifacts, restore. Instance admin only.
   backups: "backups",
   // AI provider registry + roles + feature toggles + presets (spec 101) — admin only.
@@ -180,8 +178,6 @@ export const RoutePath = {
   /** SSO providers + per-provider signup domain allowlists (spec 110, admin). */
   settingsSignIn: `${SETTINGS_SEGMENT}/${SettingsSection.signIn}`,
   settingsWebhooks: `${SETTINGS_SEGMENT}/${SettingsSection.webhooks}`,
-  /** Alertmanager receivers (RADD-1317, admin). */
-  settingsAlertmanager: `${SETTINGS_SEGMENT}/${SettingsSection.alertmanager}`,
   /** Plugin manager (spec 93 / A4, admin): install/enable/disable plugins. */
   settingsPlugins: `${SETTINGS_SEGMENT}/${SettingsSection.plugins}`,
   /** Canned responses admin (spec 30, global manage). */

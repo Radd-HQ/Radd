@@ -1,12 +1,11 @@
 """Alertmanager intake (spec 47, rebuilt RADD-1317): receivers as rows, and a
-receiver that records alerts and FIRES TRIGGERS — nothing else.
+receiver that creates the alert's issue, maps the fingerprint, and fires
+`alertmanager.alert.firing|repeated|resolved` with the alert's facts.
 
-It used to comment on the issue for every repeat and resolution, transition it
-on resolve to a state NAMED in an env var, and hardcode an `alert` label — the
-same unasked behaviour RADD-1309 took out of the VCS connectors. Now the issue
-is created (someone has to see the alert), the fingerprint is mapped, and
-`alertmanager.alert.firing|repeated|resolved` fire with the alert's facts. The
-old behaviours are this plugin's automation templates.
+Beyond that a receiver does only what its own settings say (RADD-1370, after a
+day as automation templates): label the issues it creates, comment internally
+when an alert repeats or resolves, and move a resolved alert's issue to a state
+of its project. Each is off until someone sets it on Settings → Alertmanager.
 """
 
 import hmac
@@ -23,16 +22,27 @@ from radd.kernel import changes
 from radd.modules.auth import service as auth
 from radd.modules.automations.intake import suppressed as intake_suppressed
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
+from radd.modules.comments import service as comments
+from radd.modules.comments.schemas import CommentCreate
+from radd.modules.comments.types import CommentVisibility
 from radd.modules.events import service as events
 from radd.modules.items import service as items
 from radd.modules.items.enums import ItemOrigin
-from radd.modules.items.schemas import ItemCreate
+from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
+from radd.modules.workflow import service as workflow
 from radd.snapshot import Snapshot
 
 from . import planner
 from .models import AlertItem, AlertReceiver
-from .types import AlertAction, AlertEntity, AlertmanagerEvent, AlertTrigger
+from .types import (
+    RESOLVED_COMMENT,
+    STILL_FIRING_COMMENT,
+    AlertAction,
+    AlertEntity,
+    AlertmanagerEvent,
+    AlertTrigger,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +82,7 @@ async def process(session: AsyncSession, receiver: AlertReceiver, payload: dict)
     if receiver.project_id is None:
         raise ConflictError(AlertEntity.RECEIVER, reason=f"receiver {receiver.name!r} has no project")
     actor = await auth.get_user(session, SYSTEM_ACTOR_ID)
-    created = triggered = 0
+    created = triggered = commented = moved = 0
     for plan in plans:
         if plan.action is AlertAction.CREATE:
             # Machine intake is not human intake (spec 119): a monitoring system
@@ -80,7 +90,10 @@ async def process(session: AsyncSession, receiver: AlertReceiver, payload: dict)
             with intake_suppressed(), items.creating_from(ItemOrigin.ALERT):
                 item = await items.create_item(
                     session,
-                    ItemCreate(project_id=receiver.project_id, title=plan.title, description=plan.description),
+                    ItemCreate(
+                        project_id=receiver.project_id, title=plan.title, description=plan.description,
+                        labels=[receiver.label] if receiver.label else [],
+                    ),
                     actor,
                 )
             session.add(AlertItem(fingerprint=plan.fingerprint, item_id=item.id, receiver_id=receiver.id))
@@ -97,7 +110,51 @@ async def process(session: AsyncSession, receiver: AlertReceiver, payload: dict)
             payload=planner.facts_of(plan, receiver.name),
         )
         triggered += 1
-    return {"created": created, "triggered": triggered}
+        if plan.action is not AlertAction.CREATE:
+            commented += await _comment(session, receiver, plan, known[plan.fingerprint], actor)
+        if plan.action is AlertAction.RESOLVED:
+            moved += await _move_resolved(session, receiver, known[plan.fingerprint], actor)
+    result = {"created": created, "triggered": triggered}
+    if receiver.comment_updates:
+        result["commented"] = commented
+    if receiver.resolve_state_id is not None:
+        result["moved"] = moved
+    return result
+
+
+async def _comment(session: AsyncSession, receiver: AlertReceiver, plan, item_id: uuid.UUID, actor) -> int:
+    """RADD-1370: an INTERNAL note on a repeat or a resolution, when the
+    receiver's `comment_updates` is on — operational noise stays off anything a
+    requester could be mailed."""
+    if not receiver.comment_updates:
+        return 0
+    body = RESOLVED_COMMENT if plan.action is AlertAction.RESOLVED else STILL_FIRING_COMMENT.format(count=plan.firing_count)
+    await comments.create_comment(
+        session, item_id, CommentCreate(body=body, visibility=CommentVisibility.INTERNAL), actor
+    )
+    return 1
+
+
+async def _move_resolved(session: AsyncSession, receiver: AlertReceiver, item_id: uuid.UUID, actor) -> int:
+    """RADD-1370: move a resolved alert's issue to the receiver's resolve state.
+    A state that no longer belongs to the issue's project (the receiver was
+    pointed elsewhere since) is skipped; a refused transition keeps the delivery."""
+    target = receiver.resolve_state_id
+    if target is None:
+        return 0
+    item = await items.require_item(session, item_id)
+    if item.state_id == target:
+        return 0
+    if target not in {state.id for state in await workflow.list_states(session, item.project_id)}:
+        logger.warning("alertmanager: resolve state of %s is not in the issue's project", receiver.name)
+        return 0
+    try:
+        async with session.begin_nested():
+            await items.update_item(session, item.id, ItemUpdate(state_id=target), actor)
+    except Exception:  # noqa: BLE001 — a guard refusing one move must not lose the delivery
+        logger.exception("alertmanager: resolve transition failed for item %s", item.id)
+        return 0
+    return 1
 
 
 async def _known_items(session: AsyncSession, receiver_id: uuid.UUID, fingerprints: set[str]) -> dict[str, uuid.UUID]:
@@ -140,11 +197,28 @@ async def _emit(session, event_type, receiver: AlertReceiver, actor_id, diff=Non
     )
 
 
+#: What a receiver diff reports (spec 123); the token only as "changed".
+_AUDITED = ("name", "token", "project_id", "active", "comment_updates", "label", "resolve_state_id")
+
+
+async def _check_resolve_state(session: AsyncSession, receiver: AlertReceiver) -> None:
+    """The resolve state must be one of the receiver's project's states."""
+    if receiver.resolve_state_id is None:
+        return
+    states = await workflow.list_states(session, receiver.project_id) if receiver.project_id else []
+    if receiver.resolve_state_id not in {state.id for state in states}:
+        raise ConflictError(AlertEntity.RECEIVER, reason="the resolve state must belong to the receiver's project")
+
+
 async def create_receiver(session: AsyncSession, data, *, actor_id: uuid.UUID | None = None) -> AlertReceiver:
     await _claim_seed(session)
     if (await session.execute(select(AlertReceiver).where(AlertReceiver.name == data.name))).scalar_one_or_none():
         raise ConflictError(AlertEntity.RECEIVER, data.name)
-    receiver = AlertReceiver(name=data.name, token=data.token, project_id=data.project_id, active=data.active)
+    receiver = AlertReceiver(
+        name=data.name, token=data.token, project_id=data.project_id, active=data.active,
+        comment_updates=data.comment_updates, label=data.label.strip(), resolve_state_id=data.resolve_state_id,
+    )
+    await _check_resolve_state(session, receiver)
     session.add(receiver)
     await session.flush()
     await refresh_snapshot(session)
@@ -154,12 +228,17 @@ async def create_receiver(session: AsyncSession, data, *, actor_id: uuid.UUID | 
 
 async def update_receiver(session: AsyncSession, receiver_id: uuid.UUID, data, *, actor_id=None) -> AlertReceiver:
     receiver = await get_receiver(session, receiver_id)
-    before = changes.snapshot(receiver, ("name", "token", "project_id", "active"))
+    before = changes.snapshot(receiver, _AUDITED)
     fields = data.model_dump(exclude_unset=True)
     if not fields.get("token"):
         fields.pop("token", None)  # empty on update keeps the stored token
+    if fields.get("label") is not None:
+        fields["label"] = fields["label"].strip()
     for key, value in fields.items():
         setattr(receiver, key, value)
+    if "project_id" in fields and "resolve_state_id" not in fields:
+        receiver.resolve_state_id = None  # a new project has its own states
+    await _check_resolve_state(session, receiver)
     await session.flush()
     await refresh_snapshot(session)
     await _emit(

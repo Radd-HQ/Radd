@@ -115,4 +115,8 @@ try {
     await close();
   }
 }
-report(checks, "email automatic messages");
+const failed = report(
+  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
+  { proof: "email automatic messages" },
+);
+process.exit(failed ? 1 : 0);

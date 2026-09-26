@@ -78,21 +78,23 @@ export function RepoRow({ provider, changeNoun, connection, repo, categories }: 
         </div>
         <CategorySelect repo={repo} categories={categories} onChange={(id) => patch.mutate({ time_category_id: id })} />
       </div>
+      {/* Switches stay live while another field saves: each is its own PATCH,
+          and disabling them swallowed a click that arrived mid-save (RADD-1370). */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pl-5">
-        <Switch label="Ingest webhooks" checked={repo.enabled} disabled={patch.isPending}
+        <Switch label="Ingest webhooks" checked={repo.enabled}
           onChange={(next) => patch.mutate({ enabled: next })} data-ingest={repo.full_name} />
-        <Switch label="Link across projects" checked={repo.link_all_projects} disabled={patch.isPending}
+        <Switch label="Link across projects" checked={repo.link_all_projects}
           onChange={(next) => patch.mutate({ link_all_projects: next })} />
-        <Switch label="Mirror time" checked={repo.mirror_time} disabled={patch.isPending}
+        <Switch label="Mirror time" checked={repo.mirror_time}
           onChange={(next) => patch.mutate({ mirror_time: next })} data-mirror-time={repo.full_name} />
       </div>
       {/* RADD-1369: what a delivery DOES beyond linking — off until switched on here. */}
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pl-5">
         <Switch label={`Move linked issues to waiting for release when a ${changeNoun} merges`}
-          checked={repo.move_on_merge} disabled={patch.isPending}
+          checked={repo.move_on_merge}
           onChange={(next) => patch.mutate({ move_on_merge: next })} data-move-on-merge={repo.full_name} />
         <Switch label="Publish a version on release and ship what is waiting"
-          checked={repo.publish_on_release} disabled={patch.isPending || (!repo.project_id && !repo.publish_on_release)}
+          checked={repo.publish_on_release} disabled={!repo.project_id && !repo.publish_on_release}
           onChange={(next) => patch.mutate({ publish_on_release: next })} data-publish-on-release={repo.full_name} />
         {!repo.project_id && <span className="text-[11px] text-fg-muted">Publishing needs a default project.</span>}
       </div>

@@ -1,10 +1,11 @@
 """RADD-1317: Alertmanager receivers are rows, and a receiver records the alert
-and fires its triggers — it comments, labels and transitions nothing.
+and fires its triggers — with its settings off, it comments, labels and
+transitions nothing. RADD-1370: with them on, it does exactly those three.
 
 The old receiver commented on every repeat and resolution, labelled every issue
 `alert`, and moved a resolved alert's issue to an env-named state. The project
 below HAS a Done state an old-style resolve could have moved to, so "the state
-did not move" is not vacuous; those behaviours are this plugin's templates now.
+did not move" is not vacuous; those behaviours are the receiver's settings now.
 """
 
 import uuid
@@ -128,3 +129,65 @@ async def test_an_empty_token_on_update_keeps_the_stored_one_and_the_diff_hides_
     [updated] = await _events(db, head, AlertmanagerEvent.RECEIVER_UPDATED.value)
     assert "another-secret" not in str(updated.payload) and token not in str(updated.payload)
     assert [c["field"] for c in updated.payload["changes"]] == ["token"]
+
+
+async def test_a_receiver_with_its_settings_on_labels_comments_and_moves(db):
+    """RADD-1370: label on creation, an INTERNAL comment on the repeat and the
+    resolution, and the resolved alert's issue moved to the receiver's state."""
+    from radd.modules.comments.models import Comment
+    from radd.modules.items.models import ItemLabel
+    from radd.modules.labels.models import Label
+    from radd.modules.workflow import service as workflow
+
+    project = await projects_service.create_project(db, ProjectCreate(key=f"AS{uuid.uuid4().hex[:4].upper()}", name="Alerts on"))
+    done = next(state for state in await workflow.list_states(db, project.id) if state.name == "Done")
+    token = uuid.uuid4().hex
+    await service.create_receiver(db, ReceiverCreate(
+        name=f"on-{uuid.uuid4().hex[:6]}", token=token, project_id=project.id,
+        comment_updates=True, label="alert", resolve_state_id=done.id,
+    ))
+    fingerprint = uuid.uuid4().hex
+    head = (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_app(db)), base_url="http://t") as client:
+        url = f"/integrations/alertmanager?token={token}"
+        first = await client.post(url, json={"alerts": [_alert("firing", fingerprint)]})
+        again = await client.post(url, json={"alerts": [_alert("firing", fingerprint)]})
+        resolved = await client.post(url, json={"alerts": [_alert("resolved", fingerprint)]})
+    assert first.json() == {"created": 1, "triggered": 1, "commented": 0, "moved": 0}
+    assert again.json() == {"created": 0, "triggered": 1, "commented": 1, "moved": 0}
+    assert resolved.json() == {"created": 0, "triggered": 1, "commented": 1, "moved": 1}
+
+    [firing] = await _events(db, head, AlertTrigger.FIRING.value)
+    item = await items_service.require_item(db, uuid.UUID(firing.payload["item"]["id"]))
+    assert item.state_id == done.id
+    labels = (await db.execute(
+        select(Label.name).join(ItemLabel, ItemLabel.label_id == Label.id).where(ItemLabel.item_id == item.id)
+    )).scalars().all()
+    assert list(labels) == ["alert"]
+    notes = (await db.execute(
+        select(Comment).where(Comment.entity_id == item.id).order_by(Comment.created_at)
+    )).scalars().all()
+    assert [(c.body, c.visibility) for c in notes] == [
+        ("Alert still firing — 1 firing alert(s) in this notification group.", "internal"),
+        ("Alert resolved.", "internal"),
+    ]
+
+
+async def test_the_resolve_state_must_belong_to_the_receivers_project(db):
+    from radd.exceptions import ConflictError
+    from radd.modules.workflow import service as workflow
+
+    mine = await projects_service.create_project(db, ProjectCreate(key=f"AR{uuid.uuid4().hex[:4].upper()}", name="Mine"))
+    other = await projects_service.create_project(db, ProjectCreate(key=f"AO{uuid.uuid4().hex[:4].upper()}", name="Other"))
+    foreign = (await workflow.list_states(db, other.id))[0]
+    with pytest.raises(ConflictError):
+        await service.create_receiver(db, ReceiverCreate(
+            name=f"x-{uuid.uuid4().hex[:6]}", token=uuid.uuid4().hex, project_id=mine.id, resolve_state_id=foreign.id,
+        ))
+    own = (await workflow.list_states(db, mine.id))[0]
+    receiver = await service.create_receiver(db, ReceiverCreate(
+        name=f"y-{uuid.uuid4().hex[:6]}", token=uuid.uuid4().hex, project_id=mine.id, resolve_state_id=own.id,
+    ))
+    # Pointing the receiver at another project drops a state that belonged to the old one.
+    moved = await service.update_receiver(db, receiver.id, ReceiverUpdate(project_id=other.id))
+    assert moved.resolve_state_id is None

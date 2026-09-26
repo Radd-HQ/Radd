@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -21,6 +21,16 @@ class AlertReceiver(Base, TimestampMixin):
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # RADD-1370: what a delivery does to the alert's issue beyond creating it and
+    # firing triggers — each off/empty until set on Settings → Alertmanager.
+    #: An internal comment when the alert fires again and when it resolves.
+    comment_updates: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    #: A label every issue this receiver creates carries ("" = none).
+    label: Mapped[str] = mapped_column(String(100), default="", server_default="")
+    #: Where a resolved alert's issue moves — a state of the receiver's project.
+    resolve_state_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("states.id", ondelete="SET NULL"), nullable=True, default=None
+    )
 
 
 class AlertItem(Base):

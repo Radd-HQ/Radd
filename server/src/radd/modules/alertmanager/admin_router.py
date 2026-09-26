@@ -22,6 +22,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 def _read(receiver) -> ReceiverRead:
     return ReceiverRead(
         id=receiver.id, name=receiver.name, project_id=receiver.project_id, active=receiver.active,
+        comment_updates=receiver.comment_updates, label=receiver.label, resolve_state_id=receiver.resolve_state_id,
         has_token=bool(receiver.token), created_at=receiver.created_at,
     )
 

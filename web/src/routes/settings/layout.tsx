@@ -260,14 +260,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // RADD-1317: Alertmanager receivers as rows — the env token seeds one, once.
-        to: RoutePath.settingsAlertmanager,
-        label: "Alertmanager",
-        icon: BellRing,
-        plugin: "alertmanager",
-        show: (g) => g.instanceAdmin,
-      },
-      {
         to: RoutePath.settingsImportData,
         label: "Import data",
         icon: DatabaseZap,
@@ -351,7 +343,7 @@ export function SettingsLayout() {
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch };
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);

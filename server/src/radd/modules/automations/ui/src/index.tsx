@@ -1,6 +1,5 @@
 import { AutomationScope } from "./query-lifetime";
 import { AutomationsSettingsPage } from "./SettingsPage";
-import { IntegrationAutomations } from "./IntegrationAutomations";
 import { manualCommands } from "./commands";
 import { lazy, Suspense } from "react";
 import { definePlugin, SlotId } from "@radd/plugin-sdk";
@@ -12,7 +11,6 @@ import { SCHEDULE_EDITOR_SLOT, type ScheduleEditorProps } from "./schedule-contr
 const GraphCanvas = lazy(() => import("./GraphCanvas"));
 export default definePlugin({ commandSources: [manualCommands], contributions: [
   {id: "settings", slot: SlotId.settingsPage, match: "/settings/automations", render: () => <AutomationScope><AutomationsSettingsPage /></AutomationScope>},
-  {id: "integration-settings", slot: SlotId.integrationSettings, render: props => <AutomationScope><IntegrationAutomations integration={String(props.integration)} label={String(props.label)} /></AutomationScope>},
 {
   id: "graph-canvas", slot: GRAPH_CANVAS_SLOT, toggleable: false,
   render: props => <Suspense fallback={<div className="h-[620px] border border-subtle p-4">Loading canvas…</div>}>

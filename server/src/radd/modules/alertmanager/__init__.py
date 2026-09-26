@@ -1,10 +1,9 @@
-from radd.kernel import CapabilitySpec, CrudResourceSpec, EventTypeSpec, RaddPlugin
+from radd.kernel import CapabilitySpec, CrudResourceSpec, EventTypeSpec, NavItemSpec, PluginUiManifest, RaddPlugin
 
 from . import service
 from .admin_router import router as admin_router
 from .models import AlertItem, AlertReceiver  # noqa: F401 — Alembic autogenerate
 from .router import router
-from .templates import TEMPLATES
 from .types import AlertEntity, AlertmanagerEvent, AlertTrigger
 
 
@@ -27,8 +26,17 @@ plugin = RaddPlugin(
         "Turns firing Prometheus Alertmanager alerts into issues, and offers firing, "
         "repeats and resolutions as automation triggers."
     ),
-    depends_on=("projects", "auth", "items", "events", "automations"),
+    # comments + workflow (RADD-1370): the receiver's own comment and
+    # resolve-state settings.
+    depends_on=("projects", "auth", "items", "events", "automations", "comments", "workflow"),
     routers=(router, admin_router),
+    # RADD-1370: the settings page is this plugin's own remote; disabling the
+    # plugin withdraws the page and its nav entry with it.
+    ui=PluginUiManifest(
+        remote="/plugins/alertmanager/remoteEntry.js", ui_api_version="1.13.0",
+        nav=(NavItemSpec(key="alertmanager", label="Alertmanager", path="/settings/alertmanager",
+                         section="settings", group="Server", icon="BellRing", order=99, requires_admin=True),),
+    ),
     crud_resources=(
         CrudResourceSpec(
             "alertreceiver", "global", "Alertmanager receivers", "global.manage",
@@ -39,12 +47,12 @@ plugin = RaddPlugin(
         _admin_event(AlertmanagerEvent.RECEIVER_CREATED, "Alertmanager receiver created"),
         _admin_event(AlertmanagerEvent.RECEIVER_UPDATED, "Alertmanager receiver updated"),
         _admin_event(AlertmanagerEvent.RECEIVER_DELETED, "Alertmanager receiver deleted"),
-        # RADD-1317: the receiver acts on nothing itself — these are the triggers.
+        # RADD-1317: the triggers, fired on every delivery; what the receiver
+        # itself does is its own settings (RADD-1370).
         _trigger(AlertTrigger.FIRING, "alert firing (new issue)"),
         _trigger(AlertTrigger.REPEATED, "alert firing again"),
         _trigger(AlertTrigger.RESOLVED, "alert resolved"),
     ),
-    automation_templates=TEMPLATES,
     # RADD_ALERTMANAGER_TOKEN (+ _PROJECT_KEY) seed ONE receiver row, once.
     on_startup=(service.seed_from_env,),
     capabilities=(

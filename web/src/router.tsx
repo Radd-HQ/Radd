@@ -64,7 +64,6 @@ const AiSettingsPage = lazyRouteComponent(() => import("./routes/settings/ai"), 
 const StorageSettingsPage = lazyRouteComponent(() => import("./routes/settings/storage"), "StorageSettingsPage");
 const EmailSettingsPage = lazyRouteComponent(() => import("./routes/settings/email"), "EmailSettingsPage");
 const SignInSettingsPage = lazyRouteComponent(() => import("./routes/settings/sign-in"), "SignInSettingsPage");
-const AlertmanagerSettingsPage = lazyRouteComponent(() => import("./routes/settings/alertmanager"), "AlertmanagerSettingsPage");
 const WebhooksSettingsPage = lazyRouteComponent(() => import("./routes/settings/webhooks"), "WebhooksSettingsPage");
 const NotificationSettingsPage = lazyRouteComponent(() => import("./routes/settings/notifications"), "NotificationSettingsPage");
 const ProfileSettingsPage = lazyRouteComponent(() => import("./routes/settings/profile"), "ProfileSettingsPage");
@@ -611,13 +610,6 @@ const settingsSignInRoute = createRoute({
   component: SignInSettingsPage,
 });
 
-/** Alertmanager receivers (RADD-1317): one row per receiver, token + project. */
-const settingsAlertmanagerRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.alertmanager,
-  component: AlertmanagerSettingsPage,
-});
-
 /** Outbound webhooks (RADD-1096): endpoint CRUD + the delivery log. */
 const settingsWebhooksRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -780,7 +772,6 @@ const routeTree = rootRoute.addChildren([
   settingsEmailRoute,
       settingsSignInRoute,
     settingsWebhooksRoute,
-    settingsAlertmanagerRoute,
       settingsHolidaysRoute,
       // Splat LAST under settings so explicit settings pages win; plugin settings.page slots
       // render here (inside the Settings chrome). Spec 94.

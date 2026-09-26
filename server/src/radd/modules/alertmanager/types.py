@@ -21,9 +21,8 @@ class AlertAction(StrEnum):
 
 class AlertTrigger(StrEnum):
     """RADD-1317: Alertmanager's OWN automation triggers, one per linked issue.
-    The receiver records the alert and fires these — what an alert should DO to
-    its issue (comment, label, move it) is an automation someone chose, starting
-    from the templates this plugin ships."""
+    They fire on every delivery; what the receiver itself does to the issue
+    (comment, label, move it) is its own settings (RADD-1370)."""
 
     FIRING = "alertmanager.alert.firing"
     REPEATED = "alertmanager.alert.repeated"
@@ -46,3 +45,7 @@ class AlertEntity(StrEnum):
 
 # Item titles are capped at 500 chars (items.schemas.ItemCreate).
 TITLE_MAX_CHARS = 500
+
+# RADD-1370: the internal comments a receiver with "comment updates" on writes.
+STILL_FIRING_COMMENT = "Alert still firing — {count} firing alert(s) in this notification group."
+RESOLVED_COMMENT = "Alert resolved."
