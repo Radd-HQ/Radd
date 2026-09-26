@@ -1013,6 +1013,8 @@ class NavItemSpec:
     capability: str = ""  # hide unless this capability is enabled
     group: str = ""  # optional settings navigation group label
     requires_admin: bool = False
+    #: Each atom must hold in at least one project; navigation only, never authorization.
+    requires_any_project: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

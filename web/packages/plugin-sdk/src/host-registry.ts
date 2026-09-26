@@ -44,7 +44,13 @@ export interface CalloutProps extends HTMLAttributes<HTMLDivElement> { kind: "in
 export interface ModalProps { title?: string; onClose: () => void; children: ReactNode; wide?: boolean; extraWide?: boolean }
 export interface DirectoryPagerProps { page: number; pageSize: number; total: number; busy: boolean; onPage: (page: number) => void; label: string }
 export interface ListSearchInputProps { value: string; onChange: (next: string) => void; placeholder: string; ariaLabel?: string; total?: number; matched: number; noun: string; className?: string }
+/** Shared person-avatar presentation; status data is contributed independently. */
+export interface AvatarProps {
+  user: {id: string; name: string; avatar_color?: string | null; avatar_emoji?: string | null; avatar_url?: string | null};
+  size?: "xs" | "sm" | "md" | "lg"; className?: string; title?: string;
+}
 export interface HostComponents {
+  Avatar?: ComponentType<AvatarProps>;
   DirectoryPager?: ComponentType<DirectoryPagerProps>;
   ListSearchInput?: ComponentType<ListSearchInputProps>;
   Modal?: ComponentType<ModalProps>;

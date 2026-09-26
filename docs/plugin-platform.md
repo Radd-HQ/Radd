@@ -890,3 +890,51 @@ version conflicts are install-time errors, never runtime surprises.
 12. **Per-plugin dependencies** (§14) — plugins ship their own Python (pyproject/extras) and JS
     (module-federation remote + shared singletons) deps; install resolves them; incompatible
     shared-library versions are refused in the in-process tier.
+
+## Audit contributions and shared change presentation (RADD-1364)
+
+Audit owns its settings page, URL parsing, ledger/catalog/access queries, entity
+history panel and settings footer in `modules/audit/ui`. The host settings router
+uses its existing contributed-page catch-all. Settings frames expose
+`settings.footer` with `{history: {entities?, projectId?}}`; entity editors expose
+`entity.history` with `{entityType, entityId, projectId?, title?}`. The remaining
+host history component is a slot adapter, with no Audit import or access decision.
+
+Audit's `/audit/access` applies the same exact scope decision as the ledger:
+instance admin for the whole instance, or `project.manage` for the supplied
+project. It accounts for credential restrictions. Each mounted consumer owns its
+query key and abort signal, with immediate cache disposal. Permission entity
+invalidation refreshes access and row redaction. An unavailable access decision
+hides previous access-dependent UI. Disabling the page contribution also removes
+footer/older-history links to that page. Catalog and row queries track the current
+owner manifest so unavailable owners cannot leave live cached destinations.
+
+SDK 1.11 adds generic `ChangeList`/`ChangeLine` and the backend structured-change
+wire shape, plus `CollapsibleCard`, `DateField`, `Pager`, table primitives and
+`TableSkeleton`. Its avatar delegates to the shared host avatar, preserving
+owner-contributed person indicators and picture/emoji behavior. The renderer understands scalar changes, collection deltas and
+withheld values. It strips withheld payload values before invoking any
+`entity.change.line` contribution, matched by entity type. Items supplies its
+field labels, priority labels, flag sentences and dependency references. Auth contributes role-grant subject/role/scope wording. Other
+entities use generic wording and retain complete unknown structured values. `entity.change.fields` accepts `{entityType?}` and
+renders owner-provided datalist options; suggestions are optional and freeform
+field filtering remains available without an owner contribution.
+
+Public cross-plugin contracts may be published through explicit package exports.
+Projects exports `@radd-plugin-ui/projects/picker-contract`, containing slot IDs
+and types, and Audit declares that package dependency. The workspace build
+links declared public packages before type-checking; it rejects duplicate names
+and refuses to replace a real installed package. Boundary checks require public
+exports and declared dependencies, and prohibit implementation code in these
+contract entry points. The SDK remains the platform API; private owner UI imports
+remain forbidden. Additional owners must publish their own contracts as they move.
+
+Manifest navigation can declare `requires_any_project`: each permission atom must
+hold in at least one project for the navigation item to appear. This is only an
+availability hint; destination APIs enforce exact scope authorization. Audit uses
+it to offer the project chooser to project managers without exposing a forbidden
+instance-wide view.
+
+Audit and Items retain their existing core declarations. Browser tests simulate
+missing/failed remote contributions, and do not claim those core plugins became
+administratively disableable. The wider backend ownership audit remains open.

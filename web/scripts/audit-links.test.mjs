@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 const dir=mkdtempSync(join(tmpdir(),'radd-audit-links-'));
 symlinkSync(resolve('web/node_modules'),join(dir,'node_modules'),'dir');
-writeFileSync(join(dir,'audit.ts'),readFileSync('web/src/lib/audit.ts','utf8'));
+writeFileSync(join(dir,'audit.ts'),readFileSync('server/src/radd/modules/audit/ui/src/audit.ts','utf8'));
 const {auditEntityLink}=await import(join(dir,'audit.ts'));
 const entry={entity_owner:'fixture',entity_url:'/things?number=123&id=abc#selected'};
 test('audit links use owner destinations and preserve router query types and fragments',()=>{

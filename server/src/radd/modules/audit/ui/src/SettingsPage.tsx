@@ -1,32 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Bot, ScrollText, Server, X } from "lucide-react";
-import { ApiError } from "../../lib/api";
-import { useCapabilities } from "@radd/plugin-sdk";
-import { auditEntityLink, auditSentence, type AuditSearch } from "../../lib/audit";
-import { RoutePath } from "../../lib/constants";
-import { SEARCH_DEBOUNCE_MS } from "../../lib/constants";
-import { formatDateTime } from "../../lib/dates";
-import { useDebounced, usePermissions } from "../../lib/hooks";
-import { HISTORY_FIELD_LABELS } from "../../lib/meta";
-import { auditCatalogQuery, auditQuery } from "../../lib/queries";
-import { AuditSource, Permission, type AuditEntry, type AuditSourceValue } from "../../lib/types";
-import { Avatar } from "../../components/Avatar";
-import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
-import { ChangeList } from "../../components/history/ChangeLines";
-import { DateField } from "../../components/items/PlanningFields";
-import { Pager } from "../../components/Pager";
-import { PeopleDirectorySelect } from "../../components/PeopleDirectorySelect";
-import { ProjectSelect } from "../../components/projects/ProjectSelect";
-import { QueryError } from "../../components/QueryError";
-import { Select } from "../../components/Select";
-import { SettingsPage } from "../../components/settings/SettingsPage";
-import { Table, TBody, Td, THead, Th } from "../../components/Table";
-import { TableSkeleton } from "../../components/TableSkeleton";
-import { TextField } from "../../components/TextField";
-
+import { ApiError, useCapabilities, formatDateTime, Avatar, Button, EmptyState, ChangeList, DateField, Pager,
+  DirectorySelect, QueryError, SelectField, SettingsPage, Table, TBody, Td, THead, Th, TableSkeleton, TextField, Slot, SlotId } from "@radd/plugin-sdk";
+import { PROJECT_SELECT_SLOT, type ProjectSelectProps } from "@radd-plugin-ui/projects/picker-contract";
+import { auditEntityLink, auditSentence, parseAuditSearch, type AuditSearch } from "./audit";
+import { useAudit, useAuditAccess, useAuditCatalog } from "./queries";
+import { AuditSource, type AuditEntry, type AuditSourceValue } from "./types";
+function ProjectSelect(props: ProjectSelectProps) {
+  const fallback = <Button disabled variant="secondary" aria-label={props.label}>Selection unavailable{props.value ? ` · ${props.value}` : ""}</Button>;
+  return <Slot id={PROJECT_SELECT_SLOT} {...props} fallback={fallback} errorFallback={fallback} />;
+}
 const AUDIT_PAGE_SIZE = 50;
 /** Change lines shown before a row folds the rest behind "+N more". */
 const CHANGES_PREVIEW = 3;
@@ -45,45 +29,59 @@ const SOURCE_OPTIONS = [
  * project manager reads their project (the server enforces both).
  */
 export function AuditSettingsPage() {
-  const search = useSearch({ strict: false }) as AuditSearch;
+  const rawSearch = useSearch({ strict: false });
+  const search = parseAuditSearch(rawSearch);
   const navigate = useNavigate();
-  const perms = usePermissions();
+  const access = useAuditAccess(search.project);
   const capabilities = useCapabilities();
   const availablePlugins = useMemo(() => new Set(capabilities?.plugins ?? []), [capabilities?.plugins]);
   const ownerRevision = JSON.stringify([capabilities?.plugins, capabilities?.remotes]);
-  const instanceWide = perms.global(Permission.globalManage);
+  const instanceWide = access.data?.instance_wide === true;
 
   const setSearch = (patch: Partial<AuditSearch>) => {
     const next: Record<string, unknown> = { ...search, ...patch };
     for (const key of Object.keys(next)) if (!next[key]) delete next[key];
-    void navigate({ to: RoutePath.settingsAudit, search: next as AuditSearch, replace: true });
+    void navigate({ to: "/settings/audit", search: next as AuditSearch, replace: true });
   };
 
-  const [q, setQ] = useState(search.q ?? "");
-  const debouncedQ = useDebounced(q, SEARCH_DEBOUNCE_MS);
+  // A draft is attached to its URL value. Back/forward, reset or an external link
+  // immediately replaces stale input; only user input schedules a URL update.
+  const [draft, setDraft] = useState<{base: string; value: string} | null>(null);
+  const urlQ = search.q ?? "";
+  useEffect(() => setDraft(null), [urlQ]);
+  const q = draft?.base === urlQ ? draft.value : urlQ;
+  const setQ = (value: string) => setDraft({base: urlQ, value});
   useEffect(() => {
-    if ((search.q ?? "") !== debouncedQ) setSearch({ q: debouncedQ || undefined });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQ]);
-
-  const [page, setPage] = useState(1);
+    if (!draft || draft.base !== urlQ || draft.value === urlQ) return;
+    const timer = setTimeout(() => setSearch({q: draft.value || undefined}), 250);
+    return () => clearTimeout(timer);
+    // setSearch uses the current URL so simultaneous filter edits are preserved.
+  }, [draft, urlQ, JSON.stringify(search)]);
   const filterKey = JSON.stringify(search);
-  useEffect(() => setPage(1), [filterKey]);
-
-  const catalog = useQuery(auditCatalogQuery());
-  const entityOptions = useMemo(
-    () => [
+  const [pagination, setPagination] = useState({filterKey, page: 1});
+  const page = pagination.filterKey === filterKey ? pagination.page : 1;
+  if (pagination.filterKey !== filterKey) setPagination({filterKey, page: 1});
+  const setPage = (page: number) => setPagination({filterKey, page});
+  const catalog = useAuditCatalog(ownerRevision);
+  const entityOptions = useMemo(() => {
+    const options = [
       { value: "", label: "All entities" },
-      ...(catalog.data?.entity_types ?? []).map((e) => ({ value: e.key, label: e.label })),
-    ],
-    [catalog.data],
-  );
+      ...(catalog.data?.entity_types ?? []).map((entry) => ({value: entry.key, label: entry.label})),
+    ];
+    // Historical or combined filters remain visible when owners leave the catalog.
+    if (search.entity && !options.some(option => option.value === search.entity)) {
+      const label = search.entity.split(",").map(key =>
+        options.find(option => option.value === key)?.label ?? key.replace(/[._]/g, " "),
+      ).join(", ");
+      options.push({value: search.entity, label: `${label} (saved filter)`});
+    }
+    return options;
+  }, [catalog.data, search.entity]);
 
   // A project manager cannot read the instance-wide view: the page asks for
   // the project first instead of handing them a 403.
-  const needsProject = !instanceWide && !search.project;
-  const audit = useQuery({
-    ...auditQuery({
+  const needsProject = !access.isPending && !instanceWide && !search.project;
+  const audit = useAudit({
       projectId: search.project,
       entityType: search.entity,
       entityId: search.entity_id,
@@ -91,14 +89,12 @@ export function AuditSettingsPage() {
       changedField: search.field,
       source: search.source ?? "",
       start: search.from ? `${search.from}T00:00:00` : undefined,
-      end: search.to ? `${search.to}T23:59:59` : undefined,
+      end: search.to ? `${search.to}T23:59:59.999999` : undefined,
       q: search.q,
       includeNoise: search.noise,
       limit: AUDIT_PAGE_SIZE,
       offset: (page - 1) * AUDIT_PAGE_SIZE,
-    }, ownerRevision),
-    enabled: !needsProject,
-  });
+    }, ownerRevision, access.data?.allowed === true);
   const forbidden = audit.error instanceof ApiError && audit.error.status === 403;
   const active = Object.entries(search).filter(([, v]) => v).length;
 
@@ -110,23 +106,21 @@ export function AuditSettingsPage() {
           onChange={(id) => setSearch({ project: id || undefined })}
           label="Project"
           emptyLabel={instanceWide ? "Every project" : "Choose a project…"}
-          permission={Permission.projectManage}
+          permission={"project.manage"}
         />
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-fg-secondary">Entity</span>
-          <Select
+          <SelectField label=""
             value={search.entity ?? ""}
-            onChange={(value) => setSearch({ entity: value || undefined, entity_id: undefined })}
-            options={entityOptions}
-            aria-label="Filter by entity type"
-            searchable
-          />
+            onChange={(event) => setSearch({ entity: event.target.value || undefined, entity_id: undefined })}
+            ariaLabel="Filter by entity type"
+          >{entityOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</SelectField>
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-fg-secondary">Who</span>
           <div className="flex items-center gap-1">
-            <PeopleDirectorySelect
-              kind="person"
+            <DirectorySelect
+              source="auth.people"
               value={search.actor ? { id: search.actor, name: "Selected person" } : null}
               onChange={(choice) => setSearch({ actor: choice?.id })}
               label="Filter by person"
@@ -141,25 +135,19 @@ export function AuditSettingsPage() {
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-fg-secondary">Source</span>
-          <Select
+          <SelectField label=""
             value={search.source ?? ""}
-            onChange={(value) => setSearch({ source: (value || undefined) as AuditSourceValue | undefined })}
-            options={SOURCE_OPTIONS}
-            aria-label="Filter by source"
-          />
+            onChange={(event) => setSearch({ source: (event.target.value || undefined) as AuditSourceValue | undefined })}
+            ariaLabel="Filter by source"
+          >{SOURCE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</SelectField>
         </div>
         <TextField
-          label="Changed field"
-          list="audit-field-suggestions"
+          label="Changed field" list="audit-field-suggestions"
           placeholder="e.g. assignee, permissions"
           value={search.field ?? ""}
           onChange={(event) => setSearch({ field: event.target.value || undefined })}
         />
-        <datalist id="audit-field-suggestions">
-          {Object.keys(HISTORY_FIELD_LABELS).map((key) => (
-            <option key={key} value={key} />
-          ))}
-        </datalist>
+        <datalist id="audit-field-suggestions"><Slot id={SlotId.entityChangeFields} entityType={search.entity} /></datalist>
         <DateField label="From" value={search.from ?? null} onChange={(v) => setSearch({ from: v ?? undefined })} />
         <DateField label="To" value={search.to ?? null} onChange={(v) => setSearch({ to: v ?? undefined })} />
         <TextField
@@ -181,7 +169,7 @@ export function AuditSettingsPage() {
           Include system noise (notifications, mail delivery, scheduler ticks)
         </label>
         {active > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => { setQ(""); setSearch(Object.fromEntries(Object.keys(search).map((k) => [k, undefined]))); }}>
+          <Button variant="ghost" size="sm" onClick={() => { setDraft(null); setSearch(Object.fromEntries(Object.keys(search).map((k) => [k, undefined]))); }}>
             Reset filters
           </Button>
         )}
@@ -195,20 +183,19 @@ export function AuditSettingsPage() {
       description="Who changed what, from what, to what — every attributable change, newest first."
     >
       {filters}
-      {needsProject ? (
+      {catalog.isError && <QueryError label="audit filter vocabulary" error={catalog.error} />}
+      {access.isError ? <QueryError label="audit access" error={access.error} /> : access.isPending ? <TableSkeleton rows={6} /> : needsProject ? (
         <p className="rounded-md border border-subtle px-4 py-3 text-sm text-fg-muted">
           Choose a project you manage to read its change history. The instance-wide log needs an instance admin.
         </p>
-      ) : audit.isPending ? (
-        <TableSkeleton rows={6} />
-      ) : forbidden ? (
+      ) : !access.data?.allowed || forbidden ? (
         <p className="rounded-md border border-subtle px-4 py-3 text-sm text-fg-muted">
           You need admin access to view the audit log for this scope.
         </p>
-      ) : audit.isError ? (
+      ) : audit.isPending ? <TableSkeleton rows={6} /> : audit.isError ? (
         <QueryError label="audit log" error={audit.error} />
       ) : audit.data.length === 0 ? (
-        <EmptyState icon={ScrollText} message="No activity recorded for this filter." />
+        <EmptyState><ScrollText size={24} aria-hidden />No activity recorded for this filter.</EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-subtle">
           <Table>
@@ -228,7 +215,7 @@ export function AuditSettingsPage() {
           </Table>
         </div>
       )}
-      {audit.data && (page > 1 || audit.data.length === AUDIT_PAGE_SIZE) && (
+      {!audit.isError && access.data?.allowed && audit.data && (page > 1 || audit.data.length === AUDIT_PAGE_SIZE) && (
         <div className="mt-3 flex justify-end">
           <Pager
             page={page}
@@ -311,7 +298,7 @@ function AuditRow({ entry, showProject, availablePlugins }: { entry: AuditEntry;
           <span className="text-fg-faint">—</span>
         ) : (
           <div data-audit-changes>
-            <ChangeList changes={visible} />
+            <ChangeList entityType={entry.entity_type} changes={visible} />
             {hidden > 0 && (
               <button
                 type="button"

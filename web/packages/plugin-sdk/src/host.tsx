@@ -1,3 +1,4 @@
+import { Slot, SlotId } from "./slots";
 import { TextArea, Select } from "./primitives";
 
 /**
@@ -47,7 +48,7 @@ export function TokenList(props: TokenListProps) {
 /** Shared page chrome and controls; these contracts carry no feature implementation. */
 export function SettingsPage(props: SettingsPageProps) {
   const { SettingsPage: Host } = useProvided();
-  return Host ? <Host {...props} /> : <section><h2>{props.title}</h2><p>{props.description}</p>{props.children}</section>;
+  return Host ? <Host {...props} /> : <section><h2>{props.title}</h2><p>{props.description}</p>{props.children}{props.history && <Slot id={SlotId.settingsFooter} history={props.history} />}</section>;
 }
 export function SelectField(props: SelectFieldProps) {
   const { SelectField: Host } = useProvided();

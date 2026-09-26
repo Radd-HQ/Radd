@@ -30,6 +30,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1361 | Owner catalog queries and nonvisual contribution lifecycle | Verified; Waiting for release |
 | RADD-1362 | Independent scheduling contributions and preview lifecycle | Verified; Waiting for release |
 | RADD-1363 | Owner-declared entity destinations for audit navigation | Verified; Waiting for release |
+| RADD-1364 | Audit page/history/footer ownership and exact scope access | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -47,8 +48,8 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | alertmanager | False | 0 | projects, auth, items, events, automations | Pending |
 | approvals | False | 2 | events, projects, auth, teams, workflow, items | Pending |
 | attachments | default | 0 | events, projects, auth, items, access, groups, teams | Pending |
-| audit | default | 0 | events, auth, projects, items | Pending |
-| auth | default | 2 | events, projects | Option contributions verified (RADD-1357); remaining review pending |
+| audit | default | 7 | events, auth, projects, items | UI contributions verified (RADD-1364); backend dependency review remains open |
+| auth | default | 3 | events, projects | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
 | automations | default | 13 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
 | avatars | default | 0 | auth, attachments | Pending |
 | backup | default | 3 | auth, events | Schedule contribution verified (RADD-1362); full settings/backend review pending |
@@ -63,12 +64,12 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | events | default | 0 |  | Pending |
 | fields | default | 5 | projects, events, auth, teams, access | Catalog contributions verified (RADD-1361); remaining review pending |
 | forgejo | False | 0 | events, projects, auth, items, vcs, automations | Pending |
-| forms | default | 2 | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Option contributions verified (RADD-1357); remaining review pending |
+| forms | default | 2 | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
 | github | False | 0 | events, projects, auth, items, vcs, automations | Pending |
 | gitlab | False | 0 | events, projects, auth, items, vcs, automations | Pending |
-| groups | default | 2 | events, auth | Option contributions verified (RADD-1357); remaining review pending |
-| items | default | 0 | projects, workflow, labels, fields, cycles, releases, auth, teams, events, access, itemtypes, linktypes, settings | Pending |
-| itemtypes | default | 2 | projects, events, auth | Option contributions verified (RADD-1357); remaining review pending |
+| groups | default | 2 | events, auth | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
+| items | default | 2 | projects, workflow, labels, fields, cycles, releases, auth, teams, events, access, itemtypes, linktypes, settings | Change presentation contributed (RADD-1364); remaining UI/backend review pending |
+| itemtypes | default | 2 | projects, events, auth | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
 | jiraimport | False | 0 | auth, projects, fields, items, workflow, comments, cycles, attachments, events, itemtypes, linktypes, notify, releases, timelogging, weblinks, teams | Pending |
 | labels | default | 3 | projects, events, auth | Catalog contributions verified (RADD-1361); remaining review pending |
 | ldap | False | 0 | events, projects, auth, settings, groups, teams | Pending |
@@ -79,12 +80,12 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | milestones | False | 2 | projects, auth, events | Pending |
 | monitoring | False | 4 | auth, events | Settings UI verified; backend review pending |
 | notify | default | 0 | events, projects, auth, items, comments, teams | Pending |
-| pages | False | 2 | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Option contributions verified (RADD-1357); remaining review pending |
+| pages | False | 2 | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
 | participants | False | 3 | events, projects, auth, teams, items, notify | Pending |
 | pluginmgr | default | 0 | auth, events | Pending |
 | projects | default | 7 | events | Picker contributions verified (RADD-1358); remaining review pending |
 | realtime | default | 0 | events, auth | Pending |
-| releases | default | 2 | projects, auth, events, workflow | Option contributions verified (RADD-1357); remaining review pending |
+| releases | default | 2 | projects, auth, events, workflow | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
 | reporting | default | 0 | events, projects, auth, workflow, cycles, items | Pending |
 | screens | default | 0 | projects, events, auth, fields, itemtypes | Pending |
 | scripts | False | 6 | auth, events, projects, items | Settings UI verified; backend review pending |
@@ -98,7 +99,7 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | views | default | 0 | projects, workflow, items, fields, auth, events, access, groups, teams | Pending |
 | webhooks | default | 0 | projects, events, auth, fields, items | Pending |
 | weblinks | default | 0 | projects, auth, events, items | Pending |
-| workflow | default | 2 | projects, events, auth, settings, teams | Option contributions verified (RADD-1357); remaining review pending |
+| workflow | default | 2 | projects, events, auth, settings, teams | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
 
 ## Confirmed findings still requiring remediation
 
@@ -557,3 +558,64 @@ Evidence:
 - Screenshot `/tmp/radd-audit-entity-links.png` inspected. The temporary scope-denied
   toast belongs to the refusal scenario immediately before recovery. Logs:
   `/tmp/radd-1363-{build,unit,backend,browser,reload}.log`.
+
+## RADD-1364 — Audit UI and exact-scope history contributions
+
+Moved the complete Audit frontend into seven owner source files: page, URL/link
+helpers, query hooks, wire types, history panel, footer and remote entry. Audit
+contributes its navigation and page through the existing catch-all. Removed host
+Audit page/helper, transport/keys/constants/types and settings footer implementation;
+the editor history adapter emits a generic slot. The SDK avatar now uses the host's shared avatar so status contributions remain
+visible in Audit. SDK 1.11 adds generic change
+presentation and shared date, table, pagination and collapse controls. Items' two
+owner source files contribute issue vocabulary and suggestions; Auth owns role
+grant wording emitted by its grants service. Public Projects
+picker contracts now use an explicit package export and declared dependency.
+
+Confirmed behavior corrections: exact project access replaces global/any-project
+permission guesses; access caches participate in permission invalidation; denied
+refreshes hide stale rows/footers/panels; changed filters request page 1 immediately
+and do not resurrect a previous page after A→B→A navigation; external URL navigation
+cancels pending search edits; To-day filtering includes fractional seconds at the
+end of the day. Page-contribution withdrawal also removes links to that page.
+Owner-formatting preserves bare/redacted changes and unknown saved values.
+
+Verification is recorded below. This stage does not certify
+all Items UI, all Audit backend dependencies, the general navigation system, or
+all contents of modified shared barrels. Audit/Items are still declared core;
+missing/failed remote fixtures verify contribution lifetimes, not a new ability
+to disable these core plugins in Settings. The full per-artifact audit stays open.
+
+Final stage evidence:
+
+- Host and all 26 remotes built against SDK 1.11; 72 frontend tests passed,
+  including owner formatting, redaction, host/owner boundaries, public-contract
+  exports and federation-shim parity. Ruff checks passed for the changed Python
+  declarations, endpoints and tests.
+- 68 backend tests passed across Audit ledger/credential security/MCP, entity
+  destinations, module/kernel contracts, federation and plugin workflow. The
+  added DB-backed access matrix tests instance admin, exact managed project,
+  another project, an outsider and a constrained admin credential against the
+  same ledger authorization function. The actual capabilities response carries
+  both owner remotes and Audit's project-navigation requirement.
+- `browser-audit-contributions.mjs`: 17 groups, 77 recorded requests, three
+  confirmed aborts. Actual Audit, Items, Projects, Auth and Leave bundles mounted in the
+  host. Tests cover absent and open withdrawal, fresh restored values, disposed
+  Audit caches, bundle failures/recovery, isolated contribution disabling,
+  permission invalidation, URL filter/pagination transitions, actual picker
+  interaction and saved IDs while picker owners are unavailable. A fixture page
+  supplies generic slot context; it is not a replacement Audit implementation.
+- `browser-audit-entity-links.mjs`: seven groups, 47 exact destinations, 11 reads,
+  one abort; updated to load Audit's actual remote. Existing Projects/Cycles
+  picker proof also passed all 14 groups, 34 requests, three aborts. The existing
+  Leave proof passed 12 groups, including profile, holidays, timesheet and
+  in-flight status withdrawal (writes only against its mocked fixture).
+- Light/dark screenshots `/tmp/radd-audit-contributions-{light,dark}.png` inspected.
+  A deliberate denied-refresh toast remains briefly in the dark screenshot; it
+  is expected feedback from that test scenario, not a successful-read error.
+- Local backend reloaded at `http://localhost:8000`. An ephemeral-token probe
+  verified served Audit/Items/Auth bytes against all three built bundles, SDK 1.11, the
+  contributed navigation requirement, global and project access responses and
+  25 actual audit rows. The token was discarded. Leave/GitHub/Forgejo remain
+  disabled; the before/after enabled-plugin list is identical. No external
+  deployment or repository push was performed.

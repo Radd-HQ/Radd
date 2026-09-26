@@ -171,6 +171,7 @@ export interface AvatarUser {
   name: string;
   avatar_color?: string | null;
   avatar_emoji?: string | null;
+  avatar_url?: string | null;
 }
 
 const AVATAR_PX: Record<string, number> = { xs: 20, sm: 24, md: 32, lg: 64 };
@@ -192,11 +193,15 @@ export function Avatar({
   user,
   size = "sm",
   title,
+  className,
 }: {
   user: AvatarUser;
   size?: "xs" | "sm" | "md" | "lg";
   title?: string;
+  className?: string;
 }) {
+  const { Avatar: Host } = useProvided();
+  if (Host) return <Host user={user} size={size} title={title} className={className} />;
   const px = AVATAR_PX[size] ?? 24;
   const background = user.avatar_emoji
     ? "var(--radd-panel-hover)"
@@ -204,6 +209,7 @@ export function Avatar({
   return (
     <span
       title={title ?? user.name}
+      className={className}
       style={{
         display: "inline-flex",
         flexShrink: 0,

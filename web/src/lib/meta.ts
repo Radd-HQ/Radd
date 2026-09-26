@@ -1,3 +1,4 @@
+import { PRIORITY_LABELS } from "../../../server/src/radd/modules/items/ui/src/change-format";
 import {
   CircleCheck,
   CircleDashed,
@@ -77,10 +78,10 @@ export interface PriorityMeta {
 }
 
 export const PRIORITY_META: Record<PriorityValue, PriorityMeta> = {
-  [Priority.blocker]: { label: "Blocker", short: "BLOCK", icon: OctagonAlert, className: "text-red-400", order: 0 },
-  [Priority.high]: { label: "High", short: "HIGH", icon: SignalHigh, className: "text-orange-400", order: 1 },
-  [Priority.normal]: { label: "Normal", short: "NORM", icon: SignalMedium, className: "text-fg-secondary", order: 2 },
-  [Priority.low]: { label: "Low", short: "LOW", icon: SignalLow, className: "text-fg-muted", order: 3 },
+  [Priority.blocker]: { label: PRIORITY_LABELS.blocker, short: "BLOCK", icon: OctagonAlert, className: "text-red-400", order: 0 },
+  [Priority.high]: { label: PRIORITY_LABELS.high, short: "HIGH", icon: SignalHigh, className: "text-orange-400", order: 1 },
+  [Priority.normal]: { label: PRIORITY_LABELS.normal, short: "NORM", icon: SignalMedium, className: "text-fg-secondary", order: 2 },
+  [Priority.low]: { label: PRIORITY_LABELS.low, short: "LOW", icon: SignalLow, className: "text-fg-muted", order: 3 },
 };
 
 /** Spec 121 — who may read an issue. Labels differ by whether the project is
@@ -441,24 +442,7 @@ export function initials(name: string): string {
 // ---------------------------------------------------------------------------
 
 /** Human labels for item-history change fields (`custom_field` uses the change's `name`). */
-export const HISTORY_FIELD_LABELS: Record<string, string> = {
-  title: "Title",
-  description: "Description",
-  state: "State",
-  priority: "Priority",
-  assignee: "Assignee",
-  reporter: "Reporter",
-  team: "Team",
-  parent: "Parent",
-  cycle: "Cycle",
-  release: "Release",
-  start_date: "Start date",
-  target_date: "Target date",
-  flagged: "Flag",
-  labels: "Labels",
-  links: "Dependencies",
-  custom_field: "Field",
-};
+export { HISTORY_FIELD_LABELS } from "../../../server/src/radd/modules/items/ui/src/change-format";
 
 interface IconMeta {
   label: string;

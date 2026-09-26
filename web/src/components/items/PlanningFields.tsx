@@ -1,5 +1,6 @@
 import { CycleSelect } from "../cycles/CycleSelect";
-import { useId } from "react";
+import { DateField } from "@radd/plugin-sdk";
+export { DateField } from "@radd/plugin-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { RELEASE_STATUS_META } from "../../lib/meta";
 import { releasesQuery } from "../../lib/queries";
@@ -12,9 +13,6 @@ import { Select } from "../Select";
  * inputs. An empty value clears the field (PATCH with `null`).
  */
 
-const dateClasses =
-  "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
-  "focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]";
 
 interface PlanningFieldsProps {
   projectId: string;
@@ -113,32 +111,6 @@ export function ReleasePicker({
           ]}
         />
       </div>
-    </div>
-  );
-}
-
-export function DateField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string | null;
-  onChange: (value: string | null) => void;
-}) {
-  const id = useId();
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-xs font-medium text-fg-secondary">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="date"
-        value={value ?? ""}
-        onChange={(event) => onChange(event.target.value || null)}
-        className={dateClasses}
-      />
     </div>
   );
 }

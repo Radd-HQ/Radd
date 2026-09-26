@@ -35,6 +35,7 @@ import { ListSearchInput } from "./components/ListSearchInput";
 import { Modal } from "./components/Modal";
 
 // Page frames and generic form primitives are platform-owned, shared by every remote.
+import { Avatar } from "./components/Avatar";
 import { SettingsPage } from "./components/settings/SettingsPage";
 import { Button } from "./components/Button";
 import { TextField } from "./components/TextField";
@@ -44,6 +45,6 @@ import { QueryError } from "./components/QueryError";
 provideHostComponents({
   DirectoryPager, ListSearchInput,
   Modal: props => <Modal {...props} title={props.title ?? ""} />,
-  SettingsPage, Button, SelectField, Callout, QueryError,
+  SettingsPage, Avatar, Button, SelectField, Callout, QueryError,
   TextField: props => <TextField {...props} label={props.label ?? ""} />,
 });

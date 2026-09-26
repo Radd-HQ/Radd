@@ -1,9 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
-import { History, Info, X } from "lucide-react";
-import { RoutePath } from "../../lib/constants";
-import { usePermissions } from "../../lib/hooks";
-import { Permission } from "../../lib/types";
+import { Info, X } from "lucide-react";
+import { Slot, SlotId } from "@radd/plugin-sdk";
 
 /**
  * What a settings page is ABOUT, for its "Change history" footer link (spec
@@ -24,7 +21,7 @@ interface SettingsPageProps {
   actions?: ReactNode;
   /** A dismissible explanatory callout under the header. */
   info?: ReactNode;
-  /** The audit context for the footer link; omit on pages with no trail (profile, monitoring). */
+  /** Context forwarded to footer contributors; omit when the page has no entity context. */
   history?: SettingsHistoryContext;
   children: ReactNode;
 }
@@ -42,37 +39,8 @@ export function SettingsPage({ title, description, actions, info, history, child
       </div>
       {info && <InfoBanner>{info}</InfoBanner>}
       {children}
-      {history && <ChangeHistoryLink history={history} />}
+      {history && <Slot id={SlotId.settingsFooter} history={history} />}
     </div>
-  );
-}
-
-/**
- * The footer link every settings page carries (RADD-1171): "who changed what
- * to what" for the context being viewed, one click away, filters preset.
- * Hidden for a viewer the audit log would refuse (no `global.manage`; for a
- * project page, no `project.manage` anywhere), the way the nav hides tabs.
- */
-export function ChangeHistoryLink({ history }: { history: SettingsHistoryContext }) {
-  const perms = usePermissions();
-  const allowed =
-    perms.global(Permission.globalManage) ||
-    (Boolean(history.projectId) && perms.anyProject(Permission.projectManage));
-  if (!allowed) return null;
-  return (
-    <footer className="mt-8 border-t border-subtle/60 pt-4" data-settings-history>
-      <Link
-        to={RoutePath.settingsAudit}
-        search={{
-          entity: history.entities?.length ? history.entities.join(",") : undefined,
-          project: history.projectId,
-        }}
-        className="inline-flex items-center gap-1.5 text-[13px] text-accent-text hover:text-accent-text-strong"
-      >
-        <History size={14} aria-hidden />
-        Change history for this page
-      </Link>
-    </footer>
   );
 }
 

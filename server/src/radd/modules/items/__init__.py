@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EntityLinkSpec
 from radd.kernel import EntityRefSpec, EventTypeSpec
-from radd.kernel import RaddPlugin
+from radd.kernel import PluginUiManifest, RaddPlugin
 from radd.kernel import PermissionSpec, ProjectPurgeSpec, ProjectRelationSpec
 from radd.kernel import SettingSpec
 
@@ -38,6 +38,7 @@ async def _slq_handler(request: Request, exc: SlqError) -> JSONResponse:
 
 plugin = RaddPlugin(
     name="items",
+    ui=PluginUiManifest(remote="/plugins/items/remoteEntry.js", ui_api_version="1.11.0"),
     entity_links=(
         EntityLinkSpec('item', ('/issues/{refs.item.key}',)),
     ),

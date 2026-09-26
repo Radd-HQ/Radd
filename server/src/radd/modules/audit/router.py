@@ -6,15 +6,33 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.exceptions import ForbiddenError
 from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.principals import is_instance_admin
 from radd.modules.events.types import EventSource
 
 from . import service
-from .schemas import AuditCatalog, AuditEntry
+from .schemas import AuditAccess, AuditCatalog, AuditEntry
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+@router.get("/access", response_model=AuditAccess)
+async def audit_access(
+    session: Session, user: CurrentUser, project_id: uuid.UUID | None = None
+) -> AuditAccess:
+    """The same scope decision as the ledger, for contributed navigation and history UI.
+
+    A denied scope is an ordinary capability answer. Missing/invalid projects
+    retain the ledger's errors; this does not grant access to any row.
+    """
+    try:
+        await service.require_audit_scope(session, user, project_id)
+    except ForbiddenError:
+        return AuditAccess(allowed=False, instance_wide=is_instance_admin(user))
+    return AuditAccess(allowed=True, instance_wide=is_instance_admin(user))
 
 
 @router.get("/catalog", response_model=AuditCatalog)

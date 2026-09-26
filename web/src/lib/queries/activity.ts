@@ -12,9 +12,6 @@ import {
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
-  AuditCatalog,
-  AuditEntry,
-  AuditSourceValue,
   BackupArtifact,
   BackupRun,
   BackupSchedule,
@@ -80,62 +77,6 @@ export const linkSearchQuery = (projectId: string, q: string, excludeId?: string
       }),
     staleTime: 15_000,
     placeholderData: keepPreviousData,
-  });
-
-export interface AuditParams {
-  /** Constrains the read to one project — REQUIRED for anyone but an instance admin. */
-  projectId?: string;
-  entityType?: string;
-  entityId?: string;
-  actorId?: string;
-  /** Rows whose diff touched this field (`assignee`, `permissions`…). */
-  changedField?: string;
-  source?: AuditSourceValue | "";
-  /** ISO dates (inclusive day bounds are applied by the caller). */
-  start?: string;
-  end?: string;
-  /** Trigram free text over the event, the entity and the changed values (spec 123). */
-  q?: string;
-  includeNoise?: boolean;
-  limit?: number;
-  offset?: number;
-}
-
-const auditWire = (params: AuditParams): Record<string, string | undefined> => ({
-  project_id: params.projectId || undefined,
-  entity_type: params.entityType || undefined,
-  entity_id: params.entityId || undefined,
-  actor_id: params.actorId || undefined,
-  changed_field: params.changedField || undefined,
-  source: params.source || undefined,
-  start: params.start || undefined,
-  end: params.end || undefined,
-  q: params.q || undefined,
-  include_noise: params.includeNoise ? "true" : undefined,
-  limit: String(params.limit ?? 100),
-  offset: String(params.offset ?? 0),
-});
-
-/** The audit ledger (newest first). Admins read the instance, project managers one project (403 otherwise). */
-export const auditQuery = (params: AuditParams, ownerRevision = "") =>
-  queryOptions({
-    queryKey: [...queryKeys.audit(
-      Object.fromEntries(
-        Object.entries(auditWire(params)).map(([key, value]) => [key, value ?? ""]),
-      ),
-    ), ownerRevision],
-    queryFn: ({ signal }) =>
-      api.get<AuditEntry[]>(ApiPath.audit, { signal, query: auditWire(params) }),
-    retry: false,
-
-  });
-
-/** The registry's event/entity vocabulary — what the audit filters are built from. */
-export const auditCatalogQuery = () =>
-  queryOptions({
-    queryKey: queryKeys.auditCatalog(),
-    queryFn: ({ signal }) => api.get<AuditCatalog>(ApiPath.auditCatalog, { signal }),
-    staleTime: 5 * 60_000,
   });
 
 // --- backups (spec 99) — instance admin only ---

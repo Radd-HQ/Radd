@@ -27,7 +27,7 @@ const requests=[],pending=[],aborted=[],writes=[];
 const rows=()=>evidence.rows.map(row=>!github&&row.entity_owner==='github'?{...row,entity_url:null,entity_owner:null}:!milestones&&row.entity_owner==='milestones'?{...row,entity_url:null,entity_owner:null}:row);
 const server=http.createServer((req,res)=>{
  const p=new URL(req.url,'http://fixture').pathname;
- if(p.startsWith('/plugins/')){if(broken){res.statusCode=404;res.end();return;}const[,,name,...parts]=p.split('/');res.setHeader('content-type','text/javascript');res.end(readFileSync(path.join(root,'server/src/radd/modules',name,'ui/dist',...parts)));return;}
+ if(p.startsWith('/plugins/')){if(broken && p.includes("/milestones/")){res.statusCode=404;res.end();return;}const[,,name,...parts]=p.split('/');res.setHeader('content-type','text/javascript');res.end(readFileSync(path.join(root,'server/src/radd/modules',name,'ui/dist',...parts)));return;}
  if(p.startsWith('/api/')){
   res.setHeader('content-type','application/json');
   if(!['GET','HEAD'].includes(req.method)&&!p.endsWith('/preferences'))writes.push({p,method:req.method});
@@ -37,7 +37,8 @@ const server=http.createServer((req,res)=>{
   }
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:['audit',...evidence.plugins.filter(name=>(name!=='github'||github)&&(name!=='milestones'||milestones))],remotes:milestones?[{name:'milestones',remote_entry:`/plugins/milestones/remoteEntry.js?v=${version}`,ui_api_version:'1.0.0'}]:[],nav:milestones?[{key:'milestones',plugin:'milestones',label:'Milestones',path:'/milestones',section:'main',requires:[]}]:[],widget_types:[],view_types:[]};
+  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:['audit',...evidence.plugins.filter(name=>(name!=='github'||github)&&(name!=='milestones'||milestones))],remotes:[{name:'audit',remote_entry:'/plugins/audit/remoteEntry.js',ui_api_version:'1.11.0'},{name:'items',remote_entry:'/plugins/items/remoteEntry.js',ui_api_version:'1.11.0'},...(milestones?[{name:'milestones',remote_entry:`/plugins/milestones/remoteEntry.js?v=${version}`,ui_api_version:'1.0.0'}]:[])],nav:milestones?[{key:'milestones',plugin:'milestones',label:'Milestones',path:'/milestones',section:'main',requires:[]}]:[],widget_types:[],view_types:[]};
+  else if(p==='/api/v1/audit/access')data={allowed:true,instance_wide:true};
   else if(p==='/api/v1/audit/catalog')data={entity_types:evidence.rows.map(row=>({key:row.entity_type,label:row.entity_type})),event_types:[]};
   else if(p==='/api/v1/milestones')data=[{id:'saved',project_id:'project',title:'Owner-linked milestone',description:'Preserved navigation',status:'open',due_on:null}];
   else if(p==='/api/v1/projects')data=[{id:'project',key:'TEST',name:'Test',permissions:['project.manage']}];

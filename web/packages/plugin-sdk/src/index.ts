@@ -1,6 +1,7 @@
 /**
  * @radd/plugin-sdk — the public frontend surface for Radd plugins (docs/plugin-platform.md §9).
- * The ONLY module a plugin's UI imports. Shared as a federation singleton so the slot registry,
+ * The platform API imported by plugin UI. Owner-defined public packages may supply data/type
+ * contracts; feature implementations remain behind contributions. Shared as a singleton so the slot registry,
  * primitives, hooks and theme are ONE instance across the host and every remote.
  */
 
@@ -114,3 +115,11 @@ export { registerQuerySource, unregisterQuerySources, useContributedQuery, type 
 
 export { ScheduleKind, defaultSchedule, isScheduleValid, type ScheduleKindValue, type ScheduleConfig, type SchedulePreview } from "./schedule";
 export { ScheduleEditor, type ScheduleEditorProps } from "./schedule-editor";
+
+export { ChangeList, ChangeLine, changeLabel, humanize, formatChangeValue } from "./ChangeLines";
+export type { HistoryChange } from "./changes";
+export { CollapsibleCard } from "./CollapsibleCard";
+export { Pager } from "./Pager";
+export { DateField } from "./DateField";
+export { Table, THead, TBody, Th, Td } from "./Table";
+export { TableSkeleton } from "./TableSkeleton";

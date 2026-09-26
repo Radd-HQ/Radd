@@ -846,3 +846,19 @@ Monitoring offers the `settings.section` match `monitoring` inside its card grid
 ### Directory contribution ownership (RADD-1353)
 
 Auth's `ui/src/index.tsx` owns the people-directory picker query (`auth.people`). Teams' remote owns team choices (`teams.teams`) and member/manager/owner candidates (`teams.candidates`). Both register the public `directory.select` slot, with UI SDK minimum 1.4. A plugin needing a person picker (such as VCS identity mapping) uses the generic SDK DirectorySelect; it does not import a host feature component. The source provider owns endpoints, candidate rules, query keys and realtime entity tags. Generic modal/search/pagination stay in the platform through the SDK's shared control adapters. The host's existing PeopleDirectorySelect callers now delegate through this seam, with their behavior preserved; migration of those calling features is still pending.
+
+**RADD-1364 — Audit frontend ownership.** Audit now owns its page, URL filters,
+access/catalog/ledger reads, entity history panel and settings footer under
+`server/src/radd/modules/audit/ui`. Generic settings-footer and entity-history
+slots replace host Audit rendering and permission guesses. `/audit/access` uses
+the ledger's exact scope rule, including constrained admin credentials. SDK 1.11
+owns generic change rendering and shared date/table/pagination/collapse primitives;
+Items contributes issue-specific history wording and field suggestions through
+its own remote, while Auth contributes its role-grant wording. The SDK avatar
+uses the shared host avatar to preserve contributed person status indicators. Projects publishes its picker data/type contract as an explicit
+package export. Filter changes reset pagination immediately, external navigation
+cancels stale search drafts, and the To date includes the final fractional second.
+Queries abort on contribution withdrawal, use fresh observer-owned cache keys,
+and participate in permission invalidation. Both new remotes retain their existing
+core-plugin policy. Other Items UI and Audit backend cross-feature seams remain
+in the complete isolation inventory.

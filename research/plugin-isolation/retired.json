@@ -69,6 +69,23 @@
       "AST boundary check refuses restoration at old locations. Actual Scripts/AI inspectors and automation canvas use the new controls; RADD-1356 browser evidence."
     ]
   },
+  "web/src/components/history/ChangeLines.tsx": {
+    "last_sha256": "07583ec76038307bd3d626fbe86fd969bcc3e3357ded44ff15bf4c6481069043",
+    "previous_review": {
+      "sha256": "07583ec76038307bd3d626fbe86fd969bcc3e3357ded44ff15bf4c6481069043",
+      "status": "unreviewed",
+      "owner": null,
+      "evidence": [],
+      "issue": null
+    },
+    "status": "reviewed",
+    "owner": "Audit owner UI / platform structured change rendering / Items presentation",
+    "issue": "RADD-1364",
+    "evidence": [
+      "Moved implementation to web/packages/plugin-sdk/src/ChangeLines.tsx and server/src/radd/modules/items/ui/src/change-format.ts; former host implementation removed.",
+      "Current boundary tests refuse host Audit endpoints/pages; actual-bundle lifecycle and structured-value tests verified the successors."
+    ]
+  },
   "web/src/components/scripts/PythonEditor.tsx": {
     "last_sha256": "a4e07c8289404ed67e5d2a52a4a68e3fe187436cd3a84c6329ef0362ad501cd1",
     "previous_review": {
@@ -84,6 +101,48 @@
     "evidence": [
       "Removed former feature-located generic implementation; successor: web/src/components/CodeEditor.tsx and generic language/highlight utilities.",
       "AST boundary check refuses restoration at old locations. Actual Scripts/AI inspectors and automation canvas use the new controls; RADD-1356 browser evidence."
+    ]
+  },
+  "web/src/lib/audit.ts": {
+    "last_sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
+    "previous_review": {
+      "sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
+      "status": "partially_reviewed",
+      "owner": "platform entity navigation and audit integration",
+      "evidence": [
+        "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+        "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+        "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      ],
+      "issue": "RADD-1363"
+    },
+    "status": "reviewed",
+    "owner": "Audit owner UI / platform structured change rendering / Items presentation",
+    "issue": "RADD-1364",
+    "evidence": [
+      "Moved implementation to server/src/radd/modules/audit/ui/src/audit.ts; former host implementation removed.",
+      "Current boundary tests refuse host Audit endpoints/pages; actual-bundle lifecycle and structured-value tests verified the successors."
+    ]
+  },
+  "web/src/routes/settings/audit.tsx": {
+    "last_sha256": "ad8846c4e389668c78b0738fe15208d597924ce333883445b15164cdd9f2b8b2",
+    "previous_review": {
+      "sha256": "ad8846c4e389668c78b0738fe15208d597924ce333883445b15164cdd9f2b8b2",
+      "status": "partially_reviewed",
+      "owner": "platform entity navigation and audit integration",
+      "evidence": [
+        "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
+        "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+        "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      ],
+      "issue": "RADD-1363"
+    },
+    "status": "reviewed",
+    "owner": "Audit owner UI / platform structured change rendering / Items presentation",
+    "issue": "RADD-1364",
+    "evidence": [
+      "Moved implementation to server/src/radd/modules/audit/ui/src/SettingsPage.tsx; former host implementation removed.",
+      "Current boundary tests refuse host Audit endpoints/pages; actual-bundle lifecycle and structured-value tests verified the successors."
     ]
   }
 }

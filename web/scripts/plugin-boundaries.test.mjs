@@ -217,8 +217,48 @@ test('federation shim exports every runtime value in the public SDK',()=>{
 });
 
 test('audit navigation has no feature destination table or entity-specific routing branches',()=>{
-  const ast=nodes('web/src/lib/audit.ts');
+  const ast=nodes('server/src/radd/modules/audit/ui/src/audit.ts');
   assert(ast.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='./types'||n.source.value==='@tanstack/react-router'));
   assert(!ast.some(n=>n.type==='StringLiteral'&&/^\/(?:settings|issues|pages|p\/)/.test(n.value)));
   assert(!ast.some(n=>n.type==='MemberExpression'&&n.property?.name==='entity_type'));
+});
+
+
+test('Audit is contributed: host has no page, endpoint, access decision or footer implementation',()=>{
+  assert(!files('web/src').includes('web/src/routes/settings/audit.tsx'));
+  for(const file of files('web/src')) for(const node of nodes(file)) {
+    if(node.type==='StringLiteral') assert(!/^\/(?:settings\/)?audit(?:\/|$)/.test(node.value), file);
+  }
+  for(const file of ['web/src/components/history/ChangeHistoryPanel.tsx','web/src/components/settings/SettingsPage.tsx']){
+    assert(!nodes(file).some(n=>n.type==='CallExpression'&&['useQuery','usePermissions'].includes(n.callee?.name)),file);
+  }
+  for(const file of ['web/packages/plugin-sdk/src/ChangeLines.tsx','web/packages/plugin-sdk/src/changes.ts']){
+    assert(!nodes(file).some(n=>n.type==='StringLiteral'&&/^(?:item|flagged|priority|links|subject|role|scope)$/.test(n.value)),file);
+    assert(!nodes(file).some(n=>n.type==='ImportDeclaration'&&/modules|web\/src/.test(n.source.value)),file);
+  }
+});
+
+test('cross-plugin public imports resolve through declared package exports, never private source',()=>{
+  const packages=new Map();
+  for(const folder of readdirSync('server/src/radd/modules',{withFileTypes:true}).filter(entry=>entry.isDirectory()).map(entry=>entry.name)) {
+    const file=`server/src/radd/modules/${folder}/ui/package.json`;
+    try {const pkg=JSON.parse(readFileSync(file,'utf8'));packages.set(pkg.name,{pkg,root:path.dirname(file)});}catch(error){if(error.code!=='ENOENT')throw error;}
+  }
+  for(const file of files('server/src/radd/modules')){
+    if(!file.includes('/ui/src/'))continue;
+    const consumer=JSON.parse(readFileSync(file.split('/ui/src/')[0]+'/ui/package.json','utf8'));
+    for(const node of nodes(file)){
+      const source=node.source?.value;
+      if(typeof source!=='string'||!source.startsWith('@radd-plugin-ui/'))continue;
+      const [scope,name,...subpath]=source.split('/');const packageName=scope+'/'+name;
+      const provider=packages.get(packageName);assert(provider,source);
+      assert(consumer.dependencies?.[packageName],file+' must declare its dependency');
+      const exported=provider.pkg.exports?.['./'+subpath.join('/')];assert(typeof exported==='string',source+' must be a public export');
+      const entry=path.resolve(provider.root,exported);assert(entry.startsWith(path.resolve(provider.root)+path.sep));
+      for(const n of nodes(entry)){
+        assert(!['FunctionDeclaration','ArrowFunctionExpression','CallExpression','JSXElement'].includes(n.type),entry+' exports contract data/types only');
+        if(n.type==='ImportDeclaration')assert.equal(n.importKind,'type',entry+' must not load another implementation');
+      }
+    }
+  }
 });

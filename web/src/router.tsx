@@ -7,7 +7,6 @@ import {
   lazyRouteComponent,
 } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
-import { parseAuditSearch, type AuditSearch } from "./lib/audit";
 import { AuthStatus } from "./lib/auth";
 import { ProjectSettingsSection, RoutePath, SettingsSection } from "./lib/constants";
 import { authStateQuery } from "./lib/queries";
@@ -58,7 +57,6 @@ const RolesSettingsPage = lazyRouteComponent(() => import("./routes/settings/rol
 const TeamsSettingsPage = lazyRouteComponent(() => import("./routes/settings/teams"), "TeamsSettingsPage");
 const TimeloggingSettingsPage = lazyRouteComponent(() => import("./routes/settings/timelogging"), "TimeloggingSettingsPage");
 const TokensSettingsPage = lazyRouteComponent(() => import("./routes/settings/tokens"), "TokensSettingsPage");
-const AuditSettingsPage = lazyRouteComponent(() => import("./routes/settings/audit"), "AuditSettingsPage");
 const BackupsSettingsPage = lazyRouteComponent(() => import("./routes/settings/backups"), "BackupsSettingsPage");
 const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/plugins"), "PluginsSettingsPage");
 const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
@@ -560,15 +558,6 @@ const settingsTimeloggingRoute = createRoute({
   component: TimeloggingSettingsPage,
 });
 
-const settingsAuditRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.audit,
-  component: AuditSettingsPage,
-  // Spec 123: every filter rides in the URL so an auditor can share a view and
-  // a settings page can deep-link the trail for what it shows (RADD-1171).
-  validateSearch: (search: Record<string, unknown>): AuditSearch => parseAuditSearch(search),
-});
-
 const settingsBackupsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.backups,
@@ -829,7 +818,6 @@ const routeTree = rootRoute.addChildren([
       settingsNotificationsRoute,
       settingsAutomationsRoute,
       settingsTimeloggingRoute,
-      settingsAuditRoute,
       settingsBackupsRoute,
       settingsPluginsRoute,
       settingsCannedRoute,

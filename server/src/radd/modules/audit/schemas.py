@@ -66,3 +66,8 @@ class AuditCatalog(BaseModel):
 
     event_types: list[AuditEventType]
     entity_types: list[AuditEntityType]
+
+
+class AuditAccess(BaseModel):
+    allowed: bool
+    instance_wide: bool

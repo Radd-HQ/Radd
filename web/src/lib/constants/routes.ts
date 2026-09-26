@@ -38,7 +38,6 @@ export const SettingsSection = {
   // Per-project time-logging enablement moved under the project (spec 50);
   // this global section keeps the shared work categories.
   timelogging: "timelogging",
-  audit: "audit",
   canned: "canned",
   // RADD-1262: ONE Version control page with a tab per host kind; the per-kind
   // segments stay as redirects so bookmarks and audit links keep working.
@@ -179,7 +178,6 @@ export const RoutePath = {
   /** Work-categories admin (spec 22/50, global manage) — the shared category list. */
   settingsTimelogging: `${SETTINGS_SEGMENT}/${SettingsSection.timelogging}`,
   /** Audit log (admin): every attributable change across the server. */
-  settingsAudit: `${SETTINGS_SEGMENT}/${SettingsSection.audit}`,
   settingsBackups: `${SETTINGS_SEGMENT}/${SettingsSection.backups}`,
   /** AI providers, model roles, feature toggles, preset prompts (spec 101, admin). */
   settingsAi: `${SETTINGS_SEGMENT}/${SettingsSection.ai}`,

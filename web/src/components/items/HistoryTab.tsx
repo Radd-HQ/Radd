@@ -6,7 +6,7 @@ import { itemHistoryQuery } from "../../lib/queries";
 import { initials } from "../../lib/meta";
 import type { HistoryEntry } from "../../lib/types";
 import { formatDuration, type DurationConfig } from "../../lib/duration";
-import { ChangeList } from "../history/ChangeLines";
+import { ChangeList } from "@radd/plugin-sdk";
 import { Spinner } from "../Spinner";
 
 /**
@@ -63,7 +63,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
           </time>
         </p>
         {isUpdate && entry.changes.length > 0 && (
-          <ChangeList changes={entry.changes} className="mt-1" />
+          <ChangeList entityType="item" changes={entry.changes} className="mt-1" />
         )}
         <SecondaryLine entry={entry} />
       </div>

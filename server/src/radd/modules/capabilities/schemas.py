@@ -23,6 +23,7 @@ class NavItemRead(BaseModel):
     section: str = "main"  # main | settings
     group: str = ""
     requires_admin: bool = False
+    requires_any_project: list[str] = []
     plugin: str = ""  # owning plugin, assigned by the registry
     requires: list[str] = []  # permission atoms that must ALL be held
     capability: str = ""  # hide unless this capability is enabled

@@ -297,13 +297,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         icon: Blocks,
         show: (g) => g.instanceAdmin,
       },
-      {
-        to: RoutePath.settingsAudit,
-        label: "Audit log",
-        icon: ScrollText,
-        // Spec 123: a project manager reads their own project's trail.
-        show: (g) => g.ws(Permission.globalManage) || g.any(Permission.projectManage),
-      },
     ],
   },
 ];
@@ -374,8 +367,9 @@ export function SettingsLayout() {
     .filter((n) => !n.capability || enabledCaps.has(n.capability))
     .filter((n) => !n.requires_admin || gate.instanceAdmin)
     .filter((n) => n.requires.every((r) => perms.global(r)))
+    .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks };
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);

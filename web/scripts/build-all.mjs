@@ -11,7 +11,7 @@
  * it. Run: `node web/scripts/build-all.mjs`. Pass `--host-only` to skip the remotes.
  */
 import { execFileSync } from "node:child_process";
-import { readdirSync, existsSync, mkdirSync, rmSync, symlinkSync, lstatSync } from "node:fs";
+import { readdirSync, existsSync, mkdirSync, rmSync, symlinkSync, lstatSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -57,7 +57,21 @@ run(process.execPath, [resolve(here, "prepare-federation.mjs")]);
 // Public plugin contracts may be consumed during the staged host migration.
 // Resolve their package dependencies before either side is type-checked.
 const uiDirs = SCAN_ROOTS.flatMap((r) => findUiDirs(r)).sort();
-for (const uiDir of uiDirs) ensureNodeModules(uiDir);
+const contractPackages = new Set();
+for (const uiDir of uiDirs) {
+  ensureNodeModules(uiDir);
+  const pkg = JSON.parse(readFileSync(resolve(uiDir, "package.json"), "utf8"));
+  if (!pkg.exports) continue;
+  if (!/^@radd-plugin-ui\/[a-z0-9-]+$/.test(pkg.name)) throw new Error(`Invalid public contract package: ${pkg.name}`);
+  if (contractPackages.has(pkg.name)) throw new Error(`Duplicate public contract package: ${pkg.name}`);
+  contractPackages.add(pkg.name);
+  const link = resolve(sharedNodeModules, pkg.name);
+  mkdirSync(dirname(link), {recursive: true});
+  const existing = lstatSync(link, {throwIfNoEntry: false});
+  if (existing && !existing.isSymbolicLink()) throw new Error(`Refusing to overwrite package: ${link}`);
+  if (existing) rmSync(link);
+  symlinkSync(uiDir, link, "dir");
+}
 
 console.log("\n== build host ==");
 run(bin("tsc"), ["-b"]);

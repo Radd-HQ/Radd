@@ -11,6 +11,7 @@ export interface PluginNavItem {
   section: string;
   group?: string;
   requires_admin?: boolean;
+  requires_any_project?: string[];
   plugin?: string;
   requires: string[];
   capability: string;

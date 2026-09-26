@@ -92,6 +92,7 @@ export function Sidebar() {
     // RADD-843: `requires` through the scope-aware seam — a project-scoped
     // atom held on one project satisfies its nav link (the RADD-810 class).
     .filter((n) => n.requires.every((r) => perms.global(r) || perms.anyProject(r)))
+    .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
   const nav = useNavFacts();
   const { data: projectSummary } = useQuery(projectSummaryQuery());

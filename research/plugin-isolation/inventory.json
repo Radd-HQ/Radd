@@ -197,6 +197,7 @@
       "manifest": "server/src/radd/modules/audit/__init__.py",
       "declarations": {
         "name": "audit",
+        "ui": "PluginUiManifest(remote='/plugins/audit/remoteEntry.js', ui_api_version='1.11.0', nav=(NavItemSpec(key='audit', label='Audit log', path='/settings/audit', section='settings', group='Server', icon='ScrollText', order=190, requires_any_project=('project.manage',)),))",
         "description": "The audit log: who changed what, from what, to what \u2014 searchable by project, person, field and date.",
         "depends_on": [
           "events",
@@ -207,14 +208,22 @@
         "routers": "(router,)",
         "mcp_tools": "(AUDIT_LOG,)"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/audit/ui/src/ChangeHistoryPanel.tsx",
+        "server/src/radd/modules/audit/ui/src/SettingsFooter.tsx",
+        "server/src/radd/modules/audit/ui/src/SettingsPage.tsx",
+        "server/src/radd/modules/audit/ui/src/audit.ts",
+        "server/src/radd/modules/audit/ui/src/index.tsx",
+        "server/src/radd/modules/audit/ui/src/queries.ts",
+        "server/src/radd/modules/audit/ui/src/types.ts"
+      ]
     },
     "auth": {
       "manifest": "server/src/radd/modules/auth/__init__.py",
       "declarations": {
         "name": "auth",
         "entity_links": "(EntityLinkSpec('user', ('/settings/users',)), EntityLinkSpec('service_account', ('/settings/service-accounts',)), EntityLinkSpec('role', ('/settings/roles',)))",
-        "ui": "PluginUiManifest(remote='/plugins/auth/remoteEntry.js', ui_api_version='1.6.0')",
+        "ui": "PluginUiManifest(remote='/plugins/auth/remoteEntry.js', ui_api_version='1.11.0')",
         "description": "People, sign-in sessions, API tokens and roles.",
         "depends_on": [
           "events",
@@ -236,6 +245,7 @@
         "on_startup": "(subscribers.ensure_seeded,)"
       },
       "ui_sources": [
+        "server/src/radd/modules/auth/ui/src/change-format.ts",
         "server/src/radd/modules/auth/ui/src/index.tsx",
         "server/src/radd/modules/auth/ui/src/options.ts"
       ]
@@ -720,6 +730,7 @@
       "manifest": "server/src/radd/modules/items/__init__.py",
       "declarations": {
         "name": "items",
+        "ui": "PluginUiManifest(remote='/plugins/items/remoteEntry.js', ui_api_version='1.11.0')",
         "entity_links": "(EntityLinkSpec('item', ('/issues/{refs.item.key}',)),)",
         "permissions": "(PermissionSpec('item.read', 'project', \"See the project's work items.\", implied_by=('project.manage',)), PermissionSpec('item.create', 'project', 'Create work items in the project.'), PermissionSpec('item.update', 'project', \"Edit the project's work items.\", implies=('attachment.create', 'attachment.delete@own')), PermissionSpec('item.delete', 'project', 'Hard-delete work items.', implied_by=('project.manage',)))",
         "description": "Issues: projects' work items, with keys, hierarchy, assignees, dates and links.",
@@ -754,7 +765,10 @@
         "project_relations": "(ProjectRelationSpec(key='item', label='you reported or are assigned an item here', resolve=service.projects_with_user_items), ProjectRelationSpec(key='team_item', label='one of your teams owns an item here', resolve=service.projects_with_team_items))",
         "mcp_tools": "MCP_TOOLS"
       },
-      "ui_sources": []
+      "ui_sources": [
+        "server/src/radd/modules/items/ui/src/change-format.ts",
+        "server/src/radd/modules/items/ui/src/index.tsx"
+      ]
     },
     "itemtypes": {
       "manifest": "server/src/radd/modules/itemtypes/__init__.py",
@@ -1673,6 +1687,18 @@
         "build": "vite build"
       }
     },
+    "server/src/radd/modules/audit/ui/package.json": {
+      "name": "@radd-plugin-ui/audit",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*",
+        "@radd-plugin-ui/projects": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
     "server/src/radd/modules/auth/ui/package.json": {
       "name": "@radd-plugin-ui/auth",
       "version": "1.0.0",
@@ -1754,6 +1780,17 @@
     },
     "server/src/radd/modules/groups/ui/package.json": {
       "name": "@radd-plugin-ui/groups",
+      "version": "1.0.0",
+      "type": "module",
+      "dependencies": {
+        "@radd/plugin-sdk": "*"
+      },
+      "scripts": {
+        "build": "vite build"
+      }
+    },
+    "server/src/radd/modules/items/ui/package.json": {
+      "name": "@radd-plugin-ui/items",
       "version": "1.0.0",
       "type": "module",
       "dependencies": {
@@ -1956,7 +1993,7 @@
         "build": "tsc -b && vite build",
         "preview": "vite preview",
         "test": "cd .. && node --test web/scripts/*.test.mjs",
-        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs && node scripts/browser-query-contributions.mjs && node scripts/browser-schedule-contributions.mjs && node scripts/browser-audit-entity-links.mjs",
+        "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs && node scripts/browser-query-contributions.mjs && node scripts/browser-schedule-contributions.mjs && node scripts/browser-audit-entity-links.mjs && node scripts/browser-audit-contributions.mjs",
         "build:all": "node scripts/build-all.mjs",
         "check": "npm run test && npm run build:all && npm run test:browser"
       }
@@ -2406,7 +2443,7 @@
       "imports": []
     },
     "docs/modules.md": {
-      "sha256": "b7714d540588583d76353de4c4b7f7a3fe2c97a2a527b78a6299f552f0a827af",
+      "sha256": "664bbef136045290821ca1427b8d454605f3f609a90b1eb1ccb8b2415ab9d8c8",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -2442,7 +2479,7 @@
       "imports": []
     },
     "docs/plugin-platform.md": {
-      "sha256": "1c6dfbde9296c9dd0c2b5e958ae056e3f449e8bf37e035e4ab36f23493e21662",
+      "sha256": "1f7d72e28ecf7f2aaeb780973ebfd2d8343641dbb553638a3b8d960381ae9aff",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -4026,7 +4063,7 @@
       "imports": []
     },
     "research/plugin-isolation/README.md": {
-      "sha256": "8db2517f3d79c9c6b57ac967dbb182282e3fb06848186283e5eedd680cc397cc",
+      "sha256": "a201f62360054a6283ba1aad8decff61ec41402db3813795e6b09f29da636ea2",
       "module_directory": null,
       "role": "documentation",
       "imports": []
@@ -12967,7 +13004,7 @@
       ]
     },
     "server/src/radd/kernel/specs.py": {
-      "sha256": "89a0a6b7908197aa682bbe499d79e5e8b475add716c32fd74c52198b5c5be297",
+      "sha256": "b34b2820b825dc24eb5a1aebea9ef1352ef550f0c6f4c74a80e898e227e36aad",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -19433,7 +19470,7 @@
       ]
     },
     "server/src/radd/modules/audit/__init__.py": {
-      "sha256": "6bfe60cb20c654c4a63dacd7db37fd1933e86123ef9e5402b842cde4460d7304",
+      "sha256": "a7913fd658addab2db5fa98c806284b00322b98aeadd304d1489a2295a0ec48e",
       "module_directory": "audit",
       "role": "runtime_source",
       "imports": [
@@ -19441,6 +19478,8 @@
           "line": 1,
           "module": "radd.kernel",
           "names": [
+            "NavItemSpec",
+            "PluginUiManifest",
             "RaddPlugin"
           ]
         },
@@ -19559,7 +19598,7 @@
       ]
     },
     "server/src/radd/modules/audit/router.py": {
-      "sha256": "5ca24cb29fc0f8b5e7b15babe781295bd1f057a346c4c74a5d03bb737bcb6dee",
+      "sha256": "fe6fe9312af7013dcc26dc14b2af66413041f42c33092bf2a92dcf57aa7eed0b",
       "module_directory": "audit",
       "role": "runtime_source",
       "imports": [
@@ -19606,29 +19645,44 @@
         },
         {
           "line": 9,
+          "module": "radd.exceptions",
+          "names": [
+            "ForbiddenError"
+          ]
+        },
+        {
+          "line": 10,
           "module": "radd.modules.auth.deps",
           "names": [
             "CurrentUser"
           ]
         },
         {
-          "line": 10,
+          "line": 11,
+          "module": "radd.modules.auth.principals",
+          "names": [
+            "is_instance_admin"
+          ]
+        },
+        {
+          "line": 12,
           "module": "radd.modules.events.types",
           "names": [
             "EventSource"
           ]
         },
         {
-          "line": 12,
+          "line": 14,
           "module": ".",
           "names": [
             "service"
           ]
         },
         {
-          "line": 13,
+          "line": 15,
           "module": ".schemas",
           "names": [
+            "AuditAccess",
             "AuditCatalog",
             "AuditEntry"
           ]
@@ -19636,7 +19690,7 @@
       ]
     },
     "server/src/radd/modules/audit/schemas.py": {
-      "sha256": "aa3a41caab8601ea0e3e825afcfa026db93a79afea39ebbd6cf5b47af9f2c5dd",
+      "sha256": "cfd91c998b901ebd571dacef9ea97a73764df7878cdb3382257e782d2191fbe9",
       "module_directory": "audit",
       "role": "runtime_source",
       "imports": [
@@ -19807,8 +19861,196 @@
         }
       ]
     },
+    "server/src/radd/modules/audit/ui/package.json": {
+      "sha256": "b200e8697bafaae4a84397c6b9664cea480b58866dbc7885c037faf41e538d62",
+      "module_directory": "audit",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/audit/ui/src/ChangeHistoryPanel.tsx": {
+      "sha256": "d751a03ee5985e128e220aeeb4a33896de0585b7be2225f12a592e21655f28e9",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@tanstack/react-router"
+        },
+        {
+          "line": 2,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 3,
+          "module": "./queries"
+        }
+      ]
+    },
+    "server/src/radd/modules/audit/ui/src/SettingsFooter.tsx": {
+      "sha256": "175827b4e132abd08efd887765aef06e4e41d8af44bdb3e5a5a9a869dd34044f",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@tanstack/react-router"
+        },
+        {
+          "line": 2,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 3,
+          "module": "lucide-react"
+        },
+        {
+          "line": 4,
+          "module": "./queries"
+        }
+      ]
+    },
+    "server/src/radd/modules/audit/ui/src/SettingsPage.tsx": {
+      "sha256": "c3d93ce8276464bf23c39039ca83e08360b9fc562fe8340ddabadb837b63754d",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-router"
+        },
+        {
+          "line": 3,
+          "module": "lucide-react"
+        },
+        {
+          "line": 5,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 6,
+          "module": "@radd-plugin-ui/projects/picker-contract"
+        },
+        {
+          "line": 7,
+          "module": "./audit"
+        },
+        {
+          "line": 8,
+          "module": "./queries"
+        },
+        {
+          "line": 9,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/audit/ui/src/audit.ts": {
+      "sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 9,
+          "module": "./types"
+        },
+        {
+          "line": 10,
+          "module": "@tanstack/react-router"
+        }
+      ]
+    },
+    "server/src/radd/modules/audit/ui/src/index.tsx": {
+      "sha256": "2ef1632ecd5dfee56133efbc20b2b74a8cbb1faf42a6f73c72c3b7516e08d402",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./SettingsPage"
+        },
+        {
+          "line": 3,
+          "module": "./ChangeHistoryPanel"
+        },
+        {
+          "line": 4,
+          "module": "./SettingsFooter"
+        },
+        {
+          "line": 5,
+          "module": "react"
+        }
+      ]
+    },
+    "server/src/radd/modules/audit/ui/src/queries.ts": {
+      "sha256": "351dc1c6f63d68a922650477beeb4a441609710242b0d9fd9f9993a92c4f31bd",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "@tanstack/react-query"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 4,
+          "module": "./types"
+        }
+      ]
+    },
+    "server/src/radd/modules/audit/ui/src/types.ts": {
+      "sha256": "6ad30dd4a098f822b6523fd1f13fb7c0f3be38f911d1aca367a1395371e74c10",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/audit/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "audit",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/audit/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "audit",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
+        }
+      ]
+    },
     "server/src/radd/modules/auth/__init__.py": {
-      "sha256": "d8920ea0bbec9afb313fd6ea22361bed5c16dd40166acd71bb5f7589b9cbff4b",
+      "sha256": "6b3a20fd9715cae4b45fe47c1f7a4ebf084ba4d31ff8732e581def7ef856084a",
       "module_directory": "auth",
       "role": "runtime_source",
       "imports": [
@@ -23401,17 +23643,32 @@
       "role": "configuration",
       "imports": []
     },
-    "server/src/radd/modules/auth/ui/src/index.tsx": {
-      "sha256": "385565e1ea26479a622f207bd92f1bcc8ad6006e8dd780349b2a7d5a1d155bb7",
+    "server/src/radd/modules/auth/ui/src/change-format.ts": {
+      "sha256": "5f8026d339368988b7a3bcecc82a790cab347b748c011465b5c5fb64f7f601aa",
       "module_directory": "auth",
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "./options"
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
+    "server/src/radd/modules/auth/ui/src/index.tsx": {
+      "sha256": "7c3fc10038cc54c060c45d374452f432d2e88aa2ae022ed78c12bad71d0dc20a",
+      "module_directory": "auth",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "./change-format"
         },
         {
           "line": 2,
+          "module": "./options"
+        },
+        {
+          "line": 3,
           "module": "@radd/plugin-sdk"
         }
       ]
@@ -28080,7 +28337,7 @@
       ]
     },
     "server/src/radd/modules/capabilities/router.py": {
-      "sha256": "6a95f0be29ac4e53e914444c8900b0e7e3c013cb224f2e86537b6b496589fbde",
+      "sha256": "21c26e08a6a77dd978b78a545081ec761a0627f61959b680c7c5d4bba86fd132",
       "module_directory": "capabilities",
       "role": "runtime_source",
       "imports": [
@@ -28137,7 +28394,7 @@
       ]
     },
     "server/src/radd/modules/capabilities/schemas.py": {
-      "sha256": "07fd51c19795bf79c74285d870cf4dcac2b7f415b66f656de1aaaf841ef6dcd3",
+      "sha256": "0d1256b18370ad77b43130d79269fea764c4925fae1e9c4f67f936387c81f550",
       "module_directory": "capabilities",
       "role": "runtime_source",
       "imports": [
@@ -40155,7 +40412,7 @@
       ]
     },
     "server/src/radd/modules/items/__init__.py": {
-      "sha256": "746f9f36f72baae62cabff0b195f0ffb3d37d5f69cd4bc7bff9c1a0be49f1720",
+      "sha256": "dc428abcad209a43433f180c909bd49215ac8caaf6339dce6614c75a6a4e9315",
       "module_directory": "items",
       "role": "runtime_source",
       "imports": [
@@ -40192,6 +40449,7 @@
           "line": 6,
           "module": "radd.kernel",
           "names": [
+            "PluginUiManifest",
             "RaddPlugin"
           ]
         },
@@ -45578,6 +45836,67 @@
           "names": [
             "WorkItem"
           ]
+        }
+      ]
+    },
+    "server/src/radd/modules/items/ui/package.json": {
+      "sha256": "1a8e04d34e894ba63e32c931f629858ebbf26de30182d6f6472d96eff81d7957",
+      "module_directory": "items",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/items/ui/src/change-format.ts": {
+      "sha256": "e85afdb56d3812bd4f6af5ceaef3e7b2e0a22d434b913e8d760ef4eb27221bc6",
+      "module_directory": "items",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 31,
+          "module": " in change ? {from: value(change.from)} : {}), ...("
+        }
+      ]
+    },
+    "server/src/radd/modules/items/ui/src/index.tsx": {
+      "sha256": "7287c74f807eabc84739e267f7d208dbf5cf1d9cbec56d0adbc62db4391e67e9",
+      "module_directory": "items",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 2,
+          "module": "./change-format"
+        }
+      ]
+    },
+    "server/src/radd/modules/items/ui/tsconfig.json": {
+      "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+      "module_directory": "items",
+      "role": "configuration",
+      "imports": []
+    },
+    "server/src/radd/modules/items/ui/vite.config.mjs": {
+      "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+      "module_directory": "items",
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:path"
+        },
+        {
+          "line": 2,
+          "module": "node:url"
+        },
+        {
+          "line": 3,
+          "module": "@radd/plugin-sdk/vite"
         }
       ]
     },
@@ -60927,7 +61246,7 @@
       ]
     },
     "server/src/radd/modules/projects/ui/package.json": {
-      "sha256": "1da57fd0df560a0647412fecd36d844af5525c87d3433ac258dcd36a868f4c74",
+      "sha256": "85aa59df527b42184c66ea46d806849ec48eb346ee66f308ef94c491afdcfe60",
       "module_directory": "projects",
       "role": "configuration",
       "imports": []
@@ -76109,7 +76428,7 @@
       ]
     },
     "server/tests/test_audit_ledger.py": {
-      "sha256": "829f7ae898615d543141bb81188a7d4c4c5783bc0668dcde87741c91a7ad8123",
+      "sha256": "2027d8e8b16232a2607c0bba69d143ac3ea59e875e49dfed4897ee1266d36879",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -76255,6 +76574,27 @@
           "module": "radd.modules.items",
           "names": [
             "plugin"
+          ]
+        },
+        {
+          "line": 213,
+          "module": "radd.modules.audit.router",
+          "names": [
+            "audit_access"
+          ]
+        },
+        {
+          "line": 214,
+          "module": "radd.modules.auth.scopes",
+          "names": [
+            "parse_scope"
+          ]
+        },
+        {
+          "line": 245,
+          "module": "radd.modules.capabilities.router",
+          "names": [
+            "get_capabilities"
           ]
         }
       ]
@@ -110639,7 +110979,7 @@
       "imports": []
     },
     "web/package.json": {
-      "sha256": "731300e119c9f9c2ab3c9f6bdd300f23fb3898a8fb338b117801ac1c2a7423b2",
+      "sha256": "41afc91e0096bc82e36a25f1d1bec32ae350cf3da44c88d4c590e2f7854fd8a1",
       "module_directory": null,
       "role": "configuration",
       "imports": []
@@ -110651,13 +110991,112 @@
       "imports": []
     },
     "web/packages/plugin-sdk/package.json": {
-      "sha256": "72e2df339763f6b28c2dddf2a5eefff33f750e8a9cd0e79a4fb07abc8c002ae5",
+      "sha256": "eb9390c465f0c8f7c9093e0713f23a4209b47d2fc3dd51fb61572d247b84ba9f",
       "module_directory": null,
       "role": "configuration",
       "imports": []
     },
+    "web/packages/plugin-sdk/src/ChangeLines.tsx": {
+      "sha256": "e0c8c616f3ba35a2fa8f9b27ea6f8794faef72b64305f4e92e6bbebb58b58b48",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "lucide-react"
+        },
+        {
+          "line": 3,
+          "module": "./slots"
+        },
+        {
+          "line": 4,
+          "module": "./changes"
+        },
+        {
+          "line": 33,
+          "module": " in change) && !("
+        },
+        {
+          "line": 67,
+          "module": "];\n  muted?: boolean;\n}) {\n  const text = formatChangeValue(value);\n  return <span className={muted ? "
+        },
+        {
+          "line": 74,
+          "module": "]): string {\n  if (value === null || value === undefined || value === "
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/CollapsibleCard.tsx": {
+      "sha256": "6516226c45dffd21e0bdf115e4fa6a47c0289b298a743347453aeaa0b451eee4",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        },
+        {
+          "line": 2,
+          "module": "lucide-react"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/DateField.tsx": {
+      "sha256": "2ff1b6be308ad651ab22d0fe4d2a5c756128a6d40f8b60ab03a7121edba09abc",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/Pager.tsx": {
+      "sha256": "39d237f4c850812be17c067ef88848b8ab3a88317272e960c72583e802163607",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 12,
+          "module": "lucide-react"
+        },
+        {
+          "line": 13,
+          "module": "./host"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/Table.tsx": {
+      "sha256": "032e063363432255416c23bde5a947b691c4995f6970b23850b2a43b21840547",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": [
+        {
+          "line": 1,
+          "module": "react"
+        }
+      ]
+    },
+    "web/packages/plugin-sdk/src/TableSkeleton.tsx": {
+      "sha256": "728635886f91fc2f2ae28bd368bf7ada681d03100bbcf679a0c06e23376ef22f",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": []
+    },
     "web/packages/plugin-sdk/src/api.ts": {
       "sha256": "d39532704e8af3604339a583f3a9153396f261edc520a4dc376a89ff89b94f6e",
+      "module_directory": null,
+      "role": "runtime_source",
+      "imports": []
+    },
+    "web/packages/plugin-sdk/src/changes.ts": {
+      "sha256": "0c59795daa75472409e19c21a1d79f786f7c22098f89c01db2f8850221c8cdea",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
@@ -110745,7 +111184,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/host-registry.ts": {
-      "sha256": "85179b8948f8f09dcfd1d1aa2b675ed38756d572de24286b4e768d4f25228fcf",
+      "sha256": "d3887e50477692a47a8a0018c808eb4c26e215a822510a2c10cfb61aae8d20fa",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -110756,17 +111195,17 @@
       ]
     },
     "web/packages/plugin-sdk/src/host.tsx": {
-      "sha256": "c57bcd5138c2a73ce9319cefefbc87e7895279fa5fa029724e3e0b7987f73fc5",
+      "sha256": "6cf51a9952be2daa1258197407558067d16c157f28452b3d43a9378271a93f37",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "./primitives"
+          "module": "./slots"
         },
         {
-          "line": 13,
-          "module": "./host-registry"
+          "line": 2,
+          "module": "./primitives"
         },
         {
           "line": 14,
@@ -110775,101 +111214,133 @@
         {
           "line": 15,
           "module": "./host-registry"
+        },
+        {
+          "line": 16,
+          "module": "./host-registry"
         }
       ]
     },
     "web/packages/plugin-sdk/src/index.ts": {
-      "sha256": "c50ff4e3b39cefa26bacd44d24d0212ba29109dfb9ecac6d80430251581eaef6",
+      "sha256": "91d2f06966bd2ea2640ea0de14816816baa1b0bf037b671a0eea1b0a5873836d",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
-          "line": 7,
+          "line": 8,
           "module": "./version"
         },
         {
-          "line": 32,
+          "line": 33,
           "module": "./slots"
         },
         {
-          "line": 39,
+          "line": 40,
           "module": "./plugin"
         },
         {
-          "line": 54,
+          "line": 55,
           "module": "./primitives"
         },
         {
-          "line": 56,
+          "line": 57,
           "module": "./tokens"
         },
         {
-          "line": 68,
+          "line": 69,
           "module": "./host"
         },
         {
-          "line": 70,
+          "line": 71,
           "module": "./api"
         },
         {
-          "line": 81,
+          "line": 82,
           "module": "./hooks"
         },
         {
-          "line": 94,
+          "line": 95,
           "module": "./types"
         },
         {
-          "line": 96,
+          "line": 97,
           "module": "./data"
         },
         {
-          "line": 98,
+          "line": 99,
           "module": "./dates"
         },
         {
-          "line": 100,
+          "line": 101,
           "module": "./directory"
         },
         {
-          "line": 102,
+          "line": 103,
           "module": "./schema-form"
         },
         {
-          "line": 103,
+          "line": 104,
           "module": "./schema-defaults"
         },
         {
-          "line": 105,
+          "line": 106,
           "module": "./options"
         },
         {
-          "line": 107,
+          "line": 108,
           "module": "./switch"
         },
         {
-          "line": 108,
+          "line": 109,
           "module": "./paged-directory"
         },
         {
-          "line": 110,
+          "line": 111,
           "module": "./token-multi-select"
         },
         {
-          "line": 111,
+          "line": 112,
           "module": "./error-text"
         },
         {
-          "line": 113,
+          "line": 114,
           "module": "./query-sources"
         },
         {
-          "line": 115,
+          "line": 116,
           "module": "./schedule"
         },
         {
-          "line": 116,
+          "line": 117,
           "module": "./schedule-editor"
+        },
+        {
+          "line": 119,
+          "module": "./ChangeLines"
+        },
+        {
+          "line": 120,
+          "module": "./changes"
+        },
+        {
+          "line": 121,
+          "module": "./CollapsibleCard"
+        },
+        {
+          "line": 122,
+          "module": "./Pager"
+        },
+        {
+          "line": 123,
+          "module": "./DateField"
+        },
+        {
+          "line": 124,
+          "module": "./Table"
+        },
+        {
+          "line": 125,
+          "module": "./TableSkeleton"
         }
       ]
     },
@@ -110947,7 +111418,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/primitives.tsx": {
-      "sha256": "dd144f0be5d448642ee4a69c7b94ed02bc28722e47a9b1393b2d1d22351ca4c9",
+      "sha256": "2bcf211f7f87c299e65a0f5531536e4f784d85226872fa26a8cb6716ed534644",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -111039,7 +111510,7 @@
       ]
     },
     "web/packages/plugin-sdk/src/slots.tsx": {
-      "sha256": "9c21989edb3df158672ca647847c767df996ec66baeb7e6713c8aea1e3fadb73",
+      "sha256": "1cf67ea9a175e33e8e74a5348d60075155cf0fdd24cfbb36e566f980f73b8a27",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -111056,7 +111527,7 @@
           "module": "./tokens"
         },
         {
-          "line": 704,
+          "line": 712,
           "module": "${this.props.plugin}"
         }
       ]
@@ -111107,13 +111578,13 @@
       "imports": []
     },
     "web/packages/plugin-sdk/src/types.ts": {
-      "sha256": "52f40ce8af6fa35bbccede6df14c2b7bcc671311cf3aa7feb73553d019e21fe5",
+      "sha256": "5d4df5635102cade65901455de609b83346397e93e02d50efd8a54399b239a05",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
     },
     "web/packages/plugin-sdk/src/version.ts": {
-      "sha256": "57d98c7e345a4a8d67654ddce4ecc647a8456b3361f050728cebd865f4d17789",
+      "sha256": "f476cd6ea393ef9d07ae56193ae632acb85cb3cb280d83b2ba629705a7e43448",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
@@ -111208,7 +111679,7 @@
       "imports": []
     },
     "web/public/shared/radd-plugin-sdk.js": {
-      "sha256": "63b9009aa5fd9726f6cd7e1035ddd138f8ad0835672a190b32380a51f206d57a",
+      "sha256": "d33337a58c31a3ba5c9e790ded4ce7f4d27edbabc8b16edf641205151e24402c",
       "module_directory": null,
       "role": "generated_source",
       "imports": []
@@ -111429,8 +111900,31 @@
         }
       ]
     },
+    "web/scripts/audit-change-format.test.mjs": {
+      "sha256": "e0496f2258642a2bdd85abb76e3a78caf14af7fed6252f1fae3e8dea0a1b57b4",
+      "module_directory": null,
+      "role": "test",
+      "imports": [
+        {
+          "line": 1,
+          "module": "node:test"
+        },
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:fs"
+        },
+        {
+          "line": 4,
+          "module": "node:module"
+        }
+      ]
+    },
     "web/scripts/audit-links.test.mjs": {
-      "sha256": "1f3f139f50f3f0ed36a90a7fa81a5a6b1d8e5f31597e3daf64af575da4ff0d04",
+      "sha256": "188a8913855b6a8da4e4578e082eb57ac14b25795fc7f91f193b5fe08ff9f1fe",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -111778,8 +112272,59 @@
         }
       ]
     },
+    "web/scripts/browser-audit-contributions.mjs": {
+      "sha256": "3f323d7515c2026337c5ddfbaae722ed8677df679539c2dbed9dcc2b359320c0",
+      "module_directory": null,
+      "role": "tooling_source",
+      "imports": [
+        {
+          "line": 2,
+          "module": "node:assert/strict"
+        },
+        {
+          "line": 3,
+          "module": "node:http"
+        },
+        {
+          "line": 4,
+          "module": "node:fs"
+        },
+        {
+          "line": 5,
+          "module": "node:fs/promises"
+        },
+        {
+          "line": 6,
+          "module": "node:path"
+        },
+        {
+          "line": 7,
+          "module": "./lib/cdp.mjs"
+        },
+        {
+          "line": 12,
+          "module": "react"
+        },
+        {
+          "line": 12,
+          "module": "@tanstack/react-router"
+        },
+        {
+          "line": 12,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 65,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 65,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
+    },
     "web/scripts/browser-audit-entity-links.mjs": {
-      "sha256": "96c4812f17ca804f43f96a1de96525f5fcb433d808d429247e84affa13692c06",
+      "sha256": "426f8576fe297e039f9c5f249f02828f7ae5778414e81afc3b5fb563cead473c",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -112636,7 +113181,7 @@
       ]
     },
     "web/scripts/build-all.mjs": {
-      "sha256": "72456355d9b3a9b2bcc570771dfb2b0d93a0f97097998636da3106783c7f33c1",
+      "sha256": "b33f501a2bb8b4484fbd60a09a947e246a58f7b6e22a6830c4d17fa156e18997",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -112995,7 +113540,7 @@
       ]
     },
     "web/scripts/gen-shared-shims.mjs": {
-      "sha256": "7bd4981754be54838828eff0a82ecc2d9e5281684c4c8ce298dd338f4d8176ec",
+      "sha256": "6c6bdfbe4c98987a4a9dfc9fb82d93490d08ec5e8853b353d47e2da0de2c0c10",
       "module_directory": null,
       "role": "tooling_source",
       "imports": [
@@ -113805,7 +114350,7 @@
       ]
     },
     "web/scripts/plugin-boundaries.test.mjs": {
-      "sha256": "8183144868aad1e61c0226d06ca9ec7da626c9f81b26214d393d1e005128102c",
+      "sha256": "54b33eccce7667580bfde33acaceb20097ac7779c03ed5fac0cab1dcc6492e13",
       "module_directory": null,
       "role": "test",
       "imports": [
@@ -114845,17 +115390,13 @@
       ]
     },
     "web/src/components/CollapsibleCard.tsx": {
-      "sha256": "6516226c45dffd21e0bdf115e4fa6a47c0289b298a743347453aeaa0b451eee4",
+      "sha256": "8d4af391e607faa079ef0c62ad03bb31f66f1b42d83966463fb1a81e3ba2ecec",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "react"
-        },
-        {
-          "line": 2,
-          "module": "lucide-react"
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -115119,17 +115660,17 @@
       ]
     },
     "web/src/components/Pager.tsx": {
-      "sha256": "6813d02ea3bac7d4148b3c9c17c92b5ef6b7b2abdc1895b40c5a54cc5c7245d3",
+      "sha256": "09bb2732e77972d92757f01f2ef0e80ad576cf7f6188698abbc8f4f6cf45fa19",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
-          "line": 12,
-          "module": "lucide-react"
+          "line": 1,
+          "module": "@radd/plugin-sdk"
         },
         {
-          "line": 13,
-          "module": "./Select"
+          "line": 2,
+          "module": "react"
         }
       ]
     },
@@ -115290,21 +115831,26 @@
       ]
     },
     "web/src/components/Table.tsx": {
-      "sha256": "032e063363432255416c23bde5a947b691c4995f6970b23850b2a43b21840547",
+      "sha256": "2995698a975808158a07df0268af601710657587e6e538de961886223ee66fd3",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "react"
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
     "web/src/components/TableSkeleton.tsx": {
-      "sha256": "728635886f91fc2f2ae28bd368bf7ada681d03100bbcf679a0c06e23376ef22f",
+      "sha256": "d750b2741feaa4cf7c95d86dce6f7398400f5d885ab49275fa4b86545d2cc2ba",
       "module_directory": null,
       "role": "runtime_source",
-      "imports": []
+      "imports": [
+        {
+          "line": 1,
+          "module": "@radd/plugin-sdk"
+        }
+      ]
     },
     "web/src/components/TextField.tsx": {
       "sha256": "06f6fa7583f2deacc5d2045fa1dd7482b55833f6716e89783540f1ac88a90d1d",
@@ -119091,84 +119637,13 @@
       ]
     },
     "web/src/components/history/ChangeHistoryPanel.tsx": {
-      "sha256": "2862dd59ea73ec4a3a59de6f0451f146eeef32e538891d61b27c2402a1af7f5d",
+      "sha256": "9a1faa7756f7667cfba52e13b7fdd308298b997ef860cb7253c8d8dce801b146",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 1,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 2,
-          "module": "@tanstack/react-router"
-        },
-        {
-          "line": 3,
-          "module": "../../lib/constants"
-        },
-        {
-          "line": 4,
-          "module": "../../lib/dates"
-        },
-        {
-          "line": 5,
-          "module": "../../lib/hooks"
-        },
-        {
-          "line": 6,
-          "module": "../../lib/queries"
-        },
-        {
-          "line": 7,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 8,
-          "module": "../CollapsibleCard"
-        },
-        {
-          "line": 9,
-          "module": "../Spinner"
-        },
-        {
-          "line": 10,
-          "module": "./ChangeLines"
-        }
-      ]
-    },
-    "web/src/components/history/ChangeLines.tsx": {
-      "sha256": "07583ec76038307bd3d626fbe86fd969bcc3e3357ded44ff15bf4c6481069043",
-      "module_directory": null,
-      "role": "runtime_source",
-      "imports": [
-        {
-          "line": 1,
-          "module": "react"
-        },
-        {
-          "line": 2,
-          "module": "lucide-react"
-        },
-        {
-          "line": 3,
-          "module": "../../lib/meta"
-        },
-        {
-          "line": 4,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 45,
-          "module": " in change) && !("
-        },
-        {
-          "line": 92,
-          "module": "];\n  muted?: boolean;\n}) {\n  const text = formatValue(field, value);\n  return <span className={muted ? "
-        },
-        {
-          "line": 99,
-          "module": "]): string {\n  if (value === null || value === undefined || value === "
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -119792,7 +120267,7 @@
       ]
     },
     "web/src/components/items/HistoryTab.tsx": {
-      "sha256": "d354a2c64100421bb47fafa3c08c241c923ded4d348b9199aa5ef44f0cd6fea4",
+      "sha256": "0307a1e9ee07be2467e226586031b3b342095ecd77e23366fe62e40c75ff36da",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -119830,7 +120305,7 @@
         },
         {
           "line": 9,
-          "module": "../history/ChangeLines"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 10,
@@ -120314,7 +120789,7 @@
       ]
     },
     "web/src/components/items/PlanningFields.tsx": {
-      "sha256": "7ca0e6269279e6fc13a96b3a18bf6742dc72ce0b858030ff4b5cec130053d926",
+      "sha256": "4a7ded5a74a7c6df42894ea86b34b1c3b8437c2e3fc0d15c5cafea7b58900791",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -120324,26 +120799,30 @@
         },
         {
           "line": 2,
-          "module": "react"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 3,
-          "module": "@tanstack/react-query"
+          "module": "@radd/plugin-sdk"
         },
         {
           "line": 4,
-          "module": "../../lib/meta"
+          "module": "@tanstack/react-query"
         },
         {
           "line": 5,
-          "module": "../../lib/queries"
+          "module": "../../lib/meta"
         },
         {
           "line": 6,
-          "module": "../../lib/types"
+          "module": "../../lib/queries"
         },
         {
           "line": 7,
+          "module": "../../lib/types"
+        },
+        {
+          "line": 8,
           "module": "../Select"
         }
       ]
@@ -125433,7 +125912,7 @@
       ]
     },
     "web/src/components/settings/SettingsPage.tsx": {
-      "sha256": "c0b00543d3a21132f56772caf7a3238c52cb3c2c7adca99170be24f7b9a94da1",
+      "sha256": "ea680e4a3c4feef47c1add109df1d92e6afb4106e8ffbfb79f5432680b263472",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -125443,23 +125922,11 @@
         },
         {
           "line": 2,
-          "module": "@tanstack/react-router"
-        },
-        {
-          "line": 3,
           "module": "lucide-react"
         },
         {
-          "line": 4,
-          "module": "../../lib/constants"
-        },
-        {
-          "line": 5,
-          "module": "../../lib/hooks"
-        },
-        {
-          "line": 6,
-          "module": "../../lib/types"
+          "line": 3,
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -128782,7 +129249,7 @@
       ]
     },
     "web/src/components/shell/Sidebar.tsx": {
-      "sha256": "d0b4db585657778489da712df0d2da6738a1e32f505848efaa50f2c150a9fdf6",
+      "sha256": "d0ad385e8c36ad4d6a07a3c3bceeb6eaabbc75856cbe3f01e282a58fd13968af",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -130497,7 +130964,7 @@
       ]
     },
     "web/src/host-components.tsx": {
-      "sha256": "a04083bdf998b0ed691996284218fc025539225f6583291e306ab1b4c2af85a3",
+      "sha256": "5ab11e61731c2c6da10567b22f7c4f6a30598e2adc6a4886f254c9cab370346d",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -130531,26 +130998,30 @@
         },
         {
           "line": 38,
-          "module": "./components/settings/SettingsPage"
+          "module": "./components/Avatar"
         },
         {
           "line": 39,
-          "module": "./components/Button"
+          "module": "./components/settings/SettingsPage"
         },
         {
           "line": 40,
-          "module": "./components/TextField"
+          "module": "./components/Button"
         },
         {
           "line": 41,
-          "module": "./components/SelectField"
+          "module": "./components/TextField"
         },
         {
           "line": 42,
-          "module": "./components/Callout"
+          "module": "./components/SelectField"
         },
         {
           "line": 43,
+          "module": "./components/Callout"
+        },
+        {
+          "line": 44,
           "module": "./components/QueryError"
         }
       ]
@@ -130658,21 +131129,6 @@
         {
           "line": 5,
           "module": "./types"
-        }
-      ]
-    },
-    "web/src/lib/audit.ts": {
-      "sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
-      "module_directory": null,
-      "role": "runtime_source",
-      "imports": [
-        {
-          "line": 9,
-          "module": "./types"
-        },
-        {
-          "line": 10,
-          "module": "@tanstack/react-router"
         }
       ]
     },
@@ -130943,7 +131399,7 @@
       ]
     },
     "web/src/lib/constants/api.ts": {
-      "sha256": "49824d4ba44e4bcc8b8263986457beb772285b141f72fef41e43c162178c84a7",
+      "sha256": "5bfa5ba89a3938f4c5c1a4bde019cc9045595b44f5e9b8b44277cb73ba95b19f",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -131009,7 +131465,7 @@
       "imports": []
     },
     "web/src/lib/constants/routes.ts": {
-      "sha256": "2d4a68037fbd434a9eb4ba0a78111e2eeb264cd3b4751df71ee759f30682216e",
+      "sha256": "18e4572b0e01f68312c19b2409d42759a7ab9293533defeeb36ebc09d015c54b",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -131327,29 +131783,37 @@
       ]
     },
     "web/src/lib/meta.ts": {
-      "sha256": "37df2c19298697918a0d7f7b5b492d0ba17e3d985c029380c3b89fdced39f07e",
+      "sha256": "15857c869800db9aba761e7ba829504a89e868cb33af455aaaeb300d37400d68",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
-          "line": 24,
-          "module": "lucide-react"
+          "line": 1,
+          "module": "../../../server/src/radd/modules/items/ui/src/change-format"
         },
         {
           "line": 25,
           "module": "lucide-react"
         },
         {
-          "line": 35,
+          "line": 26,
+          "module": "lucide-react"
+        },
+        {
+          "line": 36,
           "module": "./types"
         },
         {
-          "line": 62,
+          "line": 63,
           "module": "./types"
         },
         {
-          "line": 330,
+          "line": 331,
           "module": "../../../server/src/radd/modules/cycles/ui/src/status"
+        },
+        {
+          "line": 445,
+          "module": "../../../server/src/radd/modules/items/ui/src/change-format"
         }
       ]
     },
@@ -131509,7 +131973,7 @@
       ]
     },
     "web/src/lib/queries/activity.ts": {
-      "sha256": "97c230a17f248ab7bed66047efc947fefe68516310bd7bc70c07c903aef7e941",
+      "sha256": "87e21b3fcf86c20ee4e7601565fb5f2f757a101e2e2fd2ec4e7b39446eb7c144",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -131534,7 +131998,7 @@
           "module": "./shared"
         },
         {
-          "line": 26,
+          "line": 23,
           "module": "../types"
         }
       ]
@@ -132426,7 +132890,7 @@
       ]
     },
     "web/src/lib/queries/shared.ts": {
-      "sha256": "3d7227de1919833eb2d5f63e3fbee5611bd8be7f37aff42c0db03d90b8968d96",
+      "sha256": "f2f0baba3b40a531893eed8250bc7e1b0b9ae899551aabc5d9eba6049feaf9b7",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -132970,13 +133434,21 @@
       "imports": []
     },
     "web/src/lib/types/history.ts": {
-      "sha256": "97524987a06a4c7929714c6381c5739a6849da928795e910693a691ccaba4fd2",
+      "sha256": "8c4d905e4429c5e9f80bb9437177d582391ca6c5c1c9e0d0e3ab7f0e6c4d8cd5",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
         {
           "line": 2,
           "module": "./items"
+        },
+        {
+          "line": 24,
+          "module": "@radd/plugin-sdk"
+        },
+        {
+          "line": 25,
+          "module": "@radd/plugin-sdk"
         }
       ]
     },
@@ -133212,7 +133684,7 @@
       "imports": []
     },
     "web/src/lib/types/plugins.ts": {
-      "sha256": "32a29bf36edf2d0a4a33f3ccc6cc925b1a5574b915dff7961ff35dd04095ca00",
+      "sha256": "ac9b7ee2ada4b0444e1e53224481c030b94f4408cb71bc5b160e623989de5228",
       "module_directory": null,
       "role": "runtime_source",
       "imports": []
@@ -133684,7 +134156,7 @@
       ]
     },
     "web/src/router.tsx": {
-      "sha256": "9f2907e26b2fc4c5dce9b6dd5d69447580f07c06b2009c6e6bbdf12f0d47be37",
+      "sha256": "2fdfa9185857efab261dbb5dacb1a8d92f3d020b5da632bab97af6275fb96bda",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [
@@ -133698,103 +134170,103 @@
         },
         {
           "line": 10,
-          "module": "./lib/audit"
-        },
-        {
-          "line": 11,
           "module": "./lib/auth"
         },
         {
-          "line": 12,
+          "line": 11,
           "module": "./lib/constants"
         },
         {
-          "line": 13,
+          "line": 12,
           "module": "./lib/queries"
         },
         {
-          "line": 14,
+          "line": 13,
           "module": "./routes/app-layout"
         },
         {
-          "line": 15,
+          "line": 14,
           "module": "./components/shell/PluginPage"
         },
         {
-          "line": 16,
+          "line": 15,
           "module": "./components/shell/SettingsPluginPage"
         },
         {
-          "line": 17,
+          "line": 16,
           "module": "./routes/project-releases"
         },
         {
-          "line": 18,
+          "line": 17,
           "module": "./routes/cycle"
         },
         {
-          "line": 19,
+          "line": 18,
           "module": "./routes/form-submit"
         },
         {
-          "line": 20,
+          "line": 19,
           "module": "./routes/item-page"
         },
         {
-          "line": 21,
+          "line": 20,
           "module": "./routes/login"
         },
         {
-          "line": 22,
+          "line": 21,
           "module": "./routes/starred"
         },
         {
-          "line": 23,
+          "line": 22,
           "module": "./routes/my-work"
         },
         {
-          "line": 24,
+          "line": 23,
           "module": "./routes/project-home"
         },
         {
-          "line": 25,
+          "line": 24,
           "module": "./routes/projects-index"
         },
         {
-          "line": 26,
+          "line": 25,
           "module": "./routes/public-csat"
         },
         {
-          "line": 27,
+          "line": 26,
           "module": "./routes/roadmap"
         },
         {
-          "line": 28,
+          "line": 27,
           "module": "./routes/reports"
         },
         {
-          "line": 29,
+          "line": 28,
           "module": "./routes/global-reports"
         },
         {
-          "line": 30,
+          "line": 29,
           "module": "./routes/timesheet"
         },
         {
-          "line": 31,
+          "line": 30,
           "module": "./routes/inbox"
         },
         {
-          "line": 32,
+          "line": 31,
           "module": "./routes/portal"
         },
         {
-          "line": 33,
+          "line": 32,
           "module": "./routes/portal-form"
         },
         {
-          "line": 34,
+          "line": 33,
           "module": "./routes/settings/layout"
+        },
+        {
+          "line": 34,
+          "module": "./routes/project-settings/layout"
         },
         {
           "line": 35,
@@ -133838,150 +134310,142 @@
         },
         {
           "line": 45,
-          "module": "./routes/project-settings/layout"
-        },
-        {
-          "line": 46,
           "module": "./routes/settings/general"
         },
         {
-          "line": 47,
+          "line": 46,
           "module": "./routes/settings/automations"
         },
         {
-          "line": 48,
+          "line": 47,
           "module": "./routes/settings/cycles"
         },
         {
-          "line": 49,
+          "line": 48,
           "module": "./routes/settings/fields"
         },
         {
-          "line": 50,
+          "line": 49,
           "module": "./routes/settings/link-types"
         },
         {
-          "line": 51,
+          "line": 50,
           "module": "./routes/settings/labels"
         },
         {
-          "line": 52,
+          "line": 51,
           "module": "./routes/settings/users"
         },
         {
-          "line": 53,
+          "line": 52,
           "module": "./routes/settings/directory"
         },
         {
-          "line": 54,
+          "line": 53,
           "module": "./routes/settings/import-data"
         },
         {
-          "line": 55,
+          "line": 54,
           "module": "./routes/settings/jira-import"
         },
         {
-          "line": 56,
+          "line": 55,
           "module": "./routes/settings/confluence-import"
         },
         {
-          "line": 57,
+          "line": 56,
           "module": "./routes/settings/roles"
         },
         {
-          "line": 58,
+          "line": 57,
           "module": "./routes/settings/teams"
         },
         {
-          "line": 59,
+          "line": 58,
           "module": "./routes/settings/timelogging"
         },
         {
-          "line": 60,
+          "line": 59,
           "module": "./routes/settings/tokens"
         },
         {
-          "line": 61,
-          "module": "./routes/settings/audit"
-        },
-        {
-          "line": 62,
+          "line": 60,
           "module": "./routes/settings/backups"
         },
         {
-          "line": 63,
+          "line": 61,
           "module": "./routes/settings/plugins"
         },
         {
-          "line": 64,
+          "line": 62,
           "module": "./routes/settings/canned"
         },
         {
-          "line": 65,
+          "line": 63,
           "module": "./routes/settings/vcs"
         },
         {
-          "line": 66,
+          "line": 64,
           "module": "./routes/settings/service-accounts"
         },
         {
-          "line": 67,
+          "line": 65,
           "module": "./routes/settings/ai"
         },
         {
-          "line": 68,
+          "line": 66,
           "module": "./routes/settings/storage"
         },
         {
-          "line": 69,
+          "line": 67,
           "module": "./routes/settings/email"
         },
         {
-          "line": 70,
+          "line": 68,
           "module": "./routes/settings/sign-in"
         },
         {
-          "line": 71,
+          "line": 69,
           "module": "./routes/settings/alertmanager"
         },
         {
-          "line": 72,
+          "line": 70,
           "module": "./routes/settings/webhooks"
         },
         {
-          "line": 73,
+          "line": 71,
           "module": "./routes/settings/notifications"
         },
         {
-          "line": 74,
+          "line": 72,
           "module": "./routes/settings/profile"
         },
         {
-          "line": 75,
+          "line": 73,
           "module": "./routes/settings/instance"
         },
         {
-          "line": 76,
+          "line": 74,
           "module": "./routes/settings/pages"
         },
         {
-          "line": 77,
+          "line": 75,
           "module": "./routes/view"
         },
         {
-          "line": 78,
+          "line": 76,
           "module": "./routes/pages-index"
         },
         {
-          "line": 79,
+          "line": 77,
           "module": "./routes/page-space"
         },
         {
-          "line": 80,
+          "line": 78,
           "module": "./routes/page-print"
         },
         {
-          "line": 81,
+          "line": 79,
           "module": "./routes/dashboard"
         }
       ]
@@ -136173,125 +136637,6 @@
         }
       ]
     },
-    "web/src/routes/settings/audit.tsx": {
-      "sha256": "ad8846c4e389668c78b0738fe15208d597924ce333883445b15164cdd9f2b8b2",
-      "module_directory": null,
-      "role": "runtime_source",
-      "imports": [
-        {
-          "line": 1,
-          "module": "react"
-        },
-        {
-          "line": 2,
-          "module": "@tanstack/react-query"
-        },
-        {
-          "line": 3,
-          "module": "@tanstack/react-router"
-        },
-        {
-          "line": 4,
-          "module": "lucide-react"
-        },
-        {
-          "line": 5,
-          "module": "../../lib/api"
-        },
-        {
-          "line": 6,
-          "module": "@radd/plugin-sdk"
-        },
-        {
-          "line": 7,
-          "module": "../../lib/audit"
-        },
-        {
-          "line": 8,
-          "module": "../../lib/constants"
-        },
-        {
-          "line": 9,
-          "module": "../../lib/constants"
-        },
-        {
-          "line": 10,
-          "module": "../../lib/dates"
-        },
-        {
-          "line": 11,
-          "module": "../../lib/hooks"
-        },
-        {
-          "line": 12,
-          "module": "../../lib/meta"
-        },
-        {
-          "line": 13,
-          "module": "../../lib/queries"
-        },
-        {
-          "line": 14,
-          "module": "../../lib/types"
-        },
-        {
-          "line": 15,
-          "module": "../../components/Avatar"
-        },
-        {
-          "line": 16,
-          "module": "../../components/Button"
-        },
-        {
-          "line": 17,
-          "module": "../../components/EmptyState"
-        },
-        {
-          "line": 18,
-          "module": "../../components/history/ChangeLines"
-        },
-        {
-          "line": 19,
-          "module": "../../components/items/PlanningFields"
-        },
-        {
-          "line": 20,
-          "module": "../../components/Pager"
-        },
-        {
-          "line": 21,
-          "module": "../../components/PeopleDirectorySelect"
-        },
-        {
-          "line": 22,
-          "module": "../../components/projects/ProjectSelect"
-        },
-        {
-          "line": 23,
-          "module": "../../components/QueryError"
-        },
-        {
-          "line": 24,
-          "module": "../../components/Select"
-        },
-        {
-          "line": 25,
-          "module": "../../components/settings/SettingsPage"
-        },
-        {
-          "line": 26,
-          "module": "../../components/Table"
-        },
-        {
-          "line": 27,
-          "module": "../../components/TableSkeleton"
-        },
-        {
-          "line": 28,
-          "module": "../../components/TextField"
-        }
-      ]
-    },
     "web/src/routes/settings/automations.tsx": {
       "sha256": "001b550d029f08a60b9441317b80147c3e56dd13931c1269f630487c5ffb0024",
       "module_directory": null,
@@ -137248,7 +137593,7 @@
       ]
     },
     "web/src/routes/settings/layout.tsx": {
-      "sha256": "19a8c00d41f03ff0df5937830fbdfc9e99151fe7f223488890711a0635ac98d7",
+      "sha256": "f40fed9a2ea9ec5cb4444f260fb927a9e7abef89e1c4f012bc98639d6ecdc653",
       "module_directory": null,
       "role": "runtime_source",
       "imports": [

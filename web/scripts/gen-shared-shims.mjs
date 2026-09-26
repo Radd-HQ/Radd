@@ -31,6 +31,7 @@ const NPM_MODULES = [
 // web/packages/plugin-sdk/src/index.ts. A drift shows up as an undefined import at runtime.
 const SDK_EXPORTS = [
   "UI_API_VERSION", "isUiApiCompatible",
+  "ChangeList", "ChangeLine", "changeLabel", "humanize", "formatChangeValue", "CollapsibleCard", "Pager", "DateField", "Table", "THead", "TBody", "Th", "Td", "TableSkeleton",
   "ScheduleEditor", "ScheduleKind", "defaultSchedule", "isScheduleValid",
   "SlotId", "Slot", "useSlot", "useSlotMatch", "registerSlot", "unregisterSlot",
   "unregisterPlugin", "activeSlotPlugins", "useActiveSlotPlugins", "useDisabledNavPaths",

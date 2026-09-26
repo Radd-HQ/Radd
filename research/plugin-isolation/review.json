@@ -506,9 +506,9 @@
     "issue": null
   },
   "docs/modules.md": {
-    "sha256": "b7714d540588583d76353de4c4b7f7a3fe2c97a2a527b78a6299f552f0a827af",
+    "sha256": "664bbef136045290821ca1427b8d454605f3f609a90b1eb1ccb8b2415ab9d8c8",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -517,9 +517,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "docs/performance-safety-audit.md": {
     "sha256": "103b850cbfe71ea293d998895fd8449ee03f8a4764199133d84bf080dcbda7d9",
@@ -557,9 +560,9 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "1c6dfbde9296c9dd0c2b5e958ae056e3f449e8bf37e035e4ab36f23493e21662",
+    "sha256": "1f7d72e28ecf7f2aaeb780973ebfd2d8343641dbb553638a3b8d960381ae9aff",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -568,9 +571,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2064,9 +2070,9 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "8db2517f3d79c9c6b57ac967dbb182282e3fb06848186283e5eedd680cc397cc",
+    "sha256": "a201f62360054a6283ba1aad8decff61ec41402db3813795e6b09f29da636ea2",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -2075,9 +2081,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "research/review-2026-09-25/FIXES.md": {
     "sha256": "247e2f0759a2a12cb87c1e1d28fd6baefb175deb7f2d58bff79200f4d80925c2",
@@ -4328,15 +4337,18 @@
     "issue": null
   },
   "server/src/radd/kernel/specs.py": {
-    "sha256": "89a0a6b7908197aa682bbe499d79e5e8b475add716c32fd74c52198b5c5be297",
+    "sha256": "b34b2820b825dc24eb5a1aebea9ef1352ef550f0c6f4c74a80e898e227e36aad",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "server/src/radd/mailrender.py": {
     "sha256": "57ab07ed23c2301f7b354e48866589f76a20e891fd600542c4033996367a2c32",
@@ -5015,11 +5027,15 @@
     "issue": null
   },
   "server/src/radd/modules/audit/__init__.py": {
-    "sha256": "6bfe60cb20c654c4a63dacd7db37fd1933e86123ef9e5402b842cde4460d7304",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "a7913fd658addab2db5fa98c806284b00322b98aeadd304d1489a2295a0ec48e",
+    "status": "partially_reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/audit/mcptool.py": {
     "sha256": "c74b23737de35cc76cb99e8cc987aeb8c066df696436cd2f9b8881835dfd2064",
@@ -5029,22 +5045,27 @@
     "issue": null
   },
   "server/src/radd/modules/audit/router.py": {
-    "sha256": "5ca24cb29fc0f8b5e7b15babe781295bd1f057a346c4c74a5d03bb737bcb6dee",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "fe6fe9312af7013dcc26dc14b2af66413041f42c33092bf2a92dcf57aa7eed0b",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/audit/schemas.py": {
-    "sha256": "aa3a41caab8601ea0e3e825afcfa026db93a79afea39ebbd6cf5b47af9f2c5dd",
-    "status": "partially_reviewed",
+    "sha256": "cfd91c998b901ebd571dacef9ea97a73764df7878cdb3382257e782d2191fbe9",
+    "status": "reviewed",
     "owner": "audit",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/audit/service.py": {
     "sha256": "20ab91620604658d31276d40a8b43f3a9f1c0437d7659e0b4b2b98894bc31712",
@@ -5057,8 +5078,108 @@
     ],
     "issue": "RADD-1363"
   },
+  "server/src/radd/modules/audit/ui/package.json": {
+    "sha256": "b200e8697bafaae4a84397c6b9664cea480b58866dbc7885c037faf41e538d62",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/src/ChangeHistoryPanel.tsx": {
+    "sha256": "d751a03ee5985e128e220aeeb4a33896de0585b7be2225f12a592e21655f28e9",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/src/SettingsFooter.tsx": {
+    "sha256": "175827b4e132abd08efd887765aef06e4e41d8af44bdb3e5a5a9a869dd34044f",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/src/SettingsPage.tsx": {
+    "sha256": "c3d93ce8276464bf23c39039ca83e08360b9fc562fe8340ddabadb837b63754d",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/src/audit.ts": {
+    "sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/src/index.tsx": {
+    "sha256": "2ef1632ecd5dfee56133efbc20b2b74a8cbb1faf42a6f73c72c3b7516e08d402",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/src/queries.ts": {
+    "sha256": "351dc1c6f63d68a922650477beeb4a441609710242b0d9fd9f9993a92c4f31bd",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/src/types.ts": {
+    "sha256": "6ad30dd4a098f822b6523fd1f13fb7c0f3be38f911d1aca367a1395371e74c10",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/audit/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "reviewed",
+    "owner": "audit",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
   "server/src/radd/modules/auth/__init__.py": {
-    "sha256": "d8920ea0bbec9afb313fd6ea22361bed5c16dd40166acd71bb5f7589b9cbff4b",
+    "sha256": "6b3a20fd9715cae4b45fe47c1f7a4ebf084ba4d31ff8732e581def7ef856084a",
     "status": "partially_reviewed",
     "owner": "auth",
     "evidence": [
@@ -5066,9 +5187,12 @@
       "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/auth/account_directory.py": {
     "sha256": "0024bce13e5bf133db2af88d0c2df31307893244ee4109bc64b141adf92d37db",
@@ -5329,15 +5453,28 @@
     "evidence": [],
     "issue": null
   },
+  "server/src/radd/modules/auth/ui/src/change-format.ts": {
+    "sha256": "5f8026d339368988b7a3bcecc82a790cab347b748c011465b5c5fb64f7f601aa",
+    "status": "reviewed",
+    "owner": "auth",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
   "server/src/radd/modules/auth/ui/src/index.tsx": {
-    "sha256": "385565e1ea26479a622f207bd92f1bcc8ad6006e8dd780349b2a7d5a1d155bb7",
+    "sha256": "7c3fc10038cc54c060c45d374452f432d2e88aa2ae022ed78c12bad71d0dc20a",
     "status": "partially_reviewed",
     "owner": "auth",
     "evidence": [
       "Reviewed only RADD-1357 changes: option contribution registration, manifest SDK gate, build/test wiring or documentation. Remaining file/domain review is not certified.",
-      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks."
+      "research/plugin-isolation/README.md: RADD-1357 verification. Host + 19 remotes build; 53 frontend and 25 backend tests; 11 option, 10 directory, 15 canvas and 13 shared-control browser checks.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1357"
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/auth/ui/src/options.ts": {
     "sha256": "ccd81e022327a10709288659fdc7ad060249905b751fa8cf59b64caa11b33f46",
@@ -5966,18 +6103,26 @@
     "issue": null
   },
   "server/src/radd/modules/capabilities/router.py": {
-    "sha256": "6a95f0be29ac4e53e914444c8900b0e7e3c013cb224f2e86537b6b496589fbde",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "21c26e08a6a77dd978b78a545081ec761a0627f61959b680c7c5d4bba86fd132",
+    "status": "partially_reviewed",
+    "owner": "capabilities",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/capabilities/schemas.py": {
-    "sha256": "07fd51c19795bf79c74285d870cf4dcac2b7f415b66f656de1aaaf841ef6dcd3",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "0d1256b18370ad77b43130d79269fea764c4925fae1e9c4f67f936387c81f550",
+    "status": "partially_reviewed",
+    "owner": "capabilities",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/collab/__init__.py": {
     "sha256": "051930521cf6d002068882bf81c534288658efba16ea1c61b140ec6f5c180c68",
@@ -7433,15 +7578,18 @@
     "issue": "RADD-1357"
   },
   "server/src/radd/modules/items/__init__.py": {
-    "sha256": "746f9f36f72baae62cabff0b195f0ffb3d37d5f69cd4bc7bff9c1a0be49f1720",
+    "sha256": "dc428abcad209a43433f180c909bd49215ac8caaf6339dce6614c75a6a4e9315",
     "status": "partially_reviewed",
     "owner": "items",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/items/bulk.py": {
     "sha256": "cd14013735f2922eac919b0bf0e425c987e53195aa8035a5376e40599ecf469d",
@@ -7806,6 +7954,56 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/items/ui/package.json": {
+    "sha256": "1a8e04d34e894ba63e32c931f629858ebbf26de30182d6f6472d96eff81d7957",
+    "status": "reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/items/ui/src/change-format.ts": {
+    "sha256": "e85afdb56d3812bd4f6af5ceaef3e7b2e0a22d434b913e8d760ef4eb27221bc6",
+    "status": "reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/items/ui/src/index.tsx": {
+    "sha256": "7287c74f807eabc84739e267f7d208dbf5cf1d9cbec56d0adbc62db4391e67e9",
+    "status": "reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/items/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "server/src/radd/modules/items/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "reviewed",
+    "owner": "items",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/itemtypes/__init__.py": {
     "sha256": "04fe2218ae8a843abda8b8d9e3eba32025f542862bbaa578217467726e29ede8",
@@ -9723,14 +9921,17 @@
     "issue": null
   },
   "server/src/radd/modules/projects/ui/package.json": {
-    "sha256": "1da57fd0df560a0647412fecd36d844af5525c87d3433ac258dcd36a868f4c74",
-    "status": "reviewed",
+    "sha256": "85aa59df527b42184c66ea46d806849ec48eb346ee66f308ef94c491afdcfe60",
+    "status": "partially_reviewed",
     "owner": "projects",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
-      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks."
+      "Read owner contracts/implementation and verified host + 21 remote builds; 54 frontend tests; 27 focused backend tests; 14 actual-bundle picker checks, 11 option and 15 canvas regression checks.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1364"
   },
   "server/src/radd/modules/projects/ui/src/ProjectPicker.tsx": {
     "sha256": "ddca37c20f38a631860161f3786a34c88663e0b86e9172d991b923028ac1032b",
@@ -11549,15 +11750,18 @@
     "issue": null
   },
   "server/tests/test_audit_ledger.py": {
-    "sha256": "829f7ae898615d543141bb81188a7d4c4c5783bc0668dcde87741c91a7ad8123",
+    "sha256": "2027d8e8b16232a2607c0bba69d143ac3ea59e875e49dfed4897ee1266d36879",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "server/tests/test_audit_mcp.py": {
     "sha256": "c3f76bdf3d6744a465bbe40f445d6a6f17d1db390ffd9214b53d8837f0f7bf96",
@@ -13575,9 +13779,9 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "731300e119c9f9c2ab3c9f6bdd300f23fb3898a8fb338b117801ac1c2a7423b2",
+    "sha256": "41afc91e0096bc82e36a25f1d1bec32ae350cf3da44c88d4c590e2f7854fd8a1",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -13586,9 +13790,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -13598,11 +13805,75 @@
     "issue": null
   },
   "web/packages/plugin-sdk/package.json": {
-    "sha256": "72e2df339763f6b28c2dddf2a5eefff33f750e8a9cd0e79a4fb07abc8c002ae5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "eb9390c465f0c8f7c9093e0713f23a4209b47d2fc3dd51fb61572d247b84ba9f",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/packages/plugin-sdk/src/ChangeLines.tsx": {
+    "sha256": "e0c8c616f3ba35a2fa8f9b27ea6f8794faef72b64305f4e92e6bbebb58b58b48",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/packages/plugin-sdk/src/CollapsibleCard.tsx": {
+    "sha256": "6516226c45dffd21e0bdf115e4fa6a47c0289b298a743347453aeaa0b451eee4",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/packages/plugin-sdk/src/DateField.tsx": {
+    "sha256": "2ff1b6be308ad651ab22d0fe4d2a5c756128a6d40f8b60ab03a7121edba09abc",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/packages/plugin-sdk/src/Pager.tsx": {
+    "sha256": "39d237f4c850812be17c067ef88848b8ab3a88317272e960c72583e802163607",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/packages/plugin-sdk/src/Table.tsx": {
+    "sha256": "032e063363432255416c23bde5a947b691c4995f6970b23850b2a43b21840547",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/packages/plugin-sdk/src/TableSkeleton.tsx": {
+    "sha256": "728635886f91fc2f2ae28bd368bf7ada681d03100bbcf679a0c06e23376ef22f",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/api.ts": {
     "sha256": "d39532704e8af3604339a583f3a9153396f261edc520a4dc376a89ff89b94f6e",
@@ -13610,6 +13881,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/packages/plugin-sdk/src/changes.ts": {
+    "sha256": "0c59795daa75472409e19c21a1d79f786f7c22098f89c01db2f8850221c8cdea",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/data.ts": {
     "sha256": "3bc4409e5b45a040a31f7372f015094d6910e8f4b74f115d9be5d73de079c576",
@@ -13659,37 +13940,46 @@
     "issue": "RADD-1351"
   },
   "web/packages/plugin-sdk/src/host-registry.ts": {
-    "sha256": "85179b8948f8f09dcfd1d1aa2b675ed38756d572de24286b4e768d4f25228fcf",
+    "sha256": "d3887e50477692a47a8a0018c808eb4c26e215a822510a2c10cfb61aae8d20fa",
     "status": "partially_reviewed",
-    "owner": "platform",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/host.tsx": {
-    "sha256": "c57bcd5138c2a73ce9319cefefbc87e7895279fa5fa029724e3e0b7987f73fc5",
+    "sha256": "6cf51a9952be2daa1258197407558067d16c157f28452b3d43a9378271a93f37",
     "status": "partially_reviewed",
-    "owner": "platform",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "c50ff4e3b39cefa26bacd44d24d0212ba29109dfb9ecac6d80430251581eaef6",
+    "sha256": "91d2f06966bd2ea2640ea0de14816816baa1b0bf037b671a0eea1b0a5873836d",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/options.tsx": {
     "sha256": "4cbaf0efbf8426e9cd32b3b9875885a93abc0a59de84cca5887c0b7e06d12adc",
@@ -13722,13 +14012,16 @@
     "issue": "RADD-1361"
   },
   "web/packages/plugin-sdk/src/primitives.tsx": {
-    "sha256": "dd144f0be5d448642ee4a69c7b94ed02bc28722e47a9b1393b2d1d22351ca4c9",
+    "sha256": "2bcf211f7f87c299e65a0f5531536e4f784d85226872fa26a8cb6716ed534644",
     "status": "partially_reviewed",
-    "owner": "platform / remaining feature callers under review",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
-      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified."
+      "Directory UI/query ownership migrated and tested. Host compatibility adapter retains domain-to-source mapping pending consumer migrations. Remaining Auth/Teams/SDK/API feature ownership is not certified.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1353"
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/query-sources.ts": {
     "sha256": "f5ed83f36544ed02a090c29ddde2320b8f333b5263f7271580c128876418ac58",
@@ -13781,13 +14074,16 @@
     "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/slots.tsx": {
-    "sha256": "9c21989edb3df158672ca647847c767df996ec66baeb7e6713c8aea1e3fadb73",
+    "sha256": "1cf67ea9a175e33e8e74a5348d60075155cf0fdd24cfbb36e566f980f73b8a27",
     "status": "partially_reviewed",
-    "owner": "platform (residual feature ownership under review)",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
-      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review."
+      "Shared settings/page/capability/API contracts verified. Remaining static feature navigation, identity hooks, editor adapters, primitives and other slot callers require subsequent ownership review.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1351"
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/styles/components.css": {
     "sha256": "21574be09e4c37f1109dd626a00bdda9acb8abe589ff5eb3f7d14b730518c80d",
@@ -13838,23 +14134,30 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/types.ts": {
-    "sha256": "52f40ce8af6fa35bbccede6df14c2b7bcc671311cf3aa7feb73553d019e21fe5",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "5d4df5635102cade65901455de609b83346397e93e02d50efd8a54399b239a05",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "57d98c7e345a4a8d67654ddce4ecc647a8456b3361f050728cebd865f4d17789",
-    "status": "reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "sha256": "f476cd6ea393ef9d07ae56193ae632acb85cb3cb280d83b2ba629705a7e43448",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
-      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1364"
   },
   "web/packages/plugin-sdk/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -13930,17 +14233,20 @@
     "issue": null
   },
   "web/public/shared/radd-plugin-sdk.js": {
-    "sha256": "63b9009aa5fd9726f6cd7e1035ddd138f8ad0835672a190b32380a51f206d57a",
+    "sha256": "d33337a58c31a3ba5c9e790ded4ce7f4d27edbabc8b16edf641205151e24402c",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1364"
   },
   "web/public/shared/react-dom-client.js": {
     "sha256": "7f77c7fcf2095f1ed7fd3c955b4531b8e8bb8fc97c907abd3b8019e0b0157892",
@@ -14061,15 +14367,27 @@
     "evidence": [],
     "issue": null
   },
-  "web/scripts/audit-links.test.mjs": {
-    "sha256": "1f3f139f50f3f0ed36a90a7fa81a5a6b1d8e5f31597e3daf64af575da4ff0d04",
+  "web/scripts/audit-change-format.test.mjs": {
+    "sha256": "e0496f2258642a2bdd85abb76e3a78caf14af7fed6252f1fae3e8dea0a1b57b4",
     "status": "reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/scripts/audit-links.test.mjs": {
+    "sha256": "188a8913855b6a8da4e4578e082eb57ac14b25795fc7f91f193b5fe08ff9f1fe",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
-      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built."
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "web/scripts/audit-proof.mjs": {
     "sha256": "a4a2126f6806a40b645733ecca2844f52e8374dc1c4e59223d4027077c524d0f",
@@ -14203,15 +14521,27 @@
     "evidence": [],
     "issue": null
   },
-  "web/scripts/browser-audit-entity-links.mjs": {
-    "sha256": "96c4812f17ca804f43f96a1de96525f5fcb433d808d429247e84affa13692c06",
+  "web/scripts/browser-audit-contributions.mjs": {
+    "sha256": "3f323d7515c2026337c5ddfbaae722ed8677df679539c2dbed9dcc2b359320c0",
     "status": "reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
+  },
+  "web/scripts/browser-audit-entity-links.mjs": {
+    "sha256": "426f8576fe297e039f9c5f249f02828f7ae5778414e81afc3b5fb563cead473c",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
-      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built."
+      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "web/scripts/browser-autocomplete.mjs": {
     "sha256": "0634f6012386163d2300dcec3131c9dffe91031f166e72f9122cf5e280719ce1",
@@ -14389,13 +14719,16 @@
     "issue": "RADD-1359"
   },
   "web/scripts/build-all.mjs": {
-    "sha256": "72456355d9b3a9b2bcc570771dfb2b0d93a0f97097998636da3106783c7f33c1",
+    "sha256": "b33f501a2bb8b4484fbd60a09a947e246a58f7b6e22a6830c4d17fa156e18997",
     "status": "partially_reviewed",
-    "owner": "platform frontend build",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
-      "Source reviewed and host/13 remote builds verified in 6525dce8. Full isolated packaging and dependency resolution still need review; shared local node_modules does not prove external install correctness."
+      "Source reviewed and host/13 remote builds verified in 6525dce8. Full isolated packaging and dependency resolution still need review; shared local node_modules does not prove external install correctness.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1364"
   },
   "web/scripts/code-block-proof.mjs": {
     "sha256": "de1ebcfe5e7a923cd0a164c1f8324726724037fef526d63e4fa00679941445af",
@@ -14531,17 +14864,20 @@
     "issue": null
   },
   "web/scripts/gen-shared-shims.mjs": {
-    "sha256": "7bd4981754be54838828eff0a82ecc2d9e5281684c4c8ce298dd338f4d8176ec",
+    "sha256": "6c6bdfbe4c98987a4a9dfc9fb82d93490d08ec5e8853b353d47e2da0de2c0c10",
     "status": "partially_reviewed",
-    "owner": "platform tooling and transitional integrations",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
       "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
       "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
-      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1362"
+    "issue": "RADD-1364"
   },
   "web/scripts/grouped-pagination-proof.mjs": {
     "sha256": "0019d9fd3dd43ea4cdcb117f450e1a1c9f4200d550fdac34fe5fe73c334ae93b",
@@ -14803,9 +15139,9 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "8183144868aad1e61c0226d06ca9ec7da626c9f81b26214d393d1e005128102c",
+    "sha256": "54b33eccce7667580bfde33acaceb20097ac7779c03ed5fac0cab1dcc6492e13",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
       "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
@@ -14814,9 +15150,12 @@
       "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review.",
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -15197,11 +15536,14 @@
     "issue": "RADD-1356"
   },
   "web/src/components/CollapsibleCard.tsx": {
-    "sha256": "6516226c45dffd21e0bdf115e4fa6a47c0289b298a743347453aeaa0b451eee4",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "8d4af391e607faa079ef0c62ad03bb31f66f1b42d83966463fb1a81e3ba2ecec",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/CommandPalette.tsx": {
     "sha256": "a9bd6ae103a4a387558ac17670c6960e8789e7b71aba3c41f685468fc73ee5db",
@@ -15301,11 +15643,15 @@
     "issue": null
   },
   "web/src/components/Pager.tsx": {
-    "sha256": "6813d02ea3bac7d4148b3c9c17c92b5ef6b7b2abdc1895b40c5a54cc5c7245d3",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "09bb2732e77972d92757f01f2ef0e80ad576cf7f6188698abbc8f4f6cf45fa19",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/PeopleDirectorySelect.tsx": {
     "sha256": "63e7fa8195c8f8b62745f4ae1be5658a6b91e47201c1b9b12fbf2f3d3277f2b3",
@@ -15393,18 +15739,24 @@
     "issue": "RADD-1358"
   },
   "web/src/components/Table.tsx": {
-    "sha256": "032e063363432255416c23bde5a947b691c4995f6970b23850b2a43b21840547",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "2995698a975808158a07df0268af601710657587e6e538de961886223ee66fd3",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/TableSkeleton.tsx": {
-    "sha256": "728635886f91fc2f2ae28bd368bf7ada681d03100bbcf679a0c06e23376ef22f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d750b2741feaa4cf7c95d86dce6f7398400f5d885ab49275fa4b86545d2cc2ba",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/TextField.tsx": {
     "sha256": "06f6fa7583f2deacc5d2045fa1dd7482b55833f6716e89783540f1ac88a90d1d",
@@ -16235,18 +16587,14 @@
     "issue": null
   },
   "web/src/components/history/ChangeHistoryPanel.tsx": {
-    "sha256": "2862dd59ea73ec4a3a59de6f0451f146eeef32e538891d61b27c2402a1af7f5d",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
-  "web/src/components/history/ChangeLines.tsx": {
-    "sha256": "07583ec76038307bd3d626fbe86fd969bcc3e3357ded44ff15bf4c6481069043",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "9a1faa7756f7667cfba52e13b7fdd308298b997ef860cb7253c8d8dce801b146",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/items/ActivityPanel.tsx": {
     "sha256": "fb3f20f3ad5ab5006241514310f71ece2b067fa3d9b15219837769b862bac86f",
@@ -16349,11 +16697,15 @@
     "issue": null
   },
   "web/src/components/items/HistoryTab.tsx": {
-    "sha256": "d354a2c64100421bb47fafa3c08c241c923ded4d348b9199aa5ef44f0cd6fea4",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "0307a1e9ee07be2467e226586031b3b342095ecd77e23366fe62e40c75ff36da",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/items/IssuePanel.tsx": {
     "sha256": "5234a1dd52e4ee86863f5b237f8be90d08616a8c1d7cd8d92655cfc2816d240a",
@@ -16419,11 +16771,15 @@
     "issue": null
   },
   "web/src/components/items/PlanningFields.tsx": {
-    "sha256": "7ca0e6269279e6fc13a96b3a18bf6742dc72ce0b858030ff4b5cec130053d926",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "4a7ded5a74a7c6df42894ea86b34b1c3b8437c2e3fc0d15c5cafea7b58900791",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/items/QuickStar.tsx": {
     "sha256": "83c1e0f2787cc72c83983028aa9488006461353276d06c80add06b8277747b40",
@@ -17239,11 +17595,14 @@
     "issue": null
   },
   "web/src/components/settings/SettingsPage.tsx": {
-    "sha256": "c0b00543d3a21132f56772caf7a3238c52cb3c2c7adca99170be24f7b9a94da1",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ea680e4a3c4feef47c1add109df1d92e6afb4106e8ffbfb79f5432680b263472",
+    "status": "reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/settings/SlaMetOnField.tsx": {
     "sha256": "be3219acebfee1a28d5a52777aa95d4bd22b204be2671a526dac833b4b8ce748",
@@ -17744,11 +18103,15 @@
     "issue": "RADD-1351"
   },
   "web/src/components/shell/Sidebar.tsx": {
-    "sha256": "d0b4db585657778489da712df0d2da6738a1e32f505848efaa50f2c150a9fdf6",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "d0ad385e8c36ad4d6a07a3c3bceeb6eaabbc75856cbe3f01e282a58fd13968af",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/components/shell/SidebarDirectory.tsx": {
     "sha256": "54b8d43b80a365c74f00c380782d1612793d2baa98f0e2df45759f45ad6fb769",
@@ -18037,14 +18400,17 @@
     "issue": null
   },
   "web/src/host-components.tsx": {
-    "sha256": "a04083bdf998b0ed691996284218fc025539225f6583291e306ab1b4c2af85a3",
-    "status": "reviewed",
-    "owner": "platform",
+    "sha256": "5ab11e61731c2c6da10567b22f7c4f6a30598e2adc6a4886f254c9cab370346d",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "All registrations are generic primitives; previous Scripts and Automations imports removed. AST boundary test and actual Scripts/AI consumers verified.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "72 frontend / 68 backend tests; 17 Audit lifecycle, 7 destination, 14 Project/Cycle picker and 12 Leave browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1364"
   },
   "web/src/index.css": {
     "sha256": "c81fd995ea64036e936a03a7667f07d8a3d18736cf8e34523b3e0f38a31658cc",
@@ -18096,17 +18462,6 @@
     "owner": null,
     "evidence": [],
     "issue": null
-  },
-  "web/src/lib/audit.ts": {
-    "sha256": "d806b0512c6a58c3b7de304890621e8f47c225ddd6d68aa13159d4c6268752db",
-    "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
-    "evidence": [
-      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
-      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
-    ],
-    "issue": "RADD-1363"
   },
   "web/src/lib/auth.ts": {
     "sha256": "ae4d828258075dfda25d6d0540055f02867cf0703335e4d0e3d1183385b4868f",
@@ -18246,11 +18601,15 @@
     "issue": "RADD-1354"
   },
   "web/src/lib/constants/api.ts": {
-    "sha256": "49824d4ba44e4bcc8b8263986457beb772285b141f72fef41e43c162178c84a7",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "5bfa5ba89a3938f4c5c1a4bde019cc9045595b44f5e9b8b44277cb73ba95b19f",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/lib/constants/index.ts": {
     "sha256": "c9862605644555f6920b61c51aac528f2071c25da8e73802b2243c86ea14238f",
@@ -18274,11 +18633,15 @@
     "issue": null
   },
   "web/src/lib/constants/routes.ts": {
-    "sha256": "2d4a68037fbd434a9eb4ba0a78111e2eeb264cd3b4751df71ee759f30682216e",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "18e4572b0e01f68312c19b2409d42759a7ab9293533defeeb36ebc09d015c54b",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/lib/constants/storage.ts": {
     "sha256": "9ca32c8d8fd5ae9de7b19ddfc870881af0a6f4113f7f115f3317a58bcc845424",
@@ -18430,14 +18793,17 @@
     "issue": null
   },
   "web/src/lib/meta.ts": {
-    "sha256": "37df2c19298697918a0d7f7b5b492d0ba17e3d985c029380c3b89fdced39f07e",
+    "sha256": "15857c869800db9aba761e7ba829504a89e868cb33af455aaaeb300d37400d68",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1364"
   },
   "web/src/lib/nav-facts.ts": {
     "sha256": "e4478bafbc944163fc331b152f0f0b3385de5114bdeb683d705e32e94fba3b32",
@@ -18523,15 +18889,18 @@
     "issue": "RADD-1361"
   },
   "web/src/lib/queries/activity.ts": {
-    "sha256": "97c230a17f248ab7bed66047efc947fefe68516310bd7bc70c07c903aef7e941",
+    "sha256": "87e21b3fcf86c20ee4e7601565fb5f2f757a101e2e2fd2ec4e7b39446eb7c144",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "web/src/lib/queries/ai-admin.ts": {
     "sha256": "987606fbab1c6a2bb5aee12f80dc37bbd7ccf73bbe3e9f2c208a99fe8e10b546",
@@ -18728,14 +19097,17 @@
     "issue": null
   },
   "web/src/lib/queries/shared.ts": {
-    "sha256": "3d7227de1919833eb2d5f63e3fbee5611bd8be7f37aff42c0db03d90b8968d96",
+    "sha256": "f2f0baba3b40a531893eed8250bc7e1b0b9ae899551aabc5d9eba6049feaf9b7",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1358-verification",
-      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review."
+      "Picker contribution scope verified; remaining host consumers, unrelated behavior and full artifact ownership still require review.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1358"
+    "issue": "RADD-1364"
   },
   "web/src/lib/queries/sso-admin.ts": {
     "sha256": "de0903328acce8101e5062719aa238ed6b9ce918cca8a95defd0e4285866299c",
@@ -18967,15 +19339,18 @@
     "issue": null
   },
   "web/src/lib/types/history.ts": {
-    "sha256": "97524987a06a4c7929714c6381c5739a6849da928795e910693a691ccaba4fd2",
+    "sha256": "8c4d905e4429c5e9f80bb9437177d582391ca6c5c1c9e0d0e3ab7f0e6c4d8cd5",
     "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
+    "owner": "platform contribution contracts and Audit migration",
     "evidence": [
       "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
       "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
+      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit.",
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
     ],
-    "issue": "RADD-1363"
+    "issue": "RADD-1364"
   },
   "web/src/lib/types/index.ts": {
     "sha256": "2656260df79bbfc535ee2f77b0c2dde802f62bc85e7e5b7a503d799cf63b92c8",
@@ -19047,11 +19422,15 @@
     "issue": null
   },
   "web/src/lib/types/plugins.ts": {
-    "sha256": "32a29bf36edf2d0a4a33f3ccc6cc925b1a5574b915dff7961ff35dd04095ca00",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "ac9b7ee2ada4b0444e1e53224481c030b94f4408cb71bc5b160e623989de5228",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/lib/types/reporting.ts": {
     "sha256": "f8e96883e784a0825fb4285f0aa1b3d8551eafff5ffc88184a65d1d94991a8d8",
@@ -19239,11 +19618,15 @@
     "issue": null
   },
   "web/src/router.tsx": {
-    "sha256": "9f2907e26b2fc4c5dce9b6dd5d69447580f07c06b2009c6e6bbdf12f0d47be37",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "2fdfa9185857efab261dbb5dacb1a8d92f3d020b5da632bab97af6275fb96bda",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/routes/app-layout.tsx": {
     "sha256": "0c22169fe2c7dcb864c49fed945c53fd7e79b5cab5436fba2ce6c0b1953636fa",
@@ -19469,17 +19852,6 @@
     "evidence": [],
     "issue": null
   },
-  "web/src/routes/settings/audit.tsx": {
-    "sha256": "ad8846c4e389668c78b0738fe15208d597924ce333883445b15164cdd9f2b8b2",
-    "status": "partially_reviewed",
-    "owner": "platform entity navigation and audit integration",
-    "evidence": [
-      "RADD-1363: reviewed entity navigation ownership; all 46 former destinations assigned to 33 owning declarations, with current owner lifetimes. See research/plugin-isolation/README.md RADD-1363 evidence.",
-      "67 frontend and 66 backend tests; actual backend declarations plus host Audit and Milestones bundle browser proof: 47 destinations, 7 groups, 14 reads, 1 abort. Host plus 24 remotes built.",
-      "Only the entity navigation change is verified here. Other contents/feature ownership remain subject to the complete inventory audit."
-    ],
-    "issue": "RADD-1363"
-  },
   "web/src/routes/settings/automations.tsx": {
     "sha256": "001b550d029f08a60b9441317b80147c3e56dd13931c1269f630487c5ffb0024",
     "status": "unreviewed",
@@ -19576,11 +19948,15 @@
     "issue": null
   },
   "web/src/routes/settings/layout.tsx": {
-    "sha256": "19a8c00d41f03ff0df5937830fbdfc9e99151fe7f223488890711a0635ac98d7",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "f40fed9a2ea9ec5cb4444f260fb927a9e7abef89e1c4f012bc98639d6ecdc653",
+    "status": "partially_reviewed",
+    "owner": "platform contribution contracts and Audit migration",
+    "evidence": [
+      "RADD-1364: reviewed Audit UI ownership, exact scope access and contribution lifecycle. Seven Audit and two Items source files; generic change/history/footer contracts and primitives. See research/plugin-isolation/README.md RADD-1364 evidence.",
+      "71 frontend / 68 backend tests; 15 Audit lifecycle, 7 destination, 14 Project/Cycle picker browser groups; host + 26 remotes built. Local served owner bundle bytes and scope endpoints verified; plugin choices preserved.",
+      "Only changes related to Audit UI ownership and these public contracts are verified. Remaining contents and module-wide ownership require the complete inventory audit."
+    ],
+    "issue": "RADD-1364"
   },
   "web/src/routes/settings/link-types.tsx": {
     "sha256": "77d25738835ef96dc21e38a2f0cf2bd053faac6b50573f410bd2d7ffc315442c",

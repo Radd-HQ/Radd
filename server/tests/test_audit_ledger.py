@@ -207,3 +207,47 @@ async def test_audit_destination_is_owned_and_does_not_rewrite_stored_events(db,
     restored = (await audit.audit_log(db, actor=admin, project_id=project.id, changed_field='title'))[0]
     assert restored.entity_owner == plugin.name
     assert restored.entity_url == before.entity_url
+
+
+async def test_access_endpoint_uses_the_exact_ledger_scope(db, admin, project):
+    from radd.modules.audit.router import audit_access
+    from radd.modules.auth.scopes import parse_scope
+
+    manager = await _user(db, role=InstanceRole.MEMBER, name="Scoped manager")
+    outsider = await _user(db, role=InstanceRole.MEMBER, name="Outsider")
+    other = await projects_service.create_project(
+        db, ProjectCreate(key=f"AC{uuid.uuid4().hex[:4].upper()}", name="Other scope"), actor_id=admin.id
+    )
+    role = await role_by_key(db, BuiltinRoleKey.MANAGER.value)
+    await grants.create_grant(db, role.id, user_id=manager.id, project_id=project.id, actor_id=admin.id)
+    for actor, scope, expected, instance_wide in (
+        (admin, None, True, True), (admin, project.id, True, True),
+        (manager, None, False, False), (manager, project.id, True, False),
+        (manager, other.id, False, False), (outsider, project.id, False, False),
+    ):
+        result = await audit_access(db, actor, scope)
+        assert result.allowed == expected and result.instance_wide == instance_wide
+        if expected:
+            await audit.require_audit_scope(db, actor, scope)
+        else:
+            with pytest.raises(ForbiddenError):
+                await audit.require_audit_scope(db, actor, scope)
+    # An admin account with a constrained credential is not an instance-wide reader.
+    admin.token_scope = parse_scope({"global": ["item.read"]})
+    try:
+        result = await audit_access(db, admin, None)
+        assert not result.allowed and not result.instance_wide
+    finally:
+        admin.token_scope = None
+
+
+async def test_audit_and_items_own_remote_and_navigation_contract(admin):
+    from radd.modules.capabilities.router import get_capabilities
+    manifest = await get_capabilities(admin)
+    remotes = {remote.name: remote for remote in manifest.remotes}
+    for owner in ("audit", "items"):
+        assert remotes[owner].ui_api_version == "1.11.0"
+        assert remotes[owner].remote_entry.startswith(f"/plugins/{owner}/remoteEntry.js")
+    nav = next(row for row in manifest.nav if row.plugin == "audit")
+    assert nav.path == "/settings/audit"
+    assert nav.requires_any_project == ["project.manage"]
