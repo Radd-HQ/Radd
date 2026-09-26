@@ -1,5 +1,5 @@
 from radd.kernel import EntityLinkSpec
-from radd.kernel import CapabilitySpec, EventTypeSpec, RaddPlugin
+from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest, RaddPlugin
 
 from . import registry, service
 from .types import SsoEvent
@@ -20,6 +20,12 @@ plugin = RaddPlugin(
     description="Single sign-on with Google, GitHub or any OpenID Connect provider.",
     depends_on=("events", "projects", "auth", "teams"),
     routers=(router, admin_router),
+    # RADD-1380: the provider registry is this plugin's own remote, contributed
+    # as a SECTION of the host's Settings → Sign-in page — no nav entry, because
+    # the page also carries the core auth module's MFA policy and must outlive
+    # a disabled sso. The login page's buttons stay in the host: they render
+    # before sign-in, when no remote can load.
+    ui=PluginUiManifest(remote="/plugins/sso/remoteEntry.js", ui_api_version="1.14.0"),
     on_startup=(_startup,),
     # Spec 123: provider administration is audited with a diff; not a trigger.
     event_types=(

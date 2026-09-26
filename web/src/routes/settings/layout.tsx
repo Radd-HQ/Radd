@@ -215,12 +215,13 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.instanceAdmin,
       },
       {
-        // SSO providers + per-provider signup domain allowlists (spec 110).
+        // The instance MFA policy (core auth), plus whatever sign-in methods
+        // plugins contribute as sections — sso's providers (RADD-1380). The
+        // page outlives any one of them, so it names no owner.
         to: RoutePath.settingsSignIn,
         order: 70,
         label: "Sign-in",
         icon: KeyRound,
-        plugin: "sso",
         show: (g) => g.instanceAdmin,
       },
       {
@@ -259,8 +260,19 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
  * failure mode a second hardcoded map would have. This is what makes every
  * plugin's configuration reachable FROM its plugin, per `docs/plugin-ui.md`,
  * without duplicating the page into an accordion row.
+ *
+ * A plugin with no page of its own may still contribute SECTIONS into pages
+ * the host (or another plugin) owns — Leave into Time logging, sso into
+ * Sign-in (RADD-1380). A section's key is its page's route segment, so
+ * `sectionKeys` (the `settings.section` matches the plugin has registered)
+ * finds that page with no plugin named here. Checked last: a plugin's own page
+ * outranks a page it merely adds to.
  */
-export function settingsPathForPlugin(name: string, manifest?: CapabilitiesManifest): { to: string; label: string } | null {
+export function settingsPathForPlugin(
+  name: string,
+  manifest?: CapabilitiesManifest,
+  sectionKeys: readonly string[] = [],
+): { to: string; label: string } | null {
   const contributed = manifest?.nav.find(n => n.plugin === name && n.section === "settings");
   if (contributed) return { to: contributed.path, label: contributed.label };
   for (const group of SETTINGS_NAV_GROUPS) {
@@ -268,6 +280,21 @@ export function settingsPathForPlugin(name: string, manifest?: CapabilitiesManif
       typeof item.plugin === "string" ? item.plugin === name : (item.plugin ?? []).includes(name),
     );
     if (match) return { to: match.to, label: match.label };
+  }
+  for (const key of sectionKeys) {
+    const page = settingsPageAt(`${RoutePath.settings}/${key}`, manifest);
+    if (page) return page;
+  }
+  return null;
+}
+
+/** The settings page at `path` — a host tab or a plugin-contributed one — as a link. */
+function settingsPageAt(path: string, manifest?: CapabilitiesManifest): { to: string; label: string } | null {
+  const contributed = manifest?.nav.find(n => n.section === "settings" && n.path === path);
+  if (contributed) return { to: contributed.path, label: contributed.label };
+  for (const group of SETTINGS_NAV_GROUPS) {
+    const item = group.items.find((candidate) => candidate.to === path);
+    if (item) return { to: item.to, label: item.label };
   }
   return null;
 }

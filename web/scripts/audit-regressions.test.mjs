@@ -199,7 +199,8 @@ for (const entity of ["role", "team", "project", "page_space", "group", "user"])
 }
 assert.deepEqual(selectorCalls, [7, 7, 7, 7, 7, 7], "scope authority and name frames refresh inspectors, candidates and saved subscription labels");
 stopSelectors();stopSelectorObservers.forEach(stop => stop());client.clear();
-const { provisioningReferencesQuery } = evaluate(source("queries/provisioning.ts"), {
+// RADD-1380: the provisioning references are the sso plugin's own query.
+const { provisioningReferencesQuery } = evaluate(readFileSync(new URL("../../server/src/radd/modules/sso/ui/src/queries.ts", import.meta.url), "utf8"), {
   ...ownerKeys, queryOptions: x => x, api: {}, Entity, entityMeta,
 }, ["provisioningReferencesQuery"]);
 assert.deepEqual(provisioningReferencesQuery(["b", "a", "a"], [], []).queryKey,

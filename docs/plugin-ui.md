@@ -42,7 +42,7 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `viewType` | A whole saved-view TYPE | `{view, items}` | `match` = the view_type key; pair with a `view_types=` manifest entry | `routes/view.tsx` |
 | `routePage` | A full page at a nav path | `{path}` | `match` = the pathname | `components/shell/PluginPage.tsx` (splat route) |
 | `settingsPage` | A full page under Settings → … | `{path}` | `match` = the pathname | `components/shell/SettingsPluginPage.tsx` |
-| `settingsSection` | Into an *existing* settings page | `{}` | `match` = the page's key | `routes/settings/timelogging.tsx` (`match="timelogging"`); add anchors to other pages as needed |
+| `settingsSection` | Into an *existing* settings page | `{}` | `match` = the page's key, which is its route segment under `/settings` — Settings → Plugins links a plugin with no page of its own to the pages its sections match (RADD-1380) | `routes/settings/timelogging.tsx` (`match="timelogging"`, Leave), `routes/settings/sign-in.tsx` (`match="sign-in"`, sso's providers); add anchors to other pages as needed |
 | `profileSection` | The user's Profile page | `{}` | per-user prefs; drop `<UserContributionToggles>` here | `routes/settings/profile.tsx` |
 | `pluginManagerSection` | A plugin's row in Settings → Plugins (admin) | `{plugin, pluginId}` | `match` = the plugin's registry name; drop `<GlobalContributionToggles>` here | `routes/settings/plugins.tsx` |
 | `sidebarNav` | Left sidebar nav | `{}` | today driven by the backend nav manifest | `components/shell/Sidebar.tsx` |

@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Trash2, X } from "lucide-react";
-import type { SsoDefaultGrant, SsoProvisioningRule } from "../../../lib/types";
-import { useKeyedRows } from "@radd/plugin-sdk";
-import { provisioningReferencesQuery } from "../../../lib/queries/provisioning";
-import { OptionResource } from "../../../lib/queries/options";
-import { Button } from "../../Button";
-import { DirectoryPager } from "../../DirectoryPager";
-import { ErrorText, IconButton, TokenMultiSelect, OptionChoices } from "@radd/plugin-sdk";
+import { useKeyedRows, Button, DirectoryPager, ErrorText, IconButton, OptionChoices,
+  TokenMultiSelect } from "@radd/plugin-sdk";
+import { provisioningReferencesQuery } from "./queries";
+import { OptionResource, type SsoDefaultGrant, type SsoProvisioningRule } from "./types";
 import { StartingRoleDialog } from "./StartingRoleDialog";
 
 function useWindow<T>(all: T[], pageSize: number) {

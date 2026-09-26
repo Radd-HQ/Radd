@@ -148,8 +148,6 @@ export const queryKeys = {
   aiStatus: ["aiStatus"] as const,
   // Editor AI (spec 103) — the curated action menu behind the editor's AI entry.
   aiEditorActions: ["aiEditorActions"] as const,
-  ssoProviders: ["ssoProviders"] as const,
-  ssoKinds: ["ssoKinds"] as const,
   // Storage host registry + routing chain + move jobs (spec 102).
   storageHosts: ["storageHosts"] as const,
   storageRules: ["storageRules"] as const,

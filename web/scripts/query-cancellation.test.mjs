@@ -35,7 +35,7 @@ const imports={api,Entity,entityMeta,projectEntityMeta,queryKeys,queryOptions:x=
  ITEMS_PAGE_LIMIT:200,ROADMAP_MEMBERS_LIMIT:200,ROADMAP_TRAY_PAGE_LIMIT:50,VIEW_COUNTS_MAX_VIEWS:50,VIEW_COUNTS_REFETCH_MS:60000,
 };
 const ai=evaluate(source('queries/ai-search.ts'),imports,['searchQuery','similarToTextQuery','semanticSearchQuery','deflectQuery']);
-const provisioning=evaluate(source('queries/provisioning.ts'),imports,['provisioningReferencesQuery']);
+const provisioning=evaluate(readFileSync(new URL('../../server/src/radd/modules/sso/ui/src/queries.ts',import.meta.url),'utf8'),imports,['provisioningReferencesQuery']);
 const fieldSettings=evaluate(source('queries/field-settings.ts'),imports,['fieldDirectoryQuery','managedFieldQuery','fieldProjectChoicesQuery','fieldProjectReferencesQuery','fieldOptionsQuery']);
 const formSharing=evaluate(source('queries/forms.ts'),{...imports,apiFormPath:id=>'/forms/'+id},['formSharingQuery','formShareCandidatesQuery']);
 const teams=evaluate(readFileSync(new URL('../../server/src/radd/modules/teams/ui/src/references.ts',import.meta.url),'utf8'),{...imports,ApiPath:{teams:'/teams'}},['teamReferencesQuery']);

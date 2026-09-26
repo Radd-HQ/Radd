@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { OptionResource } from "../../../lib/queries/options";
-import { IconButton, OptionChoices } from "@radd/plugin-sdk";
-import { Button } from "../../Button";
-import { Modal } from "../../Modal";
-import { ProjectPicker } from "../../projects/ProjectPicker";
 import { X } from "lucide-react";
-import type { DirectoryOption } from "@radd/plugin-sdk";
+import { Button, IconButton, Modal, OptionChoices, Slot, type DirectoryOption } from "@radd/plugin-sdk";
+import { PROJECT_PICKER_SLOT, type ProjectPickerProps } from "@radd-plugin-ui/projects/picker-contract";
+import { OptionResource } from "./types";
+
+/** The Projects plugin's picker modal, through its published slot (the owner renders it). */
+function ProjectPicker(props: ProjectPickerProps) {
+  const fallback = <Modal title={props.title} onClose={props.onClose}><p>This picker is unavailable. Saved values are preserved.</p></Modal>;
+  return <Slot id={PROJECT_PICKER_SLOT} {...props} fallback={fallback} errorFallback={fallback} />;
+}
 
 export function StartingRoleDialog({ onClose, onAdd }: { onClose: () => void; onAdd: (roleId: string, projectIds: string[]) => void }) {
   const [role, setRole] = useState<DirectoryOption>();

@@ -63,6 +63,19 @@ test('Scripts and Monitoring settings have no host-owned routes or endpoint voca
   assert.deepEqual(violations,[]);
 });
 
+test('sso owns its provider registry; the host keeps only the pre-sign-in login buttons',()=>{
+  // RADD-1380: the registry is the plugin's section of the host's Sign-in page. `/auth/sso/providers`
+  // (the unauthenticated login buttons) is the one sso path the host may name.
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    if (node.type==='StringLiteral' && (/^\/sso(?:\/|$)/.test(node.value) || ['sso','sso_provider'].includes(node.value))) {
+      violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
+    }
+  }
+  assert.deepEqual(violations,[]);
+  assert(!existsSync('web/src/components/settings/signin'),'the provider panel is the sso remote');
+});
+
 test('Monitoring UI consumes contributions instead of importing AI or mail features',()=>{
   const violations=[];
   for (const file of files('server/src/radd/modules/monitoring/ui/src')) for(const node of nodes(file)) {

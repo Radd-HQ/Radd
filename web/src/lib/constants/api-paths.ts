@@ -198,10 +198,6 @@ export const apiItemSimilarPath = (itemId: string) => `${ApiPath.items}/${itemId
 export const apiItemAiSimilarReasonsPath = (itemId: string) =>
   `${ApiPath.items}/${itemId}/ai/similar/reasons`;
 
-/** SSO provider paths (spec 110) — instance admin only. */
-export const apiSsoProviderPath = (providerId: string) => `${ApiPath.ssoProviders}/${providerId}`;
-export const apiSsoProviderTestPath = (providerId: string) =>
-  `${apiSsoProviderPath(providerId)}/test`;
 /** Where a login button points. No id = the only configured provider (spec 40 shape). */
 export const ssoLoginPath = (providerId?: string, next?: string) => {
   const params = new URLSearchParams();

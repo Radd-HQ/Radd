@@ -1,87 +1,19 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Check } from "lucide-react";
-import { api, errorMessage } from "../../../lib/api";
-import { ApiPath, apiSsoProviderPath } from "../../../lib/constants";
-import { instanceStatusQuery, queryKeys, ssoKindsQuery } from "../../../lib/queries";
+import { api, errorMessage, Button, ErrorText, Modal, SelectField, Slot, SlotId, TextField,
+  TokenMultiSelect } from "@radd/plugin-sdk";
+import { CheckboxField, RedirectUriField } from "./fields";
+import { PROVIDERS_PATH, providerPath, providersKey, ssoKindsQuery } from "./queries";
+import { StartingAccess } from "./StartingAccess";
 import {
   SIGNUP_DOMAIN_WILDCARD,
+  SSO_PROVIDER_ENTITY,
   SsoKind,
   type SsoKindValue,
   type SsoProvisioningRule,
   type SsoProviderPayload,
   type SsoProviderRead,
-} from "../../../lib/types";
-import { Button } from "../../Button";
-import { Modal } from "../../Modal";
-import { SelectField } from "../../SelectField";
-import { StartingAccess } from "./StartingAccess";
-import { TextField } from "../../TextField";
-import { TokenMultiSelect, ErrorText } from "@radd/plugin-sdk";
-import { ChangeHistoryPanel } from "../../history/ChangeHistoryPanel";
-
-/** Labeled checkbox with an indented help line (the HostDialog idiom). */
-function CheckboxField({
-  label,
-  help,
-  checked,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  help?: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div>
-      <label className="flex items-center gap-2 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          checked={checked}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.checked)}
-          className="size-3.5 accent-accent"
-        />
-        {label}
-      </label>
-      {help && <p className="mt-0.5 pl-[22px] text-xs text-fg-muted">{help}</p>}
-    </div>
-  );
-}
-
-/** The redirect URI to paste into the IdP's console — read-only, copyable. */
-function RedirectUriField({ uri }: { uri: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <div>
-      <div className="mb-1 text-[13px] text-fg">Redirect URI</div>
-      <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 truncate rounded-md border border-subtle bg-base px-2 py-1.5 text-xs text-fg-secondary">
-          {uri}
-        </code>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            void navigator.clipboard.writeText(uri);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-          }}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      <p className="mt-1 text-xs text-fg-muted">
-        Add this as an authorized redirect URI in the provider&rsquo;s console. One URI serves
-        every provider — the sign-in attempt carries which one it belongs to.
-      </p>
-    </div>
-  );
-}
+} from "./types";
 
 /**
  * Create/edit one sign-in provider (spec 110).
@@ -142,12 +74,11 @@ export function ProviderDialog({
       // An empty secret on update means "keep the stored one" — send it only
       // when the admin actually typed a replacement.
       if (clientSecret.trim()) payload.client_secret = clientSecret.trim();
-      if (editing) return api.patch(apiSsoProviderPath(existing.id), payload);
-      return api.post(ApiPath.ssoProviders, { ...payload, kind });
+      if (editing) return api.patch<SsoProviderRead>(providerPath(existing.id), payload);
+      return api.post<SsoProviderRead>(PROVIDERS_PATH, { ...payload, kind });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.ssoProviders });
-      void queryClient.invalidateQueries({ queryKey: instanceStatusQuery.queryKey });
+      void queryClient.invalidateQueries({ queryKey: providersKey });
       onClose();
     },
     onError: (err) => setError(errorMessage(err)),
@@ -168,7 +99,7 @@ export function ProviderDialog({
       onClose={onClose}
       title={editing ? `Edit ${existing.name}` : "New sign-in provider"}
     >
-      <form onSubmit={submit} className="flex flex-col gap-4">
+      <form onSubmit={submit} className="flex flex-col gap-4" data-sso-provider-form>
         {!editing && (
           <SelectField
             label="Provider"
@@ -319,7 +250,7 @@ export function ProviderDialog({
             {save.isPending ? "Saving…" : editing ? "Save" : "Create provider"}
           </Button>
         </div>
-        {existing && <ChangeHistoryPanel entityType="sso_provider" entityId={existing.id} />}
+        {existing && <Slot id={SlotId.entityHistory} entityType={SSO_PROVIDER_ENTITY} entityId={existing.id} />}
       </form>
     </Modal>
   );

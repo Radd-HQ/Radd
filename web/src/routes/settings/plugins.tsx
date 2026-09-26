@@ -2,7 +2,7 @@ import { capabilitiesQuery } from "../../lib/queries";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Slot, SlotId, useSlotMatch, useConfirm } from "@radd/plugin-sdk";
+import { Slot, SlotId, useSlot, useSlotMatch, useConfirm } from "@radd/plugin-sdk";
 import { Blocks, ChevronDown, ChevronRight, Lock, SlidersHorizontal } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
@@ -74,7 +74,12 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
   // the row gets an expander revealing that plugin-owned admin UI (its GlobalContributionToggles).
   const adminSection = useSlotMatch(SlotId.pluginManagerSection, plugin.name);
   const manifest = useQuery(capabilitiesQuery);
-  const settingsLink = settingsPathForPlugin(plugin.name, manifest.data);
+  // RADD-1380: the settings pages this plugin adds a section to — how a plugin
+  // with no page of its own (sso, leave) still links to where it is configured.
+  const sectionKeys = useSlot(SlotId.settingsSection)
+    .filter((entry) => entry.plugin === plugin.name)
+    .flatMap((entry) => (entry.contribution.match ? [entry.contribution.match] : []));
+  const settingsLink = settingsPathForPlugin(plugin.name, manifest.data, sectionKeys);
   const hasSection = adminSection !== undefined;
   const [open, setOpen] = useState(false);
 

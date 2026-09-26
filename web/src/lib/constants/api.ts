@@ -139,10 +139,8 @@ export const ApiPath = {
   // Editor AI (spec 103) — the curated action menu + the SSE writing stream.
   aiEditorActions: "/ai/editor/actions",
   aiEditorStream: "/ai/editor/stream",
-  // SSO provider registry (spec 110) — instance admin: Settings → Sign-in.
-  ssoProviders: "/sso/providers",
-  ssoKinds: "/sso/kinds",
-  // UNAUTHENTICATED — the login page's buttons (label + kind only).
+  // UNAUTHENTICATED — the login page's buttons (label + kind only). The
+  // provider registry's admin paths are the sso plugin's own (RADD-1380).
   ssoPublicProviders: "/auth/sso/providers",
   ssoLogin: "/auth/oidc/login",
   // Storage host registry (spec 102) — instance admin: Settings → Storage.
