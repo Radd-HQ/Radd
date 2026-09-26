@@ -351,6 +351,11 @@ def plan_comment_created(
     excerpt = payload.get("excerpt", "")
     visibility = payload.get("visibility", "public")
     located = {"comment_id": comment_id} if comment_id else {}
+    # RADD-1391: an internal comment narrowed to teams (spec 50) carries them into
+    # every row it plans — the consumer's team check reads THIS, and without it
+    # every internal reader got the excerpt in their inbox.
+    if payload.get("visible_to_teams"):
+        located["visible_to_teams"] = list(payload["visible_to_teams"])
     for user_id in mention_ids:
         if user_id != actor_id:
             plan._add(
