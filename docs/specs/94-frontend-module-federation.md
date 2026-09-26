@@ -1,6 +1,8 @@
 # Spec 94 — Frontend module-federation plugin platform
 
-**Status:** in progress. This spec is the **definition of done** for turning the
+**Status:** built — merged to `main` with specs 93–114, then revised by RADD-1373 (2026-09-26): core plugins' UI is bundled into the host and registered at boot; only optional plugins load as remotes. Boxes left unticked below were not re-audited at the merge.
+
+This spec is the **definition of done** for turning the
 Radd SPA from a monolith (every plugin's UI hardcoded in `web/src`) into a real **module-federation
 plugin platform**: a plugin — including one built in its OWN repo/project — ships its own UI bundle
 that a *running* Radd loads at runtime, with **zero edits to the core repo**. It implements

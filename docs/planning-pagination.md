@@ -68,22 +68,4 @@ in automatically sorted backlog and rescheduling sections.
 
 ## Verification
 
-`web/scripts/planning-pagination-proof.mjs` drives the built SPA against a local
-fixture API. It checks more than 200 sprint rows, 401 independently paginated
-backlog rows, active/upcoming/draft ordering, unfinished historical work, completed
-work visibility, lazy history, search/empty states, backlog sorting, personal
-collapse, shared hide/restore, rescheduling drops, reopening and read-only controls.
-Its screenshot is `/tmp/radd-planning-workflow-proof.png`.
-RADD-1207 additionally checks section search beyond the backlog's loaded page,
-401 matches across Show more, unchanged sprint progress during filtering,
-keyboard clearing, collapsed-section expansion and mobile Display bounds.
-Screenshots: `/tmp/radd-planning-controls-proof.png`,
-`/tmp/radd-planning-search-proof.png`, `/tmp/radd-planning-display-mobile-proof.png`.
-
-`server/tests/test_slq.py` checks the lifecycle partitions against real database
-rows, including date-expired and explicitly closed sprints, null cycles, paging,
-invalid lifecycle values and read restrictions. The full backend suite passed
-2,719 tests with 4 skipped during this change.
-
-These implementation checks use local fixtures/databases. No company deployment,
-saved view or issue is changed by the tests.
+`web/scripts/planning-pagination-proof.mjs` (fixture API) and `server/tests/test_slq.py` (lifecycle partitions against real rows).

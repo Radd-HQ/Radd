@@ -1,5 +1,7 @@
 # Spec 75 — Composable dashboards
 
+> **Superseded in part by spec 86:** workspaces were eradicated — every `workspace_id`, workspace role and workspace scope below is gone; scopes are global or per-project.
+
 Target-features wave, part 8. User-assembled dashboards of widgets over data
 surfaces that ALREADY exist — the reporting endpoints, SLQ counts/lists, view
 counts. The server side is deliberately thin: a `dashboards` module owning

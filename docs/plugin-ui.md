@@ -18,9 +18,9 @@ This is the frontend companion to `docs/plugin-platform.md` (§8/§9/§14) and s
    `<Slot id="…" …props />`; a plugin calls `registerSlot(id, contribution)`. The registry
    (`@radd/plugin-sdk`) is a federation singleton, so a plugin's registration lands in the same store
    the host reads, and disabling the plugin removes its contributions live.
-2. **Remotes** — a plugin's UI is its own bundle in its own directory (`<plugin>/ui/`), built to
-   `<plugin>/ui/dist/remoteEntry.js`, loaded at runtime. This is what gives isolation: updating one
-   plugin's UI can't break another — different bundle, loaded independently. See "New plugin" below.
+2. **Bundles** — a core plugin's UI is bundled into the host and registered at boot; an optional
+   plugin's UI is its own remote (`<plugin>/ui/dist/remoteEntry.js`), loaded at runtime, so updating
+   one plugin's UI cannot break another (RADD-1373). See "New plugin" below.
 
 A plugin does not need to own a whole page to add UI — it injects into named spots. Own a whole page
 only when you actually want one (`route.page`/`settings.page`).
@@ -53,14 +53,12 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `settingsSection` | Into an *existing* settings page | `{}` | `match` = the page's key, which is its route segment under `/settings` — Settings → Plugins links a plugin with no page of its own to the pages its sections match (RADD-1380) | `routes/settings/timelogging.tsx` (`match="timelogging"`, Leave), `routes/settings/sign-in.tsx` (`match="sign-in"`, sso's providers); add anchors to other pages as needed |
 | `profileSection` | The user's Profile page | `{}` | per-user prefs; drop `<UserContributionToggles>` here | `routes/settings/profile.tsx` |
 | `pluginManagerSection` | A plugin's row in Settings → Plugins (admin) | `{plugin, pluginId}` | `match` = the plugin's registry name; drop `<GlobalContributionToggles>` here | `routes/settings/plugins.tsx` |
-| `sidebarNav` | Left sidebar nav | `{}` | today driven by the backend nav manifest | `components/shell/Sidebar.tsx` |
 | `sidebarSection` | A folding section of the left sidebar (RADD-1392) | `{collapsed, onToggle}` | `match` = the section key the host placed (`pages`); render `SidebarSection` from the SDK | `components/shell/Sidebar.tsx` |
 | `dashboardWidget` | A dashboard widget type | `{config, widget, filterQuery}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry; `filterQuery` = the dashboard-wide SLQ filter (plugin widgets decide how to honor it); a `personal=True` type lands on My Work instead (RADD-1393) | `modules/dashboards/ui/src/WidgetBody.tsx` |
-| `itemAction` | An item's action menu | `{item}` | | *menu host* |
 | `itemAttribute` | A list COLUMN and a board-card CELL (RADD-1394) | `{item, value, surface}` | `match` = the attribute id; build it with `itemAttribute(spec)` — see "Item attributes" below | `components/views/ColumnCells.tsx`, `components/board/card-cells.tsx` |
 | `paletteMode` | A face of the command palette (RADD-1400) | `{report}` (the gate) | build it with `paletteMode(spec)`; the palette draws its entry row and its answer — see "Modes" below | `components/CommandPalette.tsx` |
 | `queryInputMode` | An input mode of the query bar: free text in, SLQ out (RADD-1400) | `{report}` (the gate) | build it with `queryInputMode(spec)`; the bar draws the toggle — see "Modes" below | `components/views/QueryBar.tsx` |
-| `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `{node, params, schema, onChange}` | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `components/automations/GraphInspector.tsx` |
+| `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `{node, params, schema, onChange}` | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `server/src/radd/modules/automations/ui/src/GraphInspector.tsx` |
 
 **Host components (RADD-1325).** An inspector should look and behave like the host's own forms
 without bundling heavy editors. `@radd/plugin-sdk` exports `CodeEditor`, `TokenList` and
@@ -605,7 +603,9 @@ plugin renders it via the `view.type` / `dashboard.widget` slot (matched by the 
 shows the viewer's OWN work is a **My Work widget**: `WidgetTypeSpec(key, label, personal=True,
 suggest=…)` — offered only in My Work's picker, refused on shared dashboards, and put on a person's
 suggested layout whenever the async `suggest(session, user)` answers True (approvals' "Awaiting my
-approval" is the worked example, RADD-1393). The example ships
+approval" is the worked example, RADD-1393). Disabling the plugin withdraws the type and its slot
+together; a widget already on a layout keeps its place and reads "no longer available" until the
+plugin returns (`tests/test_my_work_contributed_widgets.py`). The example ships
 a "Notes review" view type (`NotesReviewView.tsx`: issue list + notes editor) and a "Most Recent Notes"
 widget (`RecentNotesWidget.tsx`, fed by its own `GET /notes/recent`). All of it — SLQ field, view type,
 widget type, endpoints, UI — is torn down together when the plugin is disabled. The example plugin demonstrates all of this: `{{token}}`
@@ -685,20 +685,12 @@ then enable it in **Settings → Plugins** — its UI and backend contributions 
 
 ---
 
-## Boundaries & follow-ups
+## Boundaries
 
-- **Core frame stays host-owned.** The app shell, projects, board/list, the issue-view *frame*,
-  workflow, and custom fields are the always-on tracker; they are slot *hosts*, not remotes.
-  Federating them would add runtime-load machinery for UI that's never disabled — cost, no benefit.
-  Everything *optional/feature* (dashboards, docs, cycles, forms, connectors, settings panels) is a
-  plugin remote.
-- **`dashboardWidget` / `viewType` need a backend type-registry** to be fully pluggable end-to-end
-  (today `widget_type`/`view_type` are validated against a backend enum). The frontend slot is the
-  UI half; making the *type* pluginnable is the same inversion already done for permissions and event
-  types (`register_*`) — a bounded backend follow-up.
-- **`settingsSection`** is available; wire it by dropping `<Slot id={SlotId.settingsSection}
-  match="<pageKey>"/>` into whichever settings page should accept injected sections.
-
+- Core plugins' UI is bundled into the host and registered at boot; optional plugins' UI is a
+  runtime remote (RADD-1373). Both contribute only through slots and the SDK.
+- View and widget types are backend registries (`registries.view_types` / `widget_types`, from
+  `ViewTypeSpec` / `WidgetTypeSpec`); the `viewType` / `dashboardWidget` slots are their UI half.
 
 Settings pages may host other plugins' sections with `<Slot id={SlotId.settingsSection} match="monitoring" />`. A contribution owns its data request as well as its UI. For polling that is useful only while visible, consume the query `signal` and use `gcTime: 0` / `staleTime: 0` to abort on withdrawal and fetch fresh data on reactivation. Mutations already accepted by the backend may finish; do not discard saved configuration on disable. Navigation requirements are presentation gates; the owning endpoint must enforce authorization too.
 
@@ -711,4 +703,82 @@ Built-in remotes use the shared Tailwind sheet, whose source scan includes every
 
 The provider can use `PagedDirectorySelect` for the shared searchable/paged dialog. It supplies a query factory returning the query key, entity metadata and abortable query function. The shared `api.getPaged<T>` preserves `X-Total-Count` as `{rows, total}` using the host's account-scoped transport. Generic Modal, ListSearchInput and DirectoryPager adapters reuse the host's accessible controls. Each dialog has its own query lifetime; closing, changing source/context or withdrawing the provider unmounts it, aborts unused reads and discards its cache. Selected values belong to the caller and survive an unavailable provider. Missing/failed providers render a disabled, explicitly unavailable control.
 
-Auth/Teams remain required core modules; these tests do not imply the plugin manager can disable them. Missing/failed/withdrawn frontend contributions are exercised independently. Other Auth/Teams UI remains under ownership review. The host PeopleDirectorySelect is a temporary compatibility adapter for existing callers; new remote callers use DirectorySelect directly.
+Auth/Teams remain required core modules; these tests do not imply the plugin manager can disable them. Missing/failed/withdrawn frontend contributions are exercised independently. Auth and Teams are core plugins; callers use `DirectorySelect` directly.
+
+## Owner contracts (SDK 1.5–1.12)
+
+An owner publishes its slot ids and props in a contract file its package exports
+(`@radd-plugin-ui/<plugin>/<name>-contract`); callers pass data and callbacks, and the owner draws.
+Every mounted control owns its query identity and abort signal and keeps no unused cache. When the
+owner withdraws, its controls, open pickers and in-flight reads go away while the CALLER keeps its
+saved values; re-enabling resolves them fresh. Aborting a transport never rolls back a write the
+server already accepted — reopening reads server state again.
+
+- **1.5 — schema forms and code.** `SchemaForm` + `defaultsFromSchema` render scalar values, typed
+  enums and boolean groups, and preserve unknown saved enum values, unnamed fields and unsupported
+  structures (shown as JSON; they need an owner editor). It is not a JSON-schema editor or validator:
+  the server still validates. `CodeEditor` is the host's lazy CodeMirror; the caller picks the language.
+- **1.6 — option directories.** `optionContribution` registers a `directory.options` source: an opaque
+  source name, a noun, row presentation, cache metadata, a paged fetch and saved-value resolution, with
+  scope forwarded to both. `OptionChoices`, `OptionSelect`, `OptionTextField` and `OptionNameValues` are
+  the generic controls. Auth, Teams, Workflow, Itemtypes, Releases, Forms, Pages and Groups provide the
+  sources. Text and token inputs stay editable with the provider missing, and a disabled browser never
+  authorizes a fetch — the server checks every request.
+- **1.7 — project and cycle pickers.** Projects contributes `projects.select`/`projects.picker`, Cycles
+  `cycles.select`/`cycles.choices` (their `ui/src/picker-contract.ts`); the SDK adds `usePagedDirectory`
+  and `Switch`. Changing project context resets an open cycle picker to that project's scope.
+- **1.8 — field controls.** Fields contributes `fields.form` and `fields.control`
+  (`fields/ui/src/control-contract.ts`): callers supply definitions, values, errors, lock rules and
+  callbacks, and the controls make no registry requests. A removed select option shows as an explicit
+  unavailable option and an unsupported type as a disabled saved value — neither disappears. The SDK
+  adds `TokenMultiSelect` and `ErrorText`. Teams' relationship pickers
+  (`teams.relationship.select|choices|audience`, labels resolved in windows of at most 50 ids) ride the
+  same contracts.
+- **1.9 — query sources.** `PluginModule.querySources` / `ctx.registerQuerySource` register
+  `{key, meta?, fetch(args, signal)}`. A key must start with the registering plugin's name and a dot, so
+  no other plugin can claim it even while the owner is absent. Consumers call
+  `useContributedQuery(key, args, {enabled})` and read `available` apart from pending/error; a disabled
+  or absent source never issues a request, even on an explicit refetch. Fields, Labels, Items, Pages and
+  Projects provide sources.
+- **1.10 — schedules.** `ScheduleConfig`, `ScheduleKind`, `defaultSchedule`, `isScheduleValid` (form
+  completeness only), `SchedulePreview` and `ScheduleEditor` (`value`, `onChange`, a stable
+  `previewSchedule(config, signal)`). Backup contributes its editor to `backup.schedule.editor`, and
+  Automations draws one inside its own package; each has its own preview endpoint, both computed by
+  `radd.schedule_preview`.
+  Previews debounce 350 ms and abort superseded requests, and an A→B→A edit gets a fresh preview.
+- **1.11 — change presentation and history.** `ChangeList`/`ChangeLine` render the backend's
+  structured-change shape (scalar changes, collection deltas, withheld values — stripped before any
+  `entity.change.line` contribution, matched by entity type, sees them); `entity.change.fields` offers
+  field suggestions. Audit contributes `settings.footer` (`{history: {entities?, projectId?}}`) and
+  `entity.history` (`{entityType, entityId, projectId?, title?}`). Also `CollapsibleCard`, `DateField`,
+  `Pager`, the table primitives and `TableSkeleton`. A nav entry may declare `requires_any_project`
+  (each atom held in at least one project) — an availability hint; the destination API enforces the
+  exact scope.
+- **1.12 — contextual commands.** `PluginModule.commandSources` entries are
+  `{id, entityType, meta?, list(context, signal), execute(id, context, signal)}` with context
+  `{entityType, entityId, projectId?}`; consumers call `useContributedCommands(context, enabled)`.
+  Retained callbacks refuse after withdrawal, removal aborts an active execution, and a successful
+  command invalidates visible queries; an owner calls `invalidatePluginCommands(client, plugin)` after
+  its own configuration changes. Automations' manual actions use it.
+
+**Contract-only packages.** A package may export contract entry points (slot ids and types, no
+implementation); a consumer declares the package dependency, the build links declared packages before
+type-checking and refuses to replace a real installed package, and the boundary test forbids
+implementation code in them. Such a package may have no Vite entry at all (Comments' visibility
+vocabulary).
+
+## Transition-rule editors and VCS connector tabs
+
+- **Workflow transition rules (RADD-1383).** `@radd-plugin-ui/workflow/transition-rule-contract`
+  exports the slot `workflow.transition.rule` and `TransitionRuleEditorProps` (the row's rules,
+  `onChange(check, params | null)`, `canManage`, `saving` — not `pending`, which `<Slot>` keeps as its
+  own prop). The host's transitions editor renders the slot on every row after its own rules, and uses
+  each contribution's `match` (its check key) to tell a served rule from one whose plugin is gone: that
+  one shows a fail-closed notice with Remove, because the server refuses every move it governs.
+  Approvals' "Require approval" is the worked example (`approval-rule-editor-proof.mjs`).
+- **VCS connectors (RADD-1366).** VCS owns `/settings/vcs`; each connector remote contributes one tab
+  to `vcs.provider-settings` and renders it through `vcs.host-settings` with a `VcsHostConfig` from
+  `@radd-plugin-ui/vcs/host-contract`. The config is WORDING only (title, description, webhook and token
+  guidance, what a change is called); REST paths, cache tags and audited entity types follow from the
+  provider key by one VCS convention, so a connector cannot restate them wrong, and nothing enumerates
+  the installed connectors.

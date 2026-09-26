@@ -6,7 +6,7 @@
 
 # Spec 31 — GitLab connector (the `vcs` stub made real)
 
-Tier-2 item 6 from `docs/roadmap-ideas.md`: auto-linking MRs/branches/commits and
+Tier-2 item 6 from `research/roadmap-ideas.md`: auto-linking MRs/branches/commits and
 transitioning issues on merge is the payoff of the vcs module, and we're a GitLab
 shop. The roadmap sketches an out-of-process extensions SDK; this spec ships the
 pragmatic in-process version first — a webhook receiver module whose write path is

@@ -84,7 +84,7 @@ All 13 second-pass findings are addressed in the working tree:
 
 The new migration is `d1334review`. It retains unambiguous legacy link/time origins; ambiguous legacy origins stay historical rather than being assigned to an arbitrary host. Its downgrade deliberately refuses to collapse connection-scoped data. No application database migration or deployment was performed.
 
-Permanent regression coverage: `server/tests/test_second_review_interactions.py`, the connection-isolation case in `test_time_mirror.py`, and `web/scripts/browser-second-review.mjs`. The earlier `second_pass_probes.py` and `second-pass-browser.mjs` remain historical reproductions of defects, not acceptance tests.
+Permanent regression coverage: `server/tests/test_second_review_interactions.py`, the connection-isolation case in `test_time_mirror.py`, and `web/scripts/browser-second-review.mjs`. The earlier defect-reproducing probes (`second_pass_probes.py`, `second-pass-browser.mjs`) were removed in RADD-1411 and remain in git history.
 
 Live provider delivery and real outbound scripts are not exercised by the browser/regression fixtures. CI summaries concern received reports, and event replay uses current subject state rather than reconstructing a historical database snapshot.
 

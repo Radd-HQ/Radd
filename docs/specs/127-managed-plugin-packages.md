@@ -1,6 +1,6 @@
-# 125 — Managed plugin packages and live UI changes
+# 127 — Managed plugin packages and live UI changes
 
-Tracking: RADD-1220. Extends spec 124 with package upload and persistent storage.
+Tracking: RADD-1220. Extends spec 126 with package upload and persistent storage.
 
 ## Delivered experience
 
@@ -60,7 +60,7 @@ Disabling withdraws those contributions. Every process writes an atomic report
 of its active plugin ids and reconciliation errors. Settings polls local status;
 browser shells refresh capabilities every 15 seconds, allowing remote loaders
 to add/remove updated UI without a full page reload. The frontend loader retains
-spec 124's failed-activation rollback and stale-load suppression.
+spec 126's failed-activation rollback and stale-load suppression.
 
 This does not implement arbitrary Python module replacement. Uploading another
 version of an existing package is rejected. Disable, forget, remove files, restart

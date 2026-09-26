@@ -1,6 +1,8 @@
 # Spec 93 — Kernel + Plugin Platform (the migration)
 
-**Status:** in progress. This spec is the **definition of done** for migrating Radd
+**Status:** built — merged to `main` with the rest of the kernel-plugin-platform work (specs 93–114). Boxes left unticked below were not re-audited at the merge; check the tracker before reading one as a gap.
+
+This spec is the **definition of done** for migrating Radd
 onto the kernel+plugin architecture (`docs/plugin-platform.md`). It is a checklist: every
 architecture deliverable and every existing capability (specs 01–92) that must still hold. Nothing
 is dropped silently — an unchecked box at the end is an explicitly-logged parity gap (`BUILD-LOG.md`).

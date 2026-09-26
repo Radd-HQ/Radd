@@ -1,5 +1,7 @@
 # Spec 22 — Time logging + timesheets
 
+> **Superseded in part by spec 86:** workspaces were eradicated — every `workspace_id`, workspace role and workspace scope below is gone; scopes are global or per-project.
+
 Per-project time logging (Jira-style estimate + worklogs) and a workspace timesheet
 for day/week/month reporting, filterable by team or person, with drill-down into a
 specific day, employee, or issue.

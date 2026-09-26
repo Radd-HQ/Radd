@@ -48,12 +48,4 @@ reference-style Markdown are not fetched. Images are downloadable MIME parts,
 not inline CID rendering. Existing text is not a general data-loss-prevention
 filter: agents must still choose what they write in a public reply.
 
-`server/tests/test_mail_attachments.py` covers opt-in, mixed General/private
-replies, restricted/cross-parent files, MIME/content verification, size/count
-limits, unavailable storage, revocation/moves and the actual outbound → SMTP
-MIME path. SMTP is captured locally; no test emails are sent.
-
-`node web/scripts/storage-email-proof.mjs` exercises the built SPA against a
-local fixture API: default-off checkbox, selective enable, save payload, reopen,
-private-host exclusion, disable, new-host default and visible layout. It writes
-its screenshot to `/tmp/radd-988-storage-settings.png` and changes no live settings.
+Tests: `server/tests/test_mail_attachments.py`; browser: `web/scripts/storage-email-proof.mjs`.

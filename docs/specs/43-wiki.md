@@ -1,5 +1,7 @@
 # Spec 43 — Wiki: doc spaces, page trees, versions, issue↔doc links
 
+> **Superseded in part by RADD-701 (2026-08-02), spec 122, spec 124 (page addresses) and RADD-1392:** the `docs` module became `pages` (no `/doc-pages`/`/doc-spaces` routes remain), co-editing is live, pages are addressed by path, and the wiki UI is the pages plugin's bundled package.
+
 The Confluence half of the mission (PLAN §8 remaining #1). A new **`docs`
 module** (`radd.modules.docs`) + full frontend. Content is **markdown**,
 edited with the existing safe `MarkdownEditor` (same body pipeline as item

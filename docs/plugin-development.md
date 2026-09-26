@@ -23,7 +23,7 @@ before its report went stale, so it no longer blocks anything. Replacing the sam
 Python module requires a restart after removal; live backend code replacement is not
 supported yet.
 
-See [spec 125](specs/125-managed-plugin-packages.md) for the original package workflow
+See [spec 127](specs/127-managed-plugin-packages.md) for the original package workflow
 and the runtime activation section below for current lifecycle behavior. The image-based recipe below remains available for
 plugins that need additional dependencies or native libraries.
 

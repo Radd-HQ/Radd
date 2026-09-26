@@ -1,6 +1,8 @@
 # Spec 29 — Attachments + rich(er) text editor
 
-Tier-1 item 4 from `docs/roadmap-ideas.md`: artist support needs pasted screenshots,
+> **Superseded in part by spec 102 (storage) and RADD-745/754 (editor, 2026-08-03):** attachments are routed across storage hosts, and the hand-rolled `MarkdownEditor` is gone — the editor is Milkdown with Radd's own chrome.
+
+Tier-1 item 4 from `research/roadmap-ideas.md`: artist support needs pasted screenshots,
 frames, and logs; descriptions/comments were plain `<textarea>`s. The roadmap's
 planned editor stack is Tiptap, but this box has **no JS package manager** (no
 npm/pnpm/bun), so this spec ships the dependency-free 90%: **markdown content with a

@@ -1,5 +1,7 @@
 # Spec 90 — Jira import wizard (live connection, field mapping, staged import)
 
+> **Superseded by spec 100:** the importer was rebuilt cache-first; this wizard's internals (`jira_import_plans`, `jira_import_runs`, the one-pass issue writer) are gone.
+
 **Status: shipped.**
 
 User direction: wipe the DB and re-import from Jira, but change the flow —

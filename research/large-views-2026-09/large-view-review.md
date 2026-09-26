@@ -1,5 +1,7 @@
 # Large views: performance and navigation review
 
+> Point-in-time review, 2026-09-17 (RADD-1203); moved from `docs/` on 2026-09-27. The loading redesign it proposes has since shipped (RADD-1204–1217); it does not describe the current tree.
+
 RADD-1203 · 17 September 2026. Investigation and proposed design; the loading
 redesign below is not implemented. Follow-ups: RADD-1204, RADD-1205, RADD-1206.
 

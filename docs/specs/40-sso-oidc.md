@@ -1,5 +1,7 @@
 # Spec 40 — SSO: OIDC sign-in with group→role sync
 
+> **Superseded in part by spec 110 (and spec 86):** providers are `sso_providers` rows managed in Settings → Sign-in; `RADD_OIDC_*` only seeds the first one, and `RADD_OIDC_DEFAULT_WORKSPACE_SLUG` went with workspaces.
+
 The adoption gate (PLAN §8 #1). The `sso` module implements a standard OIDC
 authorization-code + PKCE relying party:
 

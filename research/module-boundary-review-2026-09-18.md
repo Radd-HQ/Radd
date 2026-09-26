@@ -1,5 +1,7 @@
 # Module and plugin architecture review
 
+> Point-in-time review, 2026-09-18 (RADD-1218, code at `e02e3e1`); moved from `docs/` on 2026-09-27. Findings 1–3, 6 and most of 7 have since been fixed; 4 and 5 still stood at the move; the loader's `module` fallback (#7b) was removed by the same bloat epic (RADD-1402). It does not describe the current tree.
+
 Tracking: RADD-1218. Reviewed code baseline: `e02e3e1`.
 
 The direction is sound: RADD is a modular monolith with a real plugin kernel.
@@ -122,7 +124,7 @@ semantics and coverage checks.
 
 [`router.tsx`](../web/src/router.tsx),
 [`settings/layout.tsx`](../web/src/routes/settings/layout.tsx), and the new
-[`import-data.tsx`](../web/src/routes/settings/import-data.tsx) manually wire
+`import-data.tsx` (since deleted) manually wire
 features and importer cards. The remote SDK has contribution slots, but builtin
 features do not consistently use equivalent contracts.
 
@@ -144,7 +146,7 @@ clearly for other schema failures.
 
 ### 7. Small confirmed dead-code residue; compatibility needs a policy — low
 
-[`web/src/lib/queue.ts`](../web/src/lib/queue.ts) is the sole unreachable file
+`web/src/lib/queue.ts` (since deleted) is the sole unreachable file
 in the checked frontend graph. Its `orderBySlaUrgency` export has no repository
 callers and implements the superseded client-page sort. It is a concrete
 deletion candidate; this audit has not deleted it.

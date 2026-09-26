@@ -1,5 +1,7 @@
 # Spec 06 — roles as data + permission engine + membership management (backend)
 
+> **Superseded in part by spec 86:** workspaces were eradicated — every `workspace_id`, workspace role and workspace scope below is gone; scopes are global or per-project.
+
 Allowed paths: `server/src/radd/modules/auth/` , `server/src/radd/modules/teams/`,
 `server/src/radd/modules/workspace/` (ProjectRead permissions hydration only),
 `server/src/radd/seed.py`, `server/migrations/versions/` (one revision), `server/tests/`,

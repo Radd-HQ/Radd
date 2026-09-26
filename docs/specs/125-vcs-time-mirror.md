@@ -125,7 +125,6 @@ map-and-log action; each repository a default work category.
 ## Proof
 
 `server/tests/test_time_mirror.py` (the seam, 13), `test_gitlab.py`,
-`test_gitlab_connections.py`, `test_gitlab_timelogs.py` (MockTransport over the
-18.4 shapes verified against Cinesite's GitLab). Live: a repository under
-Hussein's personal namespace on `gitlab.mtl.ad.cinesite.com` — never an IT or
-INFRA project.
+`test_gitlab_connections.py`, `test_gitlab_timelogs.py` (MockTransport over response
+shapes verified against a production GitLab 18.4 instance). Live: a repository
+under a personal namespace on the company GitLab — never an IT or INFRA project.

@@ -408,17 +408,22 @@ poller is simply fewer moving parts, and since RADD-951 it runs through the same
 stripping, attachments and the loop guards.
 
 `POST /api/v1/integrations/email` remains for push sources (a Gmail adapter, or
-a Worker if one is ever wanted). With `RADD_EMAIL_INGEST_SECRET` unset it
-**rejects every request** — an unused endpoint is a closed one.
+a Worker if one is ever wanted). The secret it verifies is the matching mail
+source row's; with no row and `RADD_EMAIL_INGEST_SECRET` unset it **rejects every
+request** — an unused endpoint is a closed one.
 
-Settings that matter, and the trap in each:
+**Mail is configured in Settings → Email** (sources, senders, routing — RADD-958).
+The variables below are **seed-only**: on a database with no mail rows they create
+the first source and sender, once, and are not read for configuration again
+(`mailintake/seeding.py`); the SMTP and ingest-secret values also stand in while no
+row exists yet. Their traps still apply to the rows they seed:
 
 | variable | value here | why it matters |
 |---|---|---|
-| `RADD_MAIL_IMAP_HOST/PORT/USERNAME/PASSWORD` | Migadu, `help@` | unset host = intake is off entirely |
-| `RADD_MAIL_PROJECT_KEY` | a real project key | naming no project makes every new ticket fail; the webhook answers 503 rather than bouncing the sender |
-| `RADD_SMTP_FROM` | `Radd <agent@radd-hq.com>` | also the self-loop guard's comparison — mail from this address arriving in `help@` is dropped |
-| `RADD_EMAIL_INGEST_ADDRESS` | `help@radd-hq.com` | the `Reply-To` on every outbound message, and the second half of the loop guard |
+| `RADD_MAIL_IMAP_HOST/PORT/USERNAME/PASSWORD` | Migadu, `help@` | seeds the first IMAP source; unset seeds nothing — intake then runs from whatever sources Settings → Email holds |
+| `RADD_MAIL_PROJECT_KEY` | a real project key | the seeded source's default project (and the webhook's fallback); naming no project makes every new ticket fail — the webhook answers 503 rather than bouncing the sender |
+| `RADD_SMTP_FROM` | `Radd <agent@radd-hq.com>` | the seeded sender's From, and part of the self-loop guard — mail from any sender's address arriving at a source is dropped |
+| `RADD_EMAIL_INGEST_ADDRESS` | `help@radd-hq.com` | the seeded source's address and sender's `Reply-To`, and the other half of the loop guard |
 
 Plain `help@`, deliberately not `help+token@`: sub-addressing is rewritten or
 stripped by exactly the corporate mail systems this feature targets, which is
@@ -427,7 +432,9 @@ why threading matches on `In-Reply-To`/`References` instead (RADD-954).
 ## Environment reference (the load-bearing subset)
 
 Every setting lives in `server/src/radd/config.py` (env prefix `RADD_`,
-`.env` supported) — that file is the authoritative list. Highlights:
+`.env` supported) — that file is the authoritative list. **Seed-only** below means
+the value creates the first database row on an empty instance, once; after that the
+named Settings page owns it and editing the variable changes nothing. Highlights:
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -438,16 +445,47 @@ Every setting lives in `server/src/radd/config.py` (env prefix `RADD_`,
 | `RADD_RUN_WORKERS` | `true` | `false` = web-only process (worker split) |
 | `RADD_WEB_DIST` | repo `web/dist` | built SPA to serve |
 | `RADD_MODULES` | all | ordered module assembly (the plugin system) |
-| `RADD_ATTACHMENT_STORAGE` / `RADD_S3_*` | filesystem | attachment backend |
-| `RADD_SMTP_*` | disabled | outbound mail: digests, acks, comment replies |
-| `RADD_EMAIL_INGEST_SECRET` | disabled | HMAC for `POST /integrations/email`. **Empty rejects everything** |
-| `RADD_OIDC_*` | disabled | SSO (spec 40) |
-| `RADD_LDAP_*` | disabled | AD directory login (spec 42) |
-| `RADD_AI_*` | disabled | AI layer (spec 46) |
+| `RADD_ATTACHMENT_STORAGE` / `RADD_S3_*` | filesystem | **seed-only** → Settings → Storage: the first storage host (spec 102) |
+| `RADD_SMTP_*` | disabled | **seed-only** → Settings → Email: the first outbound sender (digests, acks, comment replies); used directly only while no sender row exists |
+| `RADD_EMAIL_INGEST_SECRET` | disabled | **seed-only** → Settings → Email: the first webhook source's HMAC for `POST /integrations/email`; the fallback while no source row exists. **Empty rejects everything** |
+| `RADD_OIDC_*` | disabled | **seed-only** → Settings → Sign-in: the first SSO provider (spec 110) |
+| `RADD_LDAP_*` | disabled | **seed-only** → Settings → Directory: the AD connection and sync tunables (spec 42, RADD-846/848) |
+| `RADD_AI_*` | disabled | provider/base URL/key/model are **seed-only** → Settings → AI (spec 101); `_MAX_TOKENS` and the timeouts stay live |
 | `RADD_MCP_ENABLED` | `true` | MCP server at `POST /api/v1/mcp` (spec 45) |
-| `RADD_GITLAB_*` / `RADD_FORGEJO_*` / `RADD_GITHUB_*` | disabled | VCS connectors (GitHub: `_WEBHOOK_SECRET` seeds one connection once; `_API_TOKEN`, `_BASE_URL`, `_REPO` optional) |
+| `RADD_GITLAB_*` / `RADD_FORGEJO_*` / `RADD_GITHUB_*` | disabled | **seed-only** → Settings → Version control: each seeds one connection (and repository) once; `_API_TOKEN`, `_BASE_URL`, `_REPO` optional |
 | `RADD_ALERTMANAGER_*` / `RADD_MAIL_*` | disabled | seed ONE Alertmanager receiver / mail source row, once (RADD-1317, RADD-958) — both are configured in Settings after. `RADD_GOOGLECHAT_*` is gone (RADD-1319): posting to chat is an automation |
 | `RADD_WORK_WEEK_DAYS` | mon–fri | business-day SLAs + timesheet |
+
+## Reviewing imported Jira comment audiences
+
+A read-only report of how imported Jira comments' audiences compare with their
+source (RADD-1182). From `server/`, with `RADD_DATABASE_URL` pointing at the
+instance:
+
+```bash
+.venv/bin/python -m radd.modules.jiraimport.audit_comments > comment-visibility-review.jsonl
+# Optional: limit to exact import runs (repeat --run-id).
+.venv/bin/python -m radd.modules.jiraimport.audit_comments --run-id RUN_UUID > run-review.jsonl
+```
+
+It runs in a READ ONLY, REPEATABLE READ transaction, has no apply option, and
+prints JSONL (scope, findings, summary) without comment bodies, emails or
+credentials — but with IDs and source audience names, so keep it with operator
+records. Findings join on each creation record's exact run, snapshot, issue key
+and comment ID, never on matching text; imports without provenance records are
+outside its coverage, so a clean report certifies nothing about them.
+
+| Action | Meaning and next step |
+|---|---|
+| `make_internal` | The snapshot marks an internal note but the target is public. Back up, then correct the visibility explicitly. |
+| `review_restricted_audience` | The snapshot names a Jira role/group. Agree the intended Radd audience; internal alone is not equivalent. |
+| `source_unavailable` | The snapshot or source comment is missing. Reconcile with the source or a backup; this is not a safe result. |
+| `target_missing` | The ledger target no longer exists. Do not recreate it automatically. |
+| `no_change_indicated` | Nothing indicates a change; counted in the summary only. |
+
+Before any repair: keep a backup and the before-state, apply corrections through
+the normal comment service, then recheck REST, search, notifications and history
+as both permitted and excluded users.
 
 ## MFA (TOTP)
 
@@ -485,4 +523,4 @@ wheels separately. S3 attachment storage does not replace the plugin volume.
 
 Uploaded pure-Python packages need no custom RADD image if their dependencies
 already exist. UI-only manifests can activate live; backend hooks/routes/tasks
-still need process restarts. See [managed plugin packages](specs/125-managed-plugin-packages.md).
+still need process restarts. See [managed plugin packages](specs/127-managed-plugin-packages.md).

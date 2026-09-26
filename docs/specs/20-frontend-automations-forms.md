@@ -1,5 +1,7 @@
 # Spec 20 — frontend: automations rule builder + intake forms (Wave 3c, run AFTER 19)
 
+> **Superseded in part by spec 116 and RADD-1365 (2026-09-26):** the rule builder edits graphs and lives in the `automations/ui` plugin package; `ACTION_TYPE_LABELS` and the host's automation screens are gone.
+
 Allowed paths: `web/` + frontend row in `docs/modules.md`. Runs SEQUENTIALLY after spec 19 lands
 (shares web/ files — rebase on committed state). Backend LIVE on :8000 — build against real
 `/openapi.json`.

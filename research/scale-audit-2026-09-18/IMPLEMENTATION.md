@@ -1,5 +1,7 @@
 # Scale optimization implementation
 
+The JSON evidence files this report names (profiles, bursts, diagnostics) are evidence kept locally, not in the repository; the scripts that produce them are here.
+
 Implemented in the workspace on 2026-09-18, against audited revision `1ce62ae`.
 The original audit files remain the baseline. No production deployment was
 performed. The additive search-index migration was applied to the local audit
@@ -96,13 +98,13 @@ responsive layout, search cancellation, and account-switch cache isolation.
   malformed filters are still rejected when there are no completed cycles.
 - Frontend Node suite: **26 passed**; production build and all three browser
   checks passed. Build retains the existing CSS highlight/chunk-size warnings.
-- [Response comparison](read-result-parity.json): admin/member cross-project
+- Response comparison (`read-result-parity.json`): admin/member cross-project
   lists and exact/lowercase/numeric-key search outputs match byte-for-byte after
   canonical serialization. Common-word searches preserve the ordered rank and
   updated-time pairs and identical data/snippets for shared hits. They are not
   byte-for-byte identical: the existing search order has **no final tie-breaker**.
   Rows tied on both rank and timestamp can reorder or exchange places at the
-  LIMIT boundary. [Repeated old-query runs also vary](search-tie-diagnostics.json).
+  LIMIT boundary. Repeated old-query runs also vary (`search-tie-diagnostics.json`).
   The optimization retains those ordering rules; it does not establish a new
   deterministic tie order or promise identical selections within an equal tie.
 
@@ -110,7 +112,7 @@ responsive layout, search cancellation, and account-switch cache isolation.
 
 All 24 final service operations completed successfully. These are single diagnostic
 observations, not latency percentiles; they exclude HTTP/browser/worker delivery.
-See [baseline](read-profile-validated.json) and [after](read-profile-after.json).
+See baseline (`read-profile-validated.json`) and after (`read-profile-after.json`).
 
 | Operation | Admin before → after (ms) | Member before → after (ms) | Admin SQL before → after | Member SQL before → after |
 | --- | ---: | ---: | ---: | ---: |
@@ -140,8 +142,8 @@ The same anonymous cold navigation to `/issues/PUBPRF-73` made **40 → 34 API
 requests**, including the application shell, with no browser errors in either
 trace. The three eager people-directory requests are gone, and project/page-space
 summaries each load once instead of twice. Field writability remains one batched
-request, not one request per field. See [before](issue-comments-public.json) and
-[after](issue-comments-after.json). These single browser traces are request-count
+request, not one request per field. See before (`issue-comments-public.json`) and
+after (`issue-comments-after.json`). These single browser traces are request-count
 evidence, not a repeated interaction-latency benchmark; independent optional
 sections still load separately.
 
@@ -153,10 +155,10 @@ No other audit/test process was running against PostgreSQL during these bursts.
 
 | Run | Success | Median | p95 | Pool acquisition p95 | Wall time |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| [Before](read-burst-100.json) | 94/100 | 16.02 s | 33.68 s | 27.11 s | 41.04 s |
-| [Before repeat](read-burst-100-jit-on.json) | 95/100 | 15.75 s | 34.69 s | 26.56 s | 41.28 s |
-| [After](read-burst-100-after.json) | 100/100 | 4.04 s | 7.47 s | 6.35 s | 8.40 s |
-| [After repeat](read-burst-100-after-repeat.json) | 100/100 | 3.99 s | 7.50 s | 6.29 s | 8.42 s |
+| Before (`read-burst-100.json`) | 94/100 | 16.02 s | 33.68 s | 27.11 s | 41.04 s |
+| Before repeat (`read-burst-100-jit-on.json`) | 95/100 | 15.75 s | 34.69 s | 26.56 s | 41.28 s |
+| After (`read-burst-100-after.json`) | 100/100 | 4.04 s | 7.47 s | 6.35 s | 8.40 s |
+| After repeat (`read-burst-100-after-repeat.json`) | 100/100 | 3.99 s | 7.50 s | 6.29 s | 8.42 s |
 
 After-run event-loop lag p95 was 98 / 69 ms; maximum 440 / 407 ms. This is a
 substantial improvement, but a 7.5-second p95 synchronized burst still includes
@@ -166,7 +168,7 @@ probe’s 15-second SQL guardrail; production did not have that timeout configur
 
 ### Permission output and large batches
 
-[The after diagnostic](scale-diagnostics-after.json) returned the same canonical
+The after diagnostic (`scale-diagnostics-after.json`) returned the same canonical
 summary hash as the original audit with JIT on and off:
 `54099db4e28fe572cf2e23d1ee5fa2de5809dae4d20d095c368d5f72e53848a8`.
 The original 100,864-ID item fetch that failed at the PostgreSQL parameter ceiling

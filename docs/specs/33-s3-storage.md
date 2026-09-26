@@ -1,5 +1,7 @@
 # Spec 33 — S3/MinIO object storage for attachments
 
+> **Superseded in part by spec 102:** storage backends are `storage_hosts` rows with a routing chain; `RADD_ATTACHMENT_STORAGE`/`RADD_S3_*` only seed the first host (`attachments/hosts.py`).
+
 Attachment bytes currently live on the local filesystem (spec 29). For anything
 beyond a single node — and for studio NAS/MinIO deployments — attachments need an
 S3-compatible backend. This spec adds a **storage seam** inside the attachments

@@ -27,8 +27,3 @@ set of lightweight sort keys must still be evaluated per request: broad queues
 with many SLA-bearing issues cost more than an ordinary indexed list. Narrow queue
 filters remain useful; no Emden production latency claim has been made. Explicit
 saved ordering uses the ordinary database list sort.
-
-Verification includes real database regressions with over 200 issues, the same
-six-actor visibility matrix as normal issue lists/counts, and built-SPA HTTP proofs
-for grouped loading and queue paging. Browser proofs use fixtures; they do not
-change a deployed instance.

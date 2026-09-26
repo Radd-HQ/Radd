@@ -1,5 +1,7 @@
 # Spec 57 — View ownership + sharing (users, teams, levels, transfer)
 
+> **Superseded in part by spec 92:** view shares are `access_grants` rows (migration `925809931622`); `view_shares` is gone.
+
 **Status: shipped** (rounds 17–18 of the polish thread).
 
 ## Problem

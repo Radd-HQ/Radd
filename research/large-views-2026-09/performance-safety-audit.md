@@ -1,5 +1,7 @@
 # Performance changes: functionality audit
 
+> Point-in-time change log, 2026-09-17 (RADD-1204–1212); moved from `docs/` on 2026-09-27. It does not describe the current tree.
+
 User authorization: implement the proposals after auditing breakage; exclude
 variants that lose functionality. RADD-1204/1205/1206 track the existing work.
 This ledger distinguishes implemented changes from unsafe variants left out.
@@ -114,3 +116,125 @@ row modes. No aggregate cache shared between users was introduced. No card
 virtualization was introduced; previously loaded cards remain accessible, so
 extremely deep exploration still grows the DOM. Changes to filter/sort reset
 loading scope; ordinary horizontal navigation retains it.
+
+
+---
+
+## Appendix: large-view implementation notes (moved from `docs/modules.md`, 2026-09-27)
+
+As recorded in the module map when each change landed; the map now describes only the result.
+
+### Large-view performance safety audit (RADD-1204)
+
+this file records compatibility constraints for the
+approved optimization wave. Grouped reads compute global rank only for group
+ordering; selected cells alone receive per-cell ranks. Ancestor joins are used
+only for epic axes. Authorization, group ordering and page totals are unchanged.
+
+### Group totals and independent loading (RADD-1205)
+
+`items/grouped.py` accepts an optional column window and computes full point
+sums alongside counts, withholding sums for restricted fields. `useBoardItems`
+now shares complete summaries and per-group cursor windows between boards and
+grouped lists (RADD-1212/RADD-1217). Visible groups load independently as the
+reader scrolls; searchable navigation replaces group paging and bottom loaders. Planning renders section-local
+loading/errors; cycle headers share authorized whole-cycle statistics instead
+of computing progress from loaded rows. Row filtering does not alter those
+whole-sprint totals. See this file for compatibility
+limits and the browser/database regression evidence.
+
+### Collection bytes and supplementary batches (RADD-1206)
+
+`CollectionCompressionMiddleware` gzips only GET item collections (items,
+grouped items and SLA queue) above 2 KiB, preserving full Item contracts and
+existing response encodings. `useStableItemBatches` keeps prior chunk membership
+on append for rollup, SLA and timelog hooks. Existing entity invalidation still
+refreshes active chunks; complete scheduling timelog readers remain unchanged.
+No partial shared Item projection or guessed invalidation dependency was added.
+
+### Progressive personal and child lists (RADD-1208)
+
+My Work requests bounded server-ordered previews with full counts and per-section
+Show more (25 due, 25 other assigned, 8 starred). Due items are separated from
+other assignments before pagination. `childItemPagesQuery` loads direct children
+in workflow category/state order, 50 at a time on expansion, in issue detail and
+board cards. `childItemsQuery` remains the complete relation for other consumers;
+rollup and child counts remain independent of the number of displayed rows.
+
+### Hybrid continuation (RADD-1209)
+
+`GET /items?cursor_mode=true` keeps its Item array response and adds
+`X-Next-Cursor`; callers send `after` for continuation, never with an offset.
+`items/cursors.py` uses compiler ordering expressions, PostgreSQL null placement,
+and a unique ID tie-breaker. Boundary values are encrypted with the existing
+instance secretbox and bound to actor, query and structured scope. Each page
+rechecks current authorization; tokens are positions, not access grants. Large
+custom-text boundaries fall back to an encrypted offset token to keep URLs below
+proxy limits. These rare windows retain offset pagination's mutation caveats.
+
+My Work and expanded children use sequential cursor pages behind the same Show
+more buttons. Ordinary boards receive a cursor per column and independently
+continue it; invalidation rebuilds the cursor chain and cached windows are reused
+on append. Numbered list/backlog and swimlane group navigation remain available.
+Full count/stat queries remain separate. `target`/`start` date ORDER BY support
+also fixes the Due soon query's previously unsupported target sort. Cursor
+reads are not snapshots: moving an issue across the sort boundary can still
+change what a later page sees. Refresh rebuilds the sequence from its start.
+
+### Personal Starred pin board (RADD-1210)
+
+`/starred` is an authenticated, cross-project personal card grid, linked from the
+full sidebar, collapsed rail and command palette (and pinnable in the top bar).
+It queries the existing actor-scoped `starred = true` filter, includes completed
+issues, supports title search, status filtering and sorting, and uses cursor
+Show more with separate full counts. Ordinary archived/access filters still
+apply. Opening a title uses the normal peek flow and modified-click links.
+
+`QuickStar` reuses the existing personal star API on board cards, list/Planning
+rows, My Work and the pin board. The button is visible without hover, keyboard
+accessible and isolated from parent click/drag actions. It shows the requested
+state while pending, disables duplicate writes until cache reconciliation and
+reports failed saves. Personal stars require read access, never shared edit
+rights; starring does not change workflow state or a shared board's order.
+Proof: `web/scripts/starred-proof.mjs` (toggle, keyboard isolation, failed writes,
+completed rows, cursor paging, cross-page search, filters, rail and mobile layout)
+and `server/tests/test_personal_starred.py` (per-user isolation and completed pins).
+
+RADD-1211 adds a List/Cards switch to Starred. The presentation preference is
+stored per account in this browser, with cards as the initial default. Both
+layouts share the same query, filters, loaded cursor windows and personal-star
+actions; changing layout does not refetch the issue collection. The list shows
+key/title, status, priority and owner in aligned desktop columns and wraps into
+compact rows on narrow screens.
+
+### Stable board navigation (RADD-1212)
+
+Boards now use `useBoardItems`, separate from grouped-list paging. On
+`GET /items/grouped`, `summary_only` returns complete authorized totals, point
+sums and a small group directory without hydrating cards or ranking all matching
+issues. `grouped_labels.py` resolves only keys from that authorized aggregate
+through the existing auth/teams/projects/items spine. Readable-ancestor guards
+also cover epic directory entries. `grouped_axes.py` keeps direct UUID predicates
+on indexed fields for individual column reads.
+
+`rows_only` requires a complete column/lane key, reads limit+1 ordered IDs and
+returns an actor/scope/cell-bound cursor. It does not recount groups. Both paths
+retain SLQ, row visibility and field-read guards. The ordinary grouped-list
+contract and numbered list pagination remain available.
+
+`ViewBoard` keeps stable columns with a searchable navigator, fixed headers,
+independent vertical scrolling and automatic cursor continuation. Its column
+statistics cover every matching issue, not loaded cards. Cursor windows are
+separately cached; appending does not replay earlier windows or the summary.
+`ViewSwimlanes` retains complete lane headers and delays mounting off-screen
+lanes; visible cells fetch independently. Visited content stays mounted to
+preserve native selection/find/drag behaviour. `BoardLoadBoundary` observes
+clipping ancestors, stops on failures and offers local retry. Drag edge scrolling
+is shared in `board-scroll.ts`. Group paging controls now belong only to grouped
+lists. Mutations invalidate summaries and card windows through entity metadata.
+
+Proof: `web/scripts/board-navigation-proof.mjs` (also the grouped-pagination
+entry point); backend summary/cursor/permission invariants in
+`tests/test_board_loading.py`, `test_item_visibility.py` and
+`test_slq_field_oracle.py`. This is incremental loading, not card virtualization:
+very deep browsing still accumulates mounted cards.

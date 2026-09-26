@@ -26,8 +26,4 @@ Operational permissions deserve particular care: automation can execute through 
 
 ## Verification
 
-Regression coverage lives in `test_authorization_surfaces.py`, `test_authorization_grant_lifecycle.py`, and `test_access_management_hardening.py`, alongside the existing policy and management suites. Browser proofs cover explicit global-scope selection and restoring a durable page restriction. The proofs use an authenticated local session and clean up their disposable wiki space.
-
-This change is intended for the next release. It is not evidence that the company deployment has already been upgraded or that every external integration has been exercised.
-
-Validation for RADD-1213: full backend suite **2,775 passed, 4 skipped**; final focused checks **76 passed** after the last credential/delivery refinements; frontend tests **21 passed**; TypeScript, production build, Ruff and diff checks passed. Browser proofs passed six grant-dialog checks and three restriction-reset checks. Production build retains the existing bundle-size advisory.
+`test_authorization_surfaces.py`, `test_authorization_grant_lifecycle.py`, `test_access_management_hardening.py`.

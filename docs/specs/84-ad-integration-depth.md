@@ -1,5 +1,7 @@
 # Spec 84 — AD/LDAP depth: team↔group links, group import, user administration
 
+> **Superseded in part by spec 86:** workspaces were eradicated — every `workspace_id`, workspace role and workspace scope below is gone; scopes are global or per-project.
+
 User direction: teams linkable to AD groups (nested membership honored), group
 import from the directory, a real user-administration surface for
 LDAP-provisioned accounts, and a UI for merging duplicate users across auth

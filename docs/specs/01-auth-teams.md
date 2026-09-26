@@ -1,5 +1,7 @@
 # Spec 01 — auth + teams modules (backend, Wave 1)
 
+> **Superseded in part by spec 86:** workspaces were eradicated — every `workspace_id`, workspace role and workspace scope below is gone; scopes are global or per-project.
+
 Allowed paths: `server/src/radd/modules/auth/`, `server/src/radd/modules/teams/`,
 `server/src/radd/modules/events/` (actor column only), `server/src/radd/config.py`
 (modules tuple + auth settings), `server/src/radd/exceptions.py` (new error types),

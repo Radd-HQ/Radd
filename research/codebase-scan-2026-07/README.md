@@ -1,6 +1,6 @@
 # Codebase scan — findings for later review
 
-> **Historical snapshot** (2026-07). Preserved as the input that shaped later
+> **Historical snapshot** (2026-07; moved from `docs/` on 2026-09-27). Preserved as the input that shaped later
 > fix waves; individual findings may already be fixed — check the tracker.
 
 A read-only sweep. **No code was changed.** Every entry carries a file, a line

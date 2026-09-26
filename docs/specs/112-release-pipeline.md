@@ -1,5 +1,7 @@
 # Spec 112 — the release pipeline: work finishes once, ships later
 
+> **Superseded in part by RADD-1285 (2026-09-23):** shipping is a workflow transition (`workflow_transitions.on_release`); the `release_waiting_state`/`release_shipped_state` settings were deleted (migration `d1285releaseflow`).
+
 **.** "Done" answers the developer's question. The person who filed the issue is
 asking a different one: is it running yet. This spec separates the two — a
 `Waiting for release` state that means the work is complete, and a published

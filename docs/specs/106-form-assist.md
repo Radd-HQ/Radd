@@ -1,5 +1,7 @@
 # Spec 106 — Form assist: rich descriptions + similar issues on every submission form
 
+> **Superseded in part by RADD-828 and RADD-1147:** the anonymous public-form path is gone — requesters are email-provisioned accounts — and public KB deflection (`search_public`) went with spec 74.
+
 User ask: the submission forms still had a plain `<textarea>` for the
 description; it would be nice if the form searched similar issues and popped a
 panel beside the form (like Summarize / Find similar elsewhere), and if AI

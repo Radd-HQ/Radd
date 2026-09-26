@@ -1,6 +1,6 @@
 # Spec 30 — Service desk: reporter, SLAs, canned responses
 
-Tier-2 item 5 from `docs/roadmap-ideas.md`: TD is a de-facto service desk (~122
+Tier-2 item 5 from `research/roadmap-ideas.md`: TD is a de-facto service desk (~122
 issues/week of artist support). This spec adds the requester model, SLA timers with
 breach alerting, and canned replies. **Queues** are already covered by saved views
 (SLQ like `reporter != me AND category = triage`); a queue-oriented list skin can

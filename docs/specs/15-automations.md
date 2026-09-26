@@ -1,5 +1,7 @@
 # Spec 15 — automations: event-driven rules engine (backend, Wave 2)
 
+> **Superseded in part by spec 116 and RADD-1265 (2026-09-19):** an automation is a graph of nodes, not a rule row — `d116graphs` converted the rule columns and `d1265autolegacy` rewrote what was left of the legacy shapes.
+
 Depends on spec 14 (cycle/release actions). Allowed paths: `server/src/radd/modules/automations/`
 (new), `server/src/radd/modules/auth/authz.py` (add `Permission.AUTOMATION_MANAGE`),
 `server/src/radd/config.py` (modules tuple), `server/migrations/versions/` (ONE revision),

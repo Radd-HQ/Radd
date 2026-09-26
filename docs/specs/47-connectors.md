@@ -1,5 +1,7 @@
 # Spec 47 — Connector wave: Forgejo, Google Chat, Alertmanager, email-to-issue
 
+> **Superseded in part by spec 111 (Forgejo), RADD-958 (mail), RADD-1317 (Alertmanager) and RADD-1319 (Google Chat):** each connector is configured as rows in Settings with env seeding only the first row, and the `googlechat` module was retired — posting to chat is an automation.
+
 Four small modules, each the same dormant-unless-configured shape as the
 GitLab connector (spec 31). All talk through existing seams (vcs, items,
 events outbox); none add frontend surface beyond what already renders

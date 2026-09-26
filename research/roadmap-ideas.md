@@ -1,5 +1,7 @@
 # Radd — product roadmap & build backlog
 
+> Point-in-time backlog, undated (written before specs 26–52; its base commit `271f036` predates the published history, which starts 2026-08-02); moved from `docs/` on 2026-09-27. Everything in it shipped except comment reactions, `j`/`k` navigation and issue templates, which are tracker items.
+
 > **Status:** Tier 1 (items 1–4 → specs 26–29), Tier 2 (items 5–6 →
 > specs 30–31, email intake deferred), and the Tier-3 highlights (My Work home,
 > CSV export, `/` hotkey → spec 32) are BUILT. Remaining from this doc: the rest

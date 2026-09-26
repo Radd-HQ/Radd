@@ -6,6 +6,7 @@ Deployment hardware and replica counts are undecided.
 
 Implementation follow-up: [changes, validation, and remaining scale work](IMPLEMENTATION.md).
 This report and its original measurements describe the pre-change audit.
+The JSON evidence files this report names (profiles, bursts, diagnostics) are evidence kept locally, not in the repository; the scripts that produce them are here.
 
 ## Assessment
 
@@ -28,7 +29,7 @@ lifespan hooks were started by the probes.
 
 ## Environment and limitations
 
-Recorded inventory: [inventory.json](inventory.json).
+Recorded inventory: `inventory.json`.
 
 - Local PostgreSQL dataset: **501,298 issues**, **1,791,684 comments**, 501,298
   search rows, 106 projects, 1,114 accounts, 2,299 teams, 319 field definitions.
@@ -61,8 +62,8 @@ Recorded inventory: [inventory.json](inventory.json).
 
 ## Measurements
 
-Source: [validated service profiles](read-profile-validated.json). The initial
-[exploratory run](read-profile.json) includes an incorrectly specified board
+Source: validated service profiles (`read-profile-validated.json`). The initial
+exploratory run (`read-profile.json`) includes an incorrectly specified board
 lane and an unreadable member issue; those failed cases were corrected in the
 validated run and must not be used as successful performance measurements.
 
@@ -86,7 +87,7 @@ two local runs are not sufficient for a latency percentile claim.
 
 ### Permission SQL diagnosis
 
-[Read-only diagnostic](scale-diagnostics.json): identical summary output hashes
+Read-only diagnostic (`scale-diagnostics.json`): identical summary output hashes
 with transaction-local JIT off and on.
 
 | Configuration | Service time | EXPLAIN ANALYZE execution |
@@ -115,9 +116,9 @@ not 100 distinct people or a sustained mixed read/write session test.
 | 100, transaction-local JIT off | 100/100 | **9.45 s** | **17.34 s** | **14.78 s** | 18.22 s |
 | 100, JIT on again | 95/100 | **15.75 s** | **34.69 s** | **26.56 s** | 41.28 s |
 
-Sources: [10-read burst](read-burst-10.json), [100-read burst](read-burst-100.json),
-[100 reads with JIT off](read-burst-100-jit-off.json), and
-[JIT-on repeat](read-burst-100-jit-on.json). The six first-burst failures
+Sources: 10-read burst (`read-burst-10.json`), 100-read burst (`read-burst-100.json`),
+100 reads with JIT off (`read-burst-100-jit-off.json`), and
+JIT-on repeat (`read-burst-100-jit-on.json`). The six first-burst failures
 were database OperationalErrors; that first version of the recorder retained
 the exception class, not its message. They must not be relabeled as a specific
 database error without additional evidence.

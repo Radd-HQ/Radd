@@ -1,7 +1,7 @@
-# 124 — External plugin development and management
+# 126 — External plugin development and management
 
 Tracking: RADD-1219. Implements the package-and-deployment-first workflow.
-[Spec 125](125-managed-plugin-packages.md) extends it with uploads, a persistent
+[Spec 127](127-managed-plugin-packages.md) extends it with uploads, a persistent
 plugin directory and conservative live UI activation.
 
 ## User outcome

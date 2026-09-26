@@ -1,6 +1,6 @@
 # Spec 32 — "My Work" home + Tier-3 polish
 
-Tier-3 items from `docs/roadmap-ideas.md` that punch above their weight, shipped as
+Tier-3 items from `research/roadmap-ideas.md` that punch above their weight, shipped as
 small slices:
 
 ## 1. "My Work" home (`/`)

@@ -1,6 +1,6 @@
 # Spec 26 — Notifications, watchers, and the Inbox
 
-Tier-1 item 1 from `docs/roadmap-ideas.md`: nothing currently tells you an issue was
+Tier-1 item 1 from `research/roadmap-ideas.md`: nothing currently tells you an issue was
 assigned to you, you were @mentioned, or a comment landed on something you follow.
 This spec adds the `notify` module — an outbox consumer that fans item/comment events
 out into per-user notifications — plus watchers, an in-app Inbox, and SMTP email digests.

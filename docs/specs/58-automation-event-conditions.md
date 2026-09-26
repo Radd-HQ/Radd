@@ -1,5 +1,7 @@
 # Spec 58 — Automations: any-event triggers + structured event conditions
 
+> **Superseded in part by RADD-1265 (2026-09-19):** the structured condition tree and its builder were deleted; gates on the automation graph (`gate.payload` and the named gates) replace them.
+
 **Status: built.**
 
 ## Problem

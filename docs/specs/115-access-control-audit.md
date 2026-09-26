@@ -1,6 +1,6 @@
 # Spec 115 — access control: audit, gaps, and a target model
 
-**Status:** audit + proposal. No code changed. Written to be picked up later.
+**Status:** built — the proposal shipped as the spec-115 access-control wave (RADD-821 onward, released in v0.18.0, 2026-08-04). This document is the audit it started from; `115-review/` holds the review and execution plan that followed.
 **Scope:** the whole access system — permission atoms, roles, grant scoping, the
 spec-92 resource ACL framework, plugin contribution, and the permission inspector.
 

@@ -1,6 +1,6 @@
 # Spec 27 — Realtime (WebSocket live updates)
 
-Tier-1 item 2 from `docs/roadmap-ideas.md`: live boards/issues/inbox without refresh.
+Tier-1 item 2 from `research/roadmap-ideas.md`: live boards/issues/inbox without refresh.
 The substrate was ready-made: the event outbox is the push source, and the frontend
 already invalidates caches BY ENTITY (`lib/cache.ts`), so one WS message →
 `invalidateEntities()` makes every surface live with no per-view code.

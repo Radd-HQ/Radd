@@ -1,5 +1,7 @@
 # Spec 07 — field permissions by role/team + internal comments (backend, after spec 06 lands)
 
+> **Superseded in part by spec 92:** field grants are `access_grants` rows now — migration `6fc5f7c71481` moved `field_permissions` there and dropped the table.
+
 Allowed paths: `server/src/radd/modules/fields/`, `server/src/radd/modules/comments/`,
 `server/src/radd/modules/items/` (read/write path call sites + hydration ctx only),
 `server/migrations/versions/` (one revision on current head), `server/scripts/demo_permissions.sh`

@@ -1,5 +1,7 @@
 # Spec 36 — RBAC extensions: per-entity actions, builtin-field rules, wider floors
 
+> **Superseded in part by spec 92:** §2's builtin-field rules became `access_grants` rows (migration `3d1e2f0f3823`) and `/field-rules` is gone.
+
 Three RBAC growth steps in one wave, all backward-compatible.
 
 ## 1. Per-entity action permissions

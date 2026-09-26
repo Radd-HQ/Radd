@@ -1,20 +1,8 @@
-# Radd Plugin Platform — architecture & plan
+# Radd Plugin Platform — architecture
 
-Current implemented development and lifecycle contract: [spec 124](specs/124-external-plugin-workflow.md) and [developer workflow](plugin-development.md). These supersede the live-install and automatic-migration proposals below.
-**Status: design document, partially superseded.** The kernel (spec 93), the frontend
-plugin platform (spec 94), scoped keys (spec 113) and the MCP tool registry (spec 114) are
-**BUILT** — §-references to "today" below describe the pre-93 codebase. This document is
-the reference for turning Radd from a
-*modular monolith with ~54 in-repo modules* into a **kernel + plugins** platform where even
-builtin features are plugins, third-party developers can ship full featuresets (filesystem
-management, S3 storage, attachment filtering, Celery-backed automation workers, disk-package
-managers…), and everything a plugin exposes — endpoints, events, actions, tables, settings,
-background workers — plugs into the platform transparently and is governed by the existing
-RBAC / access framework.
+**Status:** built — the kernel (spec 93), the frontend platform (spec 94; revised by RADD-1373: core plugins bundled, optional plugins remote), scoped keys (spec 113), the MCP tool registry (spec 114) and the external-plugin workflow ([spec 126](specs/126-external-plugin-workflow.md) and [spec 127](specs/127-managed-plugin-packages.md), which replace the live-install and per-plugin-migration proposals in §5/§10). This document is the reference for turning Radd from a modular monolith into a **kernel + plugins** platform where even builtin features are plugins, third-party developers can ship full featuresets, and everything a plugin exposes — endpoints, events, actions, tables, settings, background workers — plugs into the platform transparently and is governed by the existing RBAC / access framework. `docs/modules.md` is the map of which plugins exist; this document is the machinery; `docs/plugin-ui.md` is the frontend contract; `docs/plugin-development.md` is the how-to.
 
-It supersedes the informal "everything is a module" agreement in `CLAUDE.md` with a concrete
-contract. `docs/modules.md` remains the live map of *which* plugins exist; this doc defines the
-*machinery* they plug into.
+It turns the "everything is a module" agreement in `CLAUDE.md` into a concrete contract.
 
 ---
 
@@ -160,7 +148,7 @@ executor's SAVEPOINT, inside its `RunBudget`, and inside `events.automated()` �
 action **cannot** spin the engine, **cannot** escape the budget, and **cannot** take the branch down
 when it raises. A plugin gets loop safety by doing nothing.
 
-The SPA generates the node's form from `params_schema` (`SchemaFields`) — the promise
+The SPA generates the node's form from `params_schema` (`SchemaForm`) — the promise
 `AutomationNodeSpec` already made and nothing kept: a contributed node without a hardcoded editor
 used to render an empty inspector.
 
@@ -175,7 +163,7 @@ repo; third-party plugins install alongside). Even today's "core" modules become
 kernel is only the machinery plugins plug into.
 
 **The kernel** — the *generic mechanisms* every feature builds on; never disabled:
-- `config` + the **plugin loader / lifecycle manager** (evolves `module.py`)
+- `config` + the **plugin loader / lifecycle manager** (`kernel/loader.py`)
 - `db.Base` / session / migration harness **+ the entity & relationship registry** — entity
   registration, cross-plugin foreign keys, entity links (the "entity relationships + DB management")
 - the **event outbox + event-type registry** (`events`)
@@ -212,7 +200,7 @@ The rule: **generic mechanism other features build on → kernel; concrete featu
 **Success test (the north star):** drop in a `milestones/` plugin — a directory + an install — and it
 appears as an automation trigger, a settings page, a capability-gated nav item, a searchable/
 mentionable entity, a webhook event, and an RBAC-governed resource, **without editing any other
-plugin or the kernel.** Today that fails at three hardcoded chokepoints (§3).
+plugin or the kernel.** The three hardcoded chokepoints that once blocked it are inverted (see Migration history).
 
 > **Searchable / mentionable is real since RADD-1327.** `EntitySpec.searchable` derives a kernel
 > `SearchableSpec` (a match on the entity's naming + text fields, filtered through the host's
@@ -223,39 +211,15 @@ plugin or the kernel.** Today that fails at three hardcoded chokepoints (§3).
 
 ---
 
-## 2. What already works (don't rebuild it)
+## Migration history
 
-The event *data plane* is already a plugin architecture; the exploration confirmed:
-- `events.emit()` is a transactional outbox; consumers are independent offset-tracked poll loops.
-- **Webhooks and realtime already fan out the entire event stream** — a new entity's events are
-  deliverable the instant they're emitted, zero code changes.
-- `import_models()` walks `RADD_MODULES` → `Base.metadata` auto-registers tables for app + Alembic.
-- `settings` has a real two-scope (project→instance) cascade over env-config defaults.
-- **`access.registry` is the template**: `register_resource(ResourceSpec)` → a generic `/grants`
-  router + a reusable `<AccessGrantsEditor>` serve any resource, including plugins, with zero
-  resource-specific code. **Every registry in §4 is this pattern, generalized.**
-- Disabling a module already means "fully gone" (drop it from the module list → tables never
-  migrate, routers never mount, loops never start).
-- **`attachments/clients.py` + `attachments/hosts.py` abstract filesystem vs S3** (spec 102
-  rebuilt the old single-backend `attachments/storage.py` into multi-host `storage_hosts` rows) —
-  the "S3 as a plugin" ask is a *formalization* of an abstraction that exists, not a greenfield build.
-
-## 3. The three backwards dependencies to invert (the actual problem)
-
-Everywhere the *general* machinery hardcodes a list of *specific* features. Invert each into a
-registry the machinery iterates blind:
-
-| # | Backwards dependency today | Inversion |
-|---|---|---|
-| 1 | `automations/catalog.py` hardcoded `_SPECS` importing **21 modules' event enums** *(inverted — `TRIGGERS` now derives from `kernel.registries` live)* | Automations derives its trigger list from the kernel **event-type registry** (entity CRUD events auto-registered; custom events registered by the plugin via the events module) — no hardcoded catalog. Webhooks already work off the same stream. |
-| 2 | `projects` module computes every provider's `enabled()` **inline** for `/instance/status` | Each plugin **contributes a capability/status descriptor**; a `/capabilities` endpoint aggregates. |
-| 3 | Frontend `SETTINGS_NAV` / routes / sidebar are **hand-authored arrays** | The SPA renders nav/settings/routes **from a manifest** the backend assembles from plugin contributions (§8). |
+The pre-93 codebase, the three chokepoints the kernel inverted (automation triggers → the event registry, provider status → `/capabilities`, hand-written nav → the UI manifest) and the P0–P6 phasing are the migration's history: spec 93 is its definition of done, spec 94 the frontend half, and `BUILD-LOG.md` the log.
 
 ---
 
 ## 4. The extension-point catalog (the heart of the platform)
 
-The plugin contract evolves from `RaddModule` (routers + lifecycle hooks only) into `RaddPlugin`:
+The plugin contract is `RaddPlugin`:
 a **manifest of contributions**. Each field is aggregated by the loader into a kernel **registry**;
 the kernel iterates registries without knowing any plugin's identity. Everything below is
 `register_*`-style (the `access.registry` pattern), declared on the manifest or via import-time
@@ -287,8 +251,8 @@ class RaddPlugin:
     permissions:     tuple[PermissionSpec, ...] = ()   # RBAC atoms it defines (§7)
     crud_resources:  tuple[CrudResourceSpec, ...] = () # spec-50 CRUD resources (§7)
     access_resources: tuple[ResourceSpec, ...] = ()    # spec-92 grantable resources (§7)
-    capabilities:    tuple[CapabilitySpec, ...] = ()   # what /capabilities reports (§3.2)
-    integrations:    tuple[IntegrationSpec, ...] = ()  # storage/notifier/connector/AI/VCS/filter (§4a)
+    capabilities:    tuple[CapabilitySpec, ...] = ()   # what /capabilities reports (§8)
+    integrations:    tuple[IntegrationSpec, ...] = ()  # socket providers (§4a)
     ui:              PluginUiManifest | None = None     # nav/routes/pages/widgets (§8)
     on_startup / on_shutdown / exception_handlers / openapi_augmentors  # kept from today
 ```
@@ -335,12 +299,8 @@ at load and read by exactly one generic consumer. No consumer names a plugin.
 Some plugins don't add *nouns* — they add *implementations* of an interface another plugin consumes.
 These are named "sockets": a plugin declares it *provides* or *consumes* a socket.
 
-- **StorageBackend** — `filesystem`, `s3`/MinIO (formalize `attachments/storage.py`); "S3 integration"
-  = a plugin providing a `StorageBackend`. Selected via settings.
-- **AttachmentFilter** — a pipeline hook every upload passes through (virus scan, type allowlist,
-  size/quarantine). "Attachment filtering" = a plugin registering a filter into the upload pipeline.
-- **Notifier** — Google Chat / email / Slack. (The env-driven `googlechat` notifier was retired in RADD-1319; chat is the Post to chat automation action.)
-- **Connector** — inbound webhook parsers (GitLab/Forgejo/Alertmanager already this shape).
+- **StorageBackend** (built, spec 102) — one blob client per storage-host type (`filesystem`, `s3`);
+  a plugin host type is one more provider.
 - **AIProvider**, **VcsProvider** — already interfaces; formalize as sockets.
 - **TaskBackend** — the Celery ask (§6): a plugin *provides* a queue backend the kernel *consumes*.
 - **NonWorkingDaysProvider** (built, RADD-1031) — calendar dates nobody works; `leave` provides, the
@@ -381,26 +341,9 @@ a plugin" and "add Celery as a plugin" become uniform.
 
 ---
 
-## 5. Plugin-owned database tables & migrations
+## 5. Plugin-owned tables & migrations
 
-**Decision: each plugin owns an Alembic branch, keyed by a branch label = the plugin id.**
-
-- Under the mediation principle (§0.5) the plugin **declares** its schema (an `EntitySpec`, or via the
-  escape hatch a kernel-registered model); the **kernel** generates the model into `Base.metadata` and
-  owns a per-plugin **Alembic branch** (`branch_labels=("acme.disk",)`). Alembic natively supports
-  multiple heads/branches; we already `alembic merge` sibling heads. **Plugin authors never write raw
-  Alembic** — they run `radd plugin revision <id>` (kernel CLI, autogenerate scoped to that plugin).
-- **Install** = `alembic upgrade acme.disk@head` (create the plugin's tables). **Uninstall** =
-  `downgrade` that branch to base (drop them), gated by an explicit "destroy plugin data" confirm.
-- The kernel provides a `plugin_migrations` helper so a plugin author runs
-  `radd plugin revision <id> -m "..."` and gets autogenerate scoped to that plugin's models.
-- **Why branches, not `create_all`:** `create_all` can't evolve schemas across plugin versions;
-  branches give per-plugin upgrade/downgrade, which the runtime enable/disable lifecycle (§ lifecycle)
-  needs. **Alternative rejected:** a separate database/schema per plugin — kills cross-plugin FKs
-  (a plugin's entity referencing `work_items.id`) and joins, which real plugins need.
-
-This is the single biggest new engineering surface. It's why "runtime enable/disable" splits into
-**install/uninstall** (heavy: runs migrations) vs **enable/disable** (light: flips active flag).
+As built (spec 126, "Validation and limits"): declarative entities get their initial tables created; existing tables are never evolved automatically, so a schema-changing plugin ships an explicit migration run at deployment. The per-plugin Alembic-branch design this section used to hold was not built (Decision 2 below records it as intent).
 
 ---
 
@@ -412,8 +355,8 @@ Today: `radd/worker.py` `PeriodicLoop` + `RADD_RUN_WORKERS`, poll-based, in-proc
 **Decision: abstract task dispatch behind a `TaskBackend` socket (§4a); `PeriodicLoop` becomes the
 default builtin backend; a Celery plugin provides an alternative.**
 
-- Define `TaskSpec` (a unit of background work: periodic tick, or an enqueued job) and a `TaskBackend`
-  interface (`enqueue(job)`, `schedule(periodic)`; as built, the backend keeps no roster and
+- Define `TaskSpec` (a unit of periodic background work) and a `TaskBackend`
+  interface (`schedule(periodic)`; as built, the backend keeps no roster and
   `kernel.runtime.PluginRuntime` starts/stops each plugin's loops with the plugin, RADD-1372). Consumers (automations, notify,
   search, SLA timers) **register `TaskSpec`s** instead of hand-rolling loops.
 - The kernel ships the **`localloop` backend** (today's `PeriodicLoop`, unchanged behavior). A
@@ -485,6 +428,10 @@ afterthought:
 - Writes go through the same context: `kernel.items.update(id, patch, as_user)` runs the same
   permission + workflow-guard checks the REST endpoint would, and emits the same events.
 
+> **As built.** The data SDK is `radd.sdk`'s lazily resolved service functions (`get_item`,
+> `list_items`, `create_item`, `update_item`, …, each taking the acting `User`), not a `kernel.items`
+> namespace. `kernel.as_system` and the `system_access` manifest entry were not built.
+
 **Why it's safe *and* easy:** the plugin gets a rich, high-level API (SLQ, issue CRUD, comments) with
 near-zero code, and is structurally incapable of bypassing the user's permissions — the property that
 makes mediation valuable, extended to reads and authorization. A dashboard, a report, an automation
@@ -555,319 +502,13 @@ editor's wrapper, and a binding needs only ProseMirror. The host keeps a feature
 `RichEditor`'s `binding` and the `liveDocuments` contribution — and `web/src` names no co-editing
 code at all (boundary test).
 
-### Current ownership migration: automation graph surface (RADD-1354)
+Remote builds externalize the shared modules through Rolldown's `esmExternalRequirePlugin`
+(`packages/plugin-sdk/vite.mjs`) and substitute `process.env.NODE_ENV`, so bundled CommonJS
+dependencies consume the host's React without Node globals in the browser. That plugin alone owns the
+external list: a duplicate top-level `external` rule bypasses the conversion, and only loading the
+built bundle in a browser shows it — a type-check passes.
 
-Automations owns `ui/src/GraphCanvas.tsx`, the graph wire types, layout/catalog/output
-helpers, node visuals, and parameter-dependent shape queries. It registers
-`automation.graph.canvas`; callers pass graph data and edit callbacks using the
-owner's `canvas-contract.ts`. The renderer and React Flow load as an owner-controlled
-lazy chunk. Its styles mount with the canvas, and its controls use SDK theme tokens.
-
-Node shapes are explicit inputs to rendering and token lookup. Each mounted consumer
-owns cancelable queries with unused-cache collection; consumers share no mutable
-shape map. Catalog entries identify the registering plugin. Capability withdrawal
-immediately excludes that provider even while an older catalog remains cached.
-Unresolved nodes retain their saved wires with disabled handles; read-only previews
-cannot remove nodes through React Flow's keyboard shortcuts.
-
-This migration is incomplete. The host still owns RuleEditor, inspector forms,
-settings, and integration selectors. Temporary source barrels expose Automations'
-contracts/helpers to those callers; they are migration debt, not a pattern for new
-host features or proof that Automations is fully isolated. Follow the complete
-inventory in `research/plugin-isolation/README.md` (RADD-1347).
-
-Remote builds externalize shared dependencies through Rolldown's ESM external-require
-plugin and substitute `process.env.NODE_ENV` for production. This lets bundled CommonJS
-dependencies consume the host's React singleton without requiring Node globals in
-the browser. The external-require plugin alone owns the external list: a duplicate
-top-level external rule bypasses conversion. Actual bundle browser tests exercise
-this path; a successful type-check alone does not verify remote loading.
-
-### Shared schema and code controls (RADD-1356)
-
-SDK 1.5 owns the generic `SchemaForm` and `defaultsFromSchema`. Automations supplies
-schemas and uses the same helper when creating node parameters; AI supplies its
-schema and retains its own richer output-field editor. The default SDK renderer no
-longer delegates to an Automations component. Its previous optional host override
-remains supported.
-
-The form covers scalar values, typed enums and groups of booleans. It preserves
-unknown saved enum values, unnamed fields and unsupported structured values.
-Unsupported structures display their saved JSON and require an owner-contributed
-editor; this helper is not a complete JSON-schema editor or validator. Required
-fields and schema constraints remain subject to the owner's server validation.
-
-The host provides a generic, lazy CodeMirror control. Scripts chooses Python and
-owns script parameters, testing and execution. Shared language resolution and syntax
-colors have no Markdown or Scripts imports; Markdown code blocks consume these
-same utilities. Controlled edits use the latest callback, external value changes
-do not echo back as user edits, and obsolete grammar loads cannot update a replaced
-or unmounted editor. Language, read-only state and accessibility labels update live.
-Neither shared control fetches feature data or runs background work.
-
-These are platform primitives because their inputs and behavior are domain-neutral,
-not because the host happened to contain them. Boundary tests forbid their former
-feature dependencies. Actual Scripts/AI bundle tests cover absence, withdrawal,
-re-enable, failed remote recovery and draft preservation. This stage does not move
-the remaining host automation editor, inspectors or VCS integration selectors.
-
-### Owner-provided option directories (RADD-1357)
-
-SDK 1.6 exposes `optionContribution` for `directory.options` and generic
-`OptionChoices`, `OptionSelect`, `OptionTextField`, and `OptionNameValues`.
-The provider supplies an opaque source name, noun, optional row presentation,
-entity invalidation metadata, a paged fetch and saved-value resolution. Endpoint
-paths and authorization semantics remain in the owner bundle. Scope is forwarded
-to both fetch and resolve, so scoped role choices retain their project/space context.
-
-Auth, Teams, Workflow, Itemtypes, Releases, Forms, Pages and Groups declare the
-formerly host-owned option sources in their own UI manifests. There is no SDK
-resource-to-plugin or endpoint registry. The host's old OptionResource constants
-are migration aliases only; the old query factories and noun/cache maps are gone.
-
-Controls mount through the normal slot lifecycle. Each mounted control owns its
-query identity, passes cancellation signals, drops unused cache entries and gets
-fresh data after reactivation. Withdrawal closes an internally opened picker and
-preserves the caller's value. An externally controlled picker retains dismissible
-unavailable UI and caller footer. Text and token inputs remain editable when a
-provider is missing. Caller-supplied presets work without directory browsing.
-Disabled browsing does not authorize fetching; server permission checks remain
-necessary for every request. Query failures have explicit retry controls.
-
-This migrates option providers, not the host features that consume them. The
-automation forms and settings/access page ownership remain in the complete audit inventory.
-
-### Owner-provided project and cycle pickers (RADD-1358)
-
-Projects registers `projects.select` and `projects.picker`; Cycles registers
-`cycles.select` and `cycles.choices`. Public owner contracts preserve full-row
-callbacks, project ID/key modes, cycle ID/name modes, permission filters, custom
-empty values and cycle scope/date/completion filters. The host adapters render
-slots and dismissible or disabled unavailable fallbacks, without directory logic.
-
-SDK 1.7 supplies `usePagedDirectory` and `Switch`. Owners supply query factories,
-transport, metadata and presentation. Each mounted picker scopes its own cache,
-passes abort signals and retains no unused results. Withdrawing its owner removes
-internally opened modals and cancels reads; reactivation resolves saved values
-fresh. Failed reads offer retry. Changing project context resets an open cycle
-picker to that project's scope. Saved values remain in the consuming feature.
-
-Core-module absence is exercised through browser manifests; this does not change
-backend core-module requirements. Remaining host navigation and page queries,
-query/type re-exports and directory hooks are transitional migration debt, not
-approved final architecture. Tests distinguish picker queries from those existing
-host navigation consumers rather than claiming all feature requests have stopped.
-
-### Contributed transition-rule editors (RADD-1383)
-
-Workflow's bundled UI package exports `@radd-plugin-ui/workflow/transition-rule-contract`: the slot
-`workflow.transition.rule` and `TransitionRuleEditorProps` (the row's rules, `onChange(check,
-params | null)`, `canManage`, `saving` — not `pending`, which `<Slot>` keeps as its own prop). The
-host's transitions editor renders the slot on every row, keeps contributed rules after its own, and
-reads each contribution's `match` (its check key) to tell a served rule from one whose plugin is
-gone: the latter shows a fail-closed notice with a Remove control, because the server refuses every
-move it governs. Approvals contributes "Require approval" from its remote and declares the
-package dependency. Proofs: `browser-resolvable-threads.mjs` (mocked, live withdrawal) and
-`approval-rule-editor-proof.mjs` (real backend).
-
-### My Work widgets and the dashboards package (RADD-1393)
-
-Dashboards is core; its UI is the bundled package `dashboards/ui`, and the host imports its page,
-My Work canvas, sidebar pieces and summary query through the package's exports. A plugin reaches
-My Work the way it reaches a shared dashboard — by contributing a widget TYPE — with two extra
-fields on the spec:
-
-```python
-WidgetTypeSpec(
-    key="approvals",               # the stored widget_type; the remote's dashboard.widget `match`
-    label="Awaiting my approval",  # the picker entry and the suggested widget's title
-    personal=True,                 # My Work only: it shows the viewer's own work
-    suggest=has_pending,           # async (session, user) -> bool: put it on the suggested layout
-)
-```
-
-A personal type is offered in My Work's add-widget picker (the `/capabilities` `widget_types`
-entry carries `personal`), accepted by `PUT /dashboards/my-work/widgets`, and refused on a shared
-dashboard. `suggest` runs when My Work builds a person's suggested defaults. The plugin draws the
-widget through `dashboard.widget` like any other type. Disabling the plugin withdraws the type and
-the slot together: it is not offered or suggested, a new one is refused, and one already on a
-layout keeps its place and reads "no longer available" until the plugin returns. My Work's own
-kinds (the shell's Assigned/Due/Starred/Inbox/Recent, "My activity", and forms' request widgets)
-are not contributions. The host draws them. Approvals is the worked example
-(`modules/approvals/__init__.py`, `ui/src/AwaitingApproval.tsx`); the invariant is pinned by
-`tests/test_my_work_contributed_widgets.py`.
-
-The package reaches what only the shell owns through the SDK host bridge (UI API 1.15.0):
-`SlqField` (the SLQ editor with live validation), `PageQueryFilter` (the top-bar filter; its child
-receives the committed query), `ViewSelect`, `SharingDialog` (the spec-57 sharing editor; the
-plugin posts the draft to its own endpoint), `ReportWidget` (the host's report cards), `ItemKeyLink`,
-`ItemPeek` and `MissingPluginType`. `ChartHeightContext` moved from reporting's package into the SDK:
-the dashboards grid provides each widget's plot height, and reporting's charts read it, so neither
-package imports the other.
-
-### Owner-provided team relationships (RADD-1359)
-
-Teams contributes `teams.relationship.select`, `teams.relationship.choices` and
-`teams.relationship.audience`. Its public contracts preserve ID values, supplied
-labels, size/error/disabled props, staged selections and modal footers. The owner
-resolves names through `/teams/references`; audience labels are requested in
-windows of at most 50 IDs. Editable audiences request member counts; read-only
-views do not. The caller retains the complete ID list and supplies the meaning
-of the selection, including comment/cycle/SLA-specific explanations.
-
-Saved-reference queries use mounted-consumer identities, abort signals and no
-unused cache retention. Owner withdrawal unmounts controls and internal modals,
-cancels requests and discards unapplied additions. Re-enabling restores the
-caller's applied values with fresh labels. Host adapters retain unavailable
-fallbacks, and standalone pickers remain dismissible. No new SDK version is
-needed: Teams continues to use the SDK 1.6 contribution and option contracts.
-
-The query compatibility export and comment-list batching remain transitional;
-this stage does not certify all comment, Teams settings or roster ownership.
-
-### Fields-owned form controls (RADD-1360)
-
-Fields contributes `fields.form` and `fields.control`. Its public contracts own
-field definitions and nullable typed values. Callers supply definitions, values,
-errors, lock rules and change callbacks; these controls make no registry requests.
-The owner implements each field type, retaining zero/false/null distinctions,
-required labels, duration minutes and all current options. Removed single-select
-values receive an explicit unavailable option; unsupported types display a disabled
-saved value instead of disappearing. Write locks reach each control explicitly,
-closing token suggestions even when a lock changes while the editor is open.
-
-SDK 1.8 supplies generic `TokenMultiSelect` and `ErrorText`. Token choices retain
-free-text values, grouping, icons/hints, filtering and a 50-row display cap. Both
-mouse and keyboard activation work; option changes clamp the active keyboard row,
-and Escape dismisses suggestions before their enclosing modal. Neither primitive
-imports Fields or another feature. The host's previous component paths re-export
-these shared implementations.
-
-Withdrawing Fields removes its controls and open suggestions while the consuming
-feature retains values. Failed bundles use unavailable fallbacks and reactivation
-restores the same draft. These UI contracts do not certify host registry queries,
-field settings/navigation, display cells or automation inspector ownership. In
-particular, the settings sidebar still queries `/fields/settings-summary`; that
-remaining dependency is recorded in the audit.
-
-### Entity navigation contributions (RADD-1363)
-
-`EntityLinkSpec(entity_type, templates)` is exported by `radd.sdk` and declared
-through `RaddPlugin.entity_links`. This is nonvisual metadata owned by the entity's
-plugin; consumers do not maintain tables of other features' settings pages.
-Templates are tried in order. They accept `{id}`, `{refs.<type>.<field>}` and
-`{project.<field>}`; absent/nonscalar substitutions try the next template. Values
-are URI-component encoded, and templates must be local absolute paths without
-browser authority escapes. This is navigation metadata, not an authorization grant.
-
-The kernel derives equivalent contributions for existing `EntitySpec.url` and
-`EntityRefSpec.url` declarations unless the owner supplies an explicit link spec.
-No current-row lookup is needed, which preserves navigation for historical refs.
-Explicit links must name types in the owner’s entity, ref, event or CRUD declarations.
-Registration validates duplicates and active foreign ownership before mutation. Replacing
-an owner removes its old link keys; stale-generation cleanup cannot remove a new
-registration. Withdrawal and registry reset remove both links and recorded owners.
-
-Audit authorizes its query first, then resolves destinations over the public subject
-refs it already returns and the authorized project context. Its response includes
-`entity_url` and `entity_owner`, or nulls when no active owner resolves a destination.
-Historical payload URLs do not override current declarations. Its current host
-consumer gates cached links on live capabilities and scopes query identity to the
-loaded plugin/build set. This removes the central cross-feature navigation table;
-it does not complete migration of the host Audit page or shared change renderer.
-
-The pre-migration destination fixture covers all 46 original entries. Browser proof
-also opens the actual Milestones remote using its derived URL, including its hash,
-and exercises withdrawal, re-enable, failed bundle recovery and denied refreshes.
-
-### Shared scheduling inputs and owner contributions (RADD-1362)
-
-SDK 1.10 exports `ScheduleConfig`, `ScheduleKind`, `defaultSchedule`,
-`isScheduleValid` (form completeness only), `SchedulePreview` and `ScheduleEditor`.
-The control takes `value`, `onChange`, and a stable
-`previewSchedule(config, signal): Promise<SchedulePreview>`. It knows no feature
-endpoints or action policy. Schedule arithmetic is a legitimate shared platform
-contract: `radd.schedule` already drives the independent Backup and Automations
-schedulers. This does not classify either feature as platform UI.
-
-Automations and Backup contribute their editors to `automations.schedule.editor`
-and `backup.schedule.editor` respectively, supplying their own transport and help.
-Backup serves `/backups/schedule/preview` with its instance-admin gate; Automations
-retains `/automations/schedule/preview` with its authenticated arithmetic policy.
-Both delegate to `radd.schedule_preview`; no consumer imports the other's schemas.
-
-Preview identity changes on every draft transition, retry and transport replacement.
-A 350 ms debounce cancels on unmount; its HTTP signal aborts superseded requests.
-Late results cannot update a new draft. Even A → B → A edits get a fresh preview.
-Failures are shown with retry, and withdrawal preserves the caller's saved config.
-The control identifies scheduler and reader timezones and retains nonpreset saved
-intervals. Host adapters and the remaining host-owned feature pages are transitional.
-
-The public SDK export list and generated federation shim are checked against each
-other so an SDK addition cannot pass the unit gate while missing its runtime export.
-
-### Data-only query contributions (RADD-1361)
-
-SDK 1.9 supports `PluginModule.querySources` and
-`PluginContext.registerQuerySource`. A source declares a `key`, optional entity
-cache `meta`, and `fetch(args, signal)`. Its key must start with its registering
-plugin name followed by a dot; another plugin cannot claim that contract even
-while the owner is absent. Re-registering an owned key replaces its generation.
-The loader accepts query-only remotes and removes sources on withdrawal, replacement
-or failed activation. Late imperative registration cannot resurrect a withdrawn
-source. The registry contains no field/label/endpoint table.
-
-Consumers call `useContributedQuery<Result>(key, args, { enabled })` and inspect
-`available` separately from pending/error/success. Arguments belong to the owner's
-contract and must be suitable for a query key. Each mounted consumer has its own
-query identity, including source generation, arguments and enabled state. Switching
-any of those removes the obsolete observer; owners must pass the supplied signal
-to transport. Unused results have zero retention, retries are explicit, and errors
-hide prior data. Disabled or absent sources cannot issue requests even through an
-explicit refetch. Owners supply cache tags for ordinary entity invalidation.
-
-Fields contributes its full definition catalog; Labels contributes its full label
-catalog. Their existing endpoints and permission checks are unchanged. The host
-query compatibility exports share the owner implementations, but are not themselves
-lifecycle-gated. Automations' picker hook now uses contributed sources, displays
-unavailable/loading/error state and offers retry. Stored custom-field keys remain
-visible without a catalog and their values restore when Fields returns.
-
-These are data contracts, not render slots. They do not certify the remaining host
-settings/navigation queries, field/label pages, automation editor composition, or
-other consumers still using compatibility exports. The existing full-catalog read
-behavior is retained; this stage does not introduce a paged registry protocol.
-
-### Original frontend design
-
-*(Built in specs 93/94: the SPA now has the federation seam and `GET /capabilities` exists —
-`modules/capabilities/`, `docs/plugin-ui.md`.)* The SPA had **no** plugin seam (hardcoded route
-tree, sidebar JSX, two `SETTINGS_NAV` arrays, no capabilities endpoint). Backend plugins are
-useless if their UI can't appear. Two layers:
-
-**8a. A backend-assembled UI manifest + `/capabilities`.** One endpoint returns: enabled plugins,
-their nav items, settings sections, routes, widget slots, and capability/status flags — replacing
-the three bespoke endpoints (`/instance/status`, `/instance/login-options`, `/ai/status`) and the
-hardcoded nav arrays. The shell renders nav/settings **from this manifest**, gated by the permission
-atoms already in `/auth/me`. This alone makes *builtin* plugins fully dynamic.
-
-**8b. Loading third-party UI code (the real problem).** A third-party plugin ships React it wrote.
-Three options, decreasing power / increasing safety:
-
-- **(A) Runtime module federation** — the plugin ships a built ESM bundle; the SPA dynamically
-  `import()`s it against a shared-dependency host (React/router/query provided by the host). Full
-  power, custom pages/widgets. Cost: a Vite module-federation host, a stable frontend SDK, and the
-  bundle runs with full DOM trust (consistent with §0's in-process trust).
-- **(B) Declarative UI manifest** — the plugin *describes* its UI (form fields, table columns,
-  detail sections, setting editors) in JSON; the host renders from a fixed widget vocabulary. Safe,
-  no third-party JS, but only covers CRUD-shaped UIs.
-- **(C) Iframe micro-frontend** — the plugin serves its own page; the host embeds it. Isolated but
-  clunky and hard to theme.
-
-**Recommendation: build (A) *and* (B).** Most plugins (settings pages, entity CRUD, a nav section)
-are fully served by **(B)** with zero third-party JS — do this first, it's where the volume is.
-Reserve **(A)** for plugins that genuinely need bespoke UI. **(C)** only as an escape hatch. This
-mirrors the backend: a rich declarative contract covers 80%, full code for the rest.
+The contracts plugins contribute through — option directories, pickers, field controls, query and command sources, schedules, change lines, transition-rule editors, VCS connector tabs — are in `docs/plugin-ui.md`. The per-issue record of moving each surface out of the host (RADD-1343) is `research/plugin-isolation/README.md`.
 
 ---
 
@@ -880,8 +521,8 @@ between "public API" and "internals" — plugins reach into `service.py` functio
 - `radd.sdk` re-exports: the registry `register_*` functions, the base specs/dataclasses,
   `events.emit`/read, the settings/access/permission APIs, `Base`/session helpers, the socket
   interfaces, and the **permission-aware data SDK (`kernel.items.query`/SLQ, item & comment CRUD,
-  projects, users) — all acting-user-scoped (§7.5)**. Everything else is `radd._internal` (may change
-  any release).
+  projects, users) — all acting-user-scoped (§7.5)**. Everything else in `radd.*` is internal and may
+  change any release (`radd/sdk.py`).
 - A plugin declares `api_version`; the loader refuses to load a plugin whose `api_version` is
   incompatible with the running kernel (semver major). This is what lets the app upgrade without
   silently breaking installed plugins.
@@ -919,38 +560,6 @@ DISCOVERED → INSTALLED (migrations up) → ENABLED (active) ⇄ DISABLED → U
 
 ---
 
-## 11. Migration path (how we get there from 45 modules)
-
-1. **Reclassify, don't rewrite.** Today's modules already look like plugins. Rename `RaddModule` →
-   `RaddPlugin`, add the new (all-optional, defaulted) manifest fields; every existing module keeps
-   working with `core: true` and empty new fields. Zero behavior change on day one.
-2. **Invert the three chokepoints (§3)** — this is the first *visible* win and is independently
-   shippable: move `TriggerSpec`s to producers, add `/capabilities`, render nav from a manifest.
-3. **Convert the two static RBAC registries** (permissions, CRUD resources) to `register_*`.
-4. **Build the lifecycle** (install/enable/disable + per-plugin migration branches + manager UI).
-5. **Define `radd.sdk` + the api_version gate.**
-6. **Frontend manifest (8a) then declarative UI (8b-B) then federation (8b-A).**
-7. **Abstract `TaskBackend`; ship the `celery` plugin as the proof.**
-8. **Prove the whole thing with a genuinely external plugin** (e.g. `acme.disk-manager`: new tables,
-   endpoints, a settings page, an automation trigger, a scheduled task, its own permissions) that
-   installs without touching the repo. That plugin passing the §1 north-star test = done.
-
----
-
-## 12. Phasing (even under "design up front," build in provable slices)
-
-| Phase | Deliverable | Provable by |
-|---|---|---|
-| **P0** | `RaddPlugin` manifest + registries; invert the 3 chokepoints; `/capabilities`; frontend renders builtin nav/settings from the manifest | milestone-entity north-star test passes for a *builtin* plugin, no other-module edits |
-| **P1** | RBAC registries (permissions + CRUD) become plugin-contributable; access already is | a plugin defines a permission atom + CRUD resource, appears in role editor |
-| **P2** | Lifecycle: install/enable/disable/uninstall + per-plugin Alembic branches + per-plugin Python/JS dependency resolution (§14) + manager service/UI | install a plugin with its own table + deps at runtime, disable/enable it live |
-| **P3** | `radd.sdk` public surface + `api_version` compat gate | a plugin pinned to an old api_version is refused cleanly |
-| **P4** | Frontend: declarative UI manifest (8b-B), then module federation (8b-A) | a plugin ships a settings page (declarative) and a custom widget (federated) |
-| **P5** | `TaskBackend` socket + `celery` plugin; `StorageBackend`/`AttachmentFilter` sockets formalized | automations run on Celery by installing a plugin; S3 storage installs as a plugin |
-| **P6** | Ship one real external plugin end-to-end as the acceptance test | `acme.disk-manager` installs from outside the repo, fully governed |
-
----
-
 ## 13. Derived extension points (from the ecosystem stress-test)
 
 We stress-tested this design against ten candidate community plugins (catalogued in
@@ -967,13 +576,13 @@ retrofit the *shape* later.
 | **Pipeline / interceptor registry** — synchronous, ordered, can transform or *veto* an in-flight operation | primitive | a new shape beyond post-commit events + in-txn hooks (upload filter, pre-save validation) | P1 |
 | **Egress policy in the capability manifest + kernel HTTP client** — declared outbound hosts, audited, retried/rate-limited | primitive | every outbound integration (Slack, AI, GitHub, exporters) | P3/P5 |
 | **Plugin/bot actor identity** — attributable write-backs that compose with the acting-user/system model (§7.5) | primitive | AI triage, sync write-backs | P1 |
-| **Anonymous/portal security context + public-route registration** — a non-user principal, routes off `/api/v1`, rate-limited | primitive | portals, status pages, `/metrics`, public forms | P2/P4 |
+| **Anonymous/portal security context + public-route registration** — a non-user principal, routes off `/api/v1`, rate-limited | primitive | portals, status pages, a metrics endpoint, public forms | P2/P4 |
 | **Field-type registry** — pluginnable field *types*: validator + storage + widget + optional recompute (ties to spec-52 render widgets) | seam | formula/geo/currency fields | P4 |
 | **Auth-method registry + privileged provisioning API** — register login methods; create/deactivate/merge users & teams under system-access | seam | SCIM/SAML | later |
 | **Bulk-ingest + external-ID mapping helper** — idempotent upsert keyed to an external system (generalizes the Jira importer) | seam | GitHub sync, importers | later |
 | **Task scheduling extensions** — cron semantics + per-user/per-tenant fan-out | seam | calendar sync, nightly reports | P5 |
 
-Two confirmations from the exercise: **frontend federation (§8b-A) is mandatory, not optional** (ideas
+Two confirmations from the exercise: **frontend federation (spec 94) is mandatory, not optional** (ideas
 2/3/5 need real UI), and **the sandboxed tier (§0) earns its separate existence** (no-code admin
 scripting is untrusted logic that must not run in-process).
 
@@ -992,14 +601,15 @@ load them. This is part of what "install a plugin" means (§10).
   with a clear error (a concrete reason the *sandbox* tier, §0, exists). Plugins should pin the widest
   compatible ranges. Heavyweight/native deps are surfaced in the capability manifest for admin review.
 
-**Frontend (React/JS).** Each plugin's UI is a **module-federation remote** (§8b-A).
+**Frontend (React/JS).** An optional plugin's UI is a **module-federation remote**; a core plugin's is
+bundled into the host (§8, RADD-1373).
 - The plugin ships its own built bundle that may include its own npm packages (charts, editors, …);
   the **host provides shared singletons** — React, React-DOM, the router, the query client, the
   design-system, and (loaded on demand) the ProseMirror editor runtime — so there is exactly one
   React instance, one theme and one editor engine (§8, RADD-1397).
-- Builtin plugin UIs live in the plugin dir with their own `package.json`, built as remotes at
-  app-build time. External plugin UIs serve their own `remoteEntry.js` + assets, loaded at runtime per
-  the §8a manifest. The host federation config pins the shared-singleton versions.
+- Plugin UIs live in the plugin dir with their own `package.json`. Core ones are bundled at app-build
+  time; optional ones, builtin or external, serve their own `remoteEntry.js` + assets, loaded at runtime
+  per the UI manifest. The host federation config pins the shared-singleton versions.
 - Version skew is gated like the Python `api_version` (§9): a plugin built against an incompatible host
   UI SDK is refused rather than loaded.
 
@@ -1015,10 +625,10 @@ version conflicts are install-time errors, never runtime surprises.
    and not `create_all` (can't evolve schemas).
 3. **Install/uninstall (migrations) split from enable/disable (runtime flag)** (§10) — the only way
    runtime toggling is safe with plugin-owned tables.
-4. **Frontend = declarative manifest first (covers ~80%), module federation for bespoke UI** (§8b).
+4. **Frontend = declarative manifest first (covers ~80%), module federation for bespoke UI** (spec 94; RADD-1373 later bundled core plugins).
 5. **`TaskBackend` socket with `localloop` default + optional `celery` plugin** (§6), Celery not builtin.
 6. **A public `radd.sdk` + semver `api_version` gate** (§9) — the price of stable external plugins.
-7. **Reclassify existing modules as builtin `core` plugins**; no rewrite, additive manifest fields (§11).
+7. **Reclassify existing modules as builtin `core` plugins**; no rewrite, additive manifest fields (Migration history).
 8. **Mediation is mandatory (§0.5)** — plugins declare intent through kernel entry points; the kernel
    owns DB schema/migrations/sessions and the event-type registry. No raw DB access, no home-grown
    event bus, no cross-plugin table reads. Auto-wiring is the payoff.
@@ -1033,132 +643,3 @@ version conflicts are install-time errors, never runtime surprises.
 12. **Per-plugin dependencies** (§14) — plugins ship their own Python (pyproject/extras) and JS
     (module-federation remote + shared singletons) deps; install resolves them; incompatible
     shared-library versions are refused in the in-process tier.
-
-## Audit contributions and shared change presentation (RADD-1364)
-
-Audit owns its settings page, URL parsing, ledger/catalog/access queries, entity
-history panel and settings footer in `modules/audit/ui`. The host settings router
-uses its existing contributed-page catch-all. Settings frames expose
-`settings.footer` with `{history: {entities?, projectId?}}`; entity editors expose
-`entity.history` with `{entityType, entityId, projectId?, title?}`. The remaining
-host history component is a slot adapter, with no Audit import or access decision.
-
-Audit's `/audit/access` applies the same exact scope decision as the ledger:
-instance admin for the whole instance, or `project.manage` for the supplied
-project. It accounts for credential restrictions. Each mounted consumer owns its
-query key and abort signal, with immediate cache disposal. Permission entity
-invalidation refreshes access and row redaction. An unavailable access decision
-hides previous access-dependent UI. Disabling the page contribution also removes
-footer/older-history links to that page. Catalog and row queries track the current
-owner manifest so unavailable owners cannot leave live cached destinations.
-
-SDK 1.11 adds generic `ChangeList`/`ChangeLine` and the backend structured-change
-wire shape, plus `CollapsibleCard`, `DateField`, `Pager`, table primitives and
-`TableSkeleton`. Its avatar delegates to the shared host avatar, preserving
-owner-contributed person indicators and picture/emoji behavior. The renderer understands scalar changes, collection deltas and
-withheld values. It strips withheld payload values before invoking any
-`entity.change.line` contribution, matched by entity type. Items supplies its
-field labels, priority labels, flag sentences and dependency references. Auth contributes role-grant subject/role/scope wording. Other
-entities use generic wording and retain complete unknown structured values. `entity.change.fields` accepts `{entityType?}` and
-renders owner-provided datalist options; suggestions are optional and freeform
-field filtering remains available without an owner contribution.
-
-Public cross-plugin contracts may be published through explicit package exports.
-Projects exports `@radd-plugin-ui/projects/picker-contract`, containing slot IDs
-and types, and Audit declares that package dependency. The workspace build
-links declared public packages before type-checking; it rejects duplicate names
-and refuses to replace a real installed package. Boundary checks require public
-exports and declared dependencies, and prohibit implementation code in these
-contract entry points. The SDK remains the platform API; private owner UI imports
-remain forbidden. Additional owners must publish their own contracts as they move.
-
-Manifest navigation can declare `requires_any_project`: each permission atom must
-hold in at least one project for the navigation item to appear. This is only an
-availability hint; destination APIs enforce exact scope authorization. Audit uses
-it to offer the project chooser to project managers without exposing a forbidden
-instance-wide view.
-
-Audit and Items retain their existing core declarations. Browser tests simulate
-missing/failed remote contributions, and do not claim those core plugins became
-administratively disableable. The wider backend ownership audit remains open.
-
-## Automations editor and contextual commands (RADD-1365)
-
-Automations owns its settings page/navigation, rule and integration editors,
-inspectors, token assistance, reports, version restoration, preview requests and
-transport paths in `modules/automations/ui`. The host settings catch-all mounts
-its page contribution. (An `integration.settings` slot embedded an automations
-panel in the Email, VCS and Alertmanager pages until RADD-1367 gave those
-integrations plain settings of their own; the slot is gone.) Automation
-templates and event catalog entries carry their
-actual registry `plugin`, so display groups and event-name prefixes are not used
-as ownership identifiers. Counts describe shared trigger/action types, not proof
-that another rule has the template's conditions.
-
-SDK 1.12 adds nonvisual contextual commands. A `PluginModule.commandSources` entry
-provides `{id, entityType, meta?, list(context, signal), execute(id, context,
-signal)}`, where context contains `{entityType, entityId, projectId?}`. Consumers
-call `useContributedCommands(context, enabled)`. The loader scopes registration
-and rollback to one activation, including asynchronous activation and failure.
-Discovery is canceled/disposed with its observer; retained command callbacks
-refuse after withdrawal/replacement, and removal aborts active execution.
-Successful commands invalidate visible queries. Owners can call
-`invalidatePluginCommands(client, plugin)` after their own configuration changes.
-Automations uses this contract for manual actions; the item editor contains no
-Automation discovery or execution endpoint. This does not migrate the remaining
-built-in item quick actions into Items yet.
-
-An Automations contribution shares its catalog reads within its mounted scope.
-Capability changes create fresh keys, denied reads hide cached content, and the
-last observer removes its cache. Mutation transports and continuations are
-scoped to the mounted editor; preview input changes advance a generation so an
-A→B→A edit cannot revive an obsolete result. Aborting transport is not a rollback
-of a write already accepted by the server: reopening reads server state again.
-
-Items, Pages and Projects supply search/default-project queries through their
-own `querySources` and exported result contracts. Project/cycle/field controls
-use public owner contracts and slots. Saved IDs, values and unknown trigger
-names remain visible while providers are unavailable. Pages and Projects now
-require SDK 1.9 for their query contributions. Public contract packages may have
-no Vite entry or executable remote (Comments' visibility vocabulary is one such
-package). The build links these packages, builds only executable remotes and
-refuses to replace real dependency directories with toolchain links.
-
-Generic confirmation, icon buttons, clipboard, debounce, list filtering and
-positioned error presentation are shared SDK primitives; host callers use the
-same implementation. Pending confirmation promises settle false on unmount.
-`EmptyState` supports both its existing children and optional icon/message/action.
-This migration leaves Automations' core status intact. Browser withdrawal tests
-simulate unavailable remotes; they do not add an administrative disable switch
-for a core module. Complete backend/action dependency review remains in the
-per-artifact inventory.
-
-### VCS settings and connector contributions (RADD-1366)
-
-VCS owns `/settings/vcs`, its navigation, the host/repository editor and the
-identity map. Connector remotes contribute one tab each to `vcs.provider-settings`
-and render it through the `vcs.host-settings` slot with a `VcsHostConfig` from the
-public `@radd-plugin-ui/vcs/host-contract`. That config is WORDING only (title,
-description, webhook and token guidance, what a change is called); the REST paths,
-cache tags and audited entity types follow from the provider key by one VCS
-convention, so a connector cannot restate them wrong. Neither the platform nor
-VCS enumerates the installed connectors. Audit links name
-`/settings/vcs?host=<provider>` directly; there are no legacy redirect routes.
-
-VCS remains a core module and keeps an empty settings page with a Manage plugins
-link when no connectors contribute. Reads are ordinary TanStack queries keyed
-`["vcs", provider, …]`, enabled while that connector is loaded; a failed refresh
-hides the rows it had (a revoked permission answers 403). Writes are plain
-`useMutation`s and are never aborted — a write the server accepted reports
-success even if the page changed underneath it. Losing `global.manage` unmounts
-the panel, including secret drafts.
-
-Projects contributes its picker; Auth contributes people selection; Time Logging
-contributes the `timelogging.categories` query and its public choice DTO. A saved
-category that is archived shows its name, one that no longer exists says so, and
-while categories are unavailable the saved id is kept, never replaced. The VCS
-unmatched-author API delegates duration presentation to Time Logging's public
-`format_durations` service, returning `pending_duration` alongside seconds.
-
-The SDK exports `invalidateEntities` (shared with the host, which wraps it with its
-typed `EntityTag` vocabulary).

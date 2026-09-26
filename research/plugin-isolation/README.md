@@ -174,7 +174,7 @@ Two review levels, stated honestly. **Reviewed** means the module was moved or i
 
 **Remaining:**
 - **RADD-1398:** a plain home load fetches ~210 script chunks. Measure it before changing anything.
-- **RADD-1395 live-provider proof:** it is unverified because mark015 refused connections from the build machine. Rerun `editor-ai-proof.mjs` when it is reachable.
+- **RADD-1395 live-provider proof:** it is unverified because the model host refused connections from the build machine. Rerun `editor-ai-proof.mjs` when it is reachable.
 - **SDK peer dependencies:** it does not declare `prosemirror-*` as peer dependencies, so an external plugin that binds the editor must install them itself (RADD-1397).
 - **Per-file ledger** (`scripts/plugin_inventory.py`): it stays an on-demand tool writing to an ignored path (RADD-1374). File-by-file ownership of migrations, build and deploy config (RADD-1344) was not re-audited.
 
@@ -575,9 +575,7 @@ Evidence:
   were probed with an ephemeral admin token, then the token was discarded. Valid
   seven-minute schedules return five UTC runs; one-minute schedules return a
   refusal. Leave/GitHub/Forgejo remain disabled and the loaded plugin set is unchanged.
-- Screenshots inspected: `/tmp/radd-schedule-contributions-light.png`,
-  `/tmp/radd-schedule-contributions-dark.png`, `/tmp/radd-backup-schedule.png`.
-  Logs are `/tmp/radd-1362-{build,unit,backend,browser,canvas,reload}.log`.
+- Light/dark schedule and backup screenshots inspected.
 
 Remaining work includes the full automation editor, audit history contribution,
 public cross-plugin contracts, Backup settings ownership, and every other partial
@@ -628,9 +626,8 @@ Evidence:
   Forgejo connection/repository audit rows, so that local probe establishes no historical
   VCS withdrawal claim; the browser fixture and registry tests cover it. Plugin choices
   were unchanged and Leave/GitHub/Forgejo remain disabled. Token discarded afterwards.
-- Screenshot `/tmp/radd-audit-entity-links.png` inspected. The temporary scope-denied
-  toast belongs to the refusal scenario immediately before recovery. Logs:
-  `/tmp/radd-1363-{build,unit,backend,browser,reload}.log`.
+- Entity-link screenshot inspected. The temporary scope-denied toast belongs to the
+  refusal scenario immediately before recovery.
 
 ## RADD-1364 — Audit UI and exact-scope history contributions
 
@@ -683,7 +680,7 @@ Final stage evidence:
   picker proof also passed all 14 groups, 34 requests, three aborts. The existing
   Leave proof passed 12 groups, including profile, holidays, timesheet and
   in-flight status withdrawal (writes only against its mocked fixture).
-- Light/dark screenshots `/tmp/radd-audit-contributions-{light,dark}.png` inspected.
+- Light/dark screenshots inspected.
   A deliberate denied-refresh toast remains briefly in the dark screenshot; it
   is expected feedback from that test scenario, not a successful-read error.
 - Local backend reloaded at `http://localhost:8000`. An ephemeral-token probe
@@ -789,7 +786,7 @@ Stage evidence:
   credentials, mirroring/backfill/test, actual person selection/replay/unmapping,
   missing lookup owners, denied refresh, provider and VCS withdrawal/recovery,
   failed provider and VCS bundle replacement, and permission loss/recovery.
-  Light/dark screenshots inspected at `/tmp/radd-vcs-settings-{light,dark}.png`.
+  Light/dark screenshots inspected.
 - Existing Automations actual-bundle proof passed 16 groups/156 requests/four
   aborts after adopting the SDK mutation lifetime. Existing Audit proof passed
   17 groups/77 requests/three aborts after shared invalidation extraction.
@@ -825,3 +822,89 @@ connectors/ingestion and realtime server-entity mapping still need their full
 inventory audit. Core bundle-withdrawal fixtures do not make core VCS or Time
 Logging administratively disableable. Large shared/backend artifacts retain
 partial status; this stage is not completion of RADD-1343/1346/1347.
+
+
+---
+
+## Appendix: ownership notes (moved from `docs/modules.md`, 2026-09-27)
+
+As recorded in the module map when each change landed; the map now describes only the result.
+
+### Personal dashboards and email signatures (RADD-1333–1338)
+
+`dashboards` exposes private My Work widget definitions and current-access-filtered personal activity. It reads the append-only log through `events.service.query_events` and checks current item and comment visibility. Deferred, optional reads of `comments`, `forms`, and `approvals` are declared weak dependencies; the latter two select relevant defaults. Shared and personal definitions use the same widget schemas and twelve-column layout. Personal definitions live in the user's server preferences; shared definitions remain dashboard-owned.
+
+`mailintake.signatures` runs domain-scoped bounded regex rules, conservative built-ins, then the optional `ai.mail_signature` feature through the configured chat role. `items.service` and `comments.service` own reversible annotation writes and restoration authorization. Bodies remain intact; read schemas expose the signature annotation beside the same visible body. Description field restrictions blank the annotation too. The requester read surface includes annotations only for already-visible descriptions and public comments. `mailintake.signature_router` owns admin settings/preview and delegates restoration to those services.
+
+
+### Settings contribution ownership (RADD-1352)
+
+Scripts and Monitoring own their settings pages in their colocated `ui/` remotes, declared via `PluginUiManifest.nav` and `settings.page`. The host router/navigation no longer names either feature. Scripts owns its interpreter/package types, queries and forms; remote inspectors reuse the local run-result type. Queries consume AbortSignal, are stale on mount and are discarded after their last observer leaves.
+
+Monitoring offers the `settings.section` match `monitoring` inside its card grid. AI contributes `EmbeddingHealthCard` and its coverage query; Mail intake contributes `MailHealthCard` and the admin-only `/mail/health` endpoint. Neither page nor host has a visibility switch for these cards. The overview's existing `mail` API field remains for compatibility through the declared `monitoring -> mailintake.service` optional seam; the new UI does not consume it. Monitoring's catalog table-count list remains a backend audit item.
+
+`RaddPlugin.consumer_descriptions` supplies operator text for its own `consumer_names`; event consumer status reads descriptions from currently registered plugin declarations. Withdrawal removes descriptions while preserving saved cursors as retired. Every builtin consumer now declares its description at its owner. RADD-1372: `RaddPlugin.consumer_resume` declares, per consumer, where it continues when its plugin is (re-)enabled — `ConsumerResume.CURSOR` (the default: catch up) or `HEAD` (skip what happened while off; `mailintake.outbound`, `csat.sender`). The head-seeded runner only seeds a FIRST start; the plugin manager applies HEAD on re-enable. Tailwind scans colocated remote sources generically, so moving a form out of the host does not silently remove its theme utilities.
+
+
+### Directory contribution ownership (RADD-1353)
+
+Auth's `ui/src/index.tsx` owns the people-directory picker query (`auth.people`). Teams' remote owns team choices (`teams.teams`) and member/manager/owner candidates (`teams.candidates`). Both register the public `directory.select` slot, with UI SDK minimum 1.4. A plugin needing a person picker (such as VCS identity mapping) uses the generic SDK DirectorySelect; it does not import a host feature component. The source provider owns endpoints, candidate rules, query keys and realtime entity tags. Generic modal/search/pagination stay in the platform through the SDK's shared control adapters. The host's existing PeopleDirectorySelect callers now delegate through this seam, with their behavior preserved; migration of those calling features is still pending.
+
+**RADD-1364 — Audit frontend ownership.** Audit now owns its page, URL filters,
+access/catalog/ledger reads, entity history panel and settings footer under
+`server/src/radd/modules/audit/ui`. Generic settings-footer and entity-history
+slots replace host Audit rendering and permission guesses. `/audit/access` uses
+the ledger's exact scope rule, including constrained admin credentials. SDK 1.11
+owns generic change rendering and shared date/table/pagination/collapse primitives;
+Items contributes issue-specific history wording and field suggestions through
+its own remote, while Auth contributes its role-grant wording. The SDK avatar
+uses the shared host avatar to preserve contributed person status indicators. Projects publishes its picker data/type contract as an explicit
+package export. Filter changes reset pagination immediately, external navigation
+cancels stale search drafts, and the To date includes the final fractional second.
+Queries abort on contribution withdrawal, use fresh observer-owned cache keys,
+and participate in permission invalidation. Both new remotes retain their existing
+core-plugin policy. Other Items UI and Audit backend cross-feature seams remain
+in the complete isolation inventory.
+
+### Automations UI ownership — RADD-1365
+
+The complete automation settings/editor frontend now lives under
+`server/src/radd/modules/automations/ui/src`: inspectors, graph editing, previews,
+runs, versions, integration templates and their transport/lifetimes. The host
+uses the generic settings catch-all and integration slot. Manual item commands
+are nonvisual contributions through SDK 1.12. Items/Pages/Projects own preview
+lookup transport; public owner contracts supply picker types and shared metadata.
+Registry owner IDs replace template display-group/prefix inference. Existing
+Automation backend services and action dependency ownership are still under the
+full audit; this change does not certify them or the remaining host VCS/Email UI.
+See `docs/plugin-platform.md` and the RADD-1365 inventory evidence.
+
+RADD-1371 fixes two things that move broke. Trigger owners come from
+`registries.event_owners()`, which counts events an `EntitySpec` DERIVES as well
+as declared `event_types` — the catalog had KeyError'd (500) on
+`milestone.created` whenever Milestones was on. "Page is in space" matches a
+saved space ID or slug: the picker stores IDs since RADD-1365, the ref carries
+both, older graphs hold slugs.
+
+RADD-1369 gives every GitLab/GitHub/Forgejo repository row two switches, OFF
+by default and for existing rows (migration `d1369vcspolicy`): `move_on_merge`
+(a merged MR/PR moves the issues it names to their project's waiting state —
+`releases.pipeline.waiting_state_id`, restored — skipping issues already in a
+done category) and `publish_on_release` (a published release/tag runs
+`pipeline.on_release_published` for the default project). Both live in
+`vcs/policies.py`, called by the three receivers after they fire their
+triggers; `vcs` now `depends_on` workflow + releases. The per-host automation
+templates that duplicated them are deleted; the triggers and the
+`release.publish` node stay. Settings → Version control shows them on each
+repository row.
+
+RADD-1373 — **core plugins' UI is bundled into the host; optional plugins stay remotes.** A core module's `ui/package.json` carries `"radd": {"bundled": true}` and an entry export; its manifest declares no `remote`. `web/scripts/plugin-packages.mjs` links plugin packages and generates `web/src/plugins/static.generated.ts`, and `plugin-loader.syncStaticPlugins` registers them at boot, withdrawing them only when `/capabilities` stops listing the plugin. The host imports plugin contracts through package exports only. SDK: `setRemotesLoading`/`useRemotesLoading` + `Slot`'s `pending`; per-mount query identities are gone from option/directory/query-source/command queries and the core pickers. Details: `docs/plugin-platform.md` §8 "Bundled core plugins, remote optional plugins".
+
+RADD-1366 moves version-control settings into VCS and connector remotes.
+`vcs/ui` owns the provider-neutral page (hosts, repository rows, identity map);
+GitHub, Forgejo and GitLab each contribute one tab carrying only their WORDING
+(`VcsHostConfig`) — REST paths, cache tags and audited entity types follow from
+the provider key by VCS's one convention (`hostPaths`/`hostEntities`/
+`historyEntities`). Their audit links point at `/settings/vcs?host=<provider>`
+(EntityLinkSpec), so no redirect routes exist. Projects/Auth supply pickers, and
+Time Logging supplies category queries and server-formatted held durations.

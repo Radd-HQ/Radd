@@ -1,5 +1,7 @@
 # Spec 64 — Queue views
 
+> **Superseded in part by RADD-1201 and RADD-1396 (2026-09-26):** queue rows come from the slas plugin's `/sla-queue-items` (`slas/types.py`), and the queue is the slas plugin's list-surface view type.
+
 Service-desk wave, part 4 — the queue skin spec 30 deferred. A queue is a saved
 view rendered for triage work: always-on SLA urgency, reporter visible, oldest
 first, live counts in the sidebar. Queues reuse the ENTIRE view machinery
