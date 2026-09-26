@@ -163,23 +163,4 @@ export const queryKeys = {
   similarItems: (itemId: string) => ["similarItems", { itemId }] as const,
   // seedKey identifies the text's origin (a comment id), not the text itself.
   similarToText: (seedKey: string, text: string, excludeItemId?: string) => ["similarToText", { seedKey, text, excludeItemId }] as const,
-  // Jira import (specs 90, 100). The wizard used to inline these key arrays.
-  jiraConnections: ["jiraConnections"] as const,
-  jiraStatus: ["jiraStatus"] as const,
-  jiraProjects: (connectionId: string | null) => ["jiraProjects", { connectionId }] as const,
-  jiraSnapshots: ["jiraSnapshots"] as const,
-  jiraPlans: ["jiraPlans"] as const,
-  jiraPlan: (planId: string) => ["jiraPlan", { planId }] as const,
-  jiraPending: ["jiraPending"] as const,
-  jiraRuns: ["jiraRuns"] as const,
-  confluenceConnections: ["confluenceConnections"] as const,
-  confluenceStatus: ["confluenceStatus"] as const,
-  confluenceSpaces: (connectionId: string | null) =>
-    ["confluenceSpaces", { connectionId }] as const,
-  confluenceTree: (spaceKey: string, parentId: string) =>
-    ["confluenceTree", { spaceKey, parentId }] as const,
-  confluenceSnapshots: ["confluenceSnapshots"] as const,
-  confluencePlans: ["confluencePlans"] as const,
-  confluencePlan: (planId: string) => ["confluencePlan", { planId }] as const,
-  confluenceRuns: ["confluenceRuns"] as const,
 } as const;

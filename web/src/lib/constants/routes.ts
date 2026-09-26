@@ -24,10 +24,6 @@ export const SettingsSection = {
   teams: "teams",
   // The people page (spec 84; role ladder = instance_role since spec 86) — admins.
   users: "users",
-  // Jira import wizard (spec 90) — admin only.
-  importData: "import-data",
-  jiraImport: "jira-import",
-  confluenceImport: "confluence-import",
   roles: "roles",
   tokens: "tokens",
   // Per-project time-logging enablement moved under the project (spec 50);
@@ -147,9 +143,6 @@ export const RoutePath = {
   /** THE people page (spec 84): accounts + the instance_role ladder (spec 86),
    * dedupe/merge. */
   settingsUsers: `${SETTINGS_SEGMENT}/${SettingsSection.users}`,
-  settingsImportData: `${SETTINGS_SEGMENT}/${SettingsSection.importData}`,
-  settingsJiraImport: `${SETTINGS_SEGMENT}/${SettingsSection.jiraImport}`,
-  settingsConfluenceImport: `${SETTINGS_SEGMENT}/${SettingsSection.confluenceImport}`,
   settingsRoles: `${SETTINGS_SEGMENT}/${SettingsSection.roles}`,
   settingsTokens: `${SETTINGS_SEGMENT}/${SettingsSection.tokens}`,
   /** Per-user notification rules: the kind × scope matrix + subscriptions (spec 118). */

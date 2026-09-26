@@ -1,5 +1,5 @@
 from radd.kernel import EntityLinkSpec
-from radd.kernel import EventTypeSpec, RaddPlugin
+from radd.kernel import EventTypeSpec, NavItemSpec, PluginUiManifest, RaddPlugin
 from radd.modules.attachments import hosts as storage_hosts
 
 from . import connections, runs, snapshot
@@ -50,4 +50,13 @@ plugin = RaddPlugin(
         snapshot.download.mark_interrupted,
     ),
     routers=(router, pipeline_router),
+    # RADD-1382: the importer's page is this plugin's own remote, and its link
+    # sits in the settings "Import" group that importers contribute to — there
+    # is no host hub naming them. Disabling the plugin withdraws both.
+    ui=PluginUiManifest(
+        remote="/plugins/jiraimport/remoteEntry.js", ui_api_version="1.14.0",
+        nav=(NavItemSpec(key="jiraimport", label="Jira", path="/settings/jira-import",
+                         section="settings", group="Import", icon="DatabaseZap", order=10,
+                         requires_admin=True),),
+    ),
 )

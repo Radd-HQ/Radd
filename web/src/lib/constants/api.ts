@@ -29,27 +29,6 @@ export const ApiPath = {
   // Duplicate-account candidates for the merge UI (spec 84, instance admin).
   usersDuplicates: "/users/duplicates",
   stateCategories: "/state-categories",
-  // Jira import wizard (spec 90) — instance admin.
-  // Spec 100: connections are admin-managed rows, not environment variables.
-  jiraConnections: "/jira/connections",
-  // Spec 100: a JQL result set is downloaded ONCE into a cached snapshot, and
-  // every later step reads that instead of hammering Jira again.
-  jiraSnapshots: "/jira/snapshots",
-  jiraStatus: "/jira/status",
-  jiraProjects: "/jira/projects",
-  jiraPreview: "/jira/preview",
-  jiraPlans: "/jira/plans",
-  jiraRuns: "/jira/runs",
-  // Spec 100: cross-project references still waiting for their target.
-  jiraPending: "/jira/pending",
-  jiraRelink: "/jira/relink",
-  // Confluence importer (spec 117). Same four phases as the Jira one.
-  confluenceConnections: "/confluence/connections",
-  confluenceStatus: "/confluence/status",
-  confluenceSpaces: "/confluence/spaces",
-  confluenceSnapshots: "/confluence/snapshots",
-  confluencePlans: "/confluence/plans",
-  confluenceRuns: "/confluence/runs",
   tokens: "/tokens",
   projects: "/projects",
   // Phase 2+ consumers:

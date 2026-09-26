@@ -8,7 +8,7 @@ Server/DC only. Cloud would be a second `client.py` behind the same `service.py`
 """
 
 from radd.kernel import EntityLinkSpec
-from radd.kernel import EventTypeSpec, RaddPlugin
+from radd.kernel import EventTypeSpec, NavItemSpec, PluginUiManifest, RaddPlugin
 
 from . import connections, runs, snapshot
 from .pipeline_router import pipeline_router
@@ -66,4 +66,11 @@ plugin = RaddPlugin(
         runs.mark_interrupted,
     ),
     routers=(router, pipeline_router),
+    # RADD-1382: the page is this plugin's own remote, and its nav entry sits in
+    # the settings nav's "Import" group — disabling the plugin withdraws both.
+    ui=PluginUiManifest(
+        remote="/plugins/confluenceimport/remoteEntry.js", ui_api_version="1.14.0",
+        nav=(NavItemSpec(key="confluenceimport", label="Confluence", path="/settings/confluence-import",
+                         section="settings", group="Import", icon="BookUp", order=20, requires_admin=True),),
+    ),
 )

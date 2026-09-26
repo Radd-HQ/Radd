@@ -1,9 +1,14 @@
-/** RADD-1198: actual mapping controls, representative large catalog, saved wire values. */
+/** RADD-1198: actual mapping controls, representative large catalog, saved wire values.
+ * RADD-1382: the Jira editor is the jiraimport remote's, so the harness provides what the
+ * host would — its components to the SDK, and the fields plugin's catalog query source. */
 import assert from 'node:assert/strict';
 import {writeFile,rm,mkdtemp} from 'node:fs/promises';
 import {createServer} from 'vite';
 import {openBrowser} from './lib/cdp.mjs';
 const root=new URL('../',import.meta.url).pathname,entry=root+'__mapping-proof.tsx';
+// RADD-1382: the Confluence editor is its plugin's remote source; the harness mounts it with the
+// host's components, the bundled directories and the pages plugin's space options, as the app does.
+const repo=new URL('../../',import.meta.url).pathname,modules='../server/src/radd/modules';
 const field=(id,name,extra={})=>({jira_id:id,jira_name:name,action:'ignore',target_key:'',create_name:'',create_type:null,create_options:null,create_scope:'global',value_map:{},observed_values:[],samples:[],band:'unused',band_reason:'',extend_options:false,...extra});
 let saved;
 const confluenceWrites=[];
@@ -11,14 +16,14 @@ const confluencePlan={id:'fixture',mappings:{spaces:[{key:'DOC',name:'Docs',coun
 const plan={id:'fixture',name:'Mapping proof',radd_project_id:'project',radd_project_key:'DEV',radd_project_name:'Development',provisioned_at:null,options:{quiet:true},mappings:{fields:[field('severity','Severity',{band:'in_use',action:'map',target_key:'severity',observed_values:['P1','P2']}),field('domain','Domain',{band:'in_use',action:'native',builtin_target:'team',observed_values:['Pipeline','Support']}),...Array.from({length:335},(_,i)=>field(`f${i}`,`Unused ${i}`))],statuses:[{jira:'In Review',count:200,action:'map',state_name:'Old missing state',category:'todo'}],issue_types:[],priorities:[],users:[],sprints:[],versions:[],components:[],link_types:[]}};
 let server,browser;
 try{
- await writeFile(entry,`import React from 'react';import{createRoot}from'react-dom/client';import{QueryClient,QueryClientProvider}from'@tanstack/react-query';import{PlanEditor}from'./src/components/settings/jira/PlanEditor';import{RunsPanel}from'./src/components/settings/confluence/RunsPanel';import{PlanEditor as ConfluenceEditor}from'./src/components/settings/confluence/PlanEditor';import './src/index.css';const client=new QueryClient({defaultOptions:{queries:{retry:false}}});createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><main style={{padding:32}}>{location.search === "?runs" ? <RunsPanel onFix={(plan,section,key)=>{document.body.dataset.fix=JSON.stringify({plan,section,key})}}/> : location.search ? <ConfluenceEditor planId="fixture" focus={null} onRan={()=>{}}/> : <PlanEditor planId="fixture" onRunStarted={()=>{}}/>}</main></QueryClientProvider>);`);
- server=await createServer({root,server:{host:'127.0.0.1',port:19451},plugins:[{name:'fixtures',configureServer(s){s.middlewares.use(async(req,res,next)=>{
+ await writeFile(entry,`import React from 'react';import{createRoot}from'react-dom/client';import{QueryClient,QueryClientProvider}from'@tanstack/react-query';import{registerSlot}from'@radd/plugin-sdk';import './src/host-components';import{bindQueryClient,syncStaticPlugins}from'./src/lib/plugin-loader';import{optionContributions as pageOptions}from'${modules}/pages/ui/src/options';import{PlanEditor}from'${modules}/jiraimport/ui/src/PlanEditor';import{RunsPanel}from'${modules}/confluenceimport/ui/src/RunsPanel';import{PlanEditor as ConfluenceEditor}from'${modules}/confluenceimport/ui/src/PlanEditor';import './src/index.css';const client=new QueryClient({defaultOptions:{queries:{retry:false}}});bindQueryClient(client);syncStaticPlugins();pageOptions.forEach(c=>registerSlot(c.slot,c,{plugin:'pages'}));createRoot(document.getElementById('root')).render(<QueryClientProvider client={client}><main style={{padding:32}}>{location.search === "?runs" ? <RunsPanel onFix={(plan,section,key)=>{document.body.dataset.fix=JSON.stringify({plan,section,key})}}/> : location.search ? <ConfluenceEditor planId="fixture" focus={null} onRan={()=>{}}/> : <PlanEditor planId="fixture" onRunStarted={()=>{}}/>}</main></QueryClientProvider>);`);
+ server=await createServer({root,server:{host:'127.0.0.1',port:19451,fs:{allow:[repo]}},plugins:[{name:'fixtures',configureServer(s){s.middlewares.use(async(req,res,next)=>{
   if(req.url.startsWith('/__proof')){res.setHeader('content-type','text/html');res.end(await s.transformIndexHtml('/__proof','<div id="root"></div><script type="module" src="/__mapping-proof.tsx"></script>'));return;}
   if(req.url.startsWith('/api/')){let data=[];
    if(req.url.includes('/confluence/runs') && req.method==='GET'){data=[{id:'run',plan_id:'original-plan',stage:'done',dry_run:true,counts:{},problems:[{kind:'mapping',section:'macros',mapping_key:'custom',message:'Choose renderer'}]}];}
    else if(req.url.includes('/confluence/')){if(req.method==='PATCH'){let body='';for await(const chunk of req)body+=chunk;const draft=JSON.parse(body);confluencePlan.mappings=draft.mappings;confluencePlan.options=draft.options;confluenceWrites.push('save:'+draft.mappings.spaces[0].action);}else if(req.method==='POST')confluenceWrites.push(req.url.includes('/validate')?'validate':'run');data=req.url.includes('/validate')?[]:confluencePlan;}
    else if(req.url.includes('/plans/fixture')){if(req.method==='PATCH'){let body='';for await(const chunk of req)body+=chunk;saved=JSON.parse(body);plan.mappings=saved.mappings;}data=plan;}
-   else if(req.url.includes('/page-spaces'))data=[{id:'space-target',name:'Company docs'}];
+   else if(req.url.includes('/page-spaces/options')){data=[{value:'space-target',label:'Company docs',hint:'company-docs'}];res.setHeader('X-Total-Count','1');}
    else if(req.url.includes('/pages/extensions'))data=[{name:'toc',label:'Contents'},{name:'callout',label:'Callout'}];
    else if(req.url.includes('/users/directory')){data=[{id:'target-user',name:'Merged account'}];res.setHeader('X-Total-Count','1');}
    else if(req.url.includes('/fields'))data=[{key:'severity',name:'Severity',type:'select',options:['Critical','Normal'],project_ids:[]}];
@@ -65,8 +70,8 @@ try{
  await s.eval("[...document.querySelectorAll('tr')].find(r=>r.textContent.includes('Unused docs')).setAttribute('data-unused','yes')");
  await s.click('[data-unused] button[aria-haspopup="listbox"]',text=>text==='Skip');
  await s.click('[role="option"]',text=>text==='Use existing space');await new Promise(r=>setTimeout(r,200));
- await s.click('button[aria-haspopup="listbox"]',text=>text.includes('Choose a destination'));
- await s.click('[role="option"]',text=>text==='Company docs');
+ await s.click('[data-unused] button[aria-haspopup="dialog"]',text=>text.includes('Choose'));await new Promise(r=>setTimeout(r,250));
+ await s.click('[role="dialog"] button',text=>text.includes('Company docs'));
  await s.click('button',text=>text.startsWith('People'));
  await s.click('button[aria-label="Choose attribution account"]');await new Promise(r=>setTimeout(r,250));
  await s.click('button',text=>text==='Merged account');

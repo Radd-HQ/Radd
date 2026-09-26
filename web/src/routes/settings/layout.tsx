@@ -9,6 +9,7 @@ import {
   Blocks,
   GitBranch,
   BookOpen,
+  BookUp,
   Bot,
   CalendarRange,
   CircleUserRound,
@@ -183,6 +184,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
       {
         // Deploy status (spec 50; status-only since spec 67).
         to: RoutePath.settingsInstance,
+        order: 0,
         label: "Server status",
         icon: Server,
         show: (g) => g.instanceAdmin,
@@ -191,12 +193,14 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         // Instance-scope product defaults (spec 67): writes are instance-scope,
         // so the tab is admin-only like the rest of the group.
         to: RoutePath.settingsGeneral,
+        order: 10,
         label: "General",
         icon: SlidersHorizontal,
         show: (g) => g.instanceAdmin,
       },
       {
         to: RoutePath.settingsPages,
+        order: 20,
         label: "Page spaces",
         icon: BookOpen,
         plugin: "pages",
@@ -205,6 +209,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
       {
         // Attachment storage hosts + delivery modes (spec 102).
         to: RoutePath.settingsStorage,
+        order: 40,
         label: "Storage",
         icon: HardDrive,
         show: (g) => g.instanceAdmin,
@@ -212,6 +217,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
       {
         // SSO providers + per-provider signup domain allowlists (spec 110).
         to: RoutePath.settingsSignIn,
+        order: 70,
         label: "Sign-in",
         icon: KeyRound,
         plugin: "sso",
@@ -220,6 +226,7 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
       {
         // Backups (spec 99) — schedules, artifacts, restore.
         to: RoutePath.settingsBackups,
+        order: 80,
         label: "Backups",
         icon: DatabaseBackup,
         show: (g) => g.instanceAdmin,
@@ -228,18 +235,14 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
       {
         // Outbound webhooks (RADD-1096): endpoints, secrets, the delivery log.
         to: RoutePath.settingsWebhooks,
+        order: 90,
         label: "Webhooks",
         icon: Webhook,
         show: (g) => g.instanceAdmin,
       },
       {
-        to: RoutePath.settingsImportData,
-        label: "Import data",
-        icon: DatabaseZap,
-        show: (g) => g.instanceAdmin,
-      },
-      {
         to: RoutePath.settingsPlugins,
+        order: 110,
         label: "Plugins",
         icon: Blocks,
         show: (g) => g.instanceAdmin,
@@ -260,7 +263,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
 export function settingsPathForPlugin(name: string, manifest?: CapabilitiesManifest): { to: string; label: string } | null {
   const contributed = manifest?.nav.find(n => n.plugin === name && n.section === "settings");
   if (contributed) return { to: contributed.path, label: contributed.label };
-  if (name === "jiraimport" || name === "confluenceimport") return { to: RoutePath.settingsImportData, label: "Import data" };
   for (const group of SETTINGS_NAV_GROUPS) {
     const match = group.items.find((item) =>
       typeof item.plugin === "string" ? item.plugin === name : (item.plugin ?? []).includes(name),
@@ -296,6 +298,9 @@ export function SettingsLayout() {
   const isMounted = (item: SettingsNavItem) =>
     !item.plugin ||
     (typeof item.plugin === "string" ? mounted.has(item.plugin) : item.plugin.some((name) => mounted.has(name)));
+  // Builtin rows fall back to index × 10; the Server group pins its numbers instead, because
+  // plugins slot their pages between them by `order` (AI 25, Email 45, Directory 55, Automations
+  // 90…) and a row that moved out would otherwise renumber everything after it.
   const visibleGroups = SETTINGS_NAV_GROUPS.map((group) => ({
     label: group.label,
     items: group.items.map((item, index) => ({ ...item, order: item.order ?? index * 10 })).filter((item) => item.show(gate) && isMounted(item)),
@@ -303,7 +308,8 @@ export function SettingsLayout() {
 
   // Plugin-contributed settings pages (spec 94): federated plugins register a `settings.page` slot
   // and a `section: "settings"` nav item; they appear here alongside the builtin tabs, gated by the
-  // viewer's atoms + the plugin's capability — with no edit to this array.
+  // viewer's atoms + the plugin's capability — with no edit to this array. A `group` no builtin
+  // group carries becomes its own heading after them: "Import" is the importers' (RADD-1382).
   const enabledCaps = new Set(
     (manifest?.capabilities ?? []).filter((c) => c.enabled).map((c) => c.key),
   );
@@ -316,7 +322,7 @@ export function SettingsLayout() {
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles, FolderTree, Mail };
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles, FolderTree, Mail, BookUp, DatabaseZap };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);

@@ -48,9 +48,6 @@ const FieldsSettingsPage = lazyRouteComponent(() => import("./routes/settings/fi
 const LinkTypesSettingsPage = lazyRouteComponent(() => import("./routes/settings/link-types"), "LinkTypesSettingsPage");
 const LabelsSettingsPage = lazyRouteComponent(() => import("./routes/settings/labels"), "LabelsSettingsPage");
 const UsersSettingsPage = lazyRouteComponent(() => import("./routes/settings/users"), "UsersSettingsPage");
-const ImportDataPage = lazyRouteComponent(() => import("./routes/settings/import-data"), "ImportDataPage");
-const JiraImportPage = lazyRouteComponent(() => import("./routes/settings/jira-import"), "JiraImportPage");
-const ConfluenceImportPage = lazyRouteComponent(() => import("./routes/settings/confluence-import"), "ConfluenceImportPage");
 const RolesSettingsPage = lazyRouteComponent(() => import("./routes/settings/roles"), "RolesSettingsPage");
 const TeamsSettingsPage = lazyRouteComponent(() => import("./routes/settings/teams"), "TeamsSettingsPage");
 const TimeloggingSettingsPage = lazyRouteComponent(() => import("./routes/settings/timelogging"), "TimeloggingSettingsPage");
@@ -489,25 +486,6 @@ const settingsUsersRoute = createRoute({
   component: UsersSettingsPage,
 });
 
-/** Jira import wizard (spec 90) — instance-admin only. */
-const settingsImportDataRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.importData,
-  component: ImportDataPage,
-});
-const settingsJiraImportRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.jiraImport,
-  component: JiraImportPage,
-});
-
-/** Confluence import wizard (spec 117) — instance-admin only. */
-const settingsConfluenceImportRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.confluenceImport,
-  component: ConfluenceImportPage,
-});
-
 const settingsRolesRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.roles,
@@ -723,9 +701,6 @@ const routeTree = rootRoute.addChildren([
       settingsCyclesRoute,
       settingsTeamsRoute,
       settingsUsersRoute,
-      settingsImportDataRoute,
-      settingsJiraImportRoute,
-      settingsConfluenceImportRoute,
       settingsRolesRoute,
       settingsTokensRoute,
       settingsNotificationsRoute,
