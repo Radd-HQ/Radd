@@ -38,7 +38,8 @@ plugin = RaddPlugin(
         EventTypeSpec(CsatEvent.REQUESTED, "CSAT survey sent", "Service desk", item_scoped=True),
         EventTypeSpec(CsatEvent.RESPONDED, "CSAT response received", "Service desk", item_scoped=True),
     ),
-    # Federated UI (spec 94): the CSAT rating chip in the issue rail (web/remotes/csat),
-    # rendered by the host via the issue.panel.section slot.
-    ui=PluginUiManifest(remote="/plugins/csat/remoteEntry.js", ui_api_version="1.0.0"),
+    # Federated UI (spec 94, csat/ui): the rating chip in the issue rail (issue.panel.section) and,
+    # since RADD-1401, the public rating page the survey email links to — a `public.page` matched
+    # by pattern (UI API 1.19.0), outside the shell and the sign-in gate.
+    ui=PluginUiManifest(remote="/plugins/csat/remoteEntry.js", ui_api_version="1.19.0"),
 )

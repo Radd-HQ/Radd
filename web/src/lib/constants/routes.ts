@@ -103,9 +103,9 @@ export const RoutePath = {
   cycle: CYCLE_SEGMENT,
   /** Public-shaped intake form submit page (spec 20) — members, behind the auth gate. */
   formSubmit: `${PROJECT_SEGMENT}/forms/$formId`,
-  /** Truly PUBLIC tokened form submit page (spec 62) — root-level, outside the auth gate. */
-  /** PUBLIC tokened CSAT rating page (spec 65) — root-level, outside the auth gate. */
-  publicCsat: "/public/csat/$token",
+  /** PUBLIC pages (RADD-1401) — root-level, outside the shell and the sign-in gate: a plugin's
+   *  `public.page` contribution answers the path (a tokened link from an email). */
+  publicPage: "/public/$",
   settings: SETTINGS_SEGMENT,
   /**
    * Per-project settings (spec 50) — nested under the project so the sub-nav is

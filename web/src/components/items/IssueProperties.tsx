@@ -331,10 +331,8 @@ export function IssueProperties({
         </ChipSelect>
       </div>
 
-      {/* Plugin-contributed issue-rail sections (spec 94): federated remotes register here. The
-          mailintake external-requester chip, participants, CSAT, approvals and SLA timers
-          (RADD-1394) all arrive through this slot from their own remotes — the host imports
-          none of them. */}
+      {/* Plugin-contributed issue-rail sections (spec 94): federated remotes register here, each
+          from its own bundle — the host imports none of them and names none. */}
       <Slot id={SlotId.issuePanelSection} item={item} project={project} />
 
       {primary.map((row) => {

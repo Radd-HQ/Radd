@@ -31,7 +31,7 @@ export interface CapabilitiesManifest {
   capabilities: CapabilityFlag[];
   nav: PluginNavItem[];
   /** Names of every currently-enabled plugin — lets the SPA hide UI for a disabled
-   * optional plugin (e.g. the issue view's Participants/Approvals/CSAT sections). */
+   * optional plugin (e.g. the issue view's contributed rail sections). */
   plugins: string[];
   /** Each enabled plugin's UI remote to load at runtime (spec 94, module federation). */
   remotes: PluginRemoteRef[];

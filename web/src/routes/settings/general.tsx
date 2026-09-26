@@ -22,7 +22,7 @@ export function GeneralSettingsPage() {
         // RADD-930: the REMAINDER — every key whose owner didn't claim a
         // surface that exists at instance scope. Directory keys land on the
         // Directory tab, AI toggles on AI, time policy on Time logging, all by
-        // their own declaration; the release/CSAT/workflow defaults have tabs
+        // their own declaration; the release/workflow/plugin defaults have tabs
         // only per PROJECT, so their instance-wide values belong here, which is
         // exactly what this page is for.
         <ScopedSettingsEditor

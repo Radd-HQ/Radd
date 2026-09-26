@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { AuthStatus } from "./lib/auth";
 import { ProjectSettingsSection, RoutePath, SettingsSection } from "./lib/constants";
 import { authStateQuery } from "./lib/queries";
+import { setAnonymousMode } from "./lib/api";
 import { PageRoute } from "@radd-plugin-ui/pages/links";
 const AppLayout = lazyRouteComponent(() => import("./routes/app-layout"), "AppLayout");
 import { PluginPage } from "./components/shell/PluginPage";
@@ -23,7 +24,7 @@ const StarredPage = lazyRouteComponent(() => import("./routes/starred"), "Starre
 const MyWorkPage = lazyRouteComponent(() => import("./routes/my-work"), "MyWorkPage");
 const ProjectHomePage = lazyRouteComponent(() => import("./routes/project-home"), "ProjectHomePage");
 const ProjectsIndexPage = lazyRouteComponent(() => import("./routes/projects-index"), "ProjectsIndexPage");
-const PublicCsatPage = lazyRouteComponent(() => import("./routes/public-csat"), "PublicCsatPage");
+const PublicPage = lazyRouteComponent(() => import("./components/shell/PublicPage"), "PublicPage");
 const RoadmapPage = lazyRouteComponent(() => import("./routes/roadmap"), "RoadmapPage");
 const ReportsPage = lazyRouteComponent(() => import("./routes/reports"), "ReportsPage");
 const GlobalReportsPage = lazyRouteComponent(() => import("./routes/global-reports"), "GlobalReportsPage");
@@ -96,18 +97,19 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
-/** PUBLIC tokened form submit (spec 62) — root-level like /login, no auth gate. */
-
-/** PUBLIC tokened CSAT rating page (spec 65) — same idiom; the survey email's
- * links carry `?rating=N` to preselect a star (the page still POSTs). */
-const publicCsatRoute = createRoute({
+/** PUBLIC pages (RADD-1401) — root-level like /login: no shell, no sign-in gate. A plugin's
+ * `public.page` contribution answers the path (a tokened link an email carries); the page owns
+ * its search params. The visitor is resolved first, so on these pages a 401 is a refusal to show,
+ * never a redirect to sign in — even where no Anyone principal answers /auth/me. */
+const publicPageRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: RoutePath.publicCsat,
-  validateSearch: (search: Record<string, unknown>): { rating?: number } => {
-    const rating = Number(search.rating);
-    return Number.isInteger(rating) && rating >= 1 && rating <= 5 ? { rating } : {};
+  path: RoutePath.publicPage,
+  validateSearch: (search: Record<string, unknown>) => search,
+  beforeLoad: async ({ context }) => {
+    const authState = await context.queryClient.ensureQueryData(authStateQuery).catch(() => null);
+    if (authState?.status !== AuthStatus.authenticated) setAnonymousMode(true);
   },
-  component: PublicCsatPage,
+  component: PublicPage,
 });
 
 const legacyKbIndexRoute = createRoute({
@@ -648,7 +650,7 @@ const projectSettingsPluginPageRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  publicCsatRoute,
+  publicPageRoute,
   pagePrintRoute,
   legacyKbIndexRoute,
   legacyKbSpaceRoute,

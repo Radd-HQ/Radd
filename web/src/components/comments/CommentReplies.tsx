@@ -9,7 +9,7 @@ import { Entity, entityMeta, invalidateEntities } from "../../lib/cache";
 import { chronologicalComments, type CommentPage } from "../../lib/queries/comment-feed";
 import { relativeTime } from "@radd/plugin-sdk";
 import { type Comment } from "../../lib/types";
-import { EmailBody } from "../editor/EmailBody";
+import { ContentBody } from "../editor/ContentBody";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import type { QuickAction } from "../items/quick-actions";
 import { Button } from "../Button";
@@ -147,7 +147,10 @@ export function CommentReplies({
                 )}
                 {linkFor && <CopyCommentLink href={linkFor(reply.id)} className="ml-1.5 align-middle" />}
               </p>
-              <EmailBody signature={reply.email_signature} parent={{ kind: "comment", id: reply.id }} canRestore={me?.id === reply.author?.id}
+              <ContentBody
+                record={reply}
+                context={{ entityType: "comment", entityId: reply.id, parent: { entityType: reply.entity_type, entityId: reply.entity_id } }}
+                canEdit={!!me && me.id === reply.author?.id}
                 text={reply.body}
                 // RADD-1296: a reply's author ticks its checklist in place.
                 onToggleTask={

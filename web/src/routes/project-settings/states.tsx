@@ -1,6 +1,4 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link } from "@tanstack/react-router";
-import { RoutePath } from "../../lib/constants";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Workflow, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
@@ -90,7 +88,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
           />
           <TransitionsSection project={project} states={sorted} canManage={canManage} />
           {canManage && <ThreadResolutionSection project={project} />}
-          <DoneSideEffects projectKey={project.key} />
+          <DoneSideEffects />
         </>
       )}
     </SettingsPage>
@@ -555,20 +553,17 @@ function DeleteStateDialog({
   );
 }
 
-
-/** RADD-1286: what else happens when work reaches a done state — configured on
- *  the project's General page, named here so the workflow page tells the whole story. */
-function DoneSideEffects({ projectKey }: { projectKey: string }) {
+/** RADD-1286: the workflow page tells the whole story — reaching a done state can set off more.
+ *  It names no plugin (RADD-1401): what a plugin does on done, and where it is set, is the plugin's
+ *  to say. (It used to name two plugins' settings and send both to General, where neither lived.) */
+function DoneSideEffects() {
   return (
     <section className="mt-8" aria-label="When work is done">
       <h3 className="text-sm font-medium text-heading">When work is done</h3>
       <p className="mt-1 text-xs text-fg-muted">
-        Moving an issue into a done state can also email its requesters and send them a
-        satisfaction survey. Both are set under{" "}
-        <Link to={RoutePath.projectSettingsGeneral} params={{ projectKey }} className="text-accent-text hover:underline">
-          General
-        </Link>{" "}
-        (Resolution emails, CSAT surveys).
+        Moving an issue into a done state is also a trigger: automations can act on it, and
+        plugins can tell the people who asked. Each is set up where it lives — the automation&apos;s
+        rule, or the plugin&apos;s own settings.
       </p>
     </section>
   );

@@ -116,12 +116,6 @@ export const apiFormSharingPath = (formId: string) => `${ApiPath.forms}/${formId
 export const apiPortalFormPath = (formId: string) => `${ApiPath.portalForms}/${formId}`;
 export const apiPortalFormSubmitPath = (formId: string) =>
   `${ApiPath.portalForms}/${formId}/submit`;
-/** Public (unauthenticated) form path (spec 62): GET renders, POST submits. */
-/** Tokened KB deflection for the public form page (spec 74) — docs only. */
-/** The shareable public submit URL shown in the form builder (spec 62). */
-/** Public (unauthenticated) CSAT survey path (spec 65): GET renders, POST rates. */
-export const apiPublicCsatPath = (token: string) => `/public/csat/${encodeURIComponent(token)}`;
-
 /** Time-logging paths (spec 22). */
 export const apiItemWorklogsPath = (itemId: string) => `${ApiPath.items}/${itemId}/worklogs`;
 export const apiItemTimelogPath = (itemId: string) => `${ApiPath.items}/${itemId}/timelog`;

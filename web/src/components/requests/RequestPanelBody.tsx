@@ -7,8 +7,7 @@ import { formatDateTime, relativeTime, ErrorText } from "@radd/plugin-sdk";
 import { portalRequestDetailQuery, queryKeys } from "../../lib/queries";
 import type { PortalRequestComment } from "../../lib/types";
 import { Button } from "../Button";
-import { LazyRichViewer } from "../editor/LazyRichViewer";
-import { EmailBody } from "../editor/EmailBody";
+import { ContentBody } from "../editor/ContentBody";
 import { Spinner } from "../Spinner";
 
 /**
@@ -77,7 +76,8 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
 
       {request.description && (
         <div className="mt-3 rounded-lg border border-subtle bg-surface px-3 py-2">
-          {request.email_signature ? <EmailBody text={request.description} signature={request.email_signature} /> : <LazyRichViewer text={request.description} eager />}
+          {/* A requester reads; nothing here is theirs to re-annotate. */}
+          <ContentBody record={request} context={{ entityType: "item", entityId: request.key }} text={request.description} eager />
         </div>
       )}
 
@@ -93,7 +93,7 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
         ) : (
           <ul className="flex flex-col gap-2">
             {request.comments.map((comment) => (
-              <CommentBubble key={comment.id} comment={comment} />
+              <CommentBubble key={comment.id} comment={comment} requestKey={requestKey} />
             ))}
           </ul>
         )}
@@ -119,7 +119,7 @@ export function RequestPanelBody({ requestKey }: { requestKey: string }) {
   );
 }
 
-function CommentBubble({ comment }: { comment: PortalRequestComment }) {
+function CommentBubble({ comment, requestKey }: { comment: PortalRequestComment; requestKey: string }) {
   return (
     <li
       className={
@@ -139,7 +139,12 @@ function CommentBubble({ comment }: { comment: PortalRequestComment }) {
           {relativeTime(comment.created_at)}
         </span>
       </div>
-      {comment.email_signature ? <EmailBody text={comment.body} signature={comment.email_signature} /> : <LazyRichViewer text={comment.body} eager />}
+      <ContentBody
+        record={comment}
+        context={{ entityType: "comment", entityId: comment.id, parent: { entityType: "item", entityId: requestKey } }}
+        text={comment.body}
+        eager
+      />
     </li>
   );
 }

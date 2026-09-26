@@ -1,4 +1,4 @@
-/** Intake forms, portal, public submit, mail contacts, and CSAT. */
+/** Intake forms and the requester portal. */
 
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
@@ -7,7 +7,6 @@ import {
   ApiPath,
   apiFormPath,
   apiPortalFormPath,
-  apiPublicCsatPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
@@ -16,7 +15,6 @@ import type {
   Form,
   PortalForm,
   PortalGroup,
-  PublicCsat,
 } from "../types";
 
 /** A project's intake forms (spec 20) — listing requires form.manage. */
@@ -60,22 +58,6 @@ export const portalFormQuery = (formId: string) =>
     queryKey: queryKeys.portalForm(formId),
     queryFn: ({ signal }) => api.get<PortalForm>(apiPortalFormPath(formId), { signal }),
     meta: entityMeta(Entity.form),
-    retry: false,
-  });
-
-/**
- * The PUBLIC render payload (spec 62) — no login, the token is the credential.
- * 404 (unknown token) / 409 (disabled) surface to the page as-is; no retry.
- */
-
-/**
- * The PUBLIC CSAT rating page's payload (spec 65) — no login, the token is the
- * credential. 404 (unknown token) surfaces to the page as-is; no retry.
- */
-export const publicCsatQuery = (token: string) =>
-  queryOptions({
-    queryKey: queryKeys.publicCsat(token),
-    queryFn: ({ signal }) => api.get<PublicCsat>(apiPublicCsatPath(token), { signal }),
     retry: false,
   });
 

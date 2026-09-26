@@ -9,6 +9,8 @@ import {openBrowser} from "./lib/cdp.mjs";
 import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
+// RADD-1401: a mailed body's signature is folded by the mailintake remote's `content.body` claim.
+const mailDist = fileURLToPath(new URL("../../server/src/radd/modules/mailintake/ui/dist/", import.meta.url));
 const user = {id: "admin", name: "Review Owner", email: "fixture@example.test", global_role: "admin", permissions: ["*"], timezone: "UTC"};
 const project = {id: "project", key: "THR", name: "Thread review", permissions: ["*"], created_at: "2026-01-01"};
 const states = ["Open", "Done"].map((name, i) => ({id: `state-${i}`, name, category: i ? "done" : "todo", category_key: i ? "done" : "todo", position: i, project_id: project.id}));
@@ -37,6 +39,11 @@ const issueTypes = [{id: "type-bug", project_id: "project", name: "Bug", color: 
 let failResolve = false;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://fixture");
+  if (url.pathname.startsWith("/plugins/mailintake/")) {
+    const file = path.join(mailDist, url.pathname.slice("/plugins/mailintake/".length));
+    if (!existsSync(file)) {res.writeHead(404); res.end(); return;}
+    res.writeHead(200, {"content-type": "text/javascript"}); res.end(readFileSync(file)); return;
+  }
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
     let raw = ""; for await (const chunk of req) raw += chunk;
@@ -49,7 +56,9 @@ const server = http.createServer(async (req, res) => {
     else if (route === "/items/count") data = {count:3};
     else if (route === "/comments/reply/locate") data = {id:"reply", root_id:"thread", entity_type:"item", entity_id:"issue", anchored:false};
     else if (route === "/auth/me") data = user;
-    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS], ui: []};
+    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS, "mailintake"],
+      remotes: [{name: "mailintake", remote_entry: "/plugins/mailintake/remoteEntry.js", ui_api_version: "1.19.0"}]};
+    else if (route.endsWith("/mail-contacts")) data = [];
     else if (route === "/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};

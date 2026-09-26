@@ -121,7 +121,7 @@ export function ProjectGeneralSettings() {
             canManage={perms.project(project, Permission.projectManage)}
           />
           {/* RADD-930: the REMAINDER, not everything. The release states, the
-              working week and the CSAT opt-in now declare their own tabs, and the
+              working week and plugins' own opt-ins now declare their own tabs, and the
               enforcement mode declares Workflow — which also retires the
               hand-written `key !== WORKFLOW_TRANSITION_MODE_KEY` exclude that used
               to keep a second, free-text copy of that dropdown off this page. */}

@@ -1,4 +1,4 @@
-import { EmailBody } from "../components/editor/EmailBody";
+import { ContentBody } from "../components/editor/ContentBody";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Slot, SlotId, CollapsibleCard, ReadingPaneContext, useConfirm, type EditorTransform } from "@radd/plugin-sdk";
 import { Archive, ArchiveRestore, CopyPlus, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
@@ -423,7 +423,10 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
               </div>
             ) : item.description ? (
               <div className="group/desc relative rounded-md border border-transparent px-1.5 py-1 hover:border-subtle">
-                <EmailBody signature={item.email_signature} parent={{ kind: "item", id: item.id }} canRestore={canEditDescription}
+                <ContentBody
+                  record={item}
+                  context={{ entityType: "item", entityId: item.id }}
+                  canEdit={canEditDescription}
                   text={item.description}
                   onToggleTask={
                     canEditDescription ? (toggle) => toggleDescriptionTask(item, toggle) : undefined

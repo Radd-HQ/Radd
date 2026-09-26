@@ -159,11 +159,11 @@ plugin = RaddPlugin(
         ),
     ),
     # Federated UI (spec 94, `ui/`): Settings → Email (RADD-1378 — the page and
-    # this nav entry withdraw with the plugin; 1.14.0 is the SDK that carries
-    # ScopedSettings), the Monitoring mail card, and the external-requester chip
-    # in the issue rail.
+    # this nav entry withdraw with the plugin), the Monitoring mail card, the
+    # external-requester chip in the issue rail, and (RADD-1401) how a mailed
+    # body reads: a `content.body` claim folds its signature away — UI API 1.19.0.
     ui=PluginUiManifest(
-        remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.14.0",
+        remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.19.0",
         nav=(NavItemSpec(key="email", label="Email", path="/settings/email", section="settings",
                          group="Server", icon="mail", order=45, requires_admin=True),),
     ),

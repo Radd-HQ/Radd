@@ -58,6 +58,10 @@ export const SlotId = {
   /** An action on RENDERED content (a description, a comment, a page body), shown for every
    *  reader. Props: `ReadActionProps` { text, context, transform?, subject, className? }. */
   contentReadAction: "content.read.action",
+  /** How a rendered body (a description, a comment) is DRAWN when a plugin claims its record
+   *  (RADD-1401). Build it with `contentBody(spec)`: `claims(record)` decides, the first claimant
+   *  draws. Props: `ContentBodyProps` { text, record, context, canEdit, renderText }. */
+  contentBody: "content.body",
   // --- views (board/list/roadmap) ---
   /** An item in a view's header/toolbar. Props: { view, items } — the view + its currently-loaded,
    *  permission-scoped issues, so a plugin can compute over exactly what the user sees. */
@@ -98,8 +102,15 @@ export const SlotId = {
    *  section key (the wiki's spaces are "pages"). Props: { collapsed, onToggle } — the fold is
    *  the host's persisted sidebar preference. */
   sidebarSection: "sidebar.section",
-  /** A full plugin page mounted at a nav path (matched by `match` = pathname). Props: { path }. */
+  /** A full plugin page mounted at a nav path (matched by `match` = pathname, or a pattern whose
+   *  `$name` segments capture — see `matchPagePath`). Props: `ContributedPageProps` { path, params }. */
   routePage: "route.page",
+  /** A page OUTSIDE the app shell and the sign-in gate (RADD-1401), for someone who holds a link
+   *  rather than an account — a tokened link in an email. `match` = a path under `/public/`,
+   *  usually a pattern (`/public/invites/$token`). Props: `ContributedPageProps` { path, params }. The host
+   *  draws the frame (the brand, a reading column); the visitor may be anonymous, so every request
+   *  the page makes is one the server answers for a visitor. */
+  publicPage: "public.page",
   /** A dashboard widget type. Props: { config, widget, filterQuery } — the widget's stored
    *  config, the full widget row, and the dashboard-wide SLQ filter (plugin widgets decide
    *  how to honor it). A manifest `WidgetTypeSpec(personal=True)` puts the type on My Work instead
@@ -138,7 +149,8 @@ export interface SlotContribution<P = Record<string, unknown>> {
   order?: number;
   render: (props: P) => ReactNode;
   /** When set on a `route.page`/`settings.page`/`settings.section`, the host mounts this
-   *  contribution only for the matching path/key. Ignored for section-style slots. */
+   *  contribution only for the matching path/key. A PAGE's match may be a pattern whose `$name`
+   *  segments capture (`matchPagePath`). Ignored for section-style slots. */
   match?: string;
   /** A label for tab/menu-style slots (e.g. `issue.tab` renders this as the tab button). */
   title?: ReactNode;

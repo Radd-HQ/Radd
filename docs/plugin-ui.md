@@ -42,10 +42,12 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `editorToolbarAction` | A button in the rich editor's toolbar (RADD-1395) | `EditorToolbarActionProps` `{editor}` | draw it with `EditorToolbarButton`; see "The editor's extension points" | `components/editor/RichEditor.tsx` |
 | `editorSelectionAction` | Chrome over a text selection (RADD-1395) | `EditorSelectionActionProps` `{editor, selection}` | the host places it; `selection` null ⇒ show no trigger | `components/editor/SelectionActions.tsx` |
 | `contentReadAction` | An action on RENDERED content — a description, a comment, a page body (RADD-1395) | `ReadActionProps` `{text, context, transform?, subject, className?}` | shown for every reader; `transform` only when they may rewrite | `routes/item-detail.tsx`, `components/items/CommentsThread.tsx`, pages' `view/PageReading.tsx` |
+| `contentBody` | How a rendered body — a description, a comment, a reply — is DRAWN when a plugin claims its record (RADD-1401) | `ContentBodyProps` `{text, record, context, canEdit, renderText}` | build it with `contentBody(spec)`; `claims(record)` decides and the first claimant draws — see "Content bodies" below | `components/editor/ContentBody.tsx` (used by the issue description, comments, replies and the requester's request view) |
 | `issueTab` | Activity tab bar, next to VCS | `{item, project}` | needs `title` (+ optional `icon`); `render` = tab body | `components/items/ActivityPanel.tsx` |
 | `viewHeader` | A view's header/toolbar | `{view, items}` | `items` = the view's loaded, permission-scoped issues | `routes/view.tsx` |
 | `viewType` | A whole saved-view TYPE | `{view, items}` | `match` = the view_type key; pair with a `view_types=` manifest entry. A type declared a LIST surface needs no contribution — see "View types on the host's list" below | `routes/view.tsx` |
-| `routePage` | A full page at a nav path | `{path}` | `match` = the pathname | `components/shell/PluginPage.tsx` (splat route) |
+| `routePage` | A full page at a nav path | `ContributedPageProps` `{path, params}` | `match` = the pathname, or a pattern whose `$name` segments capture into `params` (RADD-1401) | `components/shell/PluginPage.tsx` (splat route) |
+| `publicPage` | A page OUTSIDE the shell and the sign-in gate, under `/public/` (RADD-1401) | `ContributedPageProps` `{path, params}` | `match` = a path pattern (`/public/<plugin>/$token`); the visitor may be anonymous — see "Public pages" below | `components/shell/PublicPage.tsx` (root-level `/public/$` route) |
 | `settingsPage` | A full page under Settings → … | `{path}` | `match` = the pathname | `components/shell/SettingsPluginPage.tsx` |
 | `projectSettingsPage` | A whole page under a PROJECT's settings (RADD-1396) | `{project, path}` | `match` = the page's segment (`/p/<KEY>/settings/<segment>`); pair with `NavItemSpec(section="project_settings", path=<segment>)` — see "Project settings pages" below | `routes/project-settings/layout.tsx` (`ProjectSettingsPluginPage`, a splat under the project-settings route) |
 | `settingsSection` | Into an *existing* settings page | `{}` | `match` = the page's key, which is its route segment under `/settings` — Settings → Plugins links a plugin with no page of its own to the pages its sections match (RADD-1380) | `routes/settings/timelogging.tsx` (`match="timelogging"`, Leave), `routes/settings/sign-in.tsx` (`match="sign-in"`, sso's providers); add anchors to other pages as needed |
@@ -480,6 +482,85 @@ sticks. With none, the bar is plain SLQ and has no toggle. In the mode the input
   either is dropped.
 
 Remotes that use these declare `ui_api_version="1.18.0"`.
+
+## Public pages and page patterns (SDK 1.19)
+
+A page's `match` may be a PATTERN (RADD-1401): a `$name` segment captures exactly one non-empty
+path segment, and the page receives the captures, decoded, as `params` beside `path`
+(`ContributedPageProps`). A literal match wins over a pattern; among patterns, the first in the
+slot's order. `matchPagePath(pattern, path)` is the one matcher (the host's page mounts and the
+turned-off check both use it) and `usePageMatch(slot, path)` the hook. It works for every page slot —
+`route.page`, `settings.page` and the new one below.
+
+**`public.page`** is a page for someone who holds a LINK rather than an account — a tokened link in
+an email. The host mounts `/public/$` at the ROOT of the route tree, beside `/login`: no shell, no
+sign-in gate. It draws only the frame (the brand and a reading column) and runs the plugin loader
+itself, since the shell that normally does is not mounted. Before rendering, the route resolves the
+visitor and puts the api client in visitor mode, so on these pages a 401 is a refusal to show, never
+a redirect to sign in. What an anonymous visitor loads is exactly what spec 121's visitor shell
+already loads — `/capabilities` and the enabled remotes, both answered for the Anyone principal (the
+frozen inventory in `tests/test_anonymous_surface.py` is unchanged) — so a public page leaks nothing
+the visitor shell did not. The page's own endpoints must be the plugin's unauthenticated router,
+where the token is the credential.
+
+```tsx
+{ id: "survey", slot: SlotId.publicPage, match: "/public/csat/$token", toggleable: false,
+  render: (props) => <SurveyPage token={(props as ContributedPageProps).params.token} /> }
+```
+
+The csat plugin's rating page is the first (`modules/csat/ui/src/SurveyPage.tsx`): the survey email's
+links land on it, `?rating=N` preselects a star (a page owns its search params; read them with the
+router's `useSearch({ strict: false })`). Mark such a page `toggleable: false`: it is where the
+plugin's own emails land, and a visitor has no toggles to read — disabling the plugin is how it
+goes, and then the link shows the host's "unavailable" notice.
+
+The sign-in page is NOT a public page and stays the host's (RADD-1380): it is the way in, so it must
+not wait on, or break with, optional plugin code, and it mounts no plugin loader.
+
+## Content bodies (SDK 1.19)
+
+The host draws every rendered body — an issue's description, a comment, a reply, a requester's view
+of either — with its own viewer. A plugin that knows something about SOME bodies claims them by the
+record they came from and draws them instead (RADD-1401):
+
+```tsx
+import { contentBody, type ContentBodyProps } from "@radd/plugin-sdk";
+
+export const signedBody = contentBody({
+  id: "mailintake.signature",                                        // `<plugin>.<name>`
+  label: "Folded email signatures",
+  claims: (record) => typeof (record as { email_signature?: unknown }).email_signature === "string",
+  render: ({ text, record, context, canEdit, renderText }: ContentBodyProps) => <SignedBody … />,
+});
+```
+
+- **`claims(record)`** is called for every body the host renders: keep it a cheap, pure read of the
+  record, as the server sent it. A throw counts as no. The first registered, turned-on claimant (in
+  `order`) draws; the host names none of them and knows nothing that makes a body special.
+- **`renderText(text)`** draws markdown exactly as the host draws this body — its viewer, deferred
+  mounting, mentions and checklists. A LEADING part of the body keeps its task checkboxes live; any
+  other part is drawn read-only, since its tasks are not counted from the body's start.
+- `context` is `{entityType, entityId, parent?}` (an issue's description is `item`; a comment names
+  its parent); `canEdit` says whether this reader may change the content (its author, someone who
+  runs the project) — the plugin's own endpoint still enforces it.
+- **Nothing is ever lost to a plugin.** With no claimant, the claimant's plugin withdrawn, or its
+  render throwing, the body is the host's ordinary markdown.
+
+The mailintake plugin is the first (`modules/mailintake/ui/src/SignedBody.tsx`): intake records a
+mailed body's signature as `email_signature`, an annotation over an exact suffix of the stored text,
+and the claim folds it under "Show signature", with "Not a signature" for someone who may edit the
+content. There is no `origin` on the wire that marks a mailed body — `comments.origin` is
+deliberately NULL for a person's mailed reply (RADD-1318) and items carry none — so the annotation
+itself is what the claim reads.
+
+Remotes that use either declare `ui_api_version="1.19.0"`.
+
+**Named exception (RADD-1401).** The issue's History tab (`components/items/HistoryTab.tsx`) still
+words `csat.*` and `mail.*` events itself. It is a ledger: one switch words every plugin's events
+(approvals, participants, vcs, worklogs as well), and an event outlives the plugin that emitted it,
+so a disabled plugin's past rows must still read as sentences. Contributed event sentences are one
+mechanism for every plugin, not a csat or mail move; `plugin-boundaries.test.mjs` names the file
+and fails once it no longer needs the exception.
 
 ## Logic & data access — where computation goes and what a plugin can see
 

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Slot, useSlotMatch, useDisabledMatches, type SlotIdValue } from "@radd/plugin-sdk";
+import { Slot, matchPagePath, usePageMatch, useDisabledMatches, type SlotIdValue } from "@radd/plugin-sdk";
 import { capabilitiesQuery } from "../../lib/queries";
 import { isBundledPlugin, readRemoteStates, subscribeRemoteStates } from "../../lib/plugin-loader";
 import { Spinner } from "../Spinner";
@@ -13,8 +13,10 @@ import { MissingPluginType } from "./MissingPluginType";
  * The shell renders contributed pages; no feature names or implementations live here.
  *
  * `match` is the key the page's contribution and nav entry carry — the pathname for a
- * `route.page`/`settings.page`, the segment under a project's settings for a
- * `project.settings.page` (RADD-1396). `props` are handed to the page beside `path`.
+ * `route.page`/`settings.page`/`public.page`, the segment under a project's settings for a
+ * `project.settings.page` (RADD-1396). A contribution's `match` may be a PATTERN whose `$name`
+ * segments capture (RADD-1401); the page receives the captures as `params`. `props` are handed to
+ * the page beside `path` and `params`.
  */
 export function ContributedPage({ slot, match: matchKey, props }: {
   slot: SlotIdValue;
@@ -25,11 +27,14 @@ export function ContributedPage({ slot, match: matchKey, props }: {
   const key = matchKey ?? pathname;
   const manifest = useQuery(capabilitiesQuery);
   const states = useSyncExternalStore(subscribeRemoteStates, readRemoteStates);
-  const match = useSlotMatch(slot, key);
-  const disabled = useDisabledMatches(slot).has(key);
+  const page = usePageMatch(slot, key);
+  const disabledMatches = useDisabledMatches(slot);
+  const disabled = [...disabledMatches].some(match => matchPagePath(match, key) !== null);
   const failed = <Callout kind="danger" className="m-6" role="alert">This plugin page could not be loaded. Reload the page to retry, or ask an administrator to check the plugin.</Callout>;
   if (disabled) return <MissingPluginType typeKey={key} kind="page" disabled />;
-  if (match) return <Slot id={slot} match={key} {...props} path={key} errorFallback={failed} />;
+  if (page) {
+    return <Slot id={slot} match={page.match} owner={page.plugin} {...props} path={key} params={page.params} errorFallback={failed} />;
+  }
   if (manifest.isPending) return <Spinner label="Loading plugin page…" />;
   if (manifest.isError) return <QueryError label="plugin availability" error={manifest.error} />;
   const owner = manifest.data.nav.find(n => n.path === key)?.plugin;

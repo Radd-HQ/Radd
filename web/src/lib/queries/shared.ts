@@ -83,7 +83,6 @@ export const queryKeys = {
   portalRequests: ["portalRequests"] as const,
   portalRequest: (key: string) => ["portalRequests", key] as const,
   portalForm: (formId: string) => ["portalForm", { formId }] as const,
-  publicCsat: (token: string) => ["publicCsat", { token }] as const,
   itemTimelog: (itemId: string) => ["itemTimelog", { itemId }] as const,
   workCategories: (includeArchived: boolean) =>
     ["workCategories", { includeArchived }] as const,

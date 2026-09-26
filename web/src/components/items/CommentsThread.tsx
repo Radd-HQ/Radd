@@ -1,4 +1,4 @@
-import { EmailBody } from "../editor/EmailBody";
+import { ContentBody } from "../editor/ContentBody";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useThreadExpansion } from "../comments/useThreadExpansion";
 import { useCallback, useState } from "react";
@@ -269,7 +269,10 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     />
                   ) : (
                     <div className="mt-0.5">
-                      <EmailBody signature={comment.email_signature} parent={{ kind: "comment", id: comment.id }} canRestore={!!comment.author && user?.id === comment.author.id || canManageProject}
+                      <ContentBody
+                        record={comment}
+                        context={{ entityType: "comment", entityId: comment.id, parent: { entityType: "item", entityId: itemId } }}
+                        canEdit={(!!comment.author && user?.id === comment.author.id) || canManageProject}
                         text={comment.body}
                         onToggleTask={
                           (!!comment.author && user?.id === comment.author.id) || canManageProject

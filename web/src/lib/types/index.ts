@@ -22,7 +22,6 @@ export * from "./comments";
 export * from "./views";
 export * from "./reporting";
 export * from "./forms";
-export * from "./csat";
 export * from "./timelogging";
 export * from "./history";
 export * from "./integrations";

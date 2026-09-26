@@ -1,4 +1,4 @@
-/** Intake forms, public submit path, requester portal, and mail contacts (specs 20/62/73). */
+/** Intake forms, form render payloads and the requester portal (specs 20/62/73). */
 import type { ItemKindValue, PriorityValue } from "./items";
 import type { IntakeCommitValue, ValidationModeValue } from "@radd-plugin-ui/automations/types";
 import type { FieldDisplayValue, FieldTypeValue, CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
@@ -130,7 +130,7 @@ export interface FormSubmit {
 }
 
 // ---------------------------------------------------------------------------
-// Public form path + mail contacts (spec 62)
+// Form render payloads (spec 62)
 // ---------------------------------------------------------------------------
 
 /** One exposed field with its definition inlined (the registry needs a login). */
@@ -161,18 +161,6 @@ export interface PublicForm {
 export interface PublicSubmitResult {
   key: string;
   title: string;
-}
-
-/**
- * One external person on an item's mail thread (RADD-980).
- *
- * `GET /items/{id}/mail-contacts` returns them all, primary first (empty list = none);
- * `GET /items/{id}/mail-contact` still returns the PRIMARY alone, 404 when there is none.
- */
-export interface MailContact {
-  email: string;
-  name: string;
-  is_primary: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -243,7 +231,6 @@ export interface PortalRequest {
 
 /** One public comment on a request (RADD-796). Internal notes never appear. */
 export interface PortalRequestComment {
-  email_signature?: string | null;
   id: string;
   author: string;
   author_is_me: boolean;
@@ -253,7 +240,6 @@ export interface PortalRequestComment {
 
 /** GET /portal/requests/{key} — the row plus what you opened it for. */
 export interface PortalRequestDetail extends PortalRequest {
-  email_signature?: string | null;
   description: string;
   comments: PortalRequestComment[];
 }

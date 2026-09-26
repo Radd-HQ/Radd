@@ -1,15 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { useParams, useSearch } from "@tanstack/react-router";
+import { useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Star } from "lucide-react";
-import { api, errorMessage } from "../lib/api";
-import { apiPublicCsatPath } from "../lib/constants";
-import { publicCsatQuery, queryKeys } from "../lib/queries";
-import type { PublicCsat, PublicCsatSubmit } from "../lib/types";
-import { Button } from "../components/Button";
-import { RaddTile } from "../components/RaddMark";
-import { Spinner } from "../components/Spinner";
-import { ErrorText } from "@radd/plugin-sdk";
+import { Button, ErrorText, Spinner, errorMessage } from "@radd/plugin-sdk";
+import { submitSurvey, surveyKey, surveyQuery, type PublicSurvey } from "./survey";
 
 const RATING_LABELS: Record<number, string> = {
   1: "Very dissatisfied",
@@ -19,41 +13,32 @@ const RATING_LABELS: Record<number, string> = {
   5: "Very satisfied",
 };
 
-/**
- * PUBLIC tokened CSAT rating page (spec 65) — route `/public/csat/$token`,
- * root-level and OUTSIDE the auth gate (the spec-62 public-form idiom). The
- * survey email's five links land here with `?rating=N` preselecting a star;
- * the page POSTs, so a mail scanner prefetching a link never records anything.
- * Re-submits are allowed (latest wins) — an already-answered survey renders
- * with the current rating selected.
- */
-export function PublicCsatPage() {
-  const { token = "" } = useParams({ strict: false });
-  const search = useSearch({ strict: false }) as { rating?: number };
-  const survey = useQuery(publicCsatQuery(token));
+/** A star `?rating=` preselects: the survey email's five links carry one each. */
+function preselectedRating(search: Record<string, unknown>): number | undefined {
+  const rating = Number(search.rating);
+  return Number.isInteger(rating) && rating >= 1 && rating <= 5 ? rating : undefined;
+}
 
-  return (
-    <main className="flex min-h-screen justify-center bg-base px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center gap-2.5">
-          <RaddTile className="size-8 rounded-lg" />
-          <div>
-            <h1 className="text-base font-semibold text-heading">Radd</h1>
-            <p className="text-xs text-fg-muted">How did we do?</p>
-          </div>
-        </div>
-        {survey.isPending ? (
-          <Spinner label="Loading survey…" />
-        ) : survey.isError ? (
-          <p className="text-sm text-fg-secondary">
-            This survey link isn't available: {errorMessage(survey.error)}
-          </p>
-        ) : (
-          <RatingForm token={token} survey={survey.data} preselected={search.rating} />
-        )}
-      </div>
-    </main>
-  );
+/**
+ * The PUBLIC tokened rating page (spec 65) — csat's `public.page` contribution at
+ * `/public/csat/$token` since RADD-1401, drawn inside the host's public frame (no shell, no sign-in
+ * gate). The survey email's five links land here with `?rating=N` preselecting a star; the page
+ * POSTs, so a mail scanner prefetching a link never records anything. Re-submits are allowed
+ * (latest wins) — an already-answered survey renders with the current rating selected.
+ */
+export function SurveyPage({ token }: { token: string }) {
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const survey = useQuery(surveyQuery(token));
+
+  if (survey.isPending) return <Spinner label="Loading survey…" />;
+  if (survey.isError) {
+    return (
+      <p className="text-sm text-fg-secondary" data-csat-survey="unavailable">
+        This survey link isn't available: {errorMessage(survey.error)}
+      </p>
+    );
+  }
+  return <RatingForm token={token} survey={survey.data} preselected={preselectedRating(search)} />;
 }
 
 function RatingForm({
@@ -62,24 +47,20 @@ function RatingForm({
   preselected,
 }: {
   token: string;
-  survey: PublicCsat;
+  survey: PublicSurvey;
   preselected?: number;
 }) {
   const queryClient = useQueryClient();
   // Priority: the emailed link's ?rating, else a previously recorded answer.
-  const initial = preselected && preselected >= 1 && preselected <= 5 ? preselected : survey.rating;
-  const [rating, setRating] = useState<number | null>(initial ?? null);
+  const [rating, setRating] = useState<number | null>(preselected ?? survey.rating ?? null);
   const [hovered, setHovered] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const submit = useMutation({
-    mutationFn: () => {
-      const body: PublicCsatSubmit = { rating: rating ?? 0, comment: comment.trim() };
-      return api.post<PublicCsat>(apiPublicCsatPath(token), body);
-    },
+    mutationFn: () => submitSurvey(token, { rating: rating ?? 0, comment: comment.trim() }),
     onSuccess: (result) => {
-      queryClient.setQueryData(queryKeys.publicCsat(token), result);
+      queryClient.setQueryData(surveyKey(token), result);
       setSubmitted(true);
     },
   });
@@ -90,10 +71,10 @@ function RatingForm({
   };
 
   return (
-    <div className="flex flex-col gap-5 rounded-xl border border-subtle bg-surface/40 p-6">
+    <div className="flex flex-col gap-5 rounded-xl border border-subtle bg-surface/40 p-6" data-csat-survey={token}>
       <header className="flex flex-col gap-1 border-b border-subtle pb-4">
         <p className="text-[11px] font-medium uppercase tracking-wide text-accent-text">
-          Satisfaction survey
+          Satisfaction survey · How did we do?
         </p>
         <h2 className="text-lg font-semibold text-heading">
           <span className="font-mono text-accent-text">{survey.item_key}</span> {survey.item_title}
@@ -101,8 +82,11 @@ function RatingForm({
       </header>
 
       {submitted ? (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-5">
-          <p className="flex items-center gap-2 text-sm text-emerald-300">
+        <div
+          className="flex flex-col items-start gap-3 rounded-lg border border-status-success/30 bg-status-success/5 p-5"
+          data-csat-recorded
+        >
+          <p className="flex items-center gap-2 text-sm text-status-success-ink">
             <CheckCircle2 size={16} aria-hidden />
             Thanks — your rating has been recorded.
           </p>
@@ -145,7 +129,7 @@ function RatingForm({
                     <Star
                       size={28}
                       aria-hidden
-                      className={active ? "fill-amber-400 text-amber-400" : "text-fg-faint"}
+                      className={active ? "fill-status-warning text-status-warning" : "text-fg-faint"}
                     />
                   </button>
                 );
@@ -168,9 +152,7 @@ function RatingForm({
             />
           </label>
 
-          {submit.isError && (
-            <ErrorText size="sm" error={submit.error} />
-          )}
+          {submit.isError && <ErrorText size="sm" error={submit.error} />}
 
           <div className="flex justify-end">
             <Button type="submit" disabled={rating === null || submit.isPending}>
@@ -192,7 +174,7 @@ function StarRow({ value }: { value: number | null }) {
           key={star}
           size={18}
           aria-hidden
-          className={(value ?? 0) >= star ? "fill-amber-400 text-amber-400" : "text-fg-faint"}
+          className={(value ?? 0) >= star ? "fill-status-warning text-status-warning" : "text-fg-faint"}
         />
       ))}
     </span>

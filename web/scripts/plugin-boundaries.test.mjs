@@ -548,3 +548,63 @@ test('the palette and the query bar take contributed modes, and the ai remote co
   assert(members(`${root}/palette/ask.ts`).has('searchSemantic'));
   assert(members(`${root}/query-bar/natural-language.ts`).has('nlQuery'));
 });
+
+test('the survey page is csat\'s and a mailed body reads as mailintake draws it: the host names neither (RADD-1401)',async()=>{
+  for (const file of ['web/src/routes/public-csat.tsx','web/src/components/editor/EmailBody.tsx','web/src/lib/types/csat.ts']) assert(!existsSync(file),file);
+  // csat's words (the survey, its page, endpoint and types) and mail's (the signature annotation and
+  // its restore route, contacts, the inbound origin, the channel's events, the plugin's own name) —
+  // in code, copy AND comments: a comment naming the plugin is the host knowing it is there.
+  const vocabulary=/csat|satisfaction|\bsurveys?\b|mailintake|email_?signature|EmailBody|MailContact|mail[-_]contacts?|inbound_mail|\/mail\/|^mail\.[a-z]|\bmail\.(?:received|sent|failed)\b|(?:show|not a) signature/i;
+  for (const sample of ['PublicCsatPage','/public/csat/$token','satisfaction survey','email_signature','EmailBody','/mail/signatures/','mail.failed','"mail.sent"','Show signature','Not a signature','MailContact','mail-contacts','inbound_mail','mailintake provisions one']) assert(vocabulary.test(sample),sample);
+  for (const sample of ['surveying the thread','signature: JSON.stringify(drafts)','a presigned link has a signature','mailto:','email','Mail','email_images_allowed','emailed']) assert(!vocabulary.test(sample),sample);
+  // The one named exception, and why. The issue's History tab is a LEDGER: one switch renders every
+  // plugin's events — approvals, participants, vcs, worklogs, csat.* and mail.* alike — and an event
+  // outlives the plugin that emitted it, so a disabled plugin's past rows must still read as
+  // sentences. Giving the ledger contributed event sentences is one mechanism for every plugin, not
+  // a csat or mail move; until it exists, these rows stay the ledger's.
+  const EXCEPTIONS={'web/src/components/items/HistoryTab.tsx':'the History ledger\'s event sentences'};
+  const history=readFileSync('web/src/components/items/HistoryTab.tsx','utf8');
+  for (const row of ['case "csat.responded"','case "mail.failed"']) assert(history.includes(row),`the exception is stale: HistoryTab no longer carries ${row}`);
+  const {discover}=await import('./plugin-packages.mjs');
+  const bundled=discover().filter(p=>p.bundled).map(p=>path.join(p.dir,'src'));
+  assert(bundled.length>=15,'the scan reaches the core packages bundled into the host');
+  const scanned=[...files('web/src'),...files('web/packages/plugin-sdk/src'),...bundled.flatMap(files)];
+  assert(scanned.length>300,'the scan must reach the whole host');
+  const violations=new Set();
+  for (const file of scanned) {
+    if (EXCEPTIONS[path.relative(process.cwd(),file)]) continue;
+    for (const node of nodes(file)) {
+      const text=node.type==='Identifier'||node.type==='JSXIdentifier'?node.name
+        :node.type==='StringLiteral'||node.type==='JSXText'?node.value:node.type==='TemplateElement'?node.value.raw
+        :node.type==='CommentLine'||node.type==='CommentBlock'?node.value:null;
+      if (text!==null && vocabulary.test(text)) violations.add(`${file}:${node.loc?.start.line}: ${text.trim().slice(0,80)}`);
+    }
+  }
+  assert.deepEqual([...violations],[]);
+  // …and it is not vacuous: the host offers two generic points, and the two plugins fill them.
+  const router=readFileSync('web/src/router.tsx','utf8');
+  assert.match(router,/path: RoutePath\.publicPage,[\s\S]*?component: PublicPage,/,'a root-level route mounts the public frame');
+  assert.match(readFileSync('web/src/lib/constants/routes.ts','utf8'),/publicPage: "\/public\/\$"/);
+  const frame=readFileSync('web/src/components/shell/PublicPage.tsx','utf8');
+  assert.match(frame,/<ContributedPage slot=\{SlotId\.publicPage\} \/>/);
+  assert.match(frame,/<PluginRemotes \/>/,'the frame loads remotes itself: the shell that does is not mounted');
+  assert.match(readFileSync('web/src/components/shell/ContributedPage.tsx','utf8'),/usePageMatch\(slot, key\)/,'contributed pages match by pattern');
+  const body=readFileSync('web/src/components/editor/ContentBody.tsx','utf8');
+  assert.match(body,/useContentBodyClaim\(record\)/);
+  assert.match(body,/id=\{SlotId\.contentBody\}/);
+  for (const file of ['web/src/components/items/CommentsThread.tsx','web/src/components/comments/CommentReplies.tsx','web/src/routes/item-detail.tsx','web/src/components/requests/RequestPanelBody.tsx']) {
+    assert(nodes(file).some(n=>n.type==='JSXIdentifier'&&n.name==='ContentBody'),`${file} draws its bodies through ContentBody`);
+  }
+  const csat='server/src/radd/modules/csat';
+  const survey=readFileSync(`${csat}/ui/src/index.tsx`,'utf8');
+  assert.match(survey,/slot: SlotId\.publicPage,\s*match: SURVEY_PAGE,/,'csat contributes the survey page');
+  const wire=readFileSync(`${csat}/ui/src/survey.ts`,'utf8');
+  assert.match(wire,/SURVEY_PAGE = "\/public\/csat\/\$token"/);
+  assert.match(wire,/`\/public\/csat\/\$\{encodeURIComponent\(token\)\}`/,'csat owns its public endpoint');
+  const mail='server/src/radd/modules/mailintake';
+  const signed=readFileSync(`${mail}/ui/src/SignedBody.tsx`,'utf8');
+  assert.match(signed,/contentBody\(\{\s*id: "mailintake\.signature"/,'mailintake claims mailed bodies');
+  assert.match(signed,/\/mail\/signatures\/\$\{context\.entityType\}\/\$\{context\.entityId\}\/restore/,'mailintake owns the restore route');
+  assert(nodes(`${mail}/ui/src/index.tsx`).some(n=>n.type==='Identifier'&&n.name==='signedBody'),'the remote lists the claim');
+  for (const manifest of [`${csat}/__init__.py`,`${mail}/__init__.py`]) assert.match(readFileSync(manifest,'utf8'),/ui_api_version="1\.19\.0"/,manifest);
+});

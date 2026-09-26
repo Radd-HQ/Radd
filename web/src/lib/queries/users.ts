@@ -67,7 +67,7 @@ export type { PeopleChoice };
  * to them (RADD-937), so the pick has to stay possible.
  *
  * `includeRequesters` (RADD-1034): the directory excludes `UserSource.EMAIL`
- * accounts by default — mailintake provisions one, active, for every
+ * accounts by default — email intake provisions one, active, for every
  * unrecognized sender, and without the exclusion a forged message made
  * "Stranger <...@evil.example>" pickable by everyone. Pass `true` only for a
  * surface that genuinely means to offer them (the reporter picker on a

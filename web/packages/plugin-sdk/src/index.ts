@@ -125,6 +125,10 @@ export { TokenMultiSelect, type TokenOption, type TokenMultiSelectProps } from "
 export { ErrorText, type ErrorTextProps } from "./error-text";
 
 export { registerQuerySource, unregisterQuerySources, useContributedQuery, useContributedQueries, type QuerySource, type ContributedQueryRequest, type ContributedQueryResult } from "./query-sources";
+// Pages (RADD-1401): a page contribution's `match` may be a pattern; `public.page` is a page outside
+// the shell and the sign-in gate. Bodies: a plugin that claims a record draws its rendered body.
+export { matchPagePath, usePageMatch, type ContributedPageProps } from "./page-match";
+export { contentBody, useContentBodyClaim, type ContentBodyProps, type ContentBodySpec, type ContentBodyClaim } from "./content-bodies";
 export { itemAttribute, useItemAttributes, ItemAttributeCell, ItemAttributeSurface, ITEM_ATTRIBUTE_BATCH_MAX, type ItemAttribute, type ItemAttributeSpec, type ItemAttributeCellProps, type ItemAttributeBatchArgs, type ItemAttributeSurfaceValue } from "./item-attributes";
 
 export { ScheduleKind, defaultSchedule, isScheduleValid, type ScheduleKindValue, type ScheduleConfig, type SchedulePreview } from "./schedule";
