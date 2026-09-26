@@ -49,6 +49,23 @@ export interface AvatarProps {
   user: {id: string; name: string; avatar_color?: string | null; avatar_emoji?: string | null; avatar_url?: string | null};
   size?: "xs" | "sm" | "md" | "lg"; className?: string; title?: string;
 }
+/** One plugin's section of the settings cascade — the `section` it declared, and anything under it. */
+export interface ScopedSettingsProps {
+  scope: "instance" | "project";
+  /** The project id, at project scope. */
+  scopeId?: string;
+  section: string;
+  /** Grey the editors out (e.g. directory settings before a bind account exists). */
+  disabled?: boolean;
+  /** Shown when the section has no rows at this scope. */
+  emptyLabel?: string;
+}
+/** Whose role grants to list and edit. */
+export type RoleGrantSubject = { userId: string } | { teamId: string } | { groupId: string };
+export interface RoleGrantsProps { subject: RoleGrantSubject; canManage: boolean }
+export const ToastKind = { success: "success", error: "error" } as const;
+export type ToastKindValue = (typeof ToastKind)[keyof typeof ToastKind];
+
 export interface HostComponents {
   Avatar?: ComponentType<AvatarProps>;
   DirectoryPager?: ComponentType<DirectoryPagerProps>;
@@ -60,6 +77,13 @@ export interface HostComponents {
   SettingsPage?: ComponentType<SettingsPageProps>;
   Callout?: ComponentType<CalloutProps>;
   QueryError?: ComponentType<{label: string; error: unknown}>;
+
+  /** The settings cascade editor (specs 50/67), scoped to one plugin's section. */
+  ScopedSettings?: ComponentType<ScopedSettingsProps>;
+  /** A subject's role grants — the Users/Teams section, for a plugin's own subjects. */
+  RoleGrants?: ComponentType<RoleGrantsProps>;
+  /** The host's toast. A function, not a component: mutations call it from callbacks. */
+  toast?: (message: string, kind: ToastKindValue) => void;
 
   CodeEditor?: ComponentType<CodeEditorProps>;
   TokenList?: ComponentType<TokenListProps>;
@@ -73,6 +97,11 @@ const listeners = new Set<() => void>();
 export function provideHostComponents(components: HostComponents): void {
   provided = { ...provided, ...components };
   for (const listener of listeners) listener();
+}
+
+/** The current provision, outside React (for callbacks). */
+export function providedNow(): HostComponents {
+  return provided;
 }
 
 export function useProvided(): HostComponents {

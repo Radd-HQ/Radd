@@ -21,7 +21,7 @@ import { Select } from "../../Select";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
 import { TokenMultiSelect, type TokenOption, IconButton } from "@radd/plugin-sdk";
-import { useKeyedRows } from "../../../lib/keyed-rows";
+import { useKeyedRows } from "@radd/plugin-sdk";
 
 /** Backend defaults mirrored for the form's initial state (LlmConfig). */
 const LLM_DEFAULT_PREFIXES = ["image/"];

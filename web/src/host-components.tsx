@@ -41,9 +41,16 @@ import { TextField } from "./components/TextField";
 import { SelectField } from "./components/SelectField";
 import { Callout } from "./components/Callout";
 import { QueryError } from "./components/QueryError";
+import { ScopedSettingsEditor } from "./components/settings/ScopedSettingsEditor";
+import { RoleGrantsSection } from "./components/settings/RoleGrantsSection";
+import { pushToast } from "./lib/toast";
 provideHostComponents({
   DirectoryPager, ListSearchInput,
   Modal: props => <Modal {...props} title={props.title ?? ""} />,
   SettingsPage, Avatar, Button, SelectField, Callout, QueryError,
   TextField: props => <TextField {...props} label={props.label ?? ""} />,
+  // Platform surfaces a plugin's settings page renders for its own section or subjects (RADD-1377).
+  ScopedSettings: ScopedSettingsEditor,
+  RoleGrants: RoleGrantsSection,
+  toast: (message, kind) => pushToast(message, kind),
 });

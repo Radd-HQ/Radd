@@ -12,8 +12,9 @@ import { TextArea, Select } from "./primitives";
  */
 
 export { provideHostComponents } from "./host-registry";
-export type { HostComponents, CodeEditorProps, TokenListProps, SchemaFormProps, SettingsPageProps, SelectFieldProps } from "./host-registry";
-import { useProvided, type CodeEditorProps, type TokenListProps, type SettingsPageProps, type SelectFieldProps, type CalloutProps, type DirectoryPagerProps, type ListSearchInputProps } from "./host-registry";
+export type { HostComponents, CodeEditorProps, TokenListProps, SchemaFormProps, SettingsPageProps, SelectFieldProps, ScopedSettingsProps, RoleGrantsProps, RoleGrantSubject, ToastKindValue } from "./host-registry";
+export { ToastKind } from "./host-registry";
+import { providedNow, useProvided, type CodeEditorProps, type TokenListProps, type SettingsPageProps, type SelectFieldProps, type CalloutProps, type DirectoryPagerProps, type ListSearchInputProps, type ScopedSettingsProps, type RoleGrantsProps, type ToastKindValue } from "./host-registry";
 /** A code editor — the host's CodeMirror, else a monospace text area. */
 export function CodeEditor(props: CodeEditorProps) {
   const { CodeEditor: Host } = useProvided();
@@ -78,4 +79,24 @@ export function DirectoryPager(props: DirectoryPagerProps) {
 export function ListSearchInput(props: ListSearchInputProps) {
   const { ListSearchInput: Host } = useProvided();
   return Host ? <Host {...props} /> : <input type="search" aria-label={props.ariaLabel ?? props.placeholder} placeholder={props.placeholder} value={props.value} onChange={event => props.onChange(event.target.value)} />;
+}
+
+/** One plugin's section of the settings cascade (RADD-1377). The editor, its effective/inherited
+ *  display and Reset are the host's; the plugin names only the section it declared. */
+export function ScopedSettings(props: ScopedSettingsProps) {
+  const { ScopedSettings: Host } = useProvided();
+  return Host ? <Host {...props} /> : <p role="note">Settings for “{props.section}” are unavailable.</p>;
+}
+
+/** A subject's role grants, as the Users and Teams pages show them. Renders nothing without a host. */
+export function RoleGrants(props: RoleGrantsProps) {
+  const { RoleGrants: Host } = useProvided();
+  return Host ? <Host {...props} /> : null;
+}
+
+/** Show a toast. Callable from mutation callbacks; a host without toasts logs instead. */
+export function toast(message: string, kind: ToastKindValue = "success"): void {
+  const { toast: host } = providedNow();
+  if (host) host(message, kind);
+  else console.info(`[${kind}] ${message}`);
 }

@@ -15,7 +15,7 @@ import { TextField } from "../TextField";
 import { SlqCheatSheet } from "./SlqCheatSheet";
 import { SlqEditor } from "./SlqEditor";
 import { ViewSharingEditor, SERVER_PRIVATE, type LocalShare } from "./ViewSharingEditor";
-import { useKeyedRows } from "../../lib/keyed-rows";
+import { useKeyedRows } from "@radd/plugin-sdk";
 import { emptySharingDraft, sharingEdits, type SharedSave } from "../../lib/sharing-draft";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";

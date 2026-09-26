@@ -63,6 +63,14 @@ export {
   SettingsPage, SelectField, Callout, CalloutKind, QueryError,
   CodeEditor,
   TokenList,
+  ScopedSettings,
+  RoleGrants,
+  toast,
+  ToastKind,
+  type ScopedSettingsProps,
+  type RoleGrantsProps,
+  type RoleGrantSubject,
+  type ToastKindValue,
   type HostComponents,
   type CodeEditorProps,
   type TokenListProps,
@@ -123,6 +131,7 @@ export { CollapsibleCard } from "./CollapsibleCard";
 export { Pager } from "./Pager";
 export { DateField } from "./DateField";
 export { Table, THead, TBody, Th, Td } from "./Table";
+export { useKeyedRows } from "./keyed-rows";
 export { TableSkeleton } from "./TableSkeleton";
 
 export { IconButton } from "./IconButton";

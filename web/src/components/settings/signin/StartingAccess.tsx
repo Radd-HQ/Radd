@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Trash2, X } from "lucide-react";
 import type { SsoDefaultGrant, SsoProvisioningRule } from "../../../lib/types";
-import { useKeyedRows } from "../../../lib/keyed-rows";
+import { useKeyedRows } from "@radd/plugin-sdk";
 import { provisioningReferencesQuery } from "../../../lib/queries/provisioning";
 import { OptionResource } from "../../../lib/queries/options";
 import { Button } from "../../Button";

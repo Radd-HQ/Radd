@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Globe, Earth } from "lucide-react";
 import { instanceConfigQuery } from "../../lib/queries/core";
 import { OptionResource } from "../../lib/queries/options";
-import { useKeyedRows } from "../../lib/keyed-rows";
+import { useKeyedRows } from "@radd/plugin-sdk";
 import { ShareLevel, type ShareLevelValue } from "../../lib/types";
 import type { LocalShare, SharingDraft } from "../../lib/sharing-draft";
 import { Button } from "../Button";

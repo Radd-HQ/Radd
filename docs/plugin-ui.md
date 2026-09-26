@@ -57,6 +57,15 @@ CodeMirror, lazy-loaded; the `{{token}}` picker; the `params_schema` form). A pl
 from the SDK like any primitive; outside the host they degrade to plain inputs. The `ai` and
 `scripts` plugins' inspectors are the worked examples (`modules/ai/ui`, `modules/scripts/ui`).
 
+A plugin's settings PAGE reaches three more platform surfaces the same way (RADD-1377):
+`ScopedSettings` (the settings-cascade editor for the `section` the plugin declared: effective
+value, inherited/overridden, Reset), `RoleGrants` (a subject's role grants, as Users and Teams show
+them) and `toast(message, kind)`. `useKeyedRows` (stable keys for removable row builders) is plain
+SDK code. The names a remote can import are DERIVED from `packages/plugin-sdk/src/index.ts`
+(`web/scripts/sdk-exports.mjs`); after adding an SDK export, run `node web/scripts/gen-shared-shims.mjs`.
+The boundary test fails until the checked-in shim matches. These arrived in UI API 1.14.0; a remote
+that uses them declares `ui_api_version="1.14.0"`.
+
 The Leave plugin (`modules/leave/ui`) contributes its personal Leave form through `profile.section` and team Holidays through `settings.section` matched to `timelogging`. Neither settings page imports Leave components; disabling the remote withdraws both sections. Its avatar/name indicators and timesheet annotations are also plugin-owned data contributions; the host knows only the generic contracts described below.
 
 A contribution is `{ id, render, order?, match?, title?, icon?, label?, toggleable? }`. `id` is

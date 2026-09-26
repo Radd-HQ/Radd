@@ -24,7 +24,7 @@ import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { SubjectPicker, type Subject } from "./SubjectPicker";
 import { TokenMultiSelect, type TokenOption, IconButton, ErrorText } from "@radd/plugin-sdk";
-import { useKeyedRows } from "../../lib/keyed-rows";
+import { useKeyedRows } from "@radd/plugin-sdk";
 import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
 import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
