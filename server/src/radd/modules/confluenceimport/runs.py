@@ -202,14 +202,14 @@ async def _pipeline(session: AsyncSession, run: ConfluenceRun) -> None:
             by_external[row.page_id] = outcome.page_id
             by_title[row.title] = outcome.page_id
             if commit and resolution is not None:
-                written = await restrictions.apply(
+                grant_ids = await restrictions.apply(
                     session, outcome.page_id, resolution, actor_id=actor_id
                 )
-                for _ in range(written):
+                for grant_id in grant_ids:
                     await ledger.created(
-                        session, run_id, LedgerEntity.GRANT, outcome.page_id, subject=row.title
+                        session, run_id, LedgerEntity.GRANT, grant_id, subject=row.title
                     )
-                _bump(run, "restrictions", written)
+                _bump(run, "restrictions", len(grant_ids))
             if commit and row.labels:
                 await page_labels.set_labels(session, outcome.page_id, list(row.labels), actor_id)
                 _bump(run, "labels", len(row.labels))

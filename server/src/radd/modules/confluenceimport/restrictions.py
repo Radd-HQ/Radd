@@ -221,13 +221,14 @@ async def apply(
     resolution: Resolution,
     *,
     actor_id: uuid.UUID,
-) -> int:
-    """Write the grants. `pages` is default-OPEN until restricted, so writing the
-    first grant is what closes the page — and RADD-948 then closes its whole
-    subtree, which is what Confluence's own inheritance already did."""
-    written = 0
+) -> list[uuid.UUID]:
+    """Write the grants; returns their ids for the ledger. `pages` is default-OPEN
+    until restricted, so writing the first grant is what closes the page — and
+    RADD-948 then closes its whole subtree, which is what Confluence's own
+    inheritance already did."""
+    written: list[uuid.UUID] = []
     for subject_type, subject_id, access in resolution.grants:
-        await access_service.add_grant(
+        grant = await access_service.add_grant(
             session,
             PAGE_RESOURCE,
             str(page_id),
@@ -236,5 +237,5 @@ async def apply(
             access=access,
             actor_id=actor_id,
         )
-        written += 1
+        written.append(grant.id)
     return written

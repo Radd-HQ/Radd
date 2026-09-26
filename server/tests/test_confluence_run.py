@@ -295,6 +295,35 @@ async def test_a_fallback_lets_a_restricted_page_import_closed(db):
     assert grants >= 1
 
 
+async def test_rollback_removes_the_restriction_grants_it_imported(db):
+    """RADD-1417: the ledger recorded the PAGE id as each grant's id, so rollback's
+    delete matched nothing and an imported restriction outlived its rollback."""
+    from radd.modules.access.models import AccessGrant
+    from radd.modules.confluenceimport import rollback
+    from radd.modules.teams.models import Team
+
+    actor = await _admin(db)
+    team = Team(name=f"Wiki keepers {uuid.uuid4().hex[:5]}")
+    db.add(team)
+    await db.flush()
+    snapshot = await _snapshot(db, actor, [
+        {"id": "2", "title": "Secret", "restrictions": RESTRICTED},
+    ])
+    run = await _run(db, snapshot, actor, options=PlanOptions(
+        unresolved_principal=UnresolvedPrincipal.MAP_TO, unresolved_team_id=team.id,
+    ))
+    [page] = await _pages_in(db, snapshot)
+
+    def grants_on_page():
+        return select(func.count()).select_from(AccessGrant).where(
+            AccessGrant.resource_type == "page", AccessGrant.resource_id == str(page.id),
+        )
+
+    assert await db.scalar(grants_on_page()) == 1
+    await rollback.execute(db, run, skip_edited=False)
+    assert await db.scalar(grants_on_page()) == 0, "the imported grant is undone with its page"
+
+
 async def test_restrictions_can_be_turned_off_entirely(db):
     actor = await _admin(db)
     snapshot = await _snapshot(db, actor, [
