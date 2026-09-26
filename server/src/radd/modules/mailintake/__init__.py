@@ -62,6 +62,7 @@ plugin = RaddPlugin(
                 "thread so their reply comes back to it. Replies to an existing issue get no receipt."
             ),
             section="email",
+            page_scopes=("instance",),
         ),
         SettingSpec(
             key="mail_ack_body",
@@ -74,6 +75,7 @@ plugin = RaddPlugin(
                 "{{requester_name}} — an unrecognised token is sent as written. Empty sends the default wording."
             ),
             section="email",
+            page_scopes=("instance",),
         ),
         SettingSpec(
             key="mail_send_resolved",
@@ -85,6 +87,7 @@ plugin = RaddPlugin(
                 "satisfaction surveys on sends the survey instead, which already says the issue is resolved."
             ),
             section="email",
+            page_scopes=("instance",),
         ),
     ),
     # Seed rows from env BEFORE the poller starts, or the first tick finds
@@ -147,6 +150,6 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.14.0",
         nav=(NavItemSpec(key="email", label="Email", path="/settings/email", section="settings",
-                         group="Server", icon="Mail", order=45, requires_admin=True),),
+                         group="Server", icon="mail", order=45, requires_admin=True),),
     ),
 )

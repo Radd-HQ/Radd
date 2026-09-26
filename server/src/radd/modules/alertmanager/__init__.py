@@ -35,7 +35,7 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/alertmanager/remoteEntry.js", ui_api_version="1.13.0",
         nav=(NavItemSpec(key="alertmanager", label="Alertmanager", path="/settings/alertmanager",
-                         section="settings", group="Server", icon="BellRing", order=99, requires_admin=True),),
+                         section="settings", group="Server", icon="bell-ring", order=99, requires_admin=True),),
     ),
     crud_resources=(
         CrudResourceSpec(

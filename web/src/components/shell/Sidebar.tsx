@@ -46,6 +46,7 @@ import { useViewDirectory, useDashboardDirectory } from "../../lib/useSharedDire
 import { SidebarDirectory } from "./SidebarDirectory";
 import { SidebarSpaces } from "./SidebarSpaces";
 import { useCycleDirectory } from "../../lib/useCycleDirectory";
+import { PluginNavIcon } from "./PluginNavIcon";
 import { SidebarRail } from "./SidebarRail";
 import {
   CycleRow,
@@ -275,7 +276,7 @@ export function Sidebar() {
             title={n.label}
             data-plugin-nav={n.key}
           >
-            <Layers size={14} aria-hidden />
+            <PluginNavIcon name={n.icon} size={14} />
             {n.label}
           </Link>
         ))}

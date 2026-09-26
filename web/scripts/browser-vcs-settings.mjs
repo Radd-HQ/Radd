@@ -25,7 +25,7 @@ const server=http.createServer(async(req,res)=>{
   res.on('close',()=>{if(!res.writableEnded)aborted.push(request);});res.setHeader('content-type','application/json');
   let data=[],status=200;
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:admin?'admin':'member',global_role:admin?'admin':'member',permissions:[]};
-  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].filter(name=>remotes.has(name)).map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.13.0'})),nav:enabled.has('vcs')?[{plugin:'vcs',key:'vcs',icon:'GitBranch',path:'/settings/vcs',section:'settings',group:'Issues',label:'Version control',requires:['global.manage']}]:[],widget_types:[],view_types:[]};
+  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].filter(name=>remotes.has(name)).map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.13.0'})),nav:enabled.has('vcs')?[{plugin:'vcs',key:'vcs',icon:'git-branch',path:'/settings/vcs',section:'settings',group:'Issues',label:'Version control',requires:['global.manage']}]:[],widget_types:[],view_types:[]};
   else if(p==='/api/v1/automations/catalog')data=fixtures.catalog;
   else if(p==='/api/v1/automations/templates')data=fixtures.templates;
   else if(p==='/api/v1/audit/access')data={allowed:true};

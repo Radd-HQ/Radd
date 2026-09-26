@@ -8,7 +8,7 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         nav=(NavItemSpec(
             key="audit", label="Audit log", path="/settings/audit", section="settings",
-            group="Server", icon="ScrollText", order=190,
+            group="Server", icon="scroll-text", order=190,
             requires_any_project=("project.manage",),
         ),),
     ),

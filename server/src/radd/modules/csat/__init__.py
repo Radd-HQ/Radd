@@ -28,6 +28,7 @@ plugin = RaddPlugin(
                 "Email the requester a one-click satisfaction survey when their issue is resolved. Off by default; turn it on for service-desk projects."
             ),
             section="sla",
+            page_scopes=("project",),
         ),
     ),
     routers=(router, public_router),

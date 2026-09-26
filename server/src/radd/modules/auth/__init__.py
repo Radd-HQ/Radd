@@ -75,6 +75,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="require_mfa",
             section="signin.mfa",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Require two-factor authentication",

@@ -6,6 +6,7 @@
  *  a rail is good at. Everything else is one click away via the search shortcut, which is why
  *  Search is pinned first. */
 
+import { PluginNavIcon } from "./PluginNavIcon";
 import { useIsAuthenticated } from "../../lib/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -83,7 +84,7 @@ function RailInbox() {
   );
 }
 
-export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: string; label: string }[] }) {
+export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: string; label: string; icon: string }[] }) {
   const navFacts = useNavFacts();
   const authenticated = useIsAuthenticated(); // spec 121: the personal rows are an account's (RADD-1149)
   return (
@@ -123,7 +124,7 @@ export function SidebarRail({ pluginNav }: { pluginNav: { key: string; path: str
           aria-label={n.label}
           data-plugin-nav={n.key}
         >
-          <Layers size={17} aria-hidden />
+          <PluginNavIcon name={n.icon} size={17} />
         </Link>
       ))}
 

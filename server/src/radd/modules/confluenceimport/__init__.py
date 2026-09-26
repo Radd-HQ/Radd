@@ -71,6 +71,6 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/confluenceimport/remoteEntry.js", ui_api_version="1.14.0",
         nav=(NavItemSpec(key="confluenceimport", label="Confluence", path="/settings/confluence-import",
-                         section="settings", group="Import", icon="BookUp", order=20, requires_admin=True),),
+                         section="settings", group="Import", icon="book-up", order=20, requires_admin=True),),
     ),
 )

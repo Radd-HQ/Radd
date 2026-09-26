@@ -7,7 +7,7 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/monitoring/remoteEntry.js", ui_api_version="1.3.0",
         nav=(NavItemSpec(key="monitoring", label="Monitoring", path="/settings/monitoring",
-                         section="settings", group="Server", icon="Activity", order=115,
+                         section="settings", group="Server", icon="activity", order=115,
                          requires_admin=True),),
     ),
     core=False,  # optional — disable it and the endpoint disappears

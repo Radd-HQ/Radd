@@ -25,25 +25,22 @@ export interface ScopedSetting {
   /** RADD-930: the settings surface this key belongs on, declared by the owning
    * plugin. "" (or absent) = the scope's General page. */
   section?: string;
+  /** RADD-1390: the owning plugin renders this row on a page of its own at THIS scope, so the
+   * scope's General page leaves it out. Declared by the plugin, not listed by the host. */
+  homed?: boolean;
 }
 
 /**
  * Placing a setting by the surface it declares (RADD-930).
  *
- * A `section` is a dotted path: its ROOT names the page, and anything deeper
- * names a card within it (`directory.connection` vs `directory.groups`), so one
- * page can lay its own rows out in groups without a second vocabulary.
+ * A `section` is a dotted path: its ROOT names the page, and anything deeper names a card within
+ * it (`directory.connection` vs `directory.groups`), so one page can lay its own rows out in groups
+ * without a second vocabulary. `inSection` matches a section and everything under it.
  *
- * `inSection` matches a section and everything under it. `withoutSections` is
- * what a General page renders: the REMAINDER — rows with no section, plus rows
- * whose root names a surface that doesn't exist at this scope (the release
- * states have a Releases tab per project but not per instance) or at all.
- * Computing General by subtraction rather than giving it a section name of its
- * own is what makes a departed or misspelt section degrade to "appears on
- * General" instead of "silently unreachable".
+ * A General page renders the REMAINDER: every row whose plugin has not declared a page of its own
+ * for it at this scope (`homed`, RADD-1390 — it used to be a host list of section names that every
+ * plugin page had to be added to). A row nobody homes still lands on General, never nowhere.
  */
-const sectionRoot = (row: ScopedSetting) => (row.section ?? "").split(".")[0];
-
 export function inSection(rows: readonly ScopedSetting[], section: string): ScopedSetting[] {
   return rows.filter((row) => {
     const own = row.section ?? "";
@@ -51,28 +48,6 @@ export function inSection(rows: readonly ScopedSetting[], section: string): Scop
   });
 }
 
-export function withoutSections(
-  rows: readonly ScopedSetting[],
-  homed: readonly string[],
-): ScopedSetting[] {
-  const claimed = new Set(homed);
-  return rows.filter((row) => !claimed.has(sectionRoot(row)));
-}
-
-/** Section roots that have their own surface at each scope — everything else
- *  falls back to that scope's General page (see `withoutSections`). */
-/** RADD-1045: "email" is claimed by Settings → Email's `AckTemplatePanel`,
- *  which reads its own row directly rather than through `ScopedSettingsEditor`
- *  — but the section still has to be listed here, or the General page (which
- *  computes its rows by SUBTRACTION) would render a second, generic editor
- *  for the same key. */
-export const INSTANCE_HOMED_SECTIONS: readonly string[] = [
-  "directory",
-  "ai",
-  "timelogging",
-  "email",
-  "signin", // RADD-1279: require_mfa lives on Settings → Sign-in
-];
 export const PROJECT_HOMED_SECTIONS: readonly string[] = [
   "timelogging",
   "sla",

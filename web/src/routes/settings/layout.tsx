@@ -3,38 +3,29 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useDisabledNavPaths } from "@radd/plugin-sdk";
 import {
-  Activity,
   Bell,
-  BellRing,
   Blocks,
-  GitBranch,
   BookOpen,
-  BookUp,
   Bot,
   CalendarRange,
   CircleUserRound,
   Clock,
   DatabaseBackup,
-  DatabaseZap,
-  FolderTree,
   HardDrive,
   KeyRound,
   Link2,
-  Mail,
   MessageSquareQuote,
-  ScrollText,
   Server,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   Tags,
-  Terminal,
   UserRoundCog,
   UsersRound,
   Webhook,
   type LucideIcon,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
+import { iconOrFallback } from "../../lib/icons";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { capabilitiesQuery } from "../../lib/queries";
 import { InstanceRole, Permission, type PermissionValue, type CapabilitiesManifest } from "../../lib/types";
@@ -349,13 +340,12 @@ export function SettingsLayout() {
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles, FolderTree, Mail, BookUp, DatabaseZap };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);
     if (!group) { group = { label, items: [] }; visibleGroups.push(group); }
     if (!group.items.some(item => item.to === nav.path)) group.items.push({
-      to: nav.path, label: nav.label, icon: iconByName[nav.icon] ?? Blocks,
+      to: nav.path, label: nav.label, icon: iconOrFallback(nav.icon),
       order: nav.order, show: () => true,
     });
   }

@@ -218,6 +218,12 @@ plugin = RaddPlugin(
 )
 ```
 
+A nav item's `icon` is a kebab-case name from the host's one icon registry, `web/src/lib/icons.ts`:
+`"zap"`, `"folder-tree"`, `"database-zap"` and so on (RADD-1390). A name it doesn't ship draws a
+visible placeholder, and a boundary test refuses a manifest that declares one. A plugin whose settings
+page renders its own `SettingSpec`s declares `page_scopes=("instance",)` (or `"project"`) on each,
+so Settings → General leaves those rows out. No host list names the section.
+
 UI entry (`ui/src/index.tsx`) — **declarative style (preferred): every attachment is one row, so the
 whole footprint is visible at a glance.** The render is a React component (browser code), which is why
 UI attachments live here, not in the Python manifest.

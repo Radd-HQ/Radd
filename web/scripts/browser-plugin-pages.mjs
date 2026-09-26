@@ -21,7 +21,7 @@ const server=http.createServer(async(req,res)=>{
  if(p.startsWith('/api/')) {
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',global_role:'admin',instance_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],nav:enabled?[{key:'fixture',plugin:'fixture',path:'/settings/fixture',label:'Fixture',section:'settings',group:'Server',requires:[],icon:'Activity'}]:[],plugins:enabled?['fixture',...(version===1?['feature']:[])]:[],remotes:enabled?[{name:'fixture',remote_entry:`/plugins/fixture/remoteEntry.js?v=${version}`,ui_api_version:'1.0.0'}]:[],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],nav:enabled?[{key:'fixture',plugin:'fixture',path:'/settings/fixture',label:'Fixture',section:'settings',group:'Server',requires:[],icon:'activity'}]:[],plugins:enabled?['fixture',...(version===1?['feature']:[])]:[],remotes:enabled?[{name:'fixture',remote_entry:`/plugins/fixture/remoteEntry.js?v=${version}`,ui_api_version:'1.0.0'}]:[],widget_types:[],view_types:[]};
   else if(p.endsWith('/projects/summary')||p.endsWith('/page-spaces/summary'))data={total:0,related_count:0,permissions:[]};
   else if(p.includes('notifications'))data={items:[],notifications:[],unread_count:0,total:0};
   else if(p.includes('preferences'))data={};

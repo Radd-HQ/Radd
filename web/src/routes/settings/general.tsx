@@ -1,5 +1,5 @@
 import { useCurrentUser } from "../../lib/hooks";
-import { INSTANCE_HOMED_SECTIONS, InstanceRole, SettingScope } from "../../lib/types";
+import { InstanceRole, SettingScope } from "../../lib/types";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 
@@ -27,7 +27,7 @@ export function GeneralSettingsPage() {
         // exactly what this page is for.
         <ScopedSettingsEditor
           scope={SettingScope.instance}
-          homed={INSTANCE_HOMED_SECTIONS}
+          general
         />
       ) : (
         <p className="text-sm text-fg-muted">

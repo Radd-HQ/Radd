@@ -22,7 +22,7 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/scripts/remoteEntry.js", ui_api_version="1.5.0",
         nav=(NavItemSpec(key="scripts", label="Scripts", path="/settings/scripts",
-                         section="settings", group="Server", icon="Terminal", order=95,
+                         section="settings", group="Server", icon="terminal", order=95,
                          requires=(PERM_MANAGE,)),),
     ),
     name="scripts",

@@ -69,7 +69,7 @@ plugin = RaddPlugin(
         EntityLinkSpec('automation_rule', ('/settings/automations',)),
     ),
     ui=PluginUiManifest(nav=(NavItemSpec(key="automations", label="Automations", path="/settings/automations",
-            section="settings", group="Server", icon="Zap", order=90, requires=("automation.manage",)),)),
+            section="settings", group="Server", icon="zap", order=90, requires=("automation.manage",)),)),
     # RADD-1322: the built-in nodes are registered exactly as a plugin's are.
     automation_nodes=(*ROUTER_NODES, *ACTION_NODES, *VERDICT_NODES),
     # RADD-1323: the button, the clock and the draft check, as registered kinds.

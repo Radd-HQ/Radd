@@ -56,7 +56,7 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/jiraimport/remoteEntry.js", ui_api_version="1.14.0",
         nav=(NavItemSpec(key="jiraimport", label="Jira", path="/settings/jira-import",
-                         section="settings", group="Import", icon="DatabaseZap", order=10,
+                         section="settings", group="Import", icon="database-zap", order=10,
                          requires_admin=True),),
     ),
 )

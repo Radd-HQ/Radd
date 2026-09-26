@@ -220,6 +220,7 @@ async def list_for_scope(
                 "secret": spec.secret,
                 "multiline": spec.multiline,
                 "section": spec.section,
+                "homed": scope.value in spec.page_scopes,
             }
         )
     return result

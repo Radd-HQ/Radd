@@ -95,6 +95,7 @@ plugin = RaddPlugin(
                 "override."
             ),
             section="timelogging",
+            page_scopes=("instance", "project"),
         ),
         SettingSpec(
             key="timelog_hours_per_day",
@@ -107,6 +108,7 @@ plugin = RaddPlugin(
                 "same thing on every timesheet and cycle handle."
             ),
             section="timelogging",
+            page_scopes=("instance", "project"),
         ),
         SettingSpec(
             key="timesheet_day_min_hours",
@@ -119,6 +121,7 @@ plugin = RaddPlugin(
                 "holiday days are never flagged."
             ),
             section="timelogging",
+            page_scopes=("instance", "project"),
         ),
         SettingSpec(
             key="timesheet_day_max_hours",
@@ -130,6 +133,7 @@ plugin = RaddPlugin(
                 "timesheet's per-person view."
             ),
             section="timelogging",
+            page_scopes=("instance", "project"),
         ),
     ),
     description=(

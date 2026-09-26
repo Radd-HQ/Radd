@@ -1,4 +1,13 @@
 import {
+  Activity,
+  BellRing,
+  Blocks,
+  BookUp,
+  DatabaseZap,
+  GitBranch,
+  Mail,
+  ScrollText,
+  Terminal,
   AlertTriangle,
   BarChart3,
   Bell,
@@ -86,6 +95,17 @@ const ICONS: Record<string, LucideIcon> = {
   "between-horizontal-start": BetweenHorizontalStart,
   tags: Tags,
   "file-plus": FilePlus,
+  // Plugin navigation (RADD-1390): a manifest's NavItemSpec.icon names one of these, so a
+  // plugin page never needs a host edit to show its icon.
+  activity: Activity,
+  "bell-ring": BellRing,
+  blocks: Blocks,
+  "book-up": BookUp,
+  "database-zap": DatabaseZap,
+  "git-branch": GitBranch,
+  mail: Mail,
+  "scroll-text": ScrollText,
+  terminal: Terminal,
   // General purpose, for anything a plugin declares.
   "alert-triangle": AlertTriangle,
   "bar-chart-3": BarChart3,

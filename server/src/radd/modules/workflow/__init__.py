@@ -71,6 +71,7 @@ plugin = RaddPlugin(
                 "their conditions). Set per project, or here for every project."
             ),
             section="workflow",
+            page_scopes=("project",),
         ),
     ),
     description=(

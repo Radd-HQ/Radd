@@ -97,7 +97,7 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/ai/remoteEntry.js", ui_api_version="1.14.0",
         nav=(NavItemSpec(key="ai", label="AI", path="/settings/ai", section="settings",
-                         group="Server", icon="Sparkles", order=25, requires_admin=True),),
+                         group="Server", icon="sparkles", order=25, requires_admin=True),),
     ),
     name="ai",
     entity_links=(
@@ -163,10 +163,11 @@ plugin = RaddPlugin(
     # KeyError at its call site (RADD-989: `mail_routing` shipped that way and every
     # llm mail rule fell through silently for a release).
     settings_keys=(
-        SettingSpec(key="ai_mail_signature", section="ai", type="bool", scopes=("instance",), label="AI email signature detection", description="Identify trailing signatures when domain rules and built-in detection do not match. Uses the configured chat provider; email text is sent to that provider."),
+        SettingSpec(key="ai_mail_signature", section="ai", page_scopes=("instance",), type="bool", scopes=("instance",), label="AI email signature detection", description="Identify trailing signatures when domain rules and built-in detection do not match. Uses the configured chat provider; email text is sent to that provider."),
         SettingSpec(
             key="ai_editor_actions",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Editor AI actions",
@@ -179,6 +180,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_semantic_search",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Semantic search",
@@ -191,6 +193,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_storage_routing",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="LLM storage routing",
@@ -203,6 +206,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_mail_routing",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="LLM mail routing",
@@ -215,6 +219,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_summarize",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Issue summarize",
@@ -223,6 +228,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_nl_slq",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Natural language → SLQ",
@@ -231,6 +237,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_similar_rerank",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Similar-issues LLM rerank",
@@ -244,6 +251,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_validation",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="AI intake checks",
@@ -254,6 +262,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_generation",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="AI value generation",
@@ -264,6 +273,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ai_stream_responses",
             section="ai",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Stream AI responses",

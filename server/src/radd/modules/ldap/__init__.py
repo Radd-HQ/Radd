@@ -22,7 +22,7 @@ plugin = RaddPlugin(
     ui=PluginUiManifest(
         remote="/plugins/ldap/remoteEntry.js", ui_api_version="1.14.0",
         nav=(NavItemSpec(key="directory", label="Directory", path="/settings/directory",
-                         section="settings", group="Server", icon="FolderTree", order=55, requires_admin=True),),
+                         section="settings", group="Server", icon="folder-tree", order=55, requires_admin=True),),
     ),
     # Per-plugin deps (§14): AD/LDAP bind needs ldap3. Maps to the `radd[ldap]` extra.
     # RADD-891: the connection + sync tunables (RADD-846/848: env is seed-only,
@@ -32,6 +32,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_url",
             section="directory.connection",
+            page_scopes=("instance",),
             type="string",
             scopes=("instance",),
             label="Server URL",
@@ -42,6 +43,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_user_domain",
             section="directory.connection",
+            page_scopes=("instance",),
             type="string",
             scopes=("instance",),
             label="User domain",
@@ -53,6 +55,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_bind_dn",
             section="directory.connection",
+            page_scopes=("instance",),
             type="string",
             scopes=("instance",),
             label="Bind account DN",
@@ -65,6 +68,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_bind_password",
             section="directory.connection",
+            page_scopes=("instance",),
             type="string",
             scopes=("instance",),
             label="Bind account password",
@@ -77,6 +81,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_admin_groups",
             section="directory.connection",
+            page_scopes=("instance",),
             type="string",
             scopes=("instance",),
             label="Admin groups",
@@ -89,6 +94,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_group_sync_seconds",
             section="directory.groups",
+            page_scopes=("instance",),
             type="int",
             scopes=("instance",),
             label="Group sync interval (seconds)",
@@ -99,6 +105,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_user_sync_base",
             section="directory.usersync",
+            page_scopes=("instance",),
             type="string",
             scopes=("instance",),
             label="User search base DN",
@@ -112,6 +119,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_user_sync_enabled",
             section="directory.usersync",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Automatic user sync",
@@ -122,6 +130,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_user_sync_deactivate_missing",
             section="directory.usersync",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Deactivate missing users",
@@ -135,6 +144,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_exclude_disabled",
             section="directory.usersync",
+            page_scopes=("instance",),
             type="bool",
             scopes=("instance",),
             label="Skip disabled directory accounts",
@@ -150,6 +160,7 @@ plugin = RaddPlugin(
         SettingSpec(
             key="ldap_group_search_base",
             section="directory.groups",
+            page_scopes=("instance",),
             type="string",
             scopes=("instance",),
             label="Group search base DN",

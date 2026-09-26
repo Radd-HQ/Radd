@@ -8,7 +8,6 @@ import { scopedSettingsQuery } from "../../lib/queries";
 import {
   SettingScope,
   inSection,
-  withoutSections,
   type ScopedSetting,
   type SettingScopeValue,
 } from "../../lib/types";
@@ -24,8 +23,8 @@ interface Props {
   scopeId?: string;
   /**
    * Which rows this surface owns (RADD-930) — the `section` the owning plugin
-   * declared, matching that section and anything under it. Pass `homed`
-   * instead on a General page.
+   * declared, matching that section and anything under it. Pass
+   * `general` instead on a General page.
    *
    * This replaces the hand-maintained key arrays each surface used to carry
    * (`DIRECTORY_CONNECTION_KEYS`, `AI_FEATURE_SETTING_KEYS`, …): those had to be
@@ -33,10 +32,8 @@ interface Props {
    * key nobody remembered to list silently landed on General.
    */
   section?: string;
-  /** General pages only: the section roots that DO have a surface at this
-   * scope. Everything else — no section, or a section with no home here — is
-   * rendered, so a setting can never fall through the cracks. */
-  homed?: readonly string[];
+  /** General pages only: render the rows no plugin page claims at this scope (RADD-1390). */
+  general?: boolean;
   /** Grey out the editors (spec 85: directory keys without a bind account). */
   disabled?: boolean;
   /** Escape hatch for a surface that needs a predicate rather than a section. */
@@ -54,7 +51,7 @@ export function ScopedSettingsEditor({
   scope,
   scopeId,
   section,
-  homed,
+  general,
   filter,
   disabled,
   emptyLabel,
@@ -66,7 +63,7 @@ export function ScopedSettingsEditor({
   }
   let rows: readonly ScopedSetting[] = query.data;
   if (section !== undefined) rows = inSection(rows, section);
-  if (homed !== undefined) rows = withoutSections(rows, homed);
+  if (general) rows = rows.filter((row) => !row.homed);
   if (filter) rows = rows.filter(filter);
   if (rows.length === 0) {
     return (

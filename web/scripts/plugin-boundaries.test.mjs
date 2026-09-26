@@ -353,3 +353,19 @@ test('status colours use the status-* tokens that exist (RADD-1388)',()=>{
   assert.deepEqual(found,[]);
   assert.match('text-danger-text',new RegExp(guessed.source),'the pattern must catch the class it was written for');
 });
+
+test('every plugin nav icon is a name the one icon registry ships (RADD-1390)',()=>{
+  // Manifests name icons; the host resolves them through lib/icons.ts. A second, PascalCase
+  // whitelist in the settings nav needed a host edit per plugin, and Automations' "Zap" was never
+  // added, so its entry showed the fallback glyph.
+  const registry=readFileSync('web/src/lib/icons.ts','utf8');
+  const map=registry.slice(registry.indexOf('const ICONS'),registry.indexOf('};',registry.indexOf('const ICONS')));
+  const known=new Set([...map.matchAll(/^\s*(?:"([a-z0-9-]+)"|([a-z0-9]+)):/gm)].map(m=>m[1]??m[2]));
+  const declared=readdirSync('server/src/radd/modules').flatMap(m=>{
+    const file=`server/src/radd/modules/${m}/__init__.py`;
+    if(!existsSync(file))return [];
+    return [...readFileSync(file,'utf8').matchAll(/NavItemSpec\([^)]*?icon="([^"]+)"/gs)].map(x=>`${m}: ${x[1]}`);
+  });
+  assert(declared.length>=10,'the scan must find the manifests\' nav icons');
+  assert.deepEqual(declared.filter(d=>!known.has(d.split(': ')[1])),[]);
+});

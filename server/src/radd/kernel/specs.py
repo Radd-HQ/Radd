@@ -989,6 +989,11 @@ class SettingSpec:
     # can never make a setting unreachable — the reason it is computed by
     # subtraction rather than given a section name of its own.
     section: str = ""
+    # RADD-1390: the scopes at which the owning plugin renders this setting on a
+    # page of its OWN, so that scope's General page leaves it out. Declared here,
+    # beside the section, instead of a host list of section names every plugin
+    # page had to be added to. Empty = General shows it (the safe default).
+    page_scopes: tuple[str, ...] = ()
     # RADD-1279: the owner may REFUSE a write — `guard(session, value, actor_id)`
     # raises a domain error (409/403) to veto it, after coercion and before the
     # row is written. Mechanism only: what counts as a bad value is the owning

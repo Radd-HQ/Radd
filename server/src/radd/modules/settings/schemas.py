@@ -26,6 +26,9 @@ class ScopedSettingRead(BaseModel):
     # RADD-930: the settings surface this key belongs on ("" = the General page).
     # Declared by the owning plugin so placement travels with the setting.
     section: str = ""
+    # RADD-1390: the owning plugin renders it on its own page at this scope, so
+    # the scope's General page leaves it out.
+    homed: bool = False
 
 
 class ScopedSettingWrite(BaseModel):
