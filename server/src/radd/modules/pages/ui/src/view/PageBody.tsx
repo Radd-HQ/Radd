@@ -7,29 +7,16 @@ import {
 import "./extensions";
 
 /**
- * A page body: prose rendered by Crepe, extension blocks rendered as React
- * (RADD-709).
- *
- * Two jobs beyond stitching the segments together:
- *
- *  - **Heading anchors.** `radd:toc` links to `#<slug-of-heading>`, and Crepe
- *    emits headings with no ids at all, so the links would go nowhere. Ids are
- *    assigned here, over the RENDERED headings, using the same duplicate rule
- *    `headingsOf` uses on the source — both walk the document in order, so the
- *    two agree without sharing state.
- *  - **Readiness.** Crepe creates asynchronously. Anchors can only be assigned
- *    once every prose run has rendered, which is what `onReady` counts.
+ * A page body: prose through the rich viewer, `radd:*` blocks as React (RADD-709). Heading ids are
+ * assigned here over the RENDERED headings with the same duplicate rule `headingsOf` uses on the
+ * source, so `radd:toc` links land. `onReady` fires once every prose run has rendered (print waits on it).
+ * Prose renders EAGERLY: behind the viewport gate a `radd:toc` below the fold links to ids never
+ * assigned, and printing emits placeholder text.
  */
 export function PageBody({
   text,
   className = "",
   onReady,
-  // A page body is ONE document with a handful of prose runs, not an issue's
-  // hundred-comment thread — which is what LazyRichViewer's viewport gate was
-  // built for. Deferring here buys nothing and costs correctness: anything
-  // below the fold shows raw markdown, `radd:toc` links to heading ids that
-  // were never assigned, and printing emits placeholder text.
-  eager = true,
   onToggleTask,
 }: {
   text: string;
@@ -39,8 +26,6 @@ export function PageBody({
   className?: string;
   /** Fires once every segment has rendered — the print route waits on it. */
   onReady?: () => void;
-  /** Defaults to true, and should almost always stay that way — see below. */
-  eager?: boolean;
 }) {
   const segments = useMemo(() => splitExtensionBlocks(text), [text]);
   const proseCount = segments.filter((segment) => segment.kind === "markdown").length;
@@ -55,11 +40,7 @@ export function PageBody({
   const markReady = useCallback(() => setReadyCount((count) => count + 1), []);
   const taskScope = useCallback(() => containerRef.current, []);
 
-  // Re-walk on EVERY readiness tick, not once all segments are ready. Prose runs
-  // mount lazily as they near the viewport, so on a long page the tail may not
-  // mount for minutes — gating the anchor pass on the total meant a `radd:toc`
-  // on a long page linked to ids that were never assigned. Each pass rebuilds
-  // the whole map in document order, so it is idempotent and converges.
+  // Re-walk on every readiness tick: each pass rebuilds the ids in document order, so it converges.
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
@@ -87,7 +68,7 @@ export function PageBody({
             <RichViewer
               key={`md-${index}`}
               text={segment.text}
-              eager={eager}
+              eager
               onReady={markReady}
               onToggleTask={onToggleTask}
               taskScope={taskScope}
@@ -101,11 +82,7 @@ export function PageBody({
   );
 }
 
-/** One `radd:<name>` block, and the two ways it can fail to be one.
- *
- *  `data-extension` is load-bearing for the render proof, not decoration: it is
- *  what lets a headless check assert a block became an ELEMENT rather than
- *  staying source. */
+/** One `radd:<name>` block. `data-extension` is a proof hook: it shows the block became an element. */
 function ExtensionBlock({ name, body }: { name: string; body: string }) {
   const extension = lookupPageExtension(name);
   const parsed = parseExtensionParams(body);

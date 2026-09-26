@@ -1,50 +1,32 @@
 import { useQuery } from "@tanstack/react-query";
 import { useIsAuthenticated } from "@radd/plugin-sdk";
-import { aiEditorActionsQuery, aiPreferencesQuery, aiStatusQuery } from "../queries";
+import { aiEditorActionsQuery, aiPreferencesQuery, useAiStatus } from "../queries";
 import { AiFeature, type AiEditorAction } from "../types";
-
-/**
- * Editor AI (spec 103), as this plugin defines it (RADD-1395).
- *
- * The suggestion menu is server-defined — builtins plus admin presets — so a menu pick sends its
- * ACTION ID and the server owns the prompt text. The sentinel prefix survives from when a
- * third-party menu could only carry a `prompt` STRING through to the provider; it is still the
- * cheapest way to say "this is an id, not something a person typed", and `transform.ts` unpacks it
- * into the request's `action_id` or `instruction` accordingly.
- */
-
-/** Marks an instruction string as a server action id rather than typed text. */
-export const INSTRUCTION_ACTION_PREFIX = "#radd-action:";
 
 /** Per-user opt-out in the spec-94 preferences dict — an absent key means enabled. */
 export const EDITOR_AI_PREF_KEY = "ai.editor_actions";
 
-/** One dispatchable AI run: the wire instruction (sentinel-prefixed action id, or freeform text)
- * plus the label the run band shows. */
-export interface AiRun {
-  instruction: string;
-  label: string;
-}
+/** One dispatchable AI run plus the label the run band shows: a curated action goes by id (the
+ * server owns its prompt), typed text as the instruction. */
+export type AiRun = { label: string } & ({ actionId: string } | { instruction: string });
 
 /** A curated menu action as a dispatchable run. */
 export function actionRun(action: AiEditorAction): AiRun {
-  return { instruction: INSTRUCTION_ACTION_PREFIX + action.id, label: action.label };
+  return { actionId: action.id, label: action.label };
 }
 
-export interface EditorAi {
+interface EditorAi {
   actions: AiEditorAction[];
 }
 
 /**
- * The editor-AI gate: non-null only when the instance feature is on
- * (aiStatus.features.editor_actions), the user hasn't opted out (Profile), AND the action list has
- * arrived — so the chrome appears once instead of as pieces trickle in. Any fetch failure (404
- * dormant included) reads as "off". A visitor asks nothing: every one of these is authenticated,
- * and the api client answers a 401 with a redirect to /login.
+ * Non-null only when the instance feature is on, the user has not opted out (Profile) AND the
+ * actions have arrived — so the chrome appears once. Any fetch failure reads as off; a visitor
+ * asks nothing (a 401 would redirect to /login).
  */
 export function useEditorAi(): EditorAi | null {
   const signedIn = useIsAuthenticated();
-  const status = useQuery({ ...aiStatusQuery, enabled: signedIn });
+  const status = useAiStatus();
   const prefs = useQuery({ ...aiPreferencesQuery, enabled: signedIn });
   const gateOpen =
     signedIn &&

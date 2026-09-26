@@ -1,12 +1,8 @@
 import type { SlaBatchTimer, TimerState } from "./timers";
 
-/**
- * SLA timer chips (specs 30/63): the rail's per-timer rows and the SLA column / card cell
- * (the nearest-to-breach chip). Status colours are the semantic status tier — the ink tier is
- * the one that holds 4.5:1 on its own tint in both themes.
- */
+/** SLA timer chips; status colours use the ink tier (4.5:1 on its tint in both themes). */
 
-export function formatRemaining(seconds: number | null): string {
+function formatRemaining(seconds: number | null): string {
   if (seconds === null) return "—";
   const minutes = Math.max(0, Math.round(seconds / 60));
   if (minutes < 60) return `${minutes}m left`;
@@ -16,7 +12,7 @@ export function formatRemaining(seconds: number | null): string {
 }
 
 /** What a timer reads as — the chip's text and its semantic state. */
-export function timerStatus(timer: TimerState): { label: string; state: string; className: string } {
+function timerStatus(timer: TimerState): { label: string; state: string; className: string } {
   if (timer.met_at) {
     return timer.breached
       ? { label: "Met late", state: "met-late", className: "bg-status-warning/15 text-status-warning-ink" }

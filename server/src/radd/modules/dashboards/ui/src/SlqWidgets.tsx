@@ -12,7 +12,7 @@ interface WidgetProps {
 }
 
 /** The stand-in for a widget whose scope the viewer can't read (spec 75). */
-export function UnavailableCard({ title }: { title?: string | null }) {
+function UnavailableCard({ title }: { title?: string | null }) {
   return (
     <div className="rounded-xl border border-dashed border-subtle px-4 py-6 text-center text-xs text-fg-faint">
       {title ? `${title} — unavailable` : "Unavailable"}

@@ -18,12 +18,6 @@ import { EAGER_MODULES, LAZY_MODULES } from "./shared-modules.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, "../public/shared");
 
-// The list lives in shared-modules.mjs, to which the boundary test holds the import map, the SDK's
-// remote build config and the host's publisher.
-
-// The SDK's names are read from its source (`sdk-exports.mjs`), not listed here: a hand-kept list
-// drifted silently, and a missing name is `undefined` in every remote.
-
 mkdirSync(outDir, { recursive: true });
 
 for (const [id, slug] of EAGER_MODULES) {

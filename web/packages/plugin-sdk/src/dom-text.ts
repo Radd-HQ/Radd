@@ -1,12 +1,5 @@
-/**
- * Mapping between an element's rendered text and DOM ranges (RADD-726).
- *
- * Inline comments anchor against the text a reader can SEE, not the markdown
- * source. Two reasons: the quote in a comment should be the words that were
- * selected, and the source contains formatting characters that a reader never
- * saw and would be baffled to find quoted back at them. It also means one
- * anchoring implementation covers prose, tables and code blocks alike.
- */
+/** Rendered text ↔ DOM ranges. Inline comments anchor against what a reader SEES (the source has
+ *  formatting nobody saw), so one implementation covers prose, tables and code blocks. */
 
 type DomPoint = { node: Node; offset: number };
 interface TextProjection {
@@ -23,7 +16,7 @@ export function registerTextProjection(source: Element, projection: TextProjecti
 }
 
 /** Every document text node, excluding duplicate code DOM and editor chrome. */
-export function textNodesOf(root: Node): Text[] {
+function textNodesOf(root: Node): Text[] {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {

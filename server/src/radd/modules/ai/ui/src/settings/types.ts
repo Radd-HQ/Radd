@@ -1,5 +1,4 @@
-/** Settings → AI (spec 101): the provider registry's wire shapes, its endpoints, and the cache
- * tags its reads carry. The page is this plugin's own since RADD-1379. */
+/** Settings → AI: the provider registry's wire shapes, endpoints and cache tags. */
 
 /** Wire protocol a provider speaks. */
 export const AiWireShape = {
@@ -12,7 +11,7 @@ export type AiWireShapeValue = (typeof AiWireShape)[keyof typeof AiWireShape];
 
 /** Where a provider row came from — env-seeded rows are ordinary editable rows. */
 export const AiProviderSource = { env: "env", user: "user" } as const;
-export type AiProviderSourceValue = (typeof AiProviderSource)[keyof typeof AiProviderSource];
+type AiProviderSourceValue = (typeof AiProviderSource)[keyof typeof AiProviderSource];
 
 /** What a configured model is FOR — features resolve a role, never a provider. */
 export const AiRole = { chat: "chat", embeddings: "embeddings", vision: "vision" } as const;
@@ -98,11 +97,8 @@ export const AiPath = {
   coverage: "/ai/embeddings/coverage",
 } as const;
 
-/**
- * Cache tags. The host's `/ai/status` read (every AI affordance gates on it) declares the provider
- * and role tags, so the one `invalidateEntities` a write makes here refreshes this page's lists AND
- * the host's gate — without either side knowing the other's query keys.
- */
+/** Cache tags. `/ai/status` declares the provider and role tags, so one invalidation here refreshes
+ *  this page's lists and every AI affordance's gate. */
 export const AiEntity = { provider: "aiProvider", role: "aiRole", preset: "aiPreset" } as const;
 
 /** Section headings on the page share one style. */

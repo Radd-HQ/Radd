@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, Database, Loader2, Trash2, X } from "lucide-react";
+import { Database, Trash2, X } from "lucide-react";
 import { api, Button, EmptyState, QueryError, relativeTime, Table, TableSkeleton, TBody, Td, Th, THead, useConfirm } from "@radd/plugin-sdk";
 import { JiraPath, jiraKeys, snapshotsQuery } from "./api";
+import { CountList, Panel, StatusText } from "./chrome";
 import { NewDownloadModal } from "./NewDownloadModal";
 import { ProblemList } from "./ProblemList";
 import { SNAPSHOT_STAGE_LABELS, SnapshotStage, TERMINAL_SNAPSHOT_STAGES, type JiraSnapshot } from "./types";
-
-const POLL_MS = 1500;
 
 function bytes(size: number): string {
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -22,21 +21,11 @@ function bytes(size: number): string {
 
 const isRunning = (snapshot: JiraSnapshot) => !TERMINAL_SNAPSHOT_STAGES.includes(snapshot.stage);
 
-/**
- * Cached Jira downloads (spec 100).
- *
- * A snapshot is downloaded ONCE and everything after it — profiling, mapping,
- * the dry run, the import, a re-import, relinking — reads the cache instead of
- * Jira. Spec 90 re-paged Jira on every run, so fixing one mapping mistake meant
- * downloading tens of thousands of issues again.
- *
- * Each row shows what it costs and has an X, because a cache nobody can clear
- * just accumulates.
- */
+/** Cached Jira downloads: every later step (profiling, mapping, dry run, import, relink) reads the
+ * cache. Each row shows its size and can be deleted — a cache nobody can clear only grows. */
 export function SnapshotsPanel() {
   const queryClient = useQueryClient();
-  // Polls itself while a download is moving, and stops once they have all settled.
-  const snapshots = useQuery(snapshotsQuery(POLL_MS));
+  const snapshots = useQuery(snapshotsQuery());
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [confirmNode, confirm] = useConfirm();
@@ -63,21 +52,17 @@ export function SnapshotsPanel() {
   };
 
   return (
-    <section className="rounded-lg border border-subtle bg-surface p-4" data-jira-section="downloads">
-      {confirmNode}
-      <header className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[13px] font-medium text-heading">Downloads</h2>
-          <p className="mt-0.5 text-xs text-fg-secondary">
-            Jira is read once into a local cache. Mapping, the dry run and the import all work from
-            it, so you can fix a mistake and re-run without touching Jira again.
-          </p>
-        </div>
+    <Panel
+      section="downloads"
+      title="Downloads"
+      description="Jira is read once into a local cache. Mapping, the dry run and the import all work from it, so you can fix a mistake and re-run without touching Jira again."
+      action={
         <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAdding(true)}>
           New download
         </Button>
-      </header>
-
+      }
+    >
+      {confirmNode}
       {snapshots.isPending ? (
         <TableSkeleton rows={2} />
       ) : snapshots.isError ? (
@@ -113,7 +98,7 @@ export function SnapshotsPanel() {
       )}
 
       {adding && <NewDownloadModal onClose={() => setAdding(false)} onStarted={invalidate} />}
-    </section>
+    </Panel>
   );
 }
 
@@ -192,25 +177,20 @@ function StageCell({ snapshot, percent }: { snapshot: JiraSnapshot; percent: num
   const label = SNAPSHOT_STAGE_LABELS[snapshot.stage] ?? snapshot.stage;
   if (snapshot.stage === SnapshotStage.done) {
     return (
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-status-success-ink">
-        <CheckCircle2 size={13} /> {label}
+      <StatusText tone="success">
+        {label}
         <span className="text-fg-faint">· {relativeTime(snapshot.created_at)}</span>
-      </span>
+      </StatusText>
     );
   }
   if (snapshot.stage === SnapshotStage.failed || snapshot.stage === SnapshotStage.canceled) {
-    return (
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-status-danger-ink">
-        <CircleAlert size={13} /> {label}
-      </span>
-    );
+    return <StatusText tone="danger">{label}</StatusText>;
   }
   return (
-    <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-secondary">
-      <Loader2 size={13} className="animate-spin" />
+    <StatusText tone="running">
       {label}
       {percent > 0 && <span className="text-fg-faint">{percent}%</span>}
-    </span>
+    </StatusText>
   );
 }
 
@@ -226,18 +206,10 @@ const COUNT_LABELS: [string, string][] = [
 ];
 
 function SnapshotDetail({ snapshot }: { snapshot: JiraSnapshot }) {
-  const shown = COUNT_LABELS.filter(([key]) => (snapshot.counts[key] ?? 0) > 0);
   return (
     <div className="flex flex-col gap-2 py-1">
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-secondary">
-        {shown.map(([key, label]) => (
-          <span key={key}>
-            <span className="text-heading">{snapshot.counts[key]}</span> {label}
-          </span>
-        ))}
-        {shown.length === 0 && <span className="text-fg-faint">Nothing cached yet.</span>}
-      </div>
-      <ProblemList problems={snapshot.problems} label="issue" />
+      <CountList counts={snapshot.counts} labels={COUNT_LABELS} empty="Nothing cached yet." />
+      <ProblemList problems={snapshot.problems} />
     </div>
   );
 }

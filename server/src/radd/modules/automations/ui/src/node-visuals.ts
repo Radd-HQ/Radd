@@ -1,14 +1,7 @@
 /**
- * Shared node iconography and colour (spec 116).
- *
- * Split out of GraphCanvas so the panel, the right-click menu and the canvas
- * itself agree — a filter that is blue in the list and green on the canvas is a
- * small thing that makes a graph harder to read than it needs to be.
- *
- * These reference tokens that EXIST AT RUNTIME. `--color-*` names live in
- * Tailwind's `@theme` block and compile into utilities, so `var(--color-…)`
- * resolves to nothing in an inline style — which is how the first version of the
- * edges shipped black on a dark canvas.
+ * Node iconography and colour, shared by panel, menu and canvas. Inline styles must use tokens that
+ * exist at RUNTIME: Tailwind's `--color-*` compile into utilities, so `var(--color-…)` in a style
+ * resolves to nothing (edges once shipped black on a dark canvas).
  */
 import { Filter, Flag, GitBranch, OctagonX, Play, Search, Zap, type LucideIcon } from "lucide-react";
 import { NodeKind, type NodeKindValue } from "./types";
@@ -72,7 +65,7 @@ export const PORT_LABEL: Record<string, string> = {
 export const INLET_TONE = "var(--radd-text-muted)";
 export const GRID_TONE = "var(--radd-border)";
 
-export const PORTS_BY_KIND: Record<string, string[]> = {
+const PORTS_BY_KIND: Record<string, string[]> = {
   [NodeKind.trigger]: ["out"],
   [NodeKind.source]: ["out"],
   [NodeKind.filter]: ["matched", "unmatched"],
@@ -87,29 +80,14 @@ const PORTS_BY_TYPE: Record<string, string[]> = {
   "action.create_item": ["out", "created"],
 };
 
-/**
- * A node's OUTPUT PORTS — from its type when the type decides, else its kind.
- *
- * Four sources, ranked the way the SERVER ranks them (`AutomationNodeSpec.
- * ports_at` — static first, then dynamic, then the built-in table, then the
- * kind). Mirroring the order is the point: the server validates every edge
- * against the set it computes, so a handle drawn from a different precedence is
- * an affordance that 409s on save.
- *
- * `contributedPorts` carries the STATIC ports the catalog serves, keyed by node
- * type. Optional so a read-only preview renders before the catalog resolves —
- * and because a stored node whose plugin has been uninstalled has no entry at
- * all. The AI classifier's ports are the answers someone typed, which is why the
- * dynamic branch stays: the canvas has to redraw that node as its form changes,
- * and its spec deliberately declares no static set (RADD-1064).
- */
+/** A node's output ports, ranked as the server ranks them (`AutomationNodeSpec.ports_at`): declared
+ * (a terminal node declares none), then server-resolved shape, then the built-in table, then the kind.
+ * A handle drawn from any other precedence 409s on save. */
 export function portsOfNode(
   node: { kind: NodeKindValue; type: string; params: Record<string, unknown> },
   contributedPorts?: Record<string, string[]>,
   shapes?: NodeShapes,
 ): string[] {
-  // Terminal nodes are in the map with no ports (RADD-1329); fixed ports are
-  // declared; params-dependent ones are the server's answer (RADD-1325).
   const declared = contributedPorts?.[node.type];
   if (declared) return declared;
   const shape = shapeOf(node, shapes);

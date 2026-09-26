@@ -14,11 +14,8 @@ type RepoPatch = Partial<Pick<HostRepo,
 /** The work categories a mirrored worklog can carry — `undefined` while loading. */
 export type Categories = { rows: WorkCategoryChoice[] | undefined; unavailable: boolean };
 
-/**
- * One registered repository (spec 111, RADD-1258/1321/1366): where its versions
- * publish, which category mirrored time carries, and its switches. Each row owns
- * its mutations, so saving one repository never disables the others.
- */
+/** One registered repository: where its versions publish, the category mirrored time carries, its
+ *  switches. Each row owns its mutations, so saving one repository never disables the others. */
 export function RepoRow({ provider, changeNoun, connection, repo, categories }: {
   provider: string;
   /** What a merged change is called on this host ("merge request", "pull request"). */

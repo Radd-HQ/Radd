@@ -4,9 +4,6 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "vite build"
-  },
   "dependencies": {
     "@radd/plugin-sdk": "*",
     "@radd-plugin-ui/workflow": "*"

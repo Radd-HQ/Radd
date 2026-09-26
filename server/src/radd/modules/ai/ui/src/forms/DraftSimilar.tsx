@@ -15,11 +15,9 @@ const SIMILAR_MIN_SEED_CHARS = 3;
 const SIMILAR_DEBOUNCE_MS = 800;
 
 /**
- * "Similar issues" beside an issue being written — this plugin's `item.draft.assist` (spec 106,
- * RADD-1395): the /ai/similar semantic-first lookup (vector neighbours when embeddings are up, FTS
- * only as the fallback) seeded with the WHOLE draft, so it keeps improving as the description
- * grows, and surfacing OPEN duplicates the host's deflection deliberately hides. Renders nothing
- * until something matches; issues another section already shows (`exclude`) are not repeated.
+ * Similar issues beside a draft (`item.draft.assist`): /ai/similar seeded with the WHOLE draft, so
+ * it improves as the text grows, surfacing OPEN duplicates the host's deflection hides. Issues
+ * another section already shows (`exclude`) are not repeated.
  */
 export function AiDraftSimilar({ title, description, projectId, exclude }: ItemDraftAssistProps) {
   const status = useAiStatus();

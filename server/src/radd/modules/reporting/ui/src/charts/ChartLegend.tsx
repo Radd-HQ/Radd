@@ -1,6 +1,6 @@
 import type { ChartLegendProps } from "../report-contract";
 
-/** Swatch + label legend shared by the stacked-bar and line charts (spec 19). */
+/** Swatch + label legend for the stacked-bar and line charts. */
 export function ChartLegend({ entries }: ChartLegendProps) {
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5">

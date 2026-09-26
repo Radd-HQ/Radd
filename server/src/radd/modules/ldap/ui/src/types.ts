@@ -69,10 +69,10 @@ export interface GroupImportResult {
 /** Why an incoming AD user was tied to an existing account (spec 88). Radd has no username
  * column — identity is the email — so a sAMAccountName is compared against an email's local part. */
 export const ImportMatchKind = { email: "email", username: "username", name: "name" } as const;
-export type ImportMatchKindValue = (typeof ImportMatchKind)[keyof typeof ImportMatchKind];
+type ImportMatchKindValue = (typeof ImportMatchKind)[keyof typeof ImportMatchKind];
 
 export const ImportStatus = { new: "new", linked: "linked", conflict: "conflict" } as const;
-export type ImportStatusValue = (typeof ImportStatus)[keyof typeof ImportStatus];
+type ImportStatusValue = (typeof ImportStatus)[keyof typeof ImportStatus];
 
 /** Overwrite and merge both end with AD as the source of truth; they differ in how many Radd
  * accounts are involved. */

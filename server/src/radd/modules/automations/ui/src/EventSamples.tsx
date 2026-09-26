@@ -1,45 +1,66 @@
-import { ErrorText, Button } from "@radd/plugin-sdk";
-import { MANUAL_TRIGGER, SCHEDULE_TRIGGER, VALIDATE_TRIGGER } from "./types";
 /**
- * What this event actually carries (RADD-921).
- *
- * Every condition an automation writes against an event names a path into its
- * payload — `{{payload.changes.field}}` in a template, a dotted path in the
- * payload condition, a field name in "field changed". None of it was
- * discoverable: you wrote a path, saved, waited for the event to fire, and
- * learned from the absence of an effect that you had guessed wrong.
- *
- * The paths come from REAL recent events, not a hand-written example, because a
- * hand-written one would be a second copy of a shape defined across twenty
- * modules and would drift silently — and a payload that looks right and isn't is
- * exactly the failure this exists to prevent. The cost is stated rather than
- * hidden: an event type that has never fired here has no sample, and this says
- * so instead of showing a plausible shape nobody can trust.
- *
- * Clicking a path inserts it, because the point of showing them is to use them.
+ * What this event carries: paths from REAL recent events (a hand-written example would drift from a shape
+ * defined across many modules) plus what the event DECLARES. An event never fired here says so instead of
+ * showing an invented shape. Clicking a path copies its token.
  */
 import { useEffect, useRef, useState } from "react";
+import { ErrorText, Button } from "@radd/plugin-sdk";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
 
 import { Braces, Copy } from "lucide-react";
 import { copyText } from "@radd/plugin-sdk";
 import { eventSampleQuery } from "./queries";
+import { isSentinelTrigger } from "./meta";
 
-interface EventSamplesProps {
-  eventType: string;
-  /** Insert `{{payload.<path>}}` — absent when there is nowhere to put it. */
-  onInsert?: (token: string) => void;
+type Feedback = { path: string; ok: boolean } | null;
+
+/** One path; a click copies its token. */
+function PathRow({ path, many = false, detail, faint, icon, feedback, onCopy }: {
+  path: string;
+  many?: boolean;
+  detail: string;
+  faint: boolean;
+  icon: boolean;
+  feedback: Feedback;
+  onCopy: (path: string) => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onCopy(path)}
+        title="Copy the token"
+        className="flex w-full items-baseline gap-1.5 rounded-[4px] px-1.5 py-1 text-left hover:bg-elevated cursor-pointer"
+      >
+        <code className="shrink-0 text-[11px] text-accent-text">{path}</code>
+        {many && (
+          <span
+            title="Inside a list — a template reading it may render several values"
+            className="shrink-0 text-[9px] uppercase tracking-wide text-fg-faint"
+          >
+            many
+          </span>
+        )}
+        <span className={`truncate text-[11px] ${faint ? "text-fg-faint" : "text-fg-secondary"}`}>{detail}</span>
+        {feedback?.path === path ? (
+          <span className="ml-auto shrink-0 text-[10px] text-fg-muted">{feedback.ok ? "copied" : "select it above"}</span>
+        ) : icon ? (
+          <Copy size={10} className="ml-auto shrink-0 text-fg-faint" aria-hidden />
+        ) : null}
+      </button>
+    </li>
+  );
 }
 
-export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
+export function EventSamples({ eventType }: { eventType: string }) {
   const live = useRef(true);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {live.current = true; return () => {live.current = false; clearTimeout(timer.current);};}, []);
   const [open, setOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{ path: string; ok: boolean } | null>(null);
+  const [feedback, setFeedback] = useState<Feedback>(null);
   const sample = useQuery(eventSampleQuery(eventType));
 
-  if (!eventType || [MANUAL_TRIGGER, SCHEDULE_TRIGGER, VALIDATE_TRIGGER].includes(eventType)) return null;
+  if (!eventType || isSentinelTrigger(eventType)) return null;
   if (sample.isError) return <div role="alert"><ErrorText error={sample.error} /><Button variant="ghost" size="sm" onClick={() => void sample.refetch()}>Retry event samples</Button></div>;
 
   const data = sample.data;
@@ -48,18 +69,10 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
   const count = observed.size + declared.length;
 
   const copy = async (path: string) => {
-    const token = `{{payload.${path}}}`;
-    if (onInsert) {
-      onInsert(token);
-      setFeedback({ path, ok: true });
-    } else {
-      // Only claim it was copied if it WAS — a self-hosted instance on plain
-      // http has no clipboard API, and "Copied" over a no-op is a small lie
-      // that costs someone a real minute of confusion.
-      const ok = await copyText(token);
-      if (!live.current) return;
-      setFeedback({ path, ok });
-    }
+    // Only claim it was copied if it WAS — plain-http instances have no clipboard API.
+    const ok = await copyText(`{{payload.${path}}}`);
+    if (!live.current) return;
+    setFeedback({ path, ok });
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setFeedback(null), 1600);
   };
@@ -119,24 +132,15 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
               <p className="text-[11px] text-fg-faint">Declared by the event — click a path to use it.</p>
               <ul className="flex max-h-56 flex-col gap-0.5 overflow-y-auto" data-declared-paths>
                 {declared.map((entry) => (
-                  <li key={entry.path}>
-                    <button
-                      type="button"
-                      onClick={() => void copy(entry.path)}
-                      title={onInsert ? `Insert {{payload.${entry.path}}}` : "Copy the token"}
-                      className="flex w-full items-baseline gap-1.5 rounded-[4px] px-1.5 py-1 text-left hover:bg-elevated cursor-pointer"
-                    >
-                      <code className="shrink-0 text-[11px] text-accent-text">{entry.path}</code>
-                      <span className="truncate text-[11px] text-fg-faint">
-                        {entry.examples.length > 0 ? `e.g. ${entry.examples.join(" · ")}` : "declared"}
-                      </span>
-                      {feedback?.path === entry.path && (
-                        <span className="ml-auto shrink-0 text-[10px] text-fg-muted">
-                          {onInsert ? "inserted" : feedback.ok ? "copied" : "select it above"}
-                        </span>
-                      )}
-                    </button>
-                  </li>
+                  <PathRow
+                    key={entry.path}
+                    path={entry.path}
+                    detail={entry.examples.length > 0 ? `e.g. ${entry.examples.join(" · ")}` : "declared"}
+                    faint
+                    icon={false}
+                    feedback={feedback}
+                    onCopy={(path) => void copy(path)}
+                  />
                 ))}
               </ul>
             </>
@@ -149,41 +153,17 @@ export function EventSamples({ eventType, onInsert }: EventSamplesProps) {
               </p>
               <ul className="flex max-h-56 flex-col gap-0.5 overflow-y-auto">
                 {data.paths.map((entry) => (
-                  <li key={entry.path}>
-                    <button
-                      type="button"
-                      onClick={() => void copy(entry.path)}
-                      title={onInsert ? `Insert {{payload.${entry.path}}}` : "Copy the token"}
-                      className="flex w-full items-baseline gap-1.5 rounded-[4px] px-1.5 py-1 text-left hover:bg-elevated cursor-pointer"
-                    >
-                      <code className="shrink-0 text-[11px] text-accent-text">{entry.path}</code>
-                      {entry.repeated && (
-                        <span
-                          title="Inside a list — a template reading it may render several values"
-                          className="shrink-0 text-[9px] uppercase tracking-wide text-fg-faint"
-                        >
-                          many
-                        </span>
-                      )}
-                      <span
-                        className={`truncate text-[11px] ${
-                          entry.examples.length > 0 ? "text-fg-secondary" : "text-fg-faint"
-                        }`}
-                      >
-                        {/* A path with no examples is a REAL finding — the field
-                            exists and has been null in everything sampled — not a
-                            rendering failure, so it says which. */}
-                        {entry.examples.join(" · ") || "empty in every sample"}
-                      </span>
-                      {feedback?.path === entry.path ? (
-                        <span className="ml-auto shrink-0 text-[10px] text-fg-muted">
-                          {onInsert ? "inserted" : feedback.ok ? "copied" : "select it above"}
-                        </span>
-                      ) : (
-                        <Copy size={10} className="ml-auto shrink-0 text-fg-faint" aria-hidden />
-                      )}
-                    </button>
-                  </li>
+                  // No examples is a REAL finding — the field exists and was null in every sample.
+                  <PathRow
+                    key={entry.path}
+                    path={entry.path}
+                    many={entry.repeated}
+                    detail={entry.examples.join(" · ") || "empty in every sample"}
+                    faint={entry.examples.length === 0}
+                    icon
+                    feedback={feedback}
+                    onCopy={(path) => void copy(path)}
+                  />
                 ))}
               </ul>
 

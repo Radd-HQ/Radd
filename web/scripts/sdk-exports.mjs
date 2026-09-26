@@ -1,12 +1,5 @@
-/**
- * The SDK's runtime surface, derived from its source (RADD-1377).
- *
- * A remote's `import { X } from "@radd/plugin-sdk"` resolves to `public/shared/radd-plugin-sdk.js`, a
- * shim that re-exports the host's singleton by NAME. That name list used to be hand-kept, so an SDK
- * export nobody added to it type-checked, built, and was `undefined` in every remote. This reads the
- * value exports out of `packages/plugin-sdk/src/index.ts` instead (following `export *`), skipping
- * anything that is only a type.
- */
+/** The SDK's runtime names, read from `packages/plugin-sdk/src/index.ts` (following `export *`, skipping
+ *  types). A name missing from the shim is `undefined` in every remote — so it is never hand-kept. */
 import { readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

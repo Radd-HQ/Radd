@@ -1,8 +1,5 @@
-/**
- * What the builtin SLQ and saved-view widgets read — the owners' ordinary public endpoints
- * (`/items/count`, `/items`, `/views/counts`, `/views/{id}`, `/projects/{id}`), under this
- * plugin's keys and tagged with the owners' entities so live updates refresh them.
- */
+/** What the builtin SLQ and saved-view widgets read — the owners' public endpoints, under this
+ *  plugin's keys, tagged with the owners' entities so live updates refresh them. */
 import { api, type Item } from "@radd/plugin-sdk";
 
 const itemMeta = (projectId?: string) => ({ entities: ["item"], projectId: projectId || undefined });
@@ -39,7 +36,7 @@ export const viewCountQuery = (viewId: string, extraQ?: string) => ({
     api.post<Record<string, number>>("/views/counts", { view_ids: [viewId], extra_q: extraQ || undefined }, { signal }),
 });
 
-export interface ViewRef {
+interface ViewRef {
   id: string;
   name: string;
   project_id: string | null;

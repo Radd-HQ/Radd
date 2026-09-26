@@ -10,7 +10,7 @@ import { EMPTY_PRESENCE, presenceSnapshot, type PresenceSnapshot } from "./model
  * moves arrive as `update`, not `change` — `change` fires only when a client's
  * state differs, and the model ignores the cursor field anyway.)
  */
-export interface PresenceView extends PresenceSnapshot {
+interface PresenceView extends PresenceSnapshot {
   /** This client's awareness id while it is in a room, else null. */
   self: number | null;
 }

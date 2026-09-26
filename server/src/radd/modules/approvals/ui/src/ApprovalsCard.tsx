@@ -3,20 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, tokens, useCurrentUser, usePermissions, type Item, type Project } from "@radd/plugin-sdk";
 import { Check, ShieldCheck, X } from "lucide-react";
 
-/**
- * Approvals card (spec 71) as a FEDERATED remote (spec 94): `GET /items/{id}/approvals` is
- * empty-quiet, so ungated items render nothing. Shows live requests (target state, votes x/N,
- * per-voter verdicts) with Approve/Decline for eligible approvers (the server resolves the
- * electorate), Cancel for the requester/manager, and "Request approval" affordances for the
- * server-computed gated targets. The deciding approve AUTO-APPLIES the move; banked-unlock guard
- * errors ride the vote response and surface inline. Extracted from the host's IssueProperties into
- * the `approvals` plugin's own UI bundle; styled from `@radd/plugin-sdk` tokens — no hardcoded color.
- */
+/** Approvals card (spec 71): empty-quiet for ungated items. The deciding approve AUTO-APPLIES the
+ *  move; guard errors ride the vote response and show inline. */
 
-// --- The permission atom this card checks (inlined; the host owns the enum) ---
 const PROJECT_MANAGE = "project.manage";
 
-// --- The approvals wire contract, inlined (a remote can't import the host's types) ---
 const ApprovalStatus = {
   pending: "pending",
   approved: "approved",
@@ -78,7 +69,6 @@ interface ApprovalVoteResult {
 
 const approvalsKey = (itemId: string) => ["radd-remote", "approvals", itemId] as const;
 
-// --- Endpoint paths (inlined from the host's constants) ---
 const itemApprovalsPath = (itemId: string) => `/items/${itemId}/approvals`;
 const approvalPath = (requestId: string) => `/approvals/${requestId}`;
 const approvalVotePath = (requestId: string) => `/approvals/${requestId}/vote`;

@@ -24,11 +24,8 @@ const RESULT_LABELS: Record<string, string> = {
   [ImportResolution.skip]: "skipped",
 };
 
-/**
- * Spec 84: search AD users (service account) → multi-select → provision. Spec 88: two steps — the
- * selection is previewed against existing accounts first, so duplicates under an older email
- * address are resolved deliberately rather than silently forking the person into a second account.
- */
+/** Search AD users → multi-select → provision, previewed against existing accounts first, so a duplicate
+ *  under an older email is resolved deliberately, never forked into a second account. */
 export function ImportUsersDialog({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [q, setQ] = useState("");

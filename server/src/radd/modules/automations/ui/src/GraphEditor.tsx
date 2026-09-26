@@ -1,16 +1,5 @@
-/**
- * The automation editor (spec 116, RADD-916): node panel, canvas, inspector.
- *
- * There is no form view any more. The graph expresses everything the list did,
- * and keeping both meant a `toLinear`/`toGraph` adapter, a second source of
- * truth, and a "this branches so the form is unavailable" special case — all of
- * which existed only to hold two editors in step.
- *
- * Nodes are added two ways, both reading ONE catalogue so they cannot disagree:
- * click a row in the panel, or right-click the canvas and search (Nuke's tab
- * menu). Everything is a node, triggers included — a graph fires only for the
- * triggers it actually contains, and it may contain several.
- */
+/** Node panel + canvas + inspector. Nodes are added from the panel or the right-click search, both
+ * reading ONE catalogue. */
 import { Button, ErrorText } from "@radd/plugin-sdk";
 import { useNodeShapes } from "./node-shapes";
 import { useCallback, useMemo, useState } from "react";
@@ -19,12 +8,13 @@ import { useAutomationQuery as useQuery } from "./query-lifetime";
 import { ArrowDown, ArrowRight } from "lucide-react";
 import { automationCatalogQuery } from "./queries";
 import { instantiate, nodeTemplates, type NodeTemplate } from "./automation-nodes";
-import { layout, NODE_HEIGHT, NODE_WIDTH } from "./automation-layout";
+import { layout, NODE_HEIGHT, NODE_WIDTH, reachable } from "./automation-layout";
 import {
   NodeKind,
   VALIDATE_TRIGGER,
   type AutomationEdge,
   type AutomationNode,
+  type Orientation,
   type RuleTestResult,
 } from "./types";
 import { Callout, CalloutKind } from "@radd/plugin-sdk";
@@ -34,8 +24,6 @@ import { GraphInspector } from "./GraphInspector";
 import { LazyGraphCanvas } from "./LazyGraphCanvas";
 import { NodePanel } from "./NodePanel";
 import { NodeSearchMenu } from "./NodeSearchMenu";
-
-export type Orientation = "vertical" | "horizontal";
 
 interface GraphEditorProps {
   nodes: AutomationNode[];
@@ -83,31 +71,14 @@ export function GraphEditor({
   );
   const selected = useMemo(() => nodes.find((n) => n.id === selectedId) ?? null, [nodes, selectedId]);
 
-  /**
-   * Which triggers can reach the selected node, merged into one shape for the
-   * condition builder.
-   *
-   * A gate fed by two different events has no single trigger, so a subject is
-   * offered when ANY upstream trigger can supply it — offering only what they
-   * all share would hide a legitimate condition, and offering everything would
-   * let someone write a change-subject test against a trigger that carries no
-   * diff.
-   */
+  /** Triggers that can reach the selected node, merged: a subject is offered when ANY upstream trigger
+   * can supply it. */
   const upstreamTrigger = useMemo(() => {
     if (!selected || !catalog.data) return undefined;
-    const incoming = new Map<string, string[]>();
-    for (const edge of edges) incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge.source]);
-    const seen = new Set<string>();
-    const queue = [selected.id];
-    const events: string[] = [];
-    while (queue.length) {
-      const id = queue.pop() as string;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const node = nodes.find((n) => n.id === id);
-      if (node?.kind === NodeKind.trigger) events.push(String(node.params.event ?? ""));
-      queue.push(...(incoming.get(id) ?? []));
-    }
+    const upstream = reachable(edges, [selected.id], "upstream");
+    const events = nodes
+      .filter((n) => upstream.has(n.id) && n.kind === NodeKind.trigger)
+      .map((n) => String(n.params.event ?? ""));
     const infos = catalog.data.triggers.filter((t) => events.includes(t.event_type));
     if (infos.length === 0) return undefined;
     if (infos.length === 1) return infos[0];
@@ -150,6 +121,9 @@ export function GraphEditor({
 
   const deleteNodes = useCallback(
     (nodeIds: string[]) => {
+      // Edges touching a deleted node go with it — leaving them would be a graph
+      // the server rejects ("edge to unknown node"), i.e. an automation nobody
+      // can save and no message explaining why.
       const gone = new Set(nodeIds);
       onChange({
         nodes: nodes.filter((n) => !gone.has(n.id)),
@@ -165,20 +139,6 @@ export function GraphEditor({
       const key = (e: AutomationEdge) => `${e.source}|${e.port}|${e.target}`;
       const gone = new Set(removed.map(key));
       onChange({ nodes, edges: edges.filter((e) => !gone.has(key(e))) });
-    },
-    [nodes, edges, onChange],
-  );
-
-  const deleteNode = useCallback(
-    (nodeId: string) => {
-      // Edges touching a deleted node go with it — leaving them would be a graph
-      // the server rejects ("edge to unknown node"), i.e. an automation nobody
-      // can save and no message explaining why.
-      onChange({
-        nodes: nodes.filter((n) => n.id !== nodeId),
-        edges: edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
-      });
-      setSelectedId(null);
     },
     [nodes, edges, onChange],
   );
@@ -221,17 +181,7 @@ export function GraphEditor({
     const types = new Map(nodes.map((n) => [n.id, n.type]));
     for (const trigger of triggers) {
       if (String(trigger.params.event ?? "") !== VALIDATE_TRIGGER) continue;
-      const reached = new Set([trigger.id]);
-      let grew = true;
-      while (grew) {
-        grew = false;
-        for (const edge of edges) {
-          if (reached.has(edge.source) && !reached.has(edge.target)) {
-            reached.add(edge.target);
-            grew = true;
-          }
-        }
-      }
+      const reached = reachable(edges, [trigger.id], "downstream");
       chips[trigger.id] = [...reached].some((id) => types.get(id) === "verdict.block") ? "blocks" : "advises";
     }
     return chips;
@@ -247,24 +197,14 @@ export function GraphEditor({
     return triggers.some((t) => scoped.has(String(t.params.event ?? "")));
   }, [triggers, catalog.data]);
 
-  /** Nodes no trigger can reach. They are stored and valid, they simply never
-   * run — the quietest way for an automation to do nothing, so it is said. */
   /** RADD-1104: action nodes with missing required params — Save is gated on
    * this upstream in RuleEditor; here it gets said ON the canvas. */
   const incompleteActions = useMemo(() => incompleteActionNodeIds(nodes), [nodes]);
 
+  /** Nodes no trigger can reach. They are stored and valid, they simply never
+   * run — the quietest way for an automation to do nothing, so it is said. */
   const unreachable = useMemo(() => {
-    const reached = new Set(triggers.map((t) => t.id));
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const edge of edges) {
-        if (reached.has(edge.source) && !reached.has(edge.target)) {
-          reached.add(edge.target);
-          grew = true;
-        }
-      }
-    }
+    const reached = reachable(edges, triggers.map((t) => t.id), "downstream");
     return nodes.filter((n) => !reached.has(n.id)).map((n) => n.id);
   }, [nodes, edges, triggers]);
 
@@ -358,7 +298,7 @@ export function GraphEditor({
             canActAs={catalog.data?.can_act_as ?? false}
             hasItem={triggersResolveAnItem}
             onChange={updateNode}
-            onDelete={deleteNode}
+            onDelete={(id) => deleteNodes([id])}
           />
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useContributedQuery, QueryError } from "@radd/plugin-sdk";
-import type { FirstProject } from "@radd-plugin-ui/projects/lookup-contract";
+import type { Project } from "@radd-plugin-ui/projects/types";
 import type { ItemChoice } from "@radd-plugin-ui/items/lookup-contract";
 import type { PageChoices } from "@radd-plugin-ui/pages/lookup-contract";
 import { ProjectSelect } from "./controls";
@@ -11,6 +11,7 @@ import { CircleSlash, FlaskConical } from "lucide-react";
 import { api, errorMessage } from "@radd/plugin-sdk";
 import { ApiPath, apiAutomationTestPath } from "./constants";
 import { automationCatalogQuery } from "./queries";
+import { isSentinelTrigger } from "./meta";
 import type {
   ActionPreview,
   AutomationNode,
@@ -29,33 +30,21 @@ interface RuleTestPanelProps {
   ruleId: string | null;
   name?: string;
   edges?: AutomationEdge[];
-  /** The saved graph's triggers — a run starts at ONE of them. */
+  /** The draft graph's triggers — a run starts at ONE of them. */
   triggers?: Pick<RuleTrigger, "node_id" | "event_type">[];
-  /** The saved graph's nodes, for labelling results by type. */
+  /** The draft graph's nodes, for labelling results by type. */
   nodes?: AutomationNode[];
   /** Hand the result up so the canvas can label its ports with it. */
   onResult?: (result: RuleTestResult | null) => void;
 }
 
 /**
- * Dry run: what the graph WOULD do, per node (spec 20, rebuilt by RADD-921).
- *
- * It used to report one boolean and a flat list of actions — the shape of a
- * linear rule. A graph branches, so the questions people actually have are
- * "which issues came out of my filter" and "why is this branch empty", and
- * neither was answerable: you could see that six actions would apply and not
- * which node produced them, or against which item.
- *
- * Two changes make it usable on a real graph. The seed item is OPTIONAL, since a
- * graph fed by a search node or a schedule has no triggering issue and demanding
- * one made exactly those the graphs that could not be checked. And every node
- * reports what ARRIVED and what LEFT by each port, with sample keys — a count
- * answers "did my filter narrow anything", a sample answers "did it keep the
- * right ones".
+ * Dry run: what the graph WOULD do, per node. The seed item is optional (search- or schedule-fed graphs
+ * have none); every node reports what arrived and what left each port, with sample keys.
  */
 export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers = [], nodes = [], onResult }: RuleTestPanelProps) {
   const [projectId, setProjectId] = useState("");
-  const firstProject = useContributedQuery<FirstProject[]>("projects.first", {}, {enabled: !projectId});
+  const firstProject = useContributedQuery<Project[]>("projects.first", {}, {enabled: !projectId});
   useEffect(() => {if (!projectId && firstProject.data?.[0]?.id) setProjectId(firstProject.data[0].id);}, [projectId, firstProject.data]);
   const [itemId, setItemId] = useState("");
   const [triggerId, setTriggerId] = useState("");
@@ -78,7 +67,7 @@ export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers =
 
   const selectedTrigger = triggers.find(trigger => trigger.node_id === triggerId) ?? triggers[0];
   const eventType = selectedTrigger?.event_type ?? "manual";
-  const usesEvent = !["manual", "schedule", "validate"].includes(eventType) && !eventType.endsWith(".validate");
+  const usesEvent = !isSentinelTrigger(eventType);
   const [eventId, setEventId] = useState("");
   const [payload, setPayload] = useState("{}");
   const samples = useQuery({

@@ -4,16 +4,9 @@ import type { DataSource } from "./data";
 import type { LiveDocumentSource } from "./live-documents";
 import type { SlotContribution, SlotIdValue } from "./slots";
 
-/**
- * The contract every plugin remote's entry exports (docs/plugin-platform.md §8b-A). The host
- * runtime loader `import()`s the remote and applies its contributions, auto-tagged with the plugin's
- * name (from the backend manifest) so disabling the plugin removes exactly its UI.
- *
- * Two authoring styles — prefer the DECLARATIVE one:
- *   - `contributions`: an array where each row is one attachment `{ slot, ...contribution }`. Every
- *     place the plugin touches the UI is visible at a glance — this reads like a manifest.
- *   - `activate(ctx)`: an imperative escape hatch for conditional/dynamic registration.
- */
+/** What a plugin remote's entry exports. The loader applies it tagged with the plugin's name, so
+ *  disabling the plugin removes exactly its UI. Prefer declarative `contributions`; `activate` is the
+ *  escape hatch for dynamic registration. */
 export interface PluginContext {
   /** The stable plugin name (matches the backend manifest / enable key). */
   plugin: string;

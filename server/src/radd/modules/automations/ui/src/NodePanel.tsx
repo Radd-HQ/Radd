@@ -1,14 +1,4 @@
-/**
- * The node list beside the canvas (spec 116, RADD-916).
- *
- * Modelled on the roadmap's unscheduled tray: a fixed-width column of things you
- * drag or click into the surface beside it, rather than a toolbar above it. A
- * toolbar could only ever show a handful of buttons, and the catalogue is ~40
- * triggers plus 15 actions — the list is the honest shape for that.
- *
- * Collapsible sections default OPEN for the small ones and closed for the long
- * trigger groups, so the panel opens readable rather than as a wall.
- */
+/** The node list beside the canvas. Long trigger groups start collapsed; everything opens while searching. */
 import { useMemo, useState } from "react";
 import { ChevronRight, Search } from "lucide-react";
 import { groupTemplates, searchTemplates, type NodeTemplate } from "./automation-nodes";
@@ -22,12 +12,7 @@ interface NodePanelProps {
 
 export function NodePanel({ templates, onAdd }: NodePanelProps) {
   const [query, setQuery] = useState("");
-  // Groups the user has explicitly OPENED — an opt-in set, deliberately empty
-  // to begin with. The previous version computed "which to collapse" in a
-  // `useState` initializer, which is wrong twice over: it runs once, so it saw
-  // no templates on a cold load and collapsed nothing (73 triggers expanded,
-  // a 3,316px panel); and when the catalogue was already cached it collapsed
-  // everything into a set whose meaning had since inverted.
+  // Groups the user OPENED. Not a useState initializer: it ran before the catalogue loaded (a 3,316px panel).
   const [opened, setOpened] = useState<Set<string>>(new Set());
 
   const groups = useMemo(
@@ -58,10 +43,7 @@ export function NodePanel({ templates, onAdd }: NodePanelProps) {
           <p className="px-1 py-3 text-center text-xs text-fg-muted">No node matches “{query}”.</p>
         )}
         {groups.map(([group, entries]) => {
-          // While searching, everything is open — hiding a hit behind a collapsed
-          // heading is the fastest way to make a search look broken.
-          // Long trigger groups stay shut until asked for; the short ones that
-          // people use constantly are open.
+          // Searching opens everything; long trigger groups stay shut until asked for.
           const open = searching || opened.has(group) || !group.startsWith("Triggers");
           return (
             <section key={group}>

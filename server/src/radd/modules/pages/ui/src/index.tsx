@@ -11,15 +11,8 @@ const PagesSettingsPage = lazy(() =>
   import("./settings/SpacesSettingsPage").then((module) => ({ default: module.PagesSettingsPage })),
 );
 
-/**
- * The wiki's bundled UI (RADD-1392): pages is a core plugin, so this registers at boot.
- *
- * The routes (the spaces index, a space's tree and page, the print view) are the host router's —
- * it mounts this package's `./index-page`, `./space-page` and `./print-page` exports, lazily. What
- * registers here is what other surfaces show: the `radd:*` blocks (an issue description renders
- * them too), the sidebar's Pages section, the Page spaces settings page, and the page lookups and
- * option directory other plugins' controls read.
- */
+/** The wiki's bundled UI (RADD-1392). The host router mounts `./index-page`, `./space-page`, `./print-page`;
+ *  this registers what other surfaces show: `radd:*` blocks, the sidebar section, settings, lookups. */
 export default definePlugin({
   querySources: [searchSource],
   contributions: [

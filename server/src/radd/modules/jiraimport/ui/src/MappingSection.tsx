@@ -1,15 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-/**
- * One band of mapping rows (spec 100).
- *
- * The rule every mapping table follows: what the project actually USES is
- * expanded, everything else is collapsed AND already set to ignore — with the
- * reason on the row, so hiding it is a judgement you can overrule rather than a
- * disappearance. A live Jira exposes 337 fields, 59 issue types and 83 statuses;
- * a project uses a handful of each.
- */
+/** Below this many rows a mapping table needs no filter chrome (RADD-882). */
+export const FILTER_THRESHOLD = 8;
+
+/** One band of mapping rows: what the project USES is expanded; the rest is collapsed and already
+ * ignored, with the reason on each row so hiding it can be overruled. */
 export function MappingSection({
   title,
   hint,
@@ -22,8 +18,7 @@ export function MappingSection({
   hint?: string;
   count: number;
   defaultOpen?: boolean;
-  /** Held open regardless of the toggle — a band filter (RADD-882) must never
-   * hide its matches behind a collapsed fold (the cycles-page rule). */
+  /** Held open while filtering, so a match is never hidden behind a fold. */
   forceOpen?: boolean;
   children: ReactNode;
 }) {

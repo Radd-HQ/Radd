@@ -28,9 +28,13 @@ const KIND_LABELS: Record<ScheduleKindValue, string> = {
   [ScheduleKind.cron]: "Custom (cron)",
 };
 
-/** A few expressions worth starting from. Cron is powerful and unreadable, and
- * an empty box is where people give up — a working example they can edit is
- * the difference between the feature existing and being used. */
+/** Working examples to start from: an empty cron box is where people give up. */
+const pillClass = (selected: boolean) =>
+  "rounded-full border px-2.5 py-1 text-xs cursor-pointer transition-colors " +
+  (selected
+    ? "border-accent-hover/60 bg-accent/15 text-accent-text-strong"
+    : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg");
+
 const CRON_EXAMPLES: { expression: string; label: string }[] = [
   { expression: "0 9 * * 1", label: "09:00 every Monday" },
   { expression: "0 9 1 * *", label: "09:00 on the 1st of each month" },
@@ -172,12 +176,7 @@ export function ScheduleEditor({value, onChange, previewSchedule}: ScheduleEdito
                 onClick={() => onChange({ ...value, expression: example.expression })}
                 aria-pressed={value.expression === example.expression}
                 title={example.expression}
-                className={
-                  "rounded-full border px-2.5 py-1 text-xs cursor-pointer transition-colors " +
-                  (value.expression === example.expression
-                    ? "border-accent-hover/60 bg-accent/15 text-accent-text-strong"
-                    : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg")
-                }
+                className={pillClass(value.expression === example.expression)}
               >
                 {example.label}
               </Button>
@@ -201,12 +200,7 @@ export function ScheduleEditor({value, onChange, previewSchedule}: ScheduleEdito
                   type="button"
                   onClick={() => toggleWeekday(day)}
                   aria-pressed={selected}
-                  className={
-                    "rounded-full border px-2.5 py-1 text-xs cursor-pointer transition-colors " +
-                    (selected
-                      ? "border-accent-hover/60 bg-accent/15 text-accent-text-strong"
-                      : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg")
-                  }
+                  className={pillClass(selected)}
                 >
                   {name}
                 </Button>

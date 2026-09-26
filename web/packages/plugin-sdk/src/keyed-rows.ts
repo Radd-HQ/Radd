@@ -8,17 +8,10 @@ function mintKey(): string {
 }
 
 /**
- * Stable render keys for removable row builders (RADD-901). Eight builders
- * keyed editable rows by `key={index}`, so deleting row N re-keyed every row
- * below it — focus lost, editor state flashed. This mints an id per row at
- * ADD time and retires it at REMOVE time, so surviving rows keep their key
- * (and their DOM) across removals.
- *
- * Route every insert through `add` and every removal through `removeAt`;
- * in-place edits (`rows[i] = …` via onChange) need nothing. A wholesale
- * external replacement (loading a saved rule, reset) is reconciled by length
- * — extras get fresh keys, leftovers are dropped from the tail — which is
- * exactly right for load/reset and the documented limit of this helper:
+ * Stable render keys for removable row builders: a key is minted at ADD and retired at REMOVE, so
+ * surviving rows keep their DOM (`key={index}` re-keyed every row below a deletion). Route inserts
+ * through `add` and removals through `removeAt`; in-place edits need nothing. An external
+ * replacement is reconciled by length (fresh keys appended, tail dropped) — right for load/reset;
  * an external REMOVAL that bypasses `removeAt` would retire the wrong key.
  */
 export function useKeyedRows<T>(rows: readonly T[], onChange: (next: T[]) => void) {

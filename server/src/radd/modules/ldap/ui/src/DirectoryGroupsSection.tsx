@@ -8,16 +8,9 @@ import { ImportGroupsDialog } from "./ImportGroupsDialog";
 import { directoryGroupsQuery, mirroredGroupsQuery } from "./queries";
 import { SEARCH_DEBOUNCE_MS, type DirectoryGroup } from "./types";
 
-/** RADD-1294: a real AD returned ~4,400 groups and every one rendered its own checkbox. */
-const GROUPS_PAGE_SIZE = 50;
-
-/**
- * The live group browse (spec 85 §3 → RADD-829): every AD group under the configured base with
- * its MIRROR state (a `groups` row exists for the DN), per-row Import / Add-to-team, and bulk
- * import. Importing mirrors the group and ensures a same-named team holds it; "Add to team" puts an
- * already-mirrored group on any team. Un-mirroring doesn't exist — a group row is the directory's
- * truth, and removing it from a team is the team panel's job.
- */
+const GROUPS_PAGE_SIZE = 50; // a real AD has thousands of groups
+/** Browse AD groups under the base with their mirror state; Import mirrors a group into a same-named
+ *  team, Add-to-team puts a mirrored group on any team. There is no un-mirror. */
 export function DirectoryGroupsSection({ directoryReady }: { directoryReady: boolean }) {
   const [q, setQ] = useState("");
   const debounced = useDebounced(q, SEARCH_DEBOUNCE_MS);

@@ -8,12 +8,9 @@ import { shapeKey, type NodeShape, type NodeShapes, type ShapeNode } from "./sha
 type Request = { key: string; type: string; params: Record<string, unknown> };
 const requestKey = (node: Request) => JSON.stringify([node.type, node.params]);
 
-/**
- * One shared, cached answer per (loaded plugins, node type, params) — the loaded set is in the key
- * because a withdrawn provider's node has no shape. Parameter edits are debounced, and while a new
- * answer is on its way a node keeps the ports it last had (RADD-1373: they used to collapse to the
- * already-wired ones on every keystroke). A refused or failed read offers no ports.
- */
+/** One cached answer per (loaded plugins — a withdrawn provider's node has no shape — type, params),
+ * debounced; a node keeps its last ports while a new answer is in flight. A refused or failed read
+ * offers no ports. */
 export function useNodeShapes(nodes: ShapeNode[], catalog: AutomationCatalog | undefined, enabled = true): NodeShapes {
   const capabilities = useCapabilities();
   const plugins = capabilities?.plugins ?? [];

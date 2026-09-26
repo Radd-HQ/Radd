@@ -2,18 +2,8 @@ import type { FieldDef } from "@radd-plugin-ui/fields/types";
 import { OptionSelect } from "@radd/plugin-sdk";
 import { OptionResource } from "./options";
 import { ProjectSelect } from "./controls";
-/**
- * Builder forms for the spec-119 nodes: the validate TRIGGER and the check.
- *
- * Bespoke rather than `SchemaFields`-generated, because both are pickers over
- * live data. A generated form would show `targets` as a JSON array of
- * `{kind, id}` and ask an admin to paste UUIDs — which is not a form, it is a
- * text editor with a label on it.
- *
- * The target list is a ROW BUILDER for the same reason the server stores rows:
- * "this graph checks the incident form and the Bug type in two projects" is a
- * set, and any single-value control would silently keep only the last choice.
- */
+/** Forms for the validate trigger and verdicts: pickers over live data, and targets as a ROW builder
+ * (a set — a single control would keep only the last choice). */
 import { Plus, Trash2 } from "lucide-react";
 import {
   ValidationTargetKind,
@@ -28,10 +18,7 @@ import { TextField } from "@radd/plugin-sdk";
 
 type Params = Record<string, unknown>;
 
-/** Builtin field names a finding may address, with their human labels. Mirrors
- * the server's `BuiltinItemField`; a name here that the server does not know
- * would be refused on save, which is why the list is spelled out rather than
- * derived from whatever the SPA happens to render. */
+/** Mirrors the server's `BuiltinItemField`; an unknown name is refused on save. */
 const BUILTIN_FIELDS: [string, string][] = [
   ["title", "Title"],
   ["description", "Description"],

@@ -15,21 +15,13 @@ import {
 
 const TABS: ConfluenceMappingSection[] = ["spaces", "macros", "users", "groups", "labels", "jira_links"];
 
-/**
- * The mapping step (spec 117).
- *
- * The census is the point: rows carry their real usage COUNT, the used ones are
- * expanded and the unused collapse into a section that defaults to ignored — the
- * spec-100 treatment that turned 337 Jira fields into 14 decisions.
- */
+/** The mapping step: rows carry their usage count; unused rows collapse and default to ignored. */
 export function PlanEditor({
   planId,
   focus,
-  onRan,
 }: {
   planId: string;
   focus: { section: ConfluenceMappingSection; key: string; nonce: number } | null;
-  onRan: () => void;
 }) {
   const client = useQueryClient();
   const plan = useQuery(planQuery(planId));
@@ -89,7 +81,6 @@ export function PlanEditor({
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: confluenceKeys.runs });
-      onRan();
     },
   });
 

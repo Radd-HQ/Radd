@@ -5,12 +5,8 @@ import { useAiStatus } from "../queries";
 import { AI_PROVIDER_UNAVAILABLE_MESSAGE, AiEndpoint, isAiGone } from "../transport";
 import { AiFeature, type NlQueryRequest, type NlQueryResponse } from "../types";
 
-/**
- * The query bar's Ask (spec 46; a contributed input mode since RADD-1400): natural language in,
- * POST /slq/nl generates a compile-validated query in the bar's dialect (spec 98: the timesheet
- * writes worklog SLQ, `issue.` delegating to the item fields), with a sentence saying what it
- * means. The bar applies it in its SLQ editor.
- */
+/** The query bar's Ask: POST /slq/nl turns natural language into a compile-validated query in the
+ *  bar's dialect, plus a sentence saying what it means. */
 
 // A 404 means this plugin (or the feature) went dormant since the status gate last looked: the
 // mode stops offering itself until the gate reads the status again.
@@ -23,7 +19,7 @@ function markGone() {
 }
 
 /** Natural language → SLQ in `dialect`. A provider failure reads as one clean sentence. */
-export async function naturalLanguageQuery(
+async function naturalLanguageQuery(
   question: string,
   { dialect, signal }: { dialect: QueryDialectValue; signal: AbortSignal },
 ): Promise<QueryDraft> {

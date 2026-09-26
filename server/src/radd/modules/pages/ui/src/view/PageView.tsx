@@ -15,16 +15,7 @@ import { PageReading } from "./PageReading";
 import { usePageEditing } from "./usePageEditing";
 import { usePeople } from "./people";
 
-/**
- * A page (spec 43): inline-editable title, rendered markdown body with an
- * Edit mode, History tab, archive controls, and the linked-issues panel.
- *
- * Edit mode is a LIVE SESSION when a plugin offers one (spec 122, RADD-1397):
- * readers sit in it as observers (the header shows who is there), Edit joins
- * as an editor on a shared document, and the session saves it. The spec-43
- * single-editor flow (Save with expected_version; reload-or-overwrite on a 409)
- * runs when none is offered or it cannot be joined — see `usePageEditing`.
- */
+/** A page: title, meta, labels, body (read or edit — see `usePageEditing`), History, inline comments. */
 export function PageView({
   page,
   canWrite: canWriteProp,
@@ -34,19 +25,14 @@ export function PageView({
 }: {
   page: Page;
   canWrite: boolean;
-  /** `comment.write`, NOT `page.write` (RADD-770). Separate atoms on the server,
-   *  and `page.write` is held unconditionally by every active user — so passing
-   *  `canWrite` here was a gate that could never close. */
+  /** `comment.write`, not `page.write` (RADD-770): every active user holds page.write. */
   canComment: boolean;
   canManage: boolean;
   /** For page-relative extensions (RADD-709) — a `radd:toc` with subpages has
    *  to build links, and only the route knows the space's URL segment. */
-  spaceSlug?: string;
+  spaceSlug: string;
 }) {
-  // RADD-1228: an archived page is READ-ONLY until restored — every editor
-  // this component offers hangs off `canWrite`, so closing it here closes them
-  // all (title, body, URL, labels, links, history restore). Restore and
-  // permanent delete stay on `canManage`.
+  // An archived page is read-only (RADD-1228): every editor hangs off canWrite, so closing it closes all.
   const archived = page.archived_at !== null;
   const canWrite = canWriteProp && !archived;
   const authenticated = useIsAuthenticated();
@@ -91,7 +77,7 @@ export function PageView({
   }).then((ok) => { if (ok) hardDelete.mutate(); });
 
   const extensionContext = useMemo(
-    () => ({ pageId: page.id, spaceId: page.space_id, spaceSlug: spaceSlug ?? null }),
+    () => ({ pageId: page.id, spaceId: page.space_id, spaceSlug }),
     [page.id, page.space_id, spaceSlug],
   );
 
@@ -127,7 +113,7 @@ export function PageView({
       {tab === PageTab.history ? (
         <PageHistory page={page} canWrite={canWrite} />
       ) : (
-        <div className="grid min-w-0 items-start gap-6 @3xl/page-view:grid-cols-[minmax(0,1fr)_18rem]" data-page-content-layout>
+        <div className="grid min-w-0 items-start gap-6 @3xl/page-view:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0">
             {edit.editing ? (
               <div ref={bodyRef}>
@@ -169,7 +155,7 @@ export function PageView({
         </div>
       )}
       {confirmDialog}
-      {changingUrl && spaceSlug && (
+      {changingUrl && (
         <ChangeUrlDialog
           page={page}
           spaceSlug={spaceSlug}

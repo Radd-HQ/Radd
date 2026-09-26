@@ -9,16 +9,10 @@ import { Loading } from "./Loading";
 import { PageVersionDiff } from "./PageVersionDiff";
 import { usePeople } from "./people";
 
-/**
- * History tab (spec 43): past versions (the CURRENT content is v{page.version},
- * not listed) → view one → Restore, which writes the old content as a NEW
- * version (history stays linear; nothing is overwritten).
- */
+/** History (spec 43): versions → view → Restore, which writes a NEW version. */
 export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean }) {
   const [viewing, setViewing] = useState<number | null>(null);
-  // RADD-720: which version to diff against its SUCCESSOR — the comparison a
-  // reader wants from a history list is "what did this edit change", so each row
-  // offers exactly that rather than making them pick two ends.
+  // Diff each version against its SUCCESSOR — "what did this edit change".
   const [diffing, setDiffing] = useState<number | null>(null);
   const versions = useQuery(pageVersionsQuery(page.id));
   const users = usePeople(useIsAuthenticated());
@@ -84,8 +78,6 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
                   <span title={version.created_at}>{relativeTime(version.created_at)}</span>
                 </span>
               </button>
-              {/* RADD-720: restore was a guess without this — you could roll back
-                  to a version you had no way to read the difference of. */}
               <button
                 type="button"
                 onClick={() => setDiffing(version.version)}

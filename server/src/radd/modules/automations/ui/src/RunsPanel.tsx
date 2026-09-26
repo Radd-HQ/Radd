@@ -1,13 +1,5 @@
-/**
- * Recorded runs of one automation (RADD-1266).
- *
- * The engine kept nothing of a run but a log line, so "did it fire, what did
- * it skip, why" had no answer in the product. Each run is stored in the dry
- * run's own shape, and this panel renders it through the same view the dry run
- * uses — one renderer for "what would it do" and "what did it do". Selecting a
- * run also hands its report up, so the canvas labels its ports with what
- * actually happened.
- */
+/** Recorded runs of one automation, rendered through the dry run's `RunResultView`; the selected run's
+ * report labels the canvas ports. */
 import { useEffect, useState } from "react";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
 
@@ -24,7 +16,7 @@ interface RunsPanelProps {
   onResult?: (result: RuleTestResult | null) => void;
 }
 
-export const RUN_STATUS_LABEL: Record<string, string> = {
+const RUN_STATUS_LABEL: Record<string, string> = {
   [RunStatus.applied]: "Applied",
   [RunStatus.nothingToDo]: "Nothing to do",
   [RunStatus.refused]: "Refused",
@@ -48,12 +40,6 @@ export function RunStatusChip({ status }: { status: string }) {
     </span>
   );
 }
-
-const SOURCE_LABEL: Record<AutomationRun["source"], string> = {
-  event: "event",
-  schedule: "schedule",
-  manual: "manual",
-};
 
 export function RunsPanel({ ruleId, nodes = [], onResult }: RunsPanelProps) {
   const runs = useQuery(automationRunsQuery(ruleId));
@@ -113,7 +99,7 @@ export function RunsPanel({ ruleId, nodes = [], onResult }: RunsPanelProps) {
                   {relativeTime(run.started_at)}
                 </span>
                 <span className="text-[11px] text-fg-muted">
-                  {SOURCE_LABEL[run.source]}
+                  {run.source}
                   {run.event_type && run.source === "event" ? ` · ${run.event_type}` : ""}
                   {` · from ${run.trigger_node_id}`}
                 </span>

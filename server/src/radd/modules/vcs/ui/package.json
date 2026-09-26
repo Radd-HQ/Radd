@@ -11,8 +11,7 @@
   },
   "exports": {
     ".": "./src/index.tsx",
-    "./host-contract": "./src/host-contract.ts",
-    "./types": "./src/types.ts"
+    "./host-contract": "./src/host-contract.ts"
   },
   "radd": {
     "bundled": true

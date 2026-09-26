@@ -14,7 +14,7 @@ import type { AiEditorAction, AiStatus, SimilarResponse } from "./types";
  * error/undefined as disabled and render nothing. Tagged with the provider/role entities, so a
  * change on Settings → AI refreshes the gate.
  */
-export const aiStatusQuery = queryOptions({
+const aiStatusQuery = queryOptions({
   queryKey: ["ai", "status"],
   meta: { entities: [AiEntity.provider, AiEntity.role] },
   queryFn: ({ signal }) => api.get<AiStatus>(AiEndpoint.status, { signal }),

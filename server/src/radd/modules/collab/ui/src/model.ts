@@ -23,12 +23,6 @@ export interface CollabUser {
   emoji: string | null;
 }
 
-/** The awareness state every client publishes. y-prosemirror adds `cursor`. */
-export interface CollabAwarenessState {
-  user: CollabUser;
-  role: CollabRoleValue;
-}
-
 /** One person in the room — several tabs of the same account fold into one
  *  entry, editing if ANY of them is. */
 export interface Presence {

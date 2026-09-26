@@ -10,29 +10,12 @@ import { Tag } from "../queries";
 /** A `radd:items` table shows at most this many issues. */
 const ITEMS_TABLE_LIMIT = 50;
 
-/**
- * The three extensions the Confluence importer needs (spec 117, RADD-1019).
- *
- * They live here rather than in `extensions.tsx` only because that file was
- * already at its size limit; they are declared with the rest in
- * `extension-registry.tsx`, and `extensions.tsx` provides these renderers too.
- *
- * Each ships its renderer in the same commit as its kernel declaration:
- * `tests/test_page_extensions.py` compares the TypeScript list to the kernel's in
- * BOTH directions, so a name declared without a renderer fails the build rather
- * than landing as an "unknown extension" card on every imported page.
- */
+/** The importers' blocks (spec 117). Declared in `extension-registry.tsx`; `test_page_extensions.py`
+ *  checks every declaration has a renderer here or in `extensions.tsx`. */
 
 // --- radd:unsupported-macro ------------------------------------------------
 
-/**
- * The honest fallback for a Confluence macro Radd cannot render.
- *
- * It exists so the importer never has to choose between guessing and deleting.
- * The macro's name and parameters are preserved verbatim, which means building
- * the real renderer later upgrades every instance in place — the raw body is
- * still in the snapshot cache, so it is a re-convert, not a re-download.
- */
+/** A macro Radd cannot render: name, params and body kept verbatim, so a real renderer later upgrades it in place. */
 function UnsupportedMacro({ params }: { params: Record<string, unknown> }) {
   const macro = typeof params.macro === "string" ? params.macro : "unknown";
   const values =
@@ -204,14 +187,7 @@ function ItemsTable({ params }: { params: Record<string, unknown> }) {
 
 // --- radd:media ------------------------------------------------------------
 
-/**
- * A playable video or audio attachment.
- *
- * Confluence's `multimedia` macro IS the content of the pages that use it — a
- * meeting recording carded as "unsupported" is the page missing its point. The
- * native players are deliberate: no library, no custom controls, and the browser
- * handles range requests and codecs, which is exactly what a 217 MB MP4 needs.
- */
+/** A playable attachment. Native players on purpose: the browser handles range requests and codecs. */
 function Media({ params }: { params: Record<string, unknown> }) {
   const src = typeof params.src === "string" ? params.src : "";
   const kind = params.kind === "audio" ? "audio" : "video";

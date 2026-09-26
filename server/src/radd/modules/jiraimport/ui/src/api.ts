@@ -1,6 +1,4 @@
-/** Transport for the Jira importer (specs 90, 100): paths, query keys, queries.
- * Everything here is this plugin's own — including the keys under which it reads
- * the states, types, teams and people its plan editor maps onto. */
+/** The Jira importer's paths, query keys and queries (target reads included, under its own keys). */
 import { api, ApiError } from "@radd/plugin-sdk";
 import type { JiraPlan } from "./plan-types";
 import type {
@@ -19,14 +17,11 @@ import type {
 import { TERMINAL_JIRA_RUN_STAGES, TERMINAL_SNAPSHOT_STAGES } from "./types";
 
 export const JiraPath = {
-  // Spec 100: connections are admin-managed rows, not environment variables.
   connections: "/jira/connections",
   status: "/jira/status",
   projects: "/jira/projects",
   // RADD-1101: the JQL sanity check — a bad query answers 422 with Jira's reason.
   preview: "/jira/preview",
-  // A JQL result set is downloaded ONCE into a cached snapshot, and every later
-  // step reads that instead of hammering Jira again.
   snapshots: "/jira/snapshots",
   plans: "/jira/plans",
   runs: "/jira/runs",
@@ -62,23 +57,23 @@ export const jiraKeys = {
   users: [ROOT, "target", "users"] as const,
 };
 
-const Q = (signal: AbortSignal) => ({ signal });
+/** Polls while any row is still moving, and goes quiet once every one has settled. */
+const POLL_MS = 1500;
+const pollUntil = <T,>(settled: (row: T) => boolean) => (query: { state: { data?: T[] } }) =>
+  (query.state.data ?? []).every(settled) ? false : POLL_MS;
 
 /** Every configured Jira instance. Credentials are never in the response. */
 export const connectionsQuery = () => ({
   queryKey: jiraKeys.connections,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraConnection[]>(JiraPath.connections, Q(signal)),
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraConnection[]>(JiraPath.connections, { signal }),
   staleTime: 30_000,
 });
 
-/**
- * Is the DEFAULT connection live? Never rejects for an unreachable Jira — an
- * unusable connection comes back as `ok: false` with a reason, which is a state
- * to render rather than an error boundary.
- */
+/** Is the DEFAULT connection live? An unreachable Jira answers `ok: false` with a reason —
+ * a state to render, not an error. */
 export const statusQuery = () => ({
   queryKey: jiraKeys.status,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraConnectionStatus>(JiraPath.status, Q(signal)),
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraConnectionStatus>(JiraPath.status, { signal }),
   retry: false,
 });
 
@@ -92,42 +87,36 @@ export const jiraProjectsQuery = (connectionId: string | null) => ({
   staleTime: 60_000,
 });
 
-/**
- * Cached downloads, newest first. Polling is self-regulating: the interval is a
- * function of the data, so the list refetches while a download is moving and
- * goes quiet the moment every one of them has settled.
- */
-export const snapshotsQuery = (pollMs = 1500) => ({
+/** Cached downloads, newest first; polls only while one is still moving. */
+export const snapshotsQuery = () => ({
   queryKey: jiraKeys.snapshots,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraSnapshot[]>(JiraPath.snapshots, Q(signal)),
-  refetchInterval: (query: { state: { data?: JiraSnapshot[] } }) =>
-    (query.state.data ?? []).every((s) => TERMINAL_SNAPSHOT_STAGES.includes(s.stage)) ? false : pollMs,
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraSnapshot[]>(JiraPath.snapshots, { signal }),
+  refetchInterval: pollUntil<JiraSnapshot>((s) => TERMINAL_SNAPSHOT_STAGES.includes(s.stage)),
 });
 
 /** Import plans — one per snapshot, holding every mapping decision. */
 export const plansQuery = () => ({
   queryKey: jiraKeys.plans,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraPlan[]>(JiraPath.plans, Q(signal)),
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraPlan[]>(JiraPath.plans, { signal }),
 });
 
 export const planQuery = (planId: string) => ({
   queryKey: jiraKeys.plan(planId),
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraPlan>(`${JiraPath.plans}/${planId}`, Q(signal)),
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraPlan>(`${JiraPath.plans}/${planId}`, { signal }),
   enabled: Boolean(planId),
 });
 
 /** Dry runs, imports and rollbacks. Polls only while one is moving. */
-export const runsQuery = (pollMs = 1500) => ({
+export const runsQuery = () => ({
   queryKey: jiraKeys.runs,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraRun[]>(JiraPath.runs, Q(signal)),
-  refetchInterval: (query: { state: { data?: JiraRun[] } }) =>
-    (query.state.data ?? []).every((r) => TERMINAL_JIRA_RUN_STAGES.includes(r.stage)) ? false : pollMs,
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<JiraRun[]>(JiraPath.runs, { signal }),
+  refetchInterval: pollUntil<JiraRun>((r) => TERMINAL_JIRA_RUN_STAGES.includes(r.stage)),
 });
 
 /** How many cross-project references are still waiting for their target. */
 export const pendingQuery = () => ({
   queryKey: jiraKeys.pending,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<PendingSummary>(JiraPath.pending, Q(signal)),
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<PendingSummary>(JiraPath.pending, { signal }),
   staleTime: 30_000,
 });
 
@@ -136,7 +125,7 @@ export const targetProjectQuery = (key: string) => ({
   queryKey: jiraKeys.project(key),
   queryFn: async ({ signal }: { signal: AbortSignal }): Promise<TargetProject | null> => {
     try {
-      return await api.get<TargetProject>(TargetPath.projectByKey(key), Q(signal));
+      return await api.get<TargetProject>(TargetPath.projectByKey(key), { signal });
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return null;
       throw error;
@@ -166,7 +155,7 @@ export const targetIssueTypesQuery = (projectId: string) => ({
 /** Every team — a Jira team value translates onto a team NAME. */
 export const targetTeamsQuery = () => ({
   queryKey: jiraKeys.teams,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<TargetTeam[]>(TargetPath.teams, Q(signal)),
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<TargetTeam[]>(TargetPath.teams, { signal }),
   staleTime: 60_000,
 });
 
@@ -174,6 +163,6 @@ export const targetTeamsQuery = () => ({
  * matching by ADDRESS, and the whole importer is instance-admin only. */
 export const targetUsersQuery = () => ({
   queryKey: jiraKeys.users,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<TargetUser[]>(TargetPath.users, Q(signal)),
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<TargetUser[]>(TargetPath.users, { signal }),
   staleTime: 60_000,
 });

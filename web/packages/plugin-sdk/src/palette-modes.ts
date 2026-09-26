@@ -4,15 +4,9 @@ import type { PluginContribution } from "./plugin";
 import { SlotId } from "./slots";
 import { modeContribution, useContributedModes, type ContributedMode, type ModeIcon, type ModeSpec } from "./contributed-modes";
 
-/**
- * Command palette MODES (RADD-1400). The palette searches by keyword and jumps; a mode gives it
- * another face — a trailing "<label>: “<query>” — <hint>" row enters it, Esc or the back arrow
- * leaves it — in which the mode ANSWERS what is typed: with rows, drawn and navigated with the
- * keyboard exactly like the palette's own, or with streamed text.
- *
- * The palette owns the input, the debounce, the keyboard, the row chrome and navigation; the mode
- * owns what the query means and where each row goes.
- */
+/** Command-palette MODES: a trailing "<label>: “<query>” — <hint>" row enters one, and the mode
+ *  ANSWERS the query with rows (drawn and navigated like the palette's own) or streamed text. The
+ *  palette owns input, debounce, keyboard and row chrome; the mode owns meaning and destinations. */
 
 /** One row of an answer. Choosing it closes the palette and goes to `href`. */
 export interface PaletteRow {

@@ -1,20 +1,7 @@
 /**
- * What `{{tokens}}` are available HERE, shown where they are typed (spec 116,
- * made topology-aware by spec 120).
- *
- * Two lists, and the difference between them is the point:
- *
- * * the ROOTS — `{{item.key}}`, `{{actor.name}}`, `{{payload.…}}` — come from
- *   `GET /automations/catalog`, which reads the same table the resolver sits
- *   next to. A token listed here that did not resolve would render as a literal
- *   `{{…}}` in someone's issue title, and a test asserts the pairing.
- * * the VARIABLES are computed from the graph: only nodes that this one can be
- *   reached from, only ones that have been NAMED, only the outputs they declare.
- *   Listing every named node instead would offer values from branches that never
- *   run with this one — tokens that compile, save, and resolve to nothing.
- *
- * Clicking one inserts it into whichever field was last focused, because the
- * point of showing them is to use them.
+ * The `{{tokens}}` usable here: ROOTS from the served catalog (the resolver's own table), and VARIABLES
+ * from named producers that can actually reach this node — listing every named node would offer tokens
+ * that save and resolve to nothing. Click inserts into the last-focused field.
  */
 import { useState } from "react";
 import { Braces, CornerDownRight } from "lucide-react";
@@ -41,14 +28,8 @@ interface TokenReferenceProps {
   onInsert?: (token: string) => void;
 }
 
-/** Where tokens are RENDERED, said out loud on the surfaces where they are not.
- *
- * Only an ACTION's params go through the planner's `Renderer` — that is its
- * single call site. A contributed node's own params (an `ai.generate` prompt, a
- * filter's SLQ) are handed to the node verbatim, so a token typed there is
- * literal text: it reaches the model as `{{cls.answer}}`, or it compiles into a
- * query that matches nothing. Showing the list there as a REFERENCE is useful;
- * offering to insert into it is an invitation to a silent failure. */
+/** Tokens are rendered only in ACTION params (the planner's one Renderer call site). A contributed node's
+ * own params (an `ai.generate` prompt, a filter's SLQ) get literal braces — so there the list is reference only. */
 const REFERENCE_ONLY_NOTE =
   "Reference only — these are substituted in action parameters. This node's own fields are used exactly as written.";
 

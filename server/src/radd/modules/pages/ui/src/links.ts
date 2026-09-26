@@ -1,14 +1,5 @@
-/**
- * The wiki's addresses (spec 124; RADD-1392: the pages plugin owns them, and the host's router
- * mounts its route components at these paths).
- *
- * - `/pages` — the spaces index, and the permalink resolver (`/pages?pageId=<number>`);
- * - `/pages/<space>` — a space's tree; `/pages/<space>/<slug>/<slug>/…` — a page, a PATH through
- *   the tree carried by the splat. A single segment may be a number or an id: such links resolve
- *   and the page view rewrites the URL to the canonical path, so no link ever shared can rot;
- * - `/print/pages/<space>/<path>` — the print view (RADD-733), a TOP-LEVEL route outside the app
- *   layout, under its own prefix because nothing may hang a literal after a path.
- */
+/** The wiki's routes (spec 124). A page is `/pages/<space>/<slug>/…` (a splat PATH); `/pages?pageId=<n>`
+ *  is the permalink; `/print/pages/…` sits under its own prefix because nothing may follow a splat. */
 export const PageRoute = {
   pages: "/pages",
   space: "/pages/$spaceSlug",
@@ -22,19 +13,9 @@ export const PageRoute = {
 export const spacesSettingsLink = { to: "/settings/$", params: { _splat: "pages" } } as const;
 
 /**
- * The two ways to address a page (RADD-1233), and the ONE place that builds them.
- *
- * - `pageLink(space, path)` — the readable address: `/pages/<space>/<slug>/<slug>`.
- *   For anything that already holds the page's `path` (the tree, a breadcrumb,
- *   a full page read, backlinks, label lists).
- * - `pagePermalink(key)` — `/pages?pageId=<number>`: resolves and redirects to
- *   the current path. For anything that holds an id but no path (search hits,
- *   deflection, the issue's Docs row, notifications, audit refs), and for every
- *   link the SERVER emits, because it survives renames and moves.
- *
- * Nothing else may assemble a page URL from a slug: a slug is one segment of a
- * path, and a path assembled from the wrong segment is a page that "does not
- * exist".
+ * The ONE place page URLs are built. `pageLink(space, path)` when you hold the page's `path`;
+ * `pagePermalink(key)` when you hold only an id/number, and for anything the server emits — it
+ * survives renames and moves. Never assemble a page URL from a slug: a slug is one path segment.
  */
 
 export interface PageLinkProps {
@@ -62,11 +43,6 @@ export function pagePermalink(key: string | number, comment?: string): PagePerma
 /** The readable address as a plain href — for `window.open`, footers, copy. */
 export function pageHref(spaceSlug: string, path: string): string {
   return `/pages/${encodeURIComponent(spaceSlug)}/${encodePath(path)}`;
-}
-
-/** The permalink as a plain href. */
-export function pagePermalinkHref(key: string | number): string {
-  return `/pages?pageId=${encodeURIComponent(String(key))}`;
 }
 
 /** The print view of a page (RADD-733): a top-level route, outside the shell. */

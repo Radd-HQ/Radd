@@ -116,10 +116,7 @@ export const pageQuery = (pageId: string) => queryOptions({
   retry: false,
 });
 
-/** A page addressed the way the URL addresses it (RADD-702, RADD-1233): `<space>/<slug>/<slug>/…`.
- *  The space may be an id; a single page segment may be a number or an id; a stale path resolves
- *  through the page's old addresses. The answer carries the canonical `path`, and the view
- *  redirects to it when the address it arrived by differs. */
+/** A page by its URL address (`<space>/<path>`); the answer's `path` is canonical and the view redirects to it. */
 export const pageByPathQuery = (spaceSlug: string, path: string) => queryOptions({
   queryKey: pageKeys.byPath(spaceSlug, path),
   meta: tags(Tag.page),

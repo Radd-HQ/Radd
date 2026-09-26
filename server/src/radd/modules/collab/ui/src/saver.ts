@@ -5,23 +5,13 @@ import { COLLAB_AUTOSAVE_MS } from "./constants";
 import { electSaver } from "./model";
 
 /**
- * The elected saver (spec 122).
- *
- * Every editor runs one of these; only the one the election names actually
- * writes. It reads the markdown the editor already produces (a bound editor
- * publishes remote changes too, so `getMarkdown` is always the shared
- * document, not this tab's typing) and hands it to the DOCUMENT's own write
- * path with the session as its voucher — never `expected_version`: the room is
- * the concurrency control now. The saver decides when; the page decides how
- * (RADD-1397: the collab plugin knows no page endpoint).
- *
- * Triggers: 1.5 s after the last change (local or remote); the tab going
- * hidden; becoming the saver (covers whatever the previous saver had pending
- * when it left); and `final` when this client leaves the room. On a real
- * unload the session's own close may not run, so `pagehide` sends the final
- * write with keepalive.
+ * The elected saver (spec 122): every editor runs one; only the elected one writes, handing the
+ * shared markdown (`getMarkdown` is the shared doc, remote edits included) to the page's own save
+ * with the session as voucher — never `expected_version`. Triggers: 1.5 s after any change, tab
+ * hidden, becoming saver (covers the previous saver's pending edit), leaving (`final`); `pagehide`
+ * sends the final write with keepalive, since the session's close may not run on unload.
  */
-export interface SaverOptions {
+interface SaverOptions {
   session: string;
   doc: Doc;
   awareness: Awareness;

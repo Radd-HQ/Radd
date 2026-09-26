@@ -2,21 +2,10 @@ import type { DecorationAttrs } from "prosemirror-view";
 import { safeCursorColor } from "./presence-color";
 
 /**
- * Remote cursor + selection chrome (spec 122), replacing y-prosemirror's
- * default builders for two reasons:
- *
- * - Upstream paints `background-color: ${color}70` — a hex alpha suffix that
- *   is only valid on a 6-digit hex. Our colours are token references, so the
- *   colour rides a custom property (`--collab-color`) and the selection mixes
- *   it with `color-mix`, which works for any colour value.
- * - The value came from a peer's awareness state. It goes through
- *   `safeCursorColor` and `style.setProperty`, never string-built CSS beyond
- *   what that validation admits.
- *
- * The styles are inline (RADD-1397): a remote's stylesheet is not loaded with
- * it, and every value is a house token, so the chrome follows light/dark
- * without a second palette. The DOM shape and class names are upstream's, so a
- * future y-prosemirror still finds what it expects.
+ * Remote cursor/selection builders replacing y-prosemirror's: upstream appends a hex alpha to the
+ * colour (valid only on 6-digit hex; ours are token refs), so the colour rides `--collab-color` +
+ * `color-mix`. The value is a peer's data — only `safeCursorColor` output reaches a style. Inline
+ * styles because a remote's stylesheet is not loaded; DOM/class names stay upstream's.
  */
 const CURSOR_CLASS = "ProseMirror-yjs-cursor";
 const SELECTION_CLASS = "ProseMirror-yjs-selection";

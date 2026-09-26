@@ -1,15 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, ErrorText, api, contentBody, invalidateEntities, type ContentBodyProps } from "@radd/plugin-sdk";
 
-/**
- * How a MAILED body reads (RADD-1401, before that the host's `EmailBody`): intake detects the
- * sender's signature and records it on the issue or comment as `email_signature`, an annotation
- * over an exact suffix of the stored text — the text itself is never cut. This contribution claims
- * every body whose record carries one, draws the text above it through the host's viewer, folds
- * the signature under "Show signature", and lets someone who may edit the content say "Not a
- * signature", which drops the annotation (`POST /mail/signatures/{kind}/{id}/restore`). With the
- * plugin off, the host draws the whole text as it would any other body.
- */
+/** A mailed body with a recorded `email_signature` (an annotation over an exact suffix — the text
+ *  is never cut): draws the text, folds the signature under "Show signature", and lets an editor
+ *  drop the annotation. With the plugin off the host draws the whole text. */
 
 /** The parents intake annotates; each has its own restore route. */
 const RESTORABLE = new Set(["item", "comment"]);

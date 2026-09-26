@@ -19,7 +19,7 @@ export interface PublicSurvey {
   responded_at: string | null;
 }
 
-export interface SurveyAnswer {
+interface SurveyAnswer {
   rating: number;
   comment: string;
 }

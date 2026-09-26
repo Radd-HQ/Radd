@@ -6,11 +6,8 @@ import { AiActionPicker } from "./ActionPicker";
 import { useEditorAi } from "./gate";
 import { aiTransform } from "./transform";
 
-/**
- * The toolbar's AI button — this plugin's `editor.toolbar.action` (RADD-1395). The same curated
- * actions and freeform prompt the selection's Ask AI offers, minus the need for a selection: the
- * run covers the selection when there is one and the whole document when there is not.
- */
+/** The toolbar's AI button (`editor.toolbar.action`): Ask AI's actions without needing a selection —
+ *  a run covers the selection, else the whole document. */
 export function AiToolbarAction({ editor }: EditorToolbarActionProps) {
   const ai = useEditorAi();
   const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);

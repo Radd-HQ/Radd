@@ -2,10 +2,7 @@ import { useState } from "react";
 import { Button, Modal } from "@radd/plugin-sdk";
 import type { Page } from "../types";
 
-/** RADD-860: the deliberate URL change RADD-702 reserved — a small dialog
- * over the existing PATCH slug machinery (server-side collision suffixing;
- * old UUID links stay alive). Pre-fills from the title, since "make the URL
- * match the name" is the whole errand. */
+/** Change a page's URL segment (RADD-860), pre-filled from the title. */
 export function ChangeUrlDialog({
   page,
   spaceSlug,

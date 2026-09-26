@@ -1,10 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCapabilities } from "@radd/plugin-sdk";
 
-/** An Automations read. Keyed by the loaded plugin set, because the catalog, shapes and samples
- * are a function of which plugins are loaded; everything else is an ordinary shared query
- * (RADD-1373 — it used to carry a per-mount identity and never cache). A failed refresh hides
- * what it had: a revoked permission must not keep showing rules. */
+/** Keyed by the loaded plugin set (catalog, shapes and samples depend on it). A failed refresh hides its
+ * data: a revoked permission must not keep showing rules. */
 export function useAutomationQuery<T>(options: {
   queryKey: readonly unknown[];
   queryFn?: (context: {signal: AbortSignal}) => Promise<T>;

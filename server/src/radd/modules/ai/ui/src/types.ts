@@ -10,7 +10,7 @@ export const AiFeature = {
   nlSlq: "nl_slq",
   similarRerank: "similar_rerank",
 } as const;
-export type AiFeatureValue = (typeof AiFeature)[keyof typeof AiFeature];
+type AiFeatureValue = (typeof AiFeature)[keyof typeof AiFeature];
 
 /** GET /ai/status — every AI affordance gates on `enabled`, and per feature on `features`
  * (toggle AND role resolvable). */
@@ -23,7 +23,7 @@ export interface AiStatus {
 
 /** Where an editor action comes from (spec 103): shipped builtin vs admin preset. */
 export const AiEditorActionKind = { builtin: "builtin", preset: "preset" } as const;
-export type AiEditorActionKindValue = (typeof AiEditorActionKind)[keyof typeof AiEditorActionKind];
+type AiEditorActionKindValue = (typeof AiEditorActionKind)[keyof typeof AiEditorActionKind];
 
 /** One entry of GET /ai/editor/actions — the editor's curated AI menu. Builtin ids are stable
  * names; preset ids are the admin presets' uuids. */
@@ -82,7 +82,7 @@ export interface ImagesOf {
 }
 
 /** GET /search/semantic (spec 103) — the palette's Ask: one probe by meaning over items + pages. */
-export interface SemanticItem {
+interface SemanticItem {
   item_id: string;
   project_id: string;
   key: string;
@@ -91,7 +91,7 @@ export interface SemanticItem {
   score: number;
 }
 
-export interface SemanticDoc {
+interface SemanticDoc {
   page_id: string;
   space_id: string;
   title: string;

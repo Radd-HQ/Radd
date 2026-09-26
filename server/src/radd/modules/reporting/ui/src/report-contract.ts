@@ -1,11 +1,5 @@
-/**
- * The reporting module's public UI contract (RADD-1386) — slot ids and their props, nothing else.
- *
- * A plugin's report joins the reports pages through REPORT_SECTION_SLOT, and draws with the same
- * chart kit the host's own report cards use by rendering the slots below. The implementations are
- * this package's contributions, registered at boot, so a plugin's charts share the theme and the
- * dashboard widget's plot height instead of shipping a second copy of the kit.
- */
+/** Reporting's public UI contract — slot ids and props only. A plugin's report joins the reports
+ *  pages through REPORT_SECTION_SLOT and draws with the host's chart kit through the slots below. */
 import type { ReactNode } from "react";
 
 /** A section on the reports pages. The project page passes `projectId`; the global page omits it

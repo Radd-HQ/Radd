@@ -9,11 +9,10 @@ import { Tag } from "../queries";
 import type { Page, PageUpdate } from "../types";
 
 /**
- * A page's edit session. A page asks for a LIVE SESSION (RADD-1397): when a plugin provides one
- * (spec 122's co-editing), readers sit in it as observers, Edit makes an editor on a shared document,
- * and the session decides when the shared copy is saved — through this page's own write, vouched
- * for by the session. Without one — no provider, a refusal, a visitor — the spec-43 single-editor
- * flow runs: Save with `expected_version`, reload-or-overwrite on a 409.
+ * A page's edit session (RADD-1397). With a LIVE SESSION from a plugin, readers observe, Edit joins
+ * a shared document, and the session decides when it is saved — through this page's own write,
+ * vouched for by the session. Without one (no provider, a refusal, a visitor): Save with
+ * `expected_version`, reload-or-overwrite on a 409.
  */
 export function usePageEditing(page: Page, canWrite: boolean) {
   const queryClient = useQueryClient();
@@ -106,5 +105,3 @@ export function usePageEditing(page: Page, canWrite: boolean) {
     invalidate,
   };
 }
-
-export type PageEditing = ReturnType<typeof usePageEditing>;

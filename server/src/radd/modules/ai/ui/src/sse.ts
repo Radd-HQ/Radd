@@ -1,16 +1,10 @@
 import { API_BASE, ApiError } from "@radd/plugin-sdk";
 
 /**
- * POST an API path and consume the `text/event-stream` reply as an async
- * string generator (spec 103: the editor AI stream). Plain fetch, because
- * the typed client is JSON-in/JSON-out; everything
- * else (cookies, the pre-stream error shape: ApiError, so `isAiGone()` and
- * `aiErrorText()` keep working) matches it.
- *
- * Frame contract: a plain `data: {"t": …}` frame yields its `t`; a terminal
- * `event: done` ends the stream; an in-band `event: error` throws its detail
- * (the HTTP status was already 200 by then — mid-stream provider failures
- * can only arrive in-band).
+ * POST `path` and yield each `text/event-stream` data frame's `t`. Plain fetch (the typed client
+ * is JSON-only), but a pre-stream failure is an ApiError like the client's, so `isAiGone()` and
+ * `aiErrorText()` still apply. `event: done` ends the stream; `event: error` throws its detail —
+ * mid-stream failures can only arrive in-band, the status was already 200.
  */
 export async function* streamSse(
   path: string,

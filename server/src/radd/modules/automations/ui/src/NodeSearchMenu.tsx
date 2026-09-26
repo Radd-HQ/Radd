@@ -1,14 +1,4 @@
-/**
- * The right-click node menu (spec 116, RADD-916) — Nuke's tab-menu idea.
- *
- * Right-click empty canvas, type, Enter. That is the fast path once someone
- * knows the node they want, and it beats hunting a list. It reads the SAME
- * catalogue the panel does, so the two can never offer different things.
- *
- * Keyboard first: it opens focused, arrows move, Enter adds at the click point,
- * Escape closes. A context menu you must reach for the mouse to finish is not
- * faster than the list it replaces.
- */
+/** Right-click → type → Enter: the keyboard-first add menu, over the same catalogue as the panel. */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { searchTemplates, type NodeTemplate } from "./automation-nodes";
 import { NODE_KIND_ICON, NODE_KIND_TONE } from "./node-visuals";

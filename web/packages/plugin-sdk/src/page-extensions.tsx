@@ -1,31 +1,12 @@
 import { createContext, useContext, type ReactNode } from "react";
 
 /**
- * Page extensions (RADD-709) — live blocks embedded in a page's markdown.
- *
- * The wire format is a fenced code block whose language is `radd:<name>`, with
- * an optional JSON object as its content:
- *
- *     ```radd:toc
- *     {"subpages": true, "depth": 3}
- *     ```
- *
- * A fence, deliberately, rather than a bespoke syntax: the body is markdown in
- * the database and is read by FTS, the embedder, the public surface, the API and
- * any export. A fence is still markdown to every one of those — a custom node
- * would have to be taught to each. It also degrades honestly: paste the page
- * anywhere else and you get a labelled code block, not garbage.
- *
- * Rendering is client-side and dispatched BY NAME through this registry, so an
- * extension a plugin contributes needs no change here (the kernel-registry
- * pattern of RADD-640). A name nobody registered renders as a labelled card
- * rather than raw JSON, because a page written against a plugin that was later
- * disabled should say so.
- *
- * The registry and both contexts live in the SDK (RADD-1392) because they are
- * SHARED state: the host's editor and read-mode renderer look extensions up, the
- * pages plugin registers its first-party ones and provides the page context, and
- * a context only reaches a consumer through the very same object.
+ * Page extensions: live blocks written as a fenced code block whose language is `radd:<name>`,
+ * with an optional JSON object as the body. A fence stays markdown to FTS, the embedder, the API
+ * and any export, and degrades to a labelled code block anywhere else. Rendering is dispatched BY
+ * NAME through this registry; an unregistered name renders as a labelled card (its plugin may be
+ * disabled). The registry and both contexts live in the SDK because they are shared state: a
+ * context reaches a consumer only through the very same object.
  */
 
 /** The markdown source the block sits in — a `radd:toc` lists this source's
@@ -87,31 +68,10 @@ export type BodySegment =
 const FENCE_OPEN = /^(\s{0,3})(`{3,}|~{3,})[ \t]*(.*)$/;
 
 /**
- * Split a page body into prose runs and extension blocks (RADD-709).
- *
- * This is the whole render strategy, and it is worth saying why. Page bodies are
- * rendered by Crepe (Milkdown/ProseMirror), not by react-markdown — Crepe owns
- * `code_block` with its own node view, so an extension cannot simply be a React
- * component swapped in at the markdown-AST level the way it could in a plain
- * markdown renderer. The two ways out were:
- *
- *  - **A custom Milkdown node** with a React node view, plus a remark transform
- *    turning `radd:*` fences into it. Faithful to ProseMirror, and considerable
- *    machinery: a schema node, a parser rule, a serializer rule and a portal
- *    bridge, all to end up with a React subtree that then has to re-obtain the
- *    router, the query client and the page context it lost crossing the portal.
- *  - **Segmenting the source** — what this does. The body is cut at extension
- *    fences; prose runs render through the same Crepe instance type as before,
- *    and extensions render as ordinary React in the ordinary tree, so context,
- *    routing and data fetching all simply work.
- *
- * Segmenting costs one editor instance per prose run. A page with no extensions
- * — nearly all of them — gets exactly one, which is what it had before this
- * existed; a page with two extensions gets three. That is the trade accepted.
- *
- * Fence tracking is real, not a regex sweep: a ```` ```radd:toc ```` written
- * INSIDE a ```` ```markdown ```` example block is documentation, not an
- * extension, and must render as the code it is.
+ * Split a page body into prose runs and extension blocks, so read mode renders each extension as
+ * ordinary React (router, query client and page context intact) and each prose run through the
+ * viewer; a page with no extensions stays one run. Fences are tracked, not regex-swept: a
+ * ```` ```radd:toc ```` inside a ```` ```markdown ```` example is documentation and stays code.
  */
 export function splitExtensionBlocks(markdown: string): BodySegment[] {
   const lines = markdown.split("\n");

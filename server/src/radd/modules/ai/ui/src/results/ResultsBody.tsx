@@ -20,13 +20,10 @@ import {
 } from "../types";
 import { SimilarCandidatesList } from "./SimilarList";
 
-/**
- * An AI answer in the reading pane (the dead-space fix): summarize / find-similar answers land
- * beside the reading column where there is room — rather than in the w-72 rail card or a 320px
- * popover. The pane's frame is the host's (RADD-1395); this is what it shows. Transient by design:
- * nothing is stored, closing the pane discards the run, and each open renders this afresh.
- */
-export function AiResultsBody({ request }: { request: AiResultRequest }) {
+/** An AI answer, in the reading pane (the frame is the host's) or the read menu's popover.
+ *  Transient: nothing is stored, and closing it discards the run. `onOpen` lets a popover close
+ *  when a similar-issue row consumed the click. */
+export function AiResultsBody({ request, onOpen }: { request: AiResultRequest; onOpen?: () => void }) {
   const status = useAiStatus();
   // Wait for the flags before choosing one-shot vs streamed — undefined means "don't start
   // anything yet", so a run never fires twice.
@@ -120,7 +117,7 @@ export function AiResultsBody({ request }: { request: AiResultRequest }) {
                 action_id: AiBuiltinEditorAction.summarize,
                 document: request.kind === "text-summary" ? request.text : "",
                 selection: "",
-                // RADD-1275: a page's images, which the pane dropped until RADD-1395.
+                // RADD-1275: a page's images.
                 ...(request.kind === "text-summary" && request.imagesOf ? { images_of: request.imagesOf } : {}),
               },
               controller.signal,
@@ -144,6 +141,7 @@ export function AiResultsBody({ request }: { request: AiResultRequest }) {
       <>
         <SimilarCandidatesList
           mergeSourceId={itemSeed?.itemId}
+          onOpen={onOpen}
           // Reasons/scores hydrate IN PLACE — rows must never reshuffle under the pointer, so the
           // fused pool order stands.
           candidates={(similarResult.data?.candidates ?? []).map((candidate) => {

@@ -8,7 +8,7 @@ import {
 } from "./widget-meta";
 
 /** The form's working copy — strings for every select, one bag for every type. */
-export interface ConfigDraft {
+interface ConfigDraft {
   project_id: string; interval: ReportIntervalValue; kind: ItemKindValue | ""; last: string;
   measure: ReportMeasureValue; cycle_id: string; weeks: string; q: string; label: string;
   limit: string; start: string; end: string; view_id: string;

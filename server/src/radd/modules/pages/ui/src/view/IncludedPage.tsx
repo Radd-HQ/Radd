@@ -8,23 +8,11 @@ import { pageByPathQuery } from "../queries";
 import { PageBody } from "./PageBody";
 
 /**
- * `radd:include` — render another page's body here, live (RADD-716).
- *
- * A shared fragment (a warning, a contact list, a set of links) otherwise has to
- * be copy-pasted into every page that needs it, and then drifts. Including it
- * means editing the source updates every page that includes it.
- *
- * **The cycle guard is the load-bearing part.** A page that includes itself —
- * directly, or through a chain — would recurse until the browser tab dies.
- * `IncludeChainCtx` carries the ids currently being rendered ABOVE this point;
- * a target already in the chain renders a message naming the loop instead of
- * descending into it. This is why the guard lives in React context rather than
- * in a lookup at fetch time: the cycle is a property of the render stack, and
- * A→B, B→A is only a cycle when you are already inside A.
- *
- * Permissions need no special handling: the include fetches through the normal
- * page endpoint with the reader's own session, so a page they may not read comes
- * back 403 and renders as "cannot be shown" rather than leaking a body.
+ * `radd:include` — another page's body rendered here, live (RADD-716).
+ * The cycle guard is load-bearing: `IncludeChainCtx` carries the ids rendering ABOVE this point, and
+ * a target already in the chain renders a message instead of recursing. It lives in React context
+ * because a cycle is a property of the render stack (A→B, B→A is a cycle only inside A).
+ * Fetches with the reader's own session, so an unreadable page is an error, never a leaked body.
  */
 const IncludeChainCtx = createContext<readonly string[]>([]);
 

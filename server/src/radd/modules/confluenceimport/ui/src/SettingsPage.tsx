@@ -14,15 +14,8 @@ const DESCRIPTION =
   "check and dry run → import. Reopen a saved plan to adjust mappings without downloading again. Review " +
   "the run report before retrying or undoing an import. Confluence Cloud is not supported.";
 
-/**
- * Import from Confluence (spec 117; the plugin's own page since RADD-1382, in the
- * settings nav's Import group).
- *
- * ONE scrolling page, not a step wizard — matching the Jira importer. A wizard
- * implies the phases are sequential and disposable; they are not. The whole
- * design is that you fix a mapping and run again against the same cached
- * download, which is a loop, not a funnel.
- */
+/** Import from Confluence — one scrolling page, like the Jira importer: fixing a mapping and re-running
+ * against the same cached download is a loop, not a funnel. */
 export function ConfluenceImportPage() {
   const me = useCurrentUser();
   const isAdmin = useIsInstanceAdmin();
@@ -84,22 +77,14 @@ export function ConfluenceImportPage() {
       )}
 
       {planId && (
-        <PlanEditor key={planId}
-          planId={planId}
-          focus={focus}
-          onRan={() => {
-            void client.invalidateQueries({ queryKey: confluenceKeys.runs });
-          }}
-        />
+        <PlanEditor key={planId} planId={planId} focus={focus} />
       )}
 
+      {/* The editor scrolls itself to the row once the plan is open. */}
       <RunsPanel
         onFix={(targetPlan, section, key) => {
           setPlanId(targetPlan);
           setFocus({ section, key, nonce: Date.now() });
-          document
-            .getElementById("confluence-mappings")
-            ?.scrollIntoView({ behavior: "smooth", block: "start" });
         }}
       />
 

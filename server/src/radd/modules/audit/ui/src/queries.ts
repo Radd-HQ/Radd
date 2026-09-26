@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@radd/plugin-sdk";
 import type { AuditEntry, AuditCatalog, AuditSourceValue } from "./types";
-export interface AuditParams {
+interface AuditParams {
   /** Constrains the read to one project — REQUIRED for anyone but an instance admin. */
   projectId?: string;
   entityType?: string;

@@ -2,11 +2,11 @@ import { queryOptions } from "@tanstack/react-query";
 import { api, type ItemAttributeBatchArgs, type QuerySource } from "@radd/plugin-sdk";
 
 /** The timer endpoints this plugin serves (`slas/router.py`). */
-export const SLA_BATCH_PATH = "/items/sla/batch";
-export const itemSlaPath = (itemId: string) => `/items/${itemId}/sla`;
+const SLA_BATCH_PATH = "/items/sla/batch";
+const itemSlaPath = (itemId: string) => `/items/${itemId}/sla`;
 
 /** Timers tick server-side — re-read a visible countdown every minute (spec 63). */
-export const SLA_REFETCH_MS = 60_000;
+const SLA_REFETCH_MS = 60_000;
 
 /** Timer reads go stale with an item change or a policy edit: `sla_policy` is the server's own
  *  entity type, declared verbatim so realtime policy events reach it (RADD-1396). */
@@ -14,7 +14,7 @@ const TIMER_META = { entities: ["item", "sla_policy"] };
 
 /** Mirror of `slas.types.SlaKind`. */
 export const SlaKind = { response: "response", resolution: "resolution" } as const;
-export type SlaKindValue = (typeof SlaKind)[keyof typeof SlaKind];
+type SlaKindValue = (typeof SlaKind)[keyof typeof SlaKind];
 
 /** The facts every timer chip renders from. */
 export interface TimerState {
@@ -32,10 +32,10 @@ export interface SlaBatchTimer extends TimerState {
 }
 
 /** POST /items/sla/batch — readable items with a matched policy only. */
-export type SlaBatchResponse = Record<string, SlaBatchTimer[]>;
+type SlaBatchResponse = Record<string, SlaBatchTimer[]>;
 
 /** GET /items/{id}/sla — the matched policy's timers, live (at most one entry since spec 63). */
-export interface ItemSla {
+interface ItemSla {
   entries: {
     policy_id: string;
     policy_name: string;

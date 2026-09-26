@@ -14,11 +14,7 @@ interface AiActionPickerProps {
   placeholder?: string;
 }
 
-/**
- * "Pick an AI action or type a prompt" — the shared inner panel of the toolbar's AI button, the
- * selection's Ask AI and the read-mode AI menu, so the curated list and the freeform prompt cannot
- * drift between them.
- */
+/** The picker the toolbar button, Ask AI and the read menu share, so the list and prompt cannot drift. */
 export function AiActionPicker({ actions, onPick, autoFocus, placeholder }: AiActionPickerProps) {
   const [prompt, setPrompt] = useState("");
 

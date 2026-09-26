@@ -1,20 +1,13 @@
 import { useMemo, type ReactNode } from "react";
 import type { ContentContext } from "./editor-extensions";
 import type { PluginContribution } from "./plugin";
-import { SlotId, useSlot } from "./slots";
+import { metaContribution, ownedMetaId, SlotId, useSlot } from "./slots";
 
 /**
- * Content bodies (RADD-1401): how a rendered body — an issue's description, a comment, a reply —
- * is DRAWN when a plugin owns part of its presentation. The host draws every body with its own
- * viewer; a plugin that knows something about some bodies (mail knows a mailed one ends in a
- * signature it folded away) CLAIMS them by their record and draws them instead, through the
- * host's viewer for the text itself.
- *
- * Nothing here is a new registry: a body contribution is an ordinary slot contribution
- * (`SlotId.contentBody`, keyed by `match` = its id — plugin tagging, withdrawal, the toggles and the
- * error boundary come with it) whose `meta` carries the claim. Without a claimant, or when its
- * plugin is withdrawn, the body is the host's ordinary markdown; a claimant that throws while
- * drawing falls back to it too.
+ * Content bodies: a plugin that knows something about some bodies (mail folds a signature) CLAIMS
+ * them by record and draws them, through the host's viewer for the text. An ordinary slot
+ * contribution (`content.body`, `match` = its id) whose `meta` carries the claim; without a
+ * claimant, or when it throws, the host draws the markdown.
  */
 
 /** `content.body` props. */
@@ -48,15 +41,7 @@ export interface ContentBodySpec {
 
 /** The contribution row for `definePlugin({ contributions: [contentBody({...})] })`. */
 export function contentBody(spec: ContentBodySpec): PluginContribution {
-  const { render, ...meta } = spec;
-  return {
-    id: `body:${spec.id}`,
-    slot: SlotId.contentBody,
-    match: spec.id,
-    label: spec.label,
-    meta,
-    render: (props) => render(props as unknown as ContentBodyProps),
-  };
+  return metaContribution(SlotId.contentBody, "body", spec, spec.label);
 }
 
 /** Which contribution draws a body: its `match` and its owner, for `<Slot match owner>`. */
@@ -66,9 +51,7 @@ export interface ContentBodyClaim {
 }
 
 function claimOf(plugin: string, match: string | undefined, meta: Readonly<Record<string, unknown>> | undefined) {
-  if (!meta || typeof meta.id !== "string" || meta.id !== match || typeof meta.claims !== "function") return null;
-  const prefix = `${plugin}.`;
-  if (!meta.id.startsWith(prefix) || meta.id.length === prefix.length) return null;
+  if (!meta || !ownedMetaId(plugin, match, meta) || typeof meta.claims !== "function") return null;
   return meta.claims as (record: object) => boolean;
 }
 

@@ -6,14 +6,8 @@ import { formatDateTime, IconButton, ListSearchInput, QueryError, RoleGrants, Ta
 import { mirroredGroupsQuery } from "./queries";
 import type { MirroredGroup } from "./types";
 
-/**
- * The groups Radd has MIRRORED from the directory (RADD-833, folded in here by RADD-931).
- *
- * Role grants to a group have been implemented server-side since RADD-832 (`auth/grants.py` ORs the
- * caller's transitive groups into the grant lookup), so each row expands to the grant editor. The
- * table keeps what it uniquely knows — the TRANSITIVE member count, nesting, and the missing-in-AD
- * health chip. Membership stays read-only: AD owns it, and this screen must not imply otherwise.
- */
+/** Groups Radd mirrors from the directory: transitive member count, nesting, missing-in-AD health,
+ *  and each group's role grants. Membership is read-only — AD owns it. */
 export function MirroredGroupsSection({ directoryReady }: { directoryReady: boolean }) {
   const canManage = usePermissions().global("role.update");
   const groups = useQuery({ ...mirroredGroupsQuery, enabled: directoryReady });

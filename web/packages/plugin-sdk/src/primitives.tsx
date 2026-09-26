@@ -1,4 +1,5 @@
-import { useProvided, type ModalProps, type ButtonVariantValue } from "./host-registry";
+import { useProvided, type ButtonVariantValue } from "./host-registry";
+import { bridged } from "./bridge";
 import {
   useId,
   type ButtonHTMLAttributes,
@@ -158,8 +159,7 @@ export function Card({
   );
 }
 
-/** A loading indicator; `label` says what is loading, visibly (RADD-1376 — the pickers' "Loading
- * projects…" had gone silent when they moved onto this). */
+/** A loading indicator; `label` says what is loading, visibly. */
 export function Spinner({ className = "", label }: { className?: string; label?: string }) {
   if (!label) return <span className={`radd-spinner ${className}`} role="status" aria-label="Loading" />;
   return (
@@ -247,19 +247,14 @@ export function Avatar({
   );
 }
 
-export function Modal(props: ModalProps) {
-  const { Modal: Host } = useProvided();
-  if (Host) return <Host {...props} />;
-  const { onClose, children } = props;
-  return (
-    <div
-      className="radd-modal__backdrop"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div className="radd-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal>
-        {children}
-      </div>
+export const Modal = bridged("Modal", ({ onClose, children }) => (
+  <div
+    className="radd-modal__backdrop"
+    onClick={onClose}
+    role="presentation"
+  >
+    <div className="radd-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal>
+      {children}
     </div>
-  );
-}
+  </div>
+));

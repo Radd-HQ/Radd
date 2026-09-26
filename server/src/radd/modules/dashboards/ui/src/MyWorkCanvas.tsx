@@ -5,11 +5,8 @@ import { DashboardCanvas } from "./DashboardCanvas";
 import { MY_WORK_PATH, dashboardKeys, myWorkQuery } from "./queries";
 import type { Dashboard, DashboardWidget } from "./types";
 
-/**
- * My Work's canvas: the person's own layout, stored privately (spec 32 → RADD-1393). The host's
- * My Work page draws its own kinds through `render` and hands everything else to `WidgetBody`;
- * a plugin's personal widget renders there through the `dashboard.widget` slot.
- */
+/** My Work's canvas: the person's private layout. The host draws its own kinds through `render`
+ *  and hands the rest to `WidgetBody`. */
 export function MyWorkCanvas({ render }: { render: (widget: DashboardWidget) => ReactNode }) {
   const client = useQueryClient();
   const query = useQuery(myWorkQuery());

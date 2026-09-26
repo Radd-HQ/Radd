@@ -4,16 +4,10 @@ import { SlotId } from "./slots";
 import { modeContribution, useContributedModes, type ContributedMode, type ModeSpec } from "./contributed-modes";
 
 /**
- * Query-bar INPUT MODES (RADD-1400). The query bar is an SLQ editor; an input mode is another way
- * to fill it — free text in, an SLQ query and an explanation out. The bar applies the query in its
- * SLQ editor, so every run is visible SLQ, and shows the explanation under the bar until the
- * query is edited. There is deliberately no auto-detection: a mistyped query must fail loudly as
- * SLQ, never silently become a mode's input.
- *
- * The bar owns the policy: with any mode available it shows an SLQ | mode toggle, mod+I cycles
- * through them, and an EMPTY bar opens on the first available mode (a query carried in the URL
- * opens SLQ, so the applied query stays visible). With none available the bar is plain SLQ with
- * no toggle.
+ * Query-bar INPUT MODES: free text in, SLQ plus an explanation out; the bar applies the SLQ, so every
+ * run is visible. No auto-detection — a mistyped query must fail loudly as SLQ. The bar owns the
+ * policy: an SLQ | mode toggle, mod+I, and an EMPTY bar opening on the first mode (a URL-carried
+ * query opens SLQ).
  */
 
 /** The SLQ dialects a bar can query (spec 98): the dialect is rooted at the entity it returns. */

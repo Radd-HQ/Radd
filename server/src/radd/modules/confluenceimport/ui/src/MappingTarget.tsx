@@ -4,14 +4,8 @@ import { DirectorySelect, OptionSelect, QueryError, SelectField, TextField } fro
 import { OptionResource, renderersQuery } from "./queries";
 import type { ConfluenceMappingSection } from "./types";
 
-/**
- * Render destinations only for operations supported by the importer.
- *
- * Every destination belongs to another plugin, so each is reached through that
- * plugin's public surface: wiki spaces and directory groups through their owners'
- * option directories (searchable and paged, and a saved id names itself), people
- * and teams through their directory pickers, page renderers through `pages`' API.
- */
+/** The destination editor for one mapping row. Each destination belongs to another plugin and is
+ * reached through its public surface (option directories, directory pickers, `pages`' API). */
 export function MappingTarget({ section, row, onChange }: {
   section: ConfluenceMappingSection; row: Record<string, unknown>;
   onChange: (changes: Record<string, unknown>) => void;

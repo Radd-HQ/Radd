@@ -4,7 +4,7 @@ import { api, Card, QueryError, Spinner, formatDateTime } from "@radd/plugin-sdk
 import type { ReactNode } from "react";
 
 /** One message the relay refused (RADD-1036). */
-export interface MailFailureEntry {
+interface MailFailureEntry {
   at: string;
   recipient: string;
   subject: string;
@@ -37,13 +37,8 @@ function formatAt(iso: string): string {
   return Number.isNaN(Date.parse(iso)) ? iso : formatDateTime(iso);
 }
 
-/** Outbound mail over the last day (RADD-1036).
- *
- * A terminally-failed message used to exist only as two events in a stream
- * nobody aggregated: the retry ladder gives up, stamps the row, and "the
- * customer never got it" was knowable only by querying the events table. The
- * card is deliberately quiet at zero — an operator page that shouts when
- * nothing is wrong is one nobody reads when something is. */
+/** Outbound mail over the last day — quiet at zero on purpose: a page that shouts when nothing is
+ *  wrong is one nobody reads when something is. */
 export function MailHealthCard() {
   const query = useQuery({ queryKey: ["mailHealth"], queryFn: ({ signal }) => api.get<MailHealth>("/mail/health", { signal }), refetchInterval: 5000, staleTime: 0, gcTime: 0 });
   if (query.isPending) return <Spinner />;

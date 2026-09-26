@@ -2,12 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@radd/plugin-sdk";
 import type { MailKinds, MailRule, MailSender, MailSource } from "./types";
 
-/**
- * Mail sources, senders, routing rules and kind presets (RADD-958/969): the
- * endpoints Settings → Email reads and writes. Every one is gated on
- * `global.manage` server-side, and they are this plugin's own vocabulary — the
- * host never names them (RADD-1378).
- */
+/** The mail config endpoints (all `global.manage` server-side). */
 const id = (value: string) => encodeURIComponent(value);
 
 export const MailPath = {
@@ -60,11 +55,7 @@ export const mailRulesQuery = (sourceId: string) =>
     queryFn: ({ signal }) => api.get<MailRule[]>(MailPath.sourceRules(sourceId), { signal }),
   });
 
-/**
- * What each kind answers on the operator's behalf (RADD-969). A static
- * server-side catalog, so it never goes stale: both dialogs share the one
- * fetch, and neither carries its own copy of `smtp.gmail.com`.
- */
+/** Static per-kind catalog both dialogs share. */
 export const mailKindsQuery = () =>
   queryOptions({
     queryKey: mailKeys.kinds,

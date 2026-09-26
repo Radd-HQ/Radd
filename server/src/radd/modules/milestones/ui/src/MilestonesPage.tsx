@@ -13,12 +13,7 @@ import {
   useProjectsQuery,
 } from "@radd/plugin-sdk";
 
-/**
- * The Milestones CRUD page (spec 94) — the north-star `milestones` plugin's real UI, shipped as a
- * federated `route.page` remote and mounted by the host at /milestones with zero host code. Talks
- * to the kernel-auto-generated CRUD API at /api/v1/milestones. Styled from SDK tokens/primitives —
- * no hardcoded color.
- */
+/** Milestones CRUD over the kernel-generated /milestones API. */
 
 interface Milestone {
   id: string;
@@ -62,7 +57,6 @@ export function MilestonesPage() {
   const [dueOn, setDueOn] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // Delete asks first (RADD-1288): one click used to remove a milestone outright.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const refresh = () => void queryClient.invalidateQueries({ queryKey: listKey });

@@ -6,15 +6,7 @@ import type { Label } from "@radd-plugin-ui/labels/types";
 import { pageLabelsPath } from "../endpoints";
 import { Tag } from "../queries";
 
-/**
- * A page's labels (RADD-718) — the cross-cutting axis the tree cannot express.
- *
- * Shares the `labels` vocabulary with issues on purpose: "incident" meaning one
- * thing on an issue and another on a page is how a tag set rots.
- *
- * Read-only for someone without write access — the codebase's rule is to
- * disable up front rather than let an edit fail on save.
- */
+/** A page's labels (RADD-718), from the same vocabulary as issues. Read-only without write access. */
 export function PageLabels({
   pageId,
   labels,

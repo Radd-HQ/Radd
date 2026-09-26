@@ -1,6 +1,10 @@
-import { searchSource } from "./lookups";
-import { definePlugin, SlotId, ChangeLine, type HistoryChange } from "@radd/plugin-sdk";
-import { itemChange, HISTORY_FIELD_LABELS } from "./change-format";
+import { api, definePlugin, SlotId, ChangeLine, type HistoryChange, type QuerySource } from "@radd/plugin-sdk";
+import { itemChange } from "./change-format";
+import type { ItemChoice } from "./lookup-contract";
+import { HISTORY_FIELD_LABELS } from "./metadata";
+const searchSource: QuerySource<ItemChoice[]> = {key: "items.link-search", meta: {entities: ["item", "project", "role", "accessGrant", "member"]},
+  fetch: (args, signal) => api.get<ItemChoice[]>("/items/link-search", {signal, query: {project_id: String(args.projectId ?? ""), q: String(args.q ?? "")}}),
+};
 function ItemChangeLine({ change }: { change: HistoryChange }) {
   if (!change.redacted && change.field === "flagged" && "to" in change) return change.to ? "Flagged this issue" : "Removed the flag";
   return <ChangeLine change={itemChange(change)} />;

@@ -1,12 +1,8 @@
 import { useEffect, type ComponentType, type ReactNode, type Ref } from "react";
-import { providedNow, useProvided } from "./host-registry";
+import { bridged } from "./bridge";
+import { providedNow } from "./host-registry";
 
-/**
- * More of the host's kit, bridged (RADD-1392): the action menu and click-away popover every
- * surface shares, the Escape stack, the access editors, the workflow-state dot and the left
- * sidebar's section chrome. Each is host code other host surfaces use; the host provides them at
- * startup and a plugin renders them through these contracts.
- */
+/** The host's menus, Escape stack, access editors, state dot and sidebar section chrome, bridged. */
 
 type IconType = ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
 
@@ -99,43 +95,22 @@ export interface KitHost {
   registerDismiss?: (handler: () => boolean) => () => void;
 }
 
-export function DropdownMenu(props: DropdownMenuProps) {
-  const { DropdownMenu: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const DropdownMenu = bridged("DropdownMenu", () => null);
 
-export function Popover(props: PopoverProps) {
-  const { Popover: Host } = useProvided();
-  if (Host) return <Host {...props} />;
-  return props.open ? <div role="dialog" aria-label={props.label} className={props.className}>{props.children}</div> : null;
-}
+export const Popover = bridged("Popover", (props) =>
+  props.open ? <div role="dialog" aria-label={props.label} className={props.className}>{props.children}</div> : null);
 
-export function AccessGrantsEditor(props: AccessGrantsEditorProps) {
-  const { AccessGrantsEditor: Host } = useProvided();
-  return Host ? <Host {...props} /> : <p role="note">Access editing is unavailable.</p>;
-}
+export const AccessGrantsEditor = bridged("AccessGrantsEditor", () => <p role="note">Access editing is unavailable.</p>);
 
-export function ScopedAccess(props: ScopedAccessProps) {
-  const { ScopedAccess: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const ScopedAccess = bridged("ScopedAccess", () => null);
 
 /** The workflow-state category's colour dot (triage, todo, done, …). */
-export function StateCategoryDot(props: { category: string }) {
-  const { StateCategoryDot: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const StateCategoryDot = bridged("StateCategoryDot", () => null);
 
-export function SidebarSection(props: SidebarSectionProps) {
-  const { SidebarSection: Host } = useProvided();
-  if (Host) return <Host {...props} />;
-  return <section aria-label={props.label}>{props.collapsed ? null : props.children}</section>;
-}
+export const SidebarSection = bridged("SidebarSection", (props) =>
+  <section aria-label={props.label}>{props.collapsed ? null : props.children}</section>);
 
-export function SidebarLink(props: SidebarLinkProps) {
-  const { SidebarLink: Host } = useProvided();
-  return Host ? <Host {...props} /> : <a href={props.to}>{props.children}</a>;
-}
+export const SidebarLink = bridged("SidebarLink", (props) => <a href={props.to}>{props.children}</a>);
 
 /** Close on Escape through the host's dismiss stack, so the topmost surface closes first. */
 export function useDismiss(onDismiss: () => void, active = true): void {

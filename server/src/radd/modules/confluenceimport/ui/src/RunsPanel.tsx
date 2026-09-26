@@ -12,13 +12,7 @@ import {
   type ConfluenceRollbackPreflight,
 } from "./types";
 
-/**
- * What happened, and how to undo it (spec 117).
- *
- * A problem carries the mapping that caused it, so the report offers
- * "Fix in Macros → drawio" rather than leaving somebody to guess which control
- * to go and change.
- */
+/** Runs, their problems (each with a "Fix in <tab> → <row>" jump), and Undo. */
 export function RunsPanel({
   onFix,
 }: {

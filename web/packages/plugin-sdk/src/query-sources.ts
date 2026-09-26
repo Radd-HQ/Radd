@@ -54,11 +54,8 @@ function sourceQuery<T>(key: string, args: Record<string, unknown>, entry: Entry
   };
 }
 
-/** Consumers of the same source and arguments share one cached result (RADD-1373 — a
- * per-mount identity used to refetch the 2,305-label catalog on every automation-editor mount).
- * The owner's registration generation is in the key, so a re-registered source starts fresh; the
- * host loader drops a withdrawn owner's entries. Unavailable is distinct from an empty result.
- */
+/** Consumers of one source and arguments share a cached result; the owner's generation is in the key,
+ *  so a re-registered source starts fresh. Unavailable is distinct from empty. */
 export function useContributedQuery<T>(key: string, args: Record<string, unknown> = {}, { enabled = true } = {}) {
   const entry = useSyncExternalStore(subscribe, () => entries.get(key));
   const active = enabled && Boolean(entry);

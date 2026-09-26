@@ -1,12 +1,34 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Info, Link2, OctagonAlert, Tags } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Link2, OctagonAlert, Tags, type LucideIcon } from "lucide-react";
 import { ExtensionCard, Markdown, usePageExtensionContext } from "@radd/plugin-sdk";
 import { pageLink } from "../links";
 import { pageBacklinksQuery, pagesByLabelQuery } from "../queries";
 
 /** The first-party blocks that list or frame: backlinks, pages by label, and the callout
  *  (RADD-713/718/715). Their renderers are registered with the rest in `extensions.tsx`. */
+
+/** The link list the outline and index blocks share; `level` indents a row. */
+export function PageLinkList({ rows, icon: Icon }: {
+  rows: { id: string; title: string; path: string; spaceSlug: string; level?: number }[];
+  icon: LucideIcon;
+}) {
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {rows.map((row) => (
+        <li key={row.id} style={row.level === undefined ? undefined : { paddingLeft: `${row.level * 12}px` }}>
+          <Link
+            {...pageLink(row.spaceSlug, row.path)}
+            className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
+          >
+            <Icon size={11} aria-hidden className="shrink-0 text-fg-faint" />
+            {row.title}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 // --- radd:backlinks --------------------------------------------------------
 
@@ -25,19 +47,7 @@ export function Backlinks() {
       ) : !data?.length ? (
         <p className="text-[13px] text-fg-faint">Nothing links to this page yet.</p>
       ) : (
-        <ul className="flex flex-col gap-0.5">
-          {data.map((page) => (
-            <li key={page.id}>
-              <Link
-                {...pageLink(page.space_slug, page.path)}
-                className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
-              >
-                <Link2 size={11} aria-hidden className="shrink-0 text-fg-faint" />
-                {page.title}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <PageLinkList icon={Link2} rows={data.map((page) => ({ ...page, spaceSlug: page.space_slug }))} />
       )}
     </ExtensionCard>
   );
@@ -45,12 +55,7 @@ export function Backlinks() {
 
 // --- radd:label-list -------------------------------------------------------
 
-/**
- * Every page carrying a label (RADD-718) — Confluence's "content by label".
- *
- * This is how an index page maintains itself: the landing page declares the
- * label, and any page tagged with it appears without anyone editing a list.
- */
+/** Every page carrying a label (RADD-718) — an index page that maintains itself. */
 export function LabelList({ params }: { params: Record<string, unknown> }) {
   const label = typeof params.label === "string" ? params.label.trim() : "";
   const space = typeof params.space === "string" ? params.space.trim() : "";
@@ -78,19 +83,7 @@ export function LabelList({ params }: { params: Record<string, unknown> }) {
           {space ? ` in ${space}` : ""} yet.
         </p>
       ) : (
-        <ul className="flex flex-col gap-0.5">
-          {data.map((page) => (
-            <li key={page.id}>
-              <Link
-                {...pageLink(page.space_slug, page.path)}
-                className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
-              >
-                <Tags size={11} aria-hidden className="shrink-0 text-fg-faint" />
-                {page.title}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <PageLinkList icon={Tags} rows={data.map((page) => ({ ...page, spaceSlug: page.space_slug }))} />
       )}
     </ExtensionCard>
   );
@@ -98,17 +91,8 @@ export function LabelList({ params }: { params: Record<string, unknown> }) {
 
 // --- radd:callout ----------------------------------------------------------
 
-/**
- * The four kinds, on their own computed token scale (see `index.css`).
- *
- * Not `--chart-*`: those encode WORKFLOW STATE, and borrowing "in progress"
- * green to mean "success" would have a board legend and a page callout each
- * claiming the same colour means something different.
- *
- * Not raw palette utilities either. The first version of this used
- * `text-sky-300` on `bg-sky-500/10` — shades picked for dark, illegible on a
- * light tint. Every ink here clears 4.5:1 against its OWN fill in both themes.
- */
+/** The four kinds on the `--callout-*` scale — not `--chart-*`, which encodes WORKFLOW STATE; every
+ *  ink clears 4.5:1 on its own fill in both themes. */
 const CALLOUTS = {
   info: {
     icon: Info,

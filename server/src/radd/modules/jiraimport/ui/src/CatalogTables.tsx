@@ -11,7 +11,7 @@ import {
 } from "./plan-types";
 import { ACTION_OPTIONS, VocabTable, type Patch } from "./VocabTable";
 
-/** Jira link types → Radd link types, which spec 91 made definable. */
+/** Jira link types → Radd link types. */
 export function LinkTypesTable({
   rows,
   onChange,
@@ -92,7 +92,7 @@ export function SprintsTable({
   );
 }
 
-/** Jira fix versions → Radd releases. Not imported at all before spec 100. */
+/** Jira fix versions → Radd releases. */
 export function VersionsTable({
   rows,
   onChange,

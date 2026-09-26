@@ -1,15 +1,10 @@
 import { useMemo, type ReactNode } from "react";
 import type { PluginContribution } from "./plugin";
-import { Slot, SlotId, useSlot } from "./slots";
+import { metaContribution, ownedMetaId, Slot, SlotId, useSlot } from "./slots";
 import type { Item } from "./types";
 
-/**
- * Item attributes (RADD-1394, UI API 1.15): a plugin contributes a LIST COLUMN and a BOARD-CARD
- * CELL with one declaration. Nothing here is a new registry — an attribute is a slot contribution
- * (`SlotId.itemAttribute`, keyed by `match` = its id: plugin tagging, withdrawal, per-contribution
- * toggles and the error boundary come with it) whose data is one of the plugin's own contributed
- * `querySources` (shared keys, generation, abort on withdrawal come with that).
- */
+/** Item attributes: one declaration gives a list column and a board-card cell — a slot contribution
+ *  (`item.attribute`, `match` = its id) whose data is one of the plugin's own `querySources`. */
 
 /** Where a cell renders; the plugin may size or phrase its chip per surface. */
 export const ItemAttributeSurface = { list: "list", card: "card" } as const;
@@ -58,15 +53,7 @@ export interface ItemAttribute {
 
 /** The contribution row for `definePlugin({ contributions: [itemAttribute({...})] })`. */
 export function itemAttribute<V>(spec: ItemAttributeSpec<V>): PluginContribution {
-  const { render, ...meta } = spec;
-  return {
-    id: `attribute:${spec.id}`,
-    slot: SlotId.itemAttribute,
-    match: spec.id,
-    label: `${spec.label} column and card cell`,
-    meta,
-    render: (props) => render(props as unknown as ItemAttributeCellProps<V>),
-  };
+  return metaContribution(SlotId.itemAttribute, "attribute", spec, `${spec.label} column and card cell`);
 }
 
 const isWidth = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -74,12 +61,11 @@ const isWidth = (value: unknown): value is number => typeof value === "number" &
 /** Validate one registered row: an id outside its owner's namespace (or dressed as a custom field)
  *  would let a plugin shadow a builtin, a field or another plugin, so it is refused outright. */
 function attributeOf(plugin: string, match: string | undefined, meta: Readonly<Record<string, unknown>> | undefined): ItemAttribute | null {
-  if (!meta || typeof meta.id !== "string" || meta.id !== match) return null;
-  const prefix = `${plugin}.`;
-  if (!meta.id.startsWith(prefix) || meta.id.length === prefix.length || meta.id.startsWith("cf.")) return null;
+  const id = ownedMetaId(plugin, match, meta);
+  if (!meta || !id || id.startsWith("cf.")) return null;
   if (typeof meta.label !== "string" || !meta.label || !isWidth(meta.width) || !isWidth(meta.minWidth)) return null;
-  if (typeof meta.source !== "string" || !meta.source.startsWith(prefix)) return null;
-  return { id: meta.id, label: meta.label, width: meta.width, minWidth: Math.min(meta.minWidth, meta.width),
+  if (typeof meta.source !== "string" || !meta.source.startsWith(`${plugin}.`)) return null;
+  return { id, label: meta.label, width: meta.width, minWidth: Math.min(meta.minWidth, meta.width),
     source: meta.source, sample: meta.sample, plugin };
 }
 

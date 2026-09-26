@@ -47,7 +47,7 @@ export function PageCommentPopover({pointer, onClose, onKeep, onLeave, onPin, ch
   }, [onClose]);
 
   return createPortal(
-    <div ref={panel} style={position} data-page-comment-popover data-pinned={pointer.pinned}
+    <div ref={panel} style={position} data-page-comment-popover
       role={pointer.pinned ? "dialog" : "region"} aria-label={pointer.pinned ? "Inline comment thread" : "Inline comment preview"}
       onMouseEnter={onKeep} onMouseLeave={onLeave}
       className="fixed z-[60] max-h-[min(26rem,calc(100dvh-1rem))] w-80 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-strong bg-overlay p-3 shadow-pop">

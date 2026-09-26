@@ -1,23 +1,10 @@
 /**
- * The automation node canvas (spec 116, RADD-916).
- *
- * React Flow supplies the canvas primitives only — pan, zoom, edge routing, port
- * hit-testing. Every pixel of a node is ours, drawn with house tokens and the
- * kit, which is the condition under which taking the dependency was worth it:
- * unlike Crepe it imposes no chrome we then have to fight.
- *
- * Ports are the whole point of the drawing. A FILTER emits `matched` and
- * `unmatched`, a GATE emits `true` and `false`, and those must be distinguishable
- * at a glance rather than by reading a label — so they are colour-coded and
- * always visible, not hover-revealed. (Hover-revealed chrome is also invisible to
- * a CDP proof at baseline, which is its own reason to avoid it here.)
- *
- * Nodes with no stored coordinates are laid out from the topology by
- * `automation-layout.ts`, so every automation migrated by d116graphs opens tidy
- * without a data migration guessing positions for graphs nobody had opened.
+ * The automation node canvas. React Flow supplies pan/zoom/edges/hit-testing only; every node is ours,
+ * in house tokens. Ports are colour-coded and ALWAYS visible (hover-revealed chrome is also invisible
+ * to a CDP proof at baseline). Nodes without stored x/y are laid out by `automation-layout.ts`.
  */
 import { useNodeShapes } from "./node-shapes";
-import type { GraphCanvasProps, Orientation } from "./canvas-contract";
+import type { GraphCanvasProps } from "./canvas-contract";
 import { shapeOf } from "./shape-contract";
 import { useCapabilities } from "@radd/plugin-sdk";
 import { useCallback, useEffect, useMemo } from "react";
@@ -42,8 +29,10 @@ import {
   type AutomationEdge,
   type AutomationNode,
   type NodeResult,
+  type Orientation,
 } from "./types";
-import { arityOf, contributedPorts, effectiveArity, nodeTitle, titleIndex } from "./automation-nodes";
+import { contributedPorts, nodeTitle, titleIndex } from "./automation-nodes";
+import { arityOf, effectiveArity } from "./automation-outputs";
 import {
   GRID_TONE,
   INLET_TONE,
@@ -58,29 +47,22 @@ import { layout, NODE_WIDTH } from "./automation-layout";
 
 interface NodeData extends Record<string, unknown> {
   node: AutomationNode;
-  /** The type's palette label (RADD-1265) — what a person calls this node. */
+  /** The type's palette label — what a person calls this node. */
   title: string;
   subtitle: string;
   orientation: Orientation;
-  /** "item" when this node fans out — shown as a badge so the expensive part of
-   * a graph is visible without opening every node. Empty when the type offers no
-   * choice: a badge on `set_state` would say only what everyone assumes. */
+  /** "item" when this node fans out; empty when the type offers no choice. */
   arity: string;
-  /** The handles to draw, resolved ONCE where the catalog is in scope
-   * (RADD-1064) — a node deep inside React Flow's own tree cannot ask the
-   * server what a contributed type emits. */
+  /** Resolved where the catalog is in scope — a node inside React Flow's tree cannot ask. */
   ports: string[];
   portsAvailable: boolean;
   /** This node's last dry run, when there has been one. */
   run?: NodeResult;
-  /** On a VALIDATE trigger (RADD-1329): whether anything it reaches can refuse
-   * a submission — a "Block submission" node — or it only ever advises. */
+  /** On a VALIDATE trigger: can anything it reaches refuse a submission? */
   validation?: "blocks" | "advises";
 }
 
-/** One node. Deliberately plain: kind icon, its type, and a one-line summary of
- * what it is configured to do — the canvas answers "what is the shape of this
- * automation", and the detail panel answers "what exactly does this node do". */
+/** One node: kind icon, type, one-line summary. The detail panel says the rest. */
 function GraphNode({ data, selected }: NodeProps) {
   const { node, title, subtitle, orientation, arity, ports, portsAvailable, run, validation } = data as NodeData;
   // Flow enters the top and leaves the bottom when vertical; left/right when
@@ -93,8 +75,6 @@ function GraphNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      // A verdict node is edged in its own colour (RADD-1329): what blocks and
-      // what only warns is readable from across the canvas.
       style={{ width: NODE_WIDTH, ...(verdict ? { borderLeft: `3px solid ${verdict.tone}` } : {}) }}
       data-verdict={verdict ? node.type : undefined}
       className={`rounded-[10px] border bg-surface px-3 py-2.5 shadow-lift ${
@@ -198,10 +178,8 @@ function GraphNode({ data, selected }: NodeProps) {
           }
         >
           {ports.map((port) => {
-            // After a dry run, each port says what actually left it. A branch
-            // the node never emitted is struck through rather than shown as
-            // "0" — "did not run" and "ran and found nothing" are different
-            // answers and the second one is where people go looking for a bug.
+            // After a dry run a port shows what left it; a branch never emitted is struck through,
+            // not "0" — "did not run" and "found nothing" are different answers.
             const outcome = run?.ports.find((entry) => entry.port === port);
             return (
               <span
@@ -228,39 +206,22 @@ function GraphNode({ data, selected }: NodeProps) {
 
 const nodeTypes = { radd: GraphNode };
 
-/**
- * Refit the view when the node COUNT changes.
- *
- * `fitView` as a prop only runs on mount, so a node added afterwards keeps the
- * old viewport — and since new nodes are placed outside the current bounds, the
- * first one landed 5px below the canvas edge and was simply invisible. Clicking
- * "Add Action" and seeing nothing happen is indistinguishable from a broken
- * button. Refitting on count (not on every change) leaves dragging alone, which
- * would otherwise fight the user's own panning.
- */
+/** Refit when the node COUNT or ORIENTATION changes — the `fitView` prop only runs on mount, so an
+ * added node landed off-canvas. Not on every change: that would fight the user's own panning. */
 function FitOnLayoutChange({ signature }: { signature: string }) {
   const { fitView } = useReactFlow();
   useEffect(() => {
     void fitView({ padding: 0.2, duration: 200 });
-    // Keyed on node COUNT and ORIENTATION, not on every change: those are the
-    // two things that move nodes outside the current viewport. Flipping
-    // orientation re-lays the whole graph without changing the count, so a
-    // count-only key left half the nodes off-canvas — refitting on every change
-    // would instead fight the user's own panning mid-drag.
   }, [signature, fitView]);
   return null;
 }
 
-/** A one-line summary of a node's configuration, for the card body. */
 const NODE_CHROME_PARAMS = new Set(["arity", "act_as"]);
 
+/** A one-line summary of a node's configuration, for the card body. */
 function summarise(node: AutomationNode): string {
   const params = node.params as Record<string, unknown>;
-  if (node.kind === NodeKind.trigger) {
-    const parts = [String(params.event ?? "")];
-    if (params.query) parts.push(String(params.query));
-    return parts.filter(Boolean).join(" · ");
-  }
+  if (node.kind === NodeKind.trigger) return String(params.event ?? "");
   if (node.type === "filter.slq") return String(params.slq ?? "") || "matches everything";
   if (node.type === "search.slq") {
     const where = params.project ? ` in ${params.project}` : "";
@@ -299,12 +260,8 @@ function summarise(node: AutomationNode): string {
     const value = Array.isArray(params.value) ? (params.value as string[]).join(", ") : String(params.value ?? "");
     return `${params.negate ? "not " : ""}${params.path || "…"} ${params.operator ?? "eq"} ${value}`.trim();
   }
-  // The first param that says what the node DOES. `arity` and `act_as`
-  // configure how it runs, not what it does, and either could sort first in a
-  // stored params object — a card reading "arity: item" would be useless.
-  // Blank and non-scalar values are skipped for the same reason: "prompt:" and
-  // "include: [object Object]" are each a line that costs a row and says
-  // nothing.
+  // The first param that says what the node DOES: skip `arity`/`act_as` (how it runs), blanks and
+  // non-scalars ("include: [object Object]").
   const first = Object.entries(params).find(
     ([key, value]) =>
       !NODE_CHROME_PARAMS.has(key) &&
@@ -331,23 +288,9 @@ export default function GraphCanvas({
   shapes: suppliedShapes,
 }: GraphCanvasProps) {
   const capabilities = useCapabilities();
-  /**
-   * React Flow's own node state, seeded from the graph.
-   *
-   * Deriving these in a `useMemo` on every render was a real bug: React Flow
-   * MEASURES each node and writes the result back through `onNodesChange`, and
-   * keeps the node `visibility: hidden` until it has. Rebuilding the array from
-   * scratch discarded that measurement every render, so the nodes stayed hidden
-   * forever — present in the DOM, correctly positioned by getBoundingClientRect,
-   * and invisible. Holding React Flow's state and re-seeding it only when the
-   * GRAPH actually changes is what lets a measurement survive.
-   */
-  //: What each contributed TYPE emits, from the catalog — the answer the canvas
-  //: cannot derive for itself. Empty until the catalog resolves, which the
-  //: signature below accounts for.
+  // Static ports per contributed type, from the catalog (empty until it resolves).
   const declaredPorts = useMemo(() => contributedPorts(catalog), [catalog]);
-  //: Bumps when a node's server-computed shape arrives (RADD-1325), so the
-  //: handles redraw from the server's answer.
+  // Server-computed shapes for params-dependent nodes.
   const resolvedShapes = useNodeShapes(nodes, catalog, suppliedShapes === undefined);
   const shapes = suppliedShapes ?? resolvedShapes;
   const portsAvailable = (node: AutomationNode) => {
@@ -368,9 +311,7 @@ export default function GraphCanvas({
           title: nodeTitle(placed.node, titles),
           subtitle: summarise(placed.node),
           orientation,
-          // Blank unless the type offers a CHOICE: the badge means "there is a
-          // decision here", which is information. On every node it would be
-          // decoration.
+          // Only when the type offers a CHOICE — otherwise it is decoration.
           arity:
             arityOf(catalog, placed.node.type).options.length > 1
               ? effectiveArity(catalog, placed.node)
@@ -389,6 +330,9 @@ export default function GraphCanvas({
     [nodes, edges, readOnly, orientation, catalog, declaredPorts, titles, run, validationChips, shapes, capabilities],
   );
 
+  // React Flow MEASURES each node and writes it back through onNodesChange, keeping it hidden until then;
+  // rebuilding the array every render discarded that, so nodes stayed invisible. Hold React Flow's state
+  // and re-seed only when the graph's DATA changes (`signature`).
   const [flowNodes, setFlowNodes, onFlowNodesChange] = useNodesState<FlowNode>(build());
 
   //: Identity of the graph as DATA — not object identity, which changes on every
@@ -404,8 +348,7 @@ export default function GraphCanvas({
         readOnly,
         shapes,
         run?.nodes ?? null,
-        // The validate trigger's chip is a function of what it REACHES, which
-        // is not in the node list (RADD-1329).
+        // Chips depend on what a trigger REACHES, which is not in the node list.
         validationChips ?? null,
         edges.map((e) => [e.source, e.port, e.target]),
         nodes.map((n) => [n.id, n.type, n.name, n.params, n.x, n.y]),
@@ -439,11 +382,8 @@ export default function GraphCanvas({
       onFlowNodesChange(changes as never);
       if (readOnly) return;
 
-      // REMOVALS FIRST. React Flow owns the delete key, and applying a removal
-      // only to its internal copy left the node in the graph — so the next
-      // re-seed (adding any node changes the signature) resurrected it. That is
-      // the difference the delete key and the inspector's Delete button had:
-      // one went through the graph, the other did not.
+      // REMOVALS FIRST: React Flow owns the delete key, and a removal applied only to its copy was
+      // resurrected by the next re-seed.
       const removed = changes
         .filter((change) => change.type === "remove")
         .map((change) => (change as { id: string }).id);
@@ -527,7 +467,6 @@ export default function GraphCanvas({
         deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
         elementsSelectable
         fitView
-        proOptions={{ hideAttribution: false }}
       >
         <FitOnLayoutChange signature={`${flowNodes.length}:${orientation}`} />
         <Background gap={18} size={1} color={GRID_TONE} />

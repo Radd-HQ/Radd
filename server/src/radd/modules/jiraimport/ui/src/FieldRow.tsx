@@ -192,7 +192,7 @@ export const FieldRow = memo(function FieldRow({
       {entry.action === FieldAction.map && (
         <MissingOptions entry={entry} current={existingOptions[entry.target_key]} onChange={set} />
       )}
-      {/* A select needs options; without an editor this was spec 90's dead end. */}
+      {/* A select needs options, so creating one offers an editor for them. */}
       {entry.action === FieldAction.create && SELECT_TYPES.includes(entry.create_type ?? "") && (
         <div className="mt-1.5 pl-1">
           <CommaOptions values={entry.create_options ?? []} label={`${entry.jira_name}: options`} onChange={create_options => set({ create_options })} />

@@ -5,17 +5,8 @@ const EDITOR_CLASS = "[&_.ProseMirror]:min-h-[24rem]";
 const PLACEHOLDER =
   "Write the page… use the toolbar for headings, tables, code — or type markdown.";
 
-/**
- * The page's edit mode (spec 122): two flows behind one panel.
- *
- * In a LIVE SESSION the document is shared, so there is nothing to Save or
- * Cancel — every keystroke is already everyone's; the button is **Done**, which
- * leaves the session (its last save goes out first), and the session's own
- * chrome says who saves. The session and the binding that shares the editor's
- * document are a plugin's (RADD-1397). Without one the spec-43 single-editor
- * flow runs exactly as before: Save with `expected_version`, and the
- * reload-or-overwrite dialog on a 409.
- */
+/** Edit mode: a live session's shared editor with Done, or (no session) Save with `expected_version` and
+ *  reload-or-overwrite on a 409 — see `usePageEditing`. */
 export function PageEditPanel({
   draft,
   onDraft,
@@ -55,25 +46,16 @@ export function PageEditPanel({
   onDetachedComments: (ids: string[]) => void;
 }) {
   const binding = live.status === LiveStatus.live ? live.binding : null;
+  const editorProps = {
+    value: draft, onChange: onDraft, extensions: true, attachTo, autoFocus: true, placeholder: PLACEHOLDER,
+    initialTransform: pendingTransform ?? undefined, inlineAnchors, onDetachedComments, className: EDITOR_CLASS,
+  };
 
   if (!legacy) {
     return (
       <div aria-label="Edit page content" className="mt-3 flex flex-col gap-2">
         {binding ? (
-          <RichEditor
-            key={binding.key}
-            value={draft}
-            onChange={onDraft}
-            extensions
-            attachTo={attachTo}
-            autoFocus
-            placeholder={PLACEHOLDER}
-            initialTransform={pendingTransform ?? undefined}
-            inlineAnchors={inlineAnchors}
-            onDetachedComments={onDetachedComments}
-            binding={binding}
-            className={EDITOR_CLASS}
-          />
+          <RichEditor key={binding.key} {...editorProps} binding={binding} />
         ) : (
           <div className="min-h-24 animate-pulse rounded-md border border-strong bg-surface px-3 py-2 text-[13px] text-fg-faint">
             Joining the page…
@@ -115,18 +97,7 @@ export function PageEditPanel({
           </div>
         </Callout>
       )}
-      <RichEditor
-        value={draft}
-        onChange={onDraft}
-        extensions
-        attachTo={attachTo}
-        autoFocus
-        placeholder={PLACEHOLDER}
-        initialTransform={pendingTransform ?? undefined}
-        inlineAnchors={inlineAnchors}
-        onDetachedComments={onDetachedComments}
-        className={EDITOR_CLASS}
-      />
+      <RichEditor {...editorProps} />
       <div className="flex gap-2">
         <Button
           size="sm"

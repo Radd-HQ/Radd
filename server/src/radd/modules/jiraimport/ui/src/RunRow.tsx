@@ -1,5 +1,6 @@
-import { AlertTriangle, CheckCircle2, CircleAlert, Loader2, Undo2, X } from "lucide-react";
+import { AlertTriangle, Undo2, X } from "lucide-react";
 import { Button, relativeTime, Td } from "@radd/plugin-sdk";
+import { CountList, StatusText } from "./chrome";
 import { ProblemList } from "./ProblemList";
 import { DryRunPreview, PlanSnapshot } from "./RunDetail";
 import {
@@ -128,17 +129,10 @@ export function RunRow({
         <tr>
           <Td colSpan={4}>
             <div className="flex flex-col gap-2 py-1">
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-secondary">
-                {counts.map(([key, label]) => (
-                  <span key={key}>
-                    <span className="text-heading">{run.counts[key]}</span> {label}
-                  </span>
-                ))}
-              </div>
+              <CountList counts={run.counts} labels={COUNT_LABELS} />
               {run.dry_run && (run.report.rows?.length ?? 0) > 0 && <DryRunPreview run={run} />}
               <ProblemList
                 problems={run.problems}
-                label="issue"
                 onFix={
                   onFix && run.plan_id
                     ? (section, key) => onFix(run.plan_id!, section, key)
@@ -161,28 +155,12 @@ function StageCell({ run }: { run: JiraRun }) {
     // hides exactly the thing you need to act on.
     const blocked = (run.counts.skipped ?? 0) > 0;
     if (blocked || run.problems.length > 0) {
-      return (
-        <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-status-warning-ink">
-          <AlertTriangle size={13} /> {blocked ? "Done, with skips" : "Done, with warnings"}
-        </span>
-      );
+      return <StatusText tone="warning">{blocked ? "Done, with skips" : "Done, with warnings"}</StatusText>;
     }
-    return (
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-status-success-ink">
-        <CheckCircle2 size={13} /> {label}
-      </span>
-    );
+    return <StatusText tone="success">{label}</StatusText>;
   }
   if (run.stage === JiraRunStage.failed || run.stage === JiraRunStage.canceled) {
-    return (
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-status-danger-ink">
-        <CircleAlert size={13} /> {label}
-      </span>
-    );
+    return <StatusText tone="danger">{label}</StatusText>;
   }
-  return (
-    <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-fg-secondary">
-      <Loader2 size={13} className="animate-spin" /> {label}
-    </span>
-  );
+  return <StatusText tone="running">{label}</StatusText>;
 }

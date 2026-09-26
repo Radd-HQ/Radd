@@ -1,6 +1,4 @@
-/** Named outputs and upstream reachability, using explicit server-resolved shapes.
- * Dynamic results belong to the calling graph. These pure helpers never consult
- * another editor's cache or infer plugin-specific outputs from its params. */
+/** Named outputs and upstream reachability, over explicit server-resolved shapes. */
 import { shapeOf, type NodeShapes } from "./shape-contract";
 import {
   NodeArity,
@@ -14,9 +12,7 @@ import {
 
 /** Mirrors the kernel's `OUTPUT_NAME_RE`. Both halves of `{{node.field}}` are
  * read as one identifier, so one rule covers a node's name and an output's. */
-export const OUTPUT_NAME_RE = /^[a-z][a-z0-9_]{0,29}$/;
-
-
+const OUTPUT_NAME_RE = /^[a-z][a-z0-9_]{0,29}$/;
 
 /** Named values from this graph's resolved shape, or the type's fixed catalog. */
 export function outputsOfNode(
@@ -30,12 +26,7 @@ export function outputsOfNode(
   return catalog?.nodes?.find((entry) => entry.key === node.type)?.outputs ?? [];
 }
 
-/** How a node type may read its packet, from the served table.
- *
- * Defaults to "fixed at set" for an unknown type rather than guessing: an
- * automation holding a node from a plugin that has been uninstalled must still
- * open, and offering a control that the server would reject is worse than
- * offering none. */
+/** How a node type may read its packet. Unknown (plugin uninstalled) = fixed at set, so the automation still opens. */
 export function arityOf(
   catalog: AutomationCatalog | undefined,
   nodeType: string,
@@ -76,62 +67,34 @@ export function isProducer(
 }
 
 /**
- * Whether values a node produced can travel out by this PORT.
- *
- * Mirrors the executor. A contributed router's LAST port is its fallback — the
- * one taken when the node could not answer — and a node that could not answer
- * published nothing, so no output ever travels it. `ai.generate`'s
- * `unavailable` and `ai.classify`'s are exactly that port, and a token picker
- * that ignored the distinction would offer `{{gen.text}}` to a node wired to
- * the branch where `gen` produced nothing by construction.
- *
- * Built-in producers have no fallback: `create_item` stamps both `out` and
- * `created`, so both carry.
+ * Whether a node's outputs travel out by `port`. Mirrors the executor: a ROUTER's LAST port is its
+ * fallback, taken when it could not answer — so it published nothing. Actions' ports all carry
+ * (`create_item` stamps both `out` and `created`).
  */
-export function portCarriesOutputs(
+function portCarriesOutputs(
   node: Pick<AutomationNode, "type" | "params">,
   port: string,
   catalog: AutomationCatalog | undefined,
   shapes?: NodeShapes,
 ): boolean {
   const contributed = catalog?.nodes?.find((entry) => entry.key === node.type);
-  // Only a ROUTER has a fallback port (its last). An action's ports all carry:
-  // `create_item` stamps both `out` and `created` (RADD-1322 put built-ins in
-  // the catalog, and without this check `created` read as a fallback).
   if (!contributed || (contributed.kind !== "gate" && contributed.kind !== "filter")) return true;
   const ports = contributed.ports?.length ? contributed.ports : (shapeOf(node, shapes)?.ports ?? []);
   return ports.length === 0 ? true : port !== ports[ports.length - 1];
 }
 
-/**
- * Whether this node PUBLISHES what it produces at all.
- *
- * A per-item invocation makes one answer per item and the packet's bag has one
- * slot per node, so the executor drops them — a node set to "per item" produces
- * values that nothing can ever read, and offering its tokens would be offering
- * misses.
- */
-export function publishesOutputs(
+/** Per-item invocations publish nothing (the packet holds one slot per node), so their tokens always miss. */
+function publishesOutputs(
   node: Pick<AutomationNode, "type" | "params">,
   catalog: AutomationCatalog | undefined,
 ): boolean {
   return effectiveArity(catalog, node) !== NodeArity.item;
 }
 
-/** Producers whose values can actually REACH this node, nearest first.
- *
- * A breadth-first walk backwards along the edges, carrying the PORT each
- * producer would leave by. Three things disqualify a producer, and each is a
- * token that would compile, save, and resolve to nothing:
- *
- *   - it is not upstream at all (a different branch entirely);
- *   - it is upstream only through a port that carries no outputs — its
- *     fallback, taken exactly when it produced nothing;
- *   - it runs per ITEM, so the executor publishes nothing for it.
- *
- * Only the FIRST edge out of the producer matters. Once its values are in the
- * packet they ride every port of every node they pass through, so a gate two
- * hops down taking its `false` port carries them just the same. */
+/** Producers whose values can REACH this node, nearest first — a backwards BFS carrying each producer's
+ * out-port. Skipped (tokens that would save and resolve to nothing): not upstream, upstream only via its
+ * fallback port, per-item arity, unnamed. Only the producer's own port matters: once in the packet,
+ * values ride every downstream port. */
 export function upstreamProducers(
   nodeId: string,
   nodes: AutomationNode[],
@@ -179,12 +142,7 @@ export function upstreamProducers(
   return found;
 }
 
-/** A name suggestion for a freshly dropped producer: the type's last segment
- * plus a counter, so `ai.generate` arrives as `generate_1`.
- *
- * Auto-naming is the CLIENT's job by design — the server has no opinion about
- * what a node should be called, and a producer that arrives unnamed is a node
- * whose whole point is unreachable until someone notices the field. */
+/** `ai.generate` → `generate_1`. Naming is the client's job; the server has no opinion. */
 export function suggestNodeName(type: string, existing: AutomationNode[]): string {
   const base =
     (type.split(".").pop() ?? type).replace(/[^a-z0-9_]/gi, "_").toLowerCase() || "node";
@@ -196,13 +154,8 @@ export function suggestNodeName(type: string, existing: AutomationNode[]): strin
   }
 }
 
-/** Why this name cannot be used, or "" when it can.
- *
- * The same three refusals the server makes, said before the save rather than
- * after it. The RESERVED list is the roots of the served token catalogue, so it
- * cannot drift from what the server reserves: a node called `item` would shadow
- * `{{item.key}}` everywhere in the graph, and the shadowing would be invisible
- * because the token would keep resolving. */
+/** Why this name cannot be used, or "": the server's three refusals, said before save. Reserved = the
+ * served token roots, since a node called `item` would silently shadow `{{item.key}}`. */
 export function nodeNameError(
   name: string,
   self: AutomationNode,
@@ -223,7 +176,7 @@ export function nodeNameError(
 
 /** The first segment of every documented token. Derived from the served
  * catalogue, exactly as the server derives its own reserved set. */
-export function reservedRoots(catalog: AutomationCatalog | undefined): Set<string> {
+function reservedRoots(catalog: AutomationCatalog | undefined): Set<string> {
   return new Set(
     (catalog?.tokens ?? []).map((entry) => entry.token.replace(/[{}\s]/g, "").split(".")[0]),
   );

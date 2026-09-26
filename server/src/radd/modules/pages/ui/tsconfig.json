@@ -1,17 +1,5 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "verbatimModuleSyntax": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "types": []
-  },
+  "extends": "@radd/plugin-sdk/tsconfig.plugin.json",
+  "compilerOptions": { "types": ["vite/client"] },
   "include": ["src"]
 }

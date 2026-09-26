@@ -1,16 +1,7 @@
 /**
- * Copying text, on the instances Radd actually runs on.
- *
- * `navigator.clipboard` exists only in a SECURE CONTEXT. Radd is self-hosted and
- * a good number of installs sit on plain `http://` inside a network, where the
- * API is `undefined` — so `navigator.clipboard.writeText(x)` throws, and the
- * common `void navigator.clipboard?.writeText(x)` form swallows the call and
- * leaves an unhandled rejection in the console. Either way the button does
- * nothing and says nothing, which is the worst of the three outcomes.
- *
- * So: try the real API, fall back to the old `execCommand("copy")` trick, and
- * return whether anything actually happened. A caller that shows "Copied" should
- * show it because text was copied, not because a click was received.
+ * Copy text on plain-`http://` installs too: `navigator.clipboard` exists only in a secure context,
+ * so fall back to `execCommand("copy")` and report whether anything was copied — a caller shows
+ * "Copied" because text was copied, not because a click happened.
  */
 export async function copyText(text: string): Promise<boolean> {
   if (navigator.clipboard?.writeText) {

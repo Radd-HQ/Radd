@@ -9,13 +9,7 @@ export interface ErrorTextProps {
   className?: string;
 }
 
-/**
- * The inline error paragraph (RADD-901). `<p className="text-xs text-red-400">
- * {errorMessage(error)}</p>` existed in ~109 hand-typed copies — this is that
- * shape as a component, on the status tier so the danger color has ONE home.
- * Renders nothing for a null/undefined error, so call sites can drop their
- * `isError &&` guard or keep it, whichever reads better.
- */
+/** The inline error paragraph, on the status tier; renders nothing for a null/undefined error. */
 export function ErrorText({ error, size = "xs", className = "" }: ErrorTextProps) {
   if (error == null) return null;
   const text = typeof error === "string" ? error : errorMessage(error);

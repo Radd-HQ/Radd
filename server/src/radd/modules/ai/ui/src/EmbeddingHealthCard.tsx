@@ -1,20 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { api, Card, QueryError, Spinner } from "@radd/plugin-sdk";
-
-interface EmbeddingCoverage {
-  enabled: boolean;
-  items_total: number;
-  items_embedded: number;
-  docs_total: number;
-  docs_embedded: number;
-}
+import { AiPath, type EmbeddingCoverage } from "./settings/types";
 
 /** AI owns its monitoring data and presentation; no request survives withdrawal. */
 export function EmbeddingHealthCard() {
   const coverage = useQuery({
     queryKey: ["ai", "monitoring-coverage"],
-    queryFn: ({ signal }) => api.get<EmbeddingCoverage>("/ai/embeddings/coverage", { signal }),
+    queryFn: ({ signal }) => api.get<EmbeddingCoverage>(AiPath.coverage, { signal }),
     refetchInterval: 5000, retry: false, staleTime: 0, gcTime: 0,
   });
   if (coverage.isPending) return <Spinner />;

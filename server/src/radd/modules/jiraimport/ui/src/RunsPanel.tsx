@@ -3,14 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Link2 } from "lucide-react";
 import { api, Button, EmptyState, ErrorText, QueryError, Table, TableSkeleton, TBody, Th, THead, useConfirm } from "@radd/plugin-sdk";
 import { JiraPath, jiraKeys, pendingQuery, runsQuery } from "./api";
+import { Panel } from "./chrome";
 import { RunRow } from "./RunRow";
 import type { JiraRun, PendingSummary, RollbackPreflight } from "./types";
 
-/**
- * Dry runs, imports and rollbacks (spec 100), with the two repair actions spec 90
- * had no answer for: RELINK (resolve cross-project references once their target
- * arrives) and ROLLBACK (undo an import you do not like).
- */
+/** Dry runs, imports and rollbacks, plus Relink (retry cross-project references once their target exists) and Undo. */
 export function RunsPanel({
   onRerun,
   onFix,
@@ -38,11 +35,8 @@ export function RunsPanel({
   });
 
   const rollback = useMutation({
-    mutationFn: ({ id, includeSchema }: { id: string; includeSchema: boolean }) =>
-      api.post<JiraRun>(`${JiraPath.runs}/${id}/rollback`, {
-        include_schema: includeSchema,
-        skip_edited: true,
-      }),
+    mutationFn: (id: string) =>
+      api.post<JiraRun>(`${JiraPath.runs}/${id}/rollback`, { include_schema: false, skip_edited: true }),
     onSuccess: invalidate,
   });
 
@@ -73,21 +67,17 @@ export function RunsPanel({
       confirmLabel: "Undo the issues",
       danger: true,
     });
-    if (ok) rollback.mutate({ id: run.id, includeSchema: false });
+    if (ok) rollback.mutate(run.id);
   };
 
   const waiting = pending.data?.total ?? 0;
   return (
-    <section className="rounded-lg border border-subtle bg-surface p-4" data-jira-section="runs">
-      {confirmNode}
-      <header className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[13px] font-medium text-heading">Runs</h2>
-          <p className="mt-0.5 text-xs text-fg-secondary">
-            Dry runs, imports and rollbacks. Everything reads the local cache — no Jira needed.
-          </p>
-        </div>
-        {waiting > 0 && (
+    <Panel
+      section="runs"
+      title="Runs"
+      description="Dry runs, imports and rollbacks. Everything reads the local cache — no Jira needed."
+      action={
+        waiting > 0 && (
           <Button
             size="sm"
             variant="secondary"
@@ -98,8 +88,10 @@ export function RunsPanel({
           >
             <Link2 size={13} /> Relink {waiting}
           </Button>
-        )}
-      </header>
+        )
+      }
+    >
+      {confirmNode}
 
       {waiting > 0 && (
         <p className="mb-3 rounded-md border border-subtle bg-elevated px-2.5 py-2 text-xs text-fg-secondary">
@@ -148,6 +140,6 @@ export function RunsPanel({
       {(rollback.isError || relink.isError) && (
         <ErrorText className="mt-2" error={rollback.error ?? relink.error} />
       )}
-    </section>
+    </Panel>
   );
 }

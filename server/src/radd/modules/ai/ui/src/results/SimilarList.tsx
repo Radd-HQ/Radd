@@ -1,12 +1,9 @@
 import { IssueSuggestion } from "@radd/plugin-sdk";
 import type { SimilarCandidate } from "../types";
 
-/**
- * Scored candidates — the reading pane's, the read menu's and the submission form's. The row is
- * the host's `IssueSuggestion` (a peek-aware link, so a half-typed form or the issue being read
- * survives the detour, and a preview on a resting pointer, RADD-924); the score and the reason are
- * this plugin's. `onOpen` lets a hosting popover close itself when a row consumed the click.
- */
+/** Scored candidates for the pane, the read menu and the draft form. The row is the host's
+ *  peek-aware `IssueSuggestion`; score and reason are this plugin's. `onOpen` lets a popover close
+ *  when a row consumed the click. */
 export function SimilarCandidatesList({
   candidates,
   onOpen,

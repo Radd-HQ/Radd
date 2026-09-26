@@ -30,10 +30,7 @@ import { minutesLabel, windowLabel } from "./durations";
  *  there, `SettingSpec(section="sla", page_scopes=("project",))`). */
 const AFTER_RESOLUTION_SECTION = "sla";
 
-/** SLA policies for one project (specs 30/63; project-level since spec 67; the slas plugin's own
- * page since RADD-1396): targets, priority tiers, business hours, and first-match ordering (up/down,
- * same idiom as the config editors). Editing is the project's own right (`sla.*`, project-scoped
- * since RADD-1303 — the Manager role holds it). */
+/** A project's SLA policies in first-match order (`sla.*`, project-scoped). */
 export function SlaSettingsPage({ project }: { project: Project }) {
   const projectId = project.id;
   const canManage = usePermissions().project(project, SLA_UPDATE);
@@ -173,9 +170,7 @@ export function SlaSettingsPage({ project }: { project: Project }) {
           )}
           {canManage && editingId === null && <PolicyForm projectId={projectId} nextPosition={list.length} />}
 
-          {/* RADD-930: CSAT arrived here from project → General. It is the other
-              half of the service-desk loop these policies open — the survey
-              fires when the item the timers were running against resolves. */}
+          {/* The survey fires when the timed item resolves — the other half of this loop. */}
           <section aria-label="Satisfaction surveys" className="mt-8">
             <h3 className="text-[13px] font-semibold text-heading">After resolution</h3>
             <p className="mb-3 mt-0.5 text-xs text-fg-muted">What happens once the timers above stop.</p>

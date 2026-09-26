@@ -1,18 +1,11 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
-import { api, Button, ButtonVariant, ErrorText, Modal, SelectField, TextField, useConfirm } from "@radd/plugin-sdk";
+import { useQuery } from "@tanstack/react-query";
+import { Modal, SelectField, TextField } from "@radd/plugin-sdk";
 import { MailPath, mailKeys, mailKindsQuery } from "./api";
 import { MailSenderKind, type MailSenderKindValue, type MailSender } from "./types";
-import { CheckboxField, KindGuidance, findKind, kindLabel } from "./shared";
+import { CheckboxField, KindGuidance, RowDialogFooter, findKind, kindLabel, useRowEditor } from "./shared";
 
-/**
- * Create or edit one outbound relay (RADD-958; presets RADD-969).
- *
- * Gmail and Outlook are SMTP with the host, port and TLS mode already known, so
- * those fields are hidden — see `SourceDialog` for why hiding beats
- * pre-filling. The kind is immutable after creation.
- */
+/** Create/edit an outbound relay; preset kinds hide host/port/TLS (see SourceDialog). */
 export function SenderDialog({
   sender,
   onClose,
@@ -20,9 +13,7 @@ export function SenderDialog({
   sender: MailSender | null;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
   const kinds = useQuery(mailKindsQuery());
-  const [confirmDialog, confirm] = useConfirm();
   const [form, setForm] = useState({
     name: sender?.name ?? "",
     kind: (sender?.kind ?? MailSenderKind.google) as MailSenderKindValue,
@@ -46,33 +37,9 @@ export function SenderDialog({
   // An untouched name takes the kind's — see `SourceDialog`.
   const name = form.name.trim() || info?.name || "";
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: mailKeys.senders });
-  const save = useMutation({
-    mutationFn: () => {
-      const body: Record<string, unknown> = {
-        ...form,
-        name,
-        // Blank where the kind answers (RADD-969).
-        host: preset ? "" : form.host,
-        port: preset ? 0 : port,
-      };
-      if (!form.secret) delete body.secret;
-      return sender
-        ? api.patch(MailPath.sender(sender.id), body)
-        : api.post(MailPath.senders, body);
-    },
-    onSuccess: async () => {
-      await invalidate();
-      onClose();
-    },
-  });
-  const remove = useMutation({
-    mutationFn: () => api.delete(MailPath.sender(sender!.id)),
-    onSuccess: async () => {
-      await invalidate();
-      onClose();
-    },
-  });
+  const { save, remove } = useRowEditor(mailKeys.senders, MailPath.senders, sender ? MailPath.sender(sender.id) : null, onClose);
+  // Blank where the kind answers (RADD-969).
+  const body = () => ({ ...form, name, host: preset ? "" : form.host, port: preset ? 0 : port });
 
   return (
     <Modal title={sender ? `Edit ${sender.name}` : "New sender"} onClose={onClose}>
@@ -174,39 +141,20 @@ export function SenderDialog({
         />
         <CheckboxField label="Enabled" checked={form.enabled} onChange={(v) => set("enabled", v)} />
 
-        {(save.isError || remove.isError) && (
-          <ErrorText error={save.isError ? save.error : remove.error} />
-        )}
-        <div className="flex justify-between gap-2">
-          {sender ? (
-            <Button
-              variant={ButtonVariant.dangerGhost}
-              onClick={() =>
-                void confirm({
-                  title: `Delete ${sender.name}`,
-                  message: "Radd will stop sending mail unless another sender is enabled.",
-                  confirmLabel: "Delete sender",
-                  danger: true,
-                }).then((ok) => ok && remove.mutate())
-              }
-            >
-              <Trash2 size={13} aria-hidden />
-              Delete
-            </Button>
-          ) : (
-            <span />
-          )}
-          <span className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={() => save.mutate()} disabled={save.isPending || !name}>
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-          </span>
-        </div>
+        <RowDialogFooter
+          save={save}
+          remove={remove}
+          confirmDelete={sender && {
+            title: `Delete ${sender.name}`,
+            message: "Radd will stop sending mail unless another sender is enabled.",
+            confirmLabel: "Delete sender",
+            danger: true,
+          }}
+          canSave={Boolean(name)}
+          onSave={() => save.mutate(body())}
+          onClose={onClose}
+        />
       </div>
-      {confirmDialog}
     </Modal>
   );
 }

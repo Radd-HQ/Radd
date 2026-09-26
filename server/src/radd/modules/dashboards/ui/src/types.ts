@@ -13,7 +13,6 @@ export const WidgetType = {
   slqList: "slq_list",
   viewCount: "view_count",
 } as const;
-export type WidgetTypeValue = (typeof WidgetType)[keyof typeof WidgetType];
 
 /** My Work's OWN widget kinds — the shell's basics and forms' request widgets (a core module).
  * A plugin's personal widget is a contributed type instead (`widget_types`, `personal: true`). */

@@ -22,12 +22,8 @@ const SOURCE_OPTIONS = [
   { value: AuditSource.system, label: "System" },
 ];
 
-/**
- * The audit ledger (spec 123): who changed what, from what, to what — every
- * filter in the URL so a view can be shared and a settings page can deep-link
- * the trail for what it shows. An instance admin reads the instance; a
- * project manager reads their project (the server enforces both).
- */
+/** The audit ledger (spec 123), every filter in the URL so a view can be shared. An instance admin
+ *  reads the instance; a project manager reads their project (the server enforces both). */
 export function AuditSettingsPage() {
   const rawSearch = useSearch({ strict: false });
   const search = parseAuditSearch(rawSearch);

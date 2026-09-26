@@ -20,13 +20,8 @@ const timeInputClasses =
   "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
   "focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]";
 
-/** Create AND edit form for an SLA policy (specs 30/63, RADD-1300): targets +
- * "met when" rules + pause states + priority / issue-type / reporter-team
- * filters + daily business-hours window. ONE form for both, seeded from
- * `policy` when editing — two forms over one resource is how they drift.
- * The policy's project comes from the page (spec 67: policies are
- * project-level — no scope picker), which also scopes the issue types and
- * states offered. */
+/** ONE create-and-edit form for an SLA policy (two forms over one resource drift). The project,
+ *  and so the issue types and states offered, come from the page. */
 export function PolicyForm({
   projectId,
   nextPosition,

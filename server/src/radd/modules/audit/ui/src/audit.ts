@@ -1,11 +1,5 @@
-/**
- * The audit ledger's client-side seams (spec 123): the URL filter shape the
- * route validates, and where an entity in the trail LINKS to.
- *
- * Both are here rather than in the page so a settings page can build a
- * deep link (RADD-1171: "Change history for this page") with the same
- * vocabulary the page reads. Entity destinations are supplied by their owners.
- */
+/** The audit log's URL filter shape and the entity links in its rows (spec 123). No value
+ *  imports: `audit-links.test.mjs` loads this file on its own. */
 import type { AuditEntry, AuditSourceValue } from "./types";
 import { defaultParseSearch } from "@tanstack/react-router";
 
@@ -46,7 +40,7 @@ export function parseAuditSearch(search: Record<string, unknown>): AuditSearch {
 }
 
 /** A router `to` + params for the entity a row is about, or null when nothing links. */
-export interface AuditLink {
+interface AuditLink {
   to: string;
   params?: Record<string, string>;
   search?: Record<string, string | number>;

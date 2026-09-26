@@ -9,14 +9,8 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ref?: Ref<HTMLButtonElement>;
 }
 
-/**
- * The compact icon-only button (remove-row ×, edit/delete hover actions, list
- * reorder arrows). This exact class string was hand-copied 34 times across the
- * app before it was a component (RADD-901) — one home for the paddings, the
- * hover fill, the focus ring and the disabled treatment, with `aria-label`
- * required by the type so no copy ships unlabeled. Pass `danger` on
- * destructive actions; put layout (margins) in `className`.
- */
+/** The compact icon-only button; `aria-label` is required by the type. `danger` tints the hover for
+ *  destructive actions; layout goes in `className`. */
 export function IconButton({ danger = false, className = "", ...props }: IconButtonProps) {
   return (
     <button

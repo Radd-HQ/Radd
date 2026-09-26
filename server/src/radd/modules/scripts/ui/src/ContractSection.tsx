@@ -1,8 +1,6 @@
 import { Play } from "lucide-react";
 
-/** Where the script itself lives is the automation node (RADD-1272). This
- * page owns what is instance-wide; the contract is repeated here so an admin
- * reads it where they set the interpreter up. */
+/** The script contract, repeated where an admin sets the interpreter up; the script itself lives on its node. */
 export function ContractSection() {
   return (
     <section data-scripts-contract className="flex flex-col gap-2 rounded-[10px] border border-subtle bg-surface p-4">

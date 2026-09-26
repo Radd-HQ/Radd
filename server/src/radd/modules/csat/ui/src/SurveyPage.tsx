@@ -19,13 +19,7 @@ function preselectedRating(search: Record<string, unknown>): number | undefined 
   return Number.isInteger(rating) && rating >= 1 && rating <= 5 ? rating : undefined;
 }
 
-/**
- * The PUBLIC tokened rating page (spec 65) — csat's `public.page` contribution at
- * `/public/csat/$token` since RADD-1401, drawn inside the host's public frame (no shell, no sign-in
- * gate). The survey email's five links land here with `?rating=N` preselecting a star; the page
- * POSTs, so a mail scanner prefetching a link never records anything. Re-submits are allowed
- * (latest wins) — an already-answered survey renders with the current rating selected.
- */
+/** The public rating page; `?rating=N` only preselects (see survey.ts). Re-submits allowed, latest wins. */
 export function SurveyPage({ token }: { token: string }) {
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const survey = useQuery(surveyQuery(token));

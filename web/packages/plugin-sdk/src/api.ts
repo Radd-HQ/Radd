@@ -61,10 +61,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
-    // Spec 121: while the host runs the shell for an anonymous visitor
-    // (`globalThis.__RADD_ANONYMOUS__`, set by the host's auth state), a 401 is
-    // an ordinary refusal — a surface the visitor cannot use — never a lost
-    // session, so a plugin remote must not bounce the page to sign-in.
+    // A visitor (`__RADD_ANONYMOUS__`, spec 121) meets 401 as a refusal, not a lost session: no bounce to sign-in.
     const anonymous = (globalThis as { __RADD_ANONYMOUS__?: boolean }).__RADD_ANONYMOUS__ === true;
     if (response.status === 401 && !throwOn401 && !anonymous && window.location.pathname !== "/login") {
       const next = encodeURIComponent(window.location.pathname + window.location.search);

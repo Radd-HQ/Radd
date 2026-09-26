@@ -11,13 +11,6 @@ export const projectsQuery = () =>
     queryFn: ({ signal }: { signal: AbortSignal }) => api.get<Project[]>("/projects", { signal }),
   });
 
-/** Default context for a selector, without downloading its remaining choices. */
-export const firstProjectQuery = () => ({
-  queryKey: queryKeys.firstProject,
-  meta: PROJECT_META,
-  queryFn: ({ signal }: { signal: AbortSignal }) => api.get<Project[]>("/projects", { signal, query: { limit: "1" } }),
-});
-
 export const PROJECTS_PAGE_SIZE = 50;
 
 export const projectSummaryQuery = () => ({

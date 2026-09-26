@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ListSearchInput, useListFilter } from "@radd/plugin-sdk";
-import { MappingSection, splitByUse } from "./MappingSection";
+import { FILTER_THRESHOLD, MappingSection, splitByUse } from "./MappingSection";
 import { VocabAction, type PlanMappings, type VocabActionValue } from "./plan-types";
 
 export const ACTION_OPTIONS: [VocabActionValue, string][] = [
@@ -10,9 +10,6 @@ export const ACTION_OPTIONS: [VocabActionValue, string][] = [
 ];
 
 const UNUSED_HINT = "Configured in Jira but not used by this project — ignored unless you say so.";
-
-/** Below this many rows a vocabulary table needs no filter chrome (RADD-882). */
-const FILTER_THRESHOLD = 8;
 
 /** Patch one row of one mapping table. */
 export type Patch<K extends keyof PlanMappings> = (index: number, patch: Partial<PlanMappings[K][number]>) => void;
@@ -27,8 +24,6 @@ export function VocabTable<T extends { jira: string; count: number }>({
   usedTitle: string;
   row: (entry: T, index: number) => ReactNode;
 }) {
-  // 83 statuses / 59 types at a live Jira (RADD-882): filter by the Jira value;
-  // the unused fold holds itself open while filtering so matches can't hide.
   const search = useListFilter(rows, (entry) => [entry.jira]);
   const [used, unused] = splitByUse(search.filtered);
   const indexes = new Map(rows.map((entry, index) => [entry.jira, index]));

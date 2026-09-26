@@ -14,13 +14,13 @@ export type PageTabValue = (typeof PageTab)[keyof typeof PageTab];
 
 /** RADD-1228: an archived page is read-only and hidden from the tree until restored. */
 export function ArchivedBanner({ spaceSlug, canManage, onRestore }: {
-  spaceSlug?: string; canManage: boolean; onRestore: () => void;
+  spaceSlug: string; canManage: boolean; onRestore: () => void;
 }) {
   return (
     <Callout kind="warning" icon={Archive} className="mb-3" data-archived-banner>
       <div className="flex flex-wrap items-center gap-2">
         <span>This page is archived — read-only and hidden from the tree until restored.</span>
-        {canManage && spaceSlug && (
+        {canManage && (
           <Link to={PageRoute.space} params={{ spaceSlug }} search={{ archived: true }} className="underline-offset-2 hover:underline">
             All archived pages
           </Link>
@@ -55,7 +55,7 @@ export function PageMeta({
   authenticated: boolean;
   canWrite: boolean;
   canManage: boolean;
-  spaceSlug?: string;
+  spaceSlug: string;
   onChangeUrl: () => void;
   onRestrict: () => void;
   onArchive: () => void;
@@ -65,7 +65,7 @@ export function PageMeta({
   /** RADD-733: a new tab, so the reader keeps their place — the print view replaces the whole
    *  document and the browser's print dialog blocks it. */
   const openPrint = (subpages: boolean) => {
-    if (spaceSlug) window.open(pagePrintHref(spaceSlug, page.path, subpages), "_blank", "noopener");
+    window.open(pagePrintHref(spaceSlug, page.path, subpages), "_blank", "noopener");
   };
   return (
     <div className="mt-1 flex flex-wrap items-center gap-2 px-1.5 text-xs text-fg-muted">
@@ -74,8 +74,7 @@ export function PageMeta({
         <span title={page.updated_at}>{relativeTime(page.updated_at)}</span>
       </span>
       <span className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary">v{page.version}</span>
-      {/* RADD-1233: the page's number IS its permalink — shown where the version is, so the
-          stable address is one right-click away. */}
+      {/* RADD-1233: the page's number IS its permalink, one right-click away beside the version. */}
       <Link {...pagePermalink(page.number)} data-page-number={page.number} title="Permanent link — survives renames and moves"
         className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary hover:text-fg">
         #{page.number}
@@ -95,8 +94,6 @@ export function PageMeta({
             <Link2 size={13} aria-hidden />
           </IconButton>
         )}
-        {/* RADD-738: the export entry point, with the subpages choice offered WHERE the action is
-            taken rather than buried in settings. */}
         <DropdownMenu label="Export this page" align="end" className="ml-1" widthClass="w-56"
           trigger={({ ref, toggle }) => (
             <IconButton ref={ref} onClick={toggle} title="Export as PDF" aria-label="Export this page" className="flex">
@@ -115,8 +112,6 @@ export function PageMeta({
             },
           ]}
         />
-        {/* RADD-792/793: restrict this ONE page, over the generic spec-92 editor. Offered where the
-            page is, not in settings — the decision is about this page and is made while reading it. */}
         {canManage && (
           <IconButton onClick={onRestrict} title="Restrict who can see this page" aria-label="Restrict page" className="ml-1">
             <Lock size={13} aria-hidden />
@@ -127,9 +122,7 @@ export function PageMeta({
             <Archive size={13} aria-hidden />
           </IconButton>
         )}
-        {/* RADD-1245 (radd-hq/radd#17): offered on a LIVE page as well, the way an issue's Delete
-            is — archive stays the reversible choice beside it. The server still refuses a page
-            with live children. */}
+        {/* Also on a live page, as on an issue; the server refuses one with live children. */}
         {canManage && (
           <IconButton danger onClick={onDelete} title="Delete permanently" aria-label="Delete page permanently" className="ml-1">
             <Trash2 size={13} aria-hidden />

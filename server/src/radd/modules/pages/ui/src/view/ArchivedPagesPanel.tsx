@@ -14,17 +14,9 @@ interface BulkResult {
   skipped: { id: string; reason: string }[];
 }
 
-/**
- * The archive browser for one space (RADD-1228, GitHub #7): every archived
- * page, openable read-only and restorable from here — the UI half of what the
- * API has offered since spec 43. Rendered in the space's content pane under
- * `?archived=1`, for holders of `page.manage` (the listing's own gate).
- *
- * RADD-1249: a list you can WORK — search over title and path, select many,
- * restore or delete permanently the selection in one request each. The server
- * answers per page (done / skipped with a reason), and the reasons stay on the
- * rows they belong to.
- */
+/** A space's archive browser (RADD-1228/1249), under `?archived=1` for `page.manage`: search title and
+ *  path, open read-only, restore or delete one or a selection. The server answers per page (done /
+ *  skipped with a reason) and each reason stays on its row. */
 export function ArchivedPagesPanel({
   spaceId,
   spaceSlug,
@@ -139,7 +131,6 @@ export function ArchivedPagesPanel({
           </div>
           {count > 0 && (
             <div
-              data-archived-bulk-bar
               className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-strong bg-elevated px-3 py-2"
             >
               <span className="text-xs font-medium text-heading" data-archived-selected-count>
@@ -222,7 +213,6 @@ function ArchivedPageRow({
   return (
     <li
       data-archived-page={page.id}
-      data-selected={selected || undefined}
       className={
         "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 " +
         (selected ? "border-strong bg-elevated" : "border-subtle bg-surface/50")

@@ -3,11 +3,7 @@ import { SelectField, TextField, TokenMultiSelect, ErrorText } from "@radd/plugi
 import { FieldType, type FieldDef } from "./types";
 import type { CustomFieldsFormProps, ControlProps } from "./control-contract";
 
-/**
- * Form generated from the fields registry (`GET /fields`) —
- * one control per definition, rendered by field type (spec 04 §Phase 2).
- * Values map 1:1 to the item's `custom_fields`; null clears a value.
- */
+/** One control per registry field (`GET /fields`); null clears a value. */
 export function CustomFieldsForm({
   fields,
   values,
@@ -45,12 +41,7 @@ function fieldLabel(field: FieldDef): string {
   return field.required ? `${field.name} *` : field.name;
 }
 
-/**
- * A single registry-field control rendered by field type — the reusable unit
- * behind `CustomFieldsForm`. Exported so the intake-form submit page (spec 20)
- * and the automations `set_custom_field` action can render one field with their
- * own label/required overrides (pass a synthesized `FieldDef`).
- */
+/** One field's control — also rendered alone by intake forms and automations with a synthesized FieldDef. */
 export function CustomFieldControl({ field, value, error, onChange, disabled }: ControlProps) {
   switch (field.type) {
     case FieldType.select:
@@ -74,8 +65,6 @@ export function CustomFieldControl({ field, value, error, onChange, disabled }: 
       );
 
     case FieldType.multi_select:
-      // One compact single-row token editor for both display modes (spec 94 UX pass): the field's
-      // `display` no longer forks the widget — the token select scrolls rather than growing tall.
       return <MultiSelectField field={field} value={value} error={error} onChange={onChange} disabled={disabled} />;
 
     case FieldType.boolean:
@@ -145,8 +134,7 @@ export function CustomFieldControl({ field, value, error, onChange, disabled }: 
   }
 }
 
-/** A registry multi_select field: one compact single-row token editor over the field's options —
- *  type to filter + pick, × / Backspace to remove. Replaces the old chips + dropdown variants. */
+/** multi_select: one-row token editor. */
 function MultiSelectField({ field, value, error, onChange, disabled }: ControlProps) {
   const selected = Array.isArray(value) ? value : [];
   const options = (field.options ?? []).map((option) => ({ value: option, label: option }));

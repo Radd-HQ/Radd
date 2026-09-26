@@ -1,25 +1,15 @@
 /**
- * Laying out an automation graph that carries no coordinates (spec 116).
- *
- * Every automation the d116graphs migration produced has nodes but no x/y —
- * there was no canvas when they were written. Rather than backfill positions in
- * a migration (guessing a layout for graphs nobody has opened), the canvas
- * computes one from the TOPOLOGY and only persists coordinates once someone
- * actually drags a node. So an untouched automation always opens tidy, and a
- * hand-arranged one is never re-tidied behind its owner's back.
- *
- * The layout is a layered left-to-right sweep: a node sits one column right of
- * its furthest-left source, and rows stack within a column. That reads the way
- * the graph executes, which is the point of drawing it at all.
+ * Topology layout for nodes without stored x/y (graphs migrated by d116graphs have none; only a drag
+ * persists coordinates). A layered sweep along the flow axis: each node one layer past its deepest source.
  */
-import type { AutomationEdge, AutomationNode } from "./types";
+import type { AutomationEdge, AutomationNode, Orientation } from "./types";
 
 export const NODE_WIDTH = 210;
 export const NODE_HEIGHT = 78;
-export const COLUMN_GAP = 90;
-export const ROW_GAP = 28;
+const COLUMN_GAP = 90;
+const ROW_GAP = 28;
 
-export interface Placed {
+interface Placed {
   node: AutomationNode;
   x: number;
   y: number;
@@ -60,7 +50,7 @@ function columns(nodes: AutomationNode[], edges: AutomationEdge[]): Map<string, 
 export function layout(
   nodes: AutomationNode[],
   edges: AutomationEdge[],
-  orientation: "vertical" | "horizontal" = "vertical",
+  orientation: Orientation = "vertical",
 ): Placed[] {
   const depth = columns(nodes, edges);
   const byColumn = new Map<number, AutomationNode[]>();
@@ -86,14 +76,24 @@ export function layout(
   return placed;
 }
 
-
-
-/** A cubic bezier between two anchors — horizontal control points, so edges
- * leave and arrive flat and the eye follows the flow left to right. */
-export function edgePath(
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-): string {
-  const reach = Math.max(40, Math.abs(to.x - from.x) * 0.5);
-  return `M ${from.x} ${from.y} C ${from.x + reach} ${from.y}, ${to.x - reach} ${to.y}, ${to.x} ${to.y}`;
+/** Every node reachable from `start` along the edges (`downstream`) or against them (`upstream`),
+ * `start` included. */
+export function reachable(
+  edges: AutomationEdge[],
+  start: Iterable<string>,
+  direction: "downstream" | "upstream",
+): Set<string> {
+  const reached = new Set(start);
+  const queue = [...reached];
+  while (queue.length) {
+    const id = queue.pop() as string;
+    for (const edge of edges) {
+      const [from, to] = direction === "downstream" ? [edge.source, edge.target] : [edge.target, edge.source];
+      if (from === id && !reached.has(to)) {
+        reached.add(to);
+        queue.push(to);
+      }
+    }
+  }
+  return reached;
 }

@@ -1,10 +1,11 @@
 /** Searchable option controls. Providers own transport, nouns, scope and row meaning. */
 import { Check, ChevronDown } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useId, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Slot } from "./slots";
 import { Button, Modal, Spinner, TextField } from "./primitives";
 import { DirectoryPager, QueryError, TokenList } from "./host";
+import { usePagedDirectory } from "./paged-directory";
 import type { Paged } from "./api";
 import type { PluginContribution } from "./plugin";
 
@@ -104,19 +105,12 @@ function EditableControl(props: (({ kind: "text" } & OptionTextFieldProps) | ({ 
   </div>;
 }
 function Choices({ source, resource, selected = "", selectedValues = [], presets = [], canBrowse = true, scope = {}, onSelect, onClose, title, footer }: OptionChoicesProps & { source?: OptionSource }) {
-  const [filter, setFilter] = useState("");
-  const [q, setQ] = useState("");
-  useEffect(() => { const timer = setTimeout(() => setQ(filter.trim()), 150); return () => clearTimeout(timer); }, [filter]);
-  const [position, setPosition] = useState({ q, scope: JSON.stringify(scope), page: 0 });
-  const scopeKey = JSON.stringify(scope);
-  if (position.q !== q || position.scope !== scopeKey) setPosition({ q, scope: scopeKey, page: 0 });
-  const page = position.q === q && position.scope === scopeKey ? position.page : 0;
-  const pageSize = 50, active = Boolean(source && canBrowse), noun = source?.noun ?? "choices";
-  const result = useQuery({ queryKey: ["directory-options", resource, { q, page }, scope], meta: source?.meta,
-    queryFn: ({ signal }) => source!.fetch({ q, limit: pageSize, offset: page * pageSize, scope, signal }),
-    enabled: active, staleTime: DIRECTORY_STALE_MS, placeholderData: keepPreviousData });
-  const busy = result.isFetching || q !== filter.trim();
-  const rows = active ? result.data?.rows ?? [] : [];
+  const active = Boolean(source && canBrowse), noun = source?.noun ?? "choices";
+  const { filter, setFilter, page, pageSize, setPage, busy, ...result } = usePagedDirectory(JSON.stringify(scope),
+    (q, page, pageSize) => ({ queryKey: ["directory-options", resource, { q, page }, scope], meta: source?.meta,
+      queryFn: ({ signal }) => source!.fetch({ q, limit: pageSize, offset: page * pageSize, scope, signal }) }),
+    { enabled: active });
+  const rows = active ? result.rows : [];
   return <Modal title={title ?? `Choose ${noun}`} onClose={onClose}>
     {active && <TextField type="search" label={`Find ${noun}`} value={filter} onChange={event => setFilter(event.target.value)} placeholder="Search…" />}
     {presets.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{presets.map(row => <Button key={row.value} variant="secondary" disabled={selectedValues.includes(row.value)} onClick={() => onSelect(row)}>{row.label}</Button>)}</div>}
@@ -131,7 +125,7 @@ function Choices({ source, resource, selected = "", selectedValues = [], presets
           {(row.value === selected || selectedValues.includes(row.value)) && <Check size={14} className="ml-auto shrink-0 text-accent-text" aria-label="Selected" />}
         </Button></li>)}</ul>}
     </div><DirectoryPager page={page} pageSize={pageSize} total={result.data?.total ?? rows.length} busy={busy}
-      onPage={next => setPosition({ q, scope: scopeKey, page: next })} label={noun} /></>}
+      onPage={setPage} label={noun} /></>}
     {footer}
   </Modal>;
 }

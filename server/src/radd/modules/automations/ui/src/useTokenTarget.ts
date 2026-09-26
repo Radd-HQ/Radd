@@ -1,18 +1,7 @@
 /**
- * Where a clicked `{{token}}` lands (spec 120).
- *
- * The token list sits below a form whose fields are built by four different
- * components, so "insert into the field" cannot be a prop threaded through all
- * of them — it would mean every param editor learning about tokens, including
- * the ones generated from a JSON Schema. Instead the inspector remembers which
- * text field was focused LAST and writes there.
- *
- * `onFocusCapture` rather than `onFocus`, because focus does not bubble; capture
- * is what lets one handler on the container see every field below it. And the
- * write goes through the native value setter plus a synthetic `input` event
- * rather than assigning `.value`: React's onChange is wired to the input event,
- * and a plain assignment updates the DOM node while leaving React's state — and
- * therefore the node's params — exactly as they were.
+ * Where a clicked `{{token}}` lands: the text field focused LAST inside the inspector. `onFocusCapture`
+ * because focus does not bubble; the write uses the native value setter + an `input` event, because
+ * assigning `.value` leaves React state (and so the params) unchanged.
  */
 import { useCallback, useRef } from "react";
 

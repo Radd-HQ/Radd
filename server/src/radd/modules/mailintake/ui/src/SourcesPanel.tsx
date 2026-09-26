@@ -8,14 +8,7 @@ import { RuleChainDialog } from "./RuleChainDialog";
 import { SourceDialog } from "./SourceDialog";
 import { Chip, connectionLine, kindLabel } from "./shared";
 
-/**
- * Incoming mail (RADD-958): every mailbox Radd polls and every endpoint it
- * accepts pushes on, each with its own ordered routing chain.
- *
- * The connection line reads the RESOLVED host/port/username (RADD-969) — a
- * Gmail row stores none of them, so printing the raw columns would show
- * "— at —:0" for a source that is polling perfectly well.
- */
+/** Incoming mail. The connection line reads the RESOLVED host/port/user — a preset row stores none. */
 export function SourcesPanel() {
   const sources = useQuery(mailSourcesQuery());
   const kinds = useQuery(mailKindsQuery());

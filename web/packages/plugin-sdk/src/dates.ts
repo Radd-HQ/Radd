@@ -1,21 +1,9 @@
 /**
- * Shared date formatting, in the READER's zone (RADD-1008).
- *
- * Every timestamp Radd renders goes through here, and here is the one place
- * that knows which zone to render it in: the profile's `timezone` when set
- * (`setReaderTimeZone`, fed from /auth/me), else the browser's. Before this,
- * the setting was stored and never read.
- *
- * Two shapes of API value, two rules:
- * - a TIMESTAMP ("2026-07-06T09:41:12Z") is an instant — it renders in the
- *   reader's zone, and so does "today" (`todayIso`), which is why the
- *   day-boundary helpers live here too;
- * - a DATE-ONLY string ("2026-07-06") is a calendar date with no zone. It
- *   renders verbatim in EVERY zone — anchored at UTC midnight and formatted
- *   in UTC — because a bare `new Date("2026-07-06")` parses as UTC midnight
- *   and renders the PREVIOUS day in negative-offset zones, and anchoring at
- *   local midnight would shift it again for a reader whose profile zone is
- *   not the browser's.
+ * Date formatting in the READER's zone: the profile's `timezone` (`setReaderTimeZone`, fed from
+ * /auth/me), else the browser's. A TIMESTAMP is an instant and renders in that zone (so does
+ * "today"). A DATE-ONLY string renders verbatim in every zone — anchored at UTC midnight and
+ * formatted in UTC — because `new Date("2026-07-06")` is UTC midnight and shows the previous day
+ * west of UTC, and local midnight would shift it again when the profile zone is not the browser's.
  */
 
 let readerZone = "";
@@ -100,9 +88,7 @@ export function formatDateOrNever(iso: string | null): string {
   return iso ? formatDate(iso) : "Never";
 }
 
-/** Full locale timestamp, e.g. "7/6/2026, 9:41:12 AM" — audit rows, last-login,
- * hover titles. The bare `new Date(x).toLocaleString()` this replaces was
- * scattered across the settings pages (RADD-901). */
+/** Full locale timestamp, e.g. "7/6/2026, 9:41:12 AM". */
 export function formatDateTime(iso: string): string {
   return formatIso(iso, {
     year: "numeric",

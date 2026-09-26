@@ -13,15 +13,8 @@ import { PageCommentPopover } from "./PageCommentPopover";
 import { useCommentPointer } from "./useCommentPointer";
 import { useInlineAnchors } from "./useInlineAnchors";
 
-/**
- * Inline, anchored, resolvable comments on a page (RADD-726): the rail beside the body, the
- * floating thread over a highlighted passage, and commenting on a selection. Where the passages
- * are is `useInlineAnchors`' job, including the highlighting.
- *
- * Anchors resolve against the RENDERED text (see the SDK's `dom-text.ts`): the quote
- * in a comment should be the words someone selected, not markdown source they
- * never saw.
- */
+/** Inline, anchored, resolvable comments (RADD-726): the rail, the floating thread, commenting on a
+ *  selection. Anchors resolve against RENDERED text — the quote is the words someone selected. */
 export function PageInlineComments({
   pageId,
   bodyRef,
@@ -112,10 +105,7 @@ export function PageInlineComments({
 
   // RADD-1283: the server's answer under the parent's resolution rule.
   const canResolveRow = (row: CommentRow) => !!row.can_resolve;
-  // RADD-1276: three groups. Open comments that still point at the page, the
-  // ones whose passage is gone (a rewrite strands all of them at once — they
-  // stay, by RADD-726, until someone resolves them, so they get a place, a
-  // label and one action), and the resolved ones.
+  // Open, Detached (passage gone or ambiguous — kept until resolved, RADD-726/1276), Resolved.
   const open = located.filter(({ row, orphaned }) => !row.resolved_at && orphaned === null);
   const detached = located.filter(({ row, orphaned }) => !row.resolved_at && orphaned !== null);
   const resolved = located.filter(({ row }) => row.resolved_at);
@@ -134,6 +124,26 @@ export function PageInlineComments({
     setFocusedId(null);
     for (const { row } of resolvableDetached) resolve.mutate({ id: row.id, resolved: true });
   };
+  // A rail thread; a resolved one ignores the floating popover and offers Unresolve.
+  const threadFor = ({ row, orphaned }: (typeof located)[number], resolvedView = false) => (
+    <Thread
+      key={row.id}
+      expanded={expandedId === row.id && (resolvedView || !floating.pointer?.pinned)}
+      onToggle={() => { if (!resolvedView) floating.close(); setExpandedId(expandedId === row.id ? null : row.id); }}
+      {...replyProps(row)}
+      row={row}
+      orphaned={orphaned}
+      focused={row.id === focusedId}
+      canResolve={canResolveRow(row)}
+      resolvedView={resolvedView}
+      onFocus={() => setFocusedId(row.id)}
+      onNavigate={() => jumpToPassage(row)}
+      onResolve={() => {
+        if (!resolvedView) setFocusedId(null);
+        resolve.mutate({ id: row.id, resolved: !resolvedView });
+      }}
+    />
+  );
 
   if (!inline.length && !canComment && !history.hasOlder && !history.isError && !history.isPending) return null;
 
@@ -198,24 +208,7 @@ export function PageInlineComments({
           </div>
         )}
 
-        {open.map(({ row }) => (
-          <Thread
-            key={row.id}
-            expanded={expandedId === row.id && !floating.pointer?.pinned}
-            onToggle={() => {floating.close(); setExpandedId(expandedId === row.id ? null : row.id);}}
-            {...replyProps(row)}
-            row={row}
-            orphaned={null}
-            focused={row.id === focusedId}
-            canResolve={canResolveRow(row)}
-            onFocus={() => setFocusedId(row.id)}
-            onNavigate={() => jumpToPassage(row)}
-            onResolve={() => {
-              setFocusedId(null);
-              resolve.mutate({ id: row.id, resolved: true });
-            }}
-          />
-        ))}
+        {open.map((entry) => threadFor(entry))}
 
         {detached.length > 0 && (
           <section data-detached-comments className="flex flex-col gap-2 border-t border-subtle pt-2">
@@ -233,24 +226,7 @@ export function PageInlineComments({
               The passages these were written about were edited away, or now appear more than
               once. They stay until someone resolves them; a resolved comment keeps its quote.
             </p>
-            {detached.map(({ row, orphaned }) => (
-              <Thread
-                key={row.id}
-                expanded={expandedId === row.id && !floating.pointer?.pinned}
-                onToggle={() => {floating.close(); setExpandedId(expandedId === row.id ? null : row.id);}}
-                {...replyProps(row)}
-                row={row}
-                orphaned={orphaned}
-                focused={row.id === focusedId}
-                canResolve={canResolveRow(row)}
-                onFocus={() => setFocusedId(row.id)}
-                onNavigate={() => jumpToPassage(row)}
-                onResolve={() => {
-                  setFocusedId(null);
-                  resolve.mutate({ id: row.id, resolved: true });
-                }}
-              />
-            ))}
+            {detached.map((entry) => threadFor(entry))}
           </section>
         )}
 
@@ -263,23 +239,7 @@ export function PageInlineComments({
             >
               Resolved ({resolved.length})
             </button>
-            {showResolved &&
-              resolved.map(({ row, orphaned }) => (
-                <Thread
-                  key={row.id}
-                  expanded={expandedId === row.id}
-                  onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)}
-                  {...replyProps(row)}
-                  row={row}
-                  orphaned={orphaned}
-                  focused={row.id === focusedId}
-                  canResolve={canResolveRow(row)}
-                  resolvedView
-                  onFocus={() => setFocusedId(row.id)}
-                  onNavigate={() => jumpToPassage(row)}
-                  onResolve={() => resolve.mutate({ id: row.id, resolved: false })}
-                />
-              ))}
+            {showResolved && resolved.map((entry) => threadFor(entry, true))}
           </div>
         )}
       </section>

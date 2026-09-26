@@ -4,11 +4,8 @@ import { EDITOR_AI_PREF_KEY } from "../editor/gate";
 import { aiPreferencesQuery } from "../queries";
 import { AiEndpoint } from "../transport";
 
-/**
- * The editor-AI opt-out (specs 101/103) — this plugin's `profile.section` (RADD-1395). Stored
- * server-side in the preferences dict (spec 94 shallow-merge PUT) so it follows the account across
- * browsers; an absent key means enabled, and the editor gate (`editor/gate.ts`) reads the same one.
- */
+/** The editor-AI opt-out, kept in the account's preferences so it follows the account; an absent key
+ *  means enabled (`editor/gate.ts` reads the same key). */
 export function EditorAiPreference() {
   const queryClient = useQueryClient();
   const prefs = useQuery(aiPreferencesQuery);

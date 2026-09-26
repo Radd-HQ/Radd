@@ -17,12 +17,8 @@ const SAMPLE_TIMERS: SlaBatchTimer[] = [
     breached: false, paused: false, remaining_seconds: 4 * 3600 },
 ];
 
-/** The slas plugin's UI remote: the SLA report (RADD-1386) on the reports pages and as the
- * "Service desk SLA" dashboard widget, the timers (RADD-1394) — the issue rail's SLA section
- * and the SLA list column / board-card cell, fed by its `slas.timers` batch — and the project's
- * SLA settings page (RADD-1396). Disabling the plugin withdraws all of them; a saved view that
- * names the column keeps the id and skips it. The queue view type needs no UI here: the manifest
- * declares it a list surface over this plugin's urgency-ordered rows, which the host draws. */
+/** slas: the SLA report + dashboard widget, the rail timers, the SLA column/card cell (the `slas.timers` batch),
+ *  and the project SLA settings page. The queue view type needs no UI — the host draws it. */
 export default definePlugin({
   querySources: [timersSource],
   contributions: [

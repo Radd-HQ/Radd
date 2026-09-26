@@ -29,7 +29,7 @@ export const useAiPresets = () =>
     staleTime: 30_000,
   });
 
-/** Refresh everything tagged with these AI entities — this page's lists and the host's AI gate. */
+/** Refresh everything tagged with these AI entities — this page's lists and the AI gate. */
 export function useInvalidateAi() {
   const queryClient = useQueryClient();
   return (...entities: string[]) => void invalidateEntities(queryClient, ...entities);

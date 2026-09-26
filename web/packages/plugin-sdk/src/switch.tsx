@@ -1,10 +1,5 @@
-/**
- * An on/off switch (RADD-1288) — for a setting that takes effect the moment it
- * flips (a rule enabled, a filter applied), where a checkbox reads as "part of a
- * form you still have to submit". The label names the thing, never its state:
- * "Enabled" beside an unticked box, as automations used to read, says the
- * opposite of what is true.
- */
+/** An on/off switch for a setting that takes effect the moment it flips (a checkbox reads as part of a
+ *  form still to submit). `label` names the thing, never its state. */
 export function Switch({
   checked,
   onChange,

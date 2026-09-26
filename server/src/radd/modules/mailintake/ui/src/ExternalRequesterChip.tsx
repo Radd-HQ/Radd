@@ -2,20 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api, tokens } from "@radd/plugin-sdk";
 import { Mail, Star } from "lucide-react";
 
-/**
- * External requesters (spec 62) as a FEDERATED remote (spec 94): rendered only when the item has at
- * least one mail contact — raised by email or a public form by someone without an account. Agents'
- * PUBLIC comments go back out to every address listed here.
- *
- * RADD-980 made the list n-ary. It used to read the singular `/mail-contact` and render one chip,
- * which was accurate while a ticket could only ever have one contact; now a customer's CC'd
- * colleague is a contact too, and the rail has to say so — a reply fans out to all of them, and a
- * screen that shows one address makes that fan-out invisible. The PRIMARY (the person who raised
- * the ticket) is first and starred, which is the row every singular seam still means: CSAT, the
- * automation `contact` recipient role, the singular endpoint.
- *
- * Styled from `@radd/plugin-sdk` tokens — no hardcoded color, so it tracks the host theme.
- */
+/** The item's mail contacts (spec 62). A public comment is emailed to every one of them; the
+ *  primary (who raised it) is first and starred — the contact CSAT and the `contact` role mean. */
 
 interface MailContact {
   email: string;

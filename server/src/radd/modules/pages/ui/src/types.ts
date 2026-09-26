@@ -45,9 +45,7 @@ export interface PageExtensionSpec {
   description: string;
   params_schema: { properties?: Record<string, unknown>; required?: string[] };
   icon: string;
-  /** The plugin that contributed it — the insert menu's grouping (RADD-748).
-   *  The SERVER says where each came from; the client must not guess from a
-   *  plugin name it may never have seen. */
+  /** The contributing plugin, as the SERVER says — the insert menu groups by it. */
   source: string;
 }
 
@@ -159,10 +157,9 @@ export interface PageUpdate {
   parent_id?: string | null;
   position?: number;
   expected_version?: number;
-  /** Spec 122: the body comes from a live room's elected saver — the server
-   *  skips the `expected_version` check for this session's writes. */
+  /** Spec 122: a live session's write — the server skips `expected_version` for it. */
   collab_session?: string;
-  /** Spec 122: the session's last save; the server records a version row. */
+  /** The session's last save; the server records a version row. */
   final?: boolean;
 }
 

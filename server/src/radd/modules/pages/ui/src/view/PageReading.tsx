@@ -64,18 +64,11 @@ export function PageReading({ page, bodyRef, canWrite, canComment, onEdit, onRen
         )}
       </div>
 
-      {/* RADD-943: the panel owns its heading, because whether it is open is a property of what
-          it contains. */}
       <PageLinkedItems pageId={page.id} canWrite={canWrite} />
 
-      {/* RADD-944 deleted the automatic subpage index that used to sit here. Children are the
-          page tree's job, and the author's, via `radd:children`/`radd:toc`. Backlinks stay
-          automatic below: "what points at me" cannot be expressed inline any other way, which is
-          why `radd:backlinks` is the INLINE alternative rather than the only way to get them. */}
+      {/* Backlinks stay automatic: "what points at me" has no inline form (RADD-944 removed the subpage index). */}
       <PageBacklinksPanel pageId={page.id} />
 
-      {/* RADD-717: a page is where a decision gets written down; the argument about it needs
-          somewhere to live besides chat. */}
       <PageComments pageId={page.id} canComment={canComment} />
     </>
   );

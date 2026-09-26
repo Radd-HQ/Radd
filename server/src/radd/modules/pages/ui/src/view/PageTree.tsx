@@ -11,8 +11,7 @@ import { ancestorIds, buildTree, type TreeNode } from "./page-tree";
 /** Below this many pages the tree needs no filter chrome (RADD-882). */
 const FILTER_THRESHOLD = 8;
 
-/** The bits a row must carry to render in the tree — satisfied by the authed
- * PageSummary (a public space renders through the same rows — spec 121 §5). */
+/** The fields a tree row renders. */
 interface PageTreeRow {
   id: string;
   parent_id: string | null;
@@ -80,15 +79,15 @@ export function PageTree({
     () => new Set(selectedId ? ancestorIds(parentOf, selectedId, rows.length) : []),
     [selectedId, parentOf, rows.length],
   );
-  // RADD-714: open to the selected page on load. Landing on a deep page from
-  // search or a link previously showed a collapsed tree that gave no clue where
-  // you were — the one cue the rail exists to provide.
+  const persistExpanded = (next: Set<string>) =>
+    localStorage.setItem(treeExpandStorageKey(spaceId), JSON.stringify([...next]));
+  // Open the tree to the selected page (RADD-714).
   useEffect(() => {
     if (!ancestorsOfSelected.size) return;
     setExpanded((current) => {
       if ([...ancestorsOfSelected].every((id) => current.has(id))) return current;
       const next = new Set([...current, ...ancestorsOfSelected]);
-      localStorage.setItem(treeExpandStorageKey(spaceId), JSON.stringify([...next]));
+      persistExpanded(next);
       return next;
     });
   }, [ancestorsOfSelected, spaceId]);
@@ -98,7 +97,7 @@ export function PageTree({
       const next = new Set(current);
       if (next.has(pageId)) next.delete(pageId);
       else next.add(pageId);
-      localStorage.setItem(treeExpandStorageKey(spaceId), JSON.stringify([...next]));
+      persistExpanded(next);
       return next;
     });
   };
@@ -177,8 +176,6 @@ function TreeRow({
   const { row, children } = node;
   const isOpen = expanded.has(row.id);
   const Caret = isOpen ? ChevronDown : ChevronRight;
-  // RADD-1009: the tree's first row action. The server has accepted a
-  // `parent_id` move since spec 43; nothing in the browser ever sent one.
   const [moving, setMoving] = useState(false);
   return (
     <>

@@ -11,11 +11,7 @@ import {
   type ConfluenceSnapshot,
 } from "./types";
 
-/**
- * The cache (spec 117). A selection is downloaded ONCE and every later step reads
- * it — which is what makes "fix a mapping and try again" a loop rather than
- * another download.
- */
+/** Cached downloads: every later step reads the cache, so "fix a mapping and retry" needs no new download. */
 export function SnapshotsPanel({
   onPlanFrom,
 }: {
@@ -82,9 +78,7 @@ export function SnapshotsPanel({
                         .join(" · ")}
                     </p>
                   )}
-                  {/* A bare "failed" is not a report. The reason is already on the
-                      row — showing it is the difference between "something broke"
-                      and knowing which page and why. */}
+                  {/* Show the reason — a bare "failed" is not a report. */}
                   {snapshot.problems.length > 0 && (
                     <ul className="mt-1 space-y-0.5">
                       {snapshot.problems.slice(0, 3).map((problem, index) => (

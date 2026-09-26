@@ -1,10 +1,9 @@
 import { ChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Slot } from "./slots";
 import { Button, Modal, Spinner } from "./primitives";
 import { QueryError, DirectoryPager, ListSearchInput } from "./host";
-import type { Paged } from "./api";
+import { usePagedDirectory, type PagedDirectoryQuery } from "./paged-directory";
 
 /** A generic directory value. The provider owns its meaning and authorization. */
 export interface DirectoryChoice { id: string; name: string }
@@ -17,7 +16,6 @@ export interface DirectorySelectProps {
   disabled?: boolean;
   context?: Record<string, string | undefined>;
 }
-const SEARCH_DEBOUNCE_MS = 150;
 export const DIRECTORY_SELECT_SLOT = "directory.select";
 
 /** Resolve an owner-contributed control without importing that feature's implementation. */
@@ -28,12 +26,8 @@ export function DirectorySelect({ source, ...props }: DirectorySelectProps & { s
   return <Slot key={JSON.stringify([source, props.context])} id={DIRECTORY_SELECT_SLOT} match={source} {...props} fallback={unavailable} errorFallback={unavailable} />;
 }
 
-export interface DirectoryQuery {
-  queryKey: readonly unknown[];
-  queryFn: (context: { signal: AbortSignal }) => Promise<Paged<DirectoryChoice>>;
-  meta?: Record<string, unknown>;
-}
-export interface PagedDirectorySelectProps extends DirectorySelectProps {
+export type DirectoryQuery = PagedDirectoryQuery<DirectoryChoice>;
+interface PagedDirectorySelectProps extends DirectorySelectProps {
   noun: string;
   searchPlaceholder: string;
   pageSize?: number;
@@ -53,18 +47,8 @@ export function PagedDirectorySelect(props: PagedDirectorySelectProps) {
 }
 
 function DirectoryChoices({ label, emptyLabel, clearLabel, noun, searchPlaceholder, pageSize = 50, query, onChange, onClose }: PagedDirectorySelectProps & { onClose: () => void }) {
-  const [filter, setFilter] = useState("");
-  const [q, setQ] = useState("");
-  useEffect(() => { const timer = setTimeout(() => setQ(filter.trim()), SEARCH_DEBOUNCE_MS); return () => clearTimeout(timer); }, [filter]);
-  const [position, setPosition] = useState({ q, page: 0 });
-  if (position.q !== q) setPosition({ q, page: 0 });
-  const page = position.q === q ? position.page : 0;
-  const definition = query(q, page, pageSize);
-  // The provider's key prefix and entity metadata drive cross-feature invalidation; the previous
-  // page stays up while the next loads.
-  const result = useQuery({ ...definition, staleTime: 30_000, placeholderData: keepPreviousData });
-  const busy = result.isFetching || q !== filter.trim();
-  const rows = result.data?.rows ?? [];
+  // The provider's key prefix and entity metadata drive cross-feature invalidation.
+  const { filter, setFilter, page, setPage, busy, rows, ...result } = usePagedDirectory("", query, { pageSize });
   const total = result.data?.total ?? rows.length;
   return <Modal title={label} onClose={onClose}>
     <ListSearchInput value={filter} onChange={setFilter} placeholder={searchPlaceholder} total={total} matched={total} noun={noun} />
@@ -75,6 +59,6 @@ function DirectoryChoices({ label, emptyLabel, clearLabel, noun, searchPlacehold
         : !rows.length ? <p className="py-4 text-sm text-fg-muted">No matches.</p>
         : <ul>{rows.map(row => <li key={row.id}><Button variant="ghost" className="w-full justify-start" onClick={() => onChange(row)}>{row.name}</Button></li>)}</ul>}
     </div>
-    <DirectoryPager page={page} pageSize={pageSize} total={total} busy={busy} onPage={next => setPosition({ q, page: next })} label={noun} />
+    <DirectoryPager page={page} pageSize={pageSize} total={total} busy={busy} onPage={setPage} label={noun} />
   </Modal>;
 }

@@ -2,12 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, tokens } from "@radd/plugin-sdk";
 import { Star } from "lucide-react";
 
-/**
- * CSAT rating chip (spec 65) as a FEDERATED remote (spec 94): rendered only once the requester
- * ANSWERED the resolution survey — `GET /items/{id}/csat` is 404-quiet until then. Stars + the
- * free-text comment as the tooltip. Extracted from the host's IssueProperties into the `csat`
- * plugin's own UI bundle; styled from `@radd/plugin-sdk` tokens — no hardcoded color, tracks theme.
- */
+/** CSAT chip (spec 65): shown once the requester answered; the comment is the tooltip. */
 
 interface ItemCsat {
   rating: number;
@@ -20,8 +15,7 @@ const RATING_STARS = [1, 2, 3, 4, 5];
 const itemCsatKey = (itemId: string) => ["radd-remote", "csat", itemId] as const;
 
 export function CsatChip({ itemId }: { itemId: string }) {
-  // GET /items/{id}/csat — null until the requester answers (RADD-1292: it
-  // used to 404, which logged a failed request on every issue view).
+  // null until the requester answers
   const { data: csat } = useQuery({
     queryKey: itemCsatKey(itemId),
     queryFn: ({ signal }) => api.get<ItemCsat | null>(`/items/${itemId}/csat`, { signal }),

@@ -1,25 +1,12 @@
-/** Automation rules (specs 20/58/66/69). */
-/** Values accepted by the legacy action wire format. Graph params use unknown. */
+/** Automation wire types — mirrors `automations/schemas.py`. */
+/** A param value in the `{type, params}` shape `ActionParams` edits. */
 export type ActionParamValue = string | number | boolean | string[] | null;
-// ---------------------------------------------------------------------------
-// Automations (spec 20 — /automations). Global rules that react to an
-// item event, match an SLQ condition, and apply an ordered list of actions.
-// ---------------------------------------------------------------------------
 
-/** A rule's trigger is an event-type string from GET /automations/catalog
- * ("item.updated", "comment.created", …) — or a sentinel. `manual` rules
- * never fire from events: they run on demand from the editor's `/` quick-action
- * menu (POST /automations/{id}/run). */
+/** Trigger sentinels — not event types, so nothing on the event stream fires them: `manual` runs on
+ * demand (POST /automations/{id}/run), `schedule` from the clock, `validate` synchronously at intake
+ * against a draft, applying nothing. */
 export const MANUAL_TRIGGER = "manual";
-
-/** Spec 69: the schedule sentinel — the rule fires from the scheduler clock
- * instead of an event, driven by its `schedule` config. */
 export const SCHEDULE_TRIGGER = "schedule";
-
-/** Spec 119: the validation sentinel. The graph runs SYNCHRONOUSLY at intake,
- * against a savepoint-created draft, and applies nothing — it produces findings.
- * Like the other two it is not in the event catalog, so nothing can fire it from
- * the event stream. */
 export const VALIDATE_TRIGGER = "validate";
 
 /** What a validate trigger governs. A LIST of these rides on the node — one
@@ -47,9 +34,8 @@ export type ValidationModeValue = (typeof ValidationMode)[keyof typeof Validatio
 export const VERDICT_BLOCK_TYPE = "verdict.block";
 export const VERDICT_WARN_TYPE = "verdict.warn";
 
-// Scheduling is shared platform vocabulary, also consumed by Backups.
 import type { ScheduleConfig as RuleSchedule, ScheduleKindValue } from "@radd/plugin-sdk";
-export { ScheduleKind, type ScheduleKindValue, type ScheduleConfig as RuleSchedule, type SchedulePreview } from "@radd/plugin-sdk";
+export type { RuleSchedule };
 
 /** One subscribable event type, from GET /automations/catalog (spec 58). */
 export interface TriggerInfo {
@@ -70,11 +56,9 @@ export interface OperatorInfo {
   list_value: boolean;
 }
 
-/** A node type from the kernel registry (spec 116 phase 2) — EVERY node type
- * since RADD-1322, built-in and contributed alike. Served rather than
- * hardcoded: which nodes exist depends on which plugins are installed, and the
- * built-ins are described by the same specs that run them. */
-export interface NodeInfo {
+/** A node type from the kernel registry — built-in and contributed alike, served because which
+ * nodes exist depends on the loaded plugins. */
+interface NodeInfo {
   key: string;
   /** Registry owner, used to reject retained catalogs after withdrawal. */
   plugin: string;
@@ -97,17 +81,11 @@ export interface NodeInfo {
   shape_params?: string[] | null;
   /** RADD-1329: no output ports at all. */
   terminal: boolean;
-  /** The node's FIXED ports (RADD-1064). Empty means its outputs depend on its
-   * params — an AI classifier's ports are the answers being typed — and the
-   * editor computes those locally instead. Without this the canvas could only
-   * fall back to the KIND's table, which drew `ai.validate` (a gate) with
-   * TRUE/FALSE handles and let people wire edges the engine never emits. */
+  /** FIXED ports; empty = params-dependent (`dynamic_ports`). Never fall back to the kind's table:
+   * that drew `ai.validate` with TRUE/FALSE handles the engine never emits. */
   ports: string[];
   default_ports: string[];
-  /** The node's FIXED named outputs (spec 120), on exactly the terms `ports` is
-   * fixed: empty means they depend on the params — `ai.generate`'s outputs ARE
-   * the fields someone is still typing — and the editor computes those locally
-   * as the form changes. */
+  /** FIXED named outputs, on the same terms as `ports`. */
   outputs: OutputFieldInfo[];
   needs_items: boolean;
   permission: string;
@@ -178,8 +156,7 @@ export const ActionType = {
   setState: "set_state",
   setPriority: "set_priority",
   setAssignee: "set_assignee",
-  // Round-robin distribution across a team (RADD-1044). Always per-item — "the
-  // next member" is a property of one issue — so the server fixes its arity.
+  // Always per-item: "the next member" is a property of one issue.
   assignRoundRobin: "assign_round_robin",
   setTeam: "set_team",
   addLabel: "add_label",
@@ -188,7 +165,6 @@ export const ActionType = {
   setRelease: "set_release",
   setCustomField: "set_custom_field",
   addComment: "add_comment",
-  // RADD-1267: the rest of what an item can have done to it.
   setParent: "set_parent",
   setType: "set_type",
   setReporter: "set_reporter",
@@ -209,7 +185,7 @@ export const ActionType = {
   notifyUser: "notify_user",
   sendEmail: "send_email",
 } as const;
-export type ActionTypeValue = (typeof ActionType)[keyof typeof ActionType];
+type ActionTypeValue = (typeof ActionType)[keyof typeof ActionType];
 
 /**
  * Role values the send_email action's `to` param may name (spec 66) — anything
@@ -221,39 +197,25 @@ export const EmailRecipient = {
   contact: "contact",
 } as const;
 
-/**
- * One rule action as sent to the API — `{type, params}` where params is
- * type-specific (state name / priority / assignee email / team|cycle name /
- * label / release version / {key,value} / {body,visibility}). Names resolve per
- * item at apply time; `"none"` clears assignee/team/cycle/release.
- */
+/** An action node's params in the `{type, params}` shape `ActionParams` edits (`type` without the
+ * `action.` prefix). Names resolve per item at apply time; `"none"` clears. */
 export interface RuleAction {
   type: ActionTypeValue;
   params: Record<string, ActionParamValue>;
 }
 
-/** GET /automations — actions arrive opaque (`{type, params}`). */
 /** Member-visible slice of an enabled manual rule — the `/` menu's custom actions. */
 export interface RunnableRule {
   id: string;
   name: string;
 }
 
-// ---------------------------------------------------------------------------
-// The graph (spec 116). An automation is a DAG: a TRIGGER emits a packet of
-// (event facts, item set); FILTER narrows the set across matched/unmatched;
-// GATE routes the whole packet by a boolean over the event; ACTION does work and
-// passes its input through so chains continue.
-//
-// `trigger` and `schedule` are NOT sent — the server derives them from the
-// trigger node, so there is one place that says what starts an automation.
-// ---------------------------------------------------------------------------
+// The graph (spec 116): a DAG of trigger / source / filter / gate / action nodes. `trigger` and
+// `schedule` are not sent — the server derives them from the trigger nodes.
 
 export const NodeKind = {
   trigger: "trigger",
-  /** Produces items rather than narrowing them — the SLQ search node. Every
-   * other kind can only reduce what the trigger handed it, so without this an
-   * automation could never reach an issue the event did not name. */
+  /** Produces items (the SLQ search node); every other kind can only narrow what it was handed. */
   source: "source",
   filter: "filter",
   gate: "gate",
@@ -261,33 +223,12 @@ export const NodeKind = {
 } as const;
 export type NodeKindValue = (typeof NodeKind)[keyof typeof NodeKind];
 
-/** The built-in port names. A node TYPE may name its own — an AI classifier's
- * ports are its answers — so an edge's port is a plain string, checked against
- * the source node's real ports on write. */
-export const NodePort = {
-  out: "out",
-  matched: "matched",
-  unmatched: "unmatched",
-  true: "true",
-  false: "false",
-  /** What `create_item` MADE, as opposed to what it was given. */
-  created: "created",
-} as const;
-export type NodePortValue = (typeof NodePort)[keyof typeof NodePort];
-
-/** How a node reads its input packet (RADD-918).
- *
- * There is no loop node: in a dataflow graph over sets, "for each" is not
- * control flow but how a node reads its input. `set` runs once over the whole
- * packet; `item` runs per item — which for a ROUTER means partitioning the set
- * across its ports rather than sending all of it down one. */
+/** How a node reads its packet: `set` once over the whole packet, `item` per item (a router then
+ * partitions the set across its ports). There is no loop node. */
 export const NodeArity = { set: "set", item: "item" } as const;
 export type NodeArityValue = (typeof NodeArity)[keyof typeof NodeArity];
 
-/** How one node type may read its packet. `options` of length one means fixed,
- * and the editor shows no control — a toggle with one setting teaches nothing.
- * Served rather than mirrored here: a default that disagrees with the server is
- * invisible, because nothing fails to compile. */
+/** How one node type may read its packet; one option = fixed, no control. Served, never mirrored. */
 export interface NodeArityInfo {
   type: string;
   default: NodeArityValue;
@@ -297,37 +238,30 @@ export interface NodeArityInfo {
 /** What a search node does with the packet it was handed. */
 export const SearchMode = { replace: "replace", add: "add" } as const;
 
+/** Which way a graph's canvas flows. */
+export type Orientation = "vertical" | "horizontal";
+
 export interface AutomationNode {
   id: string;
   kind: NodeKindValue;
   /** The node-type key: "trigger.event", "filter.slq", "action.add_label", … */
   type: string;
   params: Record<string, unknown>;
-  /** What downstream tokens call this node (spec 120) — the left half of
-   * `{{triage.priority}}`. Separate from `id`, which edges are wired to: naming
-   * would otherwise be a graph-wide rewire. Absent/empty = unaddressable, which
-   * is right for the node types that produce nothing. */
+  /** What downstream tokens call this node (`{{triage.priority}}`); separate from `id`, which edges wire to. */
   name?: string;
-  /** Canvas coordinates. Optional and ignored by the engine — absent means
-   * "nobody has placed this node", and the editor lays it out from the topology
-   * instead. That is what lets every automation migrated by d116graphs open on
-   * the canvas without a data migration inventing positions. */
+  /** Canvas position; absent = never placed, laid out from topology. Ignored by the engine. */
   x?: number | null;
   y?: number | null;
 }
 
 export interface AutomationEdge {
   source: string;
-  /** A plain string, not `NodePortValue`: a contributed node's ports are its
-   * own — an AI classifier's are the answers someone typed. The server checks
-   * the name against the SOURCE node's real ports. */
+  /** Plain string: a contributed node names its own ports; the server checks them. */
   port: string;
   target: string;
 }
 
-/** One TRIGGER node, projected by the server with its scheduler stamps.
- * A list, not a scalar: a graph may hold several triggers, and one
- * `next_run_at` could only ever describe one of them. */
+/** One trigger node with its scheduler stamps — a list, since a graph may hold several. */
 export interface RuleTrigger {
   node_id: string;
   event_type: string;
@@ -344,7 +278,7 @@ export interface Rule {
   edges: AutomationEdge[];
   position: number;
   /** Which way the canvas flows. Stored per automation, not per viewer. */
-  orientation: "vertical" | "horizontal";
+  orientation: Orientation;
   triggers: RuleTrigger[];
   /** The newest recorded run (RADD-1266); null/"" when it has never run or
    * its runs were swept. */
@@ -374,14 +308,14 @@ export interface AutomationVersion {
 export interface AutomationVersionDetail extends AutomationVersion {
   nodes: AutomationNode[];
   edges: AutomationEdge[];
-  orientation: "vertical" | "horizontal";
+  orientation: Orientation;
 }
 
 export interface RuleCreate {
   name: string;
   enabled?: boolean;
   position?: number;
-  orientation?: "vertical" | "horizontal";
+  orientation?: Orientation;
   nodes: AutomationNode[];
   edges: AutomationEdge[];
 }
@@ -394,7 +328,7 @@ export interface RuleUpdate {
   name?: string;
   enabled?: boolean;
   position?: number;
-  orientation?: "vertical" | "horizontal";
+  orientation?: Orientation;
   nodes?: AutomationNode[];
   edges?: AutomationEdge[];
 }
@@ -403,7 +337,7 @@ export interface RuleUpdate {
 export interface ActionPreview {
   failed?: boolean;
   /** A built-in action's name, or a contributed node's full key (`script.run`). */
-  type: ActionTypeValue | string;
+  type: string;
   params: Record<string, unknown>;
   /** False when a named target no longer resolves (the engine would skip it). */
   resolves: boolean;
@@ -419,24 +353,21 @@ export interface ActionPreview {
   resolved: Record<string, string>;
 }
 
-/** One value a node produced on a dry run, with the token that reads it. The
- * token rather than the bare field name, because that is the thing someone
- * copies into the action below. */
-export interface ProducedVar {
+/** A value a node produced on a dry run, with the token that reads it. */
+interface ProducedVar {
   token: string;
   name: string;
   value: string;
 }
 
 /** What left one port of one node on a dry run. */
-export interface PortResult {
+interface PortResult {
   port: string;
   /** Exact, even when `sample` is capped. */
   count: number;
   /** Item keys — a sample you can recognise, which a count cannot be. */
   sample: string[];
-  /** False = the node did not emit this port AT ALL (a gate's untaken branch).
-   * Different from emitting zero items, which is a filter matching nothing. */
+  /** False = port not emitted at all (a gate's untaken branch) — not a filter emitting zero. */
   taken: boolean;
 }
 
@@ -468,24 +399,17 @@ export interface RuleTestResult {
   nodes: NodeResult[];
   /** Budget truncation, surfaced rather than buried in a log. */
   dropped: string[];
-  /** What a VALIDATION graph would tell the submitter (spec 119). Empty for
-   * every other kind of graph — which is the honest answer, not a missing one. */
+  /** Validation graphs only (spec 119); empty otherwise. */
   findings: Finding[];
 }
 
-// ---------------------------------------------------------------------------
-// Intake validation (spec 119) — the surfaces a submitter sees.
-// ---------------------------------------------------------------------------
+// Intake validation (spec 119).
 
-/** One thing wrong with a draft. `field` is a builtin name (`title`,
- * `description`, `assignee`, …) or `cf.<key>`, and empty when the finding is
- * about the submission as a whole — the two render differently: one against the
- * control it names, one in the panel. */
+/** `field` is a builtin name or `cf.<key>`; empty = about the submission as a whole. */
 export interface Finding {
   message: string;
   field: string;
-  /** Which check said it. Not shown; it is what makes a message traceable back
-   * to the node that produced it. */
+  /** The check that produced it; not shown. */
   node_id: string;
 }
 
@@ -497,11 +421,9 @@ export interface IntakeVerdict {
    * thing is watching, for display. NOT what happened: see `blocking`. */
   mode: ValidationModeValue;
   passed: boolean;
-  /** Whether these findings REFUSE the creation. The server's `verdict.blocks`,
-   * and the same property `commit: "always"` is answered 409 by — so a client
-   * gates "create anyway" on this and never on `mode === "required"`, which is
-   * a different question and answers it wrongly whenever a required graph and
-   * an advisory one govern the same draft and only the advisory one trips. */
+  /** Whether these findings REFUSE creation (server `verdict.blocks`; what makes `commit: "always"` 409).
+   * Gate "create anyway" on this, never on `mode === "required"`: a required and an advisory graph can
+   * govern one draft while only the advisory one trips. */
   blocking: boolean;
   findings: Finding[];
 }
@@ -527,16 +449,14 @@ export interface ValidationContext {
 
 /** One addressable path into an event payload, with values really seen at it.
  * The string is what `{{payload.<path>}}` and the payload condition take. */
-export interface PayloadPathInfo {
+interface PayloadPathInfo {
   path: string;
   examples: string[];
   /** Inside a list — a template reading it may render several values, joined. */
   repeated: boolean;
 }
 
-/** GET /automations/samples/events — what an event type actually carries.
- * Sampled from REAL events; `sampled: 0` means this type has never fired here,
- * which the UI says rather than inventing a shape. */
+/** GET /automations/samples/events. `sampled: 0` = never fired here; the UI says so, never invents a shape. */
 export interface EventSample {
   event_type: string;
   sampled: number;
@@ -544,15 +464,12 @@ export interface EventSample {
   /** Field names seen in `changes` diffs — what "field changed" can test. */
   changed_fields: string[];
   example: Record<string, unknown> | null;
-  /** Entity types this event is ABOUT (RADD-923). Each appears in the payload as
-   * a canonical ref under its own key, written by the kernel — so these resolve
-   * whether or not the event has ever fired here. */
+  /** Entity types the event is about; each resolves as a canonical ref under its own key, fired or not. */
   subjects: string[];
   /** The event's own DECLARED shape, beyond the refs. Present even when
    * `sampled` is 0 — sampling says what has happened, declaration what will. */
   declared_schema: Record<string, unknown>;
-  /** RADD-1331: the paths the event DECLARES (schema + each subject's real ref
-   *  fields) — served when nothing has been sampled yet. */
+  /** Paths the event DECLARES — served before anything has been sampled. */
   declared_paths: PayloadPathInfo[];
 }
 
@@ -563,7 +480,7 @@ export const RunStatus = {
   refused: "refused",
   failed: "failed",
 } as const;
-export type RunStatusValue = (typeof RunStatus)[keyof typeof RunStatus];
+type RunStatusValue = (typeof RunStatus)[keyof typeof RunStatus];
 
 /** One recorded run, as `GET /automations/{id}/runs` lists it. */
 export interface AutomationRun {

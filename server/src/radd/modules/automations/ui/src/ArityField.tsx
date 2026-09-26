@@ -1,27 +1,11 @@
-/**
- * How often a node runs: once for the set, or once per item (RADD-918).
- *
- * The control is only rendered when the node type offers a CHOICE — a segmented
- * control with one setting is noise, and `set_state` has never had a coherent
- * "once" reading. That decision comes from the server's `node_arity` table, not
- * from a list here: a default that disagrees with the engine is invisible,
- * because nothing fails to compile.
- *
- * The cost is stated because per-item is where it lands. "Once per issue" on a
- * scheduled run over a broad query is the difference between one Slack message
- * and two hundred, and nothing else on the canvas says so.
- */
+/** Once for the set vs once per item — only when the served `node_arity` offers a choice. The cost is
+ * stated: per item is one Slack message vs two hundred. */
 import { NodeArity, type NodeArityInfo, type NodeArityValue } from "./types";
 
 interface ArityFieldProps {
   rule: NodeArityInfo;
   value: NodeArityValue;
-  /** Which arity the node's other params have already decided, and why.
-   *
-   * A role recipient ("the reporter") is a property of ONE issue, so running
-   * once over a set would resolve nobody. The FORCED option stays selectable and
-   * the others lock — locking "whichever is not currently checked" would trap
-   * someone on the wrong one. */
+  /** Arity the params already decided (a role recipient ⇒ per item). It stays selected; the others lock. */
   forced?: { value: NodeArityValue; reason: string };
   onChange: (arity: NodeArityValue) => void;
 }
@@ -33,9 +17,7 @@ const COPY: Record<NodeArityValue, { label: string; cost: string }> = {
 
 export function ArityField({ rule, value, forced, onChange }: ArityFieldProps) {
   if (rule.options.length < 2) return null;
-  // The forced option is what is CHECKED, not merely what is allowed: the
-  // params already decided it, and a control disagreeing with what will be
-  // saved is worse than no control.
+  // The forced option is what is CHECKED.
   const current = forced?.value ?? value;
 
   return (

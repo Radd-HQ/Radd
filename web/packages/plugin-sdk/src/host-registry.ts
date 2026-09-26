@@ -41,8 +41,8 @@ export interface SelectFieldProps {
   className?: string; children?: ReactNode;
 }
 export type ButtonVariantValue = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { variant?: ButtonVariantValue; size?: "sm" | "md" }
-export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> { label?: string; hint?: string; error?: string }
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { variant?: ButtonVariantValue; size?: "sm" | "md" }
+interface FieldProps extends InputHTMLAttributes<HTMLInputElement> { label?: string; hint?: string; error?: string }
 export interface CalloutProps extends HTMLAttributes<HTMLDivElement> {
   kind: "info" | "success" | "warning" | "danger"; children: ReactNode;
   /** Replaces the kind's icon; null shows none. */
@@ -52,7 +52,7 @@ export interface ModalProps { title?: string; onClose: () => void; children: Rea
 export interface DirectoryPagerProps { page: number; pageSize: number; total: number; busy: boolean; onPage: (page: number) => void; label: string }
 export interface ListSearchInputProps { value: string; onChange: (next: string) => void; placeholder: string; ariaLabel?: string; total?: number; matched: number; noun: string; className?: string }
 /** Shared person-avatar presentation; status data is contributed independently. */
-export interface AvatarProps {
+interface AvatarProps {
   user: {id: string; name: string; avatar_color?: string | null; avatar_emoji?: string | null; avatar_url?: string | null};
   size?: "xs" | "sm" | "md" | "lg"; className?: string; title?: string;
 }
@@ -169,11 +169,8 @@ export interface HostComponents extends DocumentHost, CommentHost, KitHost {
 
   CodeEditor?: ComponentType<CodeEditorProps>;
   TokenList?: ComponentType<TokenListProps>;
-  SchemaForm?: ComponentType<SchemaFormProps>;
 
-  // RADD-1393: what the bundled dashboards package (and the approvals widget) draw with that only
-  // the shell owns — its query editor and top bar, view picker, sharing editor, report cards, and
-  // issue links and peek panel.
+  // Shell surfaces (SLQ editor, top bar, view picker, sharing, reports, issue links, peek).
   SlqField?: ComponentType<SlqFieldProps>;
   PageQueryFilter?: ComponentType<PageQueryFilterProps>;
   ViewSelect?: ComponentType<ViewSelectProps>;

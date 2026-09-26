@@ -60,7 +60,7 @@ export function incompleteActionNodeIds(
 }
 
 /** True when an action's params are complete enough to save (spec 20 contract). */
-export function isActionValid(action: RuleAction): boolean {
+function isActionValid(action: RuleAction): boolean {
   const p = action.params;
   switch (action.type) {
     case ActionType.setState:

@@ -1,16 +1,5 @@
+/** The node catalogue behind both the panel and the right-click menu, built from the served catalog. */
 import { defaultsFromSchema } from "@radd/plugin-sdk";
-/**
- * The node catalogue: everything that can be dropped on the canvas (spec 116).
- *
- * One list, consumed by BOTH the left panel and the right-click menu, so the two
- * can never offer different things. A palette that disagrees with the search is
- * the kind of drift that makes people distrust the search.
- *
- * Triggers come from the SERVER's event catalogue rather than a hardcoded list —
- * `GET /automations/catalog` already knows every subscribable event and which
- * group it belongs to, and hardcoding a copy here would go stale the first time
- * a module adds an event type.
- */
 import {
   NodeArity,
   NodeKind,
@@ -38,13 +27,9 @@ export interface NodeTemplate {
   produces?: boolean;
 }
 
-
 const TRIGGER_GROUP = "Triggers";
 
-/** Static ports by node type, from the served catalog (RADD-1064).
- *
- * Only the types that DECLARE a fixed set appear: an empty `ports` means the
- * node's outputs depend on its params, and the canvas computes those itself. */
+/** Static ports by node type (terminal = none); params-dependent types are absent. */
 export function contributedPorts(
   catalog: AutomationCatalog | undefined,
 ): Record<string, string[]> {
@@ -84,10 +69,7 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     });
   }
 
-  // Every other node — built-in and contributed alike (RADD-1322) — from the
-  // served catalog: its label, group, search words and starting params are the
-  // spec's own, so the palette cannot offer a node the server does not run.
-  // Triggers come from the trigger catalogue above, not from here.
+  // Every other node from its served spec, so the palette cannot offer what the server does not run.
   for (const node of catalog?.nodes ?? []) {
     if (node.kind === NodeKind.trigger) continue;
     const params =
@@ -109,10 +91,7 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
   return templates;
 }
 
-/** The palette's order (RADD-1265). The registry lists event groups in load
- * order, which put twenty admin triggers above Items; people reach for the
- * work-shaped groups first, the on-demand starters, then the rest. A group not
- * named here keeps its registry position after the named ones. */
+/** Palette order: work-shaped trigger groups first; an unlisted group keeps registry order after these. */
 const GROUP_ORDER = [
   `${TRIGGER_GROUP} · Items`,
   `${TRIGGER_GROUP} · Comments`,
@@ -135,12 +114,20 @@ const GROUP_ORDER = [
   "Actions",
 ];
 
+/** Rows grouped by key, groups in first-seen order (`Map.groupBy` is ES2024; the lib is ES2022). */
+export function groupBy<T>(rows: Iterable<T>, keyOf: (row: T) => string): [string, T[]][] {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  }
+  return [...groups.entries()];
+}
+
 /** Templates by group, in the palette's order. */
 export function groupTemplates(templates: NodeTemplate[]): [string, NodeTemplate[]][] {
-  const grouped = new Map<string, NodeTemplate[]>();
-  for (const template of templates) {
-    grouped.set(template.group, [...(grouped.get(template.group) ?? []), template]);
-  }
   const rank = (group: string) => {
     const index = GROUP_ORDER.indexOf(group);
     // Unlisted trigger groups (a plugin's) sit after the listed triggers and
@@ -148,7 +135,7 @@ export function groupTemplates(templates: NodeTemplate[]): [string, NodeTemplate
     if (index >= 0) return index;
     return group.startsWith(TRIGGER_GROUP) ? GROUP_ORDER.indexOf("Sources") - 0.5 : GROUP_ORDER.length;
   };
-  return [...grouped.entries()].sort(([a], [b]) => rank(a) - rank(b));
+  return groupBy(templates, (template) => template.group).sort(([a], [b]) => rank(a) - rank(b));
 }
 
 /** What a node is CALLED on the canvas (RADD-1265): the palette label of its
@@ -171,9 +158,7 @@ export function nodeTitle(
   return titles.get(node.type) ?? node.type;
 }
 
-/** A fresh automation's first node (RADD-1265): an "Item updated" trigger,
- * placed and selected, so the editor opens on a question ("fires on…") rather
- * than an empty canvas. */
+/** A fresh automation opens on a placed "Item updated" trigger. */
 export function seededTrigger(): AutomationNode {
   return {
     id: "trg1",
@@ -196,25 +181,14 @@ export function searchTemplates(templates: NodeTemplate[], query: string): NodeT
   });
 }
 
-// `arityOf` / `effectiveArity` live in `automation-outputs.ts` since RADD-1073's
-// review: the PUBLISH rules there need to know a producer's arity (an item-arity
-// node publishes nothing), and this module already depends on that one. Moving
-// them down keeps the dependency one-way; re-exported so no call site moved.
-export { arityOf, effectiveArity } from "./automation-outputs";
-
 /** Recipient values that name a ROLE rather than an address. Mirrors the
  * server's `EmailRecipient`; `notify_user` has no `contact` because a mail
  * contact has no account to notify in-app. */
 const EMAIL_ROLES = new Set(["reporter", "assignee", "contact"]);
 const NOTIFY_ROLES = new Set(["reporter", "assignee"]);
 
-/** Why a node's arity is not a choice right now, or "" when it is.
- *
- * A role recipient is a property of ONE issue. Addressed to `reporter` and run
- * once over a set, `send_email` resolves nobody and skip-logs — which is what
- * "email each reporter" did on every scheduled run until RADD-918: a saved,
- * enabled automation that had never once sent a message. The server refuses to
- * store that pairing; this is why, said before the save. */
+/** Why arity is not a choice right now, or "". A role recipient is a property of ONE issue: at set arity,
+ * `send_email` to `reporter` resolves nobody and skip-logs. The server refuses the pairing. */
 export function arityForcedReason(node: {
   type: string;
   params: Record<string, unknown>;
@@ -232,11 +206,8 @@ export function arityForcedReason(node: {
   return `“${target}” is a property of one issue, so this runs once per item. Name an address to send a single digest instead.`;
 }
 
-/** Params with the arity corrected for what they now say.
- *
- * Applied on every param edit rather than at render: choosing a role recipient
- * IMPLIES per-item, and a control that silently disagrees with what will be
- * saved is worse than one that moves. */
+/** Params with arity forced to per-item when a role recipient implies it — on edit, so the control
+ * never disagrees with what saves. */
 export function normalizeActionParams(
   node: { type: string },
   params: Record<string, unknown>,
@@ -247,7 +218,7 @@ export function normalizeActionParams(
 }
 
 /** A fresh node id that does not collide with anything already in the graph. */
-export function nextNodeId(existing: AutomationNode[], kind: NodeKindValue): string {
+function nextNodeId(existing: AutomationNode[], kind: NodeKindValue): string {
   const prefix = { trigger: "trg", source: "find", filter: "flt", gate: "gate", action: "act" }[kind] ?? "n";
   for (let n = 1; ; n++) {
     const candidate = `${prefix}${n}`;
@@ -264,15 +235,9 @@ export function instantiate(
     id: nextNodeId(existing, template.kind),
     kind: template.kind,
     type: template.type,
-    // A PRODUCER arrives named (spec 120). Its whole point is that something
-    // downstream can read it, and an unnamed one is a node whose output is
-    // unreachable until someone notices the field — so the editor suggests
-    // `generate_1` and the person renames it if they care.
+    // A producer arrives named (`generate_1`) so its output is reachable.
     name: template.produces ? suggestNodeName(template.type, existing) : undefined,
-    // Cloned, not shared: two nodes from one template must not end up editing
-    // the same params object. Normalised too — `send_email`'s blank params name
-    // the `reporter` ROLE, which implies per-item, so a freshly dropped node
-    // would otherwise arrive in the one state the server refuses to store.
+    // Cloned (no shared params) and normalised: send_email's default `reporter` implies per-item.
     params: normalizeActionParams(template, structuredClone(template.params)),
     x: at.x,
     y: at.y,

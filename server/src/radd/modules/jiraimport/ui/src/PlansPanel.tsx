@@ -3,14 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardList, Trash2 } from "lucide-react";
 import { api, Button, EmptyState, ErrorText, Modal, QueryError, SelectField, Table, TableSkeleton, TBody, Td, TextField, Th, THead, useConfirm } from "@radd/plugin-sdk";
 import { JiraPath, jiraKeys, plansQuery, snapshotsQuery } from "./api";
+import { Panel } from "./chrome";
 import type { JiraPlan } from "./plan-types";
 import { SnapshotStage } from "./types";
 
-/**
- * Import plans (spec 100) — one per cached download, holding every mapping
- * decision. Creating one PROFILES the snapshot and pre-fills all nine tables, so
- * the mapping step opens on suggestions rather than a blank sheet.
- */
+/** Import plans — one per cached download. Creating one profiles the snapshot and pre-fills all nine tables. */
 export function PlansPanel({
   selectedId,
   onSelect,
@@ -45,19 +42,17 @@ export function PlansPanel({
   };
 
   return (
-    <section className="rounded-lg border border-subtle bg-surface p-4" data-jira-section="plans">
-      {confirmNode}
-      <header className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[13px] font-medium text-heading">Import plans</h2>
-          <p className="mt-0.5 text-xs text-fg-secondary">
-            Every mapping decision for one cached download — edit it, dry-run it, import it.
-          </p>
-        </div>
+    <Panel
+      section="plans"
+      title="Import plans"
+      description="Every mapping decision for one cached download — edit it, dry-run it, import it."
+      action={
         <Button size="sm" className="shrink-0 whitespace-nowrap" onClick={() => setAdding(true)}>
           New plan
         </Button>
-      </header>
+      }
+    >
+      {confirmNode}
 
       {plans.isPending ? (
         <TableSkeleton rows={2} />
@@ -138,7 +133,7 @@ export function PlansPanel({
           }}
         />
       )}
-    </section>
+    </Panel>
   );
 }
 

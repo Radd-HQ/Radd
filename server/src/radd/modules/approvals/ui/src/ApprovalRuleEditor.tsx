@@ -14,12 +14,8 @@ interface ApproverEntry {
   required?: number;
 }
 
-/**
- * "Require approval" on a workflow transition row (RADD-1383): contributed into the transitions
- * editor's rule slot, so the host carries no approval vocabulary and a disabled approvals plugin
- * takes its editor with it. Every entry must be satisfied; the server validates the subjects and
- * snapshots their names. Removing the last approver removes the rule.
- */
+/** "Require approval" on a transition row (the workflow rule slot). Every entry must be satisfied;
+ *  removing the last approver removes the rule. */
 export function ApprovalRuleEditor({ rules, onChange, canManage, saving }: TransitionRuleEditorProps) {
   const me = useCurrentUser();
   const rule = rules.find((entry) => entry.check === REQUIRE_APPROVAL);

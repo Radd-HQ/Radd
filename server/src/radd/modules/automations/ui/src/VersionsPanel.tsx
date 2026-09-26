@@ -1,12 +1,4 @@
-/**
- * Version history (RADD-1268, delivering RADD-1111).
- *
- * Every save that changed what the automation IS wrote an immutable version.
- * This lists them, previews one read-only on its own canvas, and restores one
- * — which writes a NEW version copying it, so history never rewrites. The
- * Drive model, because a bad edit destroying hours of tuning with no way back
- * is what the report described.
- */
+/** Version history: list, read-only preview, restore — which writes a NEW version; history never rewrites. */
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAutomationQuery as useQuery } from "./query-lifetime";

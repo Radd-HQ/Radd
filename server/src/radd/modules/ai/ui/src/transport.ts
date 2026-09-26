@@ -1,10 +1,6 @@
 import { ApiError, errorMessage } from "@radd/plugin-sdk";
 
-/**
- * The ai plugin's wire (RADD-1395): its endpoints and how its failures read. The host carried
- * both until the editor, read-mode and issue AI surfaces became this plugin's; its streams are
- * read by `sse.ts`.
- */
+/** The ai plugin's endpoints and how its failures read; `sse.ts` reads its streams. */
 
 export const AiEndpoint = {
   status: "/ai/status",

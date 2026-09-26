@@ -9,13 +9,7 @@ import {
   type RoutingPreviewResult,
 } from "./types";
 
-/** Per-status chrome for the rule trace. Errored is deliberately the loudest
- * thing on the panel: it is the outcome the destination line cannot express.
- *
- * RADD-993: `text-status-danger-ink`, not the raw `text-red-400` this shipped
- * with. In dark they are the same hex; in light the semantic token is the one
- * that deepens (6.47:1 against the dialog surface, where the raw shade left
- * 4.83:1), which is the whole reason the remap exists. */
+/** Per-status chrome for the rule trace; errored is loudest — the destination line cannot express it. */
 const STATUS_STYLE: Record<MailRuleStatusValue, { label: string; text: string }> = {
   [MailRuleStatus.matched]: { label: "matched", text: "text-accent-text-strong" },
   [MailRuleStatus.declined]: { label: "no match", text: "text-fg-muted" },
@@ -29,23 +23,9 @@ const STATUS_STYLE: Record<MailRuleStatusValue, { label: string; text: string }>
 };
 
 /**
- * The routing dry run (RADD-958): where would a message like this land, and
- * which rule decided? Settings → Storage paid for this lesson first — an
- * ordered chain nobody can dry-run makes "why did this land there"
- * unanswerable.
- *
- * RADD-989 added the per-rule trace. Reporting only the destination made a
- * CRASHED rule indistinguishable from one that declined — both read as "no rule
- * matched — source default" — which is how every AI mail rule stayed broken for
- * a release. A rule that raised is now called out above the destination, because
- * a destination computed from a chain that partly failed is not an answer.
- *
- * RADD-994 finished the thought. The trace held only the rules the walk had
- * consulted, so a rule switched OFF, a rule BELOW the winner and a rule that had
- * been DELETED all rendered as the same nothing — and "why didn't my rule fire"
- * is the question this panel exists to answer. It is now the whole chain, in
- * order, numbered as the chain numbers it, with each rule's detail on its own
- * wrapping line rather than clipped into a column nobody could widen.
+ * The routing dry run: where would this message land, and which rule decided? The trace is the
+ * WHOLE chain in order — disabled, not-reached and failed rules included — because a crashed rule
+ * and a declining one otherwise lead to the same destination, and "why didn't my rule fire" is the question.
  */
 export function PreviewDialog({
   source,
@@ -164,12 +144,7 @@ function PreviewResult({ result }: { result: RoutingPreviewResult }) {
                   </span>
                 </div>
                 {outcome.detail && (
-                  // Wrapped, never truncated (RADD-994): this is the most
-                  // informative field on the panel — "the classifier failed
-                  // (TimeoutError)" — and it was clipped inside a modal with no
-                  // way to read the rest. A tooltip would have been the cheaper
-                  // fix and the wrong one; a line that takes the space it needs
-                  // is readable without hovering anything.
+                  // Wrapped, never truncated: the detail is the most informative field on the panel.
                   <p className="pl-6 text-[11px] leading-snug break-words text-fg-faint">
                     {outcome.detail}
                   </p>

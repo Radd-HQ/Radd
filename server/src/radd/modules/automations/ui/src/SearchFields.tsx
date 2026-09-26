@@ -1,11 +1,5 @@
+/** The search node's form — the only node that PRODUCES items, hence the teaching hints. */
 import { ProjectSelect } from "./controls";
-/**
- * The search node's form (RADD-919) — the only node that PRODUCES items.
- *
- * Everything else on the canvas narrows what the trigger handed it, so the
- * hints here are doing real teaching work: someone who has only used filters
- * will read "SLQ" and expect it to apply to the triggering issue.
- */
 import { SearchMode } from "./types";
 import { SelectField } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";

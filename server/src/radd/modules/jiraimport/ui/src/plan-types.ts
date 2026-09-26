@@ -1,14 +1,7 @@
-/** The import plan (spec 100): nine mapping tables plus the run options. */
+/** The import plan: nine mapping tables plus the run options. */
 
-/**
- * How much attention an inbound Jira field deserves (spec 100).
- *
- * One ordered band replaces spec 90's `is_builtin` + `likely_noise` booleans,
- * which could not express "unused" — so a field no issue has ever filled in
- * scored as ordinary data and sat at the TOP of the grid. On a real instance
- * that is most of the catalog: 337 fields, a couple of dozen with anything in
- * them. Only `in_use` is expanded; the rest are collapsed AND default to ignore.
- */
+/** How much attention an inbound field deserves. Only `in_use` is expanded; the other bands are
+ * collapsed and default to ignore (a live Jira: 337 fields, a couple of dozen with data). */
 export const FieldBand = {
   in_use: "in_use",
   noise: "noise", // has values, but is machinery or an org-wide default
@@ -24,9 +17,9 @@ export const FieldAction = {
   native: "native", // route the value into a native Radd feature (BuiltinTarget)
   builtin: "builtin", // the Jira field IS a standard column, auto-handled
 } as const;
-export type FieldActionValue = (typeof FieldAction)[keyof typeof FieldAction];
+type FieldActionValue = (typeof FieldAction)[keyof typeof FieldAction];
 
-/** Native Radd concepts a Jira field's value can be routed into (spec 90). */
+/** Native Radd concepts a Jira field's value can be routed into. */
 export const BuiltinTarget = {
   team: "team",
   status: "status",
@@ -42,9 +35,9 @@ export const BuiltinTarget = {
 } as const;
 export type BuiltinTargetValue = (typeof BuiltinTarget)[keyof typeof BuiltinTarget];
 
-/** Where a created custom field lives (spec 90). */
+/** Where a created custom field lives. */
 export const FieldScope = { global: "global", project: "project" } as const;
-export type FieldScopeValue = (typeof FieldScope)[keyof typeof FieldScope];
+type FieldScopeValue = (typeof FieldScope)[keyof typeof FieldScope];
 
 /** The Radd field types a "create" mapping can target (matches the server enum). */
 export const CreateFieldType = {
@@ -56,8 +49,7 @@ export const CreateFieldType = {
   user: "user",
 } as const;
 
-/** One field's disposition — the wire shape of a mapping row. `create_type` uses
- * the Radd FieldType strings (text/number/date/select/multi_select/user). */
+/** One field's disposition — the wire shape of a mapping row. */
 export interface FieldMappingEntry {
   jira_id: string;
   jira_name: string;
@@ -87,7 +79,7 @@ export type VocabActionValue = (typeof VocabAction)[keyof typeof VocabAction];
 
 /** Radd has no component concept, so this is a genuine decision. */
 export const ComponentAction = { label: "label", field: "field", ignore: "ignore" } as const;
-export type ComponentActionValue = (typeof ComponentAction)[keyof typeof ComponentAction];
+type ComponentActionValue = (typeof ComponentAction)[keyof typeof ComponentAction];
 
 /** What to do about a person Jira names that Radd may not know. */
 export const UserAction = {

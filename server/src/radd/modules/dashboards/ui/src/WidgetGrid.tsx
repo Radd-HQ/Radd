@@ -65,7 +65,7 @@ export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse
           <button type="button" aria-label="Remove widget" className="p-1" onClick={() => onChange(widgets.filter(w => w.id !== widget.id))}><Trash2 size={14} /></button>
         </>}
       </header>
-      {!widget.collapsed && <div className="widget-content min-h-0 flex-1 overflow-auto p-3"><ChartHeightContext.Provider value={Math.max(160, widget.height - (editing ? 210 : 180))}>{render(widget)}</ChartHeightContext.Provider></div>}
+      {!widget.collapsed && <div className="min-h-0 flex-1 overflow-auto p-3"><ChartHeightContext.Provider value={Math.max(160, widget.height - (editing ? 210 : 180))}>{render(widget)}</ChartHeightContext.Provider></div>}
       {editing && !widget.collapsed && <>
         <div className="flex items-center gap-2 border-t border-subtle px-3 py-1 text-xs">
           <label>Width <input aria-label="Widget width" className="w-12 bg-base" type="number" min={2} max={12} value={widget.width} onChange={e => patch(widget.id, { width: Math.max(2, Math.min(12, Number(e.target.value))) })} /></label>

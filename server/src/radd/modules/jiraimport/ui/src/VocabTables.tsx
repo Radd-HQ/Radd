@@ -10,13 +10,7 @@ import {
 import type { TargetIssueType, TargetState } from "./types";
 import { ACTION_OPTIONS, VocabTable, type Patch } from "./VocabTable";
 
-/**
- * Jira issue types → Radd's two orthogonal axes.
- *
- * Spec 90 collapsed this to `"epic" in name` / `"sub" in name`, so "Initiative",
- * "Milestone" and every renamed or translated type silently became a plain issue
- * with no way to correct it.
- */
+/** Jira issue types → a Radd type and hierarchy level, decided per type (never guessed from the name). */
 export function IssueTypesTable({
   types = [],
   rows,
@@ -74,14 +68,8 @@ export function IssueTypesTable({
   );
 }
 
-/**
- * Jira statuses → Radd states + CATEGORY.
- *
- * The category is what analytics, boards and rollover read. Jira has no
- * "cancelled" category — it files Rejected / Won't Do under `done` — so this is
- * where you say that "Rejeté" actually means canceled. Spec 90 tested the
- * literal English words and got everything else wrong.
- */
+/** Jira statuses → Radd states + CATEGORY (what boards and reports read). Jira has no canceled
+ * category — Rejected/Won't Do sit under `done` — so this is where that gets said. */
 export function StatusesTable({
   states = [],
   rows,
@@ -154,13 +142,7 @@ export function StatusesTable({
   );
 }
 
-/**
- * Jira priorities → Radd's four.
- *
- * Suggested from Jira's own severity ORDER rather than a name table, so P1/P2/P3
- * and Urgent/Normal both land correctly — spec 90 sent anything unrecognised to
- * `normal` with no way to fix it.
- */
+/** Jira priorities → Radd's four, suggested from Jira's severity ORDER rather than its names. */
 export function PrioritiesTable({
   rows,
   onChange,

@@ -2,18 +2,9 @@ import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import type { ReportScope } from "../report-contract";
 
-/**
- * "across 2 of 5 projects" — what a cross-project figure was computed over
- * (RADD-789).
- *
- * A filtered LIST is visibly shorter. A filtered AVERAGE is just a different
- * number, and two people reading the same dashboard would see different
- * velocities with nothing explaining why. So the figure states its own scope.
- *
- * Renders NOTHING when the reader can see every project, which is the common
- * case — a note on every report is one nobody reads by the second week.
- */
-export function scopeNote(scope: ReportScope | undefined): string | null {
+/** "across 2 of 5 projects": what a cross-project figure was computed over — a filtered average
+ *  is just a different number. Null when the reader sees every project (the common case). */
+function scopeNote(scope: ReportScope | undefined): string | null {
   if (!scope || scope.covered.length >= scope.total) return null;
   return `across ${scope.covered.length} of ${scope.total} projects you can read`;
 }

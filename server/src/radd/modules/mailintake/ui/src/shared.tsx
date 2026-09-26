@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { Slot } from "@radd/plugin-sdk";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
+import { api, Button, ButtonVariant, ErrorText, Slot, useConfirm, type ConfirmOptions } from "@radd/plugin-sdk";
 import { PROJECT_SELECT_SLOT, type ProjectSelectProps } from "@radd-plugin-ui/projects/picker-contract";
 import type { MailKindInfo } from "./types";
 
@@ -74,12 +76,7 @@ export function kindLabel(kinds: MailKindInfo[] | undefined, kind: string): stri
   return findKind(kinds, kind)?.name ?? kind;
 }
 
-/**
- * The operational precondition a preset carries — app passwords, in both
- * cases. Stating it in the form is the difference between one paste and an
- * authentication failure nobody can explain: Google and Microsoft both reject
- * an account password over SMTP/IMAP, and say so only in the relay's error.
- */
+/** A preset's precondition (app passwords): Google/Microsoft reject account passwords and say so only in the relay error. */
 export function KindGuidance({ info }: { info?: MailKindInfo }) {
   if (!info?.guidance) return null;
   return (
@@ -105,4 +102,66 @@ export function KindGuidance({ info }: { info?: MailKindInfo }) {
 /** The connection line under a source/sender row: what it will ACTUALLY dial. */
 export function connectionLine(username: string, host: string, port: number): string {
   return `${username || "—"} at ${host || "—"}:${port}`;
+}
+
+/** Save (POST when new, PATCH when it exists) and delete for one source or sender row; either
+ *  refreshes the list and closes the dialog. A blank `secret` is omitted — omitted means unchanged,
+ *  so editing a port never re-types a password. */
+export function useRowEditor(listKey: readonly string[], collectionPath: string, rowPath: string | null, onClose: () => void) {
+  const queryClient = useQueryClient();
+  const done = async () => {
+    await queryClient.invalidateQueries({ queryKey: listKey });
+    onClose();
+  };
+  const save = useMutation({
+    mutationFn: (body: Record<string, unknown>) => {
+      if (!body.secret) delete body.secret;
+      return rowPath ? api.patch(rowPath, body) : api.post(collectionPath, body);
+    },
+    onSuccess: done,
+  });
+  const remove = useMutation({ mutationFn: () => api.delete(rowPath!), onSuccess: done });
+  return { save, remove };
+}
+
+type RowEditor = ReturnType<typeof useRowEditor>;
+
+/** A row dialog's error line and footer: Delete (existing rows, behind a confirm) | Cancel | Save. */
+export function RowDialogFooter({ save, remove, confirmDelete, canSave, onSave, onClose }: RowEditor & {
+  /** The delete prompt; null for a row that does not exist yet. */
+  confirmDelete: ConfirmOptions | null;
+  canSave: boolean;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const [confirmDialog, confirm] = useConfirm();
+  return (
+    <>
+      {(save.isError || remove.isError) && (
+        <ErrorText error={save.isError ? save.error : remove.error} />
+      )}
+      <div className="flex justify-between gap-2">
+        {confirmDelete ? (
+          <Button
+            variant={ButtonVariant.dangerGhost}
+            onClick={() => void confirm(confirmDelete).then((ok) => ok && remove.mutate())}
+          >
+            <Trash2 size={13} aria-hidden />
+            Delete
+          </Button>
+        ) : (
+          <span />
+        )}
+        <span className="flex gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={onSave} disabled={save.isPending || !canSave}>
+            {save.isPending ? "Saving…" : "Save"}
+          </Button>
+        </span>
+      </div>
+      {confirmDialog}
+    </>
+  );
 }

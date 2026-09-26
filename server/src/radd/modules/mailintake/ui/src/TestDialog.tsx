@@ -4,12 +4,7 @@ import { api, Button, Callout, CalloutKind, ErrorText, Modal, TextField } from "
 import { MailPath } from "./api";
 import type { MailSender, MailTestResult } from "./types";
 
-/**
- * Send one real message and report what happened (RADD-955/958).
- *
- * The Message-ID shown is the one the RELAY reported using — the value
- * threading actually depends on, and not always the one Radd composed.
- */
+/** Send one real message; the Message-ID shown is the RELAY's — what threading depends on. */
 export function TestDialog({ sender, onClose }: { sender: MailSender; onClose: () => void }) {
   const [to, setTo] = useState("");
   const send = useMutation({
@@ -26,8 +21,6 @@ export function TestDialog({ sender, onClose }: { sender: MailSender; onClose: (
           onChange={(e) => setTo(e.target.value)}
           placeholder="you@example.com"
         />
-        {/* The house callouts, not the raw emerald/red tints this shipped with:
-            their ink is tuned to their own fill in both themes (RADD-993). */}
         {send.data?.ok && (
           <Callout kind={CalloutKind.success}>
             Sent. The relay used Message-ID{" "}

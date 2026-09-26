@@ -1,5 +1,3 @@
-/** The scripts plugin (RADD-1269). */
-
 export interface ScriptPackage {
   id: string;
   name: string;

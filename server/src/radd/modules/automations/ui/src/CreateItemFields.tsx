@@ -1,19 +1,8 @@
+/** The create-item form. Names, not ids: resolved in the target project at APPLY time, skip-logged by
+ * name when gone. */
 import { OptionTextField } from "@radd/plugin-sdk";
 import { OptionResource } from "./options";
 import { ProjectSelect } from "./controls";
-/**
- * The full create-item form (spec 116).
- *
- * It offered project, title, description and priority — so an automation could
- * only file a stub someone then finished by hand, which is most of the work it
- * was supposed to save. Everything an issue has is here now, including custom
- * fields by registry key.
- *
- * Names, not ids, throughout: an automation is written against a project's
- * vocabulary ("In Review", "Bug", an email) and keeps working when the
- * underlying rows are recreated. The server resolves them at APPLY time and
- * skip-logs with the name when one has gone, rather than silently dropping it.
- */
 import { CollapsibleCard } from "@radd/plugin-sdk";
 import { SelectField } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";

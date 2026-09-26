@@ -1,17 +1,7 @@
 import { ScopedSettings } from "@radd/plugin-sdk";
 
-/**
- * What the desk sends a requester on its own (RADD-1368): the receipt for a
- * new email ticket, its text, and the resolution notice. Settings this plugin
- * contributes to the `email` section and runs itself — all OFF until someone
- * switches them on here. A project can override either switch on its own
- * General page.
- *
- * Rendered by the host's cascade editor through the SDK (RADD-1377): the
- * receipt text is a `multiline` setting, so it gets a textarea without a
- * bespoke card. Public replies are relayed to the thread's contacts regardless
- * — that is the conversation, not a message the desk decides to send.
- */
+/** What the desk sends a requester unasked (receipt, resolution notice) — the plugin's own `email`
+ *  settings, all OFF by default, overridable per project. Public replies go out regardless. */
 export function AutomaticMessagesPanel() {
   return (
     <section data-automatic-messages>

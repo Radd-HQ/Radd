@@ -1,6 +1,6 @@
 import { api } from "@radd/plugin-sdk";
 export const TEAM_REFERENCE_PAGE_SIZE = 50;
-export interface TeamReference { id: string; name: string; member_count: number | null }
+interface TeamReference { id: string; name: string; member_count: number | null }
 /** Names/counts only; bounded by callers, permission-enforced by Teams. */
 export const teamReferencesQuery = (ids: string[], includeCounts = false) => {
   const identifiers = [...new Set(ids)].sort();

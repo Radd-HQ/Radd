@@ -28,17 +28,10 @@ export function NewDownloadModal({
     form.connection_id ?? connections.data?.find((c) => c.is_default)?.id ?? null;
   const projects = useQuery(jiraProjectsQuery(connectionId));
 
-  // RADD-1101: POST /jira/preview — spec-90's schema-inference endpoint,
-  // repurposed as the wizard's JQL sanity check (a bad query answers 422 with
-  // Jira's reason; a good one answers the true match count BEFORE a download).
+  // A bad JQL answers 422 with Jira's reason; a good one, the match count — before any download.
   const testJql = useMutation({
     mutationFn: () =>
-      api.post<{ total: number; sampled: number }>(JiraPath.preview, {
-        jql: form.jql,
-        sample_size: 1,
-        connection_id: connectionId,
-        project_key: form.jira_project_key || null,
-      }),
+      api.post<{ total: number }>(JiraPath.preview, { jql: form.jql, connection_id: connectionId }),
   });
 
   const start = useMutation({

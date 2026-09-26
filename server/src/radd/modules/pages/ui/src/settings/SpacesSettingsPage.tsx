@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import {
   api, ApiError, errorMessage, usePermissions, invalidateEntities, toast, Button, DirectoryPager, EmptyState, ErrorText,
-  IconButton, ListSearchInput, Modal, QueryError, SettingsPage, TableSkeleton, useConfirm,
+  IconButton, ListSearchInput, Modal, QueryError, ScopedAccess, SettingsPage, TableSkeleton, useConfirm,
 } from "@radd/plugin-sdk";
 import { PageApi, spacePath } from "../endpoints";
 import { PageRoute } from "../links";
@@ -14,7 +14,6 @@ import { PagePermission, useSpacePermissions } from "../permissions";
 import type { PageSpace } from "../types";
 import { PublicBadge } from "../view/PublicBadge";
 import { PageTemplatesSection } from "./PageTemplatesSection";
-import { SpaceAccessPanel } from "./SpaceAccessPanel";
 import { SpaceForm } from "./SpaceForm";
 
 /** Space mutations follow this space's authority; instance operations stay global. */
@@ -79,7 +78,8 @@ export function PagesSettingsPage() {
     {canManageInstance && <><SpaceForm /><PageTemplatesSection /></>}
     {editing && <Modal title={`Edit ${editing.name}`} onClose={() => setEditing(null)}><SpaceForm existing={editing} onDone={() => setEditing(null)} /></Modal>}
     {showingAccess && <Modal title={`Access for ${showingAccess.name}`} onClose={() => setShowingAccess(null)}>
-      <SpaceAccessPanel spaceId={showingAccess.id} spaceName={showingAccess.name} canManage={canGrant} />
+      <ScopedAccess scopeId={showingAccess.id} scopeName={showingAccess.name} kind="space"
+        canGrant={canGrant} canRevoke={canGrant} canRenew={canGrant} />
     </Modal>}
     {confirmDialog}
   </SettingsPage>;

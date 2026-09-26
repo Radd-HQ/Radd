@@ -1,9 +1,8 @@
-/** The chart kit the reports draw with (spec 19) — the host's report cards import it here; a
- * plugin's report reaches the same components through the slots in `report-contract` (RADD-1386). */
+/** The chart kit, for the host's report cards; a plugin's report draws through `report-contract`'s slots. */
 export { BarChart } from "./BarChart";
 export { ChartLegend } from "./ChartLegend";
-export { LineChart, type LineSeries } from "./LineChart";
+export { LineChart } from "./LineChart";
 export { ReportCard } from "./ReportCard";
 export { StackedBarChart } from "./StackedBarChart";
-export { CardBody, ScopeNote, scopeNote } from "./report-state";
-export type { BarDatum, LegendEntry, StackSegment, StackedBar } from "../report-contract";
+export { CardBody, ScopeNote } from "./report-state";
+export type { StackedBar } from "../report-contract";

@@ -496,6 +496,9 @@ test('the shared singletons are one list the import map, the remote build and th
     assert.match(shim,/const M = await load\(\);/,`${slug} awaits the host's loader`);
   }
   assert(LAZY_MODULES.length>=3 && SHARED_SPECIFIERS.includes('prosemirror-state'),'the editor runtime is shared');
+  // A shim for a module no longer on the list is dead weight nothing regenerates or removes.
+  const slugs=[...EAGER_MODULES,SDK_MODULE,...LAZY_MODULES].map(([,slug])=>`${slug}.js`).sort();
+  assert.deepEqual(readdirSync('web/public/shared').sort(),slugs);
 });
 
 test('editor, read-mode, issue and draft AI are the ai plugin\'s: the host and the SDK name none of it (RADD-1395)',()=>{

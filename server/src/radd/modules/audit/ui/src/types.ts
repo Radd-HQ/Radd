@@ -12,7 +12,7 @@ export interface AuditProject {
 }
 
 /** A subject ref the payload carries (`item`, `page`, `page_space`, `project`…). */
-export type AuditRef = Record<string, unknown> & { id?: string; key?: string; slug?: string };
+type AuditRef = Record<string, unknown> & { id?: string; key?: string; slug?: string };
 
 export interface AuditEntry {
   id: number;

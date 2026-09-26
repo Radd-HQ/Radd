@@ -47,7 +47,7 @@ export type HostBackfillReport = {
 
 /** RADD-1258 — how a provider account was tied to a Radd user. */
 export const VcsMatchedBy = { email: "email", manual: "manual" } as const;
-export type VcsMatchedByValue = (typeof VcsMatchedBy)[keyof typeof VcsMatchedBy];
+type VcsMatchedByValue = (typeof VcsMatchedBy)[keyof typeof VcsMatchedBy];
 
 /** One row of a connection's identity map (`GET /vcs/{provider}/connections/{id}/identities`). */
 export interface VcsUserLink {

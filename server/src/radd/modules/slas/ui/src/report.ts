@@ -2,8 +2,8 @@ import { queryOptions } from "@tanstack/react-query";
 import { api } from "@radd/plugin-sdk";
 import type { ReportScope } from "@radd-plugin-ui/reporting/report-contract";
 
-/** GET /sla-report — the slas plugin's own endpoint (RADD-1386; was reporting's /reports/sla). */
-export const SLA_REPORT_PATH = "/sla-report";
+/** GET /sla-report. */
+const SLA_REPORT_PATH = "/sla-report";
 
 /** The window picker's choices, in ISO weeks; the server caps the window at 26. */
 export const SLA_REPORT_WEEKS_OPTIONS: readonly number[] = [4, 8, 12, 26];

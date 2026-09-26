@@ -1,11 +1,5 @@
-/**
- * Wire shapes for the Confluence importer (spec 117; the plugin's own since RADD-1382).
- *
- * These mirror `../../{types,schemas}.py`. A wire constant is a contract with no
- * compiler behind it (RADD-701): renaming a value here without renaming it there
- * type-checks, builds, and silently does nothing — so every enum below is spelled
- * exactly as the server spells it.
- */
+/** Confluence importer wire shapes, mirroring `../../{types,schemas}.py`. Enum values are spelled exactly
+ * as the server spells them: a rename on one side type-checks, builds, and silently does nothing (RADD-701). */
 
 export const ConfluenceAuthMode = {
   pat: "pat",
@@ -45,17 +39,17 @@ export type ConfluenceMappingSection =
   | "labels"
   | "jira_links";
 
-export const CONFLUENCE_SNAPSHOT_STAGES = [
+const CONFLUENCE_SNAPSHOT_STAGES = [
   "pending", "spaces", "tree", "bodies", "versions",
   "comments", "restrictions", "attachments", "done", "failed", "canceled",
 ] as const;
-export type ConfluenceSnapshotStage = (typeof CONFLUENCE_SNAPSHOT_STAGES)[number];
+type ConfluenceSnapshotStage = (typeof CONFLUENCE_SNAPSHOT_STAGES)[number];
 
-export const CONFLUENCE_RUN_STAGES = [
+const CONFLUENCE_RUN_STAGES = [
   "pending", "provision", "spaces", "pages", "bodies", "attachments",
   "comments", "restrictions", "versions", "relink", "done", "failed", "canceled",
 ] as const;
-export type ConfluenceRunStage = (typeof CONFLUENCE_RUN_STAGES)[number];
+type ConfluenceRunStage = (typeof CONFLUENCE_RUN_STAGES)[number];
 
 export const CONFLUENCE_TERMINAL_STAGES = new Set(["done", "failed", "canceled"]);
 
@@ -144,7 +138,7 @@ export interface ConfluenceSnapshot {
   finished_at: string | null;
 }
 
-export interface ConfluenceSpaceMapping {
+interface ConfluenceSpaceMapping {
   key: string;
   name: string;
   count: number;
@@ -153,7 +147,7 @@ export interface ConfluenceSpaceMapping {
   target_name: string;
 }
 
-export interface ConfluenceMacroMapping {
+interface ConfluenceMacroMapping {
   name: string;
   count: number;
   action: ConfluenceMacroAction;
@@ -162,7 +156,7 @@ export interface ConfluenceMacroMapping {
   reason: string;
 }
 
-export interface ConfluenceUserMapping {
+interface ConfluenceUserMapping {
   username: string;
   display_name: string;
   email: string;
@@ -171,7 +165,7 @@ export interface ConfluenceUserMapping {
   user_id: string | null;
 }
 
-export interface ConfluenceGroupMapping {
+interface ConfluenceGroupMapping {
   name: string;
   count: number;
   action: "identity" | "map" | "fail";
@@ -180,14 +174,14 @@ export interface ConfluenceGroupMapping {
   resolved_dn: string;
 }
 
-export interface ConfluenceLabelMapping {
+interface ConfluenceLabelMapping {
   name: string;
   count: number;
   action: "create" | "map" | "ignore";
   target: string;
 }
 
-export interface ConfluenceJiraLinkMapping {
+interface ConfluenceJiraLinkMapping {
   project_key: string;
   count: number;
   action: "resolve" | "external" | "ignore";
@@ -206,7 +200,6 @@ export interface ConfluencePlanMappings {
 export interface ConfluencePlanOptions {
   quiet: boolean;
   include_history: boolean;
-  history_limit: number | null;
   import_comments: boolean;
   import_attachments: boolean;
   import_restrictions: boolean;

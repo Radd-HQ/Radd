@@ -1,8 +1,5 @@
-/** Classic pagination (pagination wave, 2026-08-01): first/prev, a windowed
- *  page-number strip, next/last, and the true total — replaces the append-only
- *  "Load more" on every paged item surface. `pageCount` may be null while the
- *  count is still loading (arrows render, numbers wait). `compact` drops the
- *  number strip and total for narrow homes (the roadmap tray). */
+/** Pagination: first/prev, a windowed page strip, next/last and the total. `pageCount` may be null while
+ *  the count loads (arrows render, numbers wait); `compact` drops the strip and total. */
 
 import {
   ChevronFirst,

@@ -3,21 +3,17 @@ export interface Project {
   id: string;
   key: string;
   name: string;
-  /** RADD-1009: plain text, "" when never described. */
+  /** "" when never described. */
   description: string;
   created_at: string;
-  /** The CURRENT user's effective permissions in this project (spec 06). */
+  /** The CURRENT user's effective permissions in this project. */
   permissions: string[];
-  /** RADD-1041 — why this row appears in a `GET /projects` listing: "entitled"
-   * (held by grant) or "related" (their own work made it visible, e.g. a
-   * ticket they filed). `null` on `POST /projects`'s response. Presentation
-   * only — never used to decide access, only to decide what the sidebar's
-   * "related projects" preference hides from the rail. */
+  /** Why the row is listed: "entitled" (a grant) or "related" (own work made it visible). Presentation
+   *  only, never used for access. */
   via?: "entitled" | "related" | null;
-  /** Spec 121: the Public role is granted to Anyone on this project — its
-   * public issues are readable without signing in. Derived from the grant. */
+  /** Anyone holds the Public role here (spec 121; derived from the grant). */
   public?: boolean;
-  /** Spec 121: the Contributor role is granted to Signed-in users here. */
+  /** Signed-in users hold the Contributor role here. */
   contributions?: boolean;
 }
 

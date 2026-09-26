@@ -1,8 +1,4 @@
-/**
- * The dashboards plugin's transport: every `/dashboards` path and query key lives here, under the
- * plugin's own name, so the host names none of them (RADD-1393). The host's nav facts read
- * `dashboardSummaryQuery` through this package's `./queries` export.
- */
+/** Every `/dashboards` path and query key; the host's nav facts read `dashboardSummaryQuery` via `./queries`. */
 import { api } from "@radd/plugin-sdk";
 import type { Dashboard, DashboardWidget } from "./types";
 
@@ -22,15 +18,15 @@ export const dashboardKeys = {
 };
 
 /** A dashboard is readable through its owner, grants, roles and teams — any of them moves it. */
-export const DASHBOARD_META = { entities: ["dashboard", "project", "role", "team", "member", "group", "accessGrant"] };
+const DASHBOARD_META = { entities: ["dashboard", "project", "role", "team", "member", "group", "accessGrant"] };
 
 export const SIDEBAR_PAGE_SIZE = 50;
 
-export const dashboardsPageQuery = (q = "", page = 0, pageSize = SIDEBAR_PAGE_SIZE) => ({
-  queryKey: dashboardKeys.page(q.trim(), page),
+export const dashboardsPageQuery = (q: string, page: number, pageSize: number) => ({
+  queryKey: dashboardKeys.page(q, page),
   meta: DASHBOARD_META,
   queryFn: ({ signal }: { signal: AbortSignal }) => api.getPaged<Dashboard>(DASHBOARDS_PATH, { signal, query: {
-    include_shares: "false", q: q.trim(), limit: String(pageSize), offset: String(page * pageSize),
+    include_shares: "false", q, limit: String(pageSize), offset: String(page * pageSize),
   } }),
 });
 

@@ -1,21 +1,12 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
-import { api, Button, ButtonVariant, ErrorText, Modal, SelectField, TextField, useConfirm } from "@radd/plugin-sdk";
+import { useQuery } from "@tanstack/react-query";
+import { Modal, SelectField, TextField } from "@radd/plugin-sdk";
 import { MailPath, mailKeys, mailKindsQuery, mailSendersQuery } from "./api";
 import { MailSourceKind, type MailSourceKindValue, type MailSource } from "./types";
-import { CheckboxField, KindGuidance, ProjectField, findKind, kindLabel } from "./shared";
+import { CheckboxField, KindGuidance, ProjectField, RowDialogFooter, findKind, kindLabel, useRowEditor } from "./shared";
 
-/**
- * Create or edit one mail source (RADD-958; presets RADD-969).
- *
- * The kind is immutable after creation — it decides which fields the row is
- * even allowed to leave blank — and for a preset kind (Gmail, Outlook) the
- * connection fields are HIDDEN rather than pre-filled. Pre-filling would put
- * `imap.gmail.com` in an editable box, the save would store it, and that stored
- * copy would then outlive the preset it came from. The row keeps nothing; the
- * server resolves it on every read.
- */
+/** Create/edit a mail source. The kind is fixed once created; a preset kind (Gmail, Outlook) HIDES
+ *  the connection fields — a stored copy of a pre-filled host would outlive the preset. */
 export function SourceDialog({
   source,
   onClose,
@@ -23,10 +14,8 @@ export function SourceDialog({
   source: MailSource | null;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
   const kinds = useQuery(mailKindsQuery());
   const senders = useQuery(mailSendersQuery());
-  const [confirmDialog, confirm] = useConfirm();
   const [form, setForm] = useState({
     name: source?.name ?? "",
     kind: (source?.kind ?? MailSourceKind.google) as MailSourceKindValue,
@@ -62,39 +51,19 @@ export function SourceDialog({
     (s) => s.enabled || s.id === form.sender_id,
   );
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: mailKeys.sources });
-  const save = useMutation({
-    mutationFn: () => {
-      const body: Record<string, unknown> = {
-        ...form,
-        name,
-        // Blank where the kind answers (RADD-969) — that is what lets an
-        // upgraded preset upgrade rows that already exist.
-        host: showConnection ? form.host : "",
-        port: showConnection ? port : 0,
-        default_project_id: form.default_project_id || null,
-        sender_id: form.sender_id || null,
-        // Blank = trust nothing (the default). Normalised to null so "unset" is
-        // one value, not two (RADD-1032).
-        trusted_authserv_id: form.trusted_authserv_id.trim() || null,
-      };
-      // Omitted = unchanged, so editing a port never re-types a password.
-      if (!form.secret) delete body.secret;
-      return source
-        ? api.patch(MailPath.source(source.id), body)
-        : api.post(MailPath.sources, body);
-    },
-    onSuccess: async () => {
-      await invalidate();
-      onClose();
-    },
-  });
-  const remove = useMutation({
-    mutationFn: () => api.delete(MailPath.source(source!.id)),
-    onSuccess: async () => {
-      await invalidate();
-      onClose();
-    },
+  const { save, remove } = useRowEditor(mailKeys.sources, MailPath.sources, source ? MailPath.source(source.id) : null, onClose);
+  const body = () => ({
+    ...form,
+    name,
+    // Blank where the kind answers (RADD-969) — that is what lets an
+    // upgraded preset upgrade rows that already exist.
+    host: showConnection ? form.host : "",
+    port: showConnection ? port : 0,
+    default_project_id: form.default_project_id || null,
+    sender_id: form.sender_id || null,
+    // Blank = trust nothing (the default). Normalised to null so "unset" is
+    // one value, not two (RADD-1032).
+    trusted_authserv_id: form.trusted_authserv_id.trim() || null,
   });
 
   return (
@@ -224,40 +193,21 @@ export function SourceDialog({
         />
         <CheckboxField label="Enabled" checked={form.enabled} onChange={(v) => set("enabled", v)} />
 
-        {(save.isError || remove.isError) && (
-          <ErrorText error={save.isError ? save.error : remove.error} />
-        )}
-        <div className="flex justify-between gap-2">
-          {source ? (
-            <Button
-              variant={ButtonVariant.dangerGhost}
-              onClick={() =>
-                void confirm({
-                  title: `Delete ${source.name}`,
-                  message:
-                    "Mail will stop arriving here and this source's routing rules go with it. Tickets already created are untouched.",
-                  confirmLabel: "Delete source",
-                  danger: true,
-                }).then((ok) => ok && remove.mutate())
-              }
-            >
-              <Trash2 size={13} aria-hidden />
-              Delete
-            </Button>
-          ) : (
-            <span />
-          )}
-          <span className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={() => save.mutate()} disabled={save.isPending || !name}>
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-          </span>
-        </div>
+        <RowDialogFooter
+          save={save}
+          remove={remove}
+          confirmDelete={source && {
+            title: `Delete ${source.name}`,
+            message:
+              "Mail will stop arriving here and this source's routing rules go with it. Tickets already created are untouched.",
+            confirmLabel: "Delete source",
+            danger: true,
+          }}
+          canSave={Boolean(name)}
+          onSave={() => save.mutate(body())}
+          onClose={onClose}
+        />
       </div>
-      {confirmDialog}
     </Modal>
   );
 }

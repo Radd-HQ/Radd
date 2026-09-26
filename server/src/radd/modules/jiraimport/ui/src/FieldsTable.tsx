@@ -1,10 +1,7 @@
 import { ListSearchInput, useListFilter } from "@radd/plugin-sdk";
 import { FieldRow } from "./FieldRow";
-import { MappingSection } from "./MappingSection";
+import { FILTER_THRESHOLD, MappingSection } from "./MappingSection";
 import { FieldBand, type FieldBandValue, type FieldMappingEntry, type PlanProblem } from "./plan-types";
-
-/** Below this many rows a mapping table needs no filter chrome (RADD-882). */
-const FILTER_THRESHOLD = 8;
 
 const BANDS: [FieldBandValue, string, string][] = [
   [FieldBand.in_use, "Fields with data", ""],
@@ -25,13 +22,7 @@ const BANDS: [FieldBandValue, string, string][] = [
   ],
 ];
 
-/**
- * One row per inbound Jira field, banded (spec 100).
- *
- * Only `in_use` is expanded; the rest are collapsed AND already set to ignore,
- * each carrying the reason. On a live instance that is 337 fields down to about
- * a dozen worth deciding.
- */
+/** One row per inbound Jira field, grouped by band (see FieldBand). */
 export function FieldsTable({
   rows,
   existingKeys,
@@ -57,8 +48,6 @@ export function FieldsTable({
   const problemFor = new Map(problems.map((p) => [p.subject, p.message]));
   const isTarget = (r: FieldMappingEntry) =>
     Boolean(highlight) && (r.target_key === highlight || r.jira_id === highlight);
-  // 337 inbound fields at a live Jira: findable by name, id, or mapped key
-  // (RADD-882); a filtered band holds itself open so matches can't hide.
   const search = useListFilter(rows, (r) => [r.jira_name, r.jira_id, r.target_key]);
   return (
     <div className="flex flex-col gap-3">

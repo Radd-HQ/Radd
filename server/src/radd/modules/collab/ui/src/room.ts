@@ -28,7 +28,7 @@ export interface CollabJoin {
 
 /** Server close codes on the room socket. y-websocket treats the whole
  *  4400–4499 band as terminal (no reconnect) and emits `closed`. */
-export const CollabCloseCode = {
+const CollabCloseCode = {
   notSignedIn: 4401,
   /** Session unknown, not yours, or the room is gone — join again. */
   unknownSession: 4403,
@@ -66,7 +66,7 @@ function collabWsBase(): string {
   return `${scheme}://${window.location.host}${COLLAB_WS_PATH}`;
 }
 
-export interface OpenRoomOptions {
+interface OpenRoomOptions {
   pageId: string;
   role: CollabRoleValue;
   user: CollabUser;

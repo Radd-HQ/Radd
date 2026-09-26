@@ -1,14 +1,15 @@
-import { useContext } from "react";
-import { ChartHeightContext } from "@radd/plugin-sdk";
 import {
   CHART_AXIS_TEXT,
-  CHART_GRID,
   CHART_MUTED_TEXT,
+  CHART_VIEW_WIDTH,
+  ChartSvg,
+  YGrid,
   niceScale,
   sampledIndices,
+  useChartHeight,
 } from "./chart-utils";
 
-export interface LineSeries {
+interface LineSeries {
   key: string;
   label: string;
   color: string;
@@ -23,18 +24,13 @@ interface LineChartProps {
   ariaLabel: string;
 }
 
-const VIEW_WIDTH = 640;
 const PAD = { top: 14, right: 44, bottom: 28, left: 32 };
 
-/**
- * Line-pair chart (burnup: scope vs completed) — hand-rolled inline SVG.
- * Series share one y-scale; x labels thin out. Legend rendered by the caller.
- */
+/** Line series on one y-scale (burnup: scope vs completed); x labels thin; the caller renders the legend. */
 export function LineChart({ xLabels, series, height: requestedHeight, ariaLabel }: LineChartProps) {
-  const availableHeight = useContext(ChartHeightContext);
-  const height = requestedHeight ?? availableHeight ?? 220;
+  const height = useChartHeight(requestedHeight, 220);
   const count = xLabels.length;
-  const plotWidth = VIEW_WIDTH - PAD.left - PAD.right;
+  const plotWidth = CHART_VIEW_WIDTH - PAD.left - PAD.right;
   const plotHeight = height - PAD.top - PAD.bottom;
   const maxValue = Math.max(0, ...series.flatMap((line) => line.points));
   const { max, ticks } = niceScale(maxValue);
@@ -43,30 +39,8 @@ export function LineChart({ xLabels, series, height: requestedHeight, ariaLabel 
   const labelEvery = new Set(sampledIndices(count, 6));
 
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
-      width="100%"
-      height={height}
-      role="img"
-      aria-label={ariaLabel}
-      preserveAspectRatio="xMidYMid meet"
-    >
-      {ticks.map((tick) => (
-        <g key={tick}>
-          <line
-            x1={PAD.left}
-            x2={VIEW_WIDTH - PAD.right}
-            y1={y(tick)}
-            y2={y(tick)}
-            stroke={CHART_GRID}
-            strokeWidth={1}
-            strokeDasharray={tick === 0 ? undefined : "2 3"}
-          />
-          <text x={PAD.left - 6} y={y(tick) + 3} textAnchor="end" fontSize={10} fill={CHART_MUTED_TEXT}>
-            {tick}
-          </text>
-        </g>
-      ))}
+    <ChartSvg height={height} ariaLabel={ariaLabel}>
+      <YGrid ticks={ticks} y={y} pad={PAD} />
 
       {xLabels.map((label, index) =>
         labelEvery.has(index) ? (
@@ -112,6 +86,6 @@ export function LineChart({ xLabels, series, height: requestedHeight, ariaLabel 
           </g>
         );
       })}
-    </svg>
+    </ChartSvg>
   );
 }

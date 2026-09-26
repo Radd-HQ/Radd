@@ -34,14 +34,34 @@ export interface TokenMultiSelectProps {
  * highlight/keyboard space is the VISIBLE rows, a tail row names the rest. */
 const MAX_VISIBLE_MATCHES = 50;
 
-/**
- * One compact multi-select used across the app (replacing the tall wrapping-pill editors): selected
- * values are chips on a SINGLE row that scrolls sideways, with a typeahead input at the end and an
- * autocomplete dropdown. Pick from `options` (optionally grouped), or free-text create when
- * `allowCreate`. Keyboard: type to filter, ↑/↓ to move, Enter/comma to add, Backspace to remove the
- * last chip, Esc to close; each chip has an × to remove. Values not present in `options` show their
- * own text as the chip label (so free-text sets round-trip).
- */
+/** One dropdown row: an ARIA option the pointer highlights without taking focus from the input. */
+function OptionButton({ id, active, onHover, onPick, children }: {
+  id: string; active: boolean; onHover: () => void; onPick: () => void; children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      id={id}
+      aria-selected={active}
+      onMouseEnter={onHover}
+      onMouseDown={(e) => {
+        e.preventDefault();
+      }}
+      onClick={onPick}
+      className={
+        "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs cursor-pointer " +
+        (active ? "bg-overlay text-heading" : "text-fg hover:bg-overlay/60")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The compact multi-select: chips on ONE row that scrolls sideways, a typeahead, and an
+ *  autocomplete dropdown (optionally grouped; free-text create with `allowCreate`). Values missing
+ *  from `options` show their own text, so free-text sets round-trip. */
 export function TokenMultiSelect({
   value,
   onChange,
@@ -83,8 +103,6 @@ export function TokenMultiSelect({
     );
   }, [options, selected, t]);
 
-  // Render cap (RADD-881): 2,016 label options used to mount 2k DOM rows on
-  // every keystroke. Past the cap a tail row reports what's hiding.
   const visible = filtered.length > MAX_VISIBLE_MATCHES
     ? filtered.slice(0, MAX_VISIBLE_MATCHES)
     : filtered;
@@ -233,26 +251,13 @@ export function TokenMultiSelect({
                     {groupHeader}
                   </div>
                 )}
-                <button
-                  type="button"
-                  role="option"
-                  id={`${inputId}-option-${idx}`}
-                  aria-selected={idx === activeIndex}
-                  onMouseEnter={() => setHighlight(idx)}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                  }}
-                  onClick={() => addValue(o.value)}
-                  className={
-                    "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs cursor-pointer " +
-                    (idx === activeIndex ? "bg-overlay text-heading" : "text-fg hover:bg-overlay/60")
-                  }
-                >
+                <OptionButton id={`${inputId}-option-${idx}`} active={idx === activeIndex}
+                  onHover={() => setHighlight(idx)} onPick={() => addValue(o.value)}>
                   {o.icon}
                   <span className="truncate">{o.label}</span>
                   {o.hint && <span className="truncate text-fg-muted">{o.hint}</span>}
                   <Check size={12} className="ml-auto shrink-0 text-accent-text opacity-0" aria-hidden />
-                </button>
+                </OptionButton>
               </li>
             );
           })}
@@ -263,25 +268,10 @@ export function TokenMultiSelect({
           )}
           {showCreate && (
             <li>
-              <button
-                type="button"
-                role="option"
-                id={`${inputId}-option-${visible.length}`}
-                aria-selected={activeIndex === visible.length}
-                onMouseEnter={() => setHighlight(visible.length)}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                }}
-                onClick={() => createValue(term)}
-                className={
-                  "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs cursor-pointer " +
-                  (activeIndex === visible.length
-                    ? "bg-overlay text-heading"
-                    : "text-fg hover:bg-overlay/60")
-                }
-              >
+              <OptionButton id={`${inputId}-option-${visible.length}`} active={activeIndex === visible.length}
+                onHover={() => setHighlight(visible.length)} onPick={() => createValue(term)}>
                 <span className="truncate">{createLabel(term.trim())}</span>
-              </button>
+              </OptionButton>
             </li>
           )}
         </ul>

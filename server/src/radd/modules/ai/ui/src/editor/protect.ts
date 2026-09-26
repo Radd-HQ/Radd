@@ -1,34 +1,21 @@
 /**
- * Protecting non-prose blocks through an AI run (RADD-1274).
- *
- * An editor AI run serialises the document to markdown, streams a replacement
- * and splices it back as a diff. A `radd:media` fence, an image, an attachment
- * link are lines of syntax the model has no reason to keep — asked to condense
- * a page it returns prose, the diff reads the player as a deletion, and
- * accepting the summary deleted the video (2026-09-20). Describing the syntax
- * in the prompt does not help: the model rewrites it, and a rewritten fence is
- * worse than a dropped one.
- *
- * So the model never sees them. Every protected fragment is replaced by an
- * opaque placeholder `⟦keep-N⟧` before the run and put back after it. The
- * system prompt carries one standing rule about placeholders (server side,
- * `prompts.EDITOR_SYSTEM`), and a placeholder the model dropped anyway is
- * appended to the end of the replacement — a block can move, it cannot vanish;
- * the diff then shows the move and the person decides.
- *
- * Pure functions over strings, no editor, so the test can name the exact
- * markdown in and out. The placeholder brackets are U+27E6/U+27E7, which no
- * page uses and no tokenizer splits into something that looks like prose.
+ * Protecting non-prose blocks through an AI run (RADD-1274). A run sends markdown and splices the
+ * reply back as a diff, so a `radd:*` fence, image or attachment link the model does not return
+ * reads as a deletion — and describing the syntax in the prompt only gets it rewritten. So the
+ * model never sees them: each becomes `⟦keep-N⟧` and is restored after, and one the model dropped
+ * is appended (a block can move, never vanish). `prompts.EDITOR_SYSTEM` carries the one
+ * placeholder rule. U+27E6/U+27E7 because no page uses them and no tokenizer splits them into
+ * prose. Pure string functions, so the test names exact markdown in and out.
  */
 
-export interface KeptBlock {
+interface KeptBlock {
   /** 1-based, stable for the run — a selection run shares ids with the document. */
   id: number;
   /** The original markdown, byte for byte. */
   text: string;
 }
 
-export interface MaskedMarkdown {
+interface MaskedMarkdown {
   masked: string;
   kept: KeptBlock[];
 }

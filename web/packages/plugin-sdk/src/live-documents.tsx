@@ -4,18 +4,11 @@ import { useCurrentUser } from "./hooks";
 import { ContributionFrame } from "./slots";
 
 /**
- * Live documents (RADD-1397): a document surface asks whether a LIVE SESSION is available for the
- * document it shows, and a plugin that provides one answers.
- *
- * The surface (the wiki's page) owns the document — its endpoint, its body, its Save. The session
- * owns the rest: who is in it, the binding that makes the editor's document a shared copy, WHEN
- * the shared copy is saved and by which client, and the chrome that says so. Without a provider,
- * or when the provider refuses, the answer is `none` and the surface runs its ordinary
- * single-editor flow; no provider code loads at all.
- *
- * A provider is a `LiveDocumentSource`, contributed like a query or data source
- * (`definePlugin({ liveDocuments })`) and withdrawn with its plugin — which closes every open
- * session, the saving client's last write first.
+ * Live documents: a document surface asks whether a live session exists for what it shows, and a
+ * plugin's `LiveDocumentSource` (`definePlugin({ liveDocuments })`) answers. The surface owns the
+ * document (endpoint, body, Save); the session owns presence, the editor binding, and when and by
+ * which client the shared copy is saved. Without a provider the answer is `none` and the surface
+ * runs its single-editor flow; withdrawing the plugin closes every session, last save first.
  */
 
 export const LiveStatus = {
@@ -139,16 +132,11 @@ const NONE: LiveDocument = {
 };
 
 /**
- * The live session for a document, while the surface shows it (`null` = stay out).
- *
- * A session opens when a provider for the entity type is registered and a signed-in account asks,
- * and reopens when the document, the editing intent, the write access or the viewer changes —
- * an observer who starts editing becomes a fresh editor session. It closes on unmount and when
- * the provider is withdrawn.
- *
- * No provider is `none` at once, even while plugin bundles are still loading: an optional plugin
- * must never be able to hold up the document's own editor. A provider that arrives mid-edit opens
- * its session then (the surface keeps its draft, which seeds an empty shared copy).
+ * The live session for a document while the surface shows it (`null` = stay out). It reopens when
+ * the document, editing intent, write access or viewer changes, and closes on unmount or
+ * withdrawal. No provider is `none` at once, even while bundles load: an optional plugin must never
+ * hold up the document's own editor. A provider that arrives mid-edit opens its session then (the
+ * surface keeps its draft, which seeds an empty shared copy).
  */
 export function useLiveDocument(request: LiveDocumentRequest | null): LiveDocument {
   const entityType = request?.entityType ?? "";

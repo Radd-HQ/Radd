@@ -1,18 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import type { PluginContribution } from "./plugin";
-import { Slot, useContributionOwner, useSlot, type SlotIdValue } from "./slots";
+import { ownedMetaId, Slot, useContributionOwner, useSlot, type SlotIdValue } from "./slots";
 
 /**
- * Contributed MODES (RADD-1400): the shared half of the command palette's modes and the query
- * bar's input modes (`palette-modes.tsx`, `query-modes.tsx`).
- *
- * A mode is a slot contribution — plugin tagging, withdrawal, the per-contribution toggles and the
- * error boundary come with it — whose `meta` describes the mode and whose `render` is its GATE: a
- * component the surface mounts while it is open, which calls the mode's `useAvailable` hook and
- * reports the answer. The surface draws the mode's trigger itself (it owns the keyboard), so the
- * gate is what keeps a closed mode from being offered: an instance feature switched off, a
- * provider missing, a plugin withdrawn (its gate unmounts), a gate that throws (its boundary
- * swallows it — never offered).
+ * Contributed MODES — the shared half of `palette-modes.ts` and `query-modes.ts`. A mode is a slot
+ * contribution whose `meta` describes it and whose `render` is its GATE: mounted while the surface
+ * is open, it calls `useAvailable` and reports. The surface draws the trigger itself, so the gate
+ * is what keeps an unavailable, withdrawn or crashing mode from being offered.
  */
 
 /** An icon a mode or an answer row names. The host draws it at its surface's size and colour; any
@@ -80,9 +74,7 @@ const isText = (value: unknown): value is string => typeof value === "string" &&
 
 /** The checks every mode's meta passes: its own id, namespaced by its owner, with a name and a hint. */
 function isModeMeta(plugin: string, match: string | undefined, meta: Readonly<Record<string, unknown>> | undefined) {
-  if (!meta || typeof meta.id !== "string" || meta.id !== match) return false;
-  const prefix = `${plugin}.`;
-  if (!meta.id.startsWith(prefix) || meta.id.length === prefix.length) return false;
+  if (!meta || !ownedMetaId(plugin, match, meta)) return false;
   return isText(meta.label) && isText(meta.hint) && (meta.icon === undefined || typeof meta.icon === "function" || typeof meta.icon === "object");
 }
 

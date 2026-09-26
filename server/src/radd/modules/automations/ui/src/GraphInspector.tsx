@@ -1,11 +1,4 @@
-/**
- * Editing the selected node's parameters, beside the canvas (spec 116, RADD-916).
- *
- * Action params reuse `ActionParams` — the same component the list editor uses —
- * so an action configured on the canvas and one configured in the form are
- * literally the same inputs with the same validation. A second set of param
- * widgets would be two things to keep in step, and they would drift.
- */
+/** The selected node's parameter form, beside the canvas. */
 import { useMemo } from "react";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
 
@@ -26,15 +19,11 @@ import {
   type RuleAction,
   type RuleSchedule,
   type TriggerInfo,
-  type TriggerKindInfo,
 } from "./types";
-import {
-  arityForcedReason,
-  arityOf,
-  effectiveArity,
-  normalizeActionParams,
-} from "./automation-nodes";
-import { isProducer, nodeNameError, outputsOfNode } from "./automation-outputs";
+import { arityForcedReason, groupBy, normalizeActionParams } from "./automation-nodes";
+import { reachable } from "./automation-layout";
+import { arityOf, effectiveArity, isProducer, nodeNameError, outputsOfNode } from "./automation-outputs";
+import { CheckField } from "./controls";
 import { ActionParams } from "./ActionParams";
 import { ArityField } from "./ArityField";
 import { CreateItemFields } from "./CreateItemFields";
@@ -127,34 +116,18 @@ export function GraphInspector({
   onChange,
   onDelete,
 }: GraphInspectorProps) {
-  const groupedTriggers = useMemo(() => {
-    const grouped = new Map<string, TriggerInfo[]>();
-    for (const trigger of catalog?.triggers ?? []) {
-      grouped.set(trigger.group, [...(grouped.get(trigger.group) ?? []), trigger]);
-    }
-    return [...grouped.entries()];
-  }, [catalog]);
+  const groupedTriggers = useMemo(() => groupBy(catalog?.triggers ?? [], (trigger) => trigger.group), [catalog]);
   // Trigger KINDS (RADD-1323), grouped the same way — served, so a plugin's
   // kind appears here with no SPA change.
-  const groupedKinds = useMemo(() => {
-    const grouped = new Map<string, TriggerKindInfo[]>();
-    for (const kind of catalog?.trigger_kinds ?? []) {
-      grouped.set(kind.group, [...(grouped.get(kind.group) ?? []), kind]);
-    }
-    return [...grouped.entries()];
-  }, [catalog]);
+  const groupedKinds = useMemo(() => groupBy(catalog?.trigger_kinds ?? [], (kind) => kind.group), [catalog]);
   const firedKind =
     node?.kind === NodeKind.trigger
       ? catalog?.trigger_kinds.find((kind) => kind.key === String(node.params.event ?? ""))
       : undefined;
 
-  // What the UPSTREAM trigger's real events carry — the field-changed picker
-  // offers those first. ABOVE the early return: a hook after one runs
-  // conditionally, which React forbids. Keyed by event type, so selecting a
-  // different node in the same graph reuses the cached answer.
+  // Both hooks sit ABOVE the early return (React forbids conditional hooks). What the upstream
+  // trigger's real events carry, which the field-changed picker offers first:
   const upstreamSample = useQuery(eventSampleQuery(trigger?.event_type ?? ""));
-  // Where a clicked token lands. ABOVE the early return, like the query above:
-  // a hook after one runs conditionally, which React forbids.
   const tokenTarget = useTokenTarget();
 
   if (!node) {
@@ -171,34 +144,16 @@ export function GraphInspector({
   const setActionParams = (params: Record<string, unknown>) =>
     setParams(normalizeActionParams(node, params));
   const arityRule = arityOf(catalog, node.type);
-  //: The registered spec, when this node came from a plugin rather than the
-  //: built-in palette. Its params are its own business — never the action union.
+  // Every node is a catalog entry (RADD-1322); core types carry their own forms, the rest a schema form.
   const contributed = catalog?.nodes?.find((entry) => entry.key === node.type);
-  //: RADD-1322 made EVERY node a catalog entry, so "is it in the catalog" no
-  //: longer means "has no editor of its own". The core types below carry their
-  //: own forms; anything else gets the one generated from its schema.
   const coreEdited = hasCoreEditor(node.type);
   const forcedReason = arityForcedReason(node);
-  //: Whether naming this node would make anything addressable (spec 120). Asked
-  //: of the type AND its params, because `ai.generate` produces `text` before a
-  //: single field has been added.
+  // Asked of type AND params — `ai.generate` produces `text` before any field exists.
   const produces = isProducer(node, catalog, shapes);
   const nameError = nodeNameError(String(node.name ?? ""), node, nodes, catalog);
-  //: Checks upstream that publish findings (RADD-1329) — what a verdict node
-  //: may relay. Walked BACKWARDS from this node, so only a check that can
-  //: actually feed it is offered.
+  // Upstream checks that publish findings — what a verdict node may relay.
   const relayableChecks = (() => {
-    const upstream = new Set<string>([node.id]);
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const edge of edges) {
-        if (upstream.has(edge.target) && !upstream.has(edge.source)) {
-          upstream.add(edge.source);
-          grew = true;
-        }
-      }
-    }
+    const upstream = reachable(edges, [node.id], "upstream");
     const publishing = new Set((catalog?.nodes ?? []).filter((entry) => entry.produces_findings).map((entry) => entry.key));
     return nodes
       .filter((candidate) => candidate.id !== node.id && upstream.has(candidate.id) && publishing.has(candidate.type))
@@ -207,12 +162,7 @@ export function GraphInspector({
         label: `${catalog?.nodes.find((entry) => entry.key === candidate.type)?.label ?? candidate.type}${candidate.name ? ` (${candidate.name})` : ""} · ${candidate.id}`,
       }));
   })();
-  //: Two panels, and the difference is load-bearing. `planning._plan` is the
-  //: ONLY place tokens are rendered, and it renders an ACTION's params — so a
-  //: token inserted into a contributed node's own prompt reaches the model as
-  //: literal braces, and one inserted into a filter's SLQ compiles to nothing.
-  //: The list is still worth SHOWING there (it is what the node above produces);
-  //: offering to insert into it is not.
+  // Tokens render only in ACTION params (see TokenReference) — elsewhere the list is reference only.
   const tokenPanel = (insertable: boolean) => (
     <TokenReference
       shapes={shapes}
@@ -244,9 +194,7 @@ export function GraphInspector({
         )}
       </div>
 
-      {/* A PRODUCER is named so downstream nodes can read it (spec 120). Only
-          shown where naming buys something: on the fourteen node types that
-          produce nothing, a name field would be a control with no effect. */}
+      {/* Only on producers: naming is what makes their outputs addressable (spec 120). */}
       {produces && (
         <TextField
           label="Name (for tokens)"
@@ -286,10 +234,7 @@ export function GraphInspector({
             value={String(node.params.event ?? "")}
             onChange={(event) => {
               const next = event.target.value;
-              // Switching kind changes which params are legal — the server
-              // rejects a schedule on an event trigger and vice versa — so the
-              // shape is rebuilt from the kind's own defaults (RADD-1323),
-              // keeping whatever this node already had for those keys.
+              // A kind change changes which params are legal: rebuild from its defaults, keeping known keys.
               const params: Record<string, unknown> = { event: next };
               const nextKind = catalog?.trigger_kinds.find((entry) => entry.key === next);
               for (const [key, fallback] of Object.entries(nextKind?.default_params ?? {})) {
@@ -327,17 +272,9 @@ export function GraphInspector({
             ))}
           </SelectField>
 
-          {/* What this event actually carries. Sampled from real events, so it
-              is the only thing on this page that cannot be wrong about the
-              payload someone is about to write a condition against. A validate
-              trigger has no event, so there is nothing to sample. */}
-          {node.params.event !== VALIDATE_TRIGGER && (
-            <EventSamples eventType={String(node.params.event ?? "")} />
-          )}
+          {/* Sampled from real events — the one thing here that cannot be wrong about the payload. */}
+          <EventSamples eventType={String(node.params.event ?? "")} />
 
-          {/* RADD-1315: automation chaining is opt-in, per trigger. Only an EVENT
-              trigger reacts to changes, so the sentinels do not offer it (and the
-              server refuses it on them). */}
           {/* A plugin's trigger kind renders its own params from its schema. */}
           {firedKind && ![SCHEDULE_TRIGGER, VALIDATE_TRIGGER, MANUAL_TRIGGER].includes(firedKind.key) &&
             Object.keys(firedKind.params_schema ?? {}).length > 0 && (
@@ -348,28 +285,23 @@ export function GraphInspector({
               />
             )}
 
+          {/* Chaining is opt-in, and only an event trigger offers it (RADD-1315). */}
           {(!firedKind || firedKind.has_event) && (
-            <label className="flex cursor-pointer items-start gap-2 text-[13px] text-fg">
-              <input
-                type="checkbox"
-                data-trigger-include-automated
-                checked={Boolean(node.params.include_automated)}
-                onChange={(event) => {
-                  const params: Record<string, unknown> = { ...node.params };
-                  if (event.target.checked) params.include_automated = true;
-                  else delete params.include_automated;
-                  setParams(params);
-                }}
-                className="mt-0.5 size-3.5 cursor-pointer accent-[var(--accent-fill)]"
-              />
-              <span>
-                Also run on changes made by other automations
-                <span className="block text-xs text-fg-secondary">
-                  Off: only people and integrations start this automation. On: another automation's change
-                  starts it too — never this automation's own, and at most {catalog?.max_chain_depth ?? 3} automations deep.
-                </span>
-              </span>
-            </label>
+            <CheckField
+              data-trigger-include-automated
+              label="Also run on changes made by other automations"
+              hint={<>
+                Off: only people and integrations start this automation. On: another automation's change
+                starts it too — never this automation's own, and at most {catalog?.max_chain_depth ?? 3} automations deep.
+              </>}
+              checked={Boolean(node.params.include_automated)}
+              onChange={(checked) => {
+                const params: Record<string, unknown> = { ...node.params };
+                if (checked) params.include_automated = true;
+                else delete params.include_automated;
+                setParams(params);
+              }}
+            />
           )}
 
           {node.params.event === VALIDATE_TRIGGER && (
@@ -429,11 +361,7 @@ export function GraphInspector({
         />
       )}
 
-      {/* A plugin's node renders the inspector its OWN UI bundle registered
-          for its type (RADD-1325: `automation.node.inspector`) — the AI and
-          scripts editors live in those plugins now, and core knows no plugin
-          node type. With none registered, the form generated from the node's
-          served params_schema (RADD-923). */}
+      {/* A plugin node renders its own `automation.node.inspector`; else the served schema form. */}
       {contributed && !coreEdited && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-fg-secondary">{contributed.description}</p>
@@ -464,9 +392,7 @@ export function GraphInspector({
 
       {node.kind === NodeKind.action && node.type.startsWith(ACTION_TYPE_PREFIX) && (
         <div className="flex flex-col gap-2">
-          {/* Act as (spec 116). Rendered ONLY when the caller holds
-              automation.act_as — a field that is refused on save is worse than
-              one that is absent, and the server enforces the same atom. */}
+          {/* Only with automation.act_as — a field refused on save is worse than an absent one. */}
           {canActAs && (
             <TextField
               label="Act as"

@@ -14,9 +14,7 @@ import {
   type StackedBarChartProps,
 } from "./report-contract";
 
-/** The reporting module's bundled UI (RADD-1386): the chart kit, contributed to the slots its
- * contract names so a plugin's report (the SLA report in slas) draws with the host's own charts.
- * The reports pages render REPORT_SECTION_SLOT for the reports themselves. */
+/** The chart kit, contributed to the contract's slots so a plugin's report (slas) draws with the host's charts. */
 export default definePlugin({
   contributions: [
     { id: "card", slot: REPORT_CARD_SLOT, toggleable: false, render: (props) => <ReportFrame {...(props as unknown as ReportCardProps)} /> },

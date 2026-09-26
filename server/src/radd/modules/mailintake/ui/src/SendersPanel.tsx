@@ -8,12 +8,7 @@ import { SenderDialog } from "./SenderDialog";
 import { TestDialog } from "./TestDialog";
 import { Chip, connectionLine, kindLabel } from "./shared";
 
-/**
- * Outgoing mail (RADD-958): the relays Radd sends replies, acknowledgements and
- * digests through. **Send test** reports the Message-ID the relay actually
- * used, so "is this working" is answerable without waiting for a customer to
- * complain.
- */
+/** Outgoing relays. */
 export function SendersPanel() {
   const senders = useQuery(mailSendersQuery());
   const kinds = useQuery(mailKindsQuery());

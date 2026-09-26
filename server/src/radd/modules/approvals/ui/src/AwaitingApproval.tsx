@@ -24,11 +24,7 @@ const pendingApprovalsQuery = {
   queryFn: ({ signal }: { signal: AbortSignal }) => api.get<PendingApproval[]>("/approvals/pending", { signal }),
 };
 
-/**
- * "Awaiting my approval" (spec 71) — requests whose verdict is MINE, as a My Work widget
- * (RADD-1393: contributed through `dashboard.widget`, suggested by the manifest's
- * `WidgetTypeSpec.suggest`). Rows open the issue in the peek panel like every My Work section.
- */
+/** "Awaiting my approval" (spec 71) — My Work widget; rows open the peek. */
 export function AwaitingApproval() {
   const pending = useQuery(pendingApprovalsQuery);
   const rows = pending.data ?? [];

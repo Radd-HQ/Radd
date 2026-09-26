@@ -8,14 +8,7 @@ import { pageLink } from "../links";
 import { Tag } from "../queries";
 import type { Page } from "../types";
 
-/**
- * `radd:new-from-template` — a button that creates a CHILD of the page it sits
- * on, from a named template (RADD-712).
- *
- * This is what makes a section self-service: the landing page carries the
- * button, and everyone adds correctly-shaped children without being told how or
- * being trusted to copy last time's page and remember to change everything.
- */
+/** `radd:new-from-template` — creates a CHILD of this page from a named template (RADD-712). */
 export function NewFromTemplate({ params }: { params: Record<string, unknown> }) {
   const ctx = usePageExtensionContext();
   const navigate = useNavigate();

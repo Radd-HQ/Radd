@@ -1,8 +1,3 @@
-/**
- * Settings → Scripts (RADD-1269, reshaped by RADD-1272): the managed
- * interpreter and its packages — what is instance-wide. The scripts
- * themselves live on their automation nodes.
- */
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Package, Plus, RotateCcw, Terminal, Trash2 } from "lucide-react";

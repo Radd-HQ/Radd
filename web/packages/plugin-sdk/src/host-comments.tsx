@@ -1,22 +1,14 @@
 import type { ComponentType, ReactNode } from "react";
-import { providedNow, useProvided } from "./host-registry";
+import type { TextAnchor } from "./anchoring";
+import { bridged } from "./bridge";
+import { providedNow } from "./host-registry";
 import type { TaskToggle } from "./host-document";
 
-/**
- * The host's comment kit, bridged (RADD-1392).
- *
- * Comments hang off any registered parent (an issue, a wiki page). The feed, threads, replies,
- * resolution and comment links are one kit the issue page uses too, so it stays HOST code; a
- * plugin that shows a discussion on its own entity renders it through these contracts. Hooks are
- * provided once at startup, so every render calls the same function.
- */
+/** The host's comment kit (feed, threads, replies, resolution, links), bridged for plugins that show a
+ *  discussion on their own entity. Hooks are provided once at startup, so every render calls the same function. */
 
 /** A text-quote selector: where an inline comment points. */
-export interface CommentAnchor {
-  quote: string;
-  prefix?: string;
-  suffix?: string;
-}
+export type CommentAnchor = TextAnchor;
 
 /** A comment as the comments API serves it — the fields a plugin surface reads. */
 export interface CommentRow {
@@ -115,36 +107,19 @@ export interface CommentHost {
   sendTaskToggle?: (path: string, toggle: TaskToggle, expectedBody: string) => Promise<unknown>;
 }
 
-export function CommentReplies(props: CommentRepliesProps) {
-  const { CommentReplies: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const CommentReplies = bridged("CommentReplies", () => null);
 
 /** A comment list that keeps its place while older comments prepend. */
-export function CommentHistory(props: CommentHistoryProps) {
-  const { CommentHistory: Host } = useProvided();
-  return Host ? <Host {...props} /> : <div>{props.error && <p role="alert">{props.error}</p>}{props.children}</div>;
-}
+export const CommentHistory = bridged("CommentHistory", (props) =>
+  <div>{props.error && <p role="alert">{props.error}</p>}{props.children}</div>);
 
-export function CopyCommentLink(props: { href: string; className?: string }) {
-  const { CopyCommentLink: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const CopyCommentLink = bridged("CopyCommentLink", () => null);
 
-export function ThreadBadge(props: { comment: CommentRow }) {
-  const { ThreadBadge: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const ThreadBadge = bridged("ThreadBadge", () => null);
 
-export function ThreadFilter(props: { unresolvedOnly: boolean; onChange: (value: boolean) => void }) {
-  const { ThreadFilter: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const ThreadFilter = bridged("ThreadFilter", () => null);
 
-export function ResolveThreadButton(props: { comment: CommentRow }) {
-  const { ResolveThreadButton: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
+export const ResolveThreadButton = bridged("ResolveThreadButton", () => null);
 
 const NO_FEED: CommentFeed = {
   comments: [], hasOlder: false, loadingOlder: false, loadOlder: () => undefined,

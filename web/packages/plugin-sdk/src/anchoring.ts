@@ -1,28 +1,10 @@
 /**
- * Text-quote anchoring for inline comments (RADD-726/728).
- *
- * An anchor is `{quote, prefix, suffix}` — the selected text plus a little
- * context either side — and NOT a character offset. An offset is invalidated by
- * the first edit made anywhere above it, so inserting one paragraph would slide
- * every comment on the page onto the wrong sentence. A quote is re-located
- * against the current text on every render, which is why W3C Web Annotation and
- * every editor that survives concurrent editing stores one.
- *
- * These functions live on the CLIENT and only here, deliberately. Re-location
- * needs the text as RENDERED — the server stores the anchor and never resolves
- * it — so a second implementation in Python would be a copy that drifts, of
- * something the server has no use for.
- *
- * Three outcomes, and the third is the one that decides whether people trust the
- * feature:
- *   - `located`      the quote was found, here is its range;
- *   - `ambiguous`    found more than once and the context could not choose —
- *                    treated as orphaned rather than guessing;
- *   - `orphaned`     the text it was written against is gone.
- *
- * An orphan is never silently dropped and never re-anchored to the nearest
- * lookalike. It keeps the text it was written against so the comment stays
- * legible as history.
+ * Text-quote anchoring for inline comments. An anchor is `{quote, prefix, suffix}`, not an offset
+ * (the first edit above an offset invalidates it); it is re-located against the current RENDERED
+ * text on every render, so it lives only on the client — the server stores anchors and never
+ * resolves them. Outcomes: `located`; `ambiguous` (several hits the context cannot separate —
+ * treated as orphaned, never guessed); `orphaned` (the text is gone). An orphan is never dropped or
+ * re-anchored to a lookalike; it keeps its quote so the comment stays legible.
  */
 
 export interface TextAnchor {
@@ -37,7 +19,7 @@ export type AnchorLocation =
   | { status: "orphaned" };
 
 /** How much context is captured either side of a selection. */
-export const ANCHOR_CONTEXT_CHARS = 32;
+const ANCHOR_CONTEXT_CHARS = 32;
 
 /** Build an anchor from a selection within `text`. */
 export function makeAnchor(text: string, start: number, end: number): TextAnchor {

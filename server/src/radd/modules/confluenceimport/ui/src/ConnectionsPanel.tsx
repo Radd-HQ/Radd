@@ -5,11 +5,7 @@ import { api, useConfirm, Button, ButtonVariant, Modal, QueryError, SelectField,
 import { ConfluencePath, confluenceKeys, connectionsQuery, statusQuery } from "./queries";
 import { ConfluenceAuthMode, type ConfluenceConnection, type ConfluenceStatus } from "./types";
 
-/**
- * Which Confluence to talk to (spec 117) — a database row an admin manages, not
- * an environment variable needing a redeploy. Credentials are never returned, so
- * an empty credential field on save means "keep the stored one".
- */
+/** Confluence connections — admin-managed rows. */
 export function ConnectionsPanel() {
   const client = useQueryClient();
   const [confirmNode, confirm] = useConfirm();

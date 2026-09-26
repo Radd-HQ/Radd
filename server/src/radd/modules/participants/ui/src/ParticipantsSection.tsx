@@ -4,12 +4,7 @@ import { api, Avatar, tokens, type Item } from "@radd/plugin-sdk";
 import { ParticipantChoices } from "./ParticipantChoices";
 import { Users, X } from "lucide-react";
 
-/**
- * Participants (spec 72) as a FEDERATED remote (spec 94): users + whole TEAMS an item is shared
- * with — the requester loop. Extracted from the host's IssueProperties into the `participants`
- * plugin's own UI bundle; the host renders it only through the `issue.panel.section` slot. Styled
- * from `@radd/plugin-sdk` tokens/primitives — no hardcoded color, so it tracks the host theme.
- */
+/** Participants (spec 72): users and whole teams an item is shared with. */
 
 interface Ref {
   id: string;

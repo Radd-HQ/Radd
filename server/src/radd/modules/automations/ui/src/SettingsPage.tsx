@@ -9,6 +9,7 @@ import { shortDateTime, relativeTime } from "@radd/plugin-sdk";
 import { usePermissions } from "@radd/plugin-sdk";
 import { useListFilter } from "@radd/plugin-sdk";
 import { triggerLabel } from "./meta";
+import { groupBy } from "./automation-nodes";
 import { automationCatalogQuery, automationsQuery, automationTemplatesQuery, invalidateAutomations } from "./queries";
 import { NodeKind, type AutomationTemplate, type Rule, type RuleUpdate } from "./types";
 import { Button, ButtonVariant } from "@radd/plugin-sdk";
@@ -251,10 +252,7 @@ function TemplatePicker({
   onPick: (template: AutomationTemplate) => void;
 }) {
   const templates = useQuery(automationTemplatesQuery);
-  const groups = new Map<string, AutomationTemplate[]>();
-  for (const template of templates.data ?? []) {
-    groups.set(template.group, [...(groups.get(template.group) ?? []), template]);
-  }
+  const groups = groupBy(templates.data ?? [], (template) => template.group);
   return (
     <Modal title="Start from a template" onClose={onClose} wide>
       <p className="mb-3 text-[13px] text-fg-secondary">
@@ -264,11 +262,11 @@ function TemplatePicker({
         <TableSkeleton rows={3} />
       ) : templates.isError ? (
         <QueryError label="templates" error={templates.error} />
-      ) : groups.size === 0 ? (
+      ) : groups.length === 0 ? (
         <EmptyState icon={Workflow} message="No templates are offered on this instance." />
       ) : (
         <div className="flex flex-col gap-4">
-          {[...groups.entries()].map(([group, entries]) => (
+          {groups.map(([group, entries]) => (
             <section key={group} className="flex flex-col gap-1.5">
               <span className="text-[11px] font-medium uppercase tracking-wide text-fg-muted">{group}</span>
               {entries.map((template) => (

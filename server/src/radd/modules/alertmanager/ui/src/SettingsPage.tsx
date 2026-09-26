@@ -13,13 +13,8 @@ function newToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * Settings → Alertmanager (RADD-1317; the plugin's own page since RADD-1370).
- * Each receiver is a row naming the project its alerts become issues in, and
- * the three things it may do to them. The token is write-only on the server, so
- * a new receiver's token is generated here and shown ONCE, inside the URL
- * Alertmanager must be configured with.
- */
+/** Settings → Alertmanager: one row per receiver. The token is write-only server-side, so a new one is
+ *  generated here and shown ONCE, inside the URL Alertmanager is configured with. */
 export function AlertmanagerSettingsPage() {
   const canManage = usePermissions().global("global.manage");
   const queryClient = useQueryClient();

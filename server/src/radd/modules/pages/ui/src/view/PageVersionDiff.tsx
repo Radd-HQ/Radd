@@ -7,17 +7,8 @@ import { collapseUnchanged, diffLines, diffStats } from "../line-diff";
 import type { Page } from "../types";
 import { Loading } from "./Loading";
 
-/**
- * Compare two versions of a page (RADD-720).
- *
- * Versions were storable and restorable but not comparable, which made restore a
- * guess: you could roll back to something you had no way to read the difference
- * of.
- *
- * The CURRENT content is `page.version` and is not in `page_versions` (only
- * previous content is snapshotted), so comparing against it reads from the page
- * itself. That asymmetry is the storage model's, not this component's.
- */
+/** Compare two versions (RADD-720). The CURRENT content is `page.version` and has no `page_versions`
+ *  row (only previous content is snapshotted), so comparing against it reads the page itself. */
 export function PageVersionDiff({
   page,
   from,

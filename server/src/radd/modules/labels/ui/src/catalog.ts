@@ -1,9 +1,7 @@
 import { api, type QuerySource } from "@radd/plugin-sdk";
 import type { Label } from "./types";
 const meta = { entities: ["label", "role", "member"] };
-/** The whole catalog as an ordinary query — for host pages that read it directly (settings,
- * filters). Plugins that must not depend on this package read the catalog
- * through the SDK query-source registry instead. */
+/** The catalog as a plain query (host pages); plugins read it through the query source below. */
 export const labelsQuery = () => ({
   queryKey: ["labels"] as const, meta, staleTime: 60_000,
   queryFn: ({ signal }: { signal: AbortSignal }) => api.get<Label[]>("/labels", { signal }),

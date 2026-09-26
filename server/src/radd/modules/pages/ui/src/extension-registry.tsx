@@ -2,13 +2,9 @@ import { Suspense, lazy, type ReactNode } from "react";
 import { ExtensionCard, registerPageExtension, type PageExtension } from "@radd/plugin-sdk";
 
 /**
- * The first-party page extensions (RADD-710/715, spec 117), registered at boot (RADD-1392).
- *
- * A `radd:*` block renders wherever markdown does — an issue description's viewer as much as a
- * page — so the registration is eager, while the renderers load with the first block that needs
- * them. The wiki's own routes import the renderers directly (PageBody), so a page or its print view
- * never waits on them; `tests/test_page_extensions.py` holds this list and the renderer maps to
- * the kernel's declarations in both directions.
+ * The first-party `radd:*` extensions, registered at boot: a block renders wherever markdown does, so
+ * registration is eager while renderers load with the first block that needs one (PageBody imports
+ * them directly). `tests/test_page_extensions.py` matches this list to the kernel's, both ways.
  */
 
 export type ExtensionRenderers = Record<string, (params: Record<string, unknown>) => ReactNode>;

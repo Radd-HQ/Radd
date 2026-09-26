@@ -23,7 +23,7 @@ export interface DataContracts {
   personIndicators: { args: Record<string, never>; result: PersonIndicator[] };
   timesheetAnnotations: { args: { start: string; end: string }; result: TimesheetAnnotation[] };
 }
-export type DataKind = keyof DataContracts;
+type DataKind = keyof DataContracts;
 export type DataSource<K extends DataKind = DataKind> = {
   [P in K]: {
     kind: P;

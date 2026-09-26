@@ -5,25 +5,11 @@ import type { EditorView } from "prosemirror-view";
 import { useContributionOwner } from "./slots";
 
 /**
- * The rich editor's extension points (RADD-1395).
- *
- * The editor — Milkdown, ProseMirror, the toolbar, the per-block diff review, code blocks and
- * `radd:*` nodes — is HOST code that issues, comments and the wiki share. A plugin extends it
- * through three slots and two mechanisms, none of which names a feature:
- *
- *   - `editor.toolbar.action` — a toolbar button (`EditorToolbarActionProps`);
- *   - `editor.selection.action` — chrome over a text selection (`EditorSelectionActionProps`);
- *   - `content.read.action` — an action on RENDERED content (`ReadActionProps`);
- *   - a TRANSFORM — a contribution hands the editor a streamed replacement for the selection or
- *     the whole document (`EditorHandle.transform`, or `ReadActionProps.transform` to open the
- *     editor with one), and the editor shows its own reviewable diff with accept/reject;
- *   - a BINDING (RADD-1397) — the editor's document is bound to a copy that lives elsewhere
- *     (`EditorBinding`, handed to `RichEditorProps.binding`), through ProseMirror plugins the
- *     binding builds from the SHARED editor runtime.
- *
- * The review is the editor's; what the replacement IS — its prompt, its protocol, what it must
- * protect — is the contribution's. A reading surface may also offer a panel beside the text
- * (`useReadingPane`), where an answer has room to be read.
+ * The rich editor's extension points. The editor is HOST code that issues, comments and the wiki
+ * share; a plugin extends it through the `editor.toolbar.action`, `editor.selection.action` and
+ * `content.read.action` slots, a TRANSFORM (a streamed replacement the editor reviews as a diff)
+ * and a BINDING (the document bound to a copy that lives elsewhere). The review is the editor's;
+ * what the replacement is — prompt, protocol, what it must protect — is the contribution's.
  */
 
 /**

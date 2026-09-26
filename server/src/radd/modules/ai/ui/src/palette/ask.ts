@@ -4,11 +4,8 @@ import { useAiStatus } from "../queries";
 import { AiEndpoint } from "../transport";
 import { AiFeature, type SemanticResponse } from "../types";
 
-/**
- * The command palette's Ask (spec 103; a contributed palette mode since RADD-1400): "search by
- * meaning" — the query runs as ONE semantic probe over issues and pages (GET /search/semantic,
- * RBAC-scoped by search and each document provider), answered as the palette's own rows.
- */
+/** The palette's Ask: one semantic probe over issues and pages (GET /search/semantic, RBAC-scoped),
+ *  answered as the palette's own rows. */
 
 const percent = (score: number) => `${Math.round(score * 100)}%`;
 

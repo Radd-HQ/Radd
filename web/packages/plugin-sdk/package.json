@@ -10,6 +10,7 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css",
     "./vite": "./vite.mjs",
+    "./tsconfig.plugin.json": "./tsconfig.plugin.json",
     "./package.json": "./package.json"
   },
   "peerDependencies": {

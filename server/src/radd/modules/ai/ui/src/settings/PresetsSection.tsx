@@ -6,11 +6,8 @@ import { api, errorMessage, Button, EmptyState, ErrorText, IconButton, QueryErro
 import { useAiPresets, useInvalidateAi } from "./queries";
 import { AiEntity, AiPath, sectionHeadClasses, type AiPreset } from "./types";
 
-/**
- * The editor-action prompt library (spec 101; the spec-103 editor menu consumes it). Enabled
- * presets appear as named actions in every user's editor AI menu — the prompt text itself stays
- * server-side, never shipped to the browser.
- */
+/** The editor preset library: enabled presets appear by name in every editor AI menu; the prompt
+ *  text never leaves the server. */
 export function PresetsSection() {
   const presets = useAiPresets();
   const invalidate = useInvalidateAi();

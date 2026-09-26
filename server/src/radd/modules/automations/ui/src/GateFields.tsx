@@ -1,21 +1,9 @@
+/** Forms for the named condition nodes. `from`/`to` carry an explicit MODE: an empty list is also what a
+ * half-filled form produces, and reading it as "any" fires on changes nobody meant. */
+import type React from "react";
 import { OptionNameValues } from "@radd/plugin-sdk";
 import { OptionResource, type OptionResourceValue } from "./options";
-/**
- * Forms for the concrete condition nodes (spec 116 revision).
- *
- * Each is one named test with named fields, replacing the abstract
- * subject/operator/value tree. "Field changed / Field: State / From: Any value /
- * To: In Review" is readable without knowing the model; the tree was not.
- *
- * `from` and `to` carry an explicit MODE rather than "empty list means any",
- * because an empty list is also what a half-filled form produces — and treating
- * that as "match everything" is how an automation fires on changes nobody meant
- * to catch.
- */
-import type React from "react";
-
-
-
+import { CheckField } from "./controls";
 import type { OperatorInfo } from "./types";
 import { TextField } from "@radd/plugin-sdk";
 import { SelectField } from "@radd/plugin-sdk";
@@ -114,11 +102,7 @@ export function FieldChangedFields({
         onChange={(event) => set({ field: event.target.value })}
         hint="Reads the event's own diff, so it matches the TRANSITION — not an issue that was already in the target state."
       >
-        {/* Fields the trigger's real events have been SEEN changing come first
-            (RADD-921). The full list below includes every custom-field key,
-            some of which the diff never names — a condition on one of those can
-            only ever be false, and looks exactly like one that has not matched
-            yet. */}
+        {/* Fields SEEN changing first: a field the diff never names makes a condition that is always false. */}
         {observedFields.length > 0 && (
           <optgroup label="Seen changing on this trigger">
             {observedFields.map((name) => (
@@ -173,15 +157,7 @@ export function ChangedByFields({
         <OptionNameValues resource={OptionResource.user} label="People" canBrowse={canChoosePeople}
           value={(params.users as string[]) ?? []} onChange={users => onChange({ ...params, users })} />
       </Labelled>
-      <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          checked={Boolean(params.negate)}
-          onChange={(event) => onChange({ ...params, negate: event.target.checked })}
-          className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
-        />
-        Invert — true when it was NOT one of them
-      </label>
+      <CheckField label="Invert — true when it was NOT one of them" checked={Boolean(params.negate)} onChange={(checked) => onChange({ ...params, negate: checked })} />
     </div>
   );
 }
@@ -261,21 +237,11 @@ export function PageSpaceFields({
           onChange={(next) => onChange({ ...params, spaces: next })}
         />
       </Labelled>
-      <label className="flex items-center gap-2 text-xs text-fg-secondary">
-        <input
-          type="checkbox"
-          checked={Boolean(params.negate)}
-          onChange={(event) => onChange({ ...params, negate: event.target.checked })}
-        />
-        Invert — every space except these
-      </label>
+      <CheckField label="Invert — every space except these" checked={Boolean(params.negate)} onChange={(checked) => onChange({ ...params, negate: checked })} />
     </div>
   );
 }
 
-/** The AI classifier (contributed by the AI module). Its answers ARE its output
- * ports, which is why they are edited here rather than in a generated form: the
- * canvas has to redraw the node as they change. */
 /** "Event value is" (RADD-1265) — the one open-ended gate: a dotted path into
  * the event payload, an operator, a value. The paths offered are the ones REAL
  * recent events of the upstream trigger carried, so the picker cannot suggest
@@ -351,19 +317,10 @@ export function PayloadGateFields({
           placeholder="Done"
         />
       )}
-      <label className="flex w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          checked={Boolean(params.negate)}
-          onChange={(event) => onChange({ ...params, negate: event.target.checked })}
-          className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
-        />
-        Invert — true when the test does NOT hold
-      </label>
+      <CheckField label="Invert — true when the test does NOT hold" checked={Boolean(params.negate)} onChange={(checked) => onChange({ ...params, negate: checked })} />
     </div>
   );
 }
-
 
 /** "Project is" (RADD-1267) — the one way to narrow a NON-item event (a
  * release, a form, a cycle) by project; a filter can only see items. Reads the
@@ -387,23 +344,7 @@ export function ProjectGateFields({
           allowCreate
         />
       </Labelled>
-      <label className="flex items-center gap-2 text-xs text-fg-secondary">
-        <input
-          type="checkbox"
-          checked={Boolean(params.negate)}
-          onChange={(event) => onChange({ ...params, negate: event.target.checked })}
-          className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
-        />
-        Invert — true when the project is NOT one of them
-      </label>
+      <CheckField label="Invert — true when the project is NOT one of them" checked={Boolean(params.negate)} onChange={(checked) => onChange({ ...params, negate: checked })} />
     </div>
   );
 }
-
-
-/** The scripts plugin's two nodes (RADD-1269, reshaped by RADD-1272): the
- * Python lives ON THE NODE. Bespoke rather than generated from the schema
- * because the body wants a code editor, the ports / outputs are what the
- * canvas redraws handles and offers tokens from, and a Test box runs the body
- * as typed — a dry run never applies an action, so this is how a script is
- * tried before the automation is enabled. */

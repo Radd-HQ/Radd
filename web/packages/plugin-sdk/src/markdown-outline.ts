@@ -1,11 +1,5 @@
-/**
- * Heading anchors and the outline behind `radd:toc` (RADD-710).
- *
- * Kept as plain functions over the markdown SOURCE rather than over the rendered
- * DOM: the table of contents renders in the same pass as the headings it points
- * at, so there is no rendered tree to read yet, and a source pass is testable
- * without a browser.
- */
+/** Heading anchors and the `radd:toc` outline, from the markdown SOURCE: the contents block renders in
+ *  the same pass as its headings, so there is no DOM to read yet. */
 
 export interface OutlineHeading {
   level: number;

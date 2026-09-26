@@ -11,7 +11,7 @@ interface ReportCardProps {
   children: ReactNode;
 }
 
-/** Titled panel wrapping one report chart/table on the dashboards (spec 19). */
+/** Titled panel wrapping one report chart or table. */
 export function ReportCard({ title, description, controls, note, children }: ReportCardProps) {
   const inDashboard = useContext(ChartHeightContext) !== undefined;
   return (

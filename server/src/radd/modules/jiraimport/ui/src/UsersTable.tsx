@@ -3,24 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, UserPlus } from "lucide-react";
 import { Button, ListSearchInput, SelectField, TextField, useListFilter } from "@radd/plugin-sdk";
 import { targetUsersQuery } from "./api";
-import { MappingSection } from "./MappingSection";
+import { FILTER_THRESHOLD, MappingSection } from "./MappingSection";
 import { USER_ACTION_LABELS, UserAction, type UserActionValue, type UserMapping } from "./plan-types";
 import type { TargetUser } from "./types";
 
-/** Below this many people the table needs no filter chrome (RADD-882). */
-const FILTER_THRESHOLD = 8;
-
-/**
- * What to do about every person Jira names (spec 100).
- *
- * Spec 90 had exactly ONE behaviour and no way to say otherwise: synthesize
- * `<jira username>@<a company domain hardcoded in the source>` and create the
- * account. Here each person is a row you decide — match an existing user, create
- * a placeholder at an address you can SEE first, attribute their work to someone
- * else, or leave it unattributed — with bulk actions for the long tail.
- *
- * Matched people collapse: if Radd already knows them there is nothing to decide.
- */
+/** One decision per person Jira names: match, placeholder (address shown first), attribute to
+ * someone else, or leave unattributed — bulk actions cover the long tail; matched people collapse. */
 export function UsersTable({
   rows,
   domain,
@@ -37,7 +25,6 @@ export function UsersTable({
   const users = useQuery(targetUsersQuery());
   const [fallbackId, setFallbackId] = useState("");
 
-  // "300 unmatched people is normal" — findable by name/address/key (RADD-882).
   const search = useListFilter(rows, (r) => [r.display_name, r.jira_email, r.jira_key]);
   const unmatched = useMemo(
     () => search.filtered.filter((r) => r.action !== UserAction.match),
@@ -84,7 +71,6 @@ export function UsersTable({
         )}
       </div>
 
-      {/* The long tail is the point of these: 300 unmatched people is normal. */}
       <div className="flex flex-wrap gap-2">
         <Button
           size="sm"

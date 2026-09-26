@@ -62,7 +62,7 @@ export interface SlaPolicy {
 }
 
 /** GET /issue-types?project_id= (itemtypes) — the fields a policy filter shows. */
-export interface IssueTypeChoice {
+interface IssueTypeChoice {
   id: string;
   name: string;
 }

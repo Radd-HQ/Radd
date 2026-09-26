@@ -7,13 +7,7 @@ import { pageLink } from "../links";
 import { pagesQuery } from "../queries";
 import type { PageBreadcrumb } from "../types";
 
-/**
- * One breadcrumb segment, with its SIBLINGS behind a chevron (RADD-714).
- *
- * A trail alone tells you where you are; siblings tell you what else is at this
- * level, which is the question that otherwise sends you hunting in the tree.
- * Confluence and every file manager work this way for the same reason.
- */
+/** A breadcrumb segment with its SIBLINGS behind a chevron (RADD-714). */
 export function BreadcrumbCrumb({
   crumb,
   spaceId,

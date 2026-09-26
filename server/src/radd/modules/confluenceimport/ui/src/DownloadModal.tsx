@@ -139,13 +139,7 @@ export function DownloadModal({
   );
 }
 
-/**
- * One level of the remote tree, fetched when it is opened.
- *
- * The picker used to ask for the whole space at once: 61 requests and over two
- * minutes against a real one, during which it rendered nothing — which reads as
- * "this space is empty", not "still loading". A branch costs one request.
- */
+/** One level of the remote tree, fetched when opened (see treeQuery). */
 function PageBranch({
   connectionId,
   spaceKey,

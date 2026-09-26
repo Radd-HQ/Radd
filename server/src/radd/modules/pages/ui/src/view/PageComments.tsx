@@ -1,35 +1,22 @@
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, MessageSquare, MessagesSquare, Send, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MessageSquare, MessagesSquare, Send, Trash2 } from "lucide-react";
 import {
   Avatar, Button, CommentHistory, CommentReplies, CommentSection, CopyCommentLink, ResolveThreadButton, RichEditor,
   RichViewer, ThreadBadge, ThreadFilter, api, commentHref, errorMessage, invalidateEntities, relativeTime,
-  repliesLabel, sendTaskToggle, threadRuleClass, useCommentFeed, useConfirm, useCurrentUser, useIsAuthenticated,
+  repliesLabel, threadRuleClass, useCommentFeed, useConfirm, useCurrentUser, useIsAuthenticated,
   useLandOnComment, useLinkedComment, useThreadExpansion,
 } from "@radd/plugin-sdk";
-import { commentPath, commentTasksPath, pageCommentsPath } from "../endpoints";
+import { commentPath, pageCommentsPath } from "../endpoints";
 import { Tag } from "../queries";
+import { ownTaskToggle } from "./PageCommentThread";
 import { usePeople } from "./people";
 
 /**
- * A page's discussion (RADD-717).
- *
- * Deliberately NOT `CommentsThread`. That component is item-shaped end to end —
- * project-scoped permissions, issue `/` quick actions, canned service-desk
- * responses, internal-visibility team pickers — and none of it means anything on
- * a wiki page. Sharing it would have meant threading "is there a project?"
- * through every one of those, to arrive at a component that renders none of them
- * here. The two share what actually matters: the same comments table, the same
- * editor, the same mention tokens, the same notifications.
- *
- * Page comments are public only. Internal visibility is a service-desk concept
- * that exists to hide a comment from a REQUESTER, and a page has no requester.
- *
- * RADD-1283: resolvable threads work here as on an issue — Start thread, the
- * status chip and rule, Resolve/Unresolve, Reply and unresolve, and the
- * Unresolved filter — sharing `comments/ThreadResolution`. Who may resolve is
- * the server's `can_resolve`; a page has no project rule, so it is the default.
+ * A page's discussion (RADD-717). Not `CommentsThread`: that component is item-shaped (project
+ * permissions, `/` actions, canned responses, internal visibility), none of which a page has.
+ * Page comments are public only — internal visibility hides a comment from a REQUESTER, and a page
+ * has none. Resolvable threads as on an issue; who may resolve is the server's `can_resolve`.
  */
 export function PageComments({ pageId, canComment }: { pageId: string; canComment: boolean }) {
   const user = useCurrentUser();
@@ -126,18 +113,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                   )}
                 </p>
                 <div className="mt-0.5 rounded-md border border-subtle bg-surface px-2 py-1">
-                  <RichViewer
-                    text={comment.body}
-                    // RADD-1296: the author ticks their own checklist in place.
-                    onToggleTask={
-                      comment.author && comment.author.id === user?.id
-                        ? async (toggle) => {
-                            await sendTaskToggle(commentTasksPath(comment.id), toggle, comment.body);
-                            await invalidateEntities(queryClient, Tag.comment);
-                          }
-                        : undefined
-                    }
-                  />
+                  <RichViewer text={comment.body} onToggleTask={ownTaskToggle(comment, user?.id, queryClient)} />
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-3">
                   {user && (

@@ -1,4 +1,4 @@
-/** Jira importer wire shapes (specs 90, 100): connections, downloads and runs.
+/** Jira importer wire shapes: connections, downloads and runs.
  * The plan's nine mapping tables are in `plan-types.ts`. */
 
 export interface JiraConnectionStatus {
@@ -11,7 +11,7 @@ export interface JiraConnectionStatus {
   connection_name: string;
 }
 
-// --- connections (spec 100) --------------------------------------------------
+// --- connections --------------------------------------------------
 
 /** How Radd authenticates to a Jira instance. Jira DC accepts both. */
 export const JiraAuthMode = {
@@ -36,7 +36,7 @@ export const JiraConnectionSource = {
   env: "env",
   user: "user",
 } as const;
-export type JiraConnectionSourceValue =
+type JiraConnectionSourceValue =
   (typeof JiraConnectionSource)[keyof typeof JiraConnectionSource];
 
 /** The credential is never returned — only whether one is stored. */
@@ -71,7 +71,7 @@ export interface JiraProject {
   project_type: string;
 }
 
-// --- snapshots (spec 100) ----------------------------------------------------
+// --- snapshots ----------------------------------------------------
 
 /** Where a download is. The order IS the pipeline. */
 export const SnapshotStage = {
@@ -86,7 +86,7 @@ export const SnapshotStage = {
   failed: "failed",
   canceled: "canceled",
 } as const;
-export type SnapshotStageValue = (typeof SnapshotStage)[keyof typeof SnapshotStage];
+type SnapshotStageValue = (typeof SnapshotStage)[keyof typeof SnapshotStage];
 
 export const SNAPSHOT_STAGE_LABELS: Record<SnapshotStageValue, string> = {
   [SnapshotStage.pending]: "Queued",
@@ -145,7 +145,7 @@ export interface SnapshotStartInput {
   include_history: boolean;
 }
 
-// --- runs (spec 100) ---------------------------------------------------------
+// --- runs ---------------------------------------------------------
 
 export const RunKind = { dry_run: "dry_run", import: "import", rollback: "rollback" } as const;
 export type RunKindValue = (typeof RunKind)[keyof typeof RunKind];
@@ -165,7 +165,7 @@ export const JiraRunStage = {
   failed: "failed",
   canceled: "canceled",
 } as const;
-export type JiraRunStageValue = (typeof JiraRunStage)[keyof typeof JiraRunStage];
+type JiraRunStageValue = (typeof JiraRunStage)[keyof typeof JiraRunStage];
 
 export const JIRA_RUN_STAGE_LABELS: Record<JiraRunStageValue, string> = {
   [JiraRunStage.pending]: "Queued",

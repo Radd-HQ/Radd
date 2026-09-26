@@ -13,7 +13,7 @@ import {
   type ActionParamValue as CustomFieldValue,
   type RuleAction,
 } from "./types";
-import { CustomFieldControl } from "./controls";
+import { CheckField, CustomFieldControl } from "./controls";
 import { SelectField } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";
 import type { PickerData } from "./ActionsBuilder";
@@ -32,17 +32,8 @@ const CLEAR_CHOICE = { value: AUTOMATION_CLEAR_VALUE, label: "Clear (unset)", hi
 const hasToken = (value: unknown) => /\{\{\s*[a-zA-Z0-9_.]+\s*\}\}/.test(String(value ?? ""));
 
 /**
- * A value param in two modes: PICKED, or a `{{token}}` (spec 120).
- *
- * The picker stays the default and stays a picker. Degrading every dropdown into
- * a text field so that a token could be typed into it would cost everyone the
- * affordance to buy a minority the flexibility — and would lose the vocabulary,
- * which is the part that stops a typo becoming a skip at 3am. So the token mode
- * is opt-in, per param, and the control announces which mode it is in.
- *
- * A stored value that already contains a token opens in token mode without being
- * asked, because the alternative is a select showing blank beside a value it
- * cannot represent.
+ * A value param that is PICKED or a `{{token}}`. Token mode is opt-in per param — the picker keeps the
+ * vocabulary — and a stored token opens in token mode, since a select cannot show it.
  */
 function TokenizableField({
   label,
@@ -90,21 +81,9 @@ function TokenizableField({
           aria-label={`Use a token for ${label}`}
           title={tokenMode ? `Pick a ${label.toLowerCase()} instead` : "Use a token instead"}
           onClick={() => {
-            // The switch replaces whichever value the other mode cannot HOLD,
-            // in both directions. Entering token mode with a picked value stored
-            // leaves "normal" sitting in the box for a token to be appended to —
-            // which is exactly what a click on the picker below then produced.
-            // LEAVING it hands the picker something it can render: the stored
-            // value when that is already a plain one, else the fallback, because
-            // a select with no blank option shows nothing at all for a token and
-            // then saves a 422 until someone notices.
-            // Leaving hands the picker something it can RENDER: the stored
-            // value when that is already plain and non-empty, else the
-            // fallback. Empty counts as unrenderable for the same reason a
-            // token does — a select with no blank option shows nothing for
-            // either, and then saves a 422 until someone notices. (Entering
-            // clears, so "empty" is the state you are in if you switch on and
-            // straight back off.)
+            // Switching replaces the value the other mode cannot hold. Entering clears; leaving keeps a
+            // plain non-empty value, else `fallback` — a select with no blank option shows nothing for a
+            // token or "" and then saves a 422.
             const plain = !hasToken(value) && value !== "";
             onChange(tokenMode ? (plain ? value : fallback) : "");
             setWanted(!tokenMode);
@@ -539,21 +518,13 @@ function SendEmailParams({
       </div>
       {/* RADD-1318: the old receipt's shape, as an opt-in — on the ticket's
           email thread, so the requester's reply lands back on the issue. */}
-      <label className="flex cursor-pointer items-start gap-2 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          data-send-email-thread
-          checked={Boolean(params.thread)}
-          onChange={(event) => set({ thread: event.target.checked })}
-          className="mt-0.5 size-3.5 cursor-pointer accent-[var(--accent-fill)]"
-        />
-        <span>
-          Send on the issue's email thread
-          <span className="block text-[11px] text-fg-muted">
-            Replies come back to the issue, and the message reads as from the desk. Keep [{"{{item.key}}"}] in the subject.
-          </span>
-        </span>
-      </label>
+      <CheckField
+        data-send-email-thread
+        label="Send on the issue's email thread"
+        hint={<>Replies come back to the issue, and the message reads as from the desk. Keep [{"{{item.key}}"}] in the subject.</>}
+        checked={Boolean(params.thread)}
+        onChange={(thread) => set({ thread })}
+      />
     </div>
   );
 }

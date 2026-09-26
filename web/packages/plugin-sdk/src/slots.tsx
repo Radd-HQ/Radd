@@ -9,133 +9,90 @@ import {
   type ReactNode,
 } from "react";
 import { api } from "./api";
-import { tokens } from "./tokens";
+import type { PluginContribution } from "./plugin";
+import { Switch } from "./switch";
 
 /** The user-preferences key under which the PER-USER disabled-contribution set is stored
  *  server-side (`GET/PUT /auth/me/preferences`). */
 const PREF_KEY = "disabled_contributions";
 
 /**
- * The slot registry — the seam between the host shell and plugin UI (docs/plugin-platform.md §8).
- * Base views render `<Slot id=…>` and know no plugin; a plugin's remote, when loaded, calls
- * `registerSlot(...)` to contribute. This store is a federation SINGLETON (shared via the import
- * map → one instance across host + every remote), so a remote's registration lands in the same
- * store the host's `<Slot>` reads. Disabling a plugin calls `unregisterPlugin(name)` and its
- * contributions vanish from every slot live (no reload).
- */
-
-/**
- * The canonical slot ids — the named places a plugin can attach UI. Base views render `<Slot>` at
- * these anchors and know no plugin; a plugin targets one by string via `registerSlot`. Add a new id
- * here + a `<Slot>` in the host to open a new extension point.
+ * The slot registry — the seam between the host shell and plugin UI. Base views render
+ * `<Slot id=…>` and know no plugin; a remote calls `registerSlot`. A federation SINGLETON, so a
+ * remote's registration lands in the store the host's `<Slot>` reads; `unregisterPlugin` withdraws
+ * a plugin's contributions live. A new extension point is a `SlotId` plus a `<Slot>` in the host.
  */
 export const SlotId = {
-  // --- issue view ---
-  /** Action buttons in the issue header, next to Star/Watch/Flag. Props: { item, project }. */
+  // --- issue view: props { item, project } ---
+  /** Buttons in the issue header, beside Star/Watch/Flag. */
   issueTitleAction: "issue.title.action",
-  /** Cards in the issue right-rail (above the fields). Props: { item, project }. Order-sortable. */
+  /** Rail cards above the fields. Order-sortable. */
   issuePanelSection: "issue.panel.section",
-  /** Cards at the BOTTOM of the issue right-rail (below the fields). Props: { item, project }. */
+  /** Rail cards below the fields. */
   issueRailBottom: "issue.rail.bottom",
-  /** Cards at the TOP of the issue right-rail, above the fields card; each draws its own card
-   *  (RADD-1395). Props: { item, project }. Order-sortable. */
+  /** Rail cards above the fields card, each drawing its own card. Order-sortable. */
   issueRailTop: "issue.rail.top",
-  /** An extra Activity tab next to Comments/History/VCS. Needs `title`; render is the tab body.
-   *  Props: { item, project }. */
+  /** An Activity tab beside Comments/History/VCS: needs `title`; render is the tab body. */
   issueTab: "issue.tab",
-  /** Suggestions beside an issue being DRAFTED — the submission form's assist panel (RADD-1395).
-   *  Props: `ItemDraftAssistProps` { title, description, projectId, exclude }. Render nothing
-   *  when there is nothing to suggest: the host hides the panel when every section is empty. */
+  /** Beside a draft on the submission form. Props: `ItemDraftAssistProps`. Render nothing when
+   *  there is nothing to suggest — the host hides the panel when every section is empty. */
   itemDraftAssist: "item.draft.assist",
-  // --- the rich editor and rendered content (RADD-1395) ---
-  /** A button in the rich editor's toolbar. Props: `EditorToolbarActionProps` { editor } — draw it
-   *  with `EditorToolbarButton`; `editor.transform(…)` streams a reviewable replacement. */
+  // --- the rich editor and rendered content ---
+  /** A toolbar button. Props: `EditorToolbarActionProps`; draw it with `EditorToolbarButton`. */
   editorToolbarAction: "editor.toolbar.action",
-  /** Chrome over a text selection, placed by the host above it. Props: `EditorSelectionActionProps`
-   *  { editor, selection } — `selection` is null while nothing is selected or the editor lost
-   *  focus, so a contribution holding a popover open keeps its CAPTURED range. */
+  /** Chrome the host places over a selection. Props: `EditorSelectionActionProps` — `selection`
+   *  is null while nothing is selected or focus left, so an open popover keeps its CAPTURED range. */
   editorSelectionAction: "editor.selection.action",
-  /** An action on RENDERED content (a description, a comment, a page body), shown for every
-   *  reader. Props: `ReadActionProps` { text, context, transform?, subject, className? }. */
+  /** An action on rendered content, for every reader. Props: `ReadActionProps`. */
   contentReadAction: "content.read.action",
-  /** How a rendered body (a description, a comment) is DRAWN when a plugin claims its record
-   *  (RADD-1401). Build it with `contentBody(spec)`: `claims(record)` decides, the first claimant
-   *  draws. Props: `ContentBodyProps` { text, record, context, canEdit, renderText }. */
+  /** Draws a body a plugin claims; build with `contentBody(spec)`. Props: `ContentBodyProps`. */
   contentBody: "content.body",
-  // --- views (board/list/roadmap) ---
-  /** An item in a view's header/toolbar. Props: { view, items } — the view + its currently-loaded,
-   *  permission-scoped issues, so a plugin can compute over exactly what the user sees. */
+  // --- views ---
+  /** A view's header/toolbar. Props: { view, items } — the loaded, permission-scoped issues. */
   viewHeader: "view.header",
-  /** A whole saved-view TYPE (matched by `match` = the view_type key). Props: { view, items }.
-   *  The plugin owns the presentation; the view still carries the SLQ query. */
+  /** A saved-view TYPE, `match` = the view_type key. Props: { view, items }. */
   viewType: "view.type",
   // --- settings ---
-  /** A whole page under Settings → …. Matched by pathname (`match`). Props: { path }. */
+  /** A page under Settings, `match` = the pathname. Props: `ContributedPageProps`. */
   settingsPage: "settings.page",
-  /** A whole page under a PROJECT's settings (RADD-1396), matched by `match` = the page's segment
-   *  (`/p/<KEY>/settings/<segment>`). Pair it with a manifest `NavItemSpec(section=
-   *  "project_settings", path=<segment>)`, whose `requires` atoms are checked in that project.
-   *  Props: { project, path } — the project whose settings these are, and the segment. */
+  /** A page under a project's settings, `match` = the segment; pair it with a manifest
+   *  `NavItemSpec(section="project_settings")`. Props: `ProjectSettingsPageProps`. */
   projectSettingsPage: "project.settings.page",
-  /** A section injected INTO an existing settings page (keyed by `match` = the page's slot key).
-   *  Props: {}. */
+  /** A section inside an existing settings page, `match` = the page's slot key. */
   settingsSection: "settings.section",
-  /** Generic settings footer context: { history: { entities?, projectId? } }. */
+  /** Settings footer. Props: { history: { entities?, projectId? } }. */
   settingsFooter: "settings.footer",
-  /** Entity history surface: { entityType, entityId, projectId?, title? }. */
+  /** Entity history. Props: { entityType, entityId, projectId?, title? }. */
   entityHistory: "entity.history",
-  /** Owner-specific change presentation, matched by entity type. Props: { change }. */
+  /** An owner's change line, `match` = the entity type. Props: { change }. */
   entityChangeLine: "entity.change.line",
-  /** Datalist options contributed by entity owners. Props: { entityType?: string }. */
+  /** Datalist options from entity owners. Props: { entityType? }. */
   entityChangeFields: "entity.change.fields",
-  /** A section on the user's Profile page — for per-user, per-account preferences. Props: {}.
-   *  A plugin drops `<UserContributionToggles>` here to let each user turn its pieces on/off. */
+  /** A Profile section; mount `<UserContributionToggles>` here for per-user toggles. */
   profileSection: "profile.section",
-  /** A section under a plugin's own row in Settings → Plugins (admin), keyed by `match` = the
-   *  plugin's registry name. Props: { plugin, pluginId }. A plugin drops
-   *  `<GlobalContributionToggles>` here for INSTANCE-WIDE availability of its contributions. */
+  /** Under a plugin's row in Settings → Plugins, `match` = its name. Props: { plugin, pluginId };
+   *  mount `<GlobalContributionToggles>` here for instance-wide toggles. */
   pluginManagerSection: "plugin.manager.section",
-  // --- global / other surfaces ---
-  /** Nav rows in the left sidebar. Props: {}. */
-  sidebarNav: "sidebar.nav",
-  /** A folding section of the left sidebar, placed by the host and matched by `match` = the
-   *  section key (the wiki's spaces are "pages"). Props: { collapsed, onToggle } — the fold is
-   *  the host's persisted sidebar preference. */
+  // --- shell ---
+  /** A folding sidebar section, `match` = the section key. Props: { collapsed, onToggle }. */
   sidebarSection: "sidebar.section",
-  /** A full plugin page mounted at a nav path (matched by `match` = pathname, or a pattern whose
-   *  `$name` segments capture — see `matchPagePath`). Props: `ContributedPageProps` { path, params }. */
+  /** A page at a nav path; `match` is the path or a `$name` pattern (`matchPagePath`).
+   *  Props: `ContributedPageProps`. */
   routePage: "route.page",
-  /** A page OUTSIDE the app shell and the sign-in gate (RADD-1401), for someone who holds a link
-   *  rather than an account — a tokened link in an email. `match` = a path under `/public/`,
-   *  usually a pattern (`/public/invites/$token`). Props: `ContributedPageProps` { path, params }. The host
-   *  draws the frame (the brand, a reading column); the visitor may be anonymous, so every request
-   *  the page makes is one the server answers for a visitor. */
+  /** A page outside the shell and the sign-in gate, `match` under `/public/`. The visitor may be
+   *  anonymous: every request it makes must be one the server answers for a visitor. */
   publicPage: "public.page",
-  /** A dashboard widget type. Props: { config, widget, filterQuery } — the widget's stored
-   *  config, the full widget row, and the dashboard-wide SLQ filter (plugin widgets decide
-   *  how to honor it). A manifest `WidgetTypeSpec(personal=True)` puts the type on My Work instead
-   *  of shared dashboards. See the dashboards package's WidgetBody.tsx. */
+  /** A dashboard widget type. Props: { config, widget, filterQuery }. A manifest
+   *  `WidgetTypeSpec(personal=True)` puts it on My Work instead of shared dashboards. */
   dashboardWidget: "dashboard.widget",
-  /** An entry in an item's action menu. Props: { item }. */
-  itemAction: "item.action",
-  /** A list column + board-card cell (RADD-1394), keyed by `match` = the attribute id. Build the
-   *  contribution with `itemAttribute(spec)`; the host reads its `meta` for the column and renders it
-   *  through `ItemAttributeCell` with { item, value, surface }. */
+  /** A list column + board-card cell, `match` = the attribute id; build with `itemAttribute`. */
   itemAttribute: "item.attribute",
-  // --- the command palette and the query bar (RADD-1400) ---
-  /** A MODE of the command palette, keyed by `match` = the mode's id. Build it with
-   *  `paletteMode(spec)`: its `meta` is the mode, its render the gate the palette mounts while open
-   *  (props: { report }). The palette draws the mode's entry row and its answer's rows. */
+  /** A command-palette mode; build with `paletteMode(spec)`. */
   paletteMode: "palette.mode",
-  /** An INPUT MODE of the query bar — free text in, SLQ out — keyed by `match` = the mode's id.
-   *  Build it with `queryInputMode(spec)`; the bar draws the toggle and owns mod+I and the
-   *  empty-bar default. Props: { report } (the gate). */
+  /** A query-bar input mode (free text in, SLQ out); build with `queryInputMode(spec)`. */
   queryInputMode: "query.input.mode",
-  // --- automations (RADD-1325) ---
-  /** The inspector form for ONE automation node type (matched by `match` = the node type, e.g.
-   *  "ai.classify"). Props: { node, params, onChange } — `params` is the node's stored params,
-   *  `onChange(next)` replaces them. Without a contribution the host renders a form generated
-   *  from the node's served `params_schema`. */
+  /** One automation node type's inspector, `match` = the node type. Props: { node, params,
+   *  onChange }; without one the host renders a form from the node's `params_schema`. */
   automationNodeInspector: "automation.node.inspector",
 } as const;
 
@@ -251,10 +208,12 @@ class SlotRegistry {
     return !this.globalDisabled.has(k) && !this.userDisabled.has(k);
   }
 
-  private invalidate(slot?: string): void {
-    if (slot) this.snapshots.delete(slot);
-    else this.snapshots.clear();
+  /** Drop the snapshots a change can reach and notify. `membership`: which plugins hold entries changed. */
+  private changed(slots: Iterable<string> | "all", membership = false): void {
+    if (slots === "all") this.snapshots.clear();
+    else for (const slot of slots) this.snapshots.delete(slot);
     this.contribSnaps.clear();
+    if (membership) this.activeSnap = null;
     this.navSnap = null;
     this.disabledMatchSnaps.clear();
     this.emit();
@@ -267,7 +226,7 @@ class SlotRegistry {
     else this.userDisabled.add(k);
     persistSet(USER_STORAGE_KEY, this.userDisabled);
     this.saveUserToServer();
-    this.invalidate(slot);
+    this.changed([slot]);
   }
 
   private userTimer: ReturnType<typeof setTimeout> | undefined;
@@ -297,7 +256,7 @@ class SlotRegistry {
     else this.globalDisabled.add(k);
     persistSet(GLOBAL_STORAGE_KEY, this.globalDisabled);
     this.saveGlobalToServer(plugin, pluginId);
-    this.invalidate(slot);
+    this.changed([slot]);
   }
 
   /** name → pluginmgr id for plugins with a pending global save. */
@@ -354,7 +313,7 @@ class SlotRegistry {
     } catch {
       /* endpoint unreachable — keep the localStorage set */
     }
-    if (changed) this.invalidate();
+    if (changed) this.changed("all");
   }
 
   /** A plugin's TOGGLEABLE contributions with their enabled state for `scope`. The `user` scope
@@ -385,23 +344,11 @@ class SlotRegistry {
 
   register(slot: string, contribution: SlotContribution, plugin: string): void {
     this.entries.set(this.key(slot, plugin, contribution.id), { plugin, slot, contribution, generation: ++this.generation });
-    this.snapshots.delete(slot);
-    this.contribSnaps.clear();
-    this.activeSnap = null;
-    this.navSnap = null;
-    this.disabledMatchSnaps.clear();
-    this.emit();
+    this.changed([slot], true);
   }
 
   unregister(slot: string, plugin: string, id: string): void {
-    if (this.entries.delete(this.key(slot, plugin, id))) {
-      this.snapshots.delete(slot);
-      this.contribSnaps.clear();
-      this.activeSnap = null;
-      this.navSnap = null;
-      this.disabledMatchSnaps.clear();
-      this.emit();
-    }
+    if (this.entries.delete(this.key(slot, plugin, id))) this.changed([slot], true);
   }
 
   /** Remove every contribution a plugin made — the runtime-disable path. */
@@ -413,14 +360,7 @@ class SlotRegistry {
         touched.add(entry.slot);
       }
     }
-    if (touched.size) {
-      for (const slot of touched) this.snapshots.delete(slot);
-      this.contribSnaps.clear();
-      this.activeSnap = null;
-      this.navSnap = null;
-      this.disabledMatchSnaps.clear();
-      this.emit();
-    }
+    if (touched.size) this.changed(touched, true);
   }
 
   private activeSnap: string[] | null = null;
@@ -490,11 +430,7 @@ class SlotRegistry {
   }
 }
 
-/**
- * The one registry instance. Kept on `globalThis` so that even if — through a bundling accident —
- * two copies of this module exist, they still share ONE registry (belt-and-suspenders on top of the
- * import-map singleton guarantee).
- */
+/** One registry, kept on `globalThis` so even an accidental second copy of this module shares it. */
 const GLOBAL_KEY = "__RADD_SLOT_REGISTRY__";
 type GlobalWithRegistry = typeof globalThis & { [GLOBAL_KEY]?: SlotRegistry };
 const g = globalThis as GlobalWithRegistry;
@@ -624,55 +560,6 @@ export function useGlobalContributionToggles(
   };
 }
 
-/** An accessible On/Off switch (spec 94). A `role="switch"` button with a sliding knob, themed via
- *  tokens (accent track when on, border track when off) — no color literals. Keyboard-operable for
- *  free (button handles Enter/Space). */
-function Switch({
-  on,
-  onChange,
-  label,
-}: {
-  on: boolean;
-  onChange: (on: boolean) => void;
-  label?: string;
-}): ReactNode {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={() => onChange(!on)}
-      style={{
-        position: "relative",
-        flexShrink: 0,
-        width: 34,
-        height: 20,
-        padding: 0,
-        border: "none",
-        borderRadius: 999,
-        cursor: "pointer",
-        background: on ? tokens.accent : tokens.borderStrong,
-        transition: "background 120ms ease",
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: 2,
-          left: on ? 16 : 2,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          background: tokens.accentFg,
-          transition: "left 120ms ease",
-        }}
-      />
-    </button>
-  );
-}
-
 function ToggleList({
   items,
   onSet,
@@ -682,42 +569,23 @@ function ToggleList({
   onSet: (slot: string, id: string, enabled: boolean) => void;
   empty: string;
 }): ReactNode {
-  if (items.length === 0) {
-    return <p style={{ fontSize: 13, color: tokens.textFaint }}>{empty}</p>;
-  }
+  if (items.length === 0) return <p className="text-[13px] text-fg-faint">{empty}</p>;
   return (
-    <ul
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        listStyle: "none",
-        margin: 0,
-        padding: 0,
-      }}
-    >
+    <ul className="flex flex-col gap-2">
       {items.map((c) => (
-        <li
-          key={`${c.slot}:${c.id}`}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-          }}
-        >
-          <span style={{ fontSize: 13, color: tokens.text }}>
+        <li key={`${c.slot}:${c.id}`} className="flex items-center justify-between gap-4">
+          <span className="text-[13px] text-fg">
             {c.label}
-            <span style={{ marginLeft: 6, fontSize: 11, color: tokens.textFaint }}>({c.slot})</span>
+            <span className="ml-1.5 text-[11px] text-fg-faint">({c.slot})</span>
           </span>
-          <Switch on={c.enabled} label={c.label} onChange={(on) => onSet(c.slot, c.id, on)} />
+          <Switch checked={c.enabled} label={c.label} hideLabel onChange={(on) => onSet(c.slot, c.id, on)} />
         </li>
       ))}
     </ul>
   );
 }
 
-/** Ready-made INSTANCE-WIDE contribution toggles (admin) — On/Off radios per contribution. A plugin
+/** Ready-made INSTANCE-WIDE contribution toggles (admin) — a switch per contribution. A plugin
  *  drops this into a `pluginManagerSection` slot; Off ⇒ the piece is hidden for everyone and won't
  *  appear on anyone's Profile. Opt-in: a plugin that never mounts it has no admin toggles. */
 export function GlobalContributionToggles({
@@ -737,7 +605,7 @@ export function GlobalContributionToggles({
   );
 }
 
-/** Ready-made PER-USER contribution toggles (Profile) — On/Off radios per contribution. A plugin
+/** Ready-made PER-USER contribution toggles (Profile) — a switch per contribution. A plugin
  *  drops this into a `profileSection` slot; it lists only contributions enabled instance-wide. */
 export function UserContributionToggles({ plugin }: { plugin: string }): ReactNode {
   const { contributions, setEnabled } = useUserContributionToggles(plugin);
@@ -748,6 +616,22 @@ export function UserContributionToggles({ plugin }: { plugin: string }): ReactNo
       empty="This plugin has no components you can turn on or off."
     />
   );
+}
+
+/** A keyed contribution whose `meta` is `spec` without its `render`: id `<kind>:<spec.id>`, match
+ *  `spec.id`. The anchor's host reads the meta without rendering. */
+export function metaContribution<P>(slot: string, kind: string, spec: { id: string; render: (props: P) => ReactNode },
+  label: string): PluginContribution {
+  const { render, ...meta } = spec;
+  return { id: `${kind}:${spec.id}`, slot, match: spec.id, label, meta, render: (props) => render(props as unknown as P) };
+}
+
+/** A keyed contribution's `meta.id` when it is its `match` and inside its owner's `<plugin>.`
+ *  namespace, else null: a foreign id would let one plugin shadow another's. */
+export function ownedMetaId(plugin: string, match: string | undefined, meta: Readonly<Record<string, unknown>> | undefined): string | null {
+  if (!meta || typeof meta.id !== "string" || meta.id !== match) return null;
+  const prefix = `${plugin}.`;
+  return meta.id.startsWith(prefix) && meta.id.length > prefix.length ? meta.id : null;
 }
 
 /** Live-subscribing hook: the contributions registered for `slot`, re-rendering on change. */
@@ -842,11 +726,7 @@ export function Slot({
   ));
 }
 
-/**
- * Like `Slot` but returns the first matching contribution's element for a keyed slot
- * (`route.page`/`settings.page`) — used where exactly one page owns a path/key. `matchValue` is
- * compared against each contribution's `match`.
- */
+/** The first contribution whose `match` equals `matchValue`, for a keyed slot one page owns. */
 export function useSlotMatch(
   slot: SlotIdValue | string,
   matchValue: string,

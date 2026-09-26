@@ -5,11 +5,10 @@ import { PersonalWidgetType, WidgetType, type DashboardWidget } from "./types";
 import { REPORT_TYPES } from "./widget-meta";
 
 /**
- * One widget's body (spec 75). The builtin SLQ and saved-view widgets read the owners' public
- * endpoints here; the report widgets are the host's report cards (the SDK's ReportWidget bridge);
- * everything else — a plugin's type, or a builtin a plugin draws (report_sla is slas',
- * "Awaiting my approval" is approvals') — renders through the `dashboard.widget` slot. A widget
- * whose fetch is refused reads as Unavailable; the dashboard as a whole never dies.
+ * One widget's body: builtin SLQ/view widgets read the owners' endpoints, report types are the
+ * host's cards (SDK `ReportWidget`), and everything else — a plugin's type or a builtin a plugin
+ * draws (report_sla) — renders through `dashboard.widget`. A refused fetch reads as Unavailable;
+ * the dashboard never dies.
  */
 export function WidgetBody({ widget, filterQuery }: {
   widget: DashboardWidget;

@@ -2,11 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { SlaTimerChip } from "./SlaChips";
 import { itemSlaQuery } from "./timers";
 
-/**
- * The issue rail's SLA section (spec 30): rendered only when a policy applies to the item — the
- * item's MATCHED policy since spec 63 (at most one entry). Live server compute, re-read every
- * minute and on every item change (the `item` tag).
- */
+/** The rail's SLA section: the item's matched policy, re-read every minute and on item change. */
 export function SlaPanel({ itemId }: { itemId: string }) {
   const { data } = useQuery(itemSlaQuery(itemId));
   if (!data || data.entries.length === 0) return null;

@@ -16,28 +16,18 @@ interface Group {
   mappingKey: string;
 }
 
-/**
- * Structured failures, GROUPED BY CAUSE with the affected issues listed under
- * each — and, where a mapping decision caused it, a jump straight to that row.
- *
- * Spec 90 rendered `errors: string[]`, sliced to 20, capped at 50 server-side,
- * every entry labelled "issue(s) skipped". The question an admin actually has is
- * "what do I CHANGE" — so the reason is the heading, the affected issues are the
- * list, and "Fix in Statuses → Needs Discussion" is a button.
- */
+/** Structured failures grouped by CAUSE, the affected issues listed under each, and — where a
+ * mapping caused it — a "Fix in <tab> → <row>" jump. */
 export function ProblemList({
   problems,
-  label = "issue",
   onFix,
 }: {
   problems: JiraProblem[];
-  label?: string;
   /** Jump to the mapping tab (and row) that would fix this. */
   onFix?: (section: string, mappingKey: string) => void;
 }) {
   if (problems.length === 0) return null;
 
-  // Group by the REASON, so one broken field does not read as 400 unrelated errors.
   const groups = new Map<string, Group>();
   for (const problem of problems) {
     const key = `${problem.kind}::${problem.message}`;
@@ -56,7 +46,7 @@ export function ProblemList({
   return (
     <div className="flex flex-col gap-1.5">
       {[...groups.values()].map((group) => (
-        <ProblemGroup key={`${group.kind}${group.message}`} group={group} label={label} onFix={onFix} />
+        <ProblemGroup key={`${group.kind}${group.message}`} group={group} onFix={onFix} />
       ))}
     </div>
   );
@@ -64,11 +54,9 @@ export function ProblemList({
 
 function ProblemGroup({
   group,
-  label,
   onFix,
 }: {
   group: Group;
-  label: string;
   onFix?: (section: string, mappingKey: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -91,13 +79,11 @@ function ProblemGroup({
             {group.message}
             {count > 0 && (
               <span className="ml-1.5 text-fg-secondary">
-                — {count} {label}
-                {count === 1 ? "" : "s"} affected
+                — {count} issue{count === 1 ? "" : "s"} affected
               </span>
             )}
           </span>
         </button>
-        {/* The whole point: go straight to the decision that caused it. */}
         {sectionLabel && onFix && (
           <Button
             size="sm"

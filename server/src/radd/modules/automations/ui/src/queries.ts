@@ -1,6 +1,4 @@
 import type { QueryClient } from "@tanstack/react-query";
-/** Automation rules + the rule-builder catalog. */
-
 import { api, invalidatePluginCommands } from "@radd/plugin-sdk";
 import {
   ApiPath,
@@ -9,10 +7,9 @@ import {
   apiAutomationVersionPath,
   apiAutomationVersionsPath,
 } from "./constants";
-export const queryKeys = {automations: ["automations"] as const, automationCatalog: ["automations", "catalog"] as const};
+const queryKeys = {automations: ["automations"] as const, automationCatalog: ["automations", "catalog"] as const};
+import { isSentinelTrigger } from "./meta";
 import {
-  MANUAL_TRIGGER,
-  SCHEDULE_TRIGGER, VALIDATE_TRIGGER,
   type AutomationCatalog,
   type AutomationTemplate,
   type AutomationRun,
@@ -45,11 +42,7 @@ export const automationCatalogQuery = ({
   staleTime: Infinity,
 });
 
-/** What an event type actually carries, sampled from real events (RADD-921).
- *
- * Per event type, cached for the session: the shape only changes when a module
- * starts emitting something new, and refetching on every trigger selection
- * would make clicking around the palette a stream of queries. */
+/** What an event type carries, cached per type for the session. */
 export const eventSampleQuery = (eventType: string) =>
   ({
     queryKey: [...queryKeys.automationCatalog, "samples", eventType] as const,
@@ -57,8 +50,7 @@ export const eventSampleQuery = (eventType: string) =>
       api.get<EventSample>(
         `${ApiPath.automations}/samples/events?event_type=${encodeURIComponent(eventType)}`, { signal },
       ),
-    // A sentinel trigger (manual/schedule) is not an event and has no payload.
-    enabled: Boolean(eventType) && eventType !== MANUAL_TRIGGER && eventType !== SCHEDULE_TRIGGER && eventType !== VALIDATE_TRIGGER,
+    enabled: Boolean(eventType) && !isSentinelTrigger(eventType),
     staleTime: 5 * 60_000,
     retry: false,
   });

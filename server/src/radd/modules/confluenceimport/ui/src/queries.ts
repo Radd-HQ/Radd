@@ -1,12 +1,6 @@
-/**
- * The Confluence importer's reads (spec 117; the plugin's own since RADD-1382).
- *
- * Progress is POLLED, not pushed: a download and a run are in-process tasks whose
- * row is the progress bar. `refetchInterval` is a function of the data, so it
- * stops the moment everything is terminal rather than polling an idle page
- * forever. Every key starts with the plugin's name, so disabling the plugin
- * drops its cache with it.
- */
+/** The Confluence importer's reads. Progress is polled, and `refetchInterval` is a function of the
+ * data, so polling stops once every row is terminal. Keys start with the plugin's name, so disabling
+ * the plugin drops its cache. */
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "@radd/plugin-sdk";
 import {
@@ -31,7 +25,7 @@ export const ConfluencePath = {
 } as const;
 
 /** Destinations owned by other plugins, read through their public API or option directories. */
-export const PAGE_RENDERERS_PATH = "/pages/extensions";
+const PAGE_RENDERERS_PATH = "/pages/extensions";
 export const OptionResource = { space: "page-spaces", group: "groups" } as const;
 
 const PLUGIN = "confluenceimport";
@@ -61,11 +55,8 @@ export const connectionsQuery = () =>
     staleTime: 30_000,
   });
 
-/**
- * Is the default connection live? Never rejects for an unreachable Confluence —
- * `ok: false` with a reason is a state to render, not an error boundary, and
- * `configured: false` is the answer before anything is set up at all.
- */
+/** Is the default connection live? `ok: false` with a reason is a state to render, not an error;
+ * `configured: false` means nothing is set up yet. */
 export const statusQuery = () =>
   queryOptions({
     queryKey: confluenceKeys.status,
@@ -85,13 +76,8 @@ export const spacesQuery = (connectionId: string | null) =>
     staleTime: 60_000,
   });
 
-/**
- * ONE level of the remote tree: a space's roots, or one page's children.
- *
- * Lazy on purpose. Fetching a real 6000-page space up front took 61 requests and
- * over two minutes — the picker showed nothing at all for the whole time, which
- * read as "there are no pages" rather than "still loading".
- */
+/** ONE level of the remote tree (a space's roots, or one page's children) — lazy: a 6000-page space
+ * fetched whole took 61 requests and 2+ minutes, rendering nothing. */
 export const treeQuery = (spaceKey: string, parentId: string, connectionId: string | null) =>
   queryOptions({
     queryKey: confluenceKeys.tree(spaceKey, parentId, connectionId),

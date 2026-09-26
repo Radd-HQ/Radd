@@ -63,11 +63,7 @@ function StatusChip({ provider }: { provider: SsoProviderRead }) {
   );
 }
 
-/**
- * The sign-in provider registry (spec 110): every identity provider the login
- * page can offer, and the signup policy each one carries. The sso plugin's
- * section of the host's Settings → Sign-in page (RADD-1380).
- */
+/** The sign-in provider registry section of Settings → Sign-in. */
 export function ProvidersPanel() {
   const providers = useQuery(ssoProvidersQuery());
   const queryClient = useQueryClient();

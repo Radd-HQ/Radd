@@ -9,16 +9,8 @@ const apiVcsIdentitiesPath = (provider: string, id: string) => `/vcs/${encodeURI
 const apiVcsUnmatchedPath = (provider: string, id: string) => `/vcs/${encodeURIComponent(provider)}/connections/${encodeURIComponent(id)}/unmatched`;
 const apiVcsUnmatchedReplayPath = (provider: string, id: string) => apiVcsUnmatchedPath(provider, id)+"/replay";
 const apiVcsIdentityPath = (id: string) => `/vcs/identities/${encodeURIComponent(id)}`;
-/**
- * One connection's identity map (RADD-1258): which provider account is which
- * Radd user, and the accounts whose time entries are PARKED because nothing
- * matched them. Mapping an unmatched account replays its parked entries into
- * real worklogs in the same step — the answer to "someone logged time on an MR
- * and it never showed up" is one row here.
- *
- * The unmatched list is derived from the parked rows, so it empties itself as
- * mappings land; nothing is kept in sync by hand.
- */
+/** One connection's identity map: provider account → Radd user, plus accounts whose time is PARKED
+ *  for want of a match. Mapping one replays its parked entries. The unmatched list derives from the parked rows. */
 export function VcsIdentityMap({ provider, connectionId }: { provider: string; connectionId: string }) {
   const identities = useVcsList<VcsUserLink[]>(provider, [connectionId, "identities"], apiVcsIdentitiesPath(provider, connectionId), ["vcsUserLink"]);
   const unmatched = useVcsList<VcsUnmatchedAuthor[]>(provider, [connectionId, "unmatched"], apiVcsUnmatchedPath(provider, connectionId), ["vcsUserLink", "worklog"]);

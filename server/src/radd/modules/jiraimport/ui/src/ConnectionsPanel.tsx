@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleAlert, Loader2, Plug, Star, Trash2 } from "lucide-react";
+import { CircleAlert, Plug, Star, Trash2 } from "lucide-react";
 import { api, Button, EmptyState, QueryError, Table, TableSkeleton, TBody, Td, Th, THead, useConfirm } from "@radd/plugin-sdk";
 import { connectionsQuery, JiraPath, jiraKeys } from "./api";
+import { Panel, StatusText } from "./chrome";
 import { ConnectionModal } from "./ConnectionModal";
 import {
   JIRA_AUTH_MODE_LABELS,
@@ -12,14 +13,7 @@ import {
   type JiraConnectionStatus,
 } from "./types";
 
-/**
- * Jira connections (spec 100) — which instances Radd can import from.
- *
- * Replaces spec 90's environment-only configuration, which named exactly one
- * instance and needed a redeploy to change, including to fix a typo in the URL.
- * An env-seeded row is an ordinary editable connection; its origin is shown only
- * so an admin can tell where it came from.
- */
+/** Jira connections — admin-managed rows. An env-seeded row is ordinary and editable; its origin is only shown. */
 export function ConnectionsPanel() {
   const queryClient = useQueryClient();
   const connections = useQuery(connectionsQuery());
@@ -63,19 +57,17 @@ export function ConnectionsPanel() {
   };
 
   return (
-    <section className="rounded-lg border border-subtle bg-surface p-4" data-jira-section="connections">
-      {confirmNode}
-      <header className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[13px] font-medium text-heading">Connections</h2>
-          <p className="mt-0.5 text-xs text-fg-secondary">
-            The Jira instances Radd can import from. Changes take effect immediately — no restart.
-          </p>
-        </div>
+    <Panel
+      section="connections"
+      title="Connections"
+      description="The Jira instances Radd can import from. Changes take effect immediately — no restart."
+      action={
         <Button size="sm" onClick={() => setAdding(true)}>
           New connection
         </Button>
-      </header>
+      }
+    >
+      {confirmNode}
 
       {connections.isPending ? (
         <TableSkeleton rows={2} />
@@ -199,7 +191,7 @@ export function ConnectionsPanel() {
           onSaved={invalidate}
         />
       )}
-    </section>
+    </Panel>
   );
 }
 
@@ -212,28 +204,10 @@ function ConnectionStatusCell({
   pending: boolean;
   hasCredential: boolean;
 }) {
-  if (pending) {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-fg-secondary">
-        <Loader2 size={13} className="animate-spin" /> Testing…
-      </span>
-    );
-  }
-  if (!hasCredential) {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-status-warning-ink">
-        <CircleAlert size={13} /> No credential
-      </span>
-    );
-  }
+  if (pending) return <StatusText tone="running" wrap>Testing…</StatusText>;
+  if (!hasCredential) return <StatusText tone="warning" icon={CircleAlert} wrap>No credential</StatusText>;
   if (!status) return <span className="whitespace-nowrap text-xs text-fg-faint">Not tested</span>;
-  if (status.ok) {
-    return (
-      <span className="flex items-center gap-1.5 text-xs text-status-success-ink">
-        <CheckCircle2 size={13} /> {status.account || "connected"}
-      </span>
-    );
-  }
+  if (status.ok) return <StatusText tone="success" wrap>{status.account || "connected"}</StatusText>;
   return (
     <span className="flex items-start gap-1.5 text-xs text-status-danger-ink" title={status.error}>
       <CircleAlert size={13} className="mt-0.5 shrink-0" />

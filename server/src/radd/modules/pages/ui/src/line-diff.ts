@@ -1,21 +1,10 @@
-/**
- * A line-level unified diff (RADD-720).
- *
- * Deliberately not the editor's diff machinery. That is a ProseMirror decoration
- * plugin built for accept/reject INSIDE an editable document (spec 103) — using
- * it to compare two stored versions would mean instantiating an editor per
- * comparison, feeding it a document nobody may edit, and suppressing the accept
- * and reject controls that are its entire purpose. Comparing versions is a
- * read-only question about two strings.
- *
- * Classic LCS over lines. A page is prose; line granularity is what people read
- * a wiki diff at, and word-level noise inside a rewritten paragraph obscures
- * more than it shows.
- */
+/** A line-level LCS diff of two stored page versions (RADD-720). Not the editor's diff plugin: that is
+ *  an accept/reject decoration inside an editable document; this is a read-only question about two
+ *  strings, at the granularity people read a wiki diff. */
 
-export type DiffOp = "same" | "add" | "remove";
+type DiffOp = "same" | "add" | "remove";
 
-export interface DiffLine {
+interface DiffLine {
   op: DiffOp;
   text: string;
   /** 1-based line number in the old text (null for an addition). */
@@ -63,11 +52,7 @@ export function diffLines(before: string, after: string): DiffLine[] {
   return out;
 }
 
-/**
- * Collapse long unchanged stretches, keeping `context` lines either side of a
- * change. A 400-line page with a one-word fix should not render 400 lines —
- * finding the change is the entire point of opening a diff.
- */
+/** Collapse unchanged runs to `context` lines either side of a change. */
 export function collapseUnchanged(
   lines: DiffLine[],
   context = 3,

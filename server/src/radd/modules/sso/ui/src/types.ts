@@ -1,6 +1,4 @@
-/** The SSO provider registry's wire shapes (spec 110) — this plugin's own vocabulary. The login
- *  page's buttons read the public `/auth/sso/providers` list and live in the host: a remote cannot
- *  load before sign-in. */
+/** SSO provider wire shapes (spec 110). The login buttons live in the host: a remote cannot load before sign-in. */
 
 /** Which IdP a provider talks to. Every kind runs the same code+PKCE flow; a kind only supplies
  *  its endpoints and how it reads the profile (github is plain OAuth2 — no issuer to configure,

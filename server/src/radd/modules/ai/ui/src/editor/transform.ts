@@ -1,18 +1,11 @@
 import type { EditorTransform } from "@radd/plugin-sdk";
 import { streamSse } from "../sse";
 import { AiEndpoint, aiErrorText, isAiGone } from "../transport";
-import { INSTRUCTION_ACTION_PREFIX, type AiRun } from "./gate";
+import type { AiRun } from "./gate";
 import { droppedCount, maskProtected, restoreProtected } from "./protect";
 
-/**
- * An AI run as an editor transform (RADD-1395).
- *
- * The editor owns the review; this owns what the replacement IS: the request to
- * `POST /ai/editor/stream` (a curated action by id, or the typed instruction) and the RADD-1274
- * guarantee — every `radd:*` fence, image and attachment link is masked behind `⟦keep-N⟧` before
- * the model sees the text and restored after, and one the model dropped is appended rather than
- * lost. The editor never learns there was a mask.
- */
+/** An AI run as an editor transform: the `POST /ai/editor/stream` request, with protected blocks
+ *  masked before and restored after (`protect.ts`). The editor owns the review. */
 
 /** Runs in flight, so withdrawing the plugin stops them (`abortAiRuns`). */
 const inFlight = new Set<AbortController>();
@@ -40,9 +33,11 @@ export function aiTransform(run: AiRun): EditorTransform {
       const whole = input.selection === "";
       const selection = whole ? { masked: "", kept: [] } : maskProtected(input.selection, document.kept);
       const kept = whole ? document.kept : selection.kept;
-      const body = run.instruction.startsWith(INSTRUCTION_ACTION_PREFIX)
-        ? { action_id: run.instruction.slice(INSTRUCTION_ACTION_PREFIX.length), document: document.masked, selection: selection.masked }
-        : { instruction: run.instruction, document: document.masked, selection: selection.masked };
+      const body = {
+        ...("actionId" in run ? { action_id: run.actionId } : { instruction: run.instruction }),
+        document: document.masked,
+        selection: selection.masked,
+      };
 
       const controller = new AbortController();
       const stop = () => controller.abort();
@@ -64,8 +59,6 @@ export function aiTransform(run: AiRun): EditorTransform {
       }
       if (controller.signal.aborted) return null;
       if (!text.trim()) return { replacement: "" };
-      // The reply with the media, images and extension blocks back in their places — and any it
-      // dropped appended, never lost (RADD-1274).
       const dropped = droppedCount(text, kept);
       return { replacement: restoreProtected(text, kept), notes: dropped > 0 ? [droppedNote(dropped)] : [] };
     },

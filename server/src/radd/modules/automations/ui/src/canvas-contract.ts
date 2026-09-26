@@ -1,8 +1,6 @@
-import type { AutomationNode, AutomationEdge, AutomationCatalog, RuleTestResult } from "./types";
+import type { AutomationNode, AutomationEdge, AutomationCatalog, Orientation, RuleTestResult } from "./types";
 import type { NodeShapes } from "./shape-contract";
 export const GRAPH_CANVAS_SLOT = "automation.graph.canvas";
-
-export type Orientation = "vertical" | "horizontal";
 
 export interface GraphCanvasProps {
   /** Explicit shapes from an editor; omitted previews resolve their own shapes. */
@@ -22,15 +20,12 @@ export interface GraphCanvasProps {
   orientation?: Orientation;
   /** Right-click on empty canvas — the Nuke-style add menu hangs off this. */
   onCanvasContextMenu?: (at: { x: number; y: number }) => void;
-  /** Only for the arity badge: which node types fan out. Optional so the
-   * read-only preview can render before the catalog resolves — a missing badge
-   * is a smaller lie than a guessed one. */
+  /** Only for the arity badge; optional so a preview renders before the catalog resolves. */
   catalog?: AutomationCatalog;
   /** The last dry run, so each node can say what reached it and each port what
    * left. Null clears the annotations. */
   run?: RuleTestResult | null;
-  /** No editing affordances — used for a branching automation until the full
-   * editor lands, so it can at least be SEEN rather than refused outright. */
+  /** No editing affordances (the version preview). */
   readOnly?: boolean;
   /** Per VALIDATE trigger id (RADD-1329): can anything it reaches refuse a
    * submission ("blocks": a Block submission node) or does it only advise. */

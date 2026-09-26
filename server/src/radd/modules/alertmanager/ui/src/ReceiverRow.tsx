@@ -5,7 +5,7 @@ import { api, copyText, Button, SelectField, Slot, Switch, TextField } from "@ra
 import { PROJECT_SELECT_SLOT } from "@radd-plugin-ui/projects/picker-contract";
 import type { AlertReceiver, ReceiverPatch, StateChoice } from "./types";
 
-export function webhookUrl(token: string): string {
+function webhookUrl(token: string): string {
   return `${window.location.origin}/api/v1/integrations/alertmanager?token=${token}`;
 }
 

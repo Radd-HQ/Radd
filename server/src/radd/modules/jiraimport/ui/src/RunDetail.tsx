@@ -7,7 +7,7 @@ const ACTION_CLASS: Record<string, string> = {
   [DryRunAction.update]: "text-status-warning-ink",
 };
 
-/** What the import would do, issue by issue — the thing spec 90 never showed. */
+/** What the import would do, issue by issue. */
 export function DryRunPreview({ run }: { run: JiraRun }) {
   const rows = run.report.rows ?? [];
   const problems = rows.filter((r) => r.action === DryRunAction.skip);
@@ -48,9 +48,8 @@ export function DryRunPreview({ run }: { run: JiraRun }) {
   );
 }
 
-/** The mapping tables this run actually executed (RADD-1105) — read-only and
- * collapsed by default, so an old run answers "what mapping produced this?"
- * even after the plan was edited for a redo. */
+/** The mapping this run executed — read-only, collapsed; survives the plan being edited for a
+ * redo (RADD-1105). */
 export function PlanSnapshot({ run }: { run: JiraRun }) {
   const mappings = run.plan_snapshot?.mappings ?? {};
   const sections = Object.entries(mappings).filter(

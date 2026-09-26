@@ -1,9 +1,5 @@
-/**
- * @radd/plugin-sdk — the public frontend surface for Radd plugins (docs/plugin-platform.md §9).
- * The platform API imported by plugin UI. Owner-defined public packages may supply data/type
- * contracts; feature implementations remain behind contributions. Shared as a singleton so the slot registry,
- * primitives, hooks and theme are ONE instance across the host and every remote.
- */
+/** @radd/plugin-sdk — the public frontend surface for Radd plugins. Shared as a singleton, so the
+ *  slot registry, primitives, hooks and theme are ONE instance across the host and every remote. */
 
 export { UI_API_VERSION, isUiApiCompatible } from "./version";
 export { setRemotesLoading, useRemotesLoading } from "./remote-loading";
@@ -118,6 +114,7 @@ export { SchemaForm } from "./schema-form";
 export { defaultsFromSchema } from "./schema-defaults";
 
 export { OptionChoices, OptionSelect, OptionTextField, OptionNameValues, optionContribution, OPTION_CONTROL_SLOT, type DirectoryOption, type OptionSource, type OptionChoicesProps, type OptionSelectProps, type OptionTextFieldProps, type OptionNameValuesProps } from "./options";
+export { optionTransport } from "./option-transport";
 
 export { Switch } from "./switch";
 export { usePagedDirectory, type PagedDirectoryQuery } from "./paged-directory";
@@ -126,8 +123,6 @@ export { TokenMultiSelect, type TokenOption, type TokenMultiSelectProps } from "
 export { ErrorText, type ErrorTextProps } from "./error-text";
 
 export { registerQuerySource, unregisterQuerySources, useContributedQuery, useContributedQueries, type QuerySource, type ContributedQueryRequest, type ContributedQueryResult } from "./query-sources";
-// Pages (RADD-1401): a page contribution's `match` may be a pattern; `public.page` is a page outside
-// the shell and the sign-in gate. Bodies: a plugin that claims a record draws its rendered body.
 export { matchPagePath, usePageMatch, type ContributedPageProps } from "./page-match";
 export { contentBody, useContentBodyClaim, type ContentBodyProps, type ContentBodySpec, type ContentBodyClaim } from "./content-bodies";
 export { itemAttribute, useItemAttributes, ItemAttributeCell, ItemAttributeSurface, ITEM_ATTRIBUTE_BATCH_MAX, type ItemAttribute, type ItemAttributeSpec, type ItemAttributeCellProps, type ItemAttributeBatchArgs, type ItemAttributeSurfaceValue } from "./item-attributes";
@@ -156,7 +151,7 @@ export { useDebounced } from "./debounced";
 // Modes (RADD-1400): the command palette's faces and the query bar's input modes are contributions.
 export { type ModeIcon, type ModeSpec, type ContributedMode } from "./contributed-modes";
 export {
-  paletteMode, usePaletteModes, usePaletteAnswer, paletteAnswerQuery, isPaletteText,
+  paletteMode, usePaletteModes, usePaletteAnswer, isPaletteText,
   type PaletteRow, type PaletteRows, type PaletteText, type PaletteAnswer, type PaletteModeSpec, type PaletteMode,
 } from "./palette-modes";
 export {
@@ -172,11 +167,7 @@ export { invalidateEntities } from "./cache";
 export { SlqField, PageQueryFilter, ViewSelect, SharingDialog, ReportWidget, ItemKeyLink, ItemPeek, IssueSuggestion, MissingPluginType } from "./host-surfaces";
 export type { SlqFieldProps, PageQueryFilterProps, ViewSelectProps, SharingDialogProps, SharedResourceSave, ReportWidgetProps, ItemKeyLinkProps, ItemPeekProps, IssueSuggestionProps, MissingPluginTypeProps } from "./host-registry";
 export { ChartHeightContext } from "./chart-height";
-// Documents (RADD-1392): the `radd:*` block registry and its contexts are shared state, the text
-// helpers are shared by the host editor and plugin surfaces, and the editor, viewer, markdown and
-// reading pane are the host's, bridged. What a plugin adds to the editor and to rendered content
-// goes through the editor's extension points (RADD-1395), a live copy of a document included
-// (RADD-1397).
+// Documents: the `radd:*` registry, the text helpers, and the host's editor surfaces, bridged.
 export {
   MarkdownSourceContext, PageExtensionCtx, usePageExtensionContext, registerPageExtension, pageExtensions,
   lookupPageExtension, extensionNameOf, extensionNameOfInfo, splitExtensionBlocks, parseExtensionParams,
@@ -184,9 +175,9 @@ export {
   type PageExtension, type PageExtensionContext, type BodySegment,
 } from "./page-extensions";
 export { headingAnchorId, headingsOf, type OutlineHeading } from "./markdown-outline";
-export { ANCHOR_CONTEXT_CHARS, makeAnchor, locateAnchor, orderByAnchor, type TextAnchor, type AnchorLocation } from "./anchoring";
+export { makeAnchor, locateAnchor, orderByAnchor, type TextAnchor, type AnchorLocation } from "./anchoring";
 export {
-  registerTextProjection, textNodesOf, renderedText, rangeForOffsets, revealTextOffset, offsetsForSelection,
+  registerTextProjection, renderedText, rangeForOffsets, revealTextOffset, offsetsForSelection,
   scrollRangeIntoView,
 } from "./dom-text";
 export {

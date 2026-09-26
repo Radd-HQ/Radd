@@ -1,9 +1,5 @@
 import type { HistoryChange } from "@radd/plugin-sdk";
-import { HISTORY_FIELD_LABELS } from "./metadata";
-export { HISTORY_FIELD_LABELS } from "./metadata";
-
-import { PRIORITY_LABELS } from "./metadata";
-export { PRIORITY_LABELS } from "./metadata";
+import { HISTORY_FIELD_LABELS, PRIORITY_LABELS } from "./metadata";
 export function itemChange(change: HistoryChange): HistoryChange {
   const label = change.name ?? HISTORY_FIELD_LABELS[change.field];
   if (change.redacted) return { field: change.field, name: label, redacted: true };

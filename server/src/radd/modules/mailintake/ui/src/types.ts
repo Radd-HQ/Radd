@@ -1,7 +1,4 @@
-/**
- * The mailintake plugin's wire types (RADD-958/969; moved out of the host with
- * the Email settings page, RADD-1378). Mirrors `mailintake/config_schemas.py`.
- */
+/** mailintake wire types; mirrors `mailintake/config_schemas.py`. */
 
 /** How mail reaches Radd. `google`/`outlook` are PRESETS over IMAP, not separate
  *  transports: the row leaves the connection blank and the kind answers it. */
@@ -21,15 +18,8 @@ export const MailSenderKind = {
 } as const;
 export type MailSenderKindValue = (typeof MailSenderKind)[keyof typeof MailSenderKind];
 
-/**
- * One entry of `GET /mail/kinds` (RADD-969) — what the add form prefills itself
- * with, per the spec-110 `SsoKindInfo` pattern.
- *
- * `preset` is the flag the form branches on: true means the connection is
- * answered, so host/port/TLS are HIDDEN rather than shown pre-filled — a field
- * showing `imap.gmail.com` invites an edit, and the edited value would then
- * outlive the preset it was copied from.
- */
+/** One `GET /mail/kinds` entry. `preset` = the connection is answered, so the form HIDES host/port/TLS
+ *  rather than pre-filling them (an edited copy would outlive the preset). */
 export interface MailKindInfo {
   /** A `MailSourceKindValue` under `sources`, a `MailSenderKindValue` under `senders`. */
   kind: string;
@@ -71,14 +61,10 @@ export interface MailSource {
   username: string;
   folder: string;
   default_project_id: string | null;
-  /** "Send replies from" (RADD-979) — the sender that answers for this address.
-   *  null = the default sender, which is what every source did before. */
+  /** "Send replies from"; null = the default sender. */
   sender_id: string | null;
-  /** The `Authentication-Results` authserv-id whose SPF/DKIM/DMARC verdict this
-   *  source trusts (RADD-1032). null/blank = trust nothing — the default, so
-   *  `From:` is taken at face value exactly as before. Set it and a message
-   *  failing (or lacking) that verdict is attributed to SYSTEM, not the account
-   *  it may have forged. */
+  /** Authentication-Results authserv-id whose SPF/DKIM/DMARC verdict this source trusts; null = trust
+   *  nothing. A message failing or lacking it is attributed to SYSTEM, not the account it may forge. */
   trusted_authserv_id: string | null;
   has_secret: boolean;
   rule_count: number;
@@ -131,16 +117,8 @@ export interface MailTestResult {
   error: string;
 }
 
-/** What one rule did on the sample message (RADD-989). `errored` is the reason
- * this exists: a rule that CRASHED and one that simply declined both let the
- * chain fall to the source default, so a destination alone describes them
- * identically — and a broken rule reads as an inapplicable one.
- *
- * `disabled` and `not_reached` (RADD-994) are what make an EMPTY row meaningful:
- * a switched-off rule, a rule below the winner and a deleted rule used to render
- * as the same absence, so the trace answered "why didn't my rule fire" with
- * silence. Adding them here is what forces `STATUS_STYLE` to grow chrome for
- * them — a `Record` over this const cannot compile with a status missing. */
+/** What one rule did on the sample. `errored` separates a crashed rule from a declining one;
+ *  `disabled`/`not_reached` make an empty row mean something. A Record over this forces STATUS_STYLE to cover all. */
 export const MailRuleStatus = {
   matched: "matched",
   declined: "declined",
@@ -150,13 +128,8 @@ export const MailRuleStatus = {
 } as const;
 export type MailRuleStatusValue = (typeof MailRuleStatus)[keyof typeof MailRuleStatus];
 
-/** The extra answer every AI routing rule offers the model on top of its own
- * categories — mirrored from `mailintake/types.py`'s `NO_MATCH_ANSWER` (RADD-989).
- * It is appended at ask time and never stored as an answer row, which is exactly
- * why the editor has to STATE it (RADD-994): an admin who cannot see it either
- * writes a prompt that fights it ("answer only Engineering or IT") or adds their
- * own duplicate "Other → DESK". A wire constant with no compiler behind it — if
- * the Python side is reworded, this line is what goes stale. */
+/** Mirrors `mailintake/types.py` NO_MATCH_ANSWER: appended at ask time, never stored, so the
+ *  editor must SHOW it. A wire constant — rewording the Python side leaves this stale. */
 export const MAIL_NO_MATCH_ANSWER = "None of these";
 
 export interface RoutingRuleOutcome {

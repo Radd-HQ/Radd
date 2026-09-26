@@ -8,10 +8,9 @@ import { existsSync, mkdirSync, rmSync, symlinkSync, lstatSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
-import { discover, linkPackages, writeStaticList } from "./plugin-packages.mjs";
+import { discover, linkPackages, webRoot, writeStaticList } from "./plugin-packages.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const webRoot = resolve(here, "..");
 
 function ensureLink(linkPath, target) {
   try {

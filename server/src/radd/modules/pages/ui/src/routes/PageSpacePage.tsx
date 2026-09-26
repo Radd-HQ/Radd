@@ -14,20 +14,11 @@ import { ArchivedPagesPanel } from "../view/ArchivedPagesPanel";
 import { archivedRows } from "../view/archived-rows";
 import { PublicBadge } from "../view/PublicBadge";
 
-/**
- * `/pages/$spaceSlug` (+ `/pages/$spaceSlug/<path…>`) — the two-pane pages
- * view (spec 43): the collapsible tree beside the selected page.
- *
- * The page segment is a PATH through the tree (RADD-1233), carried by the
- * splat. The space may be an id; a single page segment may be a number or an
- * id; a stale path resolves through the page's old addresses (RADD-702's
- * promise, kept by the server). Whatever address you arrived by, the effect
- * below rewrites the bar to the canonical one the answer carries. It REPLACES
- * the history entry — arriving by an old link shouldn't cost the visitor a
- * Back press to escape.
- */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** `/pages/$spaceSlug[/<path…>]` — the tree beside the selected page (spec 43). The page segment is a
+ *  PATH (RADD-1233); an id, a number or a stale path also resolves, and the effect below REPLACES the
+ *  URL with the canonical one the answer carries. */
 export function PageSpacePage() {
   const { spaceSlug = "", _splat: pagePath = "" } = useParams({ strict: false }) as {
     spaceSlug?: string;
@@ -41,10 +32,7 @@ export function PageSpacePage() {
   const perms = useSpacePermissions();
   const spaceQuery = useQuery(pageSpaceByIdentityQuery(spaceSlug));
   const space = spaceQuery.data;
-  // RADD-1240 (radd-hq/radd#12): an agent handed a page's id assembled
-  // `/pages/<uuid>` itself — a SPACE address that does not exist, answered
-  // with "Page space not found." and nowhere to go. When the segment is a
-  // uuid no space owns, ask whether it names a page, and land on the page.
+  // RADD-1240: a /pages/<uuid> no space owns may name a PAGE — land on it.
   const segmentIsId = UUID.test(spaceSlug);
   const rescue = useQuery({
     ...pageByKeyQuery(spaceSlug),
@@ -112,16 +100,9 @@ export function PageSpacePage() {
     );
   }
 
-  // RADD-810: all three resolve against THIS space — the server checks them at
-  // space scope (RADD-791; page comments via comments_binding), so a member
-  // granted page.write in one space finally sees its editors. The old global
-  // questions were false for every space-scoped grant holder.
+  // All three resolve at SPACE scope (RADD-810); commenting is its own atom, comment.write (RADD-770).
   const canWrite = perms.space(space, PagePermission.write);
   const canManage = perms.space(space, PagePermission.manage);
-  // A SEPARATE atom (RADD-770). The server gates a page comment on `page.read`
-  // + `comment.write`, resolved in the space (comments_binding.py), and says
-  // why: "the point of a page discussion is that people who cannot edit the
-  // page can still argue about it".
   const canComment = perms.space(space, PagePermission.commentWrite);
   const rows = pages.data ?? [];
 
@@ -212,10 +193,7 @@ export function PageSpacePage() {
                 <QueryError label="page" error={page.error} />
               </div>
             ) : (
-              // The panel, not the popover (RADD-772). A read action answers in
-              // the reading pane wherever one is offered — providing it IS the
-              // switch — and only the issue route ever offered one, so the
-              // surface with the longest document got the smallest box.
+              // The reading pane, not the popover: a read action answers there (RADD-772).
               <ReadingPane>
                 <PageView
                   key={page.data.id}

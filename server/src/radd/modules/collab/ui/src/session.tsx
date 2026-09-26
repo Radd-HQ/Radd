@@ -9,19 +9,10 @@ import type { CollabRoom } from "./room";
 import { startSaver, type Saver } from "./saver";
 
 /**
- * A page's live session (spec 122) — what the collab plugin answers when a
- * page asks for one (RADD-1397).
- *
- * The role follows the request: editing makes an editor on the shared
- * document, reading an observer who is only present; editing WITHOUT write
- * access has no session to offer (the join would be refused). A new
- * request (an observer pressing Edit) is a new session, which is what the
- * server's seed grant is keyed on. Editors run the saver; `finish` sends the
- * final write before the page leaves edit mode, so `close` skips its own.
- *
- * `unavailable` is the fallback signal: the join was refused or the socket
- * closed with a 44xx. The page then runs the single-editor flow it always had.
- * A 4403/4409 is answered with a fresh join first, bounded.
+ * A page's live session: editing → editor on the shared doc, reading → observer; editing without
+ * write access has no session. A new request is a new session (the server's seed grant is keyed on
+ * it). `unavailable` = join refused or a 44xx close → the page's single-editor flow; 4403/4409
+ * rejoin first, bounded. `finish` writes the final save so `close` skips it.
  */
 export function openPageSession(
   request: LiveDocumentOpen,

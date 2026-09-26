@@ -1,16 +1,7 @@
-/*
- * Print stylesheet for the page export (RADD-733/735).
- *
- * Two jobs: make the on-screen preview look like the sheet, and make the sheet
- * itself legible on paper. The rules that matter are the break rules — a code
- * block or a table split across a page boundary is the difference between a
- * document someone reads and one they ask you to resend.
- */
+/* The page export's print sheet (RADD-733). The break rules are the point. */
 
 .radd-print {
-  /* Forced light: printing a dark theme wastes toner and reads worse. The app's
-     tokens are variable-remapped, so overriding the surface family here is
-     enough — nothing hardcodes a hex. */
+  /* Forced light on paper. */
   background: #ffffff;
   color: #16181d;
   max-width: 46rem;
@@ -84,13 +75,10 @@
     margin: 18mm 16mm;
   }
 
-  /* Anything that is not the document. The route is already outside the app
-     layout, so this is belt-and-braces for portals (toasts, dialogs) that mount
-     onto document.body. */
+  /* Portals (toasts, dialogs) mount on body; the route itself has no chrome. */
   body > *:not(#root),
   [role="dialog"],
-  [role="menu"],
-  [data-toast] {
+  [role="menu"] {
     display: none !important;
   }
 
@@ -105,9 +93,7 @@
     break-before: page;
   }
 
-  /* The break rules. A heading stranded at the foot of a sheet with its section
-     overleaf, or a code block cut in half, is the usual way a printed page
-     stops being readable. */
+  /* Keep headings with their section. */
   h1, h2, h3, h4, h5, h6 {
     break-after: avoid;
     break-inside: avoid;
@@ -142,11 +128,6 @@
     font-size: 8pt;
     color: #5f6773;
     word-break: break-all;
-  }
-
-  /* Issue chips print as their key rather than as a bare highlight. */
-  [data-issue-chip]::after {
-    content: attr(data-issue-chip);
   }
 
   .radd-print-footer {

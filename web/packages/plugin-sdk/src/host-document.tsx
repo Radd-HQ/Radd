@@ -1,19 +1,11 @@
 import type { ComponentType, ReactNode } from "react";
 import type { TextAnchor } from "./anchoring";
 import type { EditorBinding, EditorTransform } from "./editor-extensions";
-import { useProvided } from "./host-registry";
+import { bridged } from "./bridge";
 import { TextArea } from "./primitives";
 
-/**
- * The host's document surfaces, bridged (RADD-1392).
- *
- * The rich editor, its viewer, the read-mode markdown renderer and the reading pane are HOST
- * code: issues and comments use them too, and Milkdown + ProseMirror + CodeMirror are far too
- * heavy to bundle into a plugin. The host provides them at startup; a plugin renders them through
- * the wrappers below with the typed contracts declared here. What a plugin ADDS to the editor goes
- * through its extension points (`editor-extensions.ts`) — a live copy of the document too, as a
- * binding (RADD-1397), which the host editor knows only as that contract.
- */
+/** The host's editor, viewer, markdown renderer and reading pane, bridged: Milkdown, ProseMirror and
+ *  CodeMirror are too heavy to bundle into a plugin. Additions go through `editor-extensions.ts`. */
 
 /** A reader ticked a checklist box: its index among the task items in document order. */
 export interface TaskToggle {
@@ -93,41 +85,26 @@ export interface DocumentHost {
 const plain = "whitespace-pre-wrap text-[13px] leading-relaxed text-fg";
 
 /** The host's rich markdown editor, else a plain text area. */
-export function RichEditor(props: RichEditorProps) {
-  const { RichEditor: Host } = useProvided();
-  if (Host) return <Host {...props} />;
-  return <TextArea aria-label={props.placeholder ?? "Text"} placeholder={props.placeholder}
-    defaultValue={props.value} onChange={(event) => props.onChange(event.target.value)} />;
-}
+export const RichEditor = bridged("RichEditor", (props) => (
+  <TextArea aria-label={props.placeholder ?? "Text"} placeholder={props.placeholder}
+    defaultValue={props.value} onChange={(event) => props.onChange(event.target.value)} />
+));
 
 /** The host's rendered-markdown viewer, else the raw text. */
-export function RichViewer(props: RichViewerProps) {
-  const { RichViewer: Host } = useProvided();
-  return Host ? <Host {...props} /> : <div className={plain}>{props.text}</div>;
-}
+export const RichViewer = bridged("RichViewer", (props) => <div className={plain}>{props.text}</div>);
 
 /** The host's read-mode markdown renderer (mentions, issue chips, `radd:*` blocks), else raw text. */
-export function Markdown(props: MarkdownProps) {
-  const { Markdown: Host } = useProvided();
-  return Host ? <Host {...props} /> : <div className={plain}>{props.text}</div>;
-}
+export const Markdown = bridged("Markdown", (props) => <div className={plain}>{props.text}</div>);
 
 /** Room for a panel beside the content (`useReadingPane`); without a host, just the content —
  *  answers then open where they were asked for. */
-export function ReadingPane(props: ReadingPaneProps) {
-  const { ReadingPane: Host } = useProvided();
-  return Host ? <Host {...props} /> : <>{props.children}</>;
-}
+export const ReadingPane = bridged("ReadingPane", (props) => <>{props.children}</>);
 
 /** A toolbar button for an `editor.toolbar.action` contribution. */
-export function EditorToolbarButton(props: EditorToolbarButtonProps) {
-  const { EditorToolbarButton: Host } = useProvided();
-  if (Host) return <Host {...props} />;
-  return (
-    <button type="button" title={props.title} aria-label={props.title} disabled={props.disabled}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={(event) => props.onPick(event.currentTarget.getBoundingClientRect())}>
-      {props.icon}
-    </button>
-  );
-}
+export const EditorToolbarButton = bridged("EditorToolbarButton", (props) => (
+  <button type="button" title={props.title} aria-label={props.title} disabled={props.disabled}
+    onMouseDown={(event) => event.preventDefault()}
+    onClick={(event) => props.onPick(event.currentTarget.getBoundingClientRect())}>
+    {props.icon}
+  </button>
+));

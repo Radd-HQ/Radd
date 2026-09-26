@@ -4,14 +4,7 @@ import { api, useIsAuthenticated } from "@radd/plugin-sdk";
 import { pageWatchPath } from "../endpoints";
 import { pageKeys, pageWatchQuery } from "../queries";
 
-/**
- * Watch / unwatch a page (RADD-719).
- *
- * For a wiki that documents operations, a silently changed runbook is the
- * failure mode — the only way to know it moved was to reread it. Editing a page
- * auto-watches it (the server does that), so this button is for the people who
- * READ something and want to hear about it, which is the larger group.
- */
+/** Watch / unwatch a page (RADD-719). Editing auto-watches server-side; this is for readers. */
 export function PageWatchButton({ pageId }: { pageId: string }) {
   const queryClient = useQueryClient();
   const { data } = useQuery({ ...pageWatchQuery(pageId), enabled: useIsAuthenticated() });

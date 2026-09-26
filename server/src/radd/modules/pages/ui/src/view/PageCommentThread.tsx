@@ -1,8 +1,8 @@
 import { Check, RotateCcw, Unlink } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   CommentReplies, CopyCommentLink, RichViewer, commentHref, invalidateEntities, relativeTime, repliesLabel,
-  sendTaskToggle, useCurrentUser, type CommentRow,
+  sendTaskToggle, useCurrentUser, type CommentRow, type TaskToggle,
 } from "@radd/plugin-sdk";
 import { commentTasksPath } from "../endpoints";
 import { Tag } from "../queries";
@@ -15,6 +15,15 @@ const ORPHAN_LABEL: Record<OrphanReason, string> = {
   removed: "Passage removed",
   ambiguous: "Passage ambiguous",
 };
+
+/** RADD-1296: the author ticks their own checklist in place; nobody else can. */
+export function ownTaskToggle(row: CommentRow, meId: string | undefined, queryClient: QueryClient) {
+  if (!row.author || row.author.id !== meId) return undefined;
+  return async (toggle: TaskToggle) => {
+    await sendTaskToggle(commentTasksPath(row.id), toggle, row.body);
+    await invalidateEntities(queryClient, Tag.comment);
+  };
+}
 
 export function PageCommentThread({
   row,
@@ -52,7 +61,6 @@ export function PageCommentThread({
     <div
       data-thread
       data-comment-id={row.id}
-      data-orphaned={orphaned ?? undefined}
       className={
         "rounded-md border bg-surface p-2 " +
         (focused ? "border-strong" : "border-subtle") +
@@ -81,18 +89,7 @@ export function PageCommentThread({
         <CopyCommentLink href={commentHref(row.id)} className="ml-auto" />
       </p>
       <div className="mt-0.5">
-        <RichViewer
-          text={row.body}
-          // RADD-1296: the author ticks their own checklist in place.
-          onToggleTask={
-            row.author && row.author.id === me?.id
-              ? async (toggle) => {
-                  await sendTaskToggle(commentTasksPath(row.id), toggle, row.body);
-                  await invalidateEntities(queryClient, Tag.comment);
-                }
-              : undefined
-          }
-        />
+        <RichViewer text={row.body} onToggleTask={ownTaskToggle(row, me?.id, queryClient)} />
       </div>
       <button type="button" onClick={onToggle} aria-expanded={expanded}
         className="mt-2 min-h-8 rounded px-1 text-sm font-medium text-fg-secondary hover:bg-elevated hover:text-fg">

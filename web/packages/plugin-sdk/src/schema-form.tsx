@@ -1,7 +1,7 @@
 /** Small domain-independent schema form. Richer structures belong to a contributed editor. */
 import { TextField } from "./primitives";
 import { SelectField } from "./host";
-import { useProvided, type SchemaFormProps } from "./host-registry";
+import type { SchemaFormProps } from "./host-registry";
 import { defaultsFromSchema, type SchemaProperty } from "./schema-defaults";
 
 const displayValue = (value: unknown) => typeof value === "string" ? value || "(empty text)" : JSON.stringify(value);
@@ -22,15 +22,7 @@ function BooleanGroup({ property, value, onChange }: { property: SchemaProperty;
   </fieldset>;
 }
 
-export function SchemaForm(props: SchemaFormProps) {
-  const { SchemaForm: Host } = useProvided();
-  // Keep the existing generic host override contract; the default implementation
-  // is SDK-owned and requires no Automations, Scripts, or host feature component.
-  if (Host) return <Host {...props} />;
-  return <SchemaFields {...props} />;
-}
-
-function SchemaFields({ schema, params, onChange }: SchemaFormProps) {
+export function SchemaForm({ schema, params, onChange }: SchemaFormProps) {
   const properties = (schema.properties ?? {}) as Record<string, SchemaProperty>;
   const required = new Set((schema.required as string[]) ?? []);
   const set = (key: string, value: unknown) => {

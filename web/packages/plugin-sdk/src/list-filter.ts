@@ -1,13 +1,7 @@
 import { useState } from "react";
 
-/**
- * Client-side list filtering for settings-scale lists (RADD-882) — the cycles
- * page's pattern, extracted. Correct wherever the page already fetches the
- * full list (a few thousand rows filter in well under a frame); a list whose
- * FETCH is the problem needs the server-backed `q` instead (RADD-883).
- *
- * `keys` must be pure — it runs per row per keystroke.
- */
+/** Client-side filtering for lists the page already fetches whole; a list whose FETCH is the
+ *  problem needs a server-side `q`. `keys` must be pure — it runs per row per keystroke. */
 export function useListFilter<T>(rows: T[], keys: (row: T) => (string | null | undefined)[]) {
   const [filter, setFilter] = useState("");
   const needle = filter.trim().toLowerCase();

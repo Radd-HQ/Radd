@@ -10,15 +10,7 @@ import { descendants } from "./page-tree";
 import { IncludedPage } from "./IncludedPage";
 import { NewFromTemplate } from "./NewFromTemplate";
 import { IMPORT_RENDERERS } from "./ImportExtensions";
-import { Backlinks, Callout, LabelList } from "./ListExtensions";
-
-/**
- * The first-party page extensions' renderers (RADD-710 / RADD-715).
- *
- * Each is a registry entry, not a special case in the renderer — which is the
- * point of RADD-709: a plugin's extension and a built-in one are the same kind
- * of thing.
- */
+import { Backlinks, Callout, LabelList, PageLinkList } from "./ListExtensions";
 
 // --- radd:toc --------------------------------------------------------------
 
@@ -68,19 +60,8 @@ function TableOfContents({ params }: { params: Record<string, unknown> }) {
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
             Pages below this one
           </p>
-          <ul className="flex flex-col gap-0.5">
-            {subpages.map(({ page, level }) => (
-              <li key={page.id} style={{ paddingLeft: `${level * 12}px` }}>
-                <Link
-                  {...pageLink(ctx.spaceSlug ?? "", page.path)}
-                  className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
-                >
-                  <ChevronRight size={11} aria-hidden className="shrink-0 text-fg-faint" />
-                  {page.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <PageLinkList icon={ChevronRight}
+            rows={subpages.map(({ page, level }) => ({ ...page, spaceSlug: ctx.spaceSlug ?? "", level }))} />
         </div>
       )}
     </ExtensionCard>
@@ -132,19 +113,8 @@ function ChildPages({ params }: { params: Record<string, unknown> }) {
       {list.length === 0 ? (
         <p className="text-[13px] text-fg-faint">No child pages yet.</p>
       ) : (
-        <ul className="flex flex-col gap-0.5">
-          {list.map(({ page, level }) => (
-            <li key={page.id} style={{ paddingLeft: `${level * 12}px` }}>
-              <Link
-                {...pageLink(ctx.spaceSlug ?? "", page.path)}
-                className="flex items-center gap-1 text-[13px] text-accent-text hover:underline"
-              >
-                <ListTree size={11} aria-hidden className="shrink-0 text-fg-faint" />
-                {page.title}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <PageLinkList icon={ListTree}
+          rows={list.map(({ page, level }) => ({ ...page, spaceSlug: ctx.spaceSlug ?? "", level }))} />
       )}
     </ExtensionCard>
   );

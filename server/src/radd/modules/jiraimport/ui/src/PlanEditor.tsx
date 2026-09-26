@@ -29,21 +29,12 @@ import { RunKind, type JiraRun, type RunKindValue } from "./types";
 import { UsersTable } from "./UsersTable";
 import { IssueTypesTable, PrioritiesTable, StatusesTable } from "./VocabTables";
 
-/**
- * The mapping step (spec 100): one tab per inbound vocabulary, every row a
- * decision, everything unused collapsed and already ignored.
- *
- * Then the three deliberate actions the old wizard had no equivalent for —
- * PROVISION real targets you can look at, DRY RUN against them, and only then
- * import.
- */
+/** The mapping step: one tab per inbound vocabulary, unused rows collapsed and ignored; then Check, Dry run, Import. */
 export function PlanEditor({
   planId,
-  onRunStarted,
   focus,
 }: {
   planId: string;
-  onRunStarted: (run: JiraRun) => void;
   /** Open this tab (and highlight this row) — set when a run problem points here. */
   focus?: { section: string; mappingKey: string; nonce: number } | null;
 }) {
@@ -110,10 +101,9 @@ export function PlanEditor({
       await save.mutateAsync();
       return api.post<JiraRun>(JiraPath.runs, { plan_id: planId, kind });
     },
-    onSuccess: (run) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: jiraKeys.runs });
       void queryClient.invalidateQueries({ queryKey: jiraKeys.plan(planId) });
-      onRunStarted(run);
     },
   });
 

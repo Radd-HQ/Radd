@@ -17,13 +17,8 @@ interface MoveRow {
 /** The dropdown render cap, the TokenMultiSelect convention (RADD-881). */
 const MAX_VISIBLE = 50;
 
-/**
- * "Move to…" for a wiki page (RADD-1009): pick a new parent from the SAME
- * space — the page itself and everything under it are excluded up front, so
- * the server's cycle guard is the backstop rather than the UX — or "Top
- * level" to make it a root. Sends `parent_id` alone: a move touches no
- * content, so there is no version to guard (the tree rows carry none).
- */
+/** "Move to…" (RADD-1009): a new parent in the SAME space, with the page and its subtree excluded up
+ *  front, or Top level. Sends `parent_id` alone — a move touches no content, so no version guard. */
 export function MovePageModal({
   page,
   rows,

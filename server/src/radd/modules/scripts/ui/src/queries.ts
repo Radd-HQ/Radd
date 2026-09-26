@@ -1,4 +1,3 @@
-/** The scripts plugin (RADD-1269). */
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "@radd/plugin-sdk";
 import type { ScriptInterpreter, ScriptPackage } from "./types";

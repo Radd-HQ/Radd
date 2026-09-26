@@ -9,17 +9,12 @@ import type { CommentHit } from "./useCommentPointer";
 const HIGHLIGHT = "radd-inline-comment";
 const HIGHLIGHT_FOCUS = "radd-inline-comment-focus";
 
-export interface LocatedComment { row: CommentRow; start: number | null; orphaned: OrphanReason | null }
+interface LocatedComment { row: CommentRow; start: number | null; orphaned: OrphanReason | null }
 
 /**
- * Where each inline comment's passage is on the RENDERED page (RADD-726), kept current as the body
- * re-renders, and the selection a reader can comment on (RADD-731).
- *
- * **Highlighting uses the CSS Custom Highlight API**, not wrapped `<mark>` elements. The body is
- * rendered by ProseMirror, which owns that DOM and reconciles it; inserting elements into it
- * invites the editor to fight back or to serialise our markup into the document. `CSS.highlights`
- * paints ranges without touching the tree at all. Where it is unsupported the comments still work
- * — only the tint is missing, which is the right thing to lose.
+ * Where each inline comment's passage is on the RENDERED page, kept current as it re-renders, and the
+ * selection a reader can comment on (RADD-726/731). Highlights use the CSS Custom Highlight API, not
+ * `<mark>`: ProseMirror owns this DOM and would fight or serialise inserted elements.
  */
 export function useInlineAnchors({ bodyRef, bodyVersion, editing, inline, focusedId, canComment }: {
   bodyRef: RefObject<HTMLElement | null>;

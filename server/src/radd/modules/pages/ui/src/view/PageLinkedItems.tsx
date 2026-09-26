@@ -8,23 +8,10 @@ import { Tag, pageItemsQuery } from "../queries";
 import type { PageLinkedItem } from "../types";
 
 /**
- * Linked-issues section on a page (spec 43): key chip + title + state dot, plus
- * an add-by-key input (`TD-123`) when the caller may write pages.
- *
- * **It owns its heading and it starts collapsed — always** (RADD-943/945).
- * RADD-943 opened it whenever it had links, on the theory that hiding content
- * is worse than hiding chrome. That is only true when the reader cannot tell
- * the content is there, and the count chip is precisely how they can:
- * `LINKED ISSUES 12` beside a chevron carries everything needed to decide
- * whether to open it. Auto-opening instead put twelve rows between the body
- * and the discussion on every release-notes page.
- *
- * Open/closed is per-mount and deliberately not remembered. A page's linked
- * issues are reference material; opening one page's says nothing about the next.
- *
- * Rows the page's TEXT produced carry no unlink button. Offering an X that
- * reappears on the next save would be a lie about who owns the link — the body
- * does, and the server refuses the delete for the same reason.
+ * Linked issues on a page: key, title, state, and add-by-key for writers. Starts COLLAPSED,
+ * always, and is not remembered — the count chip is how a reader decides to open it (RADD-945).
+ * Rows the page's TEXT produced (`derived`) get no unlink button: the next save would re-create
+ * the link, and the server refuses the delete.
  */
 export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite: boolean }) {
   const queryClient = useQueryClient();

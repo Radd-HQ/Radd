@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Database } from "lucide-react";
 import { Callout, EmptyState, ErrorText, SettingsPage, Spinner, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { statusQuery } from "./api";
+import { Panel } from "./chrome";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { PlanEditor } from "./PlanEditor";
 import { PlansPanel } from "./PlansPanel";
@@ -11,24 +12,14 @@ import { SnapshotsPanel } from "./SnapshotsPanel";
 
 const TITLE = "Import from Jira";
 const HISTORY = { entities: ["jira_connection"] };
-/** The whole procedure, in the order the page runs it (it was the Import data hub's line). */
+/** The whole procedure, in the order the page runs it. */
 const PROCEDURE =
   "Connect your source → download once → review mappings → check and dry run → import. " +
   "Reopen a saved plan to adjust mappings without downloading again. " +
   "Review the run report before retrying or undoing an import.";
 
-/**
- * Settings → Import → Jira (spec 100; the jiraimport plugin's own page since
- * RADD-1382) — a cache-first pipeline, in the order it runs.
- *
- *   Connections → Download once → Plan every mapping → Dry run → Import → Runs
- *
- * Spec 90 was a one-way four-step wizard that re-paged Jira on every run, decided
- * every mapping for you, and dead-ended permanently once a run started. Here each
- * stage is a durable object you can revisit: the download is cached so a mistake
- * costs nothing to fix, the plan is edited until it is right, the dry run shows
- * the result before committing, and an import can be undone.
- */
+/** Settings → Import → Jira: Connections → Download once → Plan → Dry run → Import → Runs.
+ * Each stage is a durable object you can revisit; the download is cached, so fixing a mapping costs no re-download. */
 export function JiraImportPage() {
   const me = useCurrentUser();
   const isAdmin = useIsInstanceAdmin();
@@ -38,11 +29,10 @@ export function JiraImportPage() {
     null,
   );
 
-  /** A run problem says which mapping caused it — open that plan, tab and row. */
+  /** A run problem says which mapping caused it — open that plan, tab and row (the editor scrolls to it). */
   const fixMapping = (targetPlan: string, section: string, mappingKey: string) => {
     setPlanId(targetPlan);
     setFocus({ section, mappingKey, nonce: Date.now() });
-    document.getElementById("jira-mappings")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   if (!me) {
@@ -84,16 +74,14 @@ export function JiraImportPage() {
           </p>
         )}
 
-        {/* Jira is read ONCE into a local cache; every later step works offline. */}
         <SnapshotsPanel />
 
         <PlansPanel selectedId={planId} onSelect={setPlanId} />
 
         {planId && (
-          <section id="jira-mappings" className="rounded-lg border border-subtle bg-surface p-4" data-jira-section="mappings">
-            <h2 className="mb-3 text-[13px] font-medium text-heading">Mappings</h2>
-            <PlanEditor key={planId} planId={planId} onRunStarted={() => undefined} focus={focus} />
-          </section>
+          <Panel id="jira-mappings" section="mappings" title="Mappings">
+            <PlanEditor key={planId} planId={planId} focus={focus} />
+          </Panel>
         )}
 
         <RunsPanel onRerun={setPlanId} onFix={fixMapping} />

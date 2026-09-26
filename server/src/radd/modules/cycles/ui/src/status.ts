@@ -7,10 +7,7 @@ export const CYCLE_STATUS_META: Record<CycleStatusValue, StatusMeta> = {
     dotClassName: "bg-fg-secondary",
     pillClassName: "border-emphasis/60 bg-elevated/60 text-fg",
   },
-  // Upcoming/active ride the workflow-state scale (RADD-900): a queued cycle
-  // is the todo blue, a running one the progress green — the same traffic-light
-  // reading as items, and the raw blue-200/emerald-200 shades they used had no
-  // light remap (stock blue-200 on white is ~1.4:1).
+  // Upcoming/active use the workflow-state scale: todo blue, progress green.
   [CycleStatus.upcoming]: {
     label: "Upcoming",
     dotClassName: "bg-chart-todo",

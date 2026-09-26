@@ -1,14 +1,7 @@
 /*
- * Radd plugin-SDK theme tokens — the ONE semantic palette source plugins reference
- * (docs/plugin-platform.md §8; spec 94 LOCKED-4). Each `--radd-*` token maps onto the host's
- * themed Tailwind zinc scale (`--color-zinc-*`, which the host remaps for dark/light/Obsidian in
- * web/src/index.css) so a plugin's UI tracks the host theme automatically — light, dark and compact
- * — because federated remotes render into the host DOM and inherit these `:root` variables.
- *
- * The `var(--color-*, <hex>)` fallbacks make the SDK self-contained: a remote/primitive still looks
- * right if the host palette vars are ever absent. The hex live HERE (the token source), never in a
- * plugin — so "no hardcoded hex in plugins" holds (grep-verified). Fallback hexes mirror the host's
- * DARK palette (web/src/index.css); shadow/font tokens fall back the same way.
+ * Radd plugin-SDK theme tokens: `--radd-*` over the host's themed scale, so a remote tracks the
+ * host theme. The `var(--color-*, <hex>)` fallbacks (the host's DARK palette) keep the SDK
+ * self-contained and keep hex out of plugins.
  */
 :root {
   /* Surfaces */
@@ -26,13 +19,8 @@
   --radd-text-muted: var(--color-zinc-400, #ababab);
   --radd-text-faint: var(--color-zinc-500, #8f8f8f);
 
-  /* Accent (interactive). Tracks the host's per-theme `--accent-*` vars, NOT
-     the indigo remap: the host no longer emits `--color-indigo-*` (Tailwind
-     only emits variables its utilities reference), and going through
-     `--accent-*` is what makes a plugin's hover LIGHTEN on dark and DARKEN on
-     light. `--radd-accent-fg` is the foreground ON an accent fill — the host's
-     `accent-text` token is the different thing (accent-colored text ON a
-     surface). */
+  /* Accent tracks the host's per-theme `--accent-*` (the host emits no `--color-indigo-*`), so a
+     hover lightens on dark and darkens on light. `--radd-accent-fg` is the text ON an accent fill. */
   --radd-accent: var(--accent-fill, #6366f1);
   --radd-accent-hover: var(--accent-fill-hover, #818cf8);
   --radd-accent-fg: #ffffff;

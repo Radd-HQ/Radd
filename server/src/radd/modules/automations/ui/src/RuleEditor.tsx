@@ -1,17 +1,4 @@
-/**
- * The automation editor (specs 20/58/69/116).
- *
- * Name, enabled, and the graph — that is the whole thing. The list-based form
- * that stood here until spec 116 is gone: it could not express a branch, and
- * keeping it beside the canvas meant a bidirectional adapter and two sources of
- * truth for one automation.
- *
- * A new automation opens on a placed, selected "Issue updated" trigger
- * (RADD-1265). It used to open empty on the theory that seeding a node would
- * teach the wrong lesson about where nodes come from; what it taught instead
- * was nothing, because the first thing a person met was a blank canvas. The
- * trigger's inspector is the question the editor should open on: fires on…
- */
+/** The automation editor: name, enabled, the graph. A new automation opens on a placed, selected trigger. */
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
@@ -24,6 +11,7 @@ import { positionedErrorOf as slqErrorOf } from "@radd/plugin-sdk";
 import {
   type AutomationEdge,
   type AutomationNode,
+  type Orientation,
   type Rule,
   type RuleCreate,
   type RuleTestResult,
@@ -33,7 +21,8 @@ import { Button } from "@radd/plugin-sdk";
 import { ErrorText } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";
 import { incompleteActionNodeIds } from "./ActionsBuilder";
-import { GraphEditor, type Orientation } from "./GraphEditor";
+import { GraphEditor } from "./GraphEditor";
+import { CheckField } from "./controls";
 import { seededTrigger } from "./automation-nodes";
 import { RuleTestPanel } from "./RuleTestPanel";
 import { RunsPanel } from "./RunsPanel";
@@ -49,19 +38,18 @@ interface RuleEditorProps {
   onDone: () => void;
 }
 
+/** What "unsaved changes" compares: the fields a save writes, in one fixed order. */
+const snapshotOf = (x: { name: string; enabled: boolean; orientation: Orientation; nodes: AutomationNode[]; edges: AutomationEdge[] }) =>
+  JSON.stringify({ name: x.name, enabled: x.enabled, orientation: x.orientation, nodes: x.nodes, edges: x.edges });
+
 export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
   const queryClient = useQueryClient();
   const canAdopt = useQuery(automationCatalogQuery).data?.can_act_as;
   const [persistedId, setPersistedId] = useState<string | null>(rule?.id ?? null);
   const [name, setName] = useState(rule?.name ?? draft?.name ?? "");
   const [enabled, setEnabled] = useState(rule?.enabled ?? false);
-  const [orientation, setOrientation] = useState<Orientation>(
-    (rule?.orientation as Orientation) ?? "vertical",
-  );
-  // The last dry run. Held HERE rather than in the editor because the panel that
-  // produces it and the canvas that draws it are siblings, and because it must
-  // survive a node being selected — the whole point is to read the numbers while
-  // clicking around the graph that produced them.
+  const [orientation, setOrientation] = useState<Orientation>(rule?.orientation ?? "vertical");
+  // The last dry run: held here because the panel producing it and the canvas drawing it are siblings.
   const [run, setRun] = useState<RuleTestResult | null>(null);
   const [panel, setPanel] = useState<"dry-run" | "runs" | "versions">("dry-run");
   // "Why I changed this" — rides on the version the next save writes
@@ -75,7 +63,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
   });
 
   const [adoptExecution, setAdoptExecution] = useState(false);
-  const content = JSON.stringify({ name, enabled, orientation, ...graph });
+  const content = snapshotOf({ name, enabled, orientation, ...graph });
   const [savedContent, setSavedContent] = useState(rule ? content : "");
   const currentContent = useRef(content);
   currentContent.current = content;
@@ -113,7 +101,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
         setName(saved.name);
         setGraph({ nodes: saved.nodes, edges: saved.edges });
       }
-      setSavedContent(JSON.stringify({ name: saved.name, enabled: saved.enabled, orientation: saved.orientation, nodes: saved.nodes, edges: saved.edges }));
+      setSavedContent(snapshotOf(saved));
       setAdoptExecution(false);
       setCurrent(saved.version);
       setNote("");
@@ -156,15 +144,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
           required
           className="w-full"
         /></div>
-        <label className="flex h-8 w-fit cursor-pointer items-center gap-2 text-[13px] text-fg">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(event) => setEnabled(event.target.checked)}
-            className="size-3.5 cursor-pointer accent-[var(--accent-fill)]"
-          />
-          Enabled
-        </label>
+        <CheckField className="h-8" label="Enabled" checked={enabled} onChange={setEnabled} />
       </div>
 
       {dirty && <p className="text-xs text-status-warning-ink">Unsaved changes — dry run previews this draft.</p>}
@@ -199,58 +179,56 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
         {persistedId && <span className="pb-2 text-[11px] text-fg-muted">v{current}</span>}
       </div>
 
-      {
-        <div className="flex flex-col gap-2">
-          {/* One report renderer, two sources (RADD-1266): what it WOULD do
-              and what it DID. Tabs rather than two stacked panels because both
-              annotate the same canvas, and only one can at a time. */}
-          <div role="tablist" aria-label="Automation reports" className="flex gap-1">
-            {(["dry-run", "runs", "versions"] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                disabled={!persistedId && tab !== "dry-run"}
-                aria-selected={panel === tab}
-                onClick={() => { setPanel(tab); setRun(null); }}
-                className={`rounded-[6px] px-2.5 py-1 text-xs cursor-pointer ${
-                  panel === tab ? "bg-elevated text-heading" : "text-fg-secondary hover:text-heading"
-                }`}
-              >
-                {tab === "dry-run" ? "Dry run" : tab === "runs" ? "Runs" : "Versions"}
-              </button>
-            ))}
-          </div>
-          {panel === "dry-run" ? (
-            <RuleTestPanel
-              ruleId={persistedId}
-              name={name}
-              edges={graph.edges}
-              triggers={graph.nodes.filter(node => node.kind === "trigger").map(node => ({ node_id: node.id, event_type: String(node.params.event ?? "manual") }))}
-              nodes={graph.nodes}
-              onResult={setRun}
-            />
-          ) : panel === "runs" ? (
-            <RunsPanel ruleId={persistedId!} nodes={graph.nodes} onResult={setRun} />
-          ) : (
-            <VersionsPanel
-              ruleId={persistedId!}
-              current={current}
-              onRestored={(restored) => {
-                // The editor takes the restored content as its own working
-                // copy: what the canvas shows must be what is now current.
-                setName(restored.name);
-                setEnabled(restored.enabled);
-                setSavedContent(JSON.stringify({ name: restored.name, enabled: restored.enabled, orientation: restored.orientation, nodes: restored.nodes, edges: restored.edges }));
-                setOrientation(restored.orientation as Orientation);
-                setGraph({ nodes: restored.nodes, edges: restored.edges });
-                setCurrent(restored.version);
-                setRun(null);
-              }}
-            />
-          )}
+      <div className="flex flex-col gap-2">
+        {/* One report renderer, two sources (RADD-1266): what it WOULD do
+            and what it DID. Tabs rather than two stacked panels because both
+            annotate the same canvas, and only one can at a time. */}
+        <div role="tablist" aria-label="Automation reports" className="flex gap-1">
+          {(["dry-run", "runs", "versions"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              disabled={!persistedId && tab !== "dry-run"}
+              aria-selected={panel === tab}
+              onClick={() => { setPanel(tab); setRun(null); }}
+              className={`rounded-[6px] px-2.5 py-1 text-xs cursor-pointer ${
+                panel === tab ? "bg-elevated text-heading" : "text-fg-secondary hover:text-heading"
+              }`}
+            >
+              {tab === "dry-run" ? "Dry run" : tab === "runs" ? "Runs" : "Versions"}
+            </button>
+          ))}
         </div>
-      }
+        {panel === "dry-run" ? (
+          <RuleTestPanel
+            ruleId={persistedId}
+            name={name}
+            edges={graph.edges}
+            triggers={graph.nodes.filter(node => node.kind === "trigger").map(node => ({ node_id: node.id, event_type: String(node.params.event ?? "manual") }))}
+            nodes={graph.nodes}
+            onResult={setRun}
+          />
+        ) : panel === "runs" ? (
+          <RunsPanel ruleId={persistedId!} nodes={graph.nodes} onResult={setRun} />
+        ) : (
+          <VersionsPanel
+            ruleId={persistedId!}
+            current={current}
+            onRestored={(restored) => {
+              // The editor takes the restored content as its own working
+              // copy: what the canvas shows must be what is now current.
+              setName(restored.name);
+              setEnabled(restored.enabled);
+              setSavedContent(snapshotOf(restored));
+              setOrientation(restored.orientation);
+              setGraph({ nodes: restored.nodes, edges: restored.edges });
+              setCurrent(restored.version);
+              setRun(null);
+            }}
+          />
+        )}
+      </div>
       {persistedId && <Slot id={SlotId.entityHistory} entityType="automation_rule" entityId={persistedId} />}
     </form>
   );

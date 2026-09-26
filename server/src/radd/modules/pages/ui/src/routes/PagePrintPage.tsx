@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useSearch } from "@tanstack/react-router";
 import "./page-print.css";
-import { formatDate, headingAnchorId, headingsOf, useIsAuthenticated, PageExtensionCtx } from "@radd/plugin-sdk";
+import { formatDate, headingAnchorId, useIsAuthenticated, PageExtensionCtx } from "@radd/plugin-sdk";
 import { pageByPathQuery, pageQuery, pagesQuery } from "../queries";
 import { pageHref } from "../links";
 import { PageBody } from "../view/PageBody";
@@ -10,19 +10,9 @@ import { usePeople } from "../view/people";
 import { descendants } from "../view/page-tree";
 
 /**
- * The print view (RADD-733/734): one page, or a page and its subtree, with no
- * application chrome at all.
- *
- * Rendered by the browser's own PDF engine rather than server-side. A faithful
- * PDF has to run the same Crepe renderer the app does, which would mean headless
- * Chromium in the runtime image — about a gigabyte on an image whose reason to
- * exist is being self-hosted, for an engine every reader already has. Going
- * through markdown-to-PDF instead (WeasyPrint, reportlab) avoids the weight by
- * reimplementing the renderer, so code blocks, chips, tables and every future
- * extension would drift from what the page looks like on screen.
- *
- * A top-level route, NOT a child of the app layout: the layout is precisely
- * what must not be in the output.
+ * The print view (RADD-733): a page, or a page and its subtree, with no app chrome. The browser's
+ * own PDF engine renders it, so the output is the on-screen renderer, not a reimplementation. A
+ * top-level route, outside the app layout — the layout is what must not print.
  */
 export function PagePrintPage() {
   const { spaceSlug, _splat: pagePath = "" } = useParams({ strict: false }) as {
@@ -44,19 +34,12 @@ export function PagePrintPage() {
     [withSubpages, page, rows],
   );
 
-  // RADD-736: every body has to have RENDERED before print() — Crepe creates
-  // asynchronously, so printing on mount produces blank pages. One counter for
-  // the root plus each subpage.
+  // Print only after EVERY body has rendered (RADD-736); the viewers mount asynchronously.
   const expected = 1 + subtree.length;
   const [rendered, setRendered] = useState(0);
   const printed = useRef(false);
 
-  // Force the LIGHT theme for the whole document while this route is mounted.
-  // Without it the body prints in dark-theme colours — the first PDF came out
-  // with near-invisible grey headings on white and solid dark code blocks,
-  // because the app ships dark and Crepe carries its own dark stylesheet. The
-  // theme is a class-driven variable remap, so flipping the class is enough;
-  // nothing here hardcodes a colour.
+  // Force the light theme while mounted: the app ships dark, and printing it is illegible.
   useEffect(() => {
     const root = document.documentElement;
     const wasLight = root.classList.contains("light");
@@ -164,5 +147,3 @@ function SubPage({
     </article>
   );
 }
-
-export { headingsOf };

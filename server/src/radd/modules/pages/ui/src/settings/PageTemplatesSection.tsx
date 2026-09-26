@@ -1,10 +1,11 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutTemplate, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   api, usePagedDirectory, Button, DirectoryPager, ErrorText, IconButton, ListSearchInput, Modal, OptionSelect,
   QueryError, TableSkeleton, TextField, useConfirm,
 } from "@radd/plugin-sdk";
+import { useStepBackWhenEmptied } from "../directory";
 import { PageApi } from "../endpoints";
 import { PAGE_TEMPLATES_PAGE_SIZE, pageTemplateByIdQuery, pageTemplatesPageQuery } from "../queries";
 import type { PageTemplate } from "../types";
@@ -16,11 +17,7 @@ export function PageTemplatesSection() {
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirmDialog, confirm] = useConfirm();
-  const { page, total, isSuccess } = templates;
-  useEffect(() => {
-    if (isSuccess && page > 0 && page * PAGE_TEMPLATES_PAGE_SIZE >= total)
-      templates.setPage(Math.max(0, Math.ceil(total / PAGE_TEMPLATES_PAGE_SIZE) - 1));
-  }, [page, total, isSuccess]);
+  useStepBackWhenEmptied(templates);
   const remove = useMutation({
     mutationFn: (id: string) => api.delete<void>(`${PageApi.templates}/${id}`),
     onSettled: () => void queryClient.invalidateQueries({ queryKey: ["page-templates"] }),

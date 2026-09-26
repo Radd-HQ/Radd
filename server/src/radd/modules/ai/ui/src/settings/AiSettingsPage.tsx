@@ -5,11 +5,7 @@ import { PresetsSection } from "./PresetsSection";
 import { ProvidersSection } from "./ProvidersSection";
 import { RolesSection } from "./RolesSection";
 
-/**
- * Settings → AI (spec 101; the ai plugin's own page since RADD-1379) — instance admins only (the
- * API 403s otherwise). Providers (endpoints + keys) → roles (what each model is for) → feature
- * toggles → the editor preset-prompt library.
- */
+/** Settings → AI — instance admins only (the API 403s otherwise). */
 export function AiSettingsPage() {
   const me = useCurrentUser();
   const isAdmin = useIsInstanceAdmin();

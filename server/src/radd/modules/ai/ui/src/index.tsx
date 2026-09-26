@@ -19,16 +19,8 @@ import { naturalLanguageMode } from "./query-bar/natural-language";
 import { AiReadMenu } from "./read/ReadMenu";
 import { AiSettingsPage } from "./settings/AiSettingsPage";
 
-/**
- * The `ai` plugin's UI remote. It contributes the inspector forms for its own automation nodes
- * through `automation.node.inspector`, so the host's automation editor carries no AI node type
- * (RADD-1325); Settings → AI is its page (RADD-1379). And since RADD-1395 every AI surface a reader
- * or writer meets is its too, through the editor's extension points and the issue slots — the
- * host's editor, issue page, comments, wiki and submission form name no AI. Since RADD-1400 the
- * command palette's Ask and the query bar's natural language are its contributed MODES, so the
- * host names no AI at all. Disabling the plugin withdraws all of it live, and `deactivate` stops
- * any run in flight.
- */
+/** The `ai` plugin's UI remote: every AI surface is contributed here, so the host names no AI.
+ *  `deactivate` stops any run in flight. */
 export default definePlugin({
   contributions: [
     { id: "settings", slot: SlotId.settingsPage, match: "/settings/ai", render: () => <AiSettingsPage /> },
