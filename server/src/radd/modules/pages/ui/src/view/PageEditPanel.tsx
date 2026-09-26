@@ -1,4 +1,4 @@
-import { Button, Callout, RichEditor, type EditorTransform, type InlineAnchorRef, type LiveSession } from "@radd/plugin-sdk";
+import { Button, Callout, LiveStatus, RichEditor, type EditorTransform, type InlineAnchorRef, type LiveDocument } from "@radd/plugin-sdk";
 import type { PageUpdate } from "../types";
 
 const EDITOR_CLASS = "[&_.ProseMirror]:min-h-[24rem]";
@@ -8,18 +8,20 @@ const PLACEHOLDER =
 /**
  * The page's edit mode (spec 122): two flows behind one panel.
  *
- * In a ROOM the document is shared, so there is nothing to Save or Cancel —
- * every keystroke is already everyone's; the button is **Done**, which leaves
- * the room (the elected saver's final write goes out first). When the room
- * cannot be joined the spec-43 single-editor flow runs exactly as before:
- * Save with `expected_version`, and the reload-or-overwrite dialog on a 409.
+ * In a LIVE SESSION the document is shared, so there is nothing to Save or
+ * Cancel — every keystroke is already everyone's; the button is **Done**, which
+ * leaves the session (its last save goes out first), and the session's own
+ * chrome says who saves. The session and the binding that shares the editor's
+ * document are a plugin's (RADD-1397). Without one the spec-43 single-editor
+ * flow runs exactly as before: Save with `expected_version`, and the
+ * reload-or-overwrite dialog on a 409.
  */
 export function PageEditPanel({
   draft,
   onDraft,
   pendingTransform,
   attachTo,
-  collab,
+  live,
   legacy,
   editVersion,
   conflict,
@@ -37,8 +39,8 @@ export function PageEditPanel({
   pendingTransform: EditorTransform | null;
   /** Where pasted and inserted images are stored (spec 102). */
   attachTo: { entityType: string; entityId: string };
-  collab: LiveSession;
-  /** Run the single-editor flow (the room refused us, or there is no account). */
+  live: LiveDocument;
+  /** Run the single-editor flow (no live session: none offered, refused, or a visitor). */
   legacy: boolean;
   editVersion: number;
   conflict: boolean;
@@ -52,17 +54,14 @@ export function PageEditPanel({
   inlineAnchors: InlineAnchorRef[];
   onDetachedComments: (ids: string[]) => void;
 }) {
-  const room = collab.room;
-  const saverName = collab.presence.people.find((person) =>
-    person.clientIds.includes(collab.presence.saver ?? -1),
-  )?.user.name;
+  const binding = live.status === LiveStatus.live ? live.binding : null;
 
   if (!legacy) {
     return (
       <div aria-label="Edit page content" className="mt-3 flex flex-col gap-2">
-        {room ? (
+        {binding ? (
           <RichEditor
-            key={room.session}
+            key={binding.key}
             value={draft}
             onChange={onDraft}
             extensions
@@ -72,7 +71,7 @@ export function PageEditPanel({
             initialTransform={pendingTransform ?? undefined}
             inlineAnchors={inlineAnchors}
             onDetachedComments={onDetachedComments}
-            live={room}
+            binding={binding}
             className={EDITOR_CLASS}
           />
         ) : (
@@ -81,18 +80,10 @@ export function PageEditPanel({
           </div>
         )}
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={onDone} disabled={finishing || !room}>
+          <Button size="sm" onClick={onDone} disabled={finishing || !binding}>
             {finishing ? "Saving…" : "Done"}
           </Button>
-          {room && (
-            <span className="text-[11px] text-fg-muted" data-collab-saver={collab.isSaver}>
-              {collab.isSaver
-                ? "Saving as you type"
-                : saverName
-                  ? `Saved by ${saverName}`
-                  : "Saving as you type"}
-            </span>
-          )}
+          {binding && live.saving}
         </div>
       </div>
     );

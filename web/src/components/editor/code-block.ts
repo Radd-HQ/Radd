@@ -124,7 +124,7 @@ export function mountCodeMirror(options: {
   /** ProseMirror → CodeMirror, replacing only the differing RANGE.
    *
    *  Replacing the whole document would work and would also move the cursor to
-   *  the top on every outside change (an undo, a collaborative edit), which is
+   *  the top on every outside change (an undo, an edit a binding applied), which is
    *  why the common prefix and suffix are found first. */
   function syncFromNode(next: ProseNode) {
     const incoming = next.textContent;

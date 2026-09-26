@@ -32,14 +32,14 @@ export interface EditorOptions {
   /** Initial markdown. The editor is uncontrolled after creation. */
   value: string;
   /** False for the viewer — same engine, no editing. A function is asked per
-   *  transaction: the collaborative editor (spec 122) answers false until the
-   *  room's document has arrived, so nothing typed into the local copy is
-   *  silently replaced by the shared one. */
+   *  transaction: a BOUND editor (RADD-1397) answers false until its binding
+   *  has bound, so nothing typed into the local copy is silently replaced by
+   *  the copy it is bound to. */
   editable: boolean | (() => boolean);
   /** Fires on every edit with the current markdown. Omitted for the viewer. */
   onMarkdown?: (markdown: string) => void;
-  /** Off in collaborative mode (spec 122): the Yjs undo manager takes over so
-   *  Mod-z undoes YOUR edits, not a colleague's. Default on. */
+  /** Off for a bound editor (RADD-1397): the binding's undo takes over, so
+   *  Mod-z undoes YOUR edits to a shared copy, not a colleague's. Default on. */
   history?: boolean;
 }
 

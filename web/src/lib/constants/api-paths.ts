@@ -148,11 +148,6 @@ export const apiCannedResponsePath = (responseId: string) =>
 export const apiCannedRenderPath = (responseId: string) =>
   `${apiCannedResponsePath(responseId)}/render`;
 
-/** Collaborative editing (spec 122): join a page's room as editor or observer;
- *  the socket itself is `COLLAB_WS_PATH/{pageId}?session=` (ui.ts). The wiki's own
- *  endpoints are the pages plugin's (RADD-1392). */
-export const apiCollabJoinPath = (pageId: string) => `/collab/pages/${pageId}/join`;
-
 /** Where a login button points. No id = the only configured provider (spec 40 shape). */
 export const ssoLoginPath = (providerId?: string, next?: string) => {
   const params = new URLSearchParams();

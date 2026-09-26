@@ -12,7 +12,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "cd .. && node --test web/scripts/*.test.mjs",
-    "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs && node scripts/browser-query-contributions.mjs && node scripts/browser-schedule-contributions.mjs && node scripts/browser-audit-entity-links.mjs && node scripts/browser-audit-contributions.mjs && node scripts/browser-automation-editor.mjs && node scripts/browser-vcs-settings.mjs && node scripts/browser-shared-query-sources.mjs && node scripts/browser-plugin-columns.mjs && node scripts/browser-editor-extensions.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs && node scripts/browser-autocomplete.mjs && node scripts/browser-issue-performance.mjs && node scripts/browser-login.mjs && node scripts/browser-page-comments.mjs && node scripts/browser-resolvable-threads.mjs && node scripts/browser-plugin-availability.mjs && node scripts/browser-plugin-pages.mjs && node scripts/browser-settings-ownership.mjs && node scripts/browser-directory-contributions.mjs && node scripts/browser-leave-availability.mjs && node scripts/browser-automation-canvas.mjs && node scripts/browser-shared-controls.mjs && node scripts/browser-option-contributions.mjs && node scripts/browser-picker-contributions.mjs && node scripts/browser-team-relationships.mjs && node scripts/browser-field-contributions.mjs && node scripts/browser-query-contributions.mjs && node scripts/browser-schedule-contributions.mjs && node scripts/browser-audit-entity-links.mjs && node scripts/browser-audit-contributions.mjs && node scripts/browser-automation-editor.mjs && node scripts/browser-vcs-settings.mjs && node scripts/browser-shared-query-sources.mjs && node scripts/browser-plugin-columns.mjs && node scripts/browser-editor-extensions.mjs && node scripts/browser-live-editing.mjs",
     "build:all": "node scripts/build-all.mjs",
     "check": "npm run test && npm run build:all && npm run test:browser"
   },
@@ -24,7 +24,6 @@
     "@codemirror/view": "^6.43.7",
     "@lezer/highlight": "^1.2.3",
     "@milkdown/kit": "^7.21.3",
-    "@milkdown/plugin-collab": "^7.21.3",
     "@prosemirror-adapter/react": "^0.5.5",
     "@radd/plugin-sdk": "*",
     "@tanstack/react-query": "^5.101.2",

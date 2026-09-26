@@ -530,6 +530,31 @@ times, and paging keeps the previous page. The loader removes a withdrawn plugin
 `useMutation`s and are never aborted.
 
 
+### Shared singletons, and the editor runtime on demand (RADD-1397)
+
+A remote externalizes the shared modules and keeps their bare specifiers; the host's import map
+resolves each to a `/shared/<slug>.js` shim that re-exports the host's instance. ONE list,
+`web/scripts/shared-modules.mjs`, names them, and `plugin-boundaries.test.mjs` holds the import map
+(`web/index.html`), the remote build's externals (`packages/plugin-sdk/vite.mjs`), the host's
+publisher (`web/src/shared-runtime.ts`) and the generated shims to it.
+
+- **Eager:** React, React DOM, the router, the query client and the SDK — published on
+  `globalThis.__RADD_SHARED__` at boot.
+- **Lazy — the editor runtime:** `prosemirror-model`, `prosemirror-state`, `prosemirror-view`. The
+  host's editor engine is a chunk that loads when an editor first mounts, so the host registers
+  LOADERS on `globalThis.__RADD_SHARED_LAZY__` (through the very paths its editor imports them by)
+  and the shims top-level-await them. A plugin that extends the editor with ProseMirror plugins — an
+  editor binding — gets the editor's own instances; a bundled copy would not work (keys,
+  `instanceof`, node classes). Importing one costs nothing until an editor exists.
+
+Only what CROSSES into host code is shared. Co-editing moved into the collab remote on this rule
+(RADD-1397, contract in `docs/plugin-ui.md`): its binding is y-prosemirror over the shared
+ProseMirror, while yjs, y-protocols and y-websocket are the remote's own — nothing in the host ever
+touches a Y.Doc, so there is no second copy to disagree with. Milkdown is not shared: it is the host
+editor's wrapper, and a binding needs only ProseMirror. The host keeps a feature-neutral mechanism —
+`RichEditor`'s `binding` and the `liveDocuments` contribution — and `web/src` names no co-editing
+code at all (boundary test).
+
 ### Current ownership migration: automation graph surface (RADD-1354)
 
 Automations owns `ui/src/GraphCanvas.tsx`, the graph wire types, layout/catalog/output
@@ -970,7 +995,8 @@ load them. This is part of what "install a plugin" means (§10).
 **Frontend (React/JS).** Each plugin's UI is a **module-federation remote** (§8b-A).
 - The plugin ships its own built bundle that may include its own npm packages (charts, editors, …);
   the **host provides shared singletons** — React, React-DOM, the router, the query client, the
-  design-system — so there is exactly one React instance and one theme.
+  design-system, and (loaded on demand) the ProseMirror editor runtime — so there is exactly one
+  React instance, one theme and one editor engine (§8, RADD-1397).
 - Builtin plugin UIs live in the plugin dir with their own `package.json`, built as remotes at
   app-build time. External plugin UIs serve their own `remoteEntry.js` + assets, loaded at runtime per
   the §8a manifest. The host federation config pins the shared-singleton versions.

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Archive, ArchiveRestore, Download, History, Link2, Lock, Printer, Trash2 } from "lucide-react";
 import {
-  API_BASE, Callout, DropdownMenu, EditingNow, IconButton, relativeTime, type AvatarUser, type LivePerson,
+  API_BASE, Callout, DropdownMenu, IconButton, relativeTime, type AvatarUser,
 } from "@radd/plugin-sdk";
 import { pageExportPath } from "../endpoints";
 import { PageRoute, pagePermalink, pagePrintHref } from "../links";
@@ -38,16 +38,18 @@ export function ArchivedBanner({ spaceSlug, canManage, onRestore }: {
 }
 
 /**
- * The line under the title: who last changed the page, its version and permalink, who is in the
- * room, the Content/History tabs, and the page's actions.
+ * The line under the title: who last changed the page, its version and permalink, who is here (a
+ * live session's presence, when one is offered — RADD-1397), the Content/History tabs, and the
+ * page's actions.
  */
 export function PageMeta({
-  page, users, people, tab, onTab, authenticated, canWrite, canManage, spaceSlug,
+  page, users, presence, tab, onTab, authenticated, canWrite, canManage, spaceSlug,
   onChangeUrl, onRestrict, onArchive, onDelete,
 }: {
   page: Page;
   users?: AvatarUser[];
-  people: LivePerson[];
+  /** A live session's chrome for who is here; nothing without one. */
+  presence: ReactNode;
   tab: PageTabValue;
   onTab: (tab: PageTabValue) => void;
   authenticated: boolean;
@@ -78,7 +80,7 @@ export function PageMeta({
         className="shrink-0 rounded bg-elevated px-1.5 py-px font-mono text-[10px] text-fg-secondary hover:text-fg">
         #{page.number}
       </Link>
-      <EditingNow people={people} users={users} className="ml-1" />
+      <span className="ml-1 empty:hidden">{presence}</span>
       <span className="ml-auto flex flex-wrap items-center gap-1">
         <TabButton active={tab === PageTab.content} onClick={() => onTab(PageTab.content)} label="Content" />
         {/* RADD-1153: versions and watching are account-only reads/writes — a visitor gets neither

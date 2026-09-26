@@ -15,7 +15,8 @@ import { join } from "node:path";
 
 const dir = mkdtempSync(join(tmpdir(), "collab-"));
 const file = join(dir, "model.ts");
-writeFileSync(file, readFileSync("web/src/components/editor/collab/model.ts", "utf8"));
+// The model is the collab plugin's (RADD-1397): it moved with co-editing's UI into its remote.
+writeFileSync(file, readFileSync("server/src/radd/modules/collab/ui/src/model.ts", "utf8"));
 const { electSaver, presenceSnapshot, CollabRole, EMPTY_PRESENCE } = await import(file);
 
 const ann = { id: "u-ann", name: "Ann", color: "var(--chart-todo)", emoji: null };

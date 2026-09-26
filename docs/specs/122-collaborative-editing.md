@@ -207,3 +207,18 @@ bumps. Every session therefore ends with a bump, by the client or by the
 server, and the concurrency token is as strong as before. The History tab's
 "grouped versions" note shipped the same day was removed: there is nothing
 to explain any more.
+
+
+## Addendum (RADD-1397): the client is the collab plugin's
+
+Everything under "The editor — SPA" above moved out of the host into the collab plugin's UI
+remote (`server/src/radd/modules/collab/ui`); `web/src/components/editor/collab/` is gone and the
+host names no co-editing code. Two generic contracts replaced the host's knowledge
+(`docs/plugin-ui.md`, "Live documents and editor bindings"): the page asks
+`useLiveDocument` and the plugin answers with a session — presence, the saver election, the Done
+chrome — and an `EditorBinding` the host's editor binds to. The binding is y-prosemirror over the
+HOST's ProseMirror, now a shared singleton loaded with the editor; yjs stays the plugin's. The
+saver calls the page's own save with the session as its voucher, so the plugin knows no page
+endpoint. `@milkdown/plugin-collab` is no longer used. Behaviour is unchanged — with one fix: a bound
+editor publishes from its current document only, because Milkdown's listener published the doc of
+the last LOCAL transaction 200 ms later and overwrote a colleague's change that arrived meanwhile.

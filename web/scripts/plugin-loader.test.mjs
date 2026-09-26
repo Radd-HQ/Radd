@@ -9,6 +9,7 @@ async function fixture(importer, statics = {}) {
   const dataSources = new Set();
   const querySources = new Set();
   const commandSources = new Set();
+  const liveDocuments = new Set();
   const key = `__pluginLoaderTest${serial++}`;
   globalThis[key] = {
     isUiApiCompatible: () => true,
@@ -20,6 +21,8 @@ async function fixture(importer, statics = {}) {
     unregisterQuerySources: (name) => querySources.delete(name),
     registerDataSource: (name) => dataSources.add(name),
     unregisterDataSources: (name) => dataSources.delete(name),
+    registerLiveDocumentSource: (name) => liveDocuments.add(name),
+    unregisterLiveDocumentSources: (name) => liveDocuments.delete(name),
     setRemotesLoading: (value) => { globalThis[key].loading = value; },
     loading: undefined,
     statics,
@@ -27,13 +30,13 @@ async function fixture(importer, statics = {}) {
   };
   const source = readFileSync('web/src/lib/plugin-loader.ts', 'utf8')
     .replace(/import \{[\s\S]*?\} from "@radd\/plugin-sdk";/,
-      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources, setRemotesLoading} = globalThis.${key};`)
+      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources, registerLiveDocumentSource, unregisterLiveDocumentSources, setRemotesLoading} = globalThis.${key};`)
     // Bundled core plugins are exercised by the browser proofs; the remote lifecycle is tested here.
     .replace(/import \{ STATIC_PLUGINS \} from "[^"]+";/, `const STATIC_PLUGINS = globalThis.${key}.statics;`)
     .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`);
   const js = stripTypeScriptTypes(source, { mode: 'transform' });
   const loader = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
-  return { ...loader, slots, dataSources, querySources, commandSources };
+  return { ...loader, slots, dataSources, querySources, commandSources, liveDocuments };
 }
 const remote = (url = 'v1') => [{ name: 'fixture', remote_entry: url, ui_api_version: '1.0' }];
 const contribution = { slot: 'issue.tab', title: 'Example' };
@@ -177,6 +180,16 @@ test('failed or late activation cannot retain command registrations',async()=>{
   const gate=deferred(),f=await fixture(async()=>({async activate(ctx){await gate.promise;ctx.registerCommandSource(source);}}));
   const pending=f.syncPluginRemotes(remote());await new Promise(resolve=>setImmediate(resolve));
   await f.syncPluginRemotes([]);gate.resolve();await pending;assert.equal(f.commandSources.size,0);
+});
+
+test('a live-document-only remote registers, withdraws with its plugin and returns once (RADD-1397)',async()=>{
+  const source={id:'fixture.pages',entityType:'page',open:()=>({finish:async()=>{},close(){}})};
+  const f=await fixture(async()=>({liveDocuments:[source]}));
+  await f.syncPluginRemotes(remote());assert.deepEqual([...f.liveDocuments],['fixture']);
+  await f.syncPluginRemotes([]);assert.equal(f.liveDocuments.size,0);
+  await f.syncPluginRemotes(remote('v2'));assert.deepEqual([...f.liveDocuments],['fixture']);
+  const failed=await fixture(async()=>({liveDocuments:[source],activate(){throw Error('failure');}}));
+  await failed.syncPluginRemotes(remote());assert.equal(failed.liveDocuments.size,0,'a failed activation leaves no provider');
 });
 
 test('bundled plugins register at boot, follow the enabled set, and never load as a remote (RADD-1373)', async () => {

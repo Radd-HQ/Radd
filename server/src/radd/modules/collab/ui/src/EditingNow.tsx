@@ -1,29 +1,24 @@
+import { useSyncExternalStore } from "react";
 import { Pencil } from "lucide-react";
-import { Avatar, type AvatarUser } from "../../Avatar";
-import { CollabRole, type Presence } from "./model";
+import { Avatar, useContributedQuery, type AvatarUser } from "@radd/plugin-sdk";
+import { CollabRole } from "./model";
+import type { PresenceStore } from "./presence";
 
 /** How many faces before the row folds into "+N". */
 const MAX_FACES = 5;
 
 /**
  * Who is in the room (spec 122) — one compact row in the page header, shown in
- * read mode too. Faces come from the directory when it has the person (their
- * real avatar colour and emoji, as everywhere else); awareness carries only a
- * name for anyone the directory does not list. Editors wear a pencil badge;
- * the summary reads "2 editing · 1 viewing". Nothing renders while you are
- * alone: a strip that says "you" is noise.
+ * read mode too. Faces come from the directory auth contributes when it has
+ * the person (their real avatar colour, emoji and picture, as everywhere
+ * else); awareness carries only a name for anyone it does not list. Editors
+ * wear a pencil badge; the summary reads "2 editing · 1 viewing". Nothing
+ * renders while you are alone: a strip that says "you" is noise.
  */
-export function EditingNow({
-  people,
-  users,
-  className = "",
-}: {
-  people: Presence[];
-  /** The people directory, for real avatars. */
-  users?: AvatarUser[];
-  className?: string;
-}) {
+export function EditingNow({ store }: { store: PresenceStore }) {
+  const { people } = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const others = people.filter((person) => !person.self);
+  const users = useContributedQuery<AvatarUser[]>("auth.people", {}, { enabled: others.length > 0 }).data;
   if (others.length === 0) return null;
   const editing = people.filter((person) => person.role === CollabRole.editor).length;
   const viewing = people.length - editing;
@@ -41,7 +36,7 @@ export function EditingNow({
       role="status"
       aria-label={`In this page: ${summary}`}
       data-editing-now
-      className={`flex items-center gap-2 text-[11px] text-fg-muted ${className}`}
+      className="flex items-center gap-2 text-[11px] text-fg-muted"
     >
       <span className="flex items-center -space-x-1.5">
         {shown.map((person) => {
@@ -78,5 +73,21 @@ export function EditingNow({
       </span>
       <span>{summary}</span>
     </div>
+  );
+}
+
+/**
+ * Beside the editor's Done: whether THIS client saves the shared copy, or who
+ * does. `data-collab-saver` is the election as the proofs read it.
+ */
+export function SavingStatus({ store }: { store: PresenceStore }) {
+  const { people, saver, self } = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  if (self === null) return null;
+  const isSaver = saver === self;
+  const saverName = people.find((person) => person.clientIds.includes(saver ?? -1))?.user.name;
+  return (
+    <span className="text-[11px] text-fg-muted" data-collab-saver={isSaver}>
+      {isSaver || !saverName ? "Saving as you type" : `Saved by ${saverName}`}
+    </span>
   );
 }

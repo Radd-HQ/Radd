@@ -19,8 +19,8 @@ interface RequestOptions {
   query?: Record<string, string | undefined>;
   on401?: On401Value;
   signal?: AbortSignal;
-  /** Let the request outlive the page (`fetch` keepalive) — the collab saver's
-   *  last write on unload (spec 122). Bodies are capped at 64 KiB by browsers. */
+  /** Let the request outlive the page (`fetch` keepalive) — a last write on
+   *  unload. Bodies are capped at 64 KiB by browsers. */
   keepalive?: boolean;
 }
 

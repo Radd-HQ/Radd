@@ -765,6 +765,16 @@ export function useContributionOwner(): string | null {
   return useContext(ContributionOwnerContext);
 }
 
+/** A plugin's rendered output placed OUTSIDE a `<Slot>` (a live session's chrome, RADD-1397): the
+ *  same quarantine and the same owner context a slot contribution gets. SDK-internal. */
+export function ContributionFrame({ plugin, children }: { plugin: string; children: ReactNode }) {
+  return (
+    <SlotErrorBoundary plugin={plugin}>
+      <ContributionOwnerContext.Provider value={plugin}>{children}</ContributionOwnerContext.Provider>
+    </SlotErrorBoundary>
+  );
+}
+
 function Contribution({ entry, props }: { entry: Entry; props: Record<string, unknown> }) {
   return (
     <ContributionOwnerContext.Provider value={entry.plugin}>

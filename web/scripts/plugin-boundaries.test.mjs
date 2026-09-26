@@ -437,6 +437,55 @@ test('every plugin nav icon is a name the one icon registry ships (RADD-1390)',(
   assert.deepEqual(declared.filter(d=>!known.has(d.split(': ')[1])),[]);
 });
 
+test('co-editing is the collab plugin\'s: the host and the SDK name none of it (RADD-1397)',()=>{
+  assert(!existsSync('web/src/components/editor/collab'),'the client moved into the collab remote');
+  // Every way the host could know co-editing: its words, the CRDT and its transport, the room.
+  // Comments count too: a comment explaining the room is the host knowing there is one.
+  const vocabulary=/collab|\byjs\b|y-(?:websocket|protocols|prosemirror)|\bawareness\b|\bY\.Doc\b|editing ?now|live ?room|LiveSession|useLiveSession|elected saver/i;
+  for (const sample of ['collab_session','/collab/pages','COLLAB_WS_PATH','yjs','y-websocket','EditingNow','useLiveSession','awareness']) assert(vocabulary.test(sample),sample);
+  for (const sample of ['EditorBinding','bindableEditor','LiveDocument','BOUND_SERIALIZE_MS','collapse','Collapsible']) assert(!vocabulary.test(sample),sample);
+  const scanned=[...files('web/src'),...files('web/packages/plugin-sdk/src')];
+  assert(scanned.length>300,'the scan must reach the whole host');
+  const violations=[];
+  for (const file of scanned) for (const node of nodes(file)) {
+    const text=node.type==='Identifier'||node.type==='JSXIdentifier'?node.name
+      :node.type==='StringLiteral'?node.value:node.type==='TemplateElement'?node.value.raw
+      :node.type==='CommentLine'||node.type==='CommentBlock'?node.value:null;
+    if (text!==null && vocabulary.test(text)) violations.push(`${file}:${node.loc?.start.line}: ${text.trim().slice(0,80)}`);
+  }
+  assert.deepEqual([...new Set(violations)],[]);
+  for (const text of [readFileSync('web/index.html','utf8'),readFileSync('web/package.json','utf8')]) assert(!/plugin-collab/.test(text));
+  // …and it is not vacuous: the host offers the two generic points, the wiki asks, collab answers.
+  const editor=readFileSync('web/src/components/editor/RichEditor.tsx','utf8');
+  assert.match(editor,/binding\?: EditorBinding;/);
+  assert.match(editor,/bindableEditor\(editor, contentRef\.current\)/);
+  assert.match(readFileSync('server/src/radd/modules/pages/ui/src/view/usePageEditing.ts','utf8'),/useLiveDocument\(\{\s*entityType: "page"/);
+  const remote=readFileSync('server/src/radd/modules/collab/ui/src/index.tsx','utf8');
+  assert.match(remote,/entityType: "page", open: openPageSession/);
+  assert.match(remote,/definePlugin\(\{ liveDocuments: \[pages\] \}\)/);
+  const binder=nodes('server/src/radd/modules/collab/ui/src/bind-editor.ts').filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
+  for (const source of ['prosemirror-state','y-prosemirror','yjs']) assert(binder.includes(source),`the remote's binding imports ${source}`);
+  assert.match(readFileSync('server/src/radd/modules/collab/__init__.py','utf8'),/remote="\/plugins\/collab\/remoteEntry\.js"/);
+});
+
+test('the shared singletons are one list the import map, the remote build and the host agree on (RADD-1397)',async()=>{
+  const {EAGER_MODULES,LAZY_MODULES,SDK_MODULE,SHARED_SPECIFIERS,importMap}=await import('./shared-modules.mjs');
+  const html=readFileSync('web/index.html','utf8');
+  const map=JSON.parse(/<script type="importmap">([\s\S]*?)<\/script>/.exec(html)[1]).imports;
+  assert.deepEqual(map,importMap());
+  const vite=readFileSync('web/packages/plugin-sdk/vite.mjs','utf8');
+  const external=[.../const SHARED = new Set\(\[([\s\S]*?)\]\)/.exec(vite)[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]);
+  assert.deepEqual(new Set(external),new Set(SHARED_SPECIFIERS));
+  const runtime=readFileSync('web/src/shared-runtime.ts','utf8');
+  for (const [id] of [...EAGER_MODULES,SDK_MODULE]) assert(runtime.includes(`\n  ${JSON.stringify(id)}:`)||runtime.includes(`\n  ${id}:`),`shared-runtime publishes ${id}`);
+  for (const [id,slug,host] of LAZY_MODULES) {
+    assert(runtime.includes(`${JSON.stringify(id)}: () => import(${JSON.stringify(host)})`),`shared-runtime loads ${id} through ${host}`);
+    const shim=readFileSync(`web/public/shared/${slug}.js`,'utf8');
+    assert.match(shim,/const M = await load\(\);/,`${slug} awaits the host's loader`);
+  }
+  assert(LAZY_MODULES.length>=3 && SHARED_SPECIFIERS.includes('prosemirror-state'),'the editor runtime is shared');
+});
+
 test('editor, read-mode, issue and draft AI are the ai plugin\'s: the host and the SDK name none of it (RADD-1395)',()=>{
   for (const file of ['web/src/components/editor/ai.ts','web/src/components/editor/ai-run.ts','web/src/components/editor/ai-protect.ts',
     'web/src/components/editor/AiRunPanel.tsx','web/src/components/editor/AiSelectionToolbar.tsx','web/src/components/editor/AiActionPicker.tsx',

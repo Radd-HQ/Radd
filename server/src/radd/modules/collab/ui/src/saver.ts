@@ -1,34 +1,32 @@
 import type { Doc } from "yjs";
 import type { Awareness } from "y-protocols/awareness";
-import { api } from "../../../lib/api";
-import { COLLAB_AUTOSAVE_MS } from "../../../lib/constants";
-import { pagePath } from "@radd-plugin-ui/pages/endpoints";
-import type { Page, PageUpdate } from "@radd-plugin-ui/pages/types";
+import type { LiveSave } from "@radd/plugin-sdk";
+import { COLLAB_AUTOSAVE_MS } from "./constants";
 import { electSaver } from "./model";
 
 /**
  * The elected saver (spec 122).
  *
  * Every editor runs one of these; only the one the election names actually
- * writes. It serialises the markdown the editor already produces (the listener
- * fires for remote transactions too, so `getMarkdown` is always the shared
- * document, not this tab's typing) and PATCHes it with `collab_session` —
- * never `expected_version`: the room is the concurrency control now.
+ * writes. It reads the markdown the editor already produces (a bound editor
+ * publishes remote changes too, so `getMarkdown` is always the shared
+ * document, not this tab's typing) and hands it to the DOCUMENT's own write
+ * path with the session as its voucher — never `expected_version`: the room is
+ * the concurrency control now. The saver decides when; the page decides how
+ * (RADD-1397: the collab plugin knows no page endpoint).
  *
  * Triggers: 1.5 s after the last change (local or remote); the tab going
  * hidden; becoming the saver (covers whatever the previous saver had pending
  * when it left); and `final` when this client leaves the room. On a real
- * unload the effect cleanup may not run, so `pagehide` sends the final write
- * with keepalive.
+ * unload the session's own close may not run, so `pagehide` sends the final
+ * write with keepalive.
  */
 export interface SaverOptions {
-  pageId: string;
   session: string;
   doc: Doc;
   awareness: Awareness;
   getMarkdown: () => string;
-  onSaved?: (page: Page) => void;
-  onError?: (error: unknown) => void;
+  save: (markdown: string, save: LiveSave) => Promise<void>;
 }
 
 export interface Saver {
@@ -38,15 +36,7 @@ export interface Saver {
   stop: (final: boolean) => Promise<void>;
 }
 
-export function startSaver({
-  pageId,
-  session,
-  doc,
-  awareness,
-  getMarkdown,
-  onSaved,
-  onError,
-}: SaverOptions): Saver {
+export function startSaver({ session, doc, awareness, getMarkdown, save }: SaverOptions): Saver {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastSaved: string | null = null;
   let inflight: Promise<void> | null = null;
@@ -55,21 +45,14 @@ export function startSaver({
 
   const isSaver = () => electSaver(awareness.getStates()) === awareness.clientID;
 
-  const body = (markdown: string, final: boolean): PageUpdate => ({
-    body: markdown,
-    collab_session: session,
-    final,
-  });
-
   const write = async (final: boolean) => {
     const markdown = getMarkdown();
     if (!final && markdown === lastSaved) return;
     try {
-      const page = await api.patch<Page>(pagePath(pageId), body(markdown, final));
+      await save(markdown, { session, final, keepalive: false });
       lastSaved = markdown;
-      onSaved?.(page);
-    } catch (error) {
-      onError?.(error);
+    } catch {
+      // The document's save reported it; the next change tries again.
     }
   };
 
@@ -102,7 +85,7 @@ export function startSaver({
   const onPageHide = () => {
     if (stopped || !isSaver()) return;
     // Best effort: the page is going away, so this cannot be awaited.
-    void api.patch<Page>(pagePath(pageId), body(getMarkdown(), true), { keepalive: true }).catch(() => {});
+    void save(getMarkdown(), { session, final: true, keepalive: true }).catch(() => {});
   };
 
   doc.on("update", onDocUpdate);

@@ -24,7 +24,10 @@ export { HOVER_CAPABLE_PROBE };
  * already bound to the browser and session id — so a proof never threads
  * `sessionId` through its own code.
  */
-export async function openBrowser({ port, profile, width = 1440, height = 1000, scale = 2 }) {
+export async function openBrowser({ port: basePort, profile, width = 1440, height = 1000, scale = 2 }) {
+  // Proofs hard-code their debug ports; RADD_PROOF_PORT_OFFSET shifts them all, so two runs (two
+  // agents, a CI job beside a developer) can use disjoint ranges without editing any proof.
+  const port = basePort + (Number(process.env.RADD_PROOF_PORT_OFFSET) || 0);
   // A browser already listening on this port is a LEFTOVER from a previous run,
   // and connecting to it is silent poison: it was launched from different code,
   // possibly with different flags, and every assertion then describes a browser

@@ -17,7 +17,10 @@ import react from "@vitejs/plugin-react";
 import { resolve } from "node:path";
 import { esmExternalRequirePlugin } from "rolldown/plugins";
 
-/** The deps the host provides as singletons via its index.html import map. Keep in sync with it. */
+/** The deps the host provides as singletons via its index.html import map (`web/scripts/
+ *  shared-modules.mjs` is the list; a boundary test holds this set to it). The `prosemirror-*`
+ *  modules are the editor runtime (RADD-1397), loaded on demand: a remote that extends the host's
+ *  editor must run against the host's instances, never a bundled copy. */
 const SHARED = new Set([
   "react",
   "react-dom",
@@ -27,6 +30,9 @@ const SHARED = new Set([
   "@tanstack/react-query",
   "@tanstack/react-router",
   "@radd/plugin-sdk",
+  "prosemirror-model",
+  "prosemirror-state",
+  "prosemirror-view",
 ]);
 
 /**

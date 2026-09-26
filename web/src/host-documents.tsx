@@ -1,19 +1,17 @@
 /**
  * The host's document and comment surfaces, handed to the plugin SDK (RADD-1392) so the wiki —
- * the pages plugin's bundled UI — renders the same editor, viewer, markdown, reading pane, live
- * room and comment kit as the issue page, without importing host code. Heavy surfaces stay lazy:
- * the editor engine and the markdown renderer load when one first renders. What plugins ADD to the
- * editor arrives through its extension points (RADD-1395), not through here.
+ * the pages plugin's bundled UI — renders the same editor, viewer, markdown, reading pane and
+ * comment kit as the issue page, without importing host code. Heavy surfaces stay lazy: the editor
+ * engine and the markdown renderer load when one first renders. What plugins ADD to the editor
+ * arrives through its extension points (RADD-1395) — a live copy of a document is a binding one
+ * hands the editor (RADD-1397) — not through here.
  */
 import { Suspense, lazy, useCallback, useMemo, type ComponentProps } from "react";
 import { provideHostComponents, type RichEditorProps } from "@radd/plugin-sdk";
 import { LazyRichEditor } from "./components/editor/LazyRichEditor";
 import { LazyRichViewer } from "./components/editor/LazyRichViewer";
-import { EditingNow } from "./components/editor/collab/EditingNow";
 import { ToolbarExtraButton } from "./components/editor/ToolbarExtraButton";
 import { ReadingPane } from "./components/reading/ReadingPane";
-import { useCollabSession } from "./components/editor/collab/useCollabSession";
-import type { CollabRoom } from "./components/editor/collab/provider";
 import type { AttachmentTarget } from "./lib/types";
 import { useAttachmentUploader } from "./lib/useAttachmentUploader";
 import { attachmentUrl, apiParentCommentsPath } from "./lib/constants";
@@ -33,15 +31,8 @@ const CommentReplies = lazy(() =>
 
 type EditorProps = Omit<RichEditorProps, "attachTo"> & { onUploadImage?: (file: File) => Promise<string> };
 
-/** A live room is the host's CollabRoom behind the SDK's opaque handle. */
-function Editor({ live, ...props }: EditorProps) {
-  const room = live as CollabRoom | undefined;
-  return (
-    <LazyRichEditor
-      {...props}
-      collab={room && { doc: room.doc, provider: room.provider, awareness: room.awareness, seed: room.seed, template: props.value }}
-    />
-  );
+function Editor(props: EditorProps) {
+  return <LazyRichEditor {...props} />;
 }
 
 function UploadingEditor({ attachTo, ...props }: EditorProps & { attachTo: NonNullable<RichEditorProps["attachTo"]> }) {
@@ -92,8 +83,6 @@ provideHostComponents({
   // Eager: its children are the page, and a lazy pane would remount them when it loads.
   ReadingPane,
   EditorToolbarButton: ToolbarExtraButton,
-  EditingNow,
-  useLiveSession: useCollabSession,
 
   // The comment kit's rows come from the same API as the host's `Comment`.
   CommentReplies: (props) => (

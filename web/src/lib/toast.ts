@@ -1,8 +1,8 @@
 /**
  * Minimal global toast store (no context needed — the api client pushes from
  * outside React). Subscribed via `useSyncExternalStore` in <Toaster />.
- * Producers: the 403 handler in api.ts (spec 04 Phase 3), collab autosave
- * failures, and "Created RADD-123 — Open" after a new item (RADD-1230).
+ * Producers: the 403 handler in api.ts (spec 04 Phase 3), the SDK's `toast`
+ * (plugins' failures), and "Created RADD-123 — Open" after a new item (RADD-1230).
  */
 
 export const ToastKind = {

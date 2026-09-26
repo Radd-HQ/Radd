@@ -84,7 +84,7 @@ receive an opener for the peek panel) and `MissingPluginType`. It also added `Ch
 `usePagedDirectory`. The host implements them in `web/src/host-surfaces.tsx`.
 
 **Documents, comments and the kit (RADD-1392, UI API 1.15.0).** The wiki moved into the pages plugin's package, and it reaches the host's heavy surfaces the same way, with typed contracts beside each wrapper:
-- `host-document.tsx` — `RichEditor` (`attachTo` names the attachment parent images go to; `live` is an opaque `LiveRoom` from `useLiveSession`, whose `session` keys the editor; `initialTransform` is a read action's hand-off), `RichViewer`, `Markdown`, `ReadingPane` (room beside the text for `useReadingPane`), `EditorToolbarButton`, `EditingNow`, and `useLiveSession` (a page's co-editing room; without a host it reports `failed`, so the caller runs its single-editor flow). Until RADD-1395 this file also bridged `AiReadMenu`, `AiRun` and `AiResultsPane`; the SDK names no feature now, and those are the ai plugin's contributions through the editor's extension points below.
+- `host-document.tsx` — `RichEditor` (`attachTo` names the attachment parent images go to; `binding` is an `EditorBinding` that makes the document a live copy, and its `key` keys the editor; `initialTransform` is a read action's hand-off), `RichViewer`, `Markdown`, `ReadingPane` (room beside the text for `useReadingPane`) and `EditorToolbarButton`. Until RADD-1395 this file also bridged `AiReadMenu`, `AiRun` and `AiResultsPane`, and until RADD-1397 `EditingNow` and `useLiveSession` (the host's co-editing client); the SDK names no feature now — those are the ai and collab plugins' contributions through the editor's extension points and live documents below.
 - `host-comments.tsx` — `useCommentFeed` (a parent's section, newest window first), `CommentReplies`, `CommentHistory`, `CopyCommentLink`, `ThreadBadge`/`ThreadFilter`/`ResolveThreadButton`, `useLinkedComment`/`useLandOnComment`/`useThreadExpansion`, `commentHref`, `repliesLabel`, `threadRuleClass`, `sendTaskToggle`, and the `CommentRow` shape.
 - `host-kit.tsx` — `DropdownMenu`, `Popover`, `useDismiss` (the host's one Escape stack), `AccessGrantsEditor`, `ScopedAccess`, `StateCategoryDot`, and the sidebar chrome `SidebarSection`/`SidebarLink` for the new `sidebar.section` slot.
 Hooks are bridged too: the host provides them before the first render, so every render calls the same function. Shared STATE lives in the SDK itself rather than behind a bridge: the `radd:*` registry (`registerPageExtension`, `PageExtensionCtx`, `MarkdownSourceContext`, `splitExtensionBlocks`…), `headingsOf`/`headingAnchorId`, text-quote anchoring (`makeAnchor`, `locateAnchor`, `orderByAnchor`) and the rendered-text helpers (`renderedText`, `rangeForOffsets`, `registerTextProjection`…). A bridged hook must return STABLE values: `useCommentFeed`'s list is memoised on the feed, because a fresh array per render re-ran the inline rail's anchor scan forever — and a render loop at default priority starves Suspense's retries, which read as lazy host surfaces that never finished loading.
@@ -280,8 +280,8 @@ string, so a plugin needs no host table row for its entities to go live.
 
 The rich editor — Milkdown/ProseMirror, its toolbar, the per-block diff review, CodeMirror code
 blocks, `radd:*` nodes — is HOST code that issues, comments and the wiki share. A plugin extends it
-through three slots and one mechanism; none of them names a feature (RADD-1395). The types live in
-`packages/plugin-sdk/src/editor-extensions.ts`.
+through three slots and two mechanisms — a transform, and a binding (below, RADD-1397); none of
+them names a feature (RADD-1395). The types live in `packages/plugin-sdk/src/editor-extensions.ts`.
 
 ```tsx
 import { Megaphone } from "lucide-react";
@@ -346,6 +346,60 @@ selection (`editor/`), the read menu (`read/`), answers in the reading pane (`re
 rail's card (`issue.rail.top`), Similar issues beside a draft (`item.draft.assist`) and its Profile
 opt-out. Disabling it withdraws every one of them live — from an open editor too — and its
 `deactivate()` stops any run in flight. Remotes that use these declare `ui_api_version="1.16.0"`.
+
+## Live documents and editor bindings (SDK 1.17)
+
+A document surface can be edited by several people at once without the host knowing how. Two
+contracts, both feature-neutral (RADD-1397); the collab plugin (`modules/collab/ui`) is the worked
+example, and with it disabled the host ships and loads none of its code.
+
+**Live documents — "is a live session available for this document?"** The surface asks with
+`useLiveDocument({ entityType, entityId, canWrite, editing, getMarkdown, save })`; a plugin answers by
+contributing a source (`definePlugin({ liveDocuments: [source] })`, or `ctx.registerLiveDocumentSource`):
+
+```tsx
+const pages: LiveDocumentSource = {
+  id: "collab.pages", entityType: "page",               // one provider per entity type
+  open: (request, update) => {                          // request.viewer is always a signed-in account
+    update({ status: "joining", role: "editor", binding: null, presence: <Who store={s} /> });
+    // …later: update({ status: "live", role, binding, presence, saving })
+    return { finish: async () => { /* the last save */ }, close: () => { /* leave */ } };
+  },
+};
+```
+
+- **What the surface owns:** the document — its endpoint, its body, its Save. `save(markdown, {session,
+  final, keepalive})` is the surface's own write, and `session` is the session's VOUCHER (the wiki
+  sends it as `collab_session`, which the collab write guard admits without a version check). The
+  session decides WHEN and by which client; it never learns the endpoint.
+- **What the session owns:** who is here (`presence`, rendered in the header for readers too), the
+  editor binding for editors, the chrome beside Done (`saving`), and `finish()` — the last save.
+  Chrome is rendered inside the same error boundary and owner context a slot contribution gets.
+- **The answer** (`LiveDocument`): `status` is `none` (no provider, a refusal, a visitor — run the
+  ordinary flow), `joining` or `live`. No provider is `none` at once, even while plugin bundles are
+  still loading: an optional plugin never holds up the document's own editor. The session reopens
+  when the document, `editing`, `canWrite` or the viewer changes; it closes on unmount and when the
+  provider is withdrawn, the saving client's last write first.
+
+**Editor bindings — a live copy of the editor's document.** `RichEditor`'s `binding` takes an
+`EditorBinding` (`{ key, label, bind(editor, signal) }`). Bound, the editor refuses input until
+`bind` resolves, drops its own history (the binding brings the undo a shared document needs),
+offers no plain-text mode (`label` takes the switch's place), and publishes every document change
+through `onChange` from the CURRENT document — the binding's changes included, which ProseMirror
+marks as outside the history and Milkdown's listener skips. `bind` receives a `BindableEditor` —
+`view` (ProseMirror's `EditorView`), `markdown` (what to seed an empty copy from), `parse(markdown)`
+and `addPlugins(plugins)` (returns the remover) — and resolves the unbind, which the editor runs
+before it is destroyed.
+
+**The editor runtime is a shared singleton, loaded on demand.** A binding's ProseMirror plugins must
+be built from the HOST's `prosemirror-model`, `prosemirror-state` and `prosemirror-view`: a bundled
+copy's plugin keys, `instanceof` checks and node classes do not match the editor's. The import map
+maps those three to shims that load the host's own instances with the editor (a top-level await on a
+loader the host registers), so importing them costs nothing until an editor exists — keep that code
+in a chunk you import when binding. Libraries on top (y-prosemirror) bundle normally and pick up the
+shared modules through the import map. Anything that never crosses into the editor stays private to
+the plugin: collab's yjs is its own, because no host code ever touches a Y.Doc. Remotes that use
+this declare `ui_api_version="1.17.0"`.
 
 ## Logic & data access — where computation goes and what a plugin can see
 

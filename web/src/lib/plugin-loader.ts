@@ -18,10 +18,12 @@ import {
   isUiApiCompatible,
   registerSlot,
   registerDataSource,
+  registerLiveDocumentSource,
   registerQuerySource, registerCommandSource, unregisterCommandSources,
   setRemotesLoading,
   unregisterQuerySources,
   unregisterDataSources,
+  unregisterLiveDocumentSources,
   unregisterPlugin,
   type PluginContext,
   type PluginModule,
@@ -92,14 +94,17 @@ function buildContext(entry: LoadedRemote, current: () => boolean): PluginContex
     registerCommandSource: (source) => { if (live()) registerCommandSource(entry.name, source); },
     registerQuerySource: (source) => { if (live()) registerQuerySource(entry.name, source); },
     registerDataSource: (source) => { if (live()) registerDataSource(entry.name, source); },
+    registerLiveDocumentSource: (source) => { if (live()) registerLiveDocumentSource(entry.name, source); },
     registerSlot: (slot, contribution) => { if (live()) registerSlot(slot, contribution, { plugin: entry.name }); },
   };
 }
 
-/** Everything a plugin contributed, gone — its slots, sources, commands and cached queries. */
+/** Everything a plugin contributed, gone — its slots, sources, commands, live-document sessions
+ *  (their consumers close them) and cached queries. */
 function withdraw(name: string): void {
   unregisterPlugin(name);
   unregisterDataSources(name);
+  unregisterLiveDocumentSources(name);
   unregisterQuerySources(name);
   unregisterCommandSources(name);
   // Contributed query sources key on ["plugin-query", owner, …], and a plugin's own queries by
@@ -121,8 +126,9 @@ async function deactivate(entry: LoadedRemote, current: () => boolean): Promise<
 /** Register a module's declared contributions synchronously; then run its activation. */
 async function activate(entry: LoadedRemote, mod: PluginModule, current: () => boolean): Promise<void> {
   entry.module = mod;
-  if (!Array.isArray(mod.contributions) && !Array.isArray(mod.dataSources) && !Array.isArray(mod.querySources) && !Array.isArray(mod.commandSources) && typeof mod.activate !== "function") {
-    throw new Error("plugin UI exports no contributions, data sources, query sources or activation");
+  if (!Array.isArray(mod.contributions) && !Array.isArray(mod.dataSources) && !Array.isArray(mod.querySources)
+    && !Array.isArray(mod.commandSources) && !Array.isArray(mod.liveDocuments) && typeof mod.activate !== "function") {
+    throw new Error("plugin UI exports no contributions, data sources, query sources, live documents or activation");
   }
   const ctx = buildContext(entry, current);
   for (const [i, c] of (mod.contributions ?? []).entries()) {
@@ -132,6 +138,7 @@ async function activate(entry: LoadedRemote, mod: PluginModule, current: () => b
   for (const source of mod.commandSources ?? []) ctx.registerCommandSource(source);
   for (const source of mod.querySources ?? []) ctx.registerQuerySource(source);
   for (const source of mod.dataSources ?? []) ctx.registerDataSource(source);
+  for (const source of mod.liveDocuments ?? []) ctx.registerLiveDocumentSource(source);
   await bounded(Promise.resolve(mod.activate?.(ctx)));
 }
 

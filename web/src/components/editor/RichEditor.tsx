@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { editorViewCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
-import { $view, callCommand, getMarkdown } from "@milkdown/kit/utils";
-import { COLLAB_REMOTE_SERIALIZE_MS } from "../../lib/constants";
+import { $prose, $view, callCommand, getMarkdown } from "@milkdown/kit/utils";
+import { BOUND_SERIALIZE_MS } from "../../lib/constants";
 import {
   createCodeBlockCommand,
   insertImageCommand,
@@ -25,7 +25,6 @@ import {
   toggleStrikethroughCommand,
 } from "@milkdown/kit/preset/gfm";
 import { upload, uploadConfig } from "@milkdown/kit/plugin/upload";
-import { collab, collabServiceCtx } from "@milkdown/plugin-collab";
 import { cursor } from "@milkdown/kit/plugin/cursor";
 import { linkTooltipPlugin } from "@milkdown/kit/component/link-tooltip";
 import { listItemBlockComponent } from "@milkdown/kit/component/list-item-block";
@@ -42,6 +41,8 @@ import {
   Slot,
   SlotId,
   useSlot,
+  type BindableEditor,
+  type EditorBinding,
   type EditorHandle,
   type EditorRange,
   type EditorTransform,
@@ -58,8 +59,7 @@ import { TransformOutcome, reviewPending, runTransform } from "./transform-run";
 import { detachedComments, type InlineAnchorRef } from "./detached-comments";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { makeEditor } from "./create-editor";
-import { cursorBuilder, selectionBuilder } from "./collab/cursors";
-import { COLLAB_FRAGMENT, whenDocumentReady, type CollabConfig } from "./collab/provider";
+import { bindableEditor, documentChangePlugin } from "./bindable";
 import { CodeBlockView } from "./CodeBlockView";
 import { placeholderPlugin } from "./placeholder";
 import { ImageNodeView } from "./ImageNodeView";
@@ -118,11 +118,12 @@ interface RichEditorProps {
    * 401 by bouncing the visitor to /login) and the `@`/`#`/`/` triggers (the
    * user directory and issue search are logged-in surfaces). Formatting only. */
   anonymous?: boolean;
-  /** Spec 122: bind the document to a live room instead of the local copy.
-   *  History is replaced by the Yjs undo manager, the plain-text mode is
-   *  unavailable (a textarea cannot bind a CRDT), and `value` is the seed
-   *  template. Fixed for the instance's life — a new room means a new `key`. */
-  collab?: CollabConfig;
+  /** RADD-1397: bind the document to a copy that lives elsewhere (an
+   *  `EditorBinding` a plugin supplies). The binding brings its own undo, the
+   *  plain-text mode is unavailable (a textarea cannot bind), typing waits for
+   *  the bind, and `value` is what the binding may seed from. Fixed for the
+   *  instance's life — a new binding means a new `key`. */
+  binding?: EditorBinding;
   /** RADD-1274: the open inline comments anchored to this document, so a
    *  review can say how many passages it is about to remove. Pages only. */
   inlineAnchors?: InlineAnchorRef[];
@@ -131,6 +132,36 @@ interface RichEditorProps {
   onDetachedComments?: (ids: string[]) => void;
   className?: string;
   autoFocus?: boolean;
+}
+
+/**
+ * Bind, unless the editor goes first: resolves the unbind, or undefined once `signal` aborts. A
+ * binding that settles after that is unbound at once — its plugins must not outlive the editor.
+ */
+async function bindUntilAborted(
+  binding: EditorBinding,
+  editor: BindableEditor,
+  signal: AbortSignal,
+): Promise<(() => void) | undefined> {
+  // Through a promise, so a binding that throws synchronously is a failure, not a crash.
+  const bound = Promise.resolve().then(() => binding.bind(editor, signal));
+  const aborted = new Promise<undefined>((resolve) => {
+    if (signal.aborted) resolve(undefined);
+    else signal.addEventListener("abort", () => resolve(undefined), { once: true });
+  });
+  try {
+    const off = await Promise.race([bound, aborted]);
+    if (off === undefined) {
+      void bound.then((late) => { try { late(); } catch { /* the editor is gone */ } }, () => {});
+    }
+    return off;
+  } catch (error) {
+    if (signal.aborted) return undefined;
+    // The binding owner reports its own failure (and hands the document back to its ordinary
+    // flow); the editor stays read-only rather than accept typing nobody will keep.
+    console.error("[radd] the editor's binding failed", error);
+    return undefined;
+  }
 }
 
 /** GitLab-style editing-mode preference, sticky across all editors + sessions. */
@@ -188,7 +219,7 @@ function RichEditorInner({
   initialTransform,
   anonymous = false,
   extensions = false,
-  collab: collabConfig,
+  binding,
   inlineAnchors,
   onDetachedComments,
   className = "",
@@ -225,7 +256,7 @@ function RichEditorInner({
   // An initial transform needs the rich surface (the diff review is ProseMirror
   // decorations), so it overrides the sticky plain preference for this mount.
   const [plain, setPlain] = useState(
-    () => localStorage.getItem(PLAIN_PREF_KEY) === "1" && !initialTransform && !collabConfig,
+    () => localStorage.getItem(PLAIN_PREF_KEY) === "1" && !initialTransform && !binding,
   );
   const [plainDraft, setPlainDraft] = useState(() => contentRef.current);
   // Stable bridge to the ProseMirror mention plugin (its handlers are reassigned below).
@@ -257,13 +288,13 @@ function RichEditorInner({
   // identity — it is a static per-surface choice, not live state.
   const extensionsRef = useRef(extensions);
   extensionsRef.current = extensions;
-  // The room binding (spec 122), read the same way: the config is fixed for
-  // this instance, and the caller remounts (new `key`) for a new room.
-  const collabRef = useRef(collabConfig ?? null);
-  collabRef.current = collabConfig ?? null;
-  // Typing is refused until the shared document has arrived and is bound —
-  // ProseMirror asks this per transaction (see create-editor.ts).
-  const collabEditableRef = useRef(!collabConfig);
+  // The binding (RADD-1397), read the same way: it is fixed for this
+  // instance, and the caller remounts (new `key`) for a new one.
+  const bindingRef = useRef(binding ?? null);
+  bindingRef.current = binding ?? null;
+  // Typing is refused until the binding has bound the document — ProseMirror
+  // asks this per transaction (see create-editor.ts).
+  const boundRef = useRef(!binding);
   // Builds a ProseMirror node view whose body is a React portal into this tree.
   const nodeViewFactory = useNodeViewFactory();
   // Publishing the live markdown is only worth it on surfaces that HAVE
@@ -575,30 +606,35 @@ function RichEditorInner({
     // inserts — our own `/` menu (mention.ts trigger + `quickActions`) acts on
     // the ISSUE instead.
     const extensionsOn = extensionsRef.current;
-    const collabOn = collabRef.current;
-    // A recreate (a switch back from plain mode) rebinds the room; typing is
-    // refused again until it has — the window is a few milliseconds, but a
+    const bindingOn = bindingRef.current;
+    // A recreate (a switch back from plain mode) binds again; typing is
+    // refused until it has — the window is a few milliseconds, but a
     // keystroke in it would land in a document about to be replaced.
-    if (collabOn) collabEditableRef.current = false;
+    if (bindingOn) boundRef.current = false;
     let sourceTimer: ReturnType<typeof setTimeout> | undefined;
+    const publish = (markdown: string) => {
+      contentRef.current = markdown;
+      onChangeRef.current(markdown);
+      if (extensionsOn) {
+        clearTimeout(sourceTimer);
+        sourceTimer = setTimeout(() => onSourceChangeRef.current(markdown), SOURCE_DEBOUNCE_MS);
+      }
+    };
     // Milkdown directly (RADD-755). Every feature this used to switch off is a
     // React component of ours now, so the wrapper was configuring nothing.
     const editor = makeEditor({
       root,
       value: contentRef.current,
-      editable: collabOn ? () => collabEditableRef.current : true,
-      // The Yjs undo manager replaces history in a room (spec 122): Mod-z
-      // must undo YOUR edits, and the history plugin's keymap, registered
-      // first, would otherwise win the key and undo everyone's.
-      history: !collabOn,
-      onMarkdown: (markdown) => {
-        contentRef.current = markdown;
-        onChangeRef.current(markdown);
-        if (extensionsOn) {
-          clearTimeout(sourceTimer);
-          sourceTimer = setTimeout(() => onSourceChangeRef.current(markdown), SOURCE_DEBOUNCE_MS);
-        }
-      },
+      editable: bindingOn ? () => boundRef.current : true,
+      // A bound document's undo is the binding's (RADD-1397): Mod-z must undo
+      // YOUR edits to a shared copy, and the history plugin's keymap,
+      // registered first, would otherwise win the key and undo everyone's.
+      history: !bindingOn,
+      // Bound, the change plugin below is the one publisher: Milkdown's
+      // listener serialises the doc of the last LOCAL transaction, 200 ms
+      // later — after a colleague's change that arrived meanwhile, that is a
+      // stale copy, and it overwrote the fresh one the saver was about to write.
+      onMarkdown: bindingOn ? undefined : publish,
     });
     // @/#/"/" triggers (before create) — not on anonymous pages: the popups
     // query the user directory / issue search, both logged-in surfaces.
@@ -608,7 +644,19 @@ function RichEditorInner({
     // Feeds the toolbar's active state (RADD-749). A plugin view, so the snapshot
     // is recomputed from the editor's own updates rather than polled.
     editor.use(toolbarStatePlugin(setSnapshot));
-    if (collabOn) editor.use(collab);
+    // Bound, every change is published from the CURRENT document — the
+    // binding's too, which Milkdown's listener skips (they are applied outside
+    // the history). Debounced: a burst of keystrokes serialises once.
+    let boundSerializeTimer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+    if (bindingOn) {
+      editor.use($prose(() => documentChangePlugin(() => {
+        clearTimeout(boundSerializeTimer);
+        boundSerializeTimer = setTimeout(() => {
+          if (!disposed) publish(editor.action(getMarkdown()));
+        }, BOUND_SERIALIZE_MS);
+      })));
+    }
     // The chrome Crepe used to wrap, taken from the kit directly (RADD-754).
     editor
       .use(cursor)
@@ -706,10 +754,9 @@ function RichEditorInner({
         );
     }
     editorRef.current = editor;
-    let disposed = false;
-    let cancelWait: (() => void) | undefined;
-    let offRemoteUpdate: (() => void) | undefined;
-    let remoteSerializeTimer: ReturnType<typeof setTimeout> | undefined;
+    // Aborted when this instance goes before its binding has bound.
+    const bindAbort = new AbortController();
+    let unbind: (() => void) | undefined;
     const created = (async () => {
       // The review machinery (RADD-1395: the editor's own, whoever runs the
       // transform): the diff STATE plugin plus our own decoration fork (see
@@ -734,53 +781,20 @@ function RichEditorInner({
           }),
         );
       await editor.create();
-      if (collabOn) {
-        // The seed rule (spec 122): wait for the room, and only the client
-        // the join elected seeds — and only into a fragment that is STILL
-        // empty after sync, or two first joiners would double the page.
-        const waiting = whenDocumentReady(collabOn);
-        cancelWait = waiting.cancel;
-        await waiting.ready;
-        if (disposed) return;
+      if (bindingOn) {
+        // RADD-1397: the binding makes the document a copy that lives
+        // elsewhere — it seeds, syncs and adds its plugins; the editor only
+        // waits, then accepts typing. `contentRef` is the CURRENT markdown
+        // (Jira markup converted), the text the local copy has been showing.
+        const off = await bindUntilAborted(bindingOn, bindableEditor(editor, contentRef.current), bindAbort.signal);
+        if (disposed || !off) return;
+        unbind = off;
+        boundRef.current = true;
+        // Re-ask `editable`: ProseMirror reads it when the state is updated.
         editor.action((ctx) => {
-          const fragment = collabOn.doc.getXmlFragment(COLLAB_FRAGMENT);
-          const service = ctx
-            .get(collabServiceCtx)
-            .bindXmlFragment(fragment)
-            .setAwareness(collabOn.awareness)
-            .mergeOptions({ yCursorOpts: { cursorBuilder, selectionBuilder } });
-          // The template is the CURRENT markdown (Jira markup converted), not
-          // the raw prop — the same text the local copy has been showing.
-          if (collabOn.seed && fragment.length === 0) {
-            service.applyTemplate(contentRef.current, () => true);
-          }
-          collabEditableRef.current = true;
-          // connect() reconfigures the view, which re-asks `editable`.
-          service.connect();
+          const view = ctx.get(editorViewCtx);
+          view.updateState(view.state);
         });
-        // Milkdown's listener skips transactions flagged `addToHistory: false`
-        // — which is how y-prosemirror applies a REMOTE change — so `onChange`
-        // would never learn what the other person typed and the elected saver
-        // would serialise a draft that stopped at this client's own edits.
-        // Serialise the bound document ourselves after each update — every
-        // update, not only the provider's: the origin a remote change carries
-        // is the provider's business, and a local burst re-serialising once
-        // more 150 ms later is cheaper than a save that misses a colleague.
-        const onRemoteUpdate = () => {
-          if (disposed) return;
-          clearTimeout(remoteSerializeTimer);
-          remoteSerializeTimer = setTimeout(() => {
-            if (disposed) return;
-            const markdown = editor.action(getMarkdown());
-            contentRef.current = markdown;
-            onChangeRef.current(markdown);
-          }, COLLAB_REMOTE_SERIALIZE_MS);
-        };
-        collabOn.doc.on("update", onRemoteUpdate);
-        offRemoteUpdate = () => {
-          clearTimeout(remoteSerializeTimer);
-          collabOn.doc.off("update", onRemoteUpdate);
-        };
       }
       if (autoFocus) root.querySelector<HTMLElement>(".ProseMirror")?.focus();
       // Read-mode transform hand-off: run once, on the first instance created.
@@ -792,20 +806,18 @@ function RichEditorInner({
     })();
     return () => {
       clearTimeout(sourceTimer);
+      clearTimeout(boundSerializeTimer);
       disposed = true;
-      cancelWait?.();
-      offRemoteUpdate?.();
+      bindAbort.abort();
       // Destroy only after create resolves, so an unmount mid-init can't race.
-      // In a room, unbind first: the provider outlives this editor for a
-      // moment (the parent closes it after the final save), and a remote
-      // update or awareness change landing on a destroyed context throws.
+      // Unbind first: what the binding is bound to outlives this editor for a
+      // moment (its owner closes it after a last save), and a change landing
+      // on a destroyed context throws.
       void created.then(() => {
-        if (collabOn) {
-          try {
-            editor.action((ctx) => ctx.get(collabServiceCtx).disconnect());
-          } catch {
-            // Already torn down — nothing left to unbind.
-          }
+        try {
+          unbind?.();
+        } catch {
+          // Already torn down — nothing left to unbind.
         }
         editor.destroy();
       });
@@ -935,10 +947,10 @@ function RichEditorInner({
         )}
         {/* GitLab-style mode bar: same markdown either way, pick your editing surface. */}
         <div className="flex items-center justify-between border-t border-subtle px-2.5 py-1">
-          {collabConfig ? (
-            // A textarea cannot bind a CRDT: the plain mode is not offered in
-            // a room rather than offered and refused.
-            <span className="text-[11px] text-fg-muted">Editing together</span>
+          {binding ? (
+            // A textarea cannot bind: the plain mode is not offered to a
+            // bound document rather than offered and refused.
+            <span className="text-[11px] text-fg-muted">{binding.label}</span>
           ) : (
             <button
               type="button"

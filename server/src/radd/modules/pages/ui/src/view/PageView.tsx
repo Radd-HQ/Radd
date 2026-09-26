@@ -19,11 +19,11 @@ import { usePeople } from "./people";
  * A page (spec 43): inline-editable title, rendered markdown body with an
  * Edit mode, History tab, archive controls, and the linked-issues panel.
  *
- * Edit mode is a ROOM since spec 122: readers sit in it as observers (the
- * header shows who is there), Edit joins as an editor on a shared document,
- * and the elected saver autosaves. The spec-43 single-editor flow (Save with
- * expected_version; reload-or-overwrite on a 409) is the fallback when the
- * room cannot be joined — see `usePageEditing`.
+ * Edit mode is a LIVE SESSION when a plugin offers one (spec 122, RADD-1397):
+ * readers sit in it as observers (the header shows who is there), Edit joins
+ * as an editor on a shared document, and the session saves it. The spec-43
+ * single-editor flow (Save with expected_version; reload-or-overwrite on a 409)
+ * runs when none is offered or it cannot be joined — see `usePageEditing`.
  */
 export function PageView({
   page,
@@ -52,7 +52,7 @@ export function PageView({
   const authenticated = useIsAuthenticated();
   const users = usePeople(authenticated);
   const navigate = useNavigate();
-  const edit = usePageEditing(page);
+  const edit = usePageEditing(page, canWrite);
   const [tab, setTab] = useState<PageTabValue>(PageTab.content);
   const [title, setTitle] = useState(page.title);
   const [restricting, setRestricting] = useState(false);
@@ -113,7 +113,7 @@ export function PageView({
         className="w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xl font-semibold text-heading hover:border-subtle focus:border-strong focus:outline-2 focus:outline-offset-1 focus:outline-focus read-only:hover:border-transparent"
       />
 
-      <PageMeta page={page} users={users} people={edit.collab.presence.people} tab={tab} onTab={setTab}
+      <PageMeta page={page} users={users} presence={edit.live.presence} tab={tab} onTab={setTab}
         authenticated={authenticated} canWrite={canWrite} canManage={canManage} spaceSlug={spaceSlug}
         onChangeUrl={() => setChangingUrl(true)} onRestrict={() => setRestricting(true)}
         onArchive={() => archive.mutate()} onDelete={deletePage} />
@@ -137,7 +137,7 @@ export function PageView({
                   pendingTransform={edit.pendingTransform}
                   // Pasted/inserted images go through the storage-choice seam (spec 102).
                   attachTo={{ entityType: "page", entityId: page.id }}
-                  collab={edit.collab}
+                  live={edit.live}
                   legacy={edit.legacy}
                   editVersion={edit.editVersion}
                   conflict={edit.conflict}

@@ -1,4 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
+import type { Node as ProseNode } from "prosemirror-model";
+import type { Plugin } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
 import { useContributionOwner } from "./slots";
 
 /**
@@ -6,19 +9,57 @@ import { useContributionOwner } from "./slots";
  *
  * The editor — Milkdown, ProseMirror, the toolbar, the per-block diff review, code blocks and
  * `radd:*` nodes — is HOST code that issues, comments and the wiki share. A plugin extends it
- * through three slots and one mechanism, none of which names a feature:
+ * through three slots and two mechanisms, none of which names a feature:
  *
  *   - `editor.toolbar.action` — a toolbar button (`EditorToolbarActionProps`);
  *   - `editor.selection.action` — chrome over a text selection (`EditorSelectionActionProps`);
  *   - `content.read.action` — an action on RENDERED content (`ReadActionProps`);
  *   - a TRANSFORM — a contribution hands the editor a streamed replacement for the selection or
  *     the whole document (`EditorHandle.transform`, or `ReadActionProps.transform` to open the
- *     editor with one), and the editor shows its own reviewable diff with accept/reject.
+ *     editor with one), and the editor shows its own reviewable diff with accept/reject;
+ *   - a BINDING (RADD-1397) — the editor's document is bound to a copy that lives elsewhere
+ *     (`EditorBinding`, handed to `RichEditorProps.binding`), through ProseMirror plugins the
+ *     binding builds from the SHARED editor runtime.
  *
  * The review is the editor's; what the replacement IS — its prompt, its protocol, what it must
  * protect — is the contribution's. A reading surface may also offer a panel beside the text
  * (`useReadingPane`), where an answer has room to be read.
  */
+
+/**
+ * The editor as a BINDING sees it (RADD-1397): its ProseMirror view, extended with plugins the
+ * binding builds from the shared `prosemirror-model`, `prosemirror-state` and `prosemirror-view`
+ * — the host's own instances, published through the import map. A private copy of any of them
+ * would not work: plugin keys, `instanceof` checks and node classes match only the editor's.
+ */
+export interface BindableEditor {
+  readonly view: EditorView;
+  /** The markdown the editor opened with — what a binding seeds an empty shared copy from. */
+  readonly markdown: string;
+  /** Markdown → a document in this editor's schema. */
+  parse: (markdown: string) => ProseNode;
+  /** Run `plugins` after the editor's own; the returned function removes them again. */
+  addPlugins: (plugins: readonly Plugin[]) => () => void;
+}
+
+/**
+ * Binds the editor's document to a copy that lives somewhere else — one other people edit at the
+ * same time (RADD-1397).
+ *
+ * Bound, the editor refuses input until `bind` resolves, gives up its own undo history (the
+ * binding's plugins bring the undo a shared document needs), offers no plain-text mode (a text
+ * area cannot bind), and reports every document change through `onChange` — including the ones
+ * the binding applies, which ProseMirror marks as outside the history. `bind` resolves with the
+ * unbind, which the editor runs BEFORE it is destroyed; `signal` aborts when the editor goes
+ * first, and `bind` must then settle promptly.
+ */
+export interface EditorBinding {
+  /** Keys the editor: a new binding needs a new editor instance. */
+  readonly key: string;
+  /** What the editor's mode bar says in place of the plain-text switch. */
+  readonly label: string;
+  bind: (editor: BindableEditor, signal: AbortSignal) => Promise<() => void>;
+}
 
 /** A range of the document, in editor positions. */
 export interface EditorRange {

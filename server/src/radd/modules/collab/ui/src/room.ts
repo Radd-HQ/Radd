@@ -1,8 +1,8 @@
 import { Doc } from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { WebsocketProvider } from "y-websocket";
-import { api } from "../../../lib/api";
-import { COLLAB_WS_PATH, On401, apiCollabJoinPath } from "../../../lib/constants";
+import { api } from "@radd/plugin-sdk";
+import { COLLAB_WS_PATH, collabJoinPath } from "./constants";
 import type { CollabRoleValue, CollabUser } from "./model";
 
 /**
@@ -12,6 +12,9 @@ import type { CollabRoleValue, CollabUser } from "./model";
  * documents. `disableBc` because every tab is its own session: BroadcastChannel
  * would let two tabs share a document the server thinks only one of them
  * joined.
+ *
+ * This module is the remote's transport chunk: yjs and y-websocket load with a
+ * page's first session, never with the remote's entry (RADD-1397).
  */
 
 /** `POST /collab/pages/{id}/join`. */
@@ -39,10 +42,10 @@ export function isRejoinCode(code: number): boolean {
   return code === CollabCloseCode.unknownSession || code === CollabCloseCode.documentReplaced;
 }
 
-/** The Y.XmlFragment the ProseMirror document binds to — the editor binding,
- *  the readiness check, AND the seed: `applyTemplate` encodes the template
- *  through `prosemirrorToYDoc`, whose fragment name defaults to exactly this,
- *  so a different name here would seed a fragment nobody is bound to. */
+/** The Y.XmlFragment the ProseMirror document binds to — the binding, the
+ *  readiness check, AND the seed: `prosemirrorToYDoc` names its fragment by
+ *  the same argument, so a different name here would seed a fragment nobody
+ *  is bound to. */
 export const COLLAB_FRAGMENT = "prosemirror";
 
 export interface CollabRoom {
@@ -56,16 +59,6 @@ export interface CollabRoom {
   awareness: Awareness;
   /** Announce the departure, then tear everything down. Idempotent. */
   close: () => void;
-}
-
-/** What the editor needs to bind (RichEditor's `collab` prop). */
-export interface CollabConfig {
-  doc: Doc;
-  provider: WebsocketProvider;
-  awareness: Awareness;
-  seed: boolean;
-  /** The saved markdown — what the seeder initialises the document from. */
-  template: string;
 }
 
 function collabWsBase(): string {
@@ -85,10 +78,10 @@ export interface OpenRoomOptions {
 /** Join, then connect. Rejects with the join's ApiError (401/403/network). */
 export async function openCollabRoom({ pageId, role, user, onRefused }: OpenRoomOptions): Promise<CollabRoom> {
   const join = await api.post<CollabJoin>(
-    apiCollabJoinPath(pageId),
+    collabJoinPath(pageId),
     { role },
     // A visitor's 401 is a refusal to join, not a lost session.
-    { on401: On401.throw },
+    { throwOn401: true },
   );
   const doc = new Doc();
   const provider = new WebsocketProvider(collabWsBase(), pageId, doc, {
@@ -137,27 +130,25 @@ export async function openCollabRoom({ pageId, role, user, onRefused }: OpenRoom
  * everyone else needs the fragment to be non-empty, because a second joiner
  * can sync before the first has seeded, and y-prosemirror never pushes local
  * content into an empty fragment — binding then would show an empty page.
- * `cancel` resolves early so an unmount mid-wait does not leave a listener on
- * a destroyed document.
+ * `signal` settles it early, so an editor that goes mid-wait does not leave a
+ * listener on a destroyed document.
  */
-export function whenDocumentReady({ provider, doc, seed }: CollabConfig): {
-  ready: Promise<void>;
-  cancel: () => void;
-} {
+export function whenDocumentReady({ provider, doc, seed }: CollabRoom, signal: AbortSignal): Promise<void> {
   const fragment = doc.getXmlFragment(COLLAB_FRAGMENT);
-  let settle: () => void = () => {};
-  const ready = new Promise<void>((resolve) => {
-    const check = () => {
-      if (provider.synced && (seed || fragment.length > 0)) settle();
-    };
-    settle = () => {
+  return new Promise<void>((resolve) => {
+    const settle = () => {
       provider.off("sync", check);
       doc.off("update", check);
+      signal.removeEventListener("abort", settle);
       resolve();
     };
+    function check() {
+      if (provider.synced && (seed || fragment.length > 0)) settle();
+    }
+    if (signal.aborted) return resolve();
+    signal.addEventListener("abort", settle, { once: true });
     provider.on("sync", check);
     doc.on("update", check);
     check();
   });
-  return { ready, cancel: () => settle() };
 }

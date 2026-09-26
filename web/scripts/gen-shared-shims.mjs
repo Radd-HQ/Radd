@@ -12,33 +12,34 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { SDK_SHIM, sdkShimSource, shimSource, valueExports } from "./sdk-exports.mjs";
+import { SDK_SHIM, lazyShimSource, sdkShimSource, shimSource, valueExports } from "./sdk-exports.mjs";
+import { EAGER_MODULES, LAZY_MODULES } from "./shared-modules.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, "../public/shared");
 
-// id (the bare specifier remotes import) → slug (the /shared/<slug>.js filename).
-const NPM_MODULES = [
-  ["react", "react"],
-  ["react/jsx-runtime", "react-jsx-runtime"],
-  ["react/jsx-dev-runtime", "react-jsx-dev-runtime"],
-  ["react-dom", "react-dom"],
-  ["react-dom/client", "react-dom-client"],
-  ["@tanstack/react-query", "tanstack-react-query"],
-  ["@tanstack/react-router", "tanstack-react-router"],
-];
+// The list lives in shared-modules.mjs, to which the boundary test holds the import map, the SDK's
+// remote build config and the host's publisher.
 
 // The SDK's names are read from its source (`sdk-exports.mjs`), not listed here: a hand-kept list
 // drifted silently, and a missing name is `undefined` in every remote.
 
 mkdirSync(outDir, { recursive: true });
 
-for (const [id, slug] of NPM_MODULES) {
+for (const [id, slug] of EAGER_MODULES) {
   const mod = await import(id);
   const names = Object.keys(mod);
   const hasDefault = "default" in mod;
   writeFileSync(resolve(outDir, `${slug}.js`), shimSource(id, names, hasDefault));
   console.log(`  ${id} -> shared/${slug}.js (${names.length} exports)`);
+}
+
+// The editor runtime (RADD-1397). The names come from the module the HOST publishes — the one a
+// remote's import resolves to at runtime.
+for (const [id, slug, hostSpecifier] of LAZY_MODULES) {
+  const names = Object.keys(await import(hostSpecifier));
+  writeFileSync(resolve(outDir, `${slug}.js`), lazyShimSource(id, names));
+  console.log(`  ${id} -> shared/${slug}.js (${names.length} exports, loaded with the editor)`);
 }
 
 writeFileSync(SDK_SHIM, sdkShimSource());

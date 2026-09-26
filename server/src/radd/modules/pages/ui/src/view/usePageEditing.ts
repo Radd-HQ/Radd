@@ -1,30 +1,27 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ApiError, CommentSection, LiveRole, api, errorMessage, invalidateEntities, toast, useCommentFeed, useCurrentUser,
-  useIsAuthenticated, useLiveSession, type EditorTransform, type InlineAnchorRef,
+  ApiError, CommentSection, LiveStatus, api, errorMessage, invalidateEntities, toast, useCommentFeed,
+  useLiveDocument, type EditorTransform, type InlineAnchorRef, type LiveSave,
 } from "@radd/plugin-sdk";
 import { commentPath, pagePath } from "../endpoints";
 import { Tag } from "../queries";
 import type { Page, PageUpdate } from "../types";
 
 /**
- * A page's edit session (spec 122): readers sit in the room as observers, Edit joins as an editor
- * on a shared document, and the elected saver autosaves. The spec-43 single-editor flow (Save
- * with `expected_version`; reload-or-overwrite on a 409) is the fallback when the room cannot be
- * joined. The room itself is the host's (collab stays an optional plugin): this reaches it
- * through the SDK's live-session bridge.
+ * A page's edit session. A page asks for a LIVE SESSION (RADD-1397): when a plugin provides one
+ * (spec 122's co-editing), readers sit in it as observers, Edit makes an editor on a shared document,
+ * and the session decides when the shared copy is saved — through this page's own write, vouched
+ * for by the session. Without one — no provider, a refusal, a visitor — the spec-43 single-editor
+ * flow runs: Save with `expected_version`, reload-or-overwrite on a 409.
  */
-export function usePageEditing(page: Page) {
+export function usePageEditing(page: Page, canWrite: boolean) {
   const queryClient = useQueryClient();
   const invalidate = () => void invalidateEntities(queryClient, Tag.page, Tag.space);
-  // A visitor is answered as the Anyone principal (spec 121): only an account joins a room.
-  const account = useCurrentUser();
-  const me = useIsAuthenticated() ? account : null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(page.body);
-  // The live markdown as a ref: the saver reads it at write time, and a captured value would be
-  // the draft as of the last render.
+  // The live markdown as a ref: a session's save reads it at write time, and a captured value
+  // would be the draft as of the last render.
   const draftRef = useRef(page.body);
   /** The version the session was OPENED at — the optimistic-concurrency anchor. A realtime
    *  refetch may bump page.version mid-edit; saving must still 409 against what the author read. */
@@ -50,20 +47,29 @@ export function usePageEditing(page: Page) {
       : `Resolved ${ids.length} comments whose passages were replaced.`),
     onSettled: () => void invalidateEntities(queryClient, Tag.comment),
   });
-  // Spec 122: a visitor never joins (D9); a reader is an observer; Edit is an editor. Each role
-  // change is a fresh session.
-  const collab = useLiveSession({
-    pageId: page.id,
-    role: !me ? null : editing ? LiveRole.editor : LiveRole.observer,
-    user: me,
-    getMarkdown: () => draftRef.current,
-    onSaved: (saved) => {
-      // Our own write: the version to anchor on if the room later refuses us and the
-      // single-editor Save has to take over mid-session.
+  /** A live session's save: this page's own write, vouched for by the session (spec 122's
+   *  `collab_session` — the server skips the version check for a connected editor's writes). */
+  const liveSave = useCallback(async (markdown: string, { session, final, keepalive }: LiveSave) => {
+    const body: PageUpdate = { body: markdown, collab_session: session, final };
+    try {
+      const saved = await api.patch<Page>(pagePath(page.id), body, { keepalive });
+      // Our own write: the version to anchor on if the session later ends and the
+      // single-editor Save has to take over mid-edit.
       setEditVersion(saved.version);
       invalidate();
-    },
-    onSaveError: (error) => toast(`Autosave failed: ${errorMessage(error)}`),
+    } catch (error) {
+      toast(`Autosave failed: ${errorMessage(error)}`, "error");
+      throw error;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page.id]);
+  const live = useLiveDocument({
+    entityType: "page",
+    entityId: page.id,
+    canWrite,
+    editing,
+    getMarkdown: () => draftRef.current,
+    save: liveSave,
   });
   const save = useMutation({
     mutationFn: (body: PageUpdate) => api.patch<Page>(pagePath(page.id), body),
@@ -73,9 +79,9 @@ export function usePageEditing(page: Page) {
   });
 
   return {
-    editing, draft, editVersion, conflict, pendingTransform, finishing, collab, inlineAnchors, save,
-    /** The room refused us (or there is no account): the single-editor flow. */
-    legacy: collab.failed || !me,
+    editing, draft, editVersion, conflict, pendingTransform, finishing, live, inlineAnchors, save,
+    /** No live session: the single-editor flow. */
+    legacy: live.status === LiveStatus.none,
     onDraft: (markdown: string) => { draftRef.current = markdown; setDraft(markdown); },
     open: (transform: EditorTransform | null) => {
       draftRef.current = page.body;
@@ -84,10 +90,10 @@ export function usePageEditing(page: Page) {
       setPendingTransform(transform);
       setEditing(true);
     },
-    /** Leave the room: the final write first, if this client is the saver. */
+    /** Leave the session: the final write first, when this client is the one that saves. */
     done: async () => {
       setFinishing(true);
-      try { await collab.finish(); } finally {
+      try { await live.finish(); } finally {
         setFinishing(false);
         setEditing(false);
         setPendingTransform(null);

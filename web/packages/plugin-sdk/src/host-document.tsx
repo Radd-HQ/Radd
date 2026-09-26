@@ -1,18 +1,18 @@
 import type { ComponentType, ReactNode } from "react";
 import type { TextAnchor } from "./anchoring";
-import type { EditorTransform } from "./editor-extensions";
-import { providedNow, useProvided } from "./host-registry";
-import { TextArea, type AvatarUser } from "./primitives";
+import type { EditorBinding, EditorTransform } from "./editor-extensions";
+import { useProvided } from "./host-registry";
+import { TextArea } from "./primitives";
 
 /**
  * The host's document surfaces, bridged (RADD-1392).
  *
- * The rich editor, its viewer, the read-mode markdown renderer, the reading pane and live
- * co-editing are HOST code: issues and comments use them too, and Milkdown + ProseMirror +
- * CodeMirror are far too heavy to bundle into a plugin. The host provides them at startup; a
- * plugin renders them through the wrappers below with the typed contracts declared here. The
- * contracts carry no editor internals — a live room is an opaque handle a plugin passes back.
- * What a plugin ADDS to the editor goes through its extension points (`editor-extensions.ts`).
+ * The rich editor, its viewer, the read-mode markdown renderer and the reading pane are HOST
+ * code: issues and comments use them too, and Milkdown + ProseMirror + CodeMirror are far too
+ * heavy to bundle into a plugin. The host provides them at startup; a plugin renders them through
+ * the wrappers below with the typed contracts declared here. What a plugin ADDS to the editor goes
+ * through its extension points (`editor-extensions.ts`) — a live copy of the document too, as a
+ * binding (RADD-1397), which the host editor knows only as that contract.
  */
 
 /** A reader ticked a checklist box: its index among the task items in document order. */
@@ -25,12 +25,6 @@ export interface TaskToggle {
 export interface InlineAnchorRef {
   id: string;
   anchor: TextAnchor;
-}
-
-/** A live co-editing room (spec 122), opaque to plugins: hand it back to `RichEditor`'s `live`.
- *  `session` keys the editor — a new room needs a new editor instance. */
-export interface LiveRoom {
-  readonly session: string;
 }
 
 export interface RichEditorProps {
@@ -50,8 +44,9 @@ export interface RichEditorProps {
   inlineAnchors?: InlineAnchorRef[];
   /** A review ended with those passages gone and the person chose to resolve their comments. */
   onDetachedComments?: (ids: string[]) => void;
-  /** Bind the document to a live room instead of the local copy; `value` is the seed template. */
-  live?: LiveRoom;
+  /** Bind the document to a copy that lives elsewhere (`EditorBinding`); `value` is what the
+   *  binding may seed it from. Key the editor by `binding.key`. */
+  binding?: EditorBinding;
 }
 
 export interface RichViewerProps {
@@ -86,46 +81,6 @@ export interface EditorToolbarButtonProps {
   disabled?: boolean;
 }
 
-export const LiveRole = { editor: "editor", observer: "observer" } as const;
-export type LiveRoleValue = (typeof LiveRole)[keyof typeof LiveRole];
-
-/** One person in a live room; several tabs of one account fold into one entry. */
-export interface LivePerson {
-  user: { id: string; name: string; color: string; emoji: string | null };
-  role: LiveRoleValue;
-  clientIds: number[];
-  self: boolean;
-}
-
-export interface LiveSession {
-  room: LiveRoom | null;
-  joining: boolean;
-  /** The room refused this client (or cannot exist): run the single-editor flow. */
-  failed: boolean;
-  presence: { people: LivePerson[]; saver: number | null };
-  isSaver: boolean;
-  /** The final save, when this client is the elected saver. */
-  finish: () => Promise<void>;
-}
-
-export interface LiveSessionOptions {
-  pageId: string;
-  /** null = stay out (a visitor); observer = presence only; editor = the live document. */
-  role: LiveRoleValue | null;
-  user: { id: string; name: string; avatar_color?: string | null; avatar_emoji?: string | null } | null;
-  /** The editor's live markdown — read at save time, never a captured value. */
-  getMarkdown: () => string;
-  onSaved?: (saved: { version: number }) => void;
-  onSaveError?: (error: unknown) => void;
-}
-
-export interface EditingNowProps {
-  people: LivePerson[];
-  /** The people directory, for real avatars. */
-  users?: AvatarUser[];
-  className?: string;
-}
-
 /** What the host provides for documents. */
 export interface DocumentHost {
   RichEditor?: ComponentType<RichEditorProps>;
@@ -133,9 +88,6 @@ export interface DocumentHost {
   Markdown?: ComponentType<MarkdownProps>;
   ReadingPane?: ComponentType<ReadingPaneProps>;
   EditorToolbarButton?: ComponentType<EditorToolbarButtonProps>;
-  EditingNow?: ComponentType<EditingNowProps>;
-  /** A hook: provided once at startup, so every render calls the same function. */
-  useLiveSession?: (options: LiveSessionOptions) => LiveSession;
 }
 
 const plain = "whitespace-pre-wrap text-[13px] leading-relaxed text-fg";
@@ -178,30 +130,4 @@ export function EditorToolbarButton(props: EditorToolbarButtonProps) {
       {props.icon}
     </button>
   );
-}
-
-/** Who else is in the live room. */
-export function EditingNow(props: EditingNowProps) {
-  const { EditingNow: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
-}
-
-const NO_LIVE_SESSION: LiveSession = {
-  room: null,
-  joining: false,
-  failed: true,
-  presence: { people: [], saver: null },
-  isSaver: false,
-  finish: async () => undefined,
-};
-
-function noLiveSession(): LiveSession {
-  return NO_LIVE_SESSION;
-}
-
-/** Join a page's live room (spec 122). Without a host the session has `failed`, so the caller
- *  runs its single-editor flow. The host provides the hook before the first render. */
-export function useLiveSession(options: LiveSessionOptions): LiveSession {
-  const provided = providedNow().useLiveSession ?? noLiveSession;
-  return provided(options);
 }

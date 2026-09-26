@@ -157,9 +157,10 @@ export { SlqField, PageQueryFilter, ViewSelect, SharingDialog, ReportWidget, Ite
 export type { SlqFieldProps, PageQueryFilterProps, ViewSelectProps, SharingDialogProps, SharedResourceSave, ReportWidgetProps, ItemKeyLinkProps, ItemPeekProps, IssueSuggestionProps, MissingPluginTypeProps } from "./host-registry";
 export { ChartHeightContext } from "./chart-height";
 // Documents (RADD-1392): the `radd:*` block registry and its contexts are shared state, the text
-// helpers are shared by the host editor and plugin surfaces, and the editor, viewer, markdown,
-// reading pane and live-editing surfaces are the host's, bridged. What a plugin adds to the editor
-// and to rendered content goes through the editor's extension points (RADD-1395).
+// helpers are shared by the host editor and plugin surfaces, and the editor, viewer, markdown and
+// reading pane are the host's, bridged. What a plugin adds to the editor and to rendered content
+// goes through the editor's extension points (RADD-1395), a live copy of a document included
+// (RADD-1397).
 export {
   MarkdownSourceContext, PageExtensionCtx, usePageExtensionContext, registerPageExtension, pageExtensions,
   lookupPageExtension, extensionNameOf, extensionNameOfInfo, splitExtensionBlocks, parseExtensionParams,
@@ -173,17 +174,22 @@ export {
   scrollRangeIntoView,
 } from "./dom-text";
 export {
-  RichEditor, RichViewer, Markdown, ReadingPane, EditorToolbarButton, EditingNow, useLiveSession, LiveRole,
+  RichEditor, RichViewer, Markdown, ReadingPane, EditorToolbarButton,
   type RichEditorProps, type RichViewerProps, type MarkdownProps, type ReadingPaneProps, type EditorToolbarButtonProps,
-  type EditingNowProps, type TaskToggle, type InlineAnchorRef, type LiveRoom, type LiveRoleValue,
-  type LivePerson, type LiveSession, type LiveSessionOptions,
+  type TaskToggle, type InlineAnchorRef,
 } from "./host-document";
 export {
   ReadingPaneContext, useReadingPane,
   type EditorRange, type EditorSelection, type EditorTransform, type EditorTransformInput, type EditorTransformResult,
   type EditorHandle, type EditorToolbarActionProps, type EditorSelectionActionProps, type ContentContext,
-  type ReadActionProps, type ItemDraftAssistProps, type ReadingPanel,
+  type ReadActionProps, type ItemDraftAssistProps, type ReadingPanel, type BindableEditor, type EditorBinding,
 } from "./editor-extensions";
+// Live documents (RADD-1397): a document surface asks for a live session; a plugin provides it.
+export {
+  LiveStatus, LiveRole, useLiveDocument, registerLiveDocumentSource, unregisterLiveDocumentSources,
+  type LiveStatusValue, type LiveRoleValue, type LiveSave, type LiveDocumentRequest, type LiveViewer,
+  type LiveDocumentOpen, type LiveDocumentState, type LiveDocumentHandle, type LiveDocumentSource, type LiveDocument,
+} from "./live-documents";
 export {
   CommentReplies, CommentHistory, CopyCommentLink, ThreadBadge, ThreadFilter, ResolveThreadButton, CommentSection,
   useCommentFeed, useLinkedComment, useLandOnComment, useThreadExpansion, commentHref, repliesLabel, threadRuleClass,
