@@ -1,27 +1,16 @@
 """Deleting a project (RADD-1174): complete, refusable, and gated globally.
 
-The invariants worth pinning:
-
-  - the row really goes, and so does everything the database cannot cascade on
-    its own — comments (polymorphic parent), scoped settings and subscriptions
-    (bare `scope_id`), and the custom fields scoped ONLY to this project, which
-    would otherwise be promoted to GLOBAL when their scope rows cascade away;
-  - a child moved to another project is detached, not a foreign-key error;
-  - a mail source still landing here is a 409 that names it, and the same
-    inspection the dialog reads lists it beforehand;
-  - the atom is global: `project.manage` on the project is not enough, and
-    `global.manage` carries it.
-
-Rolled-back transactions on the compose DB.
+What the database cannot cascade goes too — comments, scoped settings and
+subscriptions, and fields scoped ONLY here (else promoted to GLOBAL); a child in
+another project is detached; a mail source still landing here is a named 409; and
+`project.manage` is not enough — the atom is global. Rolled back, never committed.
 """
 
 import uuid
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules import workflow  # noqa: F401 — registers the default-state hook
 from radd.modules.auth import authz
@@ -38,21 +27,12 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.mailintake.models import MailSource
 from radd.modules.mailintake.types import MailSourceKind
 from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.projects.types import ProjectEvent
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
 from radd.modules.workflow.types import TransitionMode
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_project
 
 
 async def _user(db, label, *, role=InstanceRole.ADMIN) -> User:
@@ -66,20 +46,14 @@ async def _user(db, label, *, role=InstanceRole.ADMIN) -> User:
     return user
 
 
-async def _project(db, prefix="PD"):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"{prefix}{uuid.uuid4().hex[:4].upper()}", name="Doomed")
-    )
-
-
 async def _count(db, sql: str, **params) -> int:
     return int(await db.scalar(text(sql), params) or 0)
 
 
 async def test_delete_takes_everything_the_database_cannot_cascade(db):
     admin = await _user(db, "admin")
-    project = await _project(db)
-    other = await _project(db, "OT")
+    project = await make_project(db, 'PD')
+    other = await make_project(db, "OT")
     item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="one"), admin)
     await comments_service.create_comment(db, item.id, CommentCreate(body="a comment"), admin)
     await settings_service.set_value(
@@ -138,7 +112,7 @@ async def test_delete_takes_everything_the_database_cannot_cascade(db):
 
 async def test_mail_still_routed_here_blocks_and_is_named(db):
     admin = await _user(db, "admin")
-    project = await _project(db)
+    project = await make_project(db, 'PD')
     db.add(
         MailSource(
             name="Helpdesk", kind=MailSourceKind.WEBHOOK.value, address="help@example.test",

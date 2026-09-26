@@ -1,24 +1,16 @@
-"""A page's linked issues follow its text (RADD-943).
-
-Two things are worth pinning and they fail in opposite directions. The PARSER
-decides what counts as mentioning an issue: too narrow and the feature does
-nothing (which is what shipped — only the editor's own token counted, so a
-generated release-notes page naming twelve issues linked none of them), too wide
-and a page quoting a URL in prose acquires links nobody made.
-
-The WRITE PATH decides who owns a link. A derived row is the body's and must
-vanish with the mention; a manual row is a person's and must survive any edit.
-Getting that backwards destroys user data silently, so it is exercised through
-the service against a real session rather than asserted about a set.
+"""A page's linked issues follow its text (RADD-943). The PARSER decides what counts
+as a mention: too narrow and nothing links (only the editor's token counted, so a
+release-notes page naming twelve issues linked none), too wide and quoted URLs
+acquire links. The WRITE PATH decides ownership: a derived row vanishes with its
+mention, a manual row survives any edit — exercised through the service, because
+getting it backwards destroys user data silently.
 """
 
 import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -30,16 +22,6 @@ from radd.modules.pages.models import ItemPageLink
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

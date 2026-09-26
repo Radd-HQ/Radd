@@ -1,20 +1,10 @@
 """The channel resolver and its rule rows (spec 118).
 
-Two halves, and the first is the important one.
-
-**The defaults ARE the acceptance bar.** A rewrite of a notification preference
-model is one migration away from silently changing what lands in a thousand
-mailboxes, and "nobody noticed" is not evidence — a person who stops receiving
-something has nothing to notice. So the first section asserts, kind by kind,
-that a user with ZERO rule rows resolves to exactly what RADD-686 gave them:
-every kind in the inbox, `DEFAULT_EMAIL_TYPES` also mailed as they happen, and
-the three kinds spec 118 introduced off everywhere. The oracles are LITERALS
-below, so a change to a kind's default in `kinds.py` fails here instead of
-moving the expectation with it.
-
-The second section is precedence, which is where a scoped model earns its
-keep — most specific wins, rules are sparse, and a subscription is not a scope
-until someone actually holds one.
+The defaults ARE the acceptance bar: a person who stops receiving something has
+nothing to notice, so the first section asserts, kind by kind against LITERAL
+oracles, that a user with zero rule rows resolves to exactly what RADD-686 gave
+them. The second section is precedence: most specific wins, rules are sparse, and
+a subscription is not a scope until someone holds one.
 """
 
 import importlib.util
@@ -24,10 +14,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.notify import prefs as prefs_read, rules as policy, service as notify_service
 from radd.modules.notify.kinds import NOTIFICATION_KINDS, every_kind
@@ -37,6 +24,8 @@ from radd.modules.notify.schemas import NotificationPrefsUpdate, NotificationRul
 from radd.modules.notify.types import Channel, NotificationType, RuleScope
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+
+from _factories import make_user
 
 # The parity oracles — literals, so the vocabulary cannot move with them.
 #: Addressed AT someone by the event; resolve through `own` alone.
@@ -86,33 +75,18 @@ def _rules(*rows: tuple[RuleScope, uuid.UUID | None, dict[NotificationType, Chan
 
 
 def test_the_kind_vocabulary_covers_the_enum_exactly():
-    """`NOTIFICATION_KINDS` is not a list of the kinds someone remembered.
-
-    `DEFAULT_MATRIX` is BUILT from it, so a `NotificationType` with no row here
-    has no default anywhere — and the lookup that wants one runs inside
-    `create_notification`, i.e. inside the consumer's per-event SAVEPOINT, which
-    logs the failure and skips the event. The notification would never arrive and
-    nothing would say so: exactly the shape of RADD-978 and RADD-1056, both of
-    which survived for months behind a log line nobody reads.
-
-    Asserted as SET EQUALITY in both directions on purpose. `>=` would let a
-    stale row for a deleted member sit in the settings page forever, and `<=`
-    would let a new member ship with no row at all — the two failures are
-    different and only one of them is loud.
-    """
+    """`DEFAULT_MATRIX` is built from `NOTIFICATION_KINDS`; a type missing here has no
+    default and fails inside the consumer's per-event SAVEPOINT — logged, skipped,
+    never delivered. SET EQUALITY on purpose: `>=` lets a stale row linger, `<=` lets
+    a new type ship with no row."""
     assert {spec.key for spec in NOTIFICATION_KINDS} == {t.value for t in NotificationType}
     assert len(NOTIFICATION_KINDS) == len({spec.key for spec in NOTIFICATION_KINDS})  # and each listed once
 
 
 def test_a_kind_the_vocabulary_does_not_know_degrades_instead_of_raising():
-    """The version where somebody adds an enum member and forgets the row.
-
-    `kinds.is_personal` documents the conservative answer — an unknown kind is
-    treated as own-directed, so it still reaches the person the producer
-    addressed — and until this test that promise ended in a KeyError two lines
-    later, swallowed by the SAVEPOINT. A stand-in enum is the only way to reach
-    it: the test above guarantees no real member can.
-    """
+    """An enum member with no row is treated as own-directed (`kinds.is_personal`), not
+    a KeyError swallowed by the SAVEPOINT. A stand-in enum is the only way to reach
+    it: the test above guarantees no real member can."""
 
     class _FutureKind(StrEnum):
         TELEPATHY = "telepathy"
@@ -129,12 +103,8 @@ def test_a_kind_the_vocabulary_does_not_know_degrades_instead_of_raising():
 @pytest.mark.parametrize("kind", every_kind(), ids=str)
 def test_no_rules_reproduces_the_pre_spec_118_answer(kind: NotificationType):
     """Every kind, both relationships, against the constant that decided it before.
-
-    `own` and `participating` answer alike on purpose: RADD-686's preference had
-    no notion of relation, so the mailer gave a watcher and an assignee the same
-    answer, and any difference introduced here would be a behaviour change for
-    someone who never asked for one.
-    """
+    `own` and `participating` answer alike on purpose: RADD-686's preference had no
+    notion of relation, so any difference would change behaviour nobody asked for."""
     relation = MINE if kind in PERSONAL_KINDS else WATCHING
     verdict = policy.resolve(kind, policy.EMPTY, relation)
 
@@ -300,27 +270,6 @@ def test_a_channel_value_this_version_does_not_know_falls_through():
 # --- storage: normalisation and the migration ---------------------------------
 
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name: str, *, admin: bool = False) -> User:
-    user = User(
-        email=f"rules-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=(InstanceRole.ADMIN if admin else InstanceRole.MEMBER).value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 async def _project(db, name: str):
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"NR{uuid.uuid4().hex[:4].upper()}", name=name)
@@ -345,7 +294,7 @@ async def test_a_rule_row_must_match_its_scope_shape(db):
     does not. A row that gets it wrong is DROPPED rather than stored — a stored
     one could never be matched by the resolver, so it would be a preference
     silently doing nothing, which is the failure this whole spec came from."""
-    user = await _user(db, "Malformed")
+    user = await make_user(db, name="Malformed")
 
     await notify_service.set_rules(
         db,
@@ -367,7 +316,7 @@ async def test_saving_an_empty_matrix_leaves_no_rows_and_therefore_the_defaults(
     """Resetting every cell has to land back on "no opinion", not on a row full
     of nothing — otherwise "restore defaults" would store a rule that shadows
     the defaults it claims to restore."""
-    user = await _user(db, "Reset")
+    user = await make_user(db, name="Reset")
     await notify_service.set_rules(
         db, user.id, [(RuleScope.OWN, None, {NotificationType.COMMENTED.value: "off"})]
     )
@@ -380,21 +329,12 @@ async def test_saving_an_empty_matrix_leaves_no_rows_and_therefore_the_defaults(
 
 
 async def test_a_subscription_names_only_a_target_the_actor_may_read(db):
-    """A `scope_id` is a uuid the CLIENT picks, so the API checks it.
-
-    Delivery was never the exposure — every notification still passes
-    `consumer._allowed`, so a rule pointing at a project you cannot read delivers
-    nothing. The READ is: it resolves each target's name for display, so storing
-    an arbitrary uuid and reading it back was a lookup service for the key and
-    name of every project on the instance.
-
-    Dropped rather than 4xx'd, because a PUT is a full replace: refusing the
-    request over one bad subscription would refuse the matrix edit the person
-    actually made. The response is read back off the rows, so what did not
-    survive is visibly gone.
-    """
-    member = await _user(db, "Member")
-    admin = await _user(db, "Admin", admin=True)
+    """A `scope_id` is a uuid the CLIENT picks: the read resolves each target's name,
+    so an unchecked one was a lookup service for every project's key and name. An
+    unreadable one is dropped, not 4xx'd — a PUT is a full replace, and refusing it
+    would refuse the matrix edit the person actually made."""
+    member = await make_user(db, name="Member")
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="Admin")
     project = await _project(db, "Closed")
     body = NotificationPrefsUpdate(
         rules=[
@@ -424,16 +364,11 @@ async def test_a_subscription_names_only_a_target_the_actor_may_read(db):
 
 
 async def test_the_preferences_read_will_not_NAME_a_target_you_cannot_read(db):
-    """The same gate from the other side, and why it is applied twice.
-
-    A stored row outlives the access that created it: someone removed from a
-    project keeps the subscription row until their next save. Until then the read
-    must not narrate it — so it comes back label-less and the page shows the row
-    as unavailable, which is also the honest rendering for a target that has been
-    deleted. From here the two are the same fact.
-    """
-    member = await _user(db, "Member")
-    admin = await _user(db, "Admin", admin=True)
+    """The same gate on the read: a stored row outlives the access that created it, so
+    a target the person can no longer read comes back label-less (rendered as
+    unavailable, like a deleted one)."""
+    member = await make_user(db, name="Member")
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="Admin")
     project = await _project(db, "Closed")
     for user in (member, admin):
         await notify_service.set_rules(
@@ -452,8 +387,8 @@ async def test_subscriber_lookup_finds_every_target_family_in_one_query(db):
     narrowing by "…and the row turns something on" would be a second copy of the
     resolver written in SQL, and the two would drift the first time precedence
     changed."""
-    subscriber = await _user(db, "Subscriber")
-    stranger = await _user(db, "Stranger")
+    subscriber = await make_user(db, name="Subscriber")
+    stranger = await make_user(db, name="Stranger")
     await notify_service.set_rules(
         db,
         subscriber.id,
@@ -473,21 +408,10 @@ async def test_subscriber_lookup_finds_every_target_family_in_one_query(db):
 
 
 async def test_the_migration_carries_a_stored_preference_into_own_and_participating(db):
-    """The behaviour-preservation promise, run rather than described.
-
-    A pre-spec-118 `notification_prefs` row is written back (the columns are
-    gone at head, so they are re-added first) and the migration's own
-    `upgrade()` is replayed through alembic's operations proxy — inside the test
-    transaction, which rolls the DDL back too, so no other test sees a table
-    mid-migration. Postgres DDL being transactional is what makes this honest
-    instead of destructive.
-
-    Two things are asserted, and the second matters more: a muted type becomes
-    `off` and an emailed one becomes `both`, AND the `teams` column is left
-    empty. Writing the same preference into my-teams would have subscribed every
-    existing user to their whole team's traffic on the strength of a checkbox
-    they ticked about their own issues.
-    """
+    """Replays the migration's own `upgrade()` over a pre-spec-118 row inside the test
+    transaction (Postgres DDL is transactional, so it rolls back too). A muted type
+    becomes `off`, an emailed one `both`, and `teams` stays EMPTY — a checkbox about
+    one's own issues must not subscribe anyone to their team's traffic."""
     from alembic.migration import MigrationContext
     from alembic.operations import Operations
 

@@ -11,12 +11,10 @@ never authority.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import scopes
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.kernel import registries
 from radd.kernel.mcptools import validate_arguments
@@ -28,6 +26,8 @@ from radd.modules.mcp.router import handle_request
 from radd.modules.mcp.types import JsonRpcErrorCode, McpMethod, McpTool
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+
+from _factories import make_project, make_user
 
 WRITE_TOOLS = {
     McpTool.CREATE_ITEM.value,
@@ -52,29 +52,8 @@ ADMIN_TOOLS = {
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"MC{uuid.uuid4().hex[:4].upper()}", name="MCP catalog")
-    )
-
-
-async def _user(db, role: InstanceRole) -> User:
-    user = User(
-        email=f"mcp-{uuid.uuid4().hex[:8]}@example.com", name="MCP", instance_role=role.value
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_project(db, "MC", "MCP catalog")
 
 
 async def _names(db, user) -> set[str]:
@@ -94,7 +73,7 @@ async def test_every_tool_declares_what_it_needs():
 
 
 async def test_admin_sees_the_admin_family(db, project):
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     names = await _names(db, admin)
     assert ADMIN_TOOLS <= names
     assert WRITE_TOOLS <= names
@@ -103,7 +82,7 @@ async def test_admin_sees_the_admin_family(db, project):
 async def test_a_read_only_key_offers_no_writes(db, project):
     """The viewer case, expressed the way it actually arrives: an admin account
     holding a key scoped to reads."""
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     admin.token_scope = scopes.parse_scope(
         {"global": ["page.read"], "projects": {str(project.id): ["item.read"]}}
     )
@@ -119,7 +98,7 @@ async def test_a_member_sits_between(db, project):
     """The member floor is READ everywhere; writing takes a grant on the project.
     So an ungranted member's catalog is reads — which is the filter telling the
     truth, not withholding."""
-    member = await _user(db, InstanceRole.MEMBER)
+    member = await make_user(db, name="MCP")
     names = await _names(db, member)
 
     assert McpTool.GET_ITEM.value in names
@@ -132,7 +111,7 @@ async def test_a_member_sits_between(db, project):
 
 
 async def test_project_parameter_enumerates_only_permitted_projects(db, project):
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     other = await projects_service.create_project(
         db, ProjectCreate(key=f"MD{uuid.uuid4().hex[:4].upper()}", name="Other")
     )
@@ -148,7 +127,7 @@ async def test_project_parameter_enumerates_only_permitted_projects(db, project)
 
 
 async def test_enum_degrades_to_a_string_above_the_threshold(db, project, monkeypatch):
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     monkeypatch.setattr(settings, "mcp_project_enum_max", 0)
 
     catalog = await visible_catalog(db, admin, build_catalog({}))
@@ -164,7 +143,7 @@ async def test_enum_degrades_to_a_string_above_the_threshold(db, project, monkey
 
 async def test_a_hidden_tool_is_still_refused_when_called(db, project):
     """The claim that makes the whole design safe."""
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     admin.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
 
     assert McpTool.CREATE_SERVICE_ACCOUNT.value not in await _names(db, admin)
@@ -180,7 +159,7 @@ async def test_a_scoped_key_lists_exactly_its_projects(db, project):
     handlers demanded the GLOBAL item.read — a catalog/enforcement disagreement
     in exactly the direction spec 114 promises cannot happen. The gate is now
     item.read ANYWHERE, and the answer is scoped to where it holds."""
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     await projects_service.create_project(
         db, ProjectCreate(key=f"ME{uuid.uuid4().hex[:4].upper()}", name="Elsewhere")
     )
@@ -191,7 +170,7 @@ async def test_a_scoped_key_lists_exactly_its_projects(db, project):
 
 
 async def test_a_scoped_key_searches_without_the_global_atom(db, project):
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     admin.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
 
     result = await tools.call_tool(
@@ -203,7 +182,7 @@ async def test_a_scoped_key_searches_without_the_global_atom(db, project):
 async def test_item_read_nowhere_is_still_refused(db, project):
     """require_anywhere is a gate, not a bypass: a key with no item.read at all
     stays refused."""
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     admin.token_scope = scopes.parse_scope({"projects": {str(project.id): ["comment.write"]}})
 
     with pytest.raises(ForbiddenError):
@@ -216,7 +195,7 @@ async def test_an_anonymous_principal_sees_nothing(db):
 
 async def test_unscoped_admin_keeps_the_whole_catalog(db, project):
     """Spec 45's behaviour for every key that existed before this spec."""
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     assert admin.token_scope is None
     full = {tool["name"] for tool in build_catalog({})}
     assert await _names(db, admin) == full
@@ -233,7 +212,7 @@ async def test_the_tracking_workflow_runs_entirely_over_mcp(db, project):
     from radd.modules.timelogging import categories as timelogging_categories, enablement
     from radd.modules.timelogging.schemas import WorkCategoryCreate
 
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     await enablement.set_enabled(db, project.id, True)  # timelogging is per-project-optional
     types = {t.name for t in await itemtypes_service.list_types(db, project.id)}
     assert {"Epic", "Bug"} <= types  # seeded defaults; the names the tool resolves
@@ -319,7 +298,7 @@ async def test_every_tool_validates_against_the_schema_it_advertises(db, tool):
     tools/list renders. A tool with required properties refuses `{}` with a
     -32602 that names what is missing; a tool without any accepts `{}` at the
     validation layer, so the check is never vacuous."""
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     spec = registries.mcp_tools[tool]
     schema = await live_schema(db, spec)
     required = schema.get("required", [])
@@ -348,7 +327,7 @@ async def test_the_wiki_is_writable_over_mcp(db):
     from radd.modules.pages import spaces
     from radd.modules.pages.schemas import PageSpaceCreate
 
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     slug = f"mcp-{uuid.uuid4().hex[:8]}"
     space = await spaces.create_space(db, PageSpaceCreate(name="MCP wiki", slug=slug), admin.id)
 
@@ -376,7 +355,7 @@ async def test_the_wiki_is_writable_over_mcp(db):
     )
     assert moved["parent_id"] == parent["id"]
 
-    reader = await _user(db, InstanceRole.ADMIN)
+    reader = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     reader.token_scope = scopes.parse_scope({"global": ["page.read"]})
     page_writes = {McpTool.CREATE_PAGE.value, McpTool.UPDATE_PAGE.value, McpTool.MOVE_PAGE.value}
     assert not (page_writes & await _names(db, reader))
@@ -431,7 +410,7 @@ async def test_a_registered_tool_is_filtered_like_a_builtin(db, project, registr
     extra = registry_catalog(frozenset())
     catalog = build_catalog({}) + extra
 
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     admin.token_scope = scopes.parse_scope(
         {"projects": {str(project.id): ["item.read", "item.create"]}}
     )
@@ -439,7 +418,7 @@ async def test_a_registered_tool_is_filtered_like_a_builtin(db, project, registr
     tool = next(t for t in visible if t["name"] == registry_tool.name)
     assert tool["inputSchema"]["properties"]["project_key"]["enum"] == [project.key]
 
-    reader = await _user(db, InstanceRole.ADMIN)
+    reader = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     reader.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
     assert registry_tool.name not in {t["name"] for t in await visible_catalog(db, reader, catalog)}
 
@@ -447,12 +426,12 @@ async def test_a_registered_tool_is_filtered_like_a_builtin(db, project, registr
 async def test_a_registered_tool_is_enforced_before_its_handler_runs(db, project, registry_tool):
     """The kernel requires the declared atom — the handler holds no authz call, and
     a key without the atom is refused before it runs."""
-    reader = await _user(db, InstanceRole.ADMIN)
+    reader = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     reader.token_scope = scopes.parse_scope({"projects": {str(project.id): ["item.read"]}})
     with pytest.raises(ForbiddenError):
         await tools.call_tool(db, reader, registry_tool.name, {"project_key": project.key})
 
-    writer = await _user(db, InstanceRole.ADMIN)
+    writer = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     writer.token_scope = scopes.parse_scope(
         {"projects": {str(project.id): ["item.read", "item.create"]}}
     )
@@ -468,7 +447,7 @@ async def test_an_unregistered_tool_stops_dispatching(db, project, registry_tool
 
     registries.mcp_tools.pop(registry_tool.name)
     assert registry_tool.name not in {t["name"] for t in registry_catalog(frozenset())}
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     with pytest.raises(tools.UnknownToolError):
         await tools.call_tool(db, admin, registry_tool.name, {"project_key": project.key})
 
@@ -493,15 +472,15 @@ async def test_the_fingerprint_differs_between_principals(db):
     changed when its own scopes were widened."""
     from radd.modules.mcp.catalog import catalog_fingerprint
 
-    admin = await _user(db, InstanceRole.ADMIN)
-    member = await _user(db, InstanceRole.MEMBER)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
+    member = await make_user(db, name="MCP")
     assert await catalog_fingerprint(db, admin) != await catalog_fingerprint(db, member)
 
 
 async def test_the_fingerprint_is_stable_when_nothing_changed(db):
     from radd.modules.mcp.catalog import catalog_fingerprint
 
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     assert await catalog_fingerprint(db, admin) == await catalog_fingerprint(db, admin)
 
 
@@ -512,7 +491,7 @@ async def test_mounting_a_plugin_tool_moves_the_fingerprint(db):
     from radd.kernel.specs import McpToolSpec
     from radd.modules.mcp.catalog import catalog_fingerprint
 
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     before = await catalog_fingerprint(db, admin)
 
     async def _handler(session, actor, args):
@@ -530,18 +509,14 @@ async def test_mounting_a_plugin_tool_moves_the_fingerprint(db):
 
 
 async def test_the_change_stream_actually_serves(db):
-    """RADD-740 shipped BROKEN because nothing here opened the stream.
-
-    `_initialize_result()` does not touch `SSE_HEADERS`, and no test called the
-    GET route, so a missing import passed every check I ran and then 500'd in
-    production on the first connection. This pulls the first frame, which is the
-    cheapest thing that exercises the response construction end to end.
-    """
+    """The stream is OPENED here: RADD-740 shipped a missing import that passed every
+    check and 500'd on the first connection, because nothing called the GET route.
+    Pulling the first frame exercises the response construction end to end."""
     import asyncio
 
     from radd.modules.mcp.router import mcp_stream
 
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP")
     response = await mcp_stream(admin, db)
     assert response.media_type == "text/event-stream"
     assert response.headers["cache-control"].startswith("no-cache")

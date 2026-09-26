@@ -1,34 +1,17 @@
-"""RADD-845 — streaming responses must not hold the request transaction open.
-
-`get_session` commits in dependency teardown, which for a flush-through
-response (SSE, file delivery) runs only when the BODY finishes — hours later
-for a held-open MCP stream. Two PAT-auth sessions idle in transaction for 4-5h
-once blocked a production migration's DROP TABLE behind their ACCESS SHARE
-locks. These tests pin the two halves of the fix: handlers end the transaction
-before the stream starts, and the engine carries a server-side
-idle-in-transaction timeout so any future leak self-heals instead of wedging
-a deploy.
+"""RADD-845: streaming responses must not hold the request transaction open.
+`get_session` commits in dependency teardown, which for SSE or file delivery runs
+only when the BODY finishes (hours, for an MCP stream — long enough to block a
+migration's DROP TABLE). Pinned: handlers end the transaction before streaming,
+and the engine carries a server-side idle-in-transaction timeout.
 """
 
 import uuid
 
-import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _admin(db) -> User:

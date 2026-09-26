@@ -9,9 +9,7 @@ at teardown, so rows never persist.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
@@ -25,50 +23,11 @@ from radd.modules.participants import service as participants
 from radd.modules.participants.schemas import ParticipantAdd
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
+from _factories import make_project, make_user
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def actor(db) -> User:
-    user = User(
-        email=f"prt-{uuid.uuid4().hex[:8]}@example.com",
-        name="Participant Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _member(db, name: str) -> User:
-    """A plain active user: the global member floor grants item.read but NOT
-    item.update (spec 86)."""
-    user = User(
-        email=f"prt-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _project(db):
-    return await projects_service.create_project(
-        db,
-        ProjectCreate(key=f"PR{uuid.uuid4().hex[:4].upper()}", name="P"),
-    )
+# A plain account holds the global member floor: item.read but NOT item.update
+# (spec 86).
 
 
 async def _team(db):
@@ -81,10 +40,10 @@ async def _team(db):
 
 
 async def test_reporter_without_item_update_manages_participants(db, actor):
-    project = await _project(db)
-    reporter = await _member(db, "Reporter")
-    colleague = await _member(db, "Colleague")
-    bystander = await _member(db, "Bystander")
+    project = await make_project(db, "PR")
+    reporter = await make_user(db, name="Reporter")
+    colleague = await make_user(db, name="Colleague")
+    bystander = await make_user(db, name="Bystander")
     team = await _team(db)
     item = await items.create_item(
         db, ItemCreate(project_id=project.id, title="i", reporter_id=reporter.id), actor
@@ -141,11 +100,11 @@ async def test_reporter_without_item_update_manages_participants(db, actor):
 
 
 async def test_team_fan_out_is_live_and_direct_users_auto_watch(db, actor):
-    project = await _project(db)
-    reporter = await _member(db, "Reporter")
-    stayer = await _member(db, "Stayer")
-    leaver = await _member(db, "Leaver")
-    direct = await _member(db, "Direct")
+    project = await make_project(db, "PR")
+    reporter = await make_user(db, name="Reporter")
+    stayer = await make_user(db, name="Stayer")
+    leaver = await make_user(db, name="Leaver")
+    direct = await make_user(db, name="Direct")
     team = await _team(db)
     await teams_service.add_team_member(db, team.id, stayer.id)
     await teams_service.add_team_member(db, team.id, leaver.id)
@@ -192,9 +151,9 @@ async def test_team_fan_out_is_live_and_direct_users_auto_watch(db, actor):
 
 
 async def test_subject_validation_and_dupes_conflict(db, actor):
-    project = await _project(db)
-    reporter = await _member(db, "Reporter")
-    colleague = await _member(db, "Colleague")
+    project = await make_project(db, "PR")
+    reporter = await make_user(db, name="Reporter")
+    colleague = await make_user(db, name="Colleague")
     inactive = User(
         email=f"prt-out-{uuid.uuid4().hex[:8]}@example.com",
         name="Inactive",

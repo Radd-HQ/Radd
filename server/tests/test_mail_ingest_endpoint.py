@@ -1,14 +1,7 @@
-"""The ingest endpoint's status contract (RADD-953).
-
-These codes are not cosmetic. The Cloudflare Worker turns them into SMTP
-outcomes, so **4xx bounces the sender's mail and 5xx queues it for retry**. A
-transient database error answered with 4xx silently bounces valid mail and tells
-the sender they were rejected by policy.
-
-That asymmetry is why the endpoint catches narrowly: only signature, size and
-parse failures may produce 4xx, and everything else is allowed to propagate.
-Tested here rather than reasoned about, because the failure is invisible from
-inside the process — it looks like a handled error either way.
+"""The ingest endpoint's status contract (RADD-953). The Cloudflare Worker turns
+codes into SMTP outcomes — **4xx bounces the sender's mail, 5xx queues it for
+retry** — so only signature, size and parse failures may produce 4xx; a transient
+database error must propagate. Invisible from inside the process, hence tested.
 """
 
 import hashlib

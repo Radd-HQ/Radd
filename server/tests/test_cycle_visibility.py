@@ -6,44 +6,22 @@ import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.cycles import directory, service as cycles
 from radd.modules.cycles.schemas import CycleCreate, CycleUpdate
 from radd.modules.teams import service as teams
 from radd.modules.teams.schemas import TeamCreate
 
+from _factories import make_user
+
 TODAY = date(2026, 7, 22)
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, *, admin=False) -> User:
-    user = User(
-        email=f"cv-{uuid.uuid4().hex[:8]}@example.com",
-        name="Cycle Viz",
-        instance_role=(InstanceRole.ADMIN if admin else InstanceRole.MEMBER).value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def test_team_restricted_cycles_hide_from_non_members(db):
     run = uuid.uuid4().hex[:6]
-    member = await _user(db)
-    manager = await _user(db, admin=True)
+    member = await make_user(db)
+    manager = await make_user(db, role=InstanceRole.ADMIN)
     team_a = await teams.create_team(db, TeamCreate(name=f"A{run}"))
     team_b = await teams.create_team(db, TeamCreate(name=f"B{run}"))
     await teams.add_team_member(db, team_a.id, member.id)

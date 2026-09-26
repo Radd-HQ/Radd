@@ -8,44 +8,26 @@ validation, dedup, batch loading, and clear-on-delete.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 import radd.modules.fields.service  # noqa: F401 — registers the "field" resource on import
 from radd.modules.access import service as access
 from radd.modules.access.types import Access, GrantSubject
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
+from _factories import make_project
+
 FIELD = "field"  # registered by the fields module on import
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _team(db, name="Leads"):
     return await teams_service.create_team(db, TeamCreate(name=f"{name}-{uuid.uuid4().hex[:6]}"))
 
 
-async def _project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"AC{uuid.uuid4().hex[:6].upper()}", name="Access")
-    )
-
-
 async def test_add_scoped_grant_and_list(db):
     team = await _team(db)
-    project = await _project(db)
+    project = await make_project(db, "AC", "Access")
     resource_id = str(uuid.uuid4())
     grant = await access.add_grant(
         db, FIELD, resource_id,

@@ -10,11 +10,8 @@ REST route uses, so the two cannot disagree.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ForbiddenError
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
@@ -24,26 +21,7 @@ from radd.modules.mcp.requirements import visible_catalog
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, role: InstanceRole) -> User:
-    user = User(
-        email=f"mcp-audit-{uuid.uuid4().hex[:8]}@example.com",
-        name="MCP Auditor",
-        instance_role=role.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _names(db, user):
@@ -53,8 +31,8 @@ async def _names(db, user):
 
 
 async def test_tool_is_registered_and_gated(db):
-    admin = await _user(db, InstanceRole.ADMIN)
-    member = await _user(db, InstanceRole.MEMBER)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP Auditor")
+    member = await make_user(db, name="MCP Auditor")
     # A project-scoped tool is offered where its atom holds — somewhere must exist.
     await projects_service.create_project(
         db, ProjectCreate(key=f"MG{uuid.uuid4().hex[:4].upper()}", name="Gate"), actor_id=admin.id
@@ -66,7 +44,7 @@ async def test_tool_is_registered_and_gated(db):
 
 
 async def test_who_changed_the_issue(db):
-    admin = await _user(db, InstanceRole.ADMIN)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="MCP Auditor")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"MA{uuid.uuid4().hex[:4].upper()}", name="MCP audit"), actor_id=admin.id
     )

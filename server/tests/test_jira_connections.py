@@ -13,7 +13,6 @@ import uuid
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.db import SessionLocal
@@ -22,16 +21,6 @@ from radd.modules.jiraimport import connections
 from radd.modules.jiraimport.models import JiraConnection
 from radd.modules.jiraimport.schemas import JiraConnectionCreate, JiraConnectionUpdate
 from radd.modules.jiraimport.types import JiraAuthMode, JiraConnectionSource
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _create(name: str = "", **overrides) -> JiraConnectionCreate:

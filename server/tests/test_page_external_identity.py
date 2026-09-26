@@ -1,24 +1,15 @@
-"""A page remembers where it came from (spec 117, RADD-1012).
-
-The Jira importer never needed this: it maps `DEV-123` onto Radd `DEV-123`, so
-the item KEY is the external identity and a re-import upserts on it. A page has
-only a UUID and a cosmetic slug, so the mapping needs a column — otherwise it
-lives in an importer's run ledger, which one rollback deletes.
-
-The gate matters as much as the column. `create_page` is the door every page comes
-through, and an ordinary request must not reach the author/timestamp overrides by
-adding two fields to its JSON body — so they are honored only for a caller that
-passes a permission set carrying `page.manage`, exactly as
-`comments.create_authorized_comment` gates its own.
+"""A page remembers where it came from (spec 117): it has only a UUID and a
+cosmetic slug, so the external identity needs a column, not a run ledger one
+rollback deletes. The author/timestamp overrides are honored only for a caller
+whose permission set carries `page.manage` — an ordinary request must not reach
+them by adding two fields to its body.
 """
 
 import uuid
 from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ForbiddenError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole, Permission
@@ -27,15 +18,6 @@ from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
 
 IMPORTING = frozenset({Permission.PAGE_MANAGE})
 SOURCE = "confluence:wiki.example.com"
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
 
 
 async def _people(db) -> tuple[User, User]:

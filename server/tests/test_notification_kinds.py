@@ -13,10 +13,8 @@ from enum import StrEnum
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
-from radd.kernel import NotificationKindSpec, load_plugins
+from radd.kernel import NotificationKindSpec
 from radd.kernel.registry import registries
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -44,17 +42,6 @@ class AcmeEvent(StrEnum):
 
 class AcmeEntity(StrEnum):
     DEPLOY = "acme_deploy"
-
-
-@pytest.fixture
-async def db():
-    load_plugins(settings.modules)
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

@@ -10,9 +10,7 @@ DB-backed tests are flushed, never committed; the session rolls back at teardown
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.ai import registry as ai_registry
 from radd.modules.ai.schemas import AiProviderCreate, AiRoleAssign
 from radd.modules.ai.types import AiEvent, AiRole, AiWireShape
@@ -23,8 +21,6 @@ from radd.modules.auth import public_access
 from radd.modules.auth.models import User
 from radd.modules.auth.types import AuthEvent, InstanceRole
 from radd.modules.events import service as events
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingEvent, SettingKey, SettingScope
 from radd.modules.sso import registry as sso_registry
@@ -33,34 +29,17 @@ from radd.modules.sso.types import SsoEvent, SsoKind
 from radd.modules.timelogging import enablement
 from radd.modules.timelogging.types import WorklogEvent
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_project, make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(
-        email=f"audit-{uuid.uuid4().hex[:8]}@example.com",
-        name="Audit Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Audit Admin")
 
 
 @pytest.fixture
 async def project(db, admin):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"AU{uuid.uuid4().hex[:4].upper()}", name="Audit"), actor_id=admin.id
-    )
+    return await make_project(db, "AU", "Audit", actor=admin)
 
 
 async def _latest(db, event_type: str, *, entity_id: str | None = None):

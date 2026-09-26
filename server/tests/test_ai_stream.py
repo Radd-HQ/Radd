@@ -9,9 +9,7 @@ import uuid
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.ai import client, provider, registry
 from radd.modules.ai.schemas import AiProviderCreate, AiRoleAssign
 from radd.modules.ai.types import AiRole, AiUpstreamError, AiWireShape
@@ -100,16 +98,6 @@ def test_anthropic_stream_delta_lines():
 
 
 # --- wired: the client seam over MockTransport ---------------------------------
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

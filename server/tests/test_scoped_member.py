@@ -1,19 +1,9 @@
-"""The member floor, walked as a real actor (RADD-788).
-
-The scenario is the live one that produced the bug: an admin empties the Baseline
-role (RADD-773's setting), and a person's entire access is ONE role grant SCOPED
-to a project — which is the normal shape of a grant on this instance, and which
-contributes nothing at global scope.
-
-Roughly 28 endpoints used to gate on `item.read` with no project as a stand-in for
-"is this an ordinary member?". That check could not fail before RADD-773, because
-`item.read` sat in the hardcoded MEMBER_FLOOR — so it was decoration, and the first
-admin to empty the Baseline turned all of it into 403s for actual members.
-
-This walks the HTTP surface with that person's own token and asserts the answer for
-each endpoint, which is the only form of this test that cannot pass vacuously: a
-service-level check would resolve the permissions correctly and never touch the
-gate that was wrong.
+"""The member floor, walked as a real actor (RADD-788): the Baseline emptied, and a
+person's whole access is ONE role grant scoped to a project — which contributes
+nothing at global scope. Endpoints that gated on project-less `item.read` as
+"is an ordinary member" turned into 403s for actual members. This walks the HTTP
+surface with that person's token: a service-level check would resolve the
+permissions correctly and never touch the gate that was wrong.
 """
 
 import uuid
@@ -294,13 +284,9 @@ async def test_attaching_is_still_gated(client, world):
 
 
 async def test_cross_project_reports_cover_only_readable_projects(client, world):
-    """RADD-789. The SLA report used to fold EVERY project's bookkeeping rows into
-    its averages whenever no SLQ `q` was passed — the global item.read gate was
-    the only thing in front of it, and RADD-788 relaxed that gate.
-
-    The figure now carries the scope it was computed over, so a filtered average
-    is never silently a different number.
-    """
+    """RADD-789: with no `q`, the SLA report must fold only readable projects'
+        rows into its averages, and the figure carries the scope it was computed over,
+        so a filtered average is never silently a different number."""
     response = await client.get("/api/v1/reports/velocity", headers=_auth(world["member_token"]))
     assert response.status_code == 200
     assert response.json()["rows"] == [], "project-only readers have no cycle catalog grant"

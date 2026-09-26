@@ -1,15 +1,7 @@
-"""Page extensions (RADD-709) — the registry, and the contract across the wire.
-
-The interesting invariant is not that a dataclass holds fields; it is that the
-kernel's DECLARED set and the SPA's RENDERED set do not drift. They live in
-different languages and are edited in different files, and the failure is silent
-in both directions:
-
-  - declared but not rendered -> the insert menu offers something that renders
-    as "unknown extension";
-  - rendered but not declared -> a working block nobody can discover.
-
-So this reads the TypeScript registration list and compares it to the kernel's.
+"""Page extensions (RADD-709): the kernel's DECLARED set and the SPA's RENDERED
+set must not drift, and the failure is silent both ways (declared-only renders as
+"unknown extension"; rendered-only is undiscoverable). So this reads the
+TypeScript registration list and compares it to the kernel's.
 """
 
 import re

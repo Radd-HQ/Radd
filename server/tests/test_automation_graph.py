@@ -45,12 +45,9 @@ def test_linear_graph_validates_and_returns_its_triggers():
 
 @pytest.mark.parametrize("count", [0, 1, 2, 5])
 def test_a_graph_may_hold_any_number_of_triggers(count):
-    """Several is the point: "on create, OR every Monday" is one automation with
-    one set of actions, not two graphs kept in step by hand. A firing event starts
-    the run at the trigger that matched.
-
-    Zero is legal too — a graph being built is saved before it is wired, and the
-    editor says it can never run rather than the API refusing to store work."""
+    """Several triggers is the point ("on create, OR every Monday" is one automation);
+    the run starts at the trigger that matched. Zero is legal too: a graph is saved
+    before it is wired, and the editor, not the API, says it can never run."""
     triggers = [_node(f"t{i}", AutomationNodeKind.TRIGGER) for i in range(count)]
     assert graph.validate([*triggers, ACTION], []) == triggers
 

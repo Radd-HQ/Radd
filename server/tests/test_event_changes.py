@@ -1,19 +1,11 @@
-"""The kernel change primitive (spec 123, RADD-1166).
-
-Three invariants every module's audit trail depends on:
-
-1. `kernel.changes.diff` produces the one shape the SPA renders and the
-   consumers read — `{field, from, to}` scalars, `{field, added, removed}`
-   collections, `{field}` alone for a hidden value — JSON-safe, in field order.
-2. `events.emit` REFUSES an event whose spec declares `has_changes` when no diff
-   is passed, and accepts `[]` as "nothing visible changed". A forgotten diff is
-   a test failure, not a blank "updated" row an auditor finds a year later.
-3. Every registered `*.updated` event type declares `has_changes=True`, and
-   every event type a module's `*Event` enum can emit is REGISTERED (an
-   unregistered type has no label in the audit catalog, no automation trigger,
-   and escapes invariant 2). The allowlists below are the burn-down
-   RADD-1167/RADD-1168 empty; an entry that no longer needs to be there fails
-   the test so the lists cannot rot.
+"""The kernel change primitive (spec 123):
+1. `kernel.changes.diff` produces the one shape — `{field, from, to}` scalars,
+   `{field, added, removed}` collections, `{field}` for a hidden value.
+2. `events.emit` REFUSES a `has_changes` event with no diff; `[]` means "nothing
+   visible changed".
+3. Every `*.updated` type declares `has_changes=True` and every emittable `*Event`
+   member is REGISTERED (else no audit label, no trigger, and it escapes 2). The
+   allowlists are empty; a stale entry fails so they cannot rot.
 """
 
 import enum
@@ -25,21 +17,9 @@ from datetime import date, datetime
 from enum import StrEnum
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.kernel import changes, registries
 from radd.modules.events import service as events
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 # --- 1. the shape ---------------------------------------------------------------

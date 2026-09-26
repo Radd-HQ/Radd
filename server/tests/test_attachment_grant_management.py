@@ -8,7 +8,7 @@ from radd.modules.attachments import acl
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.schemas import TokenCreate
-from test_attachment_acl import db, setup  # noqa: F401
+from test_attachment_acl import setup  # noqa: F401
 from radd.modules.auth.types import LoginMethod
 
 

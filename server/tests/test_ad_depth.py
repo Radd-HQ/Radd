@@ -1,19 +1,15 @@
-"""AD/LDAP depth (spec 84): the pure reconcile planner, the duplicates
-heuristic, instance-admin user administration (deactivate revokes sessions,
-self-deactivate 409), and the group-import/reconcile services with the
-directory stubbed at the service seam (ldap3 never touches the wire — the
-spec-42/49 test gate: no directory in CI).
+"""AD/LDAP depth (spec 84): the duplicates heuristic, instance-admin user
+administration (deactivate revokes sessions, self-deactivate 409), and the
+group-import/reconcile services with the directory stubbed at the service seam
+(ldap3 never touches the wire: no directory in CI).
 
-DB-backed (compose Postgres) — flushed, never committed; the session rolls
-back at teardown."""
+DB-backed — flushed, never committed; the session rolls back at teardown."""
 
 import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User, UserSession
@@ -27,35 +23,8 @@ from radd.modules.teams import service as teams_service
 from radd.modules.auth.types import LoginMethod
 
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"ad84-admin-{uuid.uuid4().hex[:8]}@example.com",
-        name="AD Depth Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 def _uid() -> uuid.UUID:
     return uuid.uuid4()
-
-
-# (RADD-829 retired the pure reconcile planner: group_members has no manual
-# path, so the joiner/leaver/manual algebra collapsed into a set replace —
-# `groups.service.replace_members` — tested through the flows below.)
 
 
 # --- duplicates heuristic -----------------------------------------------------

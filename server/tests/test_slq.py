@@ -1,6 +1,6 @@
 """SLQ core tests (spec 10): lexer/parser round-trips + precedence, every operator
 per field type, error positions + did-you-mean, and compile smoke against a live
-session (Postgres from compose, same as the demo flows).
+session.
 
 Pure lex/parse/compile tests pass `session=None` — the compiler only touches the
 session to resolve label names, so label-free queries never await the DB.
@@ -10,9 +10,7 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.fields.types import FieldType
 from radd.modules.items.models import WorkItem
@@ -257,8 +255,7 @@ def test_render_round_trips(text: str):
         "key = TD-12",
         "key != TD-12",
         "key IN (TD-1, DEV-2)",
-        # `parent = <key>` forms moved to test_slq_ancestors.py: bare epic/parent
-        # keys resolve against the DB at compile time since spec 83.
+        # parent = <key>: test_slq_ancestors.py (resolved against the DB)
         "parent = none",
         "parent IS EMPTY",
         "number = 5",
@@ -500,17 +497,7 @@ async def test_past_cycle_field_compiles():
         assert compiled.where is not None
 
 
-@pytest.fixture
-async def db_session():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()  # flushed rows never persist
-    await engine.dispose()
-
-
-async def test_negated_relations_include_items_without_the_relation(db_session):
+async def test_negated_relations_include_items_without_the_relation(db):
     """RADD-1139: `assignee != x` / `NOT IN` are the complement of the positive
     form, so the unassigned item is on the negative side rather than lost to
     both; `!= none` still means assigned. The same rule rides `type`."""
@@ -528,12 +515,12 @@ async def test_negated_relations_include_items_without_the_relation(db_session):
         name="Negation Tester",
         instance_role=InstanceRole.ADMIN.value,
     )
-    db_session.add(actor)
-    await db_session.flush()
+    db.add(actor)
+    await db.flush()
     project = await projects.create_project(
-        db_session, ProjectCreate(key=f"NEG{uuid.uuid4().hex[:4].upper()}", name="Negation")
+        db, ProjectCreate(key=f"NEG{uuid.uuid4().hex[:4].upper()}", name="Negation")
     )
-    types = {t.name: t for t in await itemtypes.list_types(db_session, project.id)}
+    types = {t.name: t for t in await itemtypes.list_types(db, project.id)}
     bug, task = types["Bug"], types["Task"]
     for title, assignee, type_ in (
         ("mine bug", actor.id, bug.id),
@@ -541,16 +528,16 @@ async def test_negated_relations_include_items_without_the_relation(db_session):
         ("unassigned untyped", None, None),
     ):
         created = await items.create_item(
-            db_session,
+            db,
             ItemCreate(project_id=project.id, title=title, assignee_id=assignee, type_id=type_),
             actor,
         )
         if type_ is None:  # creation falls back to the default type; an explicit null clears
-            await items.update_item(db_session, created.id, ItemUpdate(type_id=None), actor)
+            await items.update_item(db, created.id, ItemUpdate(type_id=None), actor)
 
     async def titles(q: str) -> set[str]:
         rows = await items.list_items(
-            db_session,
+            db,
             actor=actor,
             filters=ItemListFilters(project_id=project.id),
             q=q,
@@ -574,7 +561,7 @@ async def test_negated_relations_include_items_without_the_relation(db_session):
         assert await titles(positive) & await titles(negative) == set()
 
 
-async def test_order_by_state_lists_items_in_workflow_order(db_session):
+async def test_order_by_state_lists_items_in_workflow_order(db):
     """RADD-1176, end to end: three items in three states, listed in the
     workflow's position order, and in reverse with DESC; category groups the
     tiers and `state, updated DESC` orders within a state."""
@@ -591,25 +578,25 @@ async def test_order_by_state_lists_items_in_workflow_order(db_session):
         email=f"ord-{uuid.uuid4().hex[:8]}@example.com", name="Order Tester",
         instance_role=InstanceRole.ADMIN.value,
     )
-    db_session.add(actor)
-    await db_session.flush()
+    db.add(actor)
+    await db.flush()
     project = await projects.create_project(
-        db_session, ProjectCreate(key=f"ORD{uuid.uuid4().hex[:4].upper()}", name="Ordering")
+        db, ProjectCreate(key=f"ORD{uuid.uuid4().hex[:4].upper()}", name="Ordering")
     )
-    states = sorted(await workflow.list_states(db_session, project.id), key=lambda s: s.position)
+    states = sorted(await workflow.list_states(db, project.id), key=lambda s: s.position)
     first, middle, last = states[0], states[len(states) // 2], states[-1]
     # Created in the OPPOSITE order to the workflow, so created-desc (the
     # default) and workflow order disagree and the sort is observable.
     for state in (last, middle, first):
         await items.create_item(
-            db_session,
+            db,
             ItemCreate(project_id=project.id, title=f"in {state.name}", state_id=state.id),
             actor,
         )
 
     async def titles(q: str) -> list[str]:
         rows = await items.list_items(
-            db_session, actor=actor, filters=ItemListFilters(project_id=project.id),
+            db, actor=actor, filters=ItemListFilters(project_id=project.id),
             q=q, limit=50, offset=0,
         )
         return [r.title for r in rows]
@@ -624,7 +611,7 @@ async def test_order_by_state_lists_items_in_workflow_order(db_session):
     from radd.modules.workflow.models import StateCategoryDef
 
     tier_position = dict(
-        (await db_session.execute(select(StateCategoryDef.key, StateCategoryDef.position))).all()
+        (await db.execute(select(StateCategoryDef.key, StateCategoryDef.position))).all()
     )
     expected = [
         f"in {s.name}"
@@ -633,9 +620,9 @@ async def test_order_by_state_lists_items_in_workflow_order(db_session):
     assert await titles("ORDER BY category") == expected
 
 
-async def test_compile_smoke_executes_against_the_database(db_session):
+async def test_compile_smoke_executes_against_the_database(db):
     compiled = await compile_query(
-        db_session,
+        db,
         parse(
             "project = TD AND label IN (urgent, fx) AND state != Done AND assignee != me "
             "AND team IS EMPTY AND title ~ fix AND created >= 2020-01-01 "
@@ -648,26 +635,26 @@ async def test_compile_smoke_executes_against_the_database(db_session):
     query = (
         select(WorkItem).where(compiled.where).order_by(*compiled.order).limit(5)
     )
-    result = await db_session.execute(query)  # proves the SQL is valid Postgres
+    result = await db.execute(query)  # proves the SQL is valid Postgres
     assert result.scalars().all() is not None
 
 
-async def test_issue_type_field_compiles(db_session):
+async def test_issue_type_field_compiles(db):
     # Spec 51: the `type` builtin filters by issue-type name + IS [NOT] EMPTY.
     compiled = await compile_query(
-        db_session,
+        db,
         parse("type = Bug AND type IS NOT EMPTY AND type != Epic"),
         definitions_by_key={},
         current_user_id=USER_ID,
     )
-    result = await db_session.execute(select(WorkItem).where(compiled.where).limit(1))
+    result = await db.execute(select(WorkItem).where(compiled.where).limit(1))
     assert result.scalars().all() is not None
 
 
-async def test_planning_fields_compile_to_valid_postgres(db_session):
+async def test_planning_fields_compile_to_valid_postgres(db):
     """cycle/release subqueries, blocks/blocked EXISTS, and start/target dates (spec 14)."""
     compiled = await compile_query(
-        db_session,
+        db,
         parse(
             "cycle = Sprint1 AND release = BNX.2.3 AND blocks IS NOT EMPTY "
             "AND blocked IS EMPTY AND target IS NOT EMPTY AND start >= 2026-01-01 "
@@ -676,28 +663,28 @@ async def test_planning_fields_compile_to_valid_postgres(db_session):
         definitions_by_key=DEFS,
         current_user_id=USER_ID,
     )
-    result = await db_session.execute(select(WorkItem).where(compiled.where).limit(5))
+    result = await db.execute(select(WorkItem).where(compiled.where).limit(5))
     assert result.scalars().all() is not None
 
 
-async def test_every_stored_view_query_still_compiles(db_session):
+async def test_every_stored_view_query_still_compiles(db):
     """The migration's converted output must parse + compile (live-data invariant)."""
     from radd.modules.items.listing import cf_definitions
     from radd.modules.views.models import View
 
-    definitions = await cf_definitions(db_session, None)
-    views = (await db_session.execute(select(View))).scalars().all()
+    definitions = await cf_definitions(db, None)
+    views = (await db.execute(select(View))).scalars().all()
     for view in views:
         if not view.query:
             continue
         compiled = await compile_query(
-            db_session,
+            db,
             parse(view.query),
             definitions_by_key=definitions,
             current_user_id=USER_ID,
             project_id=view.project_id,
         )
-        await db_session.execute(select(WorkItem).where(compiled.where).limit(1))
+        await db.execute(select(WorkItem).where(compiled.where).limit(1))
 
 
 async def test_planning_backlog_partition_and_default_order_compile():
@@ -711,7 +698,7 @@ async def test_planning_backlog_partition_and_default_order_compile():
     assert str(compiled.order[-1]) == "work_items.number ASC"
 
 
-async def test_planning_cycle_lifecycle_partitions_before_paging(db_session):
+async def test_planning_cycle_lifecycle_partitions_before_paging(db):
     """RADD-1202: historical unfinished work is neither backlog nor lost history."""
     from datetime import date, datetime, timedelta
     from radd.modules.auth.models import User
@@ -724,11 +711,11 @@ async def test_planning_cycle_lifecycle_partitions_before_paging(db_session):
     from radd.modules.workflow.models import State
 
     actor = User(email=f"planning-{uuid.uuid4()}@example.test", name="Planner", instance_role="admin")
-    db_session.add(actor)
-    await db_session.flush()
-    project = await projects.create_project(db_session, ProjectCreate(
+    db.add(actor)
+    await db.flush()
+    project = await projects.create_project(db, ProjectCreate(
         key=f"PLAN{uuid.uuid4().hex[:4].upper()}", name="Planning"))
-    states = list(await db_session.scalars(select(State).where(State.project_id == project.id)))
+    states = list(await db.scalars(select(State).where(State.project_id == project.id)))
     todo = next(s for s in states if s.category == "todo")
     done = next(s for s in states if s.category == "done")
     today = date.today()
@@ -737,16 +724,16 @@ async def test_planning_cycle_lifecycle_partitions_before_paging(db_session):
     draft = Cycle(name="Draft")
     completed = Cycle(name="Explicit close", start_date=today, end_date=today, completed_at=datetime.now())
     expired = Cycle(name="Expired", start_date=today - timedelta(days=7), end_date=today - timedelta(days=1))
-    db_session.add_all([active, upcoming, draft, completed, expired])
-    await db_session.flush()
+    db.add_all([active, upcoming, draft, completed, expired])
+    await db.flush()
     for cycle in [active, upcoming, draft, completed, expired, None]:
         for state in [todo, done]:
-            await items.create_item(db_session, ItemCreate(
+            await items.create_item(db, ItemCreate(
                 project_id=project.id, title=f"{cycle.name if cycle else 'Backlog'} {state.category}",
                 state_id=state.id, cycle_id=cycle.id if cycle else None), actor)
 
     async def titles(q, limit=50, offset=0):
-        rows = await items.list_items(db_session, actor=actor, filters=ItemListFilters(project_id=project.id),
+        rows = await items.list_items(db, actor=actor, filters=ItemListFilters(project_id=project.id),
                                       q=q, limit=limit, offset=offset)
         return {r.title for r in rows}
 

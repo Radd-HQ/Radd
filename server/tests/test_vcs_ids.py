@@ -17,11 +17,9 @@ from datetime import timedelta
 from pathlib import Path
 
 import httpx
-import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.clock import utcnow
 from radd.config import settings
@@ -43,16 +41,6 @@ from radd.modules.vcs.types import VcsProvider, VcsRefType
 REPO = "pipe/tools"
 HOST = "https://forge.example.com"
 SHA = "4b2b1cdeadbeef1122334455667788990011aabb"
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _item(db):

@@ -1,33 +1,16 @@
-"""The routing chain: which project a new message opens in (RADD-958/961).
-
-Two claims, and they fail in opposite directions.
-
-**Aliases must route.** `help@` → RADD, `pipeline@` → DEV. The trap is that on
-most hosts an alias delivers into a SHARED mailbox, so the IMAP connection sees
-one inbox and the alias exists only in the headers — a matcher that looked at the
-connection, or at the raw header text rather than the parsed address, would pass
-a unit test and route everything to the default in production.
-
-**The AI classifier must never cost a message.** A misrouted ticket is an
-annoyance; a customer email dropped because a model was slow is not survivable,
-and every failure path here is one a naive implementation gets wrong by raising.
-
-**And it must actually classify** (RADD-989). Every test below the fold used to
-pin only the FALL-THROUGH side — disabled, no answers, raising — so the feature
-shipped with `AiFeature.MAIL_ROUTING` missing from both of `ai.features`'
-dispatch tables, `feature_enabled` raised KeyError at its call site, the chain's
-per-rule `except` logged "rule raised, skipped", and every llm rule declined
-every message for a release with a green suite. A suite that only proves the
-safe direction proves the feature is safely absent.
+"""Which project a new message opens in (RADD-958/961).
+* Aliases route on the PARSED recipient header: an alias usually delivers into a
+  shared mailbox, so the connection alone cannot tell `help@` from `pipeline@`.
+* The AI classifier never costs a message: every failure falls through.
+* And it must actually classify — a suite pinning only the fall-through side
+  stayed green while every llm rule declined every message (RADD-989).
 """
 
 import uuid
 
 import pytest
 from email.message import EmailMessage
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.mailintake import intake, parsing, routing
@@ -42,16 +25,6 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture
@@ -92,28 +65,10 @@ def message(*, to="help@radd-hq.com", sender="Jane <jane@customer.example>", sub
 
 
 @pytest.fixture
-async def admin(db):
-    """Someone who may run the dry run. Created here rather than picked out of the
-    table, so the test cannot silently start asserting about a leftover account."""
-    user = User(
-        email=f"ma-{uuid.uuid4().hex[:6]}@example.com",
-        name="Mail admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-@pytest.fixture
 async def chat_role(db):
-    """A RESOLVABLE chat role.
-
-    `feature_enabled` is toggle AND role, so a test that stubbed the gate itself
-    would pass for a reason production never has. This assigns a real role row
-    against an unreachable endpoint — the model call is stubbed separately, so
-    nothing leaves the process.
-    """
+    """A RESOLVABLE chat role: `feature_enabled` is toggle AND role, so stubbing the
+        gate would pass for a reason production never has. The endpoint is
+        unreachable and the model call is stubbed separately."""
     from radd.modules.ai import registry as ai_registry
     from radd.modules.ai.schemas import AiProviderCreate, AiRoleAssign
     from radd.modules.ai.types import AiRole, AiWireShape
@@ -239,13 +194,9 @@ async def test_the_first_matching_rule_wins_by_position(db, world):
 
 
 async def test_a_disabled_rule_is_skipped_but_still_appears_in_the_trace(db, world):
-    """Skipped, and SAID to be skipped (RADD-994).
-
-    The walk used to filter `enabled` in SQL, so a switched-off rule left no row
-    at all — indistinguishable from one that was deleted. "Why didn't my rule
-    fire" is the commonest routing question there is and the trace answered it
-    with silence, which is the one answer that cannot be acted on.
-    """
+    """Skipped, and SAID to be skipped (RADD-994): a switched-off rule with no trace
+        row is indistinguishable from a deleted one, and "why didn't my rule fire"
+        must get an answer."""
     source, _, dev = world
     db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["pipeline@radd-hq.com"]},
                  project=dev, enabled=False))
@@ -259,17 +210,9 @@ async def test_a_disabled_rule_is_skipped_but_still_appears_in_the_trace(db, wor
 
 
 async def test_the_rules_below_the_winner_are_recorded_as_not_reached(db, world):
-    """Position is the explanation, so the trace has to show the position.
-
-    With disabled rules now in the list, a rule missing from it means one thing:
-    it does not exist. That only holds if the rules the walk stopped short of are
-    in it too — otherwise "below the match" and "deleted" swap one silence for
-    another.
-
-    The middle rule pins the decided part: a disabled rule below the winner reads
-    OFF, not "not reached". Both are true of it; only one is worth telling an
-    admin, because reordering a switched-off rule changes nothing.
-    """
+    """Position is the explanation, so rules below the match are in the trace too:
+        only then does a missing rule mean "does not exist". A disabled rule below the
+        winner reads OFF, not "not reached" — reordering it changes nothing."""
     source, default, dev = world
     db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["help@radd-hq.com"]},
                  project=dev, position=1))
@@ -289,13 +232,9 @@ async def test_the_rules_below_the_winner_are_recorded_as_not_reached(db, world)
 
 
 async def test_a_rule_that_matches_but_names_no_project_says_so(db, world):
-    """It stops the chain and lands on the source default anyway (RADD-994).
-
-    Two wrong sentences were available here and the code used both: `decide`
-    said "rule: X", naming a destination the rule never chose, and the dry run
-    recomputed it from `project_id` into "no rule matched", denying that anything
-    matched at all. Either one sends an admin to debug the rule that behaved.
-    """
+    """It stops the chain and lands on the source default anyway (RADD-994). Neither
+        "rule: X" (a destination it never chose) nor "no rule matched" is true, and
+        either sends an admin to debug the rule that behaved."""
     source, default, _ = world
     db.add(_rule(source, MailRuleType.RECIPIENT.value, {"addresses": ["help@radd-hq.com"]}))
     await db.flush()
@@ -336,15 +275,10 @@ async def test_subject_matching_is_a_substring_not_a_regex(db, world):
 async def test_an_llm_rule_classifies_and_routes_when_the_feature_is_on(
     db, world, chat_role, monkeypatch
 ):
-    """**The RADD-989 regression.** With the toggle on, the chat role assigned and
-    the model answering a configured category, the rule must MATCH.
-
-    Nothing here stubs the gate: `feature_enabled` runs for real over the settings
-    cascade and the role registry, so removing either `AiFeature.MAIL_ROUTING`
-    entry from `ai.features` puts the KeyError back and fails this test. Every
-    other llm test in this file passes with the feature entirely broken — that is
-    what let the bug ship.
-    """
+    """The RADD-989 regression: toggle on, chat role assigned, model answering a
+        category — the rule must MATCH. Nothing stubs the gate, so dropping either
+        `AiFeature.MAIL_ROUTING` entry from `ai.features` fails here; every other llm
+        test in this file passes with the feature broken."""
     source, _, dev = world
     await _set_mail_routing(db, True)
     calls = _stub_choice(monkeypatch, "dev")
@@ -360,13 +294,9 @@ async def test_an_llm_rule_classifies_and_routes_when_the_feature_is_on(
 async def test_the_model_is_always_offered_a_none_of_these_answer(
     db, world, chat_role, monkeypatch
 ):
-    """Off-topic mail must be able to DECLINE (RADD-989).
-
-    The answer set is enumerated, so without an escape hatch the model is cornered
-    into a wrong category on every message that fits none of them — the source
-    default would be reachable only by failure. The extra choice is appended at
-    ask time, never stored, so it cannot be edited into meaning something else.
-    """
+    """Off-topic mail must be able to DECLINE (RADD-989); without the escape hatch
+        the model is cornered into a wrong category. The choice is appended at ask
+        time, never stored, so it cannot be edited into meaning something else."""
     source, default, dev = world
     await _set_mail_routing(db, True)
     calls = _stub_choice(monkeypatch, NO_MATCH_ANSWER)
@@ -471,13 +401,9 @@ async def test_a_rule_that_raises_is_skipped_and_the_chain_continues(db, world):
 async def test_a_classifier_that_raises_reads_as_failed_in_the_dry_run(
     db, world, admin, chat_role, monkeypatch
 ):
-    """The preview must say CRASHED, never "no rule matched" (RADD-989).
-
-    Both outcomes leave the message on the source default, so a preview that
-    reports only the destination describes a broken rule and an inapplicable one
-    identically — and the admin's next move is to rewrite a rule that was already
-    correct. That is exactly how the KeyError survived a release.
-    """
+    """The preview says CRASHED, never "no rule matched" (RADD-989): both leave the
+        message on the default, and reporting only the destination sends the admin
+        to rewrite a rule that was already correct."""
     from radd.modules.mailintake.config_schemas import RoutingPreviewRequest
     from radd.modules.mailintake.rules_router import preview_routing
 

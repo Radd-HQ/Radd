@@ -9,23 +9,11 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import UnauthorizedError
 from radd.modules.auth import service as auth_service, totp
 from radd.modules.auth.models import TotpRecoveryCode, User
 from radd.modules.auth.schemas import UserCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 PASSWORD = "recovery-pass-1"

@@ -3,37 +3,24 @@ changes what the automation IS writes an immutable version; a toggle does not;
 restoring writes a NEW version copying the old one and rebuilds the bindings;
 the ledger says which version a change made."""
 
-import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.automations import service as automations, versions
 from radd.modules.automations.models import TriggerBinding
 from radd.modules.automations.schemas import RuleCreate, RuleUpdate
 from radd.modules.events import service as events
+from radd.modules.auth.types import InstanceRole
 
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(email=f"ver-{uuid.uuid4().hex[:8]}@example.com", name="Version Admin", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Version Admin")
 
 
 def _graph(event: str, label: str, note: str = "") -> dict:

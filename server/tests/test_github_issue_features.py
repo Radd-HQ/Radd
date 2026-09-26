@@ -4,8 +4,6 @@ import uuid
 from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -14,15 +12,6 @@ from radd.modules.dashboards.router import replace_widgets
 from radd.modules.dashboards.schemas import WidgetLayoutSave, WidgetRead, DashboardCreate
 from radd.modules.mailintake.signatures import SignatureRule, detect_rules, detect
 from radd.modules.mailintake.quoting import strip_quotes
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def actor(db):

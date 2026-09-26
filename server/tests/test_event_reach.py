@@ -16,11 +16,9 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.clock import utcnow
 from radd.config import settings
-from radd.kernel import load_plugins
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.automations.gates import project_is
@@ -31,17 +29,6 @@ from radd.modules.items.enums import ItemOrigin
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate, ProjectUpdate
-
-
-@pytest.fixture
-async def db():
-    load_plugins(settings.modules)
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

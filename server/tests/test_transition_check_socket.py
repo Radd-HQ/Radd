@@ -1,26 +1,14 @@
-"""RADD-1383 — approval gates are a transition check the approvals plugin contributes.
-
-`approvals` is an OPTIONAL plugin, but core workflow/items used to call it
-through `try: import … except ImportError`, which never fires: plugin code is
-always importable, so a plugin disabled at runtime (withdrawn from the kernel
-registries) kept validating, evaluating and consuming. Now the check rides the
-kernel TRANSITION_CHECK socket, and this module pins the two halves of that
-contract against the real plugin, withdrawn the way the plugin manager does it:
-
-* withdrawn — a stored require_approval rule FAILS CLOSED (even with an
-  approved request banked), a new one cannot be written, and the row's other
-  rules stay editable around it;
-* registered — the same banked approval unlocks exactly ONE move.
-
-DB-backed, flushed never committed; the session rolls back at teardown.
+"""Approval gates ride the kernel TRANSITION_CHECK socket the optional approvals
+plugin contributes (RADD-1383; an `except ImportError` guard never fires).
+Withdrawn: a stored require_approval rule FAILS CLOSED even with an approval
+banked, a new one cannot be written, the row's other rules stay editable.
+Registered: the banked approval unlocks exactly ONE move.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError
 from radd.kernel.registry import registries
 from radd.kernel.sockets import Socket
@@ -41,28 +29,14 @@ from radd.modules.workflow.guards import TransitionError, unprovided_failure
 from radd.modules.workflow.schemas import TransitionCreate, TransitionRule, TransitionUpdate
 from radd.modules.workflow.types import TransitionCheck, TransitionMode
 
+from _factories import make_user
+
 CLOSED = unprovided_failure(ApprovalCheck.REQUIRE_APPROVAL.value)
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
 async def actor(db) -> User:
-    user = User(
-        email=f"gate-{uuid.uuid4().hex[:8]}@example.com",
-        name="Gate Keeper",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Gate Keeper")
 
 
 def approval(user: User) -> TransitionRule:

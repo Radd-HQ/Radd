@@ -12,9 +12,7 @@ and get must answer the same set for each. The matrix IS the specification:
 | an instance admin                       | yes    | yes      | yes        |
 | a `@own`-only reader who reported none  | yes*   | no       | no         |
 
-* the project is public, so the world's `item.read@public` reaches every
-  account too — an `@own` grant adds nothing on top for someone who reported
-  nothing.
+* the project is public, so the world's `item.read@public` reaches every account.
 """
 
 import uuid

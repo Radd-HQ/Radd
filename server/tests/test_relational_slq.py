@@ -11,11 +11,8 @@ error, so this is the kind of thing that has to be executed, not eyeballed.
 import uuid
 from datetime import date
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.comments.models import Comment
@@ -28,26 +25,7 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import categories
 from radd.modules.timelogging.models import Worklog
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name: str) -> User:
-    user = User(
-        email=f"rslq-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _run(db, query: str, actor: User) -> set[uuid.UUID]:
@@ -80,8 +58,8 @@ async def _two_items(db, actor):
 
 
 async def test_logged_by_matches_only_items_with_that_authors_worklog(db):
-    alice = await _user(db, "Alice Logger")
-    bob = await _user(db, "Bob Other")
+    alice = await make_user(db, role=InstanceRole.ADMIN, name="Alice Logger")
+    bob = await make_user(db, role=InstanceRole.ADMIN, name="Bob Other")
     logged, untouched = await _two_items(db, alice)
 
     db.add(
@@ -108,7 +86,7 @@ async def test_logged_by_matches_only_items_with_that_authors_worklog(db):
 async def test_itemless_worklogs_never_match_logged_by(db):
     """Spec 59 rows have no item, so they cannot name one — the correct answer,
     and the reason the resolver filters `item_id IS NOT NULL` explicitly."""
-    alice = await _user(db, "Alice Itemless")
+    alice = await make_user(db, role=InstanceRole.ADMIN, name="Alice Itemless")
     _, _ = await _two_items(db, alice)
     # ck_worklogs_scope: an itemless row must carry a category, so this is what
     # a real general worklog looks like.
@@ -128,8 +106,8 @@ async def test_itemless_worklogs_never_match_logged_by(db):
 
 
 async def test_commented_by_matches_the_commented_item(db):
-    alice = await _user(db, "Alice Commenter")
-    bob = await _user(db, "Bob Silent")
+    alice = await make_user(db, role=InstanceRole.ADMIN, name="Alice Commenter")
+    bob = await make_user(db, role=InstanceRole.ADMIN, name="Bob Silent")
     commented, quiet = await _two_items(db, alice)
 
     db.add(Comment(entity_id=commented.id, author_id=alice.id, body="looks good"))
@@ -144,7 +122,7 @@ async def test_commented_by_matches_the_commented_item(db):
 async def test_relational_fields_compose_with_builtins_and_each_other(db):
     """The whole point of contributing them to the ITEM dialect: they AND with
     builtin fields and with one another like any other term."""
-    alice = await _user(db, "Alice Both")
+    alice = await make_user(db, role=InstanceRole.ADMIN, name="Alice Both")
     both, only_logged = await _two_items(db, alice)
 
     db.add(

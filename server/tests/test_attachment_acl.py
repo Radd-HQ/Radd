@@ -14,9 +14,7 @@ import uuid
 import pytest
 from fastapi import UploadFile
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.access import service as access_service
 from radd.modules.access.types import Access, GrantSubject
 from radd.modules.attachments import acl, hosts, service
@@ -28,7 +26,7 @@ from radd.modules.attachments.types import (
 )
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
-from radd.modules.auth.models import GlobalRoleGrant, User
+from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
@@ -37,33 +35,14 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, *, admin: bool = False) -> User:
-    user = User(
-        email=f"acl-{uuid.uuid4().hex[:8]}@example.com",
-        name="ACL",
-        instance_role=(InstanceRole.ADMIN if admin else InstanceRole.MEMBER).value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 @pytest.fixture
 async def setup(db, tmp_path):
     """(uploader-admin, plain member, item, attachment) on a tmp filesystem host."""
-    admin = await _user(db, admin=True)
-    member = await _user(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="ACL")
+    member = await make_user(db, name="ACL")
     await hosts.create_host(
         db,
         StorageHostCreate(
@@ -119,7 +98,7 @@ async def test_no_grants_means_open_to_parent_readers(db, setup):
 
 async def test_a_user_grant_restricts_everyone_else(db, setup):
     admin, member, item, attachment = setup
-    chosen = await _user(db)
+    chosen = await make_user(db, name="ACL")
     # An attachment grant narrows WITHIN parent readers; it never substitutes
     # for item visibility — chosen must be able to read the item first.
     role = await auth_roles.create_role(
@@ -143,7 +122,7 @@ async def test_a_team_grant_admits_members(db, setup):
     team = await teams_service.create_team(db, TeamCreate(name=f"T-{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, member.id)
     await _grant(db, attachment.id, GrantSubject.TEAM.value, team.id)
-    outsider = await _user(db)
+    outsider = await make_user(db, name="ACL")
     assert await acl.attachment_readable(db, member, attachment) is True
     assert await acl.attachment_readable(db, outsider, attachment) is False
 
@@ -157,7 +136,7 @@ async def test_listing_filters_unreadable_and_flags_restricted(db, setup):
         upload=UploadFile(file=io.BytesIO(b"open"), filename="o.txt", headers=None),
         actor_id=admin.id,
     )
-    chosen = await _user(db)
+    chosen = await make_user(db, name="ACL")
     await _grant(db, attachment.id, GrantSubject.USER.value, chosen.id)
     listed = await service.list_for_item(db, item.id)
     verdicts = await acl.readable_map(db, member, listed)
@@ -170,7 +149,7 @@ async def test_listing_filters_unreadable_and_flags_restricted(db, setup):
 
 async def test_deleting_an_attachment_clears_its_grants(db, setup):
     admin, member, item, attachment = setup
-    chosen = await _user(db)
+    chosen = await make_user(db, name="ACL")
     await _grant(db, attachment.id, GrantSubject.USER.value, chosen.id)
     await service.delete_attachment(db, attachment, actor_id=admin.id)
     remaining = await access_service.list_for_resource(

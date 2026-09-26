@@ -1,5 +1,4 @@
 """Generic management paging keeps policy complete and names permission-safe."""
-import uuid
 from datetime import timedelta
 
 import pytest
@@ -19,7 +18,7 @@ from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
-async def world(access_world):
+async def world(access_world):  # noqa: F811 — the imported fixture
     db,client,_,_,_,roles,people,teams,groups,cookie,engine,prefix=access_world
     field=await fields.create_field(db,FieldDefinitionCreate(key='f'+prefix,name=prefix+' field',type='text'))
     project=Project(key='H'+prefix.upper(),name=prefix+' hidden project');db.add(project);await db.flush()

@@ -1,22 +1,14 @@
-"""Groups as grant subjects (RADD-832).
-
-The ask this pins: "grants to AD groups directly, not just through teams."
-A role granted to a GROUP reaches every transitive member (nesting resolved by
-the RADD-830 closure, never flattened at grant time); the spec-92 access
-framework accepts GROUP subjects on every registered resource; and both
-enforcement paths — atom resolution and share/grant matching — read the same
-closure, so a parent-group grant reaches a nested child's members without
-either side knowing the graph's shape.
-
-Rolled-back transactions on the compose DB.
+"""Groups as grant subjects (RADD-832): a role granted to a GROUP reaches every
+transitive member (nesting resolved by the RADD-830 closure, never flattened at
+grant time); the access framework accepts GROUP subjects on every resource; and
+atom resolution and share matching read the same closure, so a parent-group grant
+reaches a nested child's members without either side knowing the graph's shape.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError
 from radd.modules.access import resolution, service as access_service
 from radd.modules.access.registry import ResourceSpec
@@ -35,16 +27,6 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.views import service as views_service
 from radd.modules.views.schemas import ViewCreate, ViewShareEntry
 from radd.modules.views.types import ViewType
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _user(db, name) -> User:

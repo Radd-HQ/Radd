@@ -16,7 +16,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.confluenceimport import plan as plan_service, runs
 from radd.modules.confluenceimport.models import (
@@ -32,6 +31,8 @@ from radd.modules.confluenceimport.types import (
 )
 from radd.modules.pages.models import Page, PageSpace
 
+from _factories import make_user
+
 SOURCE = "confluence:wiki.example.test"
 
 RESTRICTED = {
@@ -46,15 +47,10 @@ RESTRICTED = {
 
 @pytest.fixture
 async def db():
-    """A session that CLEANS UP, because the pipeline commits.
-
-    Every other suite here is isolated by rollback, which works only while the
-    code under test does not commit. A real run does — the row is its progress
-    bar — so these tests leave spaces and pages behind unless they remove them,
-    and a neighbouring suite that counts spaces then fails for a reason that has
-    nothing to do with it. Everything this file creates is stamped with `SOURCE`,
-    which makes the cleanup exact.
-    """
+    """A session that CLEANS UP, because the pipeline commits (the run row is its
+        progress bar): rollback isolation cannot undo it, and a neighbouring suite
+        counting spaces would fail. Everything here is stamped with `SOURCE`, which
+        makes the cleanup exact."""
     engine = create_async_engine(settings.database_url)
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with maker() as session:
@@ -83,25 +79,10 @@ async def db():
     await engine.dispose()
 
 
-async def _admin(db) -> User:
-    user = User(
-        email=f"imp-{uuid.uuid4().hex[:8]}@example.com",
-        name="Importer",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 async def _snapshot(db, actor, pages: list[dict]) -> ConfluenceSnapshot:
-    """A finished snapshot, built directly — no client, no network.
-
-    Page ids are made unique per snapshot. They are unique instance-wide in real
-    Confluence, and the run COMMITS, so reusing a bare "1" across tests makes the
-    second test's page resolve — correctly! — to the first test's import via the
-    external identity, and land in the wrong space.
-    """
+    """A finished snapshot, built directly. Page ids are unique per snapshot: the run
+        COMMITS, so a reused "1" would resolve through the external identity to an
+        earlier test's import and land in the wrong space."""
     key = f"SP{uuid.uuid4().hex[:6].upper()}"
     prefix = uuid.uuid4().hex[:8]
     pages = [
@@ -174,7 +155,7 @@ async def _pages_in(db, snapshot) -> list[Page]:
 
 
 async def test_a_space_imports_with_its_tree_shape(db):
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [
         {"id": "1", "title": "Root", "body": "<h2>Root</h2><p>top</p>"},
         {"id": "2", "title": "Child", "parent": "1", "body": "<p>under root</p>"},
@@ -203,7 +184,7 @@ async def test_a_space_imports_with_its_tree_shape(db):
 async def test_a_dry_run_predicts_and_writes_nothing(db):
     """The counts are measured by doing all the work except the write, so they are
     facts rather than estimates."""
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [
         {"id": "1", "title": "One"}, {"id": "2", "title": "Two"},
     ])
@@ -219,7 +200,7 @@ async def test_a_dry_run_predicts_and_writes_nothing(db):
 async def test_a_second_run_updates_rather_than_duplicating(db):
     """The whole reason `pages.external_id` exists. Without it the second run
     cannot tell its own earlier output from a page somebody wrote by hand."""
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [{"id": "1", "title": "One", "body": "<p>v1</p>"}])
     await _run(db, snapshot, actor)
 
@@ -247,7 +228,7 @@ async def test_a_second_run_updates_rather_than_duplicating(db):
 async def test_an_unresolvable_principal_blocks_its_page(db):
     """A wiki import that silently opens a restricted page is a data leak, and it
     is the failure nobody notices — the page looks perfectly fine."""
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [
         {"id": "1", "title": "Public"},
         {"id": "2", "title": "Secret", "restrictions": RESTRICTED},
@@ -266,7 +247,7 @@ async def test_an_unresolvable_principal_blocks_its_page(db):
 
 async def test_a_fallback_lets_a_restricted_page_import_closed(db):
     """"Map all unknown to Y" — the escape hatch, which still closes the page."""
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     from radd.modules.teams.models import Team
 
     team = Team(name=f"Wiki keepers {uuid.uuid4().hex[:5]}")
@@ -302,7 +283,7 @@ async def test_rollback_removes_the_restriction_grants_it_imported(db):
     from radd.modules.confluenceimport import rollback
     from radd.modules.teams.models import Team
 
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     team = Team(name=f"Wiki keepers {uuid.uuid4().hex[:5]}")
     db.add(team)
     await db.flush()
@@ -325,7 +306,7 @@ async def test_rollback_removes_the_restriction_grants_it_imported(db):
 
 
 async def test_restrictions_can_be_turned_off_entirely(db):
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [
         {"id": "2", "title": "Secret", "restrictions": RESTRICTED},
     ])
@@ -338,7 +319,7 @@ async def test_restrictions_can_be_turned_off_entirely(db):
 
 async def test_history_is_absent_unless_asked_for(db):
     """Off by default: a live page in a real corpus sits at version 206."""
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [{
         "id": "1", "title": "One", "version": 3,
         "versions": [
@@ -361,7 +342,7 @@ async def test_history_imports_revisions_below_the_live_body(db):
     """`PageVersion` holds the PREVIOUS content, so the live body is revision N and
     history is 1..N-1. Getting it backwards duplicates the current body into the
     History tab and loses revision 1."""
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [{
         "id": "1", "title": "One", "version": 3, "body": "<p>live</p>",
         "versions": [
@@ -388,14 +369,9 @@ async def test_history_imports_revisions_below_the_live_body(db):
 
 
 def test_the_attachment_url_matches_a_real_route():
-    """The importer writes attachment URLs into page bodies. They must name a
-    route the app actually serves.
-
-    It emitted `/attachments/{id}/download`, which does not exist. Everything
-    type-checked, the page rendered a `<video>` with controls, and the player
-    reported SRC_NOT_SUPPORTED — because its source was a 404 page. Nothing but
-    asking the running app catches that.
-    """
+    """Attachment URLs the importer writes into page bodies must name a route the
+        app serves: `/attachments/{id}/download` type-checked and rendered a
+        `<video>` whose source was a 404. Only asking the running app catches that."""
     import uuid as _uuid
 
     from radd.app import create_app
@@ -420,7 +396,7 @@ def test_the_attachment_url_matches_a_real_route():
 async def test_unknown_comment_author_imports_and_reads_without_false_attribution(db):
     from radd.modules.confluenceimport.models.snapshot import ConfluenceSnapshotComment
     from radd.modules.comments import service as comments
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [{'id':'1', 'title':'Unknown comments'}])
     row = await db.scalar(select(ConfluenceSnapshotPage).where(ConfluenceSnapshotPage.snapshot_id == snapshot.id))
     snapshot.include_comments = True
@@ -440,7 +416,7 @@ async def test_unknown_comment_author_imports_and_reads_without_false_attributio
 async def test_ignored_people_never_resolve_by_id_email_domain_or_name(db):
     from radd.modules.confluenceimport.schemas import PlanMappings, UserMapping
     from radd.modules.confluenceimport.types import UserAction
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     actor.name = f"Unique ignored {uuid.uuid4()}"
     await db.flush()
     username, domain = actor.email.split("@")
@@ -461,8 +437,8 @@ async def test_ignored_comment_author_stays_unattributed_in_real_run(db):
     from radd.modules.confluenceimport.schemas import UserMapping
     from radd.modules.confluenceimport.types import UserAction
     from radd.modules.comments import service as comments
-    actor = await _admin(db)
-    source_author = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
+    source_author = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [{'id':'1', 'title':'Ignored author'}])
     row = await db.scalar(select(ConfluenceSnapshotPage).where(ConfluenceSnapshotPage.snapshot_id == snapshot.id))
     db.add(ConfluenceSnapshotComment(snapshot_id=snapshot.id, comment_id='ignored-author',
@@ -486,7 +462,7 @@ async def test_ignored_comment_author_stays_unattributed_in_real_run(db):
 async def test_mapping_validation_identifies_deleted_destinations(db):
     from radd.modules.confluenceimport.schemas import GroupMapping, MacroMapping, UserMapping
     from radd.modules.confluenceimport.types import GroupAction, MacroAction, SpaceAction
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     snapshot = await _snapshot(db, actor, [{'id':'1', 'title':'Destinations'}])
     plan = await plan_service.create_plan(db, PlanCreate(name='Destinations', snapshot_id=snapshot.id))
     mapping = plan_service.mappings_of(plan)
@@ -506,7 +482,7 @@ async def test_empty_permission_mapping_does_not_fall_back_to_matching_account(d
     from radd.modules.confluenceimport import restrictions
     from radd.modules.confluenceimport.schemas import GroupMapping
     from radd.modules.confluenceimport.types import GroupAction
-    actor = await _admin(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     source = {'read':{'restrictions':{'user':{'results':[{'username':actor.email}]}}}}
     matched = await restrictions.resolve(db, source, options=PlanOptions(), overrides={})
     assert not matched.blocked and len(matched.grants) == 1

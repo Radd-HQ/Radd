@@ -1,10 +1,5 @@
-"""Automations match/apply core (spec 15).
-
-Pure, DB-free tests of the pieces many things depend on: the loop guard (the engine
-must never react to its own effects), the trigger mapping, action-union validation, and
-the read-only action planner's resolution/clear semantics. The full async engine — SLQ
-matching against a live item, applying via the services, and the loop guard holding
-end-to-end — is exercised by scripts/demo_automations.sh on an isolated database.
+"""Automations core (spec 15): the loop guard, trigger mapping, action-union
+validation and the read-only planner's resolution/clear semantics. Pure, DB-free.
 """
 
 import uuid
@@ -147,11 +142,10 @@ def _rule(actions: list[dict]) -> RuleCreate:
     return RuleCreate.model_validate(linear_graph(actions))
 
 
-# The action union moved (spec 116): it used to type-check `RuleCreate.actions`;
-# a node's `params` is an untyped envelope, so `service._validate_graph` runs
-# each ACTION node through `ActionAdapter`. These test the adapter directly —
-# asserting through RuleCreate would now pass for the wrong reason, because the
-# model rejects the graph SHAPE before it ever looks at an action's params.
+# A node's `params` is an untyped envelope; `service._validate_graph` runs each
+# ACTION node through `ActionAdapter`. These test the adapter directly: asserting
+# through RuleCreate would pass for the wrong reason (it rejects the graph SHAPE
+# before it looks at an action's params).
 
 
 def test_action_union_accepts_each_type():

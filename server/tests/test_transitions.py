@@ -1,24 +1,16 @@
 """Workflow transitions (specs 61/107): pure guard evaluation + the enforcement seam.
 
-Pure cases run without a DB (guards.py mirrors forms/validation.py). Integration
-cases are DB-backed (compose Postgres) — flushed, never committed; the session
-rolls back at teardown, so rows never persist.
-
-Spec 107: every data check is one require_field condition ({kind, key, op,
-values}) over builtins + custom fields. RADD-1383: every other check is a
-plugin's, served through the kernel TRANSITION_CHECK socket (approvals'
-require_approval is covered in test_approvals / test_transition_check_socket).
+Pure cases need no DB; integration cases are flushed, never committed. Every data
+check is one require_field condition ({kind, key, op, values}) over builtins and
+custom fields; every other check is a plugin's, served through the kernel
+TRANSITION_CHECK socket (approvals: test_approvals / test_transition_check_socket).
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.settings import service as settings_service
@@ -208,28 +200,6 @@ def test_transition_error_carries_the_edge():
 
 
 # --- integration (DB-backed) ---
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def actor(db) -> User:
-    user = User(
-        email=f"wt-{uuid.uuid4().hex[:8]}@example.com",
-        name="Transition Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def _project_with_states(db):

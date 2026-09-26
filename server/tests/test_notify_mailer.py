@@ -1,33 +1,10 @@
-"""One fan-out: notify decides who hears, mailintake carries the mail (RADD-968).
-
-There were two fan-outs and they disagreed. `mailintake.outbound` mailed
-`notify.watcher_ids` minus the author on every public comment; the INBOX fanned
-out over watchers ∪ participant-team members through `notify.consumer._allowed`
-(item.read, the RADD-817 relation gate, the internal-comment filter, and since
-RADD-971 the per-user mute). Four consequences, none of which raised anything:
-
-- a participant-TEAM member got an inbox row and no email;
-- a watcher who had since lost `item.read` still got the mail;
-- muting `commented` silenced the bell and nothing else;
-- and no event except `comment.created` ever produced an email at all.
-
-The fix is that mail follows the ROWS. A notification row has already passed
-every one of those gates, so mailing it needs no second copy of the policy —
-which is exactly what drifted the first time. These tests therefore drive the
-real consumer where the question is "who gets a row", and the real mailer tick
-where it is "what goes in the mailbox".
-
-RADD-686 then made WHICH rows mail a per-user answer rather than a constant
-(`notification_prefs.email_types`), so the middle section drives several
-recipients through one batch: a filter that had stayed global would still pass
-every test written against a single user.
-
-The delivery path is the real one end to end: `mailer.run_batch` →
-`mailintake.service.send_item_mail` → `radd.smtp.send_message`, with only
-`smtplib.SMTP` faked. That is deliberate — the reply-by-email test at the bottom
-takes the Message-ID off the composed message and feeds it back through
-`intake.accept`, which is only meaningful if the id it threads on is the one the
-transport actually stored.
+"""Mail follows the notification ROWS (RADD-968): notify decides who hears,
+mailintake carries it, so the mailer needs no second copy of the permission,
+team and mute policy. Tests drive the real consumer for "who gets a row" and the
+real `mailer.run_batch` → `send_item_mail` → `radd.smtp` path for "what reaches a
+mailbox", faking only `smtplib.SMTP` — the reply-by-email test feeds the stored
+Message-ID back through `intake.accept`. Which rows mail is per recipient
+(RADD-686), so those tests put several recipients through ONE batch.
 """
 
 import smtplib
@@ -37,7 +14,6 @@ from email.message import EmailMessage
 
 import pytest
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import smtp
 from radd.config import settings
@@ -75,6 +51,8 @@ from radd.modules.participants.schemas import ParticipantAdd
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
+from _factories import make_user
+
 BASE_URL = "https://radd.example.com"
 RELAY_FROM = "agent@radd-hq.com"
 RELAY_REPLY_TO = "help@radd-hq.com"
@@ -85,16 +63,9 @@ DESK_FROM = "support@radd-hq.com"
 
 
 class _FakeSmtp:
-    """Enough of smtplib.SMTP to capture every composed message.
-
-    `dials` counts CONNECTIONS, not messages — that is the number RADD-996 and
-    RADD-997 are both about. A recipient with no mailbox and a row inside its
-    backoff must cost the relay nothing, and "no message was captured" cannot
-    tell the difference between not connecting and connecting to say nothing.
-
-    `fail` raises from the send, which is the shape a refusal (a rate limit, an
-    unknown recipient, a dead relay) has by the time it reaches this seam.
-    """
+    """Enough of smtplib.SMTP to capture every composed message. `dials` counts
+    CONNECTIONS: "no message captured" cannot tell not connecting from connecting to
+    say nothing (RADD-996/997). `fail` raises from the send, as a refusal would."""
 
     sent: list[EmailMessage] = []
     dials: int = 0
@@ -121,16 +92,6 @@ class _FakeSmtp:
         type(self).sent.append(message)
 
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
 @pytest.fixture(autouse=True)
 def relay(monkeypatch):
     """A captured SMTP relay + a known base URL. Returns the sent list."""
@@ -153,14 +114,9 @@ def env_relay(monkeypatch):
 
 @pytest.fixture
 async def quiet_backlog(db):
-    """Stamp every notification already pending in the test database.
-
-    `run_batch` selects GLOBALLY, exactly as the loop does. Without this, a row
-    committed by some other test would be mailed here — and, worse, could fill
-    the batch and push this test's own rows out of it, producing a failure that
-    depends on which files ran first. Inside the test transaction, so it rolls
-    back with everything else.
-    """
+    """Stamp every pending notification: `run_batch` selects GLOBALLY, so another
+    test's committed row could be mailed here or push this test's rows out of the
+    batch. Inside the transaction, so it rolls back."""
     await db.execute(
         update(Notification)
         .where(Notification.emailed_at.is_(None))
@@ -170,13 +126,9 @@ async def quiet_backlog(db):
 
 @pytest.fixture
 async def no_senders(db):
-    """Disable every `mail_senders` row already in the test database.
-
-    `registry.default_sender` reads the table, not a fixture, so a row some
-    other module committed (or `seed_from_env` wrote during an app-startup test)
-    would decide this file's answers. Disabled inside the transaction, so it
-    rolls back — and so "there is nowhere to send from" means it.
-    """
+    """Disable every `mail_senders` row: `registry.default_sender` reads the table,
+    so a row another module committed would decide this file's answers. Rolls back
+    with the transaction, so "nowhere to send from" means it."""
     await db.execute(update(MailSender).values(enabled=False))
 
 
@@ -217,13 +169,6 @@ async def world(db):
     return agent, project, item
 
 
-async def _user(db, *, name: str, email: str, active: bool = True) -> User:
-    user = User(email=email, name=name, active=active, instance_role=InstanceRole.MEMBER.value)
-    db.add(user)
-    await db.flush()
-    return user
-
-
 async def _grant(db, user: User, key: BuiltinRoleKey, project_id: uuid.UUID) -> None:
     role = await role_by_key(db, key.value)
     await grants.create_grant(db, role.id, user_id=user.id, project_id=project_id)
@@ -257,18 +202,9 @@ async def _channels(
     email_types: list[NotificationType],
     muted_types: list[NotificationType] | None = None,
 ) -> None:
-    """One user's channel matrix, in RADD-686's vocabulary over spec 118's rows.
-
-    The tests below are about the MAILER, not about scoped resolution, so they
-    keep asking the question the old model asked — "which types does this person
-    want mailed" — and this helper answers it by writing the same channel map
-    into all three relationship columns. Muted becomes `off`, emailed becomes
-    `both`, everything else `inbox`, which is exactly what the migration does to
-    a stored preference.
-
-    Absence of a call means no rule rows at all — itself a case worth testing,
-    so it is never done implicitly.
-    """
+    """One user's RADD-686 "which types are mailed" answer, written into all three
+    relationship columns the way the migration converts a stored preference (muted →
+    `off`, emailed → `both`, else `inbox`). No call = no rule rows, never implicit."""
     muted = set(muted_types or [])
     emailed = set(email_types)
     channels = {
@@ -353,7 +289,7 @@ async def test_a_notification_with_no_body_to_quote_still_gets_a_readable_email(
     renderer every non-comment type uses now RADD-686 lets people ask for them.
     """
     _agent, project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     key = f"{project.key}-{item.number}"
     await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
     await notify_service.create_notification(
@@ -382,7 +318,9 @@ async def test_a_commented_notification_is_mailed_with_author_body_and_link(
     from the notification row — and carrying the FULL comment rather than the
     200-char event excerpt."""
     agent, project, item = world
-    watcher = await _user(db, name="Wanda Watcher", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(
+        db, name="Wanda Watcher", email=f"w-{uuid.uuid4().hex[:8]}@example.com"
+    )
     body = ("We restarted it. " + "Detail. " * 60).strip()  # past the excerpt's 200-char cap
     await notify_service.add_watchers(db, item.id, [agent.id, watcher.id])
     await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
@@ -412,8 +350,8 @@ async def test_a_muted_type_never_becomes_a_row_and_so_never_becomes_mail(
     The control user is the point: without one, "no mail" could equally mean the
     relay was never configured."""
     agent, project, item = world
-    muted = await _user(db, name="Mo Muted", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
-    heard = await _user(db, name="Hana Heard", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
+    muted = await make_user(db, name="Mo Muted", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
+    heard = await make_user(db, name="Hana Heard", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
     for user in (muted, heard):
         await notify_service.add_watchers(db, item.id, [user.id])
         await _grant(db, user, BuiltinRoleKey.MEMBER, project.id)
@@ -445,8 +383,10 @@ async def test_only_the_readers_of_an_internal_comment_are_mailed(
     still never sees one — `outbound.should_reply`'s PUBLIC gate stands, and
     that leg no longer mails users at all."""
     agent, project, item = world
-    insider = await _user(db, name="Ida Inside", email=f"i-{uuid.uuid4().hex[:8]}@example.com")
-    outsider = await _user(db, name="Otto Outside", email=f"o-{uuid.uuid4().hex[:8]}@example.com")
+    insider = await make_user(db, name="Ida Inside", email=f"i-{uuid.uuid4().hex[:8]}@example.com")
+    outsider = await make_user(
+        db, name="Otto Outside", email=f"o-{uuid.uuid4().hex[:8]}@example.com"
+    )
     await notify_service.add_watchers(db, item.id, [insider.id, outsider.id])
     await _grant(db, insider, BuiltinRoleKey.MEMBER, project.id)  # comment.read_internal
     await _grant(db, outsider, BuiltinRoleKey.VIEWER, project.id)  # item.read only
@@ -467,21 +407,13 @@ async def test_only_the_readers_of_an_internal_comment_are_mailed(
 async def test_which_types_mail_immediately_is_each_recipients_own_answer(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """Three users, the same two notifications each, three outcomes — in ONE
-    batch, which is the whole point. A global constant (RADD-968's
-    `DEFAULT_IMMEDIATE_EMAIL_TYPES`) would have to give all three the same mail,
-    and any single-user version of this test would pass against it.
-
-    A keeps that old behaviour by asking for `commented` alone. B asked for
-    everything, so the state change mails too — the first type other than
-    `commented` ever to reach a mailbox individually. C asked for nothing
-    immediate, and is the control that "no mail" is a preference rather than a
-    broken relay.
-    """
+    """Three users, the same two notifications, three outcomes in ONE batch — a
+    global constant would give all three the same mail, and a single-user test would
+    pass against it. C asked for nothing immediate: "no mail" is a preference."""
     _agent, _project, item = world
-    only_comments = await _user(db, name="Ada", email=f"a-{uuid.uuid4().hex[:8]}@example.com")
-    everything = await _user(db, name="Bo", email=f"b-{uuid.uuid4().hex[:8]}@example.com")
-    inbox_only = await _user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
+    only_comments = await make_user(db, name="Ada", email=f"a-{uuid.uuid4().hex[:8]}@example.com")
+    everything = await make_user(db, name="Bo", email=f"b-{uuid.uuid4().hex[:8]}@example.com")
+    inbox_only = await make_user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
     await _channels(db, only_comments, email_types=[NotificationType.COMMENTED])
     await _channels(db, everything, email_types=list(NotificationType))
     await _channels(db, inbox_only, email_types=[])
@@ -515,16 +447,11 @@ async def test_which_types_mail_immediately_is_each_recipients_own_answer(
 async def test_inbox_only_still_reaches_the_mailbox_through_the_digest_once(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """`email_types: []` with the digest on is a real answer, not silence.
-
-    The digest loop opens its own SessionLocal and so cannot see rows this
-    transaction has not committed; what is asserted instead is its SELECTION
-    (`emailed_at IS NULL`, verbatim) and its composition — which is where "once"
-    lives: two rows in, two lines out, no duplicate of the one the mailer looked
-    at and passed over.
-    """
+    """`email_types: []` with the digest on still mails, once. The digest loop opens
+    its own session and cannot see uncommitted rows, so its SELECTION (`emailed_at IS
+    NULL`, verbatim) and composition are asserted: two rows in, two lines out."""
     _agent, _project, item = world
-    inbox_only = await _user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
+    inbox_only = await make_user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
     await _channels(db, inbox_only, email_types=[])
     await _notify(db, inbox_only, NotificationType.COMMENTED, item, excerpt="Any update?")
     await _notify(
@@ -554,17 +481,13 @@ async def test_inbox_only_still_reaches_the_mailbox_through_the_digest_once(
 async def test_a_user_who_never_saved_a_preference_gets_the_default_set(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """No prefs row = each kind's default channel: the personally-directed set mails.
-
-    So a mention now mails as it happens — under RADD-968's constant only
-    `commented` ever did — while a state change on something they merely watch
-    still waits for the digest. Both halves are asserted, because widening the
-    default is only right if it stopped somewhere.
-    """
+    """No prefs row = each kind's default channel: a mention mails as it happens,
+    a state change on something merely watched waits for the digest. Both halves are
+    asserted — widening the default is only right if it stopped somewhere."""
     _agent, _project, item = world
     assert notify_rules.resolve(NotificationType.MENTIONED).email
     assert not notify_rules.resolve(NotificationType.STATE_CHANGED).email
-    newcomer = await _user(db, name="Nia", email=f"n-{uuid.uuid4().hex[:8]}@example.com")
+    newcomer = await make_user(db, name="Nia", email=f"n-{uuid.uuid4().hex[:8]}@example.com")
     assert await notify_service.get_prefs(db, newcomer.id) is None, "the absence IS the fixture"
     await _notify(db, newcomer, NotificationType.MENTIONED, item, source="comment")
     await _notify(
@@ -582,16 +505,11 @@ async def test_a_user_who_never_saved_a_preference_gets_the_default_set(
 async def test_being_shared_into_an_issue_mails_the_person_it_reaches(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """RADD-978, end to end: the real add, the real consumer, the real tick.
-
-    `participant_added` is personally directed, so it mails by default
-    — someone shared into an issue hears about it now, not in tomorrow's digest,
-    which is the whole point of telling them at all. The recipient holds nothing
-    on the project: they pass the consumer's read gate through the Baseline's
-    `item.read@participant`, i.e. through the row being announced.
-    """
+    """RADD-978 end to end: `participant_added` mails by default. The recipient
+    holds nothing on the project; they pass the read gate through the Baseline's
+    `item.read@participant`, i.e. through the row being announced."""
     agent, project, item = world
-    colleague = await _user(db, name="Colleague", email=f"p-{uuid.uuid4().hex[:8]}@example.com")
+    colleague = await make_user(db, name="Colleague", email=f"p-{uuid.uuid4().hex[:8]}@example.com")
     assert await notify_service.get_prefs(db, colleague.id) is None, "the absence IS the fixture"
     assert notify_rules.resolve(NotificationType.PARTICIPANT_ADDED).email
 
@@ -610,18 +528,11 @@ async def test_being_shared_into_an_issue_mails_the_person_it_reaches(
 async def test_a_preference_saved_before_the_type_existed_does_not_mail_it(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """The asymmetry RADD-978 accepted, asserted rather than assumed.
-
-    `d686emailtypes` backfilled every existing preferences row with the four
-    types that were default THEN, and no migration adds this one — rewriting a
-    stored preference to switch on a channel the person never asked for is worse
-    than the inconsistency. So an explicit row from that backfill gets the inbox
-    row and no mail, while the newcomer above gets both. The row is left
-    UNSTAMPED, so the digest still carries it: this is a channel choice, not
-    silence.
-    """
+    """A preferences row from the `d686emailtypes` backfill predates this type, and no
+    migration switches on a channel nobody asked for: inbox row, no mail. The row is
+    left UNSTAMPED, so the digest still carries it — a channel choice, not silence."""
     agent, _project, item = world
-    settled = await _user(db, name="Settled", email=f"s-{uuid.uuid4().hex[:8]}@example.com")
+    settled = await make_user(db, name="Settled", email=f"s-{uuid.uuid4().hex[:8]}@example.com")
     # Verbatim what the migration wrote — the point is a row that predates the type.
     await _channels(
         db,
@@ -646,19 +557,13 @@ async def test_a_preference_saved_before_the_type_existed_does_not_mail_it(
 async def test_a_type_mailed_from_a_non_comment_event_does_not_crash_the_tick(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """The bug RADD-978 surfaced, asserted in the type it was always reachable
-    from rather than only in the new one.
-
-    `mailer._comment_id` resolved the notification's event blindly, and an ITEM
-    event's `entity_id` is the item — so the transport was handed an item uuid as
-    a comment id and the tick died on a foreign-key violation. `assigned` mails by
-    default, so this was one assignment away on every instance with
-    mailintake configured. It never fired in this file because every non-comment
-    case here was written with `event_id=None`, which is the one shape that
-    cannot reach the lookup.
-    """
+    """`mailer._comment_id` resolved an ITEM event's `entity_id` (the item) as a
+    comment id, killing the tick on a foreign key. Every non-comment case here used
+    `event_id=None`, the one shape that cannot reach the lookup — so this one has one."""
     agent, project, item = world
-    assignee = await _user(db, name="Ash Assignee", email=f"as-{uuid.uuid4().hex[:8]}@example.com")
+    assignee = await make_user(
+        db, name="Ash Assignee", email=f"as-{uuid.uuid4().hex[:8]}@example.com"
+    )
     await _grant(db, assignee, BuiltinRoleKey.MEMBER, project.id)
     head = await events_service.latest_event_id(db)
     await events_service.set_offset(db, CONSUMER_NAME, head)
@@ -681,19 +586,12 @@ async def test_a_type_mailed_from_a_non_comment_event_does_not_crash_the_tick(
 async def test_an_item_update_reaches_its_assignee_and_the_people_it_mentions(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """The row half of the same find, and the more serious one.
-
-    RADD-922 nested the item event payload under `item`; `_handle_item_event`
-    went on reading a top-level `project_id` and a top-level `description`. The
-    first raised KeyError inside the consumer's per-event SAVEPOINT — logged,
-    skipped, cursor advanced — so `assigned`, `state_changed` and description
-    `mentioned` produced nothing for anyone; the second silently mention-scanned
-    an empty string. No test drove this handler over a REAL item event, which is
-    the only reason a dead third of the notification types looked healthy.
-    """
+    """Drives `_handle_item_event` over a REAL item event: reading a top-level
+    `project_id` after RADD-922 nested the payload raised inside the consumer's
+    SAVEPOINT (logged, skipped), silently killing `assigned`/`state_changed`/mentions."""
     agent, project, item = world
-    assignee = await _user(db, name="Ash", email=f"ash-{uuid.uuid4().hex[:8]}@example.com")
-    named = await _user(db, name="Nina Named", email=f"n-{uuid.uuid4().hex[:8]}@example.com")
+    assignee = await make_user(db, name="Ash", email=f"ash-{uuid.uuid4().hex[:8]}@example.com")
+    named = await make_user(db, name="Nina Named", email=f"n-{uuid.uuid4().hex[:8]}@example.com")
     for user in (assignee, named):
         await _grant(db, user, BuiltinRoleKey.MEMBER, project.id)
     head = await events_service.latest_event_id(db)
@@ -728,7 +626,7 @@ async def test_a_mailed_row_is_stamped_so_the_digest_never_repeats_it(
     """The dedup between the two channels is `emailed_at`, which the digest's
     selection already filters on — no new column, no new query."""
     agent, project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await notify_service.add_watchers(db, item.id, [watcher.id])
     await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
     await _comment(db, item, agent, "Engineer dispatched.")
@@ -758,7 +656,7 @@ async def test_a_type_the_recipient_did_not_ask_for_is_left_for_the_digest(
     whose selection is exactly that — would never see it either and the
     notification would reach nobody at all. The two channels are a partition."""
     _agent, _project, item = world
-    watcher = await _user(db, name="Ava", email=f"a-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Ava", email=f"a-{uuid.uuid4().hex[:8]}@example.com")
     await _channels(db, watcher, email_types=[NotificationType.COMMENTED])
     await _notify(db, watcher, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"})
 
@@ -775,10 +673,10 @@ async def test_a_recipient_with_no_mailbox_is_stamped_rather_than_retried_foreve
     """Inactive or addressless is a PERMANENT skip, not a delivery failure —
     stamping it is what stops a 5-second loop reconsidering it all day."""
     _agent, _project, item = world
-    departed = await _user(
+    departed = await make_user(
         db, name="Gone", email=f"g-{uuid.uuid4().hex[:8]}@example.com", active=False
     )
-    addressless = await _user(db, name="No Mail", email="")
+    addressless = await make_user(db, name="No Mail", email="")
     for user in (departed, addressless):
         await notify_service.create_notification(
             db,
@@ -818,17 +716,9 @@ async def _service_account(db) -> User:
 async def test_a_service_account_is_stamped_without_the_relay_being_dialled(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """RADD-996: `radd-agent@service.radd.local` is not a mailbox.
-
-    Service accounts have been receiving notification mail since v0.29.0, and
-    the live incident is what it costs — the relay was rate-limited partly for
-    repeatedly posting to addresses that bounce. The skip is PERMANENT, so the
-    row is stamped like the inactive/address-less case: retrying can only
-    produce the same answer more slowly.
-
-    `dials` rather than `sent` is the assertion, because a message that is never
-    composed still costs a connection if the loop reaches the relay at all.
-    """
+    """RADD-996: a service account is not a mailbox. The skip is PERMANENT, so the row
+    is stamped like the inactive case. `dials`, not `sent`: a message never composed
+    still costs a connection if the loop reaches the relay."""
     _agent, _project, item = world
     robot = await _service_account(db)
     await _notify(db, robot, NotificationType.COMMENTED, item, excerpt="Any update?")
@@ -839,7 +729,7 @@ async def test_a_service_account_is_stamped_without_the_relay_being_dialled(
     (row,) = await _rows(db, robot.id)
     assert row.emailed_at is not None, "unstamped means the digest tries the same address"
     # The control: the same batch, one line later, with a person on it.
-    human = await _user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
+    human = await make_user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
     await _notify(db, human, NotificationType.COMMENTED, item, excerpt="Any update?")
     assert await mailer.run_batch(db) == 1
     assert _FakeSmtp.dials == 1
@@ -848,15 +738,11 @@ async def test_a_service_account_is_stamped_without_the_relay_being_dialled(
 async def test_the_digest_skips_a_service_account_and_stamps_it(
     db, world, relay, env_relay, quiet_backlog
 ):
-    """The other loop, which had the same bug and no end-to-end test at all.
-
-    `state_changed` is deliberately not mailed by default, so these rows
-    are the digest's by construction rather than by the mailer having passed
-    over them.
-    """
+    """The digest loop, same skip. `state_changed` is not mailed by default, so these
+    rows are the digest's by construction."""
     _agent, _project, item = world
     robot = await _service_account(db)
-    human = await _user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
+    human = await make_user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
     for user in (robot, human):
         await _notify(
             db, user, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"}
@@ -884,22 +770,12 @@ def _html(message: EmailMessage) -> str:
 async def test_a_notification_email_carries_list_unsubscribe_and_a_preferences_link(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """Audit finding #7's deliverability half. No email Radd sent carried
-    `List-Unsubscribe` or a settings link — Gmail and Outlook rank a bulk sender
-    on the header, and the footer was prose with no anchor. Both parts now say
-    where the mail is turned off, and the header lets the client offer it.
-
-    The link is `/settings/notifications`, NOT `/settings/profile` as the issue
-    was filed: spec 118 moved the matrix to its own tab after the filing, and a
-    link to the profile page would land on a section that says "see the
-    Notifications tab".
-
-    The thread headers are asserted alongside: the caller's headers ride the
-    same dictionary as Reply-To/In-Reply-To/References and must not displace
-    them, or a client-side "unsubscribe" would cost a customer their thread.
-    """
+    """Every notification email carries `List-Unsubscribe` and a link to
+    `/settings/notifications`. The caller's headers share a dict with
+    Reply-To/In-Reply-To/References and must not displace them, or unsubscribing
+    would cost a customer their thread."""
     agent, project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await notify_service.add_watchers(db, item.id, [agent.id, watcher.id])
     await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
     await _comment(db, item, agent, "Restarted it.")
@@ -921,7 +797,7 @@ async def test_the_digest_carries_the_header_and_the_link_in_both_parts(
     """The slower channel, through `send_plain` — the one with no item and so
     nothing of the transport's to merge with; its headers go out as given."""
     _agent, _project, item = world
-    human = await _user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
+    human = await make_user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
     await _notify(db, human, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"})
 
     assert await emailer.run_batch(db) == 1
@@ -948,16 +824,11 @@ async def _failures(db, item_id: uuid.UUID) -> list[Event]:
 async def test_a_failed_send_waits_out_a_delay_instead_of_retrying_every_tick(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """The incident, in one row (RADD-997).
-
-    A failure left the row exactly as `_pending` had found it, so the 5-second
-    mailer selected it again on the next tick, and the next, for the whole
-    24-hour age window: an SMTP connection and a `mail.failed` event per
-    recipient per five seconds. The row now carries its own backoff, and the
-    second tick is the assertion that matters — the relay is not dialled at all.
-    """
+    """RADD-997: a failed row used to be re-selected every 5-second tick for 24 hours.
+    It now carries its own backoff; the second tick is the assertion — the relay is
+    not dialled at all."""
     _agent, _project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await _notify(db, watcher, NotificationType.COMMENTED, item, excerpt="Any update?")
     _FakeSmtp.fail = True
 
@@ -988,17 +859,11 @@ async def test_a_failed_send_waits_out_a_delay_instead_of_retrying_every_tick(
 async def test_the_ladder_ends_in_a_stamp_and_exactly_two_failure_events(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """Giving up, and the event half of the same fix.
-
-    The stamp is the terminal state because the digest's selection is
-    `emailed_at IS NULL` — leaving the row unstamped would hand an address that
-    has refused four times straight to the other loop. And `mail.failed` is
-    emitted on the FIRST failure and the LAST one only: the event is item-scoped
-    and drives automations and the activity feed, so it answers "did this person
-    hear from us", which the retries in between do not re-answer.
-    """
+    """Giving up stamps the row — unstamped, the digest (`emailed_at IS NULL`) would
+    retry an address that refused four times. `mail.failed` fires on the FIRST and
+    LAST failure only: it answers "did this person hear from us"."""
     _agent, _project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await _notify(db, watcher, NotificationType.COMMENTED, item, excerpt="Any update?")
     _FakeSmtp.fail = True
 
@@ -1035,7 +900,7 @@ async def test_a_failed_digest_takes_the_same_ladder(
     one per row) and equally unbounded. Same columns, same ladder, same terminal
     stamp — written once in `retry.py` so the two loops cannot drift apart."""
     _agent, _project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await _notify(
         db, watcher, NotificationType.STATE_CHANGED, item, **{"from": "Open", "to": "Done"}
     )
@@ -1075,7 +940,7 @@ async def test_nothing_is_stamped_when_there_is_nowhere_to_send_from(
     configured SMTP yet."""
     _agent, _project, item = world
     monkeypatch.setattr(settings, "smtp_host", "")
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await notify_service.create_notification(
         db,
         user_id=watcher.id,
@@ -1096,14 +961,10 @@ async def test_nothing_is_stamped_when_there_is_nowhere_to_send_from(
 async def test_a_reply_to_a_notification_email_threads_back_onto_the_issue(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """The whole point of routing notification mail through mailintake.
-
-    A notification email now carries the sender's Reply-To and its Message-ID is
-    recorded against the item, so an internal user who simply hits Reply lands
-    on the issue as a comment instead of opening a duplicate ticket.
-    """
+    """A notification email carries the sender's Reply-To and its Message-ID is stored
+    against the item, so a plain Reply lands on the issue as a comment."""
     agent, project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await notify_service.add_watchers(db, item.id, [watcher.id])
     await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
     await _comment(db, item, agent, "Engineer dispatched.")
@@ -1144,7 +1005,7 @@ async def test_the_subject_opens_the_thread_and_then_follows_it(
     """First message out: `[KEY] Title`. Every later one: the STORED subject
     with one `Re: `, so renaming the issue cannot split the conversation."""
     agent, project, item = world
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await notify_service.add_watchers(db, item.id, [watcher.id])
     await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
     key = f"{project.key}-{item.number}"
@@ -1166,17 +1027,9 @@ async def test_the_subject_opens_the_thread_and_then_follows_it(
 async def test_notification_mail_leaves_from_the_source_the_ticket_arrived_at(
     db, world, relay, no_senders, quiet_backlog
 ):
-    """RADD-979's third leg — and the one that shows the resolution point is
-    SHARED rather than copied.
-
-    Notify knows nothing about mail sources: it hands the transport an item and
-    a recipient and is done. A ticket that arrived at the support desk is
-    nonetheless mailed to its watchers AS the desk, because which identity
-    answers is decided once, inside `transport._sender`, and every caller rides
-    it. Had the lookup been added at the reply consumer instead, this leg would
-    have kept signing as the instance default with nothing anywhere saying so —
-    which is the same shape of bug as the two fan-outs RADD-968 merged.
-    """
+    """RADD-979: a ticket that arrived at the support desk is mailed to watchers AS
+    the desk, although notify knows nothing about sources — the identity is resolved
+    once, in `transport._sender`, and every caller rides it."""
     agent, project, item = world
     house = MailSender(
         name=f"House {uuid.uuid4().hex[:6]}",
@@ -1222,7 +1075,7 @@ async def test_notification_mail_leaves_from_the_source_the_ticket_arrived_at(
         source_id=source.id,
     )
 
-    watcher = await _user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await notify_service.add_watchers(db, item.id, [watcher.id])
     await _grant(db, watcher, BuiltinRoleKey.MEMBER, project.id)
     await _comment(db, item, agent, "Engineer dispatched.")
@@ -1253,15 +1106,10 @@ async def _cell(db, user: User, kind: NotificationType, channel: Channel) -> Non
 async def test_email_without_inbox_mails_and_leaves_no_inbox_row(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """The state RADD-686 could not express, end to end.
-
-    "Email me when something is assigned to me, do not clutter my inbox" was
-    structurally unsayable: a muted type never became a row, and the mailer
-    mailed rows. Spec 118 moves the decision onto the row's COLUMNS, so the row
-    exists to be mailed and the inbox never shows it.
-    """
+    """Email-only, end to end (spec 118): the decision lives on the row's COLUMNS, so
+    the row exists to be mailed and the inbox never shows it."""
     _agent, _project, item = world
-    mail_only = await _user(db, name="Mo", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
+    mail_only = await make_user(db, name="Mo", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
     await _cell(db, mail_only, NotificationType.COMMENTED, Channel.EMAIL)
     await _notify(db, mail_only, NotificationType.COMMENTED, item, excerpt="Any update?")
 
@@ -1278,16 +1126,11 @@ async def test_email_without_inbox_mails_and_leaves_no_inbox_row(
 async def test_marking_everything_read_does_not_cancel_a_pending_email_only_send(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """A trap the two-boolean model opens, closed at the seam.
-
-    `mailer._pending` skips rows that have been READ — an email about something
-    you have already opened is noise. An email-only row can never be opened,
-    because it is not in the list; so "mark all read" sweeping it would silently
-    cancel a send the person explicitly asked for, and nothing would say so.
-    `mark_all_read` is scoped to inbox rows for exactly that reason.
-    """
+    """`mailer._pending` skips READ rows, and an email-only row is never listed, so
+    "mark all read" sweeping it would silently cancel a send the person asked for.
+    `mark_all_read` is scoped to inbox rows for that reason."""
     _agent, _project, item = world
-    mail_only = await _user(db, name="Mo", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
+    mail_only = await make_user(db, name="Mo", email=f"m-{uuid.uuid4().hex[:8]}@example.com")
     await _cell(db, mail_only, NotificationType.COMMENTED, Channel.EMAIL)
     await _notify(db, mail_only, NotificationType.COMMENTED, item, excerpt="Any update?")
 
@@ -1305,7 +1148,7 @@ async def test_an_inbox_only_row_is_never_selected_by_the_mailer(
     per-recipient pass in Python. What the mailer skips stays UNSTAMPED, so the
     digest — whose selection is `emailed_at IS NULL` — still carries it."""
     _agent, _project, item = world
-    quiet = await _user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
+    quiet = await make_user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
     await _cell(db, quiet, NotificationType.COMMENTED, Channel.INBOX)
     await _notify(db, quiet, NotificationType.COMMENTED, item, excerpt="Any update?")
 

@@ -8,14 +8,10 @@ deflect resolved-only filter. Send paths never touch the network:
 `radd.smtp.send_message` is monkeypatched.
 """
 
-import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.automations import engine
 from radd.modules.automations.executor import _NodeContext
 from radd.modules.automations.graph import Node, Packet
@@ -34,28 +30,6 @@ from radd.modules.workflow import service as workflow_service
 from radd.modules.workflow.types import StateCategory
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"desk-{uuid.uuid4().hex[:8]}@example.com",
-        name="Desk Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 @pytest.fixture
@@ -207,17 +181,10 @@ async def test_send_email_resolves_roles_from_the_item(db, admin, project, smtp_
 
 
 async def test_send_email_apply_rides_the_one_transport(db, smtp_on):
-    """RADD-983: the action no longer dials `radd.smtp` itself.
-
-    It went through the environment relay directly, so an instance configured
-    only through Settings → Email (sender ROWS, no `RADD_SMTP_*`) sent nothing
-    and logged nothing. Delivery is `mailintake.service.send_plain_mail` now —
-    rows first, environment as the fallback, and the outcome emitted as
-    `mail.sent`/`mail.failed`. Every relay ROW is disabled below so the env leg
-    is the one that answers — `default_sender` reads the table, not a fixture,
-    and a row some other module committed would otherwise decide which relay
-    this test dials.
-    """
+    """RADD-983: the action delivers through `mailintake.service.send_plain_mail`
+    (rows first, environment fallback, `mail.sent`/`mail.failed` emitted). Every
+    relay ROW is disabled so the env leg answers — `default_sender` reads the table,
+    and a row another module committed would decide which relay is dialled."""
     from sqlalchemy import update
 
     from radd.modules.mailintake.models import MailSender

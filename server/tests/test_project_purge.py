@@ -1,19 +1,8 @@
-"""Project teardown is COMPLETE by construction (RADD-892).
-
-`jiraimport.rollback` used to hold a seven-entry tuple of other modules' table
-names — `_PROJECT_CHILDREN` — and delete a project's children from it. Nothing
-kept it honest: a module that added a project-scoped table, or a plugin that
-declared a project-scoped entity, fell out of coverage silently, and the symptom
-was a rollback that reported "could not be undone" against a foreign key nobody
-could name. It had in fact already happened: the north-star `milestones` table
-was never in the list, and `states` was listed without the transitions that point
-at it.
-
-Now each owner registers a `ProjectPurgeSpec` and the consumer iterates. These
-three assertions are what stop the registry from being a slower version of the
-same hole: coverage cannot shrink below what the hardcoded list did, every table
-whose foreign key the DATABASE will not clear must be claimed by someone, and a
-registered name must be a real table with a real `project_id`.
+"""Project teardown is COMPLETE by construction (RADD-892): each owner registers a
+`ProjectPurgeSpec` and the rollback iterates them. Pinned so the registry cannot
+become the hardcoded list's hole again: coverage never shrinks below that list,
+every table whose foreign key the DATABASE will not clear is claimed, and every
+registered name is a real table with a real `project_id`.
 """
 
 from radd.db import Base
@@ -43,13 +32,9 @@ def _project_fk_tables() -> dict[str, list[str | None]]:
 
 
 def _owning_module(table: str) -> str | None:
-    """Which plugin's models.py declares this table, via the mapper's module.
-
-    Needed because `Base.metadata` is process-global and accumulates every table
-    any test ever imported, while the purge registry only holds what is LOADED —
-    a disabled plugin contributes nothing by design. Comparing the two without
-    this would fail depending on test order, which is worse than not checking.
-    """
+    """Which plugin's models.py declares this table. `Base.metadata` holds every table
+        any test imported while the purge registry holds only what is LOADED, so
+        comparing them without this would pass or fail by test order."""
     for mapper in Base.registry.mappers:
         local = mapper.local_table
         if local is not None and local.name == table:
@@ -114,12 +99,9 @@ def test_a_project_scoped_entity_registers_its_own_purge():
 
 
 def test_registered_purge_tables_are_real():
-    """A typo'd table name deletes nothing and raises nothing — the purge just
-    quietly stops covering that module.
-
-    Read inside the test, never at collection: the registry is boot state that
-    conftest's autouse fixture builds, and a module-level read would parametrize
-    over an empty registry and pass by describing nothing."""
+    """A typo'd table name deletes nothing and raises nothing. Read inside the test,
+        never at collection: the registry is boot state, and a module-level read would
+        parametrize over an empty registry and pass vacuously."""
     tables = registries.project_purge_tables()
     assert tables, "no ProjectPurgeSpec registered at all — the registry is empty"
     for table in tables:

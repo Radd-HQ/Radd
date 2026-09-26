@@ -1,20 +1,9 @@
-"""RADD-810 — the client-gate scope audit, as a test.
-
-Every `perms.global(Permission.X)` in the SPA — the host and the plugin UI
-packages, whose atom constants (`PagePermission`, …) are read the same way —
-where X is not a GLOBAL-scope atom is the RADD-808/810 failure shape: a holder of the atom at its real scope
-fails a global question, so the control silently vanishes for exactly the
-people it was built for. The ten shipped instances are fixed (space-scoped
-sites resolve against their space via RADD-814's `can({space})` leg,
-project-scoped ones against the project in context or `anyProject`); the instance operations
-that are DELIBERATELY global — space-creation gates matching `create_space`'s
-own no-space check — carry a `deliberately-global` marker comment.
-
-This test re-runs the audit on every suite run: a new unannotated mismatch
-fails with the file:line, and an annotation without a mismatch is flagged too
-(a stale marker invites the next person to copy it). Same family as
-`test_route_shadowing.py` and `test_permission_scope_contract.py` — a contract
-with no compiler behind it gets a test or it rots.
+"""RADD-810 — the client-gate scope audit, as a test. A `perms.global(X)` in the SPA
+(host or plugin UI) where X is not a GLOBAL-scope atom fails for the holder of X at
+its real scope, so the control silently vanishes for exactly the people it was
+built for. Deliberately global sites carry a `deliberately-global` marker. A new
+unannotated mismatch fails with file:line, and a marker without a mismatch is
+flagged too (a stale marker invites copying).
 """
 
 import re

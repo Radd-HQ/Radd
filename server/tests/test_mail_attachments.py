@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 import pytest
 from PIL import Image
 from sqlalchemy import update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import mailrender, smtp
 from radd.config import settings
@@ -27,15 +26,6 @@ from radd.modules.mailintake.reply import OutboundReply, Recipient
 from radd.modules.mailintake.senders.smtp_sender import SmtpSender
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

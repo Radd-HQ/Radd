@@ -10,9 +10,7 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.kernel.registry import registries
 from radd.modules.auth.models import User
@@ -27,27 +25,12 @@ from radd.modules.slas.types import SlaKind
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(
-        email=f"sla-{uuid.uuid4().hex[:8]}@example.com",
-        name="SLA Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="SLA Admin")
 
 
 async def _project(db, run: str, key: str):
@@ -109,12 +92,9 @@ async def test_matched_policy_first_match_in_db(db, admin):
 
 
 async def test_policies_match_by_issue_type(db, admin):
-    """RADD-1043: a desk answers a Bug and a Story on different promises.
-
-    Priority could not express that — a normal-priority outage and a
-    normal-priority request are the same tier — so the filter is the type, with
-    the priority filter's semantics exactly: empty means every type.
-    """
+    """RADD-1043: a desk answers a Bug and a Story on different promises, which
+    priority cannot express; the type filter has the priority filter's semantics
+    exactly (empty means every type)."""
     project = await _project(db, uuid.uuid4().hex[:6], "SLT")
     types = await _types(db, project.id)
     bugs = await slas.create_policy(
@@ -354,16 +334,9 @@ def _raw(*, sender, subject, body, message_id, in_reply_to=None) -> bytes:
 
 
 async def test_an_agents_emailed_reply_satisfies_the_response_target(db, admin):
-    """RADD-981, at the seam that decides whether an answer COUNTS.
-
-    The first-response feed skips the reporter (answering yourself is not a
-    response) and the SYSTEM actor (an automation's acknowledgement is not one
-    either). Every inbound-mail comment used to be SYSTEM-authored — so an agent
-    who answered a customer BY EMAIL, the ordinary way a service desk works,
-    left the response timer running until it breached, while the same words
-    typed into the UI stopped it. Nothing reported that anywhere; the breach
-    simply arrived.
-    """
+    """RADD-981: the first-response feed skips the reporter and SYSTEM, and every
+    mailed comment used to be SYSTEM-authored — so an agent answering BY EMAIL left
+    the timer running until it breached, silently."""
     from radd.modules.mailintake import intake, parsing, threading as mail_threading
     from radd.modules.mailintake.types import MailDirection
 

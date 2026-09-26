@@ -1,13 +1,6 @@
-"""A requester who can ONLY file through a form (spec 73 + RADD-785).
-
-This is the narrowest real actor on the instance: no project grants, no
-`item.create`, an empty Baseline — someone whose entire relationship with Radd
-is "submit a request and watch it". The portal has to work for exactly them, and
-the rest of the app has to be quiet rather than hostile.
-
-Written when RADD-788 landed, to pin that the floor-gate rework did not touch
-this path and that the surfaces a requester's shell loads answer empty rather
-than refusing.
+"""A requester who can ONLY file through a form (spec 73 + RADD-785): no project
+grants, no `item.create`, an empty Baseline. The portal must work for exactly
+them, and the surfaces a requester's shell loads answer empty rather than refuse.
 """
 
 import uuid

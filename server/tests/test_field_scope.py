@@ -10,31 +10,12 @@ back on close, so nothing leaks into the dev DB.
 
 import uuid
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate, FieldDefinitionUpdate
 from radd.modules.fields.types import FieldType
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()  # discard everything this test flushed
-    await engine.dispose()
-
-
-async def _project(db, name: str):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"FS{uuid.uuid4().hex[:6].upper()}", name=name)
-    )
+from _factories import make_project
 
 
 def _keys(defs) -> set[str]:
@@ -42,8 +23,8 @@ def _keys(defs) -> set[str]:
 
 
 async def test_scope_resolution_global_single_and_multi(db):
-    a = await _project(db, "Alpha")
-    b = await _project(db, "Beta")
+    a = await make_project(db, "FS", "Alpha")
+    b = await make_project(db, "FS", "Beta")
     tag = uuid.uuid4().hex[:6]
 
     await fields_service.create_field(
@@ -71,8 +52,8 @@ async def test_scope_resolution_global_single_and_multi(db):
 
 
 async def test_widen_then_promote_to_global(db):
-    a = await _project(db, "Alpha")
-    b = await _project(db, "Beta")
+    a = await make_project(db, "FS", "Alpha")
+    b = await make_project(db, "FS", "Beta")
     tag = uuid.uuid4().hex[:6]
     field = await fields_service.create_field(
         db, FieldDefinitionCreate(project_ids=[a.id], key=f"s_{tag}", name="Scoped", type=FieldType.TEXT)
@@ -88,12 +69,12 @@ async def test_widen_then_promote_to_global(db):
 
     # Promote to global: clear the scope → visible in a brand-new project too.
     await fields_service.update_field(db, fid, FieldDefinitionUpdate(project_ids=[]), actor_id=None)
-    c = await _project(db, "Gamma")
+    c = await make_project(db, "FS", "Gamma")
     assert f"s_{tag}" in _keys(await fields_service.definitions_for_project(db, c))
 
 
 async def test_omitted_project_ids_leaves_scope_unchanged(db):
-    a = await _project(db, "Alpha")
+    a = await make_project(db, "FS", "Alpha")
     tag = uuid.uuid4().hex[:6]
     field = await fields_service.create_field(
         db, FieldDefinitionCreate(project_ids=[a.id], key=f"u_{tag}", name="Unchanged", type=FieldType.TEXT)

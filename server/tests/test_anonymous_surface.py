@@ -1,17 +1,8 @@
-"""Spec 121 (RADD-1142): the anonymous surface is a FROZEN inventory.
-
-An unauthenticated request resolves to the Anyone principal only on routes
-that declare `Actor`; everything else keeps 401-ing. Two directions, both
-asserted over the ASSEMBLED app (the `_IncludedRouter` walk from
-test_route_shadowing):
-
-* every route whose dependency graph reaches `auth.deps.actor` is in
-  `ANONYMOUS_ROUTES` — a new route cannot join the surface by accident;
-* every entry of `ANONYMOUS_ROUTES` really declares it — removing one is a
-  visible edit here, not a silent regression.
-
-And the seam is structurally read-only: `Actor` on a non-read method must
-refuse before any handler runs.
+"""Spec 121 (RADD-1142): the anonymous surface is a FROZEN inventory. Over the
+ASSEMBLED app (the `_IncludedRouter` walk from test_route_shadowing): every route
+reaching `auth.deps.actor` is in `ANONYMOUS_ROUTES` (none joins by accident), and
+every entry really declares it (removal is a visible edit). `Actor` on a non-read
+method must refuse before any handler runs.
 """
 
 from radd.app import create_app

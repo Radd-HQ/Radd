@@ -3,24 +3,12 @@
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events.models import Event
 from radd.modules.webhooks import service as webhooks
 from radd.modules.webhooks.models import WebhookDelivery, WebhookEndpoint
 from radd.modules.webhooks.types import DeliveryStatus
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _endpoint_with(db, status: str) -> tuple[WebhookEndpoint, WebhookDelivery]:

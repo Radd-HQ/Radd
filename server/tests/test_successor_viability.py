@@ -1,23 +1,8 @@
-"""RADD-784 — access dies with the account; the successor must already hold it.
-
-The decision (2026-08-05): deleting a user transfers CONTENT, never access.
-Project/team/group memberships, role grants, delegation and shares are
-destroyed — and because nothing transfers, the delete refuses a successor who
-holds LESS than the account being deleted, naming exactly what is missing per
-scope (`successor_viability`, previewed by GET /users/{id}/successor-check).
-
-Pinned here:
-
-  - a less-privileged successor is refused with the missing atoms named,
-  - granting the gap (or picking an equal) makes the delete pass,
-  - the leaver's memberships/grants are GONE afterwards, not moved,
-  - content still transfers (the spec-89 promise is unchanged),
-  - an instance-admin leaver needs an instance-admin successor,
-  - an admin successor is always viable,
-  - the comparison is lattice-aware: holding `item.read` covers a leaver's
-    `item.read@own`.
-
-Rolled-back transactions on the compose DB.
+"""Deleting a user transfers CONTENT, never access (RADD-784): memberships, grants,
+delegation and shares are destroyed, so the delete refuses a successor holding
+LESS than the leaver and names the missing atoms per scope. The comparison is
+lattice-aware (`item.read` covers `item.read@own`); an admin leaver needs an
+admin successor.
 """
 
 import uuid
@@ -35,8 +20,8 @@ from radd.modules.auth.service import _permission_gaps, successor_viability
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
+
+from _factories import make_project
 
 
 @pytest.fixture
@@ -60,12 +45,6 @@ async def _user(db, label, *, role=InstanceRole.MEMBER) -> User:
     db.add(user)
     await db.flush()
     return user
-
-
-async def _project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"SV{uuid.uuid4().hex[:4].upper()}", name="S")
-    )
 
 
 async def _member_role_id(db) -> uuid.UUID:
@@ -97,7 +76,7 @@ async def test_less_privileged_successor_is_refused_naming_the_gap(db):
     admin = await _user(db, "admin", role=InstanceRole.ADMIN)
     leaver = await _user(db, "leaver")
     junior = await _user(db, "junior")
-    project = await _project(db)
+    project = await make_project(db, "SV")
     await _join(db, project, leaver)
     # something to inherit, so the successor is exercised
     await items_service.create_item(
@@ -118,7 +97,7 @@ async def test_equal_successor_passes_and_access_dies(db):
     admin = await _user(db, "admin", role=InstanceRole.ADMIN)
     leaver = await _user(db, "leaver")
     peer = await _user(db, "peer")
-    project = await _project(db)
+    project = await make_project(db, "SV")
     await _join(db, project, leaver)
     await _join(db, project, peer)
     item = await items_service.create_item(

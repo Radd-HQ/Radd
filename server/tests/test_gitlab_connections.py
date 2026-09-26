@@ -16,9 +16,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.gitlab import service
@@ -33,16 +31,6 @@ from radd.modules.vcs.models import ItemVcsLink
 from radd.modules.vcs.models import VcsUserLink
 from radd.modules.vcs import timemirror
 from radd.modules.vcs.types import VcsProvider
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _payload(path: str = "") -> dict:

@@ -10,7 +10,6 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.kernel import TokenProviderSpec, load_plugins
@@ -19,16 +18,6 @@ from radd.modules.auth.models import User
 from radd.modules.automations import engine, service as automations, templating
 from radd.modules.automations.conditions import EventFacts
 from radd.modules.automations.schemas import RuleCreate
-
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
 
 
 @pytest.fixture

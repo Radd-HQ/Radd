@@ -11,9 +11,6 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from radd.config import settings as config
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.cycles import service as cycles_service
 from radd.modules.cycles.schemas import CycleCreate
 from radd.modules.items import service as items
@@ -25,29 +22,6 @@ from radd.modules.workflow import service as workflow
 from radd.modules.workflow.types import StateCategory
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def actor(db) -> User:
-    user = User(
-        email=f"pts-{uuid.uuid4().hex[:8]}@example.com",
-        name="Points Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def _project_with_states(db):

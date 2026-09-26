@@ -1,21 +1,9 @@
-"""search_index carries relation columns (RADD-841), and search honours every
-registered item relation — not only the mirrored ones (RADD-1030).
-
-The prerequisite for relations reaching search (RADD-823/817): a
-relation-scoped actor must be able to filter FTS results by reporter/
-assignee/team without joining work_items per query. Three facts are pinned:
-the indexer writes the columns from the event payload, an item.updated
-re-index follows a change, and the bulk sweep repairs a repoint that never
-emitted an item event (the user-merge shape).
-
-The second half (RADD-1030) is the bug that mirror set caused: a relation
-whose membership lives in ANOTHER table — `@participant` — had no mirror
-column, so `_relation_index_clause` compiled `false()` for the project and a
-shared item was invisible to /search while the list path returned it. The
-tests below assert PARITY between the two paths, because that divergence is
-the failure mode and neither path alone can show it.
-
-Rolled-back transactions on the compose DB.
+"""search_index carries relation columns (RADD-841), so a relation-scoped actor
+filters FTS by reporter/assignee/team without joining work_items: the indexer writes
+them from the payload, item.updated re-indexes, and the bulk sweep repairs a repoint
+that emitted no item event (user merge). A relation with no mirror column
+(`@participant`) must still match (RADD-1030): the tests assert PARITY between
+/search and the list, because the divergence is the failure neither shows alone.
 """
 
 import logging
@@ -24,12 +12,9 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 
 # Side effect: the workflow module's project.created hook seeds default states.
 from radd.modules import workflow as _workflow  # noqa: F401
@@ -47,15 +32,7 @@ from radd.modules.search.models import SearchIndexRow
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
@@ -175,18 +152,8 @@ async def test_sweep_repairs_a_repoint_that_emitted_no_item_event(db, admin):
 _TOKEN = "quokkasearch"
 
 
-async def _outsider(db, name: str) -> User:
-    """An active staff account holding ONLY the Baseline: no roles, no
-    memberships, no standing anywhere. It reads items solely through a
-    relation (`item.read@own`, `item.read@participant`)."""
-    user = User(
-        email=f"sr-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+# An outsider holds ONLY the Baseline (no roles, no memberships), so it reads
+# items solely through a relation (`item.read@own`, `item.read@participant`).
 
 
 async def _indexed_project(db, admin):
@@ -221,7 +188,7 @@ async def test_a_shared_item_is_findable_and_search_agrees_with_the_list(db, adm
     arm for the project compiled `false()` — the list path returned the shared
     item and /search returned nothing. Parity is the assertion, both ways."""
     project, shared, private = await _indexed_project(db, admin)
-    outsider = await _outsider(db, "Second Reporter")
+    outsider = await make_user(db, name="Second Reporter")
 
     assert await _found(db, outsider) == set()  # nothing shared yet
     assert await _listed(db, outsider, project) == set()
@@ -240,7 +207,7 @@ async def test_a_team_share_is_findable_by_current_members(db, admin):
     registered spec rather than restating it."""
     project, shared, _private = await _indexed_project(db, admin)
     team = await teams_service.create_team(db, TeamCreate(name=f"SR {uuid.uuid4().hex[:6]}"))
-    member = await _outsider(db, "Team Member")
+    member = await make_user(db, name="Team Member")
     await teams_service.add_team_member(db, team.id, member.id)
 
     await participants.add_participant(db, shared.id, ParticipantAdd(team_id=team.id), admin)
@@ -253,8 +220,8 @@ async def test_the_mirrored_relations_are_unchanged(db, admin):
     must not widen the mirror ones. A Baseline-only reporter finds their OWN
     item and no more, and a stranger finds nothing at all."""
     project, _shared, _private = await _indexed_project(db, admin)
-    reporter = await _outsider(db, "First Reporter")
-    stranger = await _outsider(db, "Stranger")
+    reporter = await make_user(db, name="First Reporter")
+    stranger = await make_user(db, name="Stranger")
     mine = await items.create_item(
         db,
         ItemCreate(
@@ -276,7 +243,7 @@ async def test_relations_compose_across_projects_in_one_query(db, admin):
     still its own."""
     first, shared, private = await _indexed_project(db, admin)
     second, elsewhere, _also_private = await _indexed_project(db, admin)
-    outsider = await _outsider(db, "Both Ways")
+    outsider = await make_user(db, name="Both Ways")
 
     # Reported by them in the FIRST project; shared with them in the SECOND.
     mine = await items.create_item(

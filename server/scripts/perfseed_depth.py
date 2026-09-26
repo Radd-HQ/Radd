@@ -1,28 +1,20 @@
 """Perf-seed depth pass: worklogs + rich event history for chosen projects.
 
-Complements perfseed.py (which seeds breadth: 503k items / 1.8M comments) by
-giving a subset of projects the per-item DEPTH a long-lived Jira project has:
+perfseed.py seeds breadth; this gives a subset of projects the per-item DEPTH of
+a long-lived Jira project:
 
-  - time logging enabled (`project_timelogging`) + 1-10 worklogs per item with
-    realistic durations/dates/authors (item-attached, so project_id stays NULL,
-    matching `timelogging.create_worklog`), and matching silent
-    `worklog.created` events so the History feed and timesheet agree.
-  - silent `comment.created` events for the items' existing comments (the
-    breadth pass skipped them), so comments appear in the History feed.
-  - a coherent `item.updated` field-change walk per item (~20-30 total feed
-    entries incl. related events): state transitions plus assignee/priority/
-    title/description/custom-field edits, each carrying the `changes` diff
-    shape from `items/changes.py` that the History tab renders verbatim.
+  - time logging enabled + 1-10 item-attached worklogs per item, with matching
+    silent `worklog.created` events so the History feed and timesheet agree;
+  - silent `comment.created` events for the items' existing comments;
+  - a coherent `item.updated` walk per item (~20-30 feed entries): state moves
+    and field edits, each carrying the `changes` diff the History tab renders.
 
-Coherence rules (reports fold item.created/item.updated in id order):
-  - the breadth pass's synthetic `item.updated` rows for these projects are
-    DELETED and replaced by the walk, so per-item event id order == time order;
-  - the walk starts from the project default state (what the existing
-    item.created payload claims) and ENDS at the item's actual current state,
-    so reports, boards and the item page agree;
-  - all rows are silent; consumer offsets are advanced past the batch.
+Reports fold item.created/item.updated in id order, so the breadth pass's
+synthetic `item.updated` rows for these projects are DELETED and replaced by the
+walk, which starts at the project default state and ENDS at the item's current
+state. All rows are silent; consumer offsets are advanced past the batch.
 
-Usage (from server/): uv run python scripts/perfseed_depth.py \
+Usage (from server/): uv run --with numpy python scripts/perfseed_depth.py \
     [--projects BNX,DLT] [--db URL] [--yes]
 Stop the app server first (the search indexer would otherwise chew the batch).
 """
@@ -31,12 +23,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import random
 import sys
 import time
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 import psycopg
@@ -251,7 +242,7 @@ def main() -> None:
         ) as copy:
             for (iid, number, kind, title, desc, priority, state_id,
                  assignee_id, reporter_id, type_id, parent_id, cf, flagged,
-                 points, cts, uts) in rows:
+                 _points, cts, uts) in rows:
                 n_related = 1 + wl_count.get(iid, 0) + comment_counts.get(iid, 0)
                 n_upd = min(max(rng.randint(20, 30) - n_related, 6), 24)
 

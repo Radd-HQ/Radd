@@ -12,9 +12,7 @@ import uuid
 
 import pytest
 from fastapi import UploadFile
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.attachments import hosts, service
 from radd.modules.attachments.routing import engine, rules, store
 from radd.modules.attachments.routing.context import RoutingContext
@@ -31,16 +29,6 @@ from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 
 LLM = StorageRuleType.LLM
-
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
 
 
 async def _host(db, tmp_path, name: str, *, default: bool = False, selectable: bool = False):

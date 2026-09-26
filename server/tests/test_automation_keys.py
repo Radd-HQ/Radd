@@ -10,8 +10,6 @@ request-scoped mark cannot leak into the next.
 import asyncio
 import uuid
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
 from radd.config import settings
@@ -20,16 +18,6 @@ from radd.modules.auth.deps import optional_user
 from radd.modules.auth.models import User
 from radd.modules.automations.planning import is_automation_caused
 from radd.modules.events import service as events
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _request(raw: str, method: str = "PATCH") -> Request:

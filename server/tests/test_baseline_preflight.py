@@ -12,11 +12,9 @@ Rolled-back transactions on the compose DB.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth import authz, preflight, roles as auth_roles
-from radd.modules.auth.models import GlobalRoleGrant, User
+from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, Permission
 
@@ -25,26 +23,7 @@ from radd.modules import workflow as _workflow  # noqa: F401
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name, *, admin=False) -> User:
-    user = User(
-        email=f"pf-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=(InstanceRole.ADMIN if admin else InstanceRole.MEMBER).value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _widen_baseline(db) -> None:
@@ -59,9 +38,9 @@ async def _widen_baseline(db) -> None:
 
 async def test_report_names_who_loses_and_where(db):
     await _widen_baseline(db)
-    floor_only = await _user(db, "Floor Only")
-    granted = await _user(db, "Has A Role")
-    admin = await _user(db, "Admin", admin=True)
+    floor_only = await make_user(db, name="Floor Only")
+    granted = await make_user(db, name="Has A Role")
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="Admin")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"PF{uuid.uuid4().hex[:4].upper()}", name="Pre")
     )

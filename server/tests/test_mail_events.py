@@ -1,19 +1,8 @@
-"""The mail channel's own events (RADD-960).
-
-Before these, `mailintake` emitted nothing: automations could see the ITEM intake
-created and the COMMENT it appended, but never that the cause was email. A rule
-could not tell a customer's reply from an agent typing in the UI.
-
-Two things are pinned here and they pull in opposite directions. The events must
-CARRY enough for a rule to be worth writing (who sent it, from what domain, did it
-open the ticket or land on one) — and must NOT carry the body, because an event
-payload is readable by anything that can read the stream while the body already
-lives on the item behind the item's own read gate.
-
-**RADD-984 added the third thing: somebody READS them.** `mail.sent`/`.failed`
-were emitted per message and consumed by nothing — no UI, no feed — so an agent
-could not learn that the customer never got the answer. The last three tests
-walk the item's History feed, which is the screen an agent is already on.
+"""The mail channel's own events (RADD-960). They must CARRY enough for a rule to
+be worth writing (sender, domain, opened vs. landed on a ticket) and must NOT
+carry the body: the stream is readable wider than the item's own read gate.
+`mail.sent`/`.failed` are READ on the item's History feed (RADD-984) — the last
+tests walk it.
 """
 
 import uuid
@@ -23,7 +12,6 @@ import pytest
 
 from radd.modules.mailintake.types import SentMailKind
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.modules.auth.models import User
@@ -39,16 +27,6 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
 BODY = "the customer's confidential sentence"
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

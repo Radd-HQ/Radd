@@ -13,9 +13,7 @@ from datetime import date
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
@@ -28,26 +26,7 @@ from radd.modules.timelogging import categories
 from radd.modules.timelogging.models import Worklog
 from radd.modules.timelogging.slq import compile_worklog_query, parse
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name: str) -> User:
-    user = User(
-        email=f"wslq-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _run(db, query: str, actor: User) -> set[uuid.UUID]:
@@ -101,8 +80,8 @@ async def _fixture(db, actor, other):
 async def test_general_worklogs_are_reachable_only_from_this_dialect(db):
     """`issue IS EMPTY` is the whole reason the timesheet needs a worklog root:
     an item query returns items, and a general worklog has no item to return."""
-    actor = await _user(db, "Alice Timesheet")
-    other = await _user(db, "Bob Assignee")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Alice Timesheet")
+    other = await make_user(db, role=InstanceRole.ADMIN, name="Bob Assignee")
     _, _, category, mine, theirs, general = await _fixture(db, actor, other)
 
     assert await _run(db, "issue IS EMPTY", actor) == {general.id}
@@ -113,8 +92,8 @@ async def test_general_worklogs_are_reachable_only_from_this_dialect(db):
 async def test_author_is_independent_of_the_issue_assignee(db):
     """The case that motivated the dialect: worklog author and issue assignee
     are different people, so they must be separately queryable."""
-    actor = await _user(db, "Alice Timesheet")
-    other = await _user(db, "Bob Assignee")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Alice Timesheet")
+    other = await make_user(db, role=InstanceRole.ADMIN, name="Bob Assignee")
     _, _, _, mine, theirs, general = await _fixture(db, actor, other)
 
     assert await _run(db, "author = me", actor) == {mine.id, general.id}
@@ -126,8 +105,8 @@ async def test_author_is_independent_of_the_issue_assignee(db):
 async def test_issue_dotted_fields_delegate_to_the_item_dialect(db):
     """`issue.<field>` is compiled by the ITEM compiler, so the whole item field
     surface works here without this module restating any of it."""
-    actor = await _user(db, "Alice Timesheet")
-    other = await _user(db, "Bob Assignee")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Alice Timesheet")
+    other = await make_user(db, role=InstanceRole.ADMIN, name="Bob Assignee")
     project, issue, _, mine, theirs, general = await _fixture(db, actor, other)
 
     # A builtin item field, reached through the delegation.
@@ -143,7 +122,7 @@ async def test_delegated_epic_filter_agrees_with_group_by_epic(db):
     """`issue.epic = KEY` must select the same hours the timesheet files under
     that epic — including time logged straight ONTO the epic, which is where the
     strict-ancestor reading of `epic` used to disagree with `epics_for_items`."""
-    actor = await _user(db, "Alice Timesheet")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Alice Timesheet")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"WE{uuid.uuid4().hex[:4].upper()}", name="Worklog epic")
     )
@@ -186,8 +165,8 @@ async def test_delegated_epic_filter_agrees_with_group_by_epic(db):
 
 
 async def test_worklog_own_scalar_fields(db):
-    actor = await _user(db, "Alice Timesheet")
-    other = await _user(db, "Bob Assignee")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Alice Timesheet")
+    other = await make_user(db, role=InstanceRole.ADMIN, name="Bob Assignee")
     _, _, _, mine, theirs, general = await _fixture(db, actor, other)
 
     # Durations use the same language the log-work form accepts.
@@ -198,7 +177,7 @@ async def test_worklog_own_scalar_fields(db):
 
 
 async def test_unknown_fields_report_a_position(db):
-    actor = await _user(db, "Alice Timesheet")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Alice Timesheet")
     with pytest.raises(SlqError):
         await _run(db, "nonsense = 1", actor)
     # An unknown field BEHIND the delegation is the item dialect's error, but it

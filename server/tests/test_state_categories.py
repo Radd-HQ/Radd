@@ -1,25 +1,17 @@
-"""State categories as user-owned vocabulary rows (RADD-854) + the RADD-853
-state lifecycle (delete-with-successor, in-place re-categorisation).
-
-The consolidation's contract: `states.category` (the semantic enum every
-report/sweep/guard reads) is DERIVED from the vocabulary row's `behaves_as`
-at assignment time — so vocabulary is fully the operator's while the 21
-semantic call sites never learn the tier exists. Pinned here: the derivation,
-the builtin guards, the behaves_as ripple, delete refusals, the successor
-flow, and the view-axis token (state_group must now REJECT).
-
-Rolled-back transactions on the compose DB.
+"""State categories as user-owned vocabulary rows (RADD-854) and the state
+lifecycle (RADD-853). `states.category` — what every report, sweep and guard
+reads — is DERIVED from the row's `behaves_as` at assignment time, so the
+vocabulary is the operator's while semantic call sites never see it. Pinned: the
+derivation, builtin guards, the behaves_as ripple, delete refusals, the successor
+flow, and `state_group` rejected as a view axis.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules import workflow as _workflow  # noqa: F401  (project.created hook)
-from radd.modules.auth.models import User
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
@@ -32,25 +24,9 @@ from radd.modules.workflow.schemas import (
     StateUpdate,
 )
 from radd.modules.workflow.types import StateCategory
+from radd.modules.auth.types import InstanceRole
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _admin(db) -> User:
-    admin = User(
-        email=f"sc-{uuid.uuid4().hex[:8]}@example.com", name="SC", instance_role="admin"
-    )
-    db.add(admin)
-    await db.flush()
-    return admin
+from _factories import make_user
 
 
 async def test_custom_category_derives_the_semantic_column(db):
@@ -138,7 +114,7 @@ async def test_delete_state_with_successor(db):
     """RADD-853 under the new tier: deletion takes a successor that inherits
     the items, with the refusal ladder intact."""
     run = uuid.uuid4().hex[:4].upper()
-    admin = await _admin(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="SC")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"SD{run}", name="Del")
     )
@@ -185,7 +161,7 @@ async def test_view_bucket_order_round_trips_and_degrades(db):
     from radd.modules.views.schemas import ViewCreate, ViewUpdate
     from radd.modules.views.types import ViewType
 
-    admin = await _admin(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="SC")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"VO{uuid.uuid4().hex[:4].upper()}", name="Order")
     )

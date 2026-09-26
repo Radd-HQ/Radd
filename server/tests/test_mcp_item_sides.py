@@ -8,12 +8,9 @@ DB-backed, flushed never committed.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.kernel import registries
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
@@ -24,24 +21,7 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, role: InstanceRole, name: str = "Side Tester") -> User:
-    user = User(
-        email=f"side-{uuid.uuid4().hex[:8]}@example.com", name=name, instance_role=role.value
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _item(db, actor):
@@ -61,8 +41,8 @@ def test_the_six_tools_are_in_the_registry_catalog():
 
 
 async def test_participants_by_email_and_team_name_round_trip(db):
-    admin = await _user(db, InstanceRole.ADMIN)
-    colleague = await _user(db, InstanceRole.MEMBER, name="Colleague")
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="Side Tester")
+    colleague = await make_user(db, name="Colleague")
     team = await teams_service.create_team(db, TeamCreate(name=f"Desk {uuid.uuid4().hex[:6]}"))
     item = await _item(db, admin)
 
@@ -90,8 +70,8 @@ async def test_participants_by_email_and_team_name_round_trip(db):
 
 
 async def test_participant_errors_name_the_cause(db):
-    admin = await _user(db, InstanceRole.ADMIN)
-    member = await _user(db, InstanceRole.MEMBER)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="Side Tester")
+    member = await make_user(db, name="Side Tester")
     item = await _item(db, admin)
     with pytest.raises(NotFoundError):
         await tools.call_tool(db, admin, "add_participant", {"key": item.key, "email": "nobody@example.com"})
@@ -109,8 +89,8 @@ async def test_participant_errors_name_the_cause(db):
 
 
 async def test_related_links_by_url_round_trip(db):
-    admin = await _user(db, InstanceRole.ADMIN)
-    member = await _user(db, InstanceRole.MEMBER)
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="Side Tester")
+    member = await make_user(db, name="Side Tester")
     item = await _item(db, admin)
     mr = "https://gitlab.example.com/infra/awx/-/merge_requests/14"
 

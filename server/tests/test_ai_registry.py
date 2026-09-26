@@ -1,14 +1,8 @@
-"""AI provider registry (spec 101) — DB-managed providers + model roles.
-
-The invariants the AI features lean on: a role resolves to a callable
-`ResolvedModel` or cleanly to None (dormant), the embeddings role can never
-point at an Anthropic-shaped provider (no embeddings API there), a stored key
-survives a round-trip through the redacted read shape, and env seeding happens
-once.
-
-CRUD tests are flushed, never committed; the session rolls back at teardown.
-`seed_from_env` opens its OWN session and commits (startup hook), so its test
-cleans up explicitly.
+"""AI provider registry (spec 101): a role resolves to a callable `ResolvedModel` or
+cleanly to None (dormant); the embeddings role can never point at an
+Anthropic-shaped provider; a stored key survives the redacted read shape; env
+seeding happens once. `seed_from_env` opens its OWN session and commits (a startup
+hook), so its test cleans up explicitly.
 """
 
 import uuid
@@ -16,7 +10,6 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.db import SessionLocal
@@ -28,16 +21,6 @@ from radd.modules.ai.schemas import (
     AiRoleAssign,
 )
 from radd.modules.ai.types import AiConfigError, AiProviderSource, AiRole, AiWireShape
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _create(name: str = "", **overrides) -> AiProviderCreate:

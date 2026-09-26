@@ -1,20 +1,9 @@
 """The generated-CRUD row filter says what it cannot do (RADD-1040).
 
-`relation_holds_row` is the SYNC gate: it treats a query-gated relation
-(`holds=None` — membership living in another table, the `@participant` shape)
-as NOT held. Failing closed is right; a leak would be worse. But
-`AuthEntityHost.visible_rows` is what every plugin entity's generated `GET
-/<entity>` uses, so a plugin registering an expensive relation on its own
-entity gets rows that quietly vanish for exactly the actors the relation was
-written to admit — and from outside that is indistinguishable from "the
-feature does not work".
-
-So the rows still stay hidden, and the operator is told why, once per
-(entity, relation) rather than once per row of every listing.
-
-Rolled-back transactions on the compose DB (the permission resolution is
-real — a fabricated permission set would prove nothing about the path that
-actually runs).
+`relation_holds_row` fails closed on a query-gated relation (`holds=None`, the
+`@participant` shape), so rows a plugin's relation was written to admit silently
+vanish from its generated `GET /<entity>`. They stay hidden, and the operator is
+told why once per (entity, relation). Real permission resolution, rolled back.
 """
 
 import logging
@@ -38,6 +27,8 @@ from radd.modules import workflow as _workflow  # noqa: F401
 from radd.modules.auth import entityhost
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+
+from _factories import make_user
 
 # The entity under test is the north-star plugin's, and the relation is one it
 # does not have: a plugin CAN register an expensive relation, which is the whole
@@ -83,17 +74,6 @@ def query_gated_relation():
     entityhost._query_gated_warned.discard((_ENTITY, _RELATION))
 
 
-async def _member(db, name: str) -> User:
-    user = User(
-        email=f"eh-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 async def _grant_via_baseline(db, atom: str) -> None:
     """Put a qualified read on the floor every active user holds, and drop the
     per-session memo so the next resolution sees it (the RADD-773 shape)."""
@@ -111,7 +91,7 @@ async def test_a_query_gated_relation_is_dropped_and_reported(
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"EH{uuid.uuid4().hex[:4].upper()}", name="E")
     )
-    actor = await _member(db, "Shepherd")
+    actor = await make_user(db, name="Shepherd")
     await _grant_via_baseline(db, _ATOM)
     # Only `visible_rows`'s own reads matter here (project_id), so the row does
     # not need the plugin's table — the path under test never loads one.
@@ -141,7 +121,7 @@ async def test_no_warning_when_the_actor_could_not_use_the_relation(
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"EQ{uuid.uuid4().hex[:4].upper()}", name="E")
     )
-    actor = await _member(db, "Ordinary")  # Baseline only: @own / @participant
+    actor = await make_user(db, name="Ordinary")  # Baseline only: @own / @participant
     row = SimpleNamespace(id=uuid.uuid4(), project_id=project.id)
 
     host = AuthEntityHost()

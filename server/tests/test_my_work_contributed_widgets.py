@@ -1,11 +1,7 @@
-"""RADD-1393 — My Work's widgets from optional plugins are CONTRIBUTED.
-
-Dashboards became core, and a core module may not name an optional plugin
-(RADD-1349). My Work used to hardcode "Awaiting my approval" and ask
-`approvals.service` whether to suggest it; now approvals contributes a
-`WidgetTypeSpec(personal=True, suggest=...)` and dashboards reads the registry.
-This pins both halves against the real plugin, withdrawn the way a runtime
-disable leaves it (`registries.unregister_plugin`):
+"""RADD-1393: approvals contributes its My Work widget as a
+`WidgetTypeSpec(personal=True, suggest=...)` (core dashboards may not name an
+optional plugin, RADD-1349). Both halves, against the real plugin withdrawn the
+way a runtime disable leaves it (`registries.unregister_plugin`):
 
 * withdrawn — the type is not a My Work type (a new one is refused), it is not
   suggested even to someone with a pending approval, and a widget already on the
@@ -21,9 +17,7 @@ from contextlib import contextmanager
 
 import pytest
 from fastapi.exceptions import RequestValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.kernel.registry import registries
 from radd.modules.approvals import service as approvals
 from radd.modules.approvals.schemas import ApprovalRequestCreate
@@ -43,29 +37,15 @@ from radd.modules.workflow import service as workflow, transitions
 from radd.modules.workflow.schemas import TransitionCreate, TransitionRule
 from radd.modules.workflow.types import TransitionMode
 
+from _factories import make_user
+
 AWAITING = ApprovalWidget.AWAITING.value
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, role: InstanceRole = InstanceRole.MEMBER) -> User:
-    user = User(email=f"mw-{uuid.uuid4().hex[:8]}@example.com", name="My Work", instance_role=role.value)
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def _approver_with_pending(db) -> User:
     """A person named on a require_approval rule, with one request awaiting them."""
-    requester = await _user(db, InstanceRole.ADMIN)
-    approver = await _user(db)
+    requester = await make_user(db, role=InstanceRole.ADMIN, name="My Work")
+    approver = await make_user(db, name="My Work")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"MW{uuid.uuid4().hex[:4].upper()}", name="My Work")
     )
@@ -130,7 +110,7 @@ async def test_a_widget_already_on_my_work_survives_its_plugin_being_off(db):
 
 async def test_registered_approvals_is_suggested_to_whoever_has_something_to_decide(db):
     approver = await _approver_with_pending(db)
-    bystander = await _user(db)
+    bystander = await make_user(db, name="My Work")
     assert personal.is_personal(AWAITING)
     mine = {w["widget_type"]: w for w in await personal.suggested_defaults(db, approver)}
     assert mine[AWAITING]["title"] == "Awaiting my approval"

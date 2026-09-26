@@ -11,12 +11,9 @@ DB-backed, flushed, never committed — the session rolls back at teardown.
 
 import uuid
 
-import pytest
 from fastapi import Response
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.apitypes import TOTAL_COUNT_HEADER
-from radd.config import settings as config
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -25,28 +22,6 @@ from radd.modules.labels.router import list_labels as labels_endpoint
 from radd.modules.labels.schemas import LabelCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"listsearch-{uuid.uuid4().hex[:8]}@example.com",
-        name="List Search Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 def _tag() -> str:
@@ -142,13 +117,9 @@ async def test_directory_pagination_and_count(db):
 
 
 async def test_directory_count_honours_every_filter(db):
-    """RADD-936: the count and the page must answer the SAME question.
-
-    `count_users` had its own copy of the predicate and filtered on
-    `User.is_active`, a column that does not exist — so `?limit=&active=` 500'd,
-    which is precisely and only what Settings → Users sends. Neither parameter
-    alone reaches the broken branch, which is why every existing test passed.
-    """
+    """RADD-936: the count and the page answer the SAME question. `count_users`
+        kept its own predicate on a nonexistent column, so `?limit=&active=` — what
+        Settings → Users sends — 500'd; neither parameter alone reaches that branch."""
     tag = _tag()
     for i in range(5):
         db.add(

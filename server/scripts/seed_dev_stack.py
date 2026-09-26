@@ -1,17 +1,10 @@
-"""Wire a FRESH database up to the dev machine's infrastructure.
+"""Wire a FRESH database up to the dev machine's infrastructure: storage hosts,
+the routing chain, AI providers and feature toggles are DB rows, so a bare
+`alembic upgrade head` has no storage, no LLM and every AI feature dark.
 
-A clean database is not a usable instance: storage hosts, the routing chain, the
-AI providers and the per-feature toggles are all DB rows, so an empty schema has
-no storage, no LLM and every AI feature dark. This turns `alembic upgrade head`
-into something you can actually open.
-
-Everything here is IDEMPOTENT — it find-or-creates — so running it twice is safe
-and re-running it after a partial failure finishes the job rather than doubling
-it.
-
-Machine-specific by design: the endpoints below are Hussein's dev box. It is a
-dev seeder, not deploy configuration; a real instance configures these in
-Settings, and `RADD_SEED_*` overrides every value for anyone else.
+IDEMPOTENT (find-or-create), so a rerun after a partial failure finishes the job.
+The endpoints are Hussein's dev box — a dev seeder, not deploy configuration;
+`RADD_SEED_*` overrides every value.
 
 Usage (from `server/`):
     uv run python scripts/seed_dev_stack.py
@@ -148,12 +141,9 @@ async def _provider(session, *, name: str, base_url: str, model: str) -> AiProvi
 
 
 async def _ai(session) -> None:
-    """The providers, the role assignments, and the feature toggles.
-
-    A feature is live only when its toggle is ON **and** its role resolves to a
-    provider (`ai/features.py`), so seeding one without the other leaves the UI
-    claiming a capability that quietly does nothing.
-    """
+    """The providers, role assignments and feature toggles — together, because a
+    feature is live only when its toggle is ON and its role resolves to a provider
+    (`ai/features.py`); one without the other is a capability that does nothing."""
     embed = await _provider(session, name=EMBED_NAME, base_url=EMBED_BASE_URL, model=EMBED_MODEL)
     roles: list[tuple[AiRole, object, str]] = [(AiRole.EMBEDDINGS, embed, EMBED_MODEL)]
     if LLM_BASE_URL:

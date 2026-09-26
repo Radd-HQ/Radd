@@ -9,25 +9,13 @@ import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.pages import service as pages_service, spaces as pages_spaces, templates
 from radd.modules.pages.models import PageTemplate
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def test_render_substitutes_three_and_only_three():

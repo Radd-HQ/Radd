@@ -48,6 +48,8 @@ from radd.modules.views.types import ViewType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
+from _factories import make_user
+
 
 @pytest.fixture
 async def db():
@@ -64,19 +66,6 @@ async def db():
     await engine.dispose()
 
 
-async def _member(db, name, *, instance_role=InstanceRole.MEMBER) -> User:
-    """An active user — active users hold the global member floor (spec 86);
-    instance_role=ADMIN is the global admin."""
-    user = User(
-        email=f"dash-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=instance_role.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 def _slq_count_widget(q="", **kwargs) -> SlqCountWidget:
     return SlqCountWidget(
         widget_type=WidgetType.SLQ_COUNT,
@@ -86,11 +75,11 @@ def _slq_count_widget(q="", **kwargs) -> SlqCountWidget:
 
 
 async def test_dashboard_sharing_matrix(db):
-    owner = await _member(db, "Owner")
-    direct = await _member(db, "Direct Grantee")
-    teammate = await _member(db, "Team Grantee")
-    outsider = await _member(db, "Outsider")
-    admin = await _member(db, "Admin", instance_role=InstanceRole.ADMIN)
+    owner = await make_user(db, name="Owner")
+    direct = await make_user(db, name="Direct Grantee")
+    teammate = await make_user(db, name="Team Grantee")
+    outsider = await make_user(db, name="Outsider")
+    admin = await make_user(db, role=InstanceRole.ADMIN, name="Admin")
     team = await teams_service.create_team(db, TeamCreate(name=f"FX-{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, teammate.id)
 
@@ -198,8 +187,8 @@ async def test_dashboard_sharing_matrix(db):
 
 
 async def test_transfer_keeps_previous_owner_as_editor(db):
-    owner = await _member(db, "Original Owner")
-    heir = await _member(db, "Heir")
+    owner = await make_user(db, name="Original Owner")
+    heir = await make_user(db, name="Heir")
     stranger = User(  # spec 86: only an INACTIVE user is barred from receiving
         email=f"dt-{uuid.uuid4().hex[:8]}@example.com",
         name="Stranger",
@@ -232,8 +221,8 @@ async def test_transfer_keeps_previous_owner_as_editor(db):
 
 
 async def test_widget_config_validation(db):
-    owner = await _member(db, "Widget Owner")
-    other = await _member(db, "Private View Owner")
+    owner = await make_user(db, name="Widget Owner")
+    other = await make_user(db, name="Private View Owner")
     dashboard = await dashboards.create_dashboard(
         db, DashboardCreate(name="Board"), actor=owner
     )
@@ -297,9 +286,9 @@ async def test_widget_config_validation(db):
 
 async def test_items_count_matches_ids_total_under_visibility(db):
     run = uuid.uuid4().hex[:8]
-    seeder = await _member(db, "Seeder", instance_role=InstanceRole.ADMIN)
-    away_seeder = await _member(db, "Away Seeder", instance_role=InstanceRole.ADMIN)
-    actor = await _member(db, "Counter")  # a plain active member
+    seeder = await make_user(db, role=InstanceRole.ADMIN, name="Seeder")
+    away_seeder = await make_user(db, role=InstanceRole.ADMIN, name="Away Seeder")
+    actor = await make_user(db, name="Counter")  # a plain active member
     home_project = await projects_service.create_project(
         db,
         ProjectCreate(key=f"DC{run[:4].upper()}", name="Home"),

@@ -1,19 +1,8 @@
-"""RADD-1384 — search's documents and meaning arrive through kernel sockets.
-
-`search` is core; `pages` and `ai` are optional. Search used to import both,
-guarded by `settings.modules` — the BOOT config — so a plugin disabled at
-runtime (withdrawn from the kernel registries, still listed in the modules
-setting) kept feeding `/search/deflect` and `/search/semantic` wiki pages whose
-routes and UI were gone. Now pages provides SEARCH_DOCUMENTS and ai provides
-SEMANTIC_CANDIDATES, and each test here runs the SAME requests over the SAME
-rows twice — plugin registered, then withdrawn the way the plugin manager does
-it — so neither half can pass vacuously:
-
-* pages withdrawn: deflection and Ask mode answer 200 with no documents, even
-  with a semantic source still naming the page;
-* ai withdrawn: `/search` is plain full-text (the semantic-only lookalike the
-  registered provider fused in is gone) and Ask mode reports `enabled: false`.
-
+"""RADD-1384: search's documents and meaning arrive through kernel sockets (pages
+provides SEARCH_DOCUMENTS, ai SEMANTIC_CANDIDATES), so a plugin disabled at runtime
+stops feeding search — `settings.modules` is boot config and cannot see that. Each
+test runs the SAME requests over the SAME rows with the plugin registered, then
+withdrawn as the plugin manager does it, so neither half can pass vacuously.
 DB-backed through the real app; flushed, never committed.
 """
 

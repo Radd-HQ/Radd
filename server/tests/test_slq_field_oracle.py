@@ -1,22 +1,15 @@
-"""RADD-840 — the SLQ compiler is part of the access surface, and search
-stops indexing read-restricted description text.
-
-Filtering/sorting on a field the actor can't read disclosed its value by
-bisection (`/items/count` made the oracle cheap); the compiler now refuses at
-compile time. `description` is read-restrictable AND searchable; the indexer
-now blanks it conservatively (for nobody) wherever a read-restriction covers
-the project. Every assertion failed on the pre-fix code.
-
-DB-backed; flushed, never committed.
+"""RADD-840 — the SLQ compiler is part of the access surface: filtering or sorting
+on a field the actor cannot read disclosed its value by bisection (`/items/count`
+made the oracle cheap), so the compiler refuses at compile time. And `description`
+is read-restrictable AND searchable, so the indexer blanks it (for everybody)
+wherever a read-restriction covers the project.
 """
 
 import uuid
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.access import service as access_service
 from radd.modules.access.types import Access, GrantSubject
 from radd.modules.auth import roles as auth_roles
@@ -32,37 +25,13 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.items.slq import SlqError
 from radd.modules.search import indexer
 from radd.modules.search.models import SearchIndexRow
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"orc-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_project
 
 
 @pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"OR{uuid.uuid4().hex[:4].upper()}", name="P")
-    )
+    return await make_project(db, "OR")
 
 
 @pytest.fixture

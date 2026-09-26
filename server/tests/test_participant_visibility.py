@@ -1,21 +1,8 @@
-"""RADD-844 — a participant is a second reporter.
-
-The decision (2026-08-05): sharing an item with someone means they can OPEN it,
-COMMENT on it, and get notified — nothing wider. Delivered as the `participant`
-relation on the item resource plus the Baseline's `item.read@participant` +
-`comment.write@participant` (and `comment.write@own`, so the FIRST reporter
-holds the same discussion right). Pinned here:
-
-  - a user with no standing in the project cannot see the item; sharing it
-    with them makes exactly that item readable — in the row gate AND the list
-    filter (the where-form composes into `relation_read_clause`),
-  - a TEAM participant row covers its current members,
-  - the shared-into user can comment but still cannot update,
-  - self-leave is an IDENTITY operation: it works even when the floor was
-    narrowed so the participant cannot read the item at all,
-  - the notify recipient gate honours the relation (the async row gate).
-
-DB-backed (rolled-back transactions on the compose DB).
+"""A participant is a second reporter (RADD-844): they can OPEN, COMMENT on and be
+notified about the shared item, nothing wider. Pinned: sharing makes exactly that
+item readable in the row gate AND the list filter; a TEAM participant covers its
+members; comment yes, update no; self-leave is an IDENTITY operation that works
+even when the floor no longer lets them read the item; notify honours the relation.
 """
 
 import uuid
@@ -28,8 +15,8 @@ from radd.config import settings as config
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules import workflow  # noqa: F401 — registers the default-state hook
 from radd.modules.auth import authz, roles as auth_roles
-from radd.modules.auth.models import Role, User
-from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
+from radd.modules.auth.models import Role
+from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.items import service as items
@@ -44,6 +31,8 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
+from _factories import make_user
+
 
 @pytest.fixture
 async def db():
@@ -56,29 +45,8 @@ async def db():
     await engine.dispose()
 
 
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"pv-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _outsider(db, name: str) -> User:
-    """An active staff account holding ONLY the Baseline — no roles, no
-    memberships, no standing anywhere."""
-    user = User(
-        email=f"pv-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+# An outsider is a plain account holding ONLY the Baseline: no roles, no
+# memberships, no standing anywhere.
 
 
 async def _fixture(db, admin):
@@ -96,7 +64,7 @@ async def test_share_confers_read_on_that_item_only(db, admin):
     other = await items.create_item(
         db, ItemCreate(project_id=project.id, title="not shared"), admin
     )
-    outsider = await _outsider(db, "Outsider")
+    outsider = await make_user(db, name="Outsider")
 
     with pytest.raises(NotFoundError):  # hidden, not forbidden (spec 57)
         await items.require_readable_item(db, item.id, outsider)
@@ -119,7 +87,7 @@ async def test_share_confers_read_on_that_item_only(db, admin):
 async def test_team_participant_covers_current_members(db, admin):
     project, item = await _fixture(db, admin)
     team = await teams_service.create_team(db, TeamCreate(name=f"PV {uuid.uuid4().hex[:6]}"))
-    member = await _outsider(db, "Team Member")
+    member = await make_user(db, name="Team Member")
     await teams_service.add_team_member(db, team.id, member.id)
 
     await participants.add_participant(db, item.id, ParticipantAdd(team_id=team.id), admin)
@@ -129,7 +97,7 @@ async def test_team_participant_covers_current_members(db, admin):
 
 async def test_participant_comments_but_never_updates(db, admin):
     project, item = await _fixture(db, admin)
-    outsider = await _outsider(db, "Second Reporter")
+    outsider = await make_user(db, name="Second Reporter")
     await participants.add_participant(
         db, item.id, ParticipantAdd(user_id=outsider.id), admin
     )
@@ -162,7 +130,7 @@ async def test_first_reporter_holds_the_same_discussion_right(db, admin):
     reply on their own ticket — the gap the second-reporter floor closes for
     reporter number one."""
     project, _ = await _fixture(db, admin)
-    reporter = await _outsider(db, "First Reporter")
+    reporter = await make_user(db, name="First Reporter")
     # Filed FOR them (the forms path): reporter override by a manager — the
     # outsider holds no item.create anywhere.
     item = await items.create_item(
@@ -180,7 +148,7 @@ async def test_non_participant_still_cannot_comment(db, admin):
     """The relation gate must bite: holding comment.write@participant via the
     Baseline confers nothing on an item that was never shared with you."""
     project, item = await _fixture(db, admin)
-    stranger = await _outsider(db, "Stranger")
+    stranger = await make_user(db, name="Stranger")
     with pytest.raises((ForbiddenError, NotFoundError)):
         await comments_service.create_comment(
             db, item.id, CommentCreate(body="drive-by"), stranger
@@ -192,7 +160,7 @@ async def test_self_leave_is_an_identity_operation(db, admin):
     the floor (an admin editing the Baseline) and the trapped participant can
     still leave to stop the notifications."""
     project, item = await _fixture(db, admin)
-    outsider = await _outsider(db, "Trapped")
+    outsider = await make_user(db, name="Trapped")
     row = await participants.add_participant(
         db, item.id, ParticipantAdd(user_id=outsider.id), admin
     )
@@ -217,7 +185,7 @@ async def test_notify_row_gate_honours_the_relation(db, admin):
     """The recipient gate is the async row gate now: a relation-scoped reader
     whose relation lives in a membership table still receives delivery."""
     project, item = await _fixture(db, admin)
-    outsider = await _outsider(db, "Recipient")
+    outsider = await make_user(db, name="Recipient")
     row_item = (
         await db.execute(select(WorkItem).where(WorkItem.id == item.id))
     ).scalar_one()

@@ -1,15 +1,8 @@
-"""Spec 121 §5 (RADD-1147): a public wiki space is the Public role granted to Anyone.
-
-Spec 74's parallel model (`page_spaces.public` + `/public/pages`) is gone. The
-world reads a public space through the ORDINARY page routes and resolvers:
-
-- the switch writes/removes one space-scoped grant, and `PageSpaceRead.public`
-  is derived from it;
-- Anyone lists exactly the public spaces, reads their pages, and 404s on a
-  private space's pages — through the same directory and page guards an
-  account uses;
-- page search for Anyone is scoped to the public spaces;
-- flipping the switch off removes the read immediately (no cache).
+"""Spec 121 §5 (RADD-1147): a public wiki space is the Public role granted to Anyone,
+read through the ORDINARY page routes and guards. The switch writes/removes one
+space-scoped grant (`PageSpaceRead.public` is derived from it); Anyone lists exactly
+the public spaces, reads their pages, 404s on private ones and searches only public
+ones; switching off removes the read immediately (no cache).
 """
 
 import uuid

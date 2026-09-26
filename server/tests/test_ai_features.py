@@ -1,36 +1,16 @@
 """The AI feature gate's dispatch tables must be TOTAL over `AiFeature`.
 
-This file exists because of RADD-989. `AiFeature.MAIL_ROUTING` was added to the
-enum, wired into `mailintake.routing`, and added to NEITHER dict in
-`ai.features` nor the settings registry — so `feature_enabled` raised KeyError
-instead of answering, mailintake's per-rule `except Exception` swallowed it as
-"rule raised, skipped", and every llm mail rule fell through on every message
-for a release. Nothing was red: the enum compiled, the call type-checked, the
-tests passed (they only pinned the fall-through side), and the feature simply
-never ran.
-
-Three registries have to agree — the enum, the two gate tables, and the scalar
-settings catalog — and a member is only as wired as its worst one. Asserting
-equality of key SETS is what makes the next feature impossible to half-add.
+RADD-989: `MAIL_ROUTING` joined the enum but neither gate table, so
+`feature_enabled` raised KeyError, mailintake swallowed it as "rule raised,
+skipped", and every llm mail rule fell through for a release with nothing red.
+The enum, the two gate tables and the settings catalog must have equal key SETS.
 """
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config_settings
 from radd.modules.ai.features import FEATURE_ROLE, FEATURE_SETTING
 from radd.modules.ai.types import AiFeature
 from radd.modules.settings.types import SettingKey
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config_settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def test_every_feature_declares_a_role():
@@ -73,14 +53,9 @@ def test_the_ai_plugin_registers_a_spec_for_every_feature_setting():
 
 
 async def test_ai_status_answers_for_every_feature(db):
-    """The blast radius, and the part of RADD-989 that was never diagnosed.
-
-    `GET /ai/status` builds its map by iterating `AiFeature` and calling the gate
-    for each, so ONE unwired member does not disable one feature — it raises out
-    of the endpoint the entire SPA gates every AI affordance on. The mail-routing
-    KeyError took editor actions, summarize, semantic search and NL→SLQ down with
-    it for any instance running the ai plugin.
-    """
+    """`GET /ai/status` calls the gate for every `AiFeature`, so ONE unwired member
+    raises out of the endpoint the SPA gates every AI affordance on — not just its
+    own feature."""
     from radd.modules.ai import features
 
     result = await features.status(db)

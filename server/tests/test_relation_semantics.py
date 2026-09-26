@@ -1,24 +1,17 @@
-"""The relation algebra + the where/holds contract (RADD-823).
+"""The relation algebra + the where/holds contract (RADD-823,
+`docs/specs/115-relations-semantics.md`).
 
-Executes `docs/specs/115-relations-semantics.md`: the chain lattice, the
-unqualified≡@any rule, the lattice-aware token-scope meet, the downward-closed
-resolvers, and — the one this mechanism is most likely to break silently — the
-CONTRACT that a relation's two forms select the same rows: `where` compiled
-against the database and `holds` evaluated in Python must agree on a fixture,
-or every list disagrees with every gate.
-
-Rolled-back transactions on the compose DB for the contract half; the algebra
-half is pure.
+The algebra half is pure: the chain lattice, unqualified≡@any, the lattice-aware
+token-scope meet, downward-closed resolvers. The contract half runs on the DB,
+because the silent break is `where` (SQL) and `holds` (Python) disagreeing on a
+fixture — then every list disagrees with every gate.
 """
 
 import uuid
 from itertools import product
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.kernel import registries
 from radd.modules.auth import authz, roles as auth_roles
 from radd.modules.auth.models import User
@@ -175,16 +168,6 @@ def test_relation_holds_row_agrees_with_the_chain():
 
 
 # --- the where/holds CONTRACT (DB) --------------------------------------------
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def test_registered_item_relations_where_and_holds_agree(db):

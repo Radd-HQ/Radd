@@ -1,18 +1,9 @@
-"""A wiki space is a grant scope, the way a project is (RADD-791).
+"""A wiki space is a grant scope, the way a project is (RADD-791): per-space access,
+and page commenting a space grant can reach (checked with no scope, the
+project-scoped `comment.write` refused everyone but an admin).
 
-Before this, every `page.*` atom was checked at GLOBAL scope, because a page had
-no scope to be checked against. Two consequences, both under test here:
-
-  - Per-space access was inexpressible. "Let the render team read the render
-    space" had no way to be said.
-  - Page COMMENTING was dead for the people it exists for. The comments binding
-    resolved `comment.write` with `project=None`, and `comment.write` is a
-    project-scoped atom, so a project-scoped grant never reached it. The gate
-    looked correct and behaved like a refusal for everyone but an admin.
-
-The Baseline is emptied throughout, because a floor holding `page.read` would
-make every assertion below pass for the wrong reason — the exact vacuous-pass
-this whole wave exists to remove.
+The Baseline is emptied throughout: a floor holding `page.read` would make every
+assertion below pass for the wrong reason.
 """
 
 import uuid
@@ -34,6 +25,8 @@ from radd.modules.pages import access as pages_access, service as pages_service,
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
+
+from _factories import make_user
 
 
 #: Spaces are created by an admin in every scenario here; who created them is
@@ -57,17 +50,6 @@ async def db():
         yield session
         await session.rollback()
     await engine.dispose()
-
-
-async def _user(db, name="Reader") -> User:
-    user = User(
-        email=f"space-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def _space(db, name: str):
@@ -97,7 +79,7 @@ async def _role(db, *permissions, name="Space role"):
 async def test_a_space_grant_reaches_its_space_and_no_other(db):
     render = await _space(db, "Render")
     pipeline = await _space(db, "Pipeline")
-    user = await _user(db)
+    user = await make_user(db, name="Reader")
     role = await _role(db, Permission.PAGE_READ)
 
     assert Permission.PAGE_READ not in await pages_access.space_permissions(db, user, render.id)
@@ -115,7 +97,7 @@ async def test_a_space_grant_reaches_its_space_and_no_other(db):
 async def test_read_only_and_writable_spaces_are_different_grants(db):
     """"Read-only space" falls out of ordinary roles — no new vocabulary."""
     space = await _space(db, "Handbook")
-    reader, editor = await _user(db, "Reader"), await _user(db, "Editor")
+    reader, editor = await make_user(db, name="Reader"), await make_user(db, name="Editor")
     read_role = await _role(db, Permission.PAGE_READ, name="Space reader")
     write_role = await _role(db, Permission.PAGE_READ, Permission.PAGE_WRITE, name="Space editor")
 
@@ -132,7 +114,7 @@ async def test_read_only_and_writable_spaces_are_different_grants(db):
 async def test_a_space_grant_reaches_a_team(db):
     """Grants are subject-agnostic: the team path is the same path."""
     space = await _space(db, "Team space")
-    user = await _user(db)
+    user = await make_user(db, name="Reader")
     team = await teams_service.create_team(db, TeamCreate(name=f"T{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, user.id)
     role = await _role(db, Permission.PAGE_READ)
@@ -147,7 +129,7 @@ async def test_a_commenter_can_comment_on_a_page_in_their_space(db):
     resolving it globally meant a scoped grant never reached a page — page
     discussion was refused for everyone but an admin."""
     space = await _space(db, "Discussable")
-    author = await _user(db, "Author")
+    author = await make_user(db, name="Author")
     page = await _page(db, space, author)
     role = await _role(db, Permission.PAGE_READ, Permission.COMMENT_WRITE)
     await grants.create_grant(db, role.id, user_id=author.id, space_id=space.id)
@@ -173,7 +155,7 @@ async def test_commenting_needs_the_grant(db):
     db.add(admin)
     await db.flush()
     page = await _page(db, space, admin)
-    outsider = await _user(db, "Outsider")
+    outsider = await make_user(db, name="Outsider")
 
     with pytest.raises(ForbiddenError):
         await comments_service.create_comment(
@@ -190,7 +172,7 @@ async def test_an_unscoped_grant_still_applies_everywhere(db):
     admin hands to a technical writer still covers every space."""
     render = await _space(db, "Render")
     pipeline = await _space(db, "Pipeline")
-    user = await _user(db)
+    user = await make_user(db, name="Reader")
     role = await _role(db, Permission.PAGE_READ, Permission.PAGE_WRITE)
 
     await grants.create_grant(db, role.id, user_id=user.id)
@@ -212,7 +194,7 @@ async def test_a_grant_carries_at_most_one_scope(db):
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"BO{uuid.uuid4().hex[:4].upper()}", name="Both")
     )
-    user = await _user(db)
+    user = await make_user(db, name="Reader")
     role = await _role(db, Permission.PAGE_READ)
 
     with pytest.raises(ConflictError):
@@ -226,7 +208,7 @@ async def test_batched_space_permissions_match_the_single_lookup(db):
     thing it optimises — a batch that drifts from `effective_permissions` would
     show a wiki nav that disagrees with what opening the space does."""
     spaces_made = [await _space(db, f"S{i}") for i in range(3)]
-    user = await _user(db)
+    user = await make_user(db, name="Reader")
     role = await _role(db, Permission.PAGE_READ, Permission.PAGE_WRITE)
     await grants.create_grant(db, role.id, user_id=user.id, space_id=spaces_made[1].id)
 

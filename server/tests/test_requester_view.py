@@ -1,13 +1,9 @@
 """The requester's view of a request (RADD-796/797/798).
 
-The boundary being defended: a requester is admitted by their RELATIONSHIP to a
-row — they reported it, or it was filed for a team they are in — and holds no
-`item.read` on the project. So the interesting assertions here are all about
-what does NOT come back, and about numbers that must not describe things the
-person cannot read.
-
-The Baseline is emptied throughout; a floor holding `item.read` would let every
-one of these pass for the wrong reason.
+A requester is admitted by RELATIONSHIP to a row (reported it, or filed for their
+team) and holds no `item.read`, so the assertions are about what does NOT come back.
+The Baseline is emptied throughout: a floor holding `item.read` would let every
+test pass for the wrong reason.
 """
 
 import uuid
@@ -20,8 +16,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import authz
-from radd.modules.auth.models import Role, User
-from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
+from radd.modules.auth.models import Role
+from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules.comments import service as comments_service
 from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentParentType, CommentVisibility
@@ -37,10 +33,10 @@ from radd.modules.forms.schemas import (
     FormSubmit,
     FormUpdate,
 )
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
+
+from _factories import make_project, make_user
 
 
 @pytest.fixture
@@ -58,35 +54,6 @@ async def db():
         yield session
         await session.rollback()
     await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"rv-adm-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _member(db, name="Requester") -> User:
-    user = User(
-        email=f"rv-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"RV{uuid.uuid4().hex[:4].upper()}", name="Requests")
-    )
 
 
 async def _shared_form(db, admin, project, requester, *, team_picker=False):
@@ -122,8 +89,8 @@ async def _file(db, form, requester, title="A request", team_id=None):
 
 
 async def test_a_requester_opens_their_own_request(db, admin):
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester, "My laptop is broken")
 
@@ -135,8 +102,11 @@ async def test_a_requester_opens_their_own_request(db, admin):
 async def test_a_stranger_gets_404_not_403(db, admin):
     """A refusal would confirm the key names a real issue — which is exactly what
     someone guessing keys is trying to learn."""
-    requester, stranger = await _member(db), await _member(db, "Stranger")
-    project = await _project(db)
+    requester, stranger = (
+        await make_user(db, name="Requester"),
+        await make_user(db, name="Stranger"),
+    )
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
 
@@ -146,11 +116,14 @@ async def test_a_stranger_gets_404_not_403(db, admin):
 
 async def test_a_teammate_opens_a_shared_request(db, admin):
     """RADD-798's decision: sharing with a team means the team can OPEN it."""
-    requester, teammate = await _member(db), await _member(db, "Teammate")
+    requester, teammate = (
+        await make_user(db, name="Requester"),
+        await make_user(db, name="Teammate"),
+    )
     team = await teams_service.create_team(db, TeamCreate(name=f"T{uuid.uuid4().hex[:6]}"))
     for person in (requester, teammate):
         await teams_service.add_team_member(db, team.id, person.id)
-    project = await _project(db)
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester, team_picker=True)
     filed = await _file(db, form, requester, team_id=team.id)
 
@@ -163,11 +136,11 @@ async def test_a_teammate_opens_a_shared_request(db, admin):
 
 async def test_you_cannot_share_with_a_team_you_are_not_in(db, admin):
     """The picker is UI; this is the enforcement."""
-    requester = await _member(db)
+    requester = await make_user(db, name="Requester")
     other_team = await teams_service.create_team(
         db, TeamCreate(name=f"Other{uuid.uuid4().hex[:6]}")
     )
-    project = await _project(db)
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester, team_picker=True)
 
     with pytest.raises(ConflictError):
@@ -177,10 +150,10 @@ async def test_you_cannot_share_with_a_team_you_are_not_in(db, admin):
 async def test_a_form_without_the_picker_refuses_a_team(db, admin):
     """Off by default, and 'off' has to mean something: a hand-made request must
     not attach itself to a queue on a form whose author turned sharing off."""
-    requester = await _member(db)
+    requester = await make_user(db, name="Requester")
     team = await teams_service.create_team(db, TeamCreate(name=f"T{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, requester.id)
-    project = await _project(db)
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)  # picker OFF
 
     with pytest.raises(ConflictError):
@@ -194,8 +167,8 @@ async def test_internal_comments_are_absent_from_the_thread_and_the_count(db, ad
     """The one that leaks quietly. Hiding an internal comment from the LIST while
     counting it still tells the requester that internal discussion exists and how
     much of it there is, so both are asserted."""
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
 
@@ -223,8 +196,8 @@ async def test_internal_comments_are_absent_from_the_thread_and_the_count(db, ad
 async def test_an_internal_comment_does_not_light_the_reply_marker(db, admin):
     """`awaiting_requester` is a signal that someone answered YOU. An internal
     note lighting it would announce a conversation the requester cannot read."""
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
 
@@ -241,8 +214,8 @@ async def test_an_internal_comment_does_not_light_the_reply_marker(db, admin):
 
 
 async def test_the_reply_marker_tracks_who_spoke_last(db, admin):
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
 
@@ -266,22 +239,15 @@ async def test_the_reply_marker_tracks_who_spoke_last(db, admin):
 
 
 async def test_the_requesters_own_emailed_reply_does_not_light_the_marker(db, admin):
-    """RADD-981. A mailed reply from someone with no account is authored by the
-    SYSTEM actor, and SYSTEM is not the reporter — so the marker read "somebody
-    answered you" and pointed at the message the requester had just sent
-    themselves. `slas.evaluation` skips the same id for the first-response timer
-    for the same reason; this is that judgment applied to the marker a person
-    actually looks at.
-
-    The comment is still COUNTED: it is a real public message on the thread, and
-    a count that disagrees with the conversation is its own bug.
-    """
+    """RADD-981: a mailed reply from someone with no account is authored by SYSTEM,
+    which is not the reporter, so it must not read as "somebody answered you" (the SLA
+    first-response timer skips it too). It is still COUNTED: a real public message."""
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
     from radd.modules.auth import service as auth_service
     from radd.modules.comments.types import CommentOrigin
 
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
     system = await auth_service.get_user(db, SYSTEM_ACTOR_ID)
@@ -305,8 +271,8 @@ async def test_the_requesters_own_emailed_reply_does_not_light_the_marker(db, ad
 async def test_a_requester_reply_is_public_and_authored_by_them(db, admin):
     """A requester holds `comment.write` nowhere; the relationship is the grant.
     The reply must land as THEIRS and as PUBLIC."""
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
 
@@ -320,8 +286,11 @@ async def test_a_requester_reply_is_public_and_authored_by_them(db, admin):
 
 
 async def test_a_stranger_cannot_reply(db, admin):
-    requester, stranger = await _member(db), await _member(db, "Stranger")
-    project = await _project(db)
+    requester, stranger = (
+        await make_user(db, name="Requester"),
+        await make_user(db, name="Stranger"),
+    )
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
 
@@ -332,8 +301,8 @@ async def test_a_stranger_cannot_reply(db, admin):
 async def test_the_detail_view_carries_no_issue_internals(db, admin):
     """Opening a request is not reading the issue. Asserted as an EXACT field set
     so a future addition has to be a decision rather than an accident."""
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
 
@@ -350,8 +319,8 @@ async def test_the_detail_view_carries_no_issue_internals(db, admin):
 
 
 async def test_unattributed_import_comment_is_counted_but_not_an_agent_answer(db, admin):
-    requester = await _member(db)
-    project = await _project(db)
+    requester = await make_user(db, name="Requester")
+    project = await make_project(db, "RV")
     form = await _shared_form(db, admin, project, requester)
     filed = await _file(db, form, requester)
     await comments_service.create_comment(db, filed.id,

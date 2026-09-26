@@ -6,23 +6,12 @@ retired residue, never as a stalled worker — the attachments.gc ghost sat in
 """
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.kernel import load_plugins
 from radd.kernel.registry import registries
 from radd.modules.events import service as events_service
 from radd.modules.events.models import ConsumerOffset
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def test_every_live_consumer_name_is_registered():

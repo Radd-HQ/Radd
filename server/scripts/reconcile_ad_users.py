@@ -1,14 +1,9 @@
 """Reconcile the whole Radd user list against Active Directory — the one-off
-cleanup for an instance seeded by the Jira importer (spec 88).
-
-The mess this fixes: the Jira import created accounts with placeholder addresses
-(`alex.webb@example.com`) or with real addresses but `source=local`, so the same
-human exists twice and the directory sync — which only ever renames ldap-source
-accounts and matches on email — is inert for almost all of them.
+cleanup for an instance seeded by the Jira importer (spec 88), whose placeholder
+or `source=local` accounts the directory sync (ldap-source, email-matched) ignores.
 
 Every account falls into exactly one bucket, decided by `ldap.userimport`'s
-planner (the same matching the interactive import uses, so there is one
-definition of "these are the same person"):
+planner (the interactive import's matching, so "same person" has one definition):
 
   ENFORCE  the exact AD email is already the account's address. Adopt AD's name
            and mark it `source=ldap` so the sync governs it from now on.
@@ -41,7 +36,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from sqlalchemy import select  # noqa: E402
 
 from radd.db import SessionLocal  # noqa: E402
-from radd.modules.auth import service as auth_service  # noqa: E402
 from radd.modules.auth.models import User  # noqa: E402
 from radd.modules.auth.types import UserSource  # noqa: E402
 from radd.modules.ldap import service as ldap_service, userimport  # noqa: E402

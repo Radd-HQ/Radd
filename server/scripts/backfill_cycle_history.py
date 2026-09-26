@@ -1,14 +1,10 @@
-"""Reconstruct CLOSED item↔cycle stints (spec 56) from the event log.
+"""Reconstruct CLOSED item↔cycle stints (spec 56) from `item.updated` cycle
+moves, so `past_cycle` SLQ sees history from before the feature existed (the
+migration seeded only the OPEN rows).
 
-The migration seeds an OPEN `item_cycle_records` row per current assignment;
-this script mines `item.updated` events whose `changes` diff carries a cycle
-move and writes the historical CLOSED stints (carryovers, removals), so
-`past_cycle` SLQ queries see history from before the feature existed.
-
-Diffs record cycle NAMES, so each name is resolved against the cycles table;
-unresolvable names (deleted/renamed cycles) are reported and skipped. Existing
-records make reruns safe: a stint whose (item, cycle, removed_at) already
-exists is skipped. Dry-run by default:
+Diffs record cycle NAMES: unresolvable ones (deleted/renamed cycles) are reported
+and skipped. Reruns are safe — an existing (item, cycle, removed_at) is skipped.
+Dry-run by default:
 
     uv run python scripts/backfill_cycle_history.py            # report only
     uv run python scripts/backfill_cycle_history.py --apply    # write records

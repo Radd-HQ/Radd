@@ -1,18 +1,8 @@
-"""The `ai.validate` node (spec 119) — the half of intake validation that writes.
-
-The client seam is MOCKED throughout: what is worth pinning is what the node
-does with an answer, not that httpx works. Four decisions in particular, each of
-which is a way for an AI check to be quietly wrong:
-
-* findings WIN over the model's own `passed` flag, so a model that lists three
-  problems and then ticks "fine" cannot throw away the part with information in
-  it;
-* an unknown field key DEGRADES to a general finding instead of being dropped —
-  the advice is still worth reading, it just has no control to attach to;
-* an outage takes the `unavailable` port and, by default, blocks NOTHING: a
-  provider being down is not evidence that a submission is bad;
-* on an ordinary event walk, where nothing is collecting findings, it is a pure
-  router — the same node in both graphs with no mode switch.
+"""The `ai.validate` node (spec 119), with the client seam MOCKED: what is pinned
+is what the node does with an answer. Findings WIN over the model's own `passed`;
+an unknown field key degrades to a general finding rather than being dropped; an
+outage takes the `unavailable` port and blocks NOTHING by default; on an ordinary
+event walk, with nothing collecting findings, it is a pure router.
 """
 
 import uuid
@@ -38,16 +28,10 @@ class _Packet:
 
 @dataclass
 class _Ctx:
-    """Duck-types `automations.executor._NodeContext` — the seam the node is
-    written against. Deliberately a stand-in rather than the real class: `ai`
-    contributes this node through the KERNEL and must keep working without
-    importing anything from `automations`, and a test that imported it would
-    stop noticing if that ever changed.
-
-    Its `add_finding` is unconditional, and that is the point: everything about
-    WHETHER a finding is collected belongs to the executor, and the tests that
-    pin that use the real context (see the two-graph section at the bottom).
-    """
+    """Duck-types `automations.executor._NodeContext` on purpose: `ai` contributes
+    this node through the KERNEL and must work without importing `automations`.
+    `add_finding` is unconditional — WHETHER findings are collected is the executor's
+    call, pinned with the real context in the two-graph section."""
 
     node: _Node = field(default_factory=_Node)
     packet: _Packet = field(default_factory=lambda: _Packet((uuid.uuid4(),)))
@@ -109,15 +93,9 @@ def test_the_ports_are_fixed_and_the_fallback_is_last():
 
 
 def test_the_ports_are_DECLARED_so_a_client_can_draw_them():
-    """RADD-1064: static ports are a declaration, not something inferred from
-    `ports_for({})`.
-
-    The distinction is what the canvas reads. Asking a DYNAMIC node for its
-    default ports answers about a node nobody has configured yet, so a client
-    that treated that as the port set would be wrong for `ai.classify` and had
-    no way to be right for this one — it fell back to the KIND's table and drew
-    a gate's TRUE/FALSE handles, which the graph validator then refused on save.
-    """
+    """Static ports are a declaration, not inferred from `ports_for({})` (RADD-1064):
+    a client that asked a DYNAMIC node for its default ports drew a gate's TRUE/FALSE
+    handles, which the graph validator then refused on save."""
     from radd.modules.ai import automation_node as classifier
 
     assert node.SPEC.ports == node.PORTS  # fixed: declared
@@ -298,15 +276,9 @@ async def test_an_unresolvable_feature_gate_is_an_outage_not_a_crash(monkeypatch
 
 
 def _walk_context(*, collecting: bool):
-    """A report and the context the EXECUTOR would build for it.
-
-    Through `executor._context`, the factory every call site in `walk` uses —
-    not by hand. The version this replaces asserted the two-graph property
-    against the stub above, using a `collecting` flag the stub itself invented,
-    so it proved that an if-statement in the test file worked. What decides is
-    the executor, and at the time it handed a node the report's findings list on
-    EVERY walk — the opposite of what the test claimed to show.
-    """
+    """A report and the context the EXECUTOR builds for it, through
+    `executor._context` like every call site in `walk` — a hand-built stub once
+    "proved" the two-graph property with a flag the stub itself invented."""
     from radd.modules.automations.conditions import EventFacts
     from radd.modules.automations.executor import RunReport, _context
     from radd.modules.automations.graph import Node, Packet

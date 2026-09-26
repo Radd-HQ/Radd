@@ -1,14 +1,8 @@
-"""Embedded MCP server protocol core (spec 45).
-
-Pure tests: JSON-RPC envelope handling (parse -> -32700/-32600, result/error
-shapes), method routing (initialize / ping / unknown -> -32601), tools/call
-shaping (domain error -> isError:true + rollback, unknown tool -> -32602,
-arguments the advertised schema rejects -> -32602 with every violation in
-`data` [RADD-1106], a handler bug -> -32603 + rollback, never an HTTP 500
-[RADD-905]), tool-catalog generation from a stubbed field registry, and
-the doc tools leaving with the pages plugin. HTTP-level auth gates (401/403) ride an in-process ASGI client that
-never touches the DB. The full PAT round trip is an integration step, not a
-unit test (repo rule: tests only where they earn their keep).
+"""Embedded MCP server protocol core (spec 45), pure: JSON-RPC envelopes
+(-32700/-32600), routing (-32601), tools/call shaping (domain error → isError +
+rollback; a schema-rejected call → -32602 listing every violation; a handler bug →
+-32603 + rollback, never HTTP 500), catalog generation, and the doc tools leaving
+with the pages plugin. Auth gates (401/403) use an in-process ASGI client, no DB.
 """
 
 import json

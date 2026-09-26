@@ -1,42 +1,22 @@
-"""Performance seed: recreate a production-Jira-scale dataset in Radd.
+"""Performance seed: recreate a production-Jira-scale dataset in Radd — 82
+projects, 503k issues, 1.8M comments, 95k attachments, 2.3k teams, 319 custom
+fields, 375 screens (the `TARGET_*` constants). Text sizes and comment volume are
+calibrated from the reference instance's cached jiraimport snapshot.
 
-Targets (mirrors the reference Jira Server instance we benchmark against):
+It bulk-writes with INSERT/COPY, bypassing the service layer:
+  - what `create_project` seeds, plus items (valid epic/issue/subtask parents),
+    comments, labels, and attachment rows with NO bytes on disk (downloads 404);
+  - silent `item.created`/`item.updated` events — REQUIRED, because reports, item
+    history and the audit log enumerate items from `events` (payload is ItemRead
+    at the top level, not the RADD-922 `payload["item"]` shape);
+  - search_index by the indexer's weighted-tsv recipe, then every consumer offset
+    is advanced past the synthetic events so no worker replays them.
 
-    projects          82      issues        503,056     comments   1,796,620
-    attachments   94,585      teams           2,293     components     2,016  (-> labels)
-    custom fields    319      issue types        61     statuses         107  (name pools)
-    screens          375      priorities          7     (-> Radd's 4-level enum)
-    security levels    4      (no Radd equivalent; skipped)
+Reuses the existing users (at least 10 active) and the filesystem storage host.
+One-shot, not idempotent: refuses a DB with more than 20 projects without --force.
 
-Text sizes are calibrated from the real instance (via the cached jiraimport
-snapshot): descriptions median 296 / avg 549 chars, comments median 176 /
-avg 341 chars, attachment sizes median 226 KB / avg 374 KB. Comment volume
-averages 3.57 per issue, matching the real 1.79M/503k ratio.
-
-What it writes, and why (bulk INSERT/COPY, bypassing the service layer):
-
-  - projects + states + issue_types + views + screens/screen_fields, mirroring
-    what `create_project` seeds (states drawn from a 107-name status pool,
-    types from a 61-name pool).
-  - work_items via COPY: kinds epic/issue/subtask with valid parents, custom
-    field values in the JSONB column, per-project sequential numbers.
-  - comments / attachments / item_labels via COPY. Attachment rows point at the
-    filesystem host with NO bytes on disk: listings work, downloads 404.
-  - events: one silent `item.created` per item plus silent `item.updated` rows
-    for state transitions, payload shaped like ItemRead. This is REQUIRED:
-    reports, item history, and the audit log all enumerate items from the
-    events table, not from work_items.
-  - search_index: populated directly with the indexer's exact weighted-tsv
-    recipe (A=key+title, B=description, C=public comments), then the GIN index
-    is rebuilt and every consumer offset is advanced past the synthetic events
-    so no worker replays them.
-  - post: projects.next_number advanced past max(number), VACUUM ANALYZE.
-
-Reuses the existing user accounts as reporters/assignees/authors. Idempotence:
-none — this is a one-shot fixture load. Refuses to run on a DB that already
-looks seeded (> 20 projects) without --force.
-
-Usage (from server/): uv run python scripts/perfseed.py [--db URL] [--yes]
+Usage (from server/; numpy is not a project dependency):
+    uv run --with numpy python scripts/perfseed.py [--db URL] [--yes] [--scale 0.01]
 Stop the app server first: its pollers otherwise contend with the bulk load.
 """
 

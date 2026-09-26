@@ -95,9 +95,3 @@ def test_real_config_loads_bootstrap_plugins():
         assert by_id[optional].core is False, optional
     # every plugin registered
     assert set(registries.plugins) == {p.id for p in plugins}
-
-
-# test_plugins_declare_their_own_dependencies died with the mechanism it
-# asserted (RADD-1097): python_deps/js_deps were manifest fields whose promised
-# install step never existed — write-only surface, deleted under the
-# no-speculative-frameworks rule.

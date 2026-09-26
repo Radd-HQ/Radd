@@ -4,24 +4,12 @@ what they administer.
 
 import uuid
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth import roles
 from radd.modules.auth.models import Role
 from radd.modules.auth.types import BUILTIN_ROLES, BuiltinRoleKey, expand_permissions
 from radd.modules.events.models import Event
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _spec(key: BuiltinRoleKey):

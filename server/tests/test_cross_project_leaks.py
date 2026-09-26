@@ -1,25 +1,16 @@
-"""RADD-839 — cross-project read leaks (spec-115 review §2, N1–N4).
+"""RADD-839: an actor entitled to ONE project sees no other project's keys or
+titles through the side doors — the timesheet, item-payload hydration, SLQ
+autocomplete (both dialects), epic rollups.
 
-An actor entitled to ONE project must not see another project's issue keys or
-titles through the side doors: the timesheet, item-payload hydration
-(links/parent/epic/child counts), SLQ autocomplete (item keys, project keys,
-both dialects), or epic rollups. All query-level fixes; each assertion failed
-on the pre-fix code.
-
-The Baseline is emptied per test session (the seeded row grants item.read
-globally, which would make every member read everything — the scoped-member
-proof does the same).
-
-DB-backed; flushed, never committed.
+The Baseline is emptied: its qualified `item.read` would let every member read
+everything. DB-backed; flushed, never committed.
 """
 
 import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
@@ -32,28 +23,6 @@ from radd.modules.timelogging.schemas import WorklogCreate
 from radd.modules.timelogging.slq.suggest import suggest_worklog
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"leak-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def _empty_baseline(db):

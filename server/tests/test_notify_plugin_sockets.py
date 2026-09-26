@@ -1,27 +1,17 @@
-"""RADD-1385 — notify learns pages, participants and the mail transport from sockets.
+"""RADD-1385 — notify (core) reaches pages, participants and mailintake (optional)
+only through kernel sockets, pinned against the REAL plugins withdrawn the way the
+plugin manager does (`registries.unregister_plugin`):
 
-`notify` is core; `pages`, `participants` and `mailintake` are optional plugins.
-Notify used to import all three behind `try: import … except ImportError`, which
-never fires — plugin code is always importable — so a plugin the plugin manager
-switched off went on being consulted. Now each serves a kernel socket, and this
-module pins both halves of that contract against the REAL plugins, withdrawn the
-way the plugin manager withdraws them (`registries.unregister_plugin`):
-
-* pages withdrawn — a page comment already in the stream plans nothing and does
-  not raise, and a queued page row fails the mail re-check; registered, the same
-  event reaches the page's watcher and the row reads again;
-* mailintake withdrawn — an email-channel notification still lands in the inbox,
-  and both mail loops record it UNDELIVERABLE (stamped, relay never dialled)
-  instead of holding it; registered, the same shape of row goes out.
-
-DB-backed, flushed never committed; the session rolls back at teardown.
+* pages withdrawn — a page comment plans nothing and does not raise, a queued page
+  row fails the mail re-check; registered, the event reaches the page's watcher;
+* mailintake withdrawn — an email-channel notification still lands in the inbox and
+  both mail loops record it UNDELIVERABLE (relay never dialled), not held.
 """
 
 import uuid
 
 import pytest
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import smtp
 from radd.config import settings
@@ -45,6 +35,8 @@ from radd.modules.pages import watchers as page_watchers
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+
+from _factories import make_user
 
 
 class _Relay:
@@ -73,15 +65,6 @@ class _Relay:
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
 def relay(monkeypatch):
     """The env relay mailintake falls back to, faked. Sender ROWS other tests
     committed are disabled per test (`_quiet`), so this is the one way out."""
@@ -102,17 +85,8 @@ async def _quiet(db) -> None:
     await db.execute(update(MailSender).values(enabled=False))
 
 
-async def _admin(db, name: str) -> User:
-    """Admins, so every recipient passes the read gate and a refusal can only
-    come from the thing under test."""
-    user = User(
-        email=f"sock-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+# Recipients are admins, so every one passes the read gate and a refusal can
+# only come from the thing under test.
 
 
 async def _drain(db, after: int) -> None:
@@ -127,7 +101,10 @@ async def _rows(db, user: User) -> list[Notification]:
 
 
 async def test_a_withdrawn_wiki_notifies_nobody_and_a_registered_one_its_watchers(db):
-    author, watcher = await _admin(db, "Author"), await _admin(db, "Watcher")
+    author, watcher = (
+        await make_user(db, role=InstanceRole.ADMIN, name="Author"),
+        await make_user(db, role=InstanceRole.ADMIN, name="Watcher"),
+    )
     slug = f"sock-{uuid.uuid4().hex[:8]}"
     space = await spaces.create_space(db, PageSpaceCreate(name=slug, slug=slug), author.id)
     page = await pages_service.create_page(
@@ -168,7 +145,10 @@ async def test_without_a_transport_email_is_recorded_undeliverable_and_the_inbox
     db, relay
 ):
     await _quiet(db)
-    agent, assignee = await _admin(db, "Agent"), await _admin(db, "Assignee")
+    agent, assignee = (
+        await make_user(db, role=InstanceRole.ADMIN, name="Agent"),
+        await make_user(db, role=InstanceRole.ADMIN, name="Assignee"),
+    )
     suffix = uuid.uuid4().hex[:4].upper()
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"SK{suffix}", name="Socket mail")

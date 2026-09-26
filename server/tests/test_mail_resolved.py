@@ -1,34 +1,15 @@
-"""The resolution notice (RADD-982) and the new-ticket receipt — the desk's own
-messages, switched on Settings → Email since RADD-1368 — driven through the real
-services against live Postgres in a rolled-back transaction.
-
-Both are OFF until someone switches them on; the tests below turn the notice on
-per project (`on`) unless they are about the switch itself.
-
-Three properties are load-bearing and each is pinned below, because each one
-has an obvious wrong implementation that would look like it worked:
-
-* it announces ENTERING done, so a done→done move (spec 112's release sweep
-  performs one on every shipped item) mails nobody a second time;
-* it YIELDS to CSAT, because the survey's own first line announces the
-  resolution and two messages for one event is worse than the silence;
-* it reaches every contact, not only the primary one (RADD-980's plural seam),
-  and never an address belonging to an active user.
-
-Events come from REAL `item.updated` emissions so the payload-shape assumption
-— a `changes` diff plus a post-mutation state embed — stays verified rather
-than asserted against a literal this file wrote.
+"""The resolution notice (RADD-982) and the new-ticket receipt, OFF until switched
+on in Settings → Email (RADD-1368). Pinned: the notice announces ENTERING done (a
+release sweep's done→done move mails nobody), yields to CSAT, and reaches every
+contact but never an active user. Events come from real `item.updated` emissions.
 """
 
 import uuid
 
 import pytest
 from sqlalchemy import update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEntity, ItemEvent
@@ -36,55 +17,27 @@ from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.mailintake import outbound, resolved, service as mail_service
 from radd.modules.mailintake.models import MailSender
 from radd.modules.mailintake.reply import Recipient
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
 from radd.modules.workflow import service as workflow_service
 from radd.modules.workflow.schemas import StateCreate
 from radd.modules.workflow.types import StateCategory
 
+from _factories import make_project
+
 CONTACT = "jane@vip-customer.com"
 SECOND_CONTACT = "priya@vip-customer.com"
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"desk-{uuid.uuid4().hex[:8]}@example.com",
-        name="Desk Agent",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-@pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"RS{uuid.uuid4().hex[:4].upper()}", name="Service desk")
-    )
+    return await make_project(db, "RS")
 
 
 @pytest.fixture
 async def relay(db, monkeypatch):
-    """Somewhere to send FROM, so `outbound_configured` is true — and rows
-    disabled so a sender another test committed cannot be what answers.
-
-    The consumer's gate is shared by both messages it ships; without this the
-    resolution tests would pass or fail on whatever else is in the database.
-    """
+    """Somewhere to send FROM (`outbound_configured` true), with other tests' sender
+    rows disabled so the result does not depend on what else is in the database."""
     await db.execute(update(MailSender).values(enabled=False))
     monkeypatch.setattr(settings, "smtp_host", "smtp.test")
 

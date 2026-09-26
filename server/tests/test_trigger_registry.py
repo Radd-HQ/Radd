@@ -1,8 +1,6 @@
-"""Chokepoint-1 parity oracle (spec 93): the automation trigger catalog derived
-from the kernel event-type registry must EXACTLY reproduce the hardcoded catalog
-it replaced. The snapshot (`_trigger_catalog_snapshot.json`) was captured from the
-pre-inversion `automations.catalog.TRIGGERS` — 65 triggers — so any drift in a
-plugin's `event_types` manifest fails here, not silently in the UI.
+"""The trigger catalog derived from the event-type registry must equal
+`_trigger_catalog_snapshot.json`; a changed `event_types` manifest fails here, not
+silently in the UI. Update the snapshot deliberately.
 """
 
 import json
@@ -37,18 +35,4 @@ def test_trigger_registry_reproduces_the_catalog_exactly():
 
 
 def test_trigger_count_is_112():
-    # RADD-829 added the three group.* events (synced/missing/restored).
-    # RADD-960 added the four mail.* events — the mail channel became something
-    # a rule can see, rather than only the item/comment it happened to produce.
-    # RADD-1009 added project.updated (rename/description, with a diff).
-    # RADD-1174 added project.deleted.
-    # RADD-1267 switched on nine more: user.created/updated, the estimate change,
-    # access grants, a space's public-access flip and the SLA policies.
-    # RADD-1309 added each VCS connector's own triggers: GitLab five (opened/
-    # merged/closed, push, release), GitHub and Forgejo six (the same plus CI).
-    # RADD-1317 added Alertmanager's three (firing/repeated/resolved) — the
-    # receiver stopped commenting and transitioning and fires these instead.
-    # RADD-1320 added form.submitted and sla.met.
-    # RADD-1330 added each VCS host's "merge/pull request updated".
-    # RADD-1255 added GitLab's CI finished and deployment finished.
     assert len(_current_triggers()) == 112

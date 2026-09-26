@@ -1,28 +1,14 @@
-"""Form defaults cover what a project actually offers (RADD-801).
-
-Hussein's bar: *"I should be able to control anything that is available on the
-project I'm submitting against."*
-
-`FormDefaults` was a hand-copied subset of `ItemCreate` and it drifted — spec 51
-added issue types, spec 70 added points, spec 24 added the flag, and none of them
-came back here. The first test below is the one that matters: it walks
-`ItemCreate` and fails when a field is neither carried by a default nor named in
-the exclusion list. Adding an item attribute and forgetting the form is a failing
-suite now, rather than a gap somebody finds a year later.
-
-The rest assert the values actually LAND, because a settable field that is stored
-and then dropped at submit is the same bug wearing a nicer schema.
+"""Form defaults cover what a project actually offers (RADD-801). The first test
+walks `ItemCreate` and fails when a field is neither carried by a default nor
+named in the exclusion list, so a new item attribute cannot silently miss forms.
+The rest assert the values actually LAND: a field stored and then dropped at
+submit is the same bug.
 """
 
 import uuid
 from datetime import date
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.forms import service as forms_service
 from radd.modules.forms.schemas import (
     DEFAULTS_COVERAGE,
@@ -38,13 +24,9 @@ from radd.modules.projects.schemas import ProjectCreate
 
 
 def test_every_item_field_is_carried_or_excluded_with_a_reason():
-    """THE drift guard.
-
-    If this fails you have added a field to `ItemCreate`. Decide, in
-    `DEFAULTS_COVERAGE`: either name the `FormDefaults` key that carries it, or
-    say in one line why a form author should not set it. Both answers are fine;
-    silence is what produced the issue-type gap.
-    """
+    """THE drift guard. If this fails you added a field to `ItemCreate`: in
+    `DEFAULTS_COVERAGE`, name the `FormDefaults` key that carries it, or say in
+    one line why a form author should not set it."""
     missing = sorted(set(ItemCreate.model_fields) - set(DEFAULTS_COVERAGE))
     assert not missing, (
         "ItemCreate fields with no entry in DEFAULTS_COVERAGE: "
@@ -79,28 +61,6 @@ def test_kind_and_type_are_different_axes():
 
 
 # --- and the values actually land ---------------------------------------------
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"fd-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def test_a_form_default_issue_type_lands_on_the_item(db, admin):

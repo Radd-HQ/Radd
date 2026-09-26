@@ -9,7 +9,6 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import secretbox
 from radd.config import settings
@@ -24,16 +23,6 @@ def keyfile(tmp_path, monkeypatch):
     secretbox.reset_key_cache()
     yield
     secretbox.reset_key_cache()
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def test_roundtrip_and_prefix(keyfile):

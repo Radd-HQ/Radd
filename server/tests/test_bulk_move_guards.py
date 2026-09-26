@@ -1,22 +1,14 @@
-"""RADD-834 — bulk move re-enters the service path's checks.
-
-`_move_one` used to mutate ORM objects directly, so builtin/custom field
-grants, workflow-transition guards and approval consumption never ran on the
-move path while running on every single-item edit. These tests pin the three
-checks (each failed on the pre-fix code), plus the estimate_points governance
-gap and the archived/rank ungrantability invariant that set_archived /
-reorder_item silently rely on.
-
-DB-backed (compose Postgres) — flushed, never committed; the session rolls
-back at teardown.
+"""RADD-834: bulk move re-enters the service path's checks — field grants,
+workflow-transition guards and approval consumption (each failed when `_move_one`
+mutated ORM objects directly), the estimate_points governance gap, and the
+archived/rank ungrantability that set_archived / reorder_item rely on. Flushed,
+never committed.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.access import service as access_service
 from radd.modules.access.types import Access, GrantSubject
@@ -36,36 +28,8 @@ from radd.modules.settings.types import SettingKey, SettingScope
 from radd.modules.workflow import service as workflow, transitions
 from radd.modules.workflow.schemas import TransitionCreate, TransitionRule
 from radd.modules.workflow.types import TransitionCheck, TransitionMode
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"bmg-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _project(db, prefix):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"{prefix}{uuid.uuid4().hex[:4].upper()}", name="P")
-    )
+from _factories import make_project
 
 
 async def _member(db, *projects) -> User:
@@ -111,8 +75,8 @@ async def _states(db, project):
 
 
 async def test_bulk_move_respects_builtin_state_rule(db, admin):
-    src = await _project(db, "BMA")
-    dst = await _project(db, "BMB")
+    src = await make_project(db, "BMA")
+    dst = await make_project(db, "BMB")
     member = await _member(db, src, dst)
     await _restrict_builtin(db, BuiltinItemField.STATE.value, await _restricting_role(db))
 
@@ -128,8 +92,8 @@ async def test_bulk_move_respects_builtin_state_rule(db, admin):
 
 
 async def test_bulk_move_checks_dropped_custom_field_writability(db, admin):
-    src = await _project(db, "BMC")
-    dst = await _project(db, "BMD")
+    src = await make_project(db, "BMC")
+    dst = await make_project(db, "BMD")
     member = await _member(db, src, dst)
     definition = await fields_service.create_field(
         db,
@@ -161,8 +125,8 @@ async def test_bulk_move_checks_dropped_custom_field_writability(db, admin):
 
 
 async def test_bulk_move_runs_wildcard_arrival_guards(db, admin):
-    src = await _project(db, "BME")
-    dst = await _project(db, "BMF")
+    src = await make_project(db, "BME")
+    dst = await make_project(db, "BMF")
     await settings_service.set_value(
         db,
         SettingKey.WORKFLOW_TRANSITION_MODE,
@@ -213,7 +177,7 @@ async def test_bulk_move_runs_wildcard_arrival_guards(db, admin):
 
 
 async def test_estimate_points_write_rule_enforced(db, admin):
-    project = await _project(db, "BMG")
+    project = await make_project(db, "BMG")
     member = await _member(db, project)
     await _restrict_builtin(db, "estimate_points", await _restricting_role(db))
     item = await items.create_item(db, ItemCreate(project_id=project.id, title="pts"), admin)
@@ -222,7 +186,7 @@ async def test_estimate_points_write_rule_enforced(db, admin):
 
 
 async def test_estimate_points_read_rule_blanks(db, admin):
-    project = await _project(db, "BMH")
+    project = await make_project(db, "BMH")
     member = await _member(db, project)
     await _restrict_builtin(
         db, "estimate_points", await _restricting_role(db), access=Access.READ
@@ -239,7 +203,7 @@ async def test_estimate_points_read_rule_blanks(db, admin):
 
 
 async def test_history_redacts_restricted_custom_field(db, admin):
-    project = await _project(db, "BMI")
+    project = await make_project(db, "BMI")
     member = await _member(db, project)
     definition = await fields_service.create_field(
         db,
@@ -278,7 +242,7 @@ async def test_history_redacts_restricted_custom_field(db, admin):
 
 
 async def test_history_redacts_restricted_builtin(db, admin):
-    project = await _project(db, "BMJ")
+    project = await make_project(db, "BMJ")
     member = await _member(db, project)
     await _restrict_builtin(
         db, BuiltinItemField.ASSIGNEE.value, await _restricting_role(db), access=Access.READ

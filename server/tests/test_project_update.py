@@ -7,47 +7,26 @@ Three things the browser never offered, at the seam that matters:
 - a real change emits `project.updated` with the diff, a no-op emits nothing.
 """
 
-import uuid
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.app import create_app
-from radd.config import settings
 from radd.modules.auth import roles as auth_roles, service as auth
-from radd.modules.auth.models import GlobalRoleGrant, User
+from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.types import SESSION_COOKIE_NAME, BuiltinRoleKey, InstanceRole
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate, ProjectUpdate
+from radd.modules.projects.schemas import ProjectUpdate
 from radd.modules.projects.types import ProjectEntity, ProjectEvent
 from radd.modules.auth.types import LoginMethod
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_project, make_user
 
 
 @pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"PU{uuid.uuid4().hex[:4].upper()}", name="Before")
-    )
-
-
-async def _user(db, role: InstanceRole) -> User:
-    user = User(
-        email=f"pu-{uuid.uuid4().hex[:8]}@example.com", name="Probe", instance_role=role.value
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_project(db, "PU", "Before")
 
 
 def _client(cookie: str) -> httpx.AsyncClient:
@@ -59,7 +38,7 @@ def _client(cookie: str) -> httpx.AsyncClient:
 
 
 async def test_service_changes_name_and_description_and_emits_the_diff(db, project):
-    actor = await _user(db, InstanceRole.ADMIN)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     await projects_service.update_project(
         db, project, ProjectUpdate(name="  After  ", description="What it is for"), actor_id=actor.id
     )
@@ -90,8 +69,8 @@ async def test_blank_name_is_refused_by_the_schema():
 
 
 async def test_http_admin_renames_member_is_refused_key_unchanged(db, project):
-    admin = await _user(db, InstanceRole.ADMIN)
-    member = await _user(db, InstanceRole.MEMBER)
+    admin = await make_user(db, role=InstanceRole.ADMIN)
+    member = await make_user(db)
     member_role = await auth_roles.role_by_key(db, BuiltinRoleKey.MEMBER)
     db.add(GlobalRoleGrant(role_id=member_role.id, user_id=member.id, project_id=project.id))
     await db.flush()

@@ -15,9 +15,7 @@ from datetime import datetime, timedelta
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.ai import client, images, provider, registry
 from radd.modules.ai.images import ImagePart, pick_images
 from radd.modules.ai.schemas import AiProviderCreate, AiRoleAssign
@@ -90,16 +88,6 @@ def test_with_images_picks_the_vision_role_and_names_the_files():
 
 
 # --- wired ----------------------------------------------------------------------
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

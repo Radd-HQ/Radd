@@ -12,26 +12,14 @@ DB-backed; flushed, never committed.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz, authz_batch, grants as auth_grants, roles as auth_roles
 from radd.modules.auth.models import User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import Permission, PermissionScope
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_project
 
 
 @pytest.fixture
@@ -53,17 +41,11 @@ async def _role(db, permissions):
     )
 
 
-async def _project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"LD{uuid.uuid4().hex[:4].upper()}", name="P")
-    )
-
-
 # --- the ladder ----------------------------------------------------------------
 
 
 async def test_global_grant_satisfies_the_project_scope(db, member):
-    project = await _project(db)
+    project = await make_project(db, "LD")
     role = await _role(db, ["cycle.create"])
     await auth_grants.create_grant(db, role_id=role.id, user_id=member.id)  # instance-wide
 
@@ -73,8 +55,8 @@ async def test_global_grant_satisfies_the_project_scope(db, member):
 
 
 async def test_project_grant_stays_inside_its_project(db, member):
-    granted = await _project(db)
-    other = await _project(db)
+    granted = await make_project(db, "LD")
+    other = await make_project(db, "LD")
     role = await _role(db, ["item.update"])
     await auth_grants.create_grant(db, role_id=role.id, user_id=member.id, project_id=granted.id)
 
@@ -86,7 +68,7 @@ async def test_project_grant_stays_inside_its_project(db, member):
 
 
 async def test_require_anywhere_rides_one_memoised_map(db, member):
-    project = await _project(db)
+    project = await make_project(db, "LD")
     role = await _role(db, ["item.read"])
     await auth_grants.create_grant(db, role_id=role.id, user_id=member.id, project_id=project.id)
 

@@ -10,9 +10,8 @@ import uuid
 from dataclasses import dataclass
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -426,16 +425,6 @@ async def test_cursor_defaults_to_end_and_clamps():
 
 
 # --- value sources against live data (rolled back afterwards) ---
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @dataclass

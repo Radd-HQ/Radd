@@ -118,12 +118,8 @@ def test_code_macro_becomes_a_plain_fence_with_its_language():
 
 
 def test_a_code_fence_carries_the_canonical_language():
-    """Confluence writes `py`; a markdown fence should say `python`.
-
-    Radd's own picker resolves both now, but the body is portable markdown that
-    GitHub and every other renderer also reads — and there, `py` highlights
-    nothing. The token that travels should be the one everybody understands.
-    """
+    """Confluence writes `py`; the fence says `python`, because the markdown body
+    travels to renderers (GitHub) where `py` highlights nothing."""
     body = (
         '<ac:structured-macro ac:name="code">'
         '<ac:parameter ac:name="language">py</ac:parameter>'
@@ -303,14 +299,9 @@ def test_details_macro_yields_its_body_rather_than_a_card():
 
 
 def test_position_none_is_a_string_and_must_not_crash():
-    """`extensions.position` is an integer for a page whose order was set by hand
-    and the literal STRING "none" for one that inherits it.
-
-    Measured on the real PIP space: 4203 of 6099 pages carry "none" — 69%, not an
-    edge case. A bare int() raised on the first one, which aborted the whole
-    listing, which is what turned it into "download failed" for the entire space
-    and an empty tree browser with no error at all.
-    """
+    """`extensions.position` is an int when set by hand and the STRING "none" when
+    inherited — 69% of a real space. A bare int() aborted the whole listing, which
+    read as "download failed" and an empty tree with no error."""
     page = _page_of(
         {"id": "3801098", "title": "Install Photoshop extension",
          "extensions": {"position": "none"}, "version": {"number": 5}},
@@ -333,13 +324,9 @@ def test_every_remote_number_falls_back_rather_than_raising():
 
 
 def test_a_listing_drops_a_repeated_page(monkeypatch):
-    """Offset pagination over a LIVE collection repeats rows.
-
-    Walking a real 6107-page space returned one page in two different windows,
-    and the snapshot's primary key then killed the download 375 bodies in. The
-    listing owns this: a caller asking for "every page in this space" should
-    never have to know it might be told one of them twice.
-    """
+    """Offset pagination over a LIVE collection repeats rows (a real 6107-page space
+    did, and the snapshot's primary key killed the download). The listing owns the
+    dedupe; its callers never see a page twice."""
     from radd.modules.confluenceimport.client import ConfluenceClient
     from radd.modules.confluenceimport.types import ConfluenceAuthMode, ConfluenceCreds
 
@@ -363,13 +350,9 @@ def test_a_page_row_with_no_version_block_still_parses():
 
 
 def test_a_mention_by_userkey_reads_as_a_person():
-    """Server/DC writes mentions as an opaque `ri:userkey`, not a username.
-
-    Unresolved, that put raw 32-character hex on the page and produced reports
-    reading "mention of unknown user 8a05808b692118d5016b76858a5f1e1a" — which
-    nobody can map by hand. The key is resolved to a person at download time; the
-    converter asks the resolver and shows a NAME either way.
-    """
+    """Server/DC writes mentions as an opaque `ri:userkey`; unresolved, raw hex landed
+    on the page and in reports. The key is resolved at download time and the
+    converter shows a NAME either way."""
     body = '<p>ask <ac:link><ri:user ri:userkey="8a05808b692118d5016b76858a5f1e1a"/></ac:link></p>'
     directory = {"8a05808b692118d5016b76858a5f1e1a": ("Hussein Jarrar", "uuid-9")}
     ctx = ConvertContext(user_ref=lambda token: directory.get(token, (token, "")))

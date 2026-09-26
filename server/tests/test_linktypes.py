@@ -9,31 +9,13 @@ already seeded there).
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.linktypes import service as lt
 from radd.modules.linktypes.schemas import LinkTypeCreate, LinkTypeUpdate
 from radd.modules.linktypes.types import LinkDirection
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _project(db, name: str):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"LT{uuid.uuid4().hex[:6].upper()}", name=name)
-    )
+from _factories import make_project
 
 
 async def test_builtins_present_and_symmetry(db):
@@ -48,8 +30,8 @@ async def test_builtins_present_and_symmetry(db):
 
 
 async def test_create_scoped_type_and_project_resolution(db):
-    a = await _project(db, "Alpha")
-    b = await _project(db, "Beta")
+    a = await make_project(db, "LT", "Alpha")
+    b = await make_project(db, "LT", "Beta")
     key = f"dep_{uuid.uuid4().hex[:6]}"
     created = await lt.create_type(
         db,
@@ -90,7 +72,7 @@ async def test_delete_guards(db):
 
 
 async def test_update_widens_scope_and_locks_builtin_direction(db):
-    a = await _project(db, "Alpha")
+    a = await make_project(db, "LT", "Alpha")
     key = f"rel_{uuid.uuid4().hex[:6]}"
     created = await lt.create_type(db, LinkTypeCreate(key=key, name="Rel", outward_name="rel"))
     # Widen to project A, then back to global.

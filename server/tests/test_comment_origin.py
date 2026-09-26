@@ -1,22 +1,15 @@
 """RADD-1318: a comment records where it came from, and the requester relay
-decides by that — not by "the author is the SYSTEM user".
-
-Three facts, each against live Postgres (rolled back):
-
-- an automation's public comment reaches the requester (it used to be dropped,
-  so "on Email received, reply 'we're on it'" wrote a comment nobody got);
-- the requester's own mail, filed with no account behind it, is never echoed;
-- resolving an issue with an email contact sends nothing by itself — the
-  resolution notice is a template now, not a consumer branch.
+decides by that — not by "the author is the SYSTEM user". Against live Postgres:
+an automation's public comment reaches the requester; the requester's own mail,
+filed with no account behind it, is never echoed; a resolution alone sends
+nothing while `mail_send_resolved` is off.
 """
 
 import uuid
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -32,16 +25,6 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.mailintake import outbound, service as mail_service
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture
@@ -113,10 +96,9 @@ async def test_a_person_typing_has_no_origin(db, ticket):
 
 
 async def test_resolving_an_issue_sends_the_requester_nothing_by_itself(db, ticket, monkeypatch):
-    """The resolution notice (RADD-982) was a branch of this consumer, ON by
-    default. It is the "Tell the requester when resolved" template now; the
-    consumer plans nothing for an item.updated even with a sender configured
-    — which is what makes the absence non-vacuous."""
+    """With `mail_send_resolved` at its default (OFF, RADD-1368) the consumer plans
+    nothing for a done move, even with a sender configured — which is what makes
+    the absence non-vacuous."""
 
     async def configured(_session):
         return True

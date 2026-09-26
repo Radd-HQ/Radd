@@ -12,9 +12,7 @@ DB-backed tests are flushed, never committed; the session rolls back at teardown
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth import roles, service as auth
 from radd.modules.auth.models import User
 from radd.modules.auth.schemas import RoleCreate, RoleUpdate, UserAdminUpdate
@@ -32,27 +30,12 @@ from radd.modules.teams import service as teams
 from radd.modules.teams.schemas import TeamCreate
 from radd.modules.teams.types import TeamEvent
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(
-        email=f"diffs-{uuid.uuid4().hex[:8]}@example.com",
-        name="Diff Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Diff Admin")
 
 
 async def _latest(db, event_type: str, entity_id) -> dict:

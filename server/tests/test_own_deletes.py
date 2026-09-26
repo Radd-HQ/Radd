@@ -12,9 +12,7 @@ Rolled-back transactions on the compose DB.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz, roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
@@ -28,16 +26,6 @@ from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

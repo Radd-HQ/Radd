@@ -1,24 +1,7 @@
-"""Round-robin team assignment — the `assign_round_robin` action (RADD-1044).
-
-Triage distributes: the action hands each new ticket to the NEXT member of a
-named team, walking members in a stable order (by user id, so the cursor stays
-meaningful as membership changes), skipping inactive and away accounts, and
-leaving the item unassigned when nobody is eligible.
-
-These pin the parts that are easy to get subtly wrong:
-
-* distribution is fair AND in a stable order, and the per-team cursor advances
-  across calls in one transaction (the read-your-writes the executor relies on);
-* an away member (leave on) and an inactive one are passed over — the cursor
-  lands on the assignee, never on a skipped member;
-* nobody eligible -> pick returns None (the planner skip-logs, leaves the item
-  unassigned, and does NOT advance the cursor);
-* leave WITHDRAWN at runtime turns away-skipping off rather than crashing —
-  pinned with the other RADD-1387 withdrawals in
-  test_optional_plugin_withdrawal.py.
-
-DB-backed because the whole point is real teams, memberships, leave rows and the
-cursor table; the `db`/`admin` fixtures mirror test_automation_arity.py.
+"""`assign_round_robin` (RADD-1044): the next eligible member of a team in user-id
+order, skipping inactive and away accounts; the per-team cursor advances within
+one transaction and does NOT advance when nobody is eligible. Leave withdrawn at
+runtime is pinned in test_optional_plugin_withdrawal.py.
 """
 
 import uuid
@@ -26,22 +9,9 @@ from datetime import date
 
 import pytest
 
-from radd.config import settings
 from radd.modules.automations import round_robin
 from radd.modules.automations.engine import _manual_facts, _plan
 from radd.modules.automations.types import PlanKind
-
-
-@pytest.fixture
-async def db():
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
 
 
 @pytest.fixture

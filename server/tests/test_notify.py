@@ -1,32 +1,15 @@
-"""Notify planning core (spec 26) + the delivery choke point (RADD-971).
-
-Pure, DB-free tests of the invariants everything else leans on: the actor is
-never self-notified, one notification per user per event with personal types
-(assigned/mentioned) beating ambient ones (state_changed/commented), auto-watch
-sets, and the mention grammar. The full consumer (permission filtering, mention
-resolution, email digests) is exercised against a live DB by the demo flows.
-
-The last section is DB-backed, because the mute preference is now enforced at
-the WRITE (`service.create_notification`) rather than in the outbox consumer —
-and the whole point of that move is that the producers which never go near the
-consumer inherit it. Testing the planner cannot see that; testing the seam alone
-would prove nothing about the two callers that were broken. So those two callers
-are driven for real. Rows are flushed, never committed; the session rolls back.
-
-RADD-978's section is DB-backed for the same reason twice over: what was missing
-was that the consumer never HANDLED `item.participant_added`, and what makes the
-recipient allowed to hear about it is the participant row itself. Neither is
-visible to a pure planner test or to a hand-built event, so those tests drive the
-real `participants.add_participant` and the real consumer.
+"""Notify planning (spec 26) and the delivery choke point (RADD-971). The planner
+tests are pure: no self-notification, one notification per user per event with
+personal types beating ambient ones, auto-watch, the mention grammar. The
+DB-backed sections exist because the mute is enforced at the WRITE
+(`service.create_notification`) and `item.participant_added` is handled by the
+real consumer — neither is visible to a pure planner test.
 """
 
 import uuid
 
-import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
@@ -53,6 +36,8 @@ from radd.modules.notify.types import (
     NotificationType,
     RuleScope,
 )
+
+from _factories import make_user
 
 ACTOR = uuid.uuid4()
 ASSIGNEE = uuid.uuid4()
@@ -144,17 +129,9 @@ def test_update_assignment_beats_state_change():
 
 
 def test_an_edit_with_no_semantic_type_plans_the_generic_one():
-    """A title change used to plan NOTHING — and before spec 118 that was the
-    whole story, because there was no kind that could describe "something else
-    moved". A reprioritised, relabelled, re-estimated issue was silent to
-    everyone watching it.
-
-    It is planned now, as `updated`, carrying which fields moved. Whether anyone
-    HEARS it is the resolver's business, and its default for this kind is `off`
-    in every relationship scope — so the observable behaviour for a watcher who
-    has changed nothing is still silence, and the test for that lives in
-    `test_notify_rules.py` rather than being smuggled in here as an empty list.
-    """
+    """A title change is planned as `updated`, carrying which fields moved.
+    Whether anyone HEARS it is the resolver's (default `off` in every relationship
+    scope) — that silence is tested in test_notify_rules.py, not here."""
     payload = {"item": {"assignee": None}, "changes": [{"field": "title", "from": "a", "to": "b"}]}
     plan = planner.plan_item_updated(payload, ACTOR, _watching(WATCHER), frozenset())
     assert _types_by_user(plan) == {WATCHER: NotificationType.UPDATED}
@@ -211,13 +188,9 @@ def test_the_notify_copy_of_the_system_actor_id_matches_the_engines():
 
 
 def test_an_item_created_by_the_system_actor_watches_nobody():
-    """RADD-996: mail intake creates items AS the system actor, so auto-watching
-    the creator put `automation@radd.system` on the watcher list of every ticket
-    that has ever arrived by email — and a human replying then fanned a
-    `commented` row to a robot, which the mailer tried to deliver to an address
-    that does not receive. The reporter arm is asserted in the same breath
-    because an intake-created item whose sender matched no account has none, and
-    one whose sender matched the system actor would have the same problem."""
+    """RADD-996: mail intake creates items AS the system actor, which must not
+    auto-watch (a reply would fan a `commented` row to a robot). The reporter arm
+    is asserted too: a sender matching the system actor has the same problem."""
     payload = {
         "item": {
             "assignee": None,
@@ -305,35 +278,9 @@ def test_participant_added_never_notifies_the_actor():
 # --- the mute is enforced at the write, so every producer inherits it (RADD-971) ---
 
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name: str) -> User:
-    user = User(
-        email=f"mute-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 async def _mute(db, user: User, type_: NotificationType) -> None:
-    """Turn one kind OFF for this person, in every scope that could reach them.
-
-    Spec 118 replaced the single mute list with per-scope rules, so "muted"
-    is now a statement about how you are connected to the thing. These tests are
-    about the choke point rather than about precedence, so they silence the
-    relationship columns outright — the equivalent of the old flat mute.
-    """
+    """Turn one kind OFF for this person in every relationship scope (spec 118's
+    rules are per scope). These tests are about the choke point, not precedence."""
     await notify_service.set_rules(
         db,
         user.id,
@@ -359,16 +306,10 @@ async def _rows(db, user: User) -> list[Notification]:
 
 
 async def test_the_system_actor_is_refused_a_notification_row(db):
-    """RADD-996's cleanup decision, asserted rather than described.
-
-    `item_watchers` already holds a system-actor row on every ticket that
-    arrived by email, and no migration removes them — rows nobody displays are
-    not worth a destructive write. What makes leaving them free is the refusal
-    at the write choke point: they can go on being planned from and produce
-    nothing. Driven through the same seam the mute uses, for the same reason —
-    it is the one function every producer of a notification calls.
-    """
-    author = await _user(db, "Author")
+    """RADD-996: existing system-actor watcher rows are left in place, which is
+    free only because the write choke point (the one function every producer
+    calls) refuses the system actor a notification row."""
+    author = await make_user(db, name="Author")
     item_id = uuid.uuid4()  # `notifications.item_id` carries no FK
     created = await notify_service.create_notification(
         db,
@@ -407,7 +348,7 @@ async def test_automation_notify_action_obeys_the_mute(db):
     from radd.modules.automations.planning import _Plan
     from radd.modules.automations.types import PlanKind
 
-    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    muted, heard = await make_user(db, name="Muted"), await make_user(db, name="Hearing")
     await _mute(db, muted, NotificationType.AUTOMATION)
 
     for user in (muted, heard):
@@ -425,13 +366,9 @@ async def test_automation_notify_action_obeys_the_mute(db):
 
 
 async def test_an_automation_notification_carries_the_issue_it_fired_on(db):
-    """RADD-972. The engine wrote `{message, rule}` and set `item_id` on the row,
-    so every renderer that composes a line from the PAYLOAD — the digest, the
-    per-event email — could name the rule and not the issue: the line was
-    linkless, by RADD-967's degradation, on the one type where the link is the
-    whole point of being told. The ref is resolved at write time like every
-    other item-scoped type (spec 26); an itemless rule keeps the degradation.
-    """
+    """RADD-972: renderers compose the line from the PAYLOAD, so the item ref must
+    be resolved into it at write time like every other item-scoped type; an
+    itemless rule keeps the linkless line."""
     from radd.modules.automations.engine import _apply_plan
     from radd.modules.automations.planning import _Plan
     from radd.modules.automations.types import PlanKind
@@ -474,24 +411,19 @@ async def test_an_automation_notification_carries_the_issue_it_fired_on(db):
 
 
 async def test_page_update_fan_out_obeys_the_channel_rules(db):
-    """The wiki path, now off the outbox like everything else (spec 118).
-
-    RADD-719 fanned this out SYNCHRONOUSLY inside the save request, so it knew
-    about watchers and nothing else and applied no read gate. This drives the
-    real edit and then the real consumer — which is the only way to see that the
-    event is handled at all, since a page edit that reaches nobody looks
-    identical to one whose recipients were all silenced.
-
-    Both watchers are instance ADMINS here, because the fan-out now checks
-    `page_access` per recipient: a person with no standing in the space is
-    correctly told nothing, and a test that used bare accounts would pass for
-    the wrong reason.
-    """
+    """The wiki path through the outbox (spec 118): the real edit, then the real
+    consumer — a page edit that reaches nobody looks identical to one whose
+    recipients were all silenced. Both watchers are ADMINS because the fan-out
+    checks `page_access` per recipient; bare accounts would pass for the wrong
+    reason."""
     from radd.modules.pages import service as pages, spaces, watchers as page_watchers
     from radd.modules.pages.schemas import PageCreate, PageSpaceCreate, PageUpdate
 
-    author = await _admin(db, "Author")
-    muted, heard = await _admin(db, "Muted"), await _admin(db, "Hearing")
+    author = await make_user(db, role=InstanceRole.ADMIN, name="Author")
+    muted, heard = (
+        await make_user(db, role=InstanceRole.ADMIN, name="Muted"),
+        await make_user(db, role=InstanceRole.ADMIN, name="Hearing"),
+    )
     await _mute(db, muted, NotificationType.PAGE_UPDATED)
 
     slug = f"mute-{uuid.uuid4().hex[:8]}"
@@ -527,17 +459,12 @@ async def test_page_update_fan_out_obeys_the_channel_rules(db):
 
 
 async def test_prefetched_rules_are_authoritative(db):
-    """The consumer's shape: it batch-reads the whole recipient set's rules in
-    one query and hands each row's answer down, so the choke point costs no
-    query per notification. A caller that passes nothing gets the lookup — slower,
-    never wrong — which is what the two callers above rely on.
-
-    The prefetch answers for EVERY id asked about, empty included. A partial dict
-    read with `.get(id, …)` at the call site is where RADD-686's mailer seam
-    nearly stored "email nothing" as the default; an explicit empty `RuleSet` is
-    a value the resolver turns into the documented defaults.
-    """
-    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    """The consumer batch-reads every recipient's rules and hands each answer down;
+    a caller passing nothing gets the lookup. The prefetch answers for EVERY id,
+    empty included: an explicit empty `RuleSet` resolves to the documented
+    defaults, where a partial dict read with `.get` nearly stored "email nothing"
+    (RADD-686)."""
+    muted, heard = await make_user(db, name="Muted"), await make_user(db, name="Hearing")
     await _mute(db, muted, NotificationType.COMMENTED)
 
     prefetched = await notify_service.rules_by_user(db, [muted.id, heard.id])
@@ -571,19 +498,8 @@ async def test_prefetched_rules_are_authoritative(db):
 # exists. Both only answer when the real `participants.add_participant` writes
 # the row, emits the real event, and the real consumer reads it — so that is
 # what these drive. A hand-built event would have proved neither.
-
-
-async def _admin(db, name: str) -> User:
-    """Someone who can share an item — `add_participant` wants item.update or
-    the reporter's identity."""
-    user = User(
-        email=f"share-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+# The sharer is an admin: `add_participant` wants item.update or the
+# reporter's identity.
 
 
 async def _shareable_item(db, actor: User):
@@ -610,16 +526,12 @@ async def _share(db, item, actor: User, **subject) -> None:
 
 
 async def test_a_direct_participant_is_told_they_were_added(db):
-    """The gap RADD-978 closes: the add auto-watched them, so every LATER event
-    reached them and the add itself reached nobody.
-
-    The recipient holds nothing on the project — no role grant, just an account.
-    They pass the consumer's per-row read gate through the Baseline's
-    `item.read@participant`, i.e. through the very row that is being announced.
-    """
-    actor = await _admin(db, "Ada Agent")
+    """RADD-978: the add itself reaches them. The recipient holds no role on the
+    project; they pass the read gate through the Baseline's
+    `item.read@participant`, i.e. through the very row being announced."""
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
     project, item = await _shareable_item(db, actor)
-    colleague = await _user(db, "Colleague")
+    colleague = await make_user(db, name="Colleague")
 
     await _share(db, item, actor, user_id=colleague.id)
 
@@ -637,9 +549,9 @@ async def test_adding_a_team_notifies_nobody_personally(db):
     """A team row resolves to CURRENT members at fan-out time (that is what makes
     joining a team join its shared tickets), so there is no stable set to
     address and the membership is ambient by design."""
-    actor = await _admin(db, "Ada Agent")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
     _project, item = await _shareable_item(db, actor)
-    member = await _user(db, "Team Member")
+    member = await make_user(db, name="Team Member")
     team = await teams_service.create_team(
         db, TeamCreate(name=f"Desk {uuid.uuid4().hex[:6]}")
     )
@@ -659,7 +571,7 @@ async def test_adding_a_team_notifies_nobody_personally(db):
 async def test_adding_yourself_as_a_participant_is_silent(db):
     """The actor is never notified about their own action — the invariant every
     other type in this file already holds to."""
-    actor = await _admin(db, "Ada Agent")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
     _project, item = await _shareable_item(db, actor)
 
     await _share(db, item, actor, user_id=actor.id)
@@ -671,9 +583,9 @@ async def test_muting_participant_added_silences_it(db):
     """The mute is enforced inside `create_notification` (RADD-971), so this type
     inherited it the moment it was created through that seam. The control user is
     the point: without one, "no row" could equally mean the consumer never ran."""
-    actor = await _admin(db, "Ada Agent")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
     _project, item = await _shareable_item(db, actor)
-    muted, heard = await _user(db, "Muted"), await _user(db, "Hearing")
+    muted, heard = await make_user(db, name="Muted"), await make_user(db, name="Hearing")
     await _mute(db, muted, NotificationType.PARTICIPANT_ADDED)
 
     await _share(db, item, actor, user_id=muted.id)

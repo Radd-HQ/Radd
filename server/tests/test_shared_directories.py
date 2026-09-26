@@ -4,10 +4,8 @@ from datetime import timedelta
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.clock import utcnow
-from radd.config import settings
 from radd.modules.access import service as access
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
@@ -26,15 +24,6 @@ from radd.modules.auth.types import LoginMethod
 
 # A view type with a sidebar section of its own (RADD-1396), registered by the slas plugin.
 QUEUE = SlaViewType.QUEUE.value
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.mark.parametrize("resource", ["view", "dashboard"])

@@ -15,9 +15,7 @@ from datetime import date
 import httpx
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.gitlab import backfill, service, timelogs
@@ -29,16 +27,6 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import categories, enablement
 from radd.modules.timelogging.models import Worklog
 from radd.modules.vcs.models import ItemVcsLink
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

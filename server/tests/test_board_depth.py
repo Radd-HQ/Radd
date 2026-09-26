@@ -11,9 +11,7 @@ from datetime import date
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
@@ -32,27 +30,12 @@ from radd.modules.workflow import service as workflow
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
 async def actor(db) -> User:
-    user = User(
-        email=f"bd-{uuid.uuid4().hex[:8]}@example.com",
-        name="Board Depth Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Board Depth Tester")
 
 
 async def _project_with_states(db, key_prefix="BD"):

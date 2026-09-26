@@ -7,22 +7,16 @@ sweep's own invariants: idempotent, never repoints an already-shipped item, and
 inert on a project that has not opted in.
 """
 
-import uuid
 from datetime import date, timedelta
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as app_settings
 from radd.exceptions import NotFoundError
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.mcp import tools
 from radd.modules.mcp.types import McpTool
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.releases import pipeline, service as releases_service
 from radd.modules.releases.schemas import ReleaseCreate, ReleaseUpdate
 from radd.modules.releases.types import ReleaseStatus
@@ -34,37 +28,15 @@ from radd.modules.workflow import transitions
 from radd.modules.workflow.schemas import StateCreate, StateUpdate, TransitionCreate, TransitionRule
 from radd.modules.workflow.types import StateCategory, TransitionCheck
 
+from _factories import make_project
+
 WAITING = "Waiting for release"
 SHIPPED = "Done"
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(app_settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"rel-{uuid.uuid4().hex[:8]}@example.com",
-        name="Release admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-@pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"RP{uuid.uuid4().hex[:4].upper()}", name="Release pipeline")
-    )
+    return await make_project(db, "RP")
 
 
 async def _configure(db, project, *, waiting: str = WAITING, shipped: str = SHIPPED):

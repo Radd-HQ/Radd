@@ -1,49 +1,22 @@
-"""Attachments staged before the item exists (RADD-800).
-
-The only genuinely new attack surface in this feature is the staging area, so
-that is what most of this file is about: it is a place an unprivileged person can
-write to, and the files sitting in it later move onto a real issue.
-
-Two properties keep it honest, and both are asserted:
+"""Attachments staged before the item exists (RADD-800). The staging area is the new
+attack surface — an unprivileged person writes to it and the files later move onto
+a real issue — so two properties are asserted:
 
   - the area's id is DERIVED from the caller, so it cannot be handed in;
-  - a submission may only claim attachments sitting on its OWN caller's area,
-    so naming somebody else's id drags nothing across.
+  - a submission claims only attachments on its OWN caller's area.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.attachments.models import Attachment
 from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.forms import staging
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name="Requester") -> User:
-    user = User(
-        email=f"sa-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 @pytest.fixture
@@ -83,13 +56,13 @@ async def _staged(db, host, owner: User, filename="screenshot.png") -> Attachmen
 async def test_the_staging_id_is_derived_from_the_person(db):
     """Stable for one person, different for another — which is what lets the
     guard verify it by comparison instead of trusting what it was handed."""
-    alice, bob = await _user(db, "Alice"), await _user(db, "Bob")
+    alice, bob = await make_user(db, name="Alice"), await make_user(db, name="Bob")
     assert staging.staging_id_for(alice) == staging.staging_id_for(alice)
     assert staging.staging_id_for(alice) != staging.staging_id_for(bob)
 
 
 async def test_you_cannot_reach_someone_elses_staging_area(db):
-    alice, bob = await _user(db, "Alice"), await _user(db, "Bob")
+    alice, bob = await make_user(db, name="Alice"), await make_user(db, name="Bob")
     binding = __import__(
         "radd.modules.attachments.parents", fromlist=["binding_for"]
     ).binding_for(AttachmentParentType.FORM_SUBMISSION.value)
@@ -106,7 +79,7 @@ async def test_you_cannot_reach_someone_elses_staging_area(db):
 
 
 async def test_claiming_moves_your_own_files_onto_the_item(db, host):
-    alice = await _user(db, "Alice")
+    alice = await make_user(db, name="Alice")
     one, two = await _staged(db, host, alice, "a.png"), await _staged(db, host, alice, "b.png")
     item_id = uuid.uuid4()
 
@@ -123,7 +96,7 @@ async def test_claiming_moves_your_own_files_onto_the_item(db, host):
 async def test_you_cannot_claim_someone_elses_staged_file(db, host):
     """THE check. Without it, naming a stranger's attachment id would drag their
     file onto your issue — and the id is the only thing you would need."""
-    alice, bob = await _user(db, "Alice"), await _user(db, "Bob")
+    alice, bob = await make_user(db, name="Alice"), await make_user(db, name="Bob")
     theirs = await _staged(db, host, bob, "private.png")
     item_id = uuid.uuid4()
 
@@ -138,14 +111,14 @@ async def test_you_cannot_claim_someone_elses_staged_file(db, host):
 
 async def test_claiming_an_unknown_id_does_not_fail_the_submission(db):
     """A request must not be lost because a file was already swept or claimed."""
-    alice = await _user(db, "Alice")
+    alice = await make_user(db, name="Alice")
     assert await staging.claim(db, alice, uuid.uuid4(), [uuid.uuid4()]) == 0
 
 
 async def test_only_the_named_files_move(db, host):
     """One staging area per person means a second tab's uploads sit alongside
     this submission's. Naming them is what keeps the tabs apart."""
-    alice = await _user(db, "Alice")
+    alice = await make_user(db, name="Alice")
     claimed = await _staged(db, host, alice, "this-form.png")
     other_tab = await _staged(db, host, alice, "other-form.png")
     item_id = uuid.uuid4()
@@ -162,7 +135,7 @@ async def test_an_abandoned_staging_area_is_swept(db, host):
     cascade understands — so cleanup needs no code of its own."""
     from datetime import datetime, timedelta
 
-    alice = await _user(db, "Alice")
+    alice = await make_user(db, name="Alice")
     stale = await _staged(db, host, alice, "last-month.png")
     stale.created_at = datetime.utcnow() - timedelta(days=30)
     await db.flush()
@@ -175,7 +148,7 @@ async def test_a_recently_used_area_is_left_alone(db, host):
     an area is judged by its NEWEST file, not its oldest."""
     from datetime import datetime, timedelta
 
-    alice = await _user(db, "Alice")
+    alice = await make_user(db, name="Alice")
     old = await _staged(db, host, alice, "from-last-month.png")
     old.created_at = datetime.utcnow() - timedelta(days=30)
     await _staged(db, host, alice, "pasted-just-now.png")

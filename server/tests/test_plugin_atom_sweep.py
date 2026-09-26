@@ -1,39 +1,20 @@
-"""Uninstall sweeps a plugin's atoms (RADD-818).
-
-Roles hold atom STRINGS; removing a plugin used to leave roles, token scopes
-and access grants referencing vocabulary the catalog no longer knew. The sweep
-is the RADD-701 migration pattern at runtime: strip only what the plugin
-DECLARED (never a shared umbrella), relation-qualified forms strip by base,
-grants of its access-resource types are deleted, and the emitted event names
-everything removed.
-
-Rolled-back transactions on the compose DB.
+"""Uninstall sweeps a plugin's atoms (RADD-818) from roles, token scopes and access
+grants: only what the plugin DECLARED (never a shared umbrella), qualified forms
+by base, grants of its resource types deleted, and the event names everything
+removed. Rolled-back transactions.
 """
 
 import json
 import uuid
 
-import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.kernel import RaddPlugin
 from radd.kernel.specs import CrudResourceSpec, PermissionSpec
 from radd.modules.access.models import AccessGrant
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.pluginmgr.service import sweep_plugin_atoms
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 class _FakeResource:

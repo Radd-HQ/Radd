@@ -1,19 +1,10 @@
 """SSO provider registry + federated identity linking (spec 110).
 
-The invariants sign-in leans on:
-
-  * the signup allowlist gates CREATION only — an existing account signs in from
-    any domain, a stranger from an unlisted one never gets an account;
-  * a Google login lands on the person's existing AD account instead of forking a
-    duplicate, and that account keeps its source, role and history;
-  * a provider with no admin groups configured has NO opinion about roles, so
-    linking can't demote the admin it just linked to (the spec-40 bug);
-  * identity is pinned to the IdP's subject after the first login, so a mailbox
-    rename doesn't fork the account and a recycled address can't inherit one;
-  * an unverified email is never trusted, because both linking and creation key
-    off the address.
-
-CRUD tests are flushed, never committed; the session rolls back at teardown.
+Pinned: the signup allowlist gates CREATION only; a Google login lands on the
+person's existing AD account (keeping its source, role and history); a provider
+with no admin groups has NO opinion about roles, so linking can't demote the admin
+it linked to; identity is pinned to the IdP subject after the first login; an
+unverified email is never trusted, because linking and creation key off it.
 """
 
 import uuid
@@ -21,9 +12,7 @@ import uuid
 import httpx
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole, UserSource
@@ -32,15 +21,7 @@ from radd.modules.sso.models import UserIdentity
 from radd.modules.sso.schemas import SsoProviderCreate, SsoProviderUpdate
 from radd.modules.sso.types import KIND_DEFAULTS, WILDCARD_DOMAIN, SsoKind
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
 async def _provider(db, **overrides):
@@ -53,18 +34,6 @@ async def _provider(db, **overrides):
     }
     payload.update(overrides)
     return await registry.create_provider(db, SsoProviderCreate(**payload))
-
-
-async def _user(db, email, name="Test Person", *, source=UserSource.LOCAL, role=None) -> User:
-    user = User(
-        email=email,
-        name=name,
-        source=source,
-        instance_role=(role or InstanceRole.MEMBER).value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 def _claims(email, sub="google-sub-1", *, verified=True, **extra):
@@ -127,7 +96,7 @@ async def test_existing_account_signs_in_from_an_unlisted_domain(db):
     instance must not be locked out because their domain isn't listed."""
     provider = await _provider(db)
     email = f"contractor-{uuid.uuid4().hex[:6]}@somewhere-else.com"
-    existing = await _user(db, email)
+    existing = await make_user(db, name="Test Person", email=email)
 
     user = await service.provision(db, provider, _claims(email))
 
@@ -150,7 +119,7 @@ async def test_domains_are_normalized_on_write(db):
 async def test_google_login_joins_the_existing_ad_account(db):
     provider = await _provider(db)
     email = f"hjarrar-{uuid.uuid4().hex[:6]}@acme.example"
-    ad_user = await _user(db, email, source=UserSource.LDAP)
+    ad_user = await make_user(db, name="Test Person", email=email, source=UserSource.LDAP)
 
     user = await service.provision(db, provider, _claims(email, sub="sub-ad-link"))
 
@@ -167,7 +136,9 @@ async def test_linking_does_not_demote_an_ad_admin(db):
     login — which ships no group claim at all — demoted the admin it linked to."""
     provider = await _provider(db, admin_groups="")  # no role opinion
     email = f"admin-{uuid.uuid4().hex[:6]}@acme.example"
-    await _user(db, email, source=UserSource.LDAP, role=InstanceRole.ADMIN)
+    await make_user(
+        db, role=InstanceRole.ADMIN, name="Test Person", email=email, source=UserSource.LDAP
+    )
 
     user = await service.provision(db, provider, _claims(email, sub="sub-admin"))
 
@@ -191,7 +162,7 @@ async def test_a_provider_with_admin_groups_does_sync_the_role(db):
 async def test_deactivated_account_is_refused(db):
     provider = await _provider(db)
     email = f"gone-{uuid.uuid4().hex[:6]}@radd-hq.com"
-    user = await _user(db, email)
+    user = await make_user(db, name="Test Person", email=email)
     user.active = False
     await db.flush()
 
@@ -244,7 +215,9 @@ async def test_unverified_email_cannot_hijack_an_existing_account(db):
     """The account-takeover vector that linking-by-email opens if unguarded."""
     provider = await _provider(db)
     email = f"target-{uuid.uuid4().hex[:6]}@acme.example"
-    await _user(db, email, source=UserSource.LDAP, role=InstanceRole.ADMIN)
+    await make_user(
+        db, role=InstanceRole.ADMIN, name="Test Person", email=email, source=UserSource.LDAP
+    )
 
     with pytest.raises(ForbiddenError, match="verified"):
         await service.provision(db, provider, _claims(email, sub="attacker", verified=False))
@@ -315,12 +288,8 @@ async def test_duplicate_names_are_rejected(db):
 
 
 async def _builtin_role(db, key: str):
-    """A seeded builtin role by key.
-
-    Seeded here rather than assumed: `ensure_builtin_roles` runs on app startup
-    and these tests talk to the session directly. Idempotent, so calling it
-    costs nothing when another test got there first.
-    """
+    """A seeded builtin role by key, seeded here (idempotently) because these tests
+    talk to the session without app startup."""
     from radd.modules.auth import roles as roles_service
     from radd.modules.auth.models import Role
 
@@ -330,12 +299,8 @@ async def _builtin_role(db, key: str):
 
 
 async def _member_role(db):
-    """The seeded Member row.
-
-    Seeded here rather than assumed: `ensure_builtin_roles` runs on app startup,
-    and these tests talk to the session directly without one. It is idempotent,
-    so calling it costs nothing when another test got there first.
-    """
+    """The seeded Member row, seeded here (idempotently) because these tests talk
+    to the session without app startup."""
     from radd.modules.auth import roles as roles_service
     from radd.modules.auth.models import Role
 
@@ -362,14 +327,9 @@ async def test_default_role_is_granted_when_the_provider_creates_the_account(db)
 
 
 async def test_the_default_grant_is_never_re_applied(db):
-    """The whole point, and the reason it is a GRANT rather than a field.
-
-    Spec 40 wrote `instance_role` on EVERY login, so an AD-provisioned admin
-    signing in through Google — which ships no group claim — was silently
-    demoted each time; `_syncs_roles` exists to stop that. A default grant
-    re-applied per login would be the same bug wearing a different hat: an admin
-    revokes it, the person signs in, it comes back.
-    """
+    """A default grant applies at CREATION only. Re-applied per login it would be
+    the spec-40 bug (a role written on every login) in another form: an admin
+    revokes it, the person signs in, it comes back."""
     from radd.modules.auth import grants
 
     role = await _member_role(db)
@@ -387,16 +347,12 @@ async def test_the_default_grant_is_never_re_applied(db):
 
 
 async def test_linking_an_existing_account_grants_nothing(db):
-    """A Google login onto an AD account is a LINK, not a creation.
-
-    The account already has whatever access it was given; handing it the
-    provider's starting role because it used a different door would be a silent
-    privilege change nobody asked for.
-    """
+    """A Google login onto an AD account is a LINK, not a creation: handing it the
+    provider's starting role would be a silent privilege change."""
     role = await _member_role(db)
     provider = await _provider(db, provisioning_rules=[{"grants": [{"role_id": role.id}]}])
     email = f"existing-{uuid.uuid4().hex[:6]}@radd-hq.com"
-    existing = await _user(db, email)
+    existing = await make_user(db, name="Test Person", email=email)
 
     linked = await service.provision(db, provider, _claims(email, sub="google-sub-link"))
 
@@ -411,12 +367,8 @@ async def test_no_default_role_configured_grants_nothing(db):
 
 
 async def test_default_grants_are_scoped_per_project(db):
-    """The shape RADD-780 fixed: several roles, each at its own scope.
-
-    RADD-777 shipped one global role, which could say "everyone gets Member
-    everywhere" and nothing else — not "Viewer on this project, Member
-    globally", which is what the setting exists for.
-    """
+    """Several roles, each at its own scope (RADD-780): "Viewer on this project,
+    Member globally", which one global role could not say."""
     from radd.modules.projects import service as projects_service
     from radd.modules.projects.schemas import ProjectCreate
 
@@ -456,20 +408,9 @@ async def test_default_teams_are_joined_on_first_login(db):
 
 
 async def test_a_stale_template_never_breaks_a_sign_in(db):
-    """A template is configured weeks before it is used.
-
-    For ROLES this turns out to be unreachable, and the failing first draft of
-    this test is what showed it: the FK refuses to store a template pointing at
-    a role that does not exist, and CASCADE removes the row if one is deleted
-    later. The database makes the case impossible rather than the code handling
-    it.
-
-    Teams are different, and this is the case that survives (RADD-829 removed
-    directory-owned teams, so a rule can no longer hit a read-only roster —
-    but it can still name a team that was DELETED after the template was
-    written). Someone signing in must not meet that failure; they land on the
-    Baseline and an admin grants the rest.
-    """
+    """A provisioning rule may name a team deleted after the rule was written; sign-in
+    must not fail on it — the person lands on the Baseline. (Roles cannot go stale:
+    the FK refuses a missing role and CASCADE removes the rule's row.)"""
     from radd.modules.teams import service as teams_service
     from radd.modules.teams.schemas import TeamCreate
 
@@ -513,13 +454,9 @@ async def test_rules_route_by_email_domain(db):
 
 
 async def test_a_catch_all_rule_composes_with_a_domain_rule(db):
-    """Every MATCHING rule applies — not first-match-wins.
-
-    Grants are additive rows, so a union is the only composition that cannot
-    surprise: adding a rule widens access and never silently removes another's.
-    First-match would make the catch-all useless the moment a domain rule
-    existed, forcing every rule to restate the common part.
-    """
+    """Every MATCHING rule applies, not first-match: grants are additive rows, so a
+    union can only widen access, and first-match would make the catch-all useless the
+    moment a domain rule existed."""
     member = await _member_role(db)
     viewer = await _builtin_role(db, "viewer")
     provider = await _provider(

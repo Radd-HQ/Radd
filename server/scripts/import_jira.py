@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
-"""Import a Jira sample export (scripts/sample_data/*.json) into Radd via the REST API.
-
-Pure API client — no radd imports, no direct DB. Dogfoods the same endpoints the UI uses.
+"""Import a Jira sample export (scripts/sample_data/*.json) into Radd over the REST
+API — the same endpoints the UI uses; the markup converter is the server's.
 
     uv run python scripts/import_jira.py --file scripts/sample_data/jira_sample.json \
         --email admin@example.com --password ...
 
-Spec 86: the workspace entity is gone — projects/fields/cycles are global.
-Auth: --token radd_pat_... (Bearer PAT) or --email/--password (session login).
-Env fallbacks: RADD_API, RADD_TOKEN, RADD_EMAIL, RADD_PASSWORD.
-Exit codes: 0 = imported (or skipped: project key already present), 1 = errors occurred.
+Auth: --token radd_pat_... or --email/--password. Env fallbacks: RADD_API,
+RADD_TOKEN, RADD_EMAIL, RADD_PASSWORD. Exit 0 = imported or skipped, 1 = errors.
 """
 
 from __future__ import annotations

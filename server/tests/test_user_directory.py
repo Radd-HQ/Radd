@@ -1,16 +1,8 @@
-"""RADD-1034 — the member-floor directory hides mail-provisioned strangers.
-
-`mailintake._sender_user` provisions an ACTIVE `UserSource.EMAIL` account for
-every unrecognized sender (RADD-828) — correct, that is how a reply threads
-back onto the right ticket. The bug was `GET /users/directory` (the endpoint
-behind every people picker, RADD-769) serving those rows to every
-authenticated user with no source filter at all: one forged email made
-"Stranger <stranger@evil.example>" pickable by anyone, forever.
-
-Tested at the HTTP surface (the `test_view_as.py` idiom: a committed world +
-real requests with a real session cookie) because the bug lived in which ROWS
-a real request gets back, not in a schema shape — `test_authz.py` already
-covers the shape.
+"""RADD-1034: `GET /users/directory` (every people picker) hides the ACTIVE
+`UserSource.EMAIL` accounts mail intake provisions per unknown sender — otherwise
+one forged email makes a stranger pickable by anyone. Tested at the HTTP surface
+(a committed world, real session cookies) because the bug is in which ROWS a real
+request gets back; test_authz.py covers the shape.
 """
 
 import uuid
@@ -122,12 +114,9 @@ async def test_include_requesters_returns_them_marked_external(client, world):
 
 
 async def test_service_accounts_are_not_excluded(client, world):
-    """The docstrings on `UserDirectoryEntry` and `preflight.py` disagree on
-    whether SERVICE rows belong in a people directory — this pins down what the
-    code actually does today: present, by default, unlike an EMAIL stranger.
-    Unlike a forged sender, a service account is admin-provisioned (spec 113),
-    and omitting it would leave the bylines it authors unresolvable — the
-    `UserDirectoryEntry` docstring's own argument against filtering it."""
+    """SERVICE rows stay in the directory, unlike an EMAIL stranger: a service
+    account is admin-provisioned (spec 113), and omitting it would leave the
+    bylines it authors unresolvable."""
     response = await client.get(
         "/api/v1/users/directory", cookies=_cookies(world["member_cookie"])
     )

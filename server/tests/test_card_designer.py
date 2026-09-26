@@ -10,7 +10,6 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
@@ -27,29 +26,6 @@ from radd.modules.views.schemas import (
     ViewUpdate,
 )
 from radd.modules.views.types import ViewType
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def actor(db) -> User:
-    user = User(
-        email=f"cd-{uuid.uuid4().hex[:8]}@example.com",
-        name="Card Designer Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 def _layout(*cells: dict, max_labels: int = 3) -> CardLayout:

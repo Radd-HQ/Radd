@@ -5,9 +5,7 @@ import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.kernel import registries
 from radd.modules.auth.models import User
 from radd.modules.automations import catalog, engine, gates
@@ -17,32 +15,14 @@ from radd.modules.automations.types import ActionType, PlanKind
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemVisibility
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import InstanceRole
 
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
+from _factories import make_project, make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(email=f"cov-{uuid.uuid4().hex[:8]}@example.com", name="Coverage Admin", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _project(db, prefix="CV"):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"{prefix}{uuid.uuid4().hex[:4].upper()}", name="Coverage")
-    )
+    return await make_user(db, role=InstanceRole.ADMIN, name="Coverage Admin")
 
 
 def _facts(**payload) -> EventFacts:
@@ -92,7 +72,7 @@ def test_the_pages_plugin_contributes_its_two_actions():
 
 
 async def test_field_actions_plan_item_updates(db, admin):
-    project = await _project(db)
+    project = await make_project(db, 'CV', "Coverage")
     item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="t"), admin)
     epic = await items_service.create_item(db, ItemCreate(project_id=project.id, title="e", kind="epic"), admin)
 
@@ -132,8 +112,8 @@ async def test_field_actions_plan_item_updates(db, admin):
 
 
 async def test_verb_actions_plan_and_apply(db, admin):
-    project = await _project(db)
-    other = await _project(db, "CW")
+    project = await make_project(db, 'CV', "Coverage")
+    other = await make_project(db, "CW", "Coverage")
     item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="t"), admin)
     target = await items_service.create_item(db, ItemCreate(project_id=project.id, title="u"), admin)
 

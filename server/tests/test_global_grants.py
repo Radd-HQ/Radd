@@ -1,51 +1,23 @@
-"""Instance-wide role grants (spec 87) — the fix for the dead global-scope path.
-
-The invariant under test: before spec 87 a global-scope check consulted
-`users.instance_role` alone, so a custom role holding `label.create` (or any of
-the ~47 global atoms the roles matrix offers) granted its holders NOTHING. A
-`global_role_grants` row must now deliver those atoms — to a user directly and
-via their teams — and must also apply on every project, so project-scoped atoms
-inside a globally-granted role are live too.
-
-Rolled-back transactions on the compose DB (the test_view_sharing idiom).
+"""Instance-wide role grants (spec 87): a custom role holding a global atom (e.g.
+`label.create`) must deliver it — to a user directly and via their teams — where
+the old `instance_role`-only check granted nothing; and a global grant applies on
+every project, so project-scoped atoms inside it are live too.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import authz, grants, roles as roles_service
-from radd.modules.auth.models import User
 from radd.modules.auth.schemas import GlobalGrantEntry, RoleCreate
-from radd.modules.auth.types import InstanceRole, Permission
+from radd.modules.auth.types import Permission
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _member(db, name, *, instance_role=InstanceRole.MEMBER) -> User:
-    user = User(
-        email=f"gg-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=instance_role.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _role(db, *permissions):
@@ -61,7 +33,7 @@ async def _role(db, *permissions):
 
 async def test_global_grant_delivers_a_global_atom(db):
     """A plain member holds no global atom; granted the role instance-wide, they do."""
-    user = await _member(db, "Wrangler")
+    user = await make_user(db, name="Wrangler")
     role = await _role(db, Permission.LABEL_CREATE)
 
     assert Permission.LABEL_CREATE not in await authz.effective_permissions(db, user)
@@ -81,7 +53,7 @@ async def test_global_grant_via_team_and_umbrella_expansion(db):
     """Grants resolve through team membership, and umbrellas still expand:
     global.manage must yield team.create/update/delete at global scope
     (RADD-816 deleted the dead team.manage umbrella)."""
-    user = await _member(db, "Team-granted")
+    user = await make_user(db, name="Team-granted")
     team = await teams_service.create_team(db, TeamCreate(name=f"GG-{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, user.id)
     role = await _role(db, Permission.GLOBAL_MANAGE)
@@ -95,7 +67,7 @@ async def test_global_grant_via_team_and_umbrella_expansion(db):
 async def test_global_grant_applies_inside_every_project(db):
     """The reach decision: a globally-granted role is unioned in at project
     scope too, so its project-scoped atoms are not a new dead grant."""
-    user = await _member(db, "Global editor")
+    user = await make_user(db, name="Global editor")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"GG{uuid.uuid4().hex[:6].upper()}", name="Grant reach")
     )
@@ -115,7 +87,7 @@ async def test_global_grant_applies_inside_every_project(db):
 async def test_project_scoped_grant_applies_only_on_that_project(db):
     """Spec 91: a grant scoped to project A delivers the role's project atoms on A,
     but NOT on another project and NOT at global scope."""
-    user = await _member(db, "Scoped editor")
+    user = await make_user(db, name="Scoped editor")
     a = await projects_service.create_project(
         db, ProjectCreate(key=f"GA{uuid.uuid4().hex[:6].upper()}", name="Alpha")
     )
@@ -137,7 +109,7 @@ async def test_project_scoped_grant_applies_only_on_that_project(db):
 
 
 async def test_grant_centric_create_and_delete_and_dup_guard(db):
-    user = await _member(db, "Grantee")
+    user = await make_user(db, name="Grantee")
     role = await _role(db, Permission.LABEL_CREATE)
 
     grant = await grants.create_grant(db, role.id, user_id=user.id)  # global
@@ -151,7 +123,7 @@ async def test_grant_centric_create_and_delete_and_dup_guard(db):
 
 
 async def test_grants_for_subject_lists_all_scopes(db):
-    user = await _member(db, "Multi")
+    user = await make_user(db, name="Multi")
     a = await projects_service.create_project(
         db, ProjectCreate(key=f"GS{uuid.uuid4().hex[:6].upper()}", name="Alpha")
     )
@@ -166,8 +138,8 @@ async def test_grants_for_subject_lists_all_scopes(db):
 
 
 async def test_replace_is_full_state_and_guards_its_subjects(db):
-    user = await _member(db, "Holder")
-    other = await _member(db, "Replacement")
+    user = await make_user(db, name="Holder")
+    other = await make_user(db, name="Replacement")
     role = await _role(db, Permission.LABEL_CREATE)
 
     await grants.replace_grants(db, role.id, [GlobalGrantEntry(user_id=user.id)])
@@ -186,7 +158,7 @@ async def test_replace_is_full_state_and_guards_its_subjects(db):
 
 
 async def test_granted_role_blocks_deletion_and_inactive_users_hold_nothing(db):
-    user = await _member(db, "Holder")
+    user = await make_user(db, name="Holder")
     role = await _role(db, Permission.LABEL_CREATE)
     await grants.replace_grants(db, role.id, [GlobalGrantEntry(user_id=user.id)])
 

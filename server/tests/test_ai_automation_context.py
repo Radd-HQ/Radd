@@ -1,14 +1,6 @@
-"""What the automation AI-classifier node sends the model (spec 116).
-
-Pure/in-memory — `build_context` takes a session only to pass to the item and
-comment services, so stubs cover the shaping rules, which is where the decisions
-are.
-
-The rule these pin: the budget is spent on WHOLE ITEMS. An earlier version capped
-descriptions at 600 characters and comments at five per item — numbers invented
-in the module with a rationale written afterwards. Truncating a description
-mid-sentence can remove the exact line that decides "bug or feature", and no
-budget arithmetic makes that a good trade.
+"""What the automation AI-classifier node sends the model (spec 116). Pure: stubs
+cover the shaping rules. The budget is spent on WHOLE ITEMS — truncating a
+description mid-sentence can remove the exact line that decides "bug or feature".
 """
 
 from dataclasses import dataclass, field
@@ -155,16 +147,10 @@ async def test_no_items_says_so_rather_than_sending_an_empty_prompt(stub):
 
 
 def test_a_choice_that_is_not_a_mapping_falls_back_to_the_defaults():
-    """`include` is an OBJECT of booleans, and the generated form rendered it as
-    a free-text input until RADD-1064 — so instances hold nodes whose `include`
-    is a string somebody typed. `"…".get(…)` is an AttributeError raised inside
-    `_ask`, which `ai.validate` catches as "the provider is unavailable": a check
-    that runs forever, checks nothing, and blames the model server.
-
-    The write path does not refuse it either — `_check_node_schema` is
-    deliberately shallow (required keys and enums), and tightening it would 422
-    the very save that repairs the node. So the reading is what forgives it.
-    """
+    """Stored nodes may hold `include` as a typed-in STRING (the form rendered it as
+    free text before RADD-1064); `.get` on it raised inside `_ask`, which `ai.validate`
+    reports as "provider unavailable". The save path is deliberately shallow (a
+    stricter check would 422 the repairing save), so the reading forgives it."""
     assert ContextOptions.from_params({"include": "{{title}}"}) == ContextOptions()
     assert ContextOptions.from_params({"include": ["fields"]}) == ContextOptions()
     assert ContextOptions.from_params({}) == ContextOptions()

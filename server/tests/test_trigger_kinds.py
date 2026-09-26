@@ -10,9 +10,7 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.kernel import TriggerKindSpec
 from radd.kernel.registry import registries
 from radd.modules.auth.models import User
@@ -23,26 +21,16 @@ from radd.modules.events.models import Event
 from radd.modules.items.models import WorkItem
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import InstanceRole
+
+from _factories import make_user
 
 KIND = "acme.hook_received"
 
 
 @pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
-
-
-@pytest.fixture
 async def admin(db) -> User:
-    user = User(email=f"kind-{uuid.uuid4().hex[:8]}@example.com", name="Kind Admin", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Kind Admin")
 
 
 @pytest.fixture

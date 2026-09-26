@@ -14,9 +14,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import UploadFile
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.attachments import hosts, parents, service
 from radd.modules.attachments.schemas import StorageHostCreate
@@ -28,7 +26,7 @@ from radd.modules.attachments.types import (
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.models import Role, User
 from radd.modules.auth.schemas import RoleUpdate
-from radd.modules.auth.types import BuiltinRoleKey, InstanceRole, Permission
+from radd.modules.auth.types import BuiltinRoleKey, Permission
 from radd.modules.pages import service as docs_service, spaces as docs_spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.items import service as items_service
@@ -36,35 +34,12 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"att-{uuid.uuid4().hex[:8]}@example.com",
-        name="Attach Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 @pytest.fixture
 async def member(db) -> User:
-    user = User(email=f"plain-{uuid.uuid4().hex[:8]}@example.com", name="Plain Member")
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db)
 
 
 @pytest.fixture
@@ -145,12 +120,9 @@ async def test_page_parent_has_no_item_id(db, admin, host):
 
 
 async def _grant_globally(db, user, permission):
-    """Give every active user an atom by widening the Baseline role (RADD-773).
-
-    Deliberately the production path — `update_role` — rather than poking the
-    row: it is what an admin does in Settings, and it exercises the memo
-    invalidation that makes the change visible inside the same request.
-    """
+    """Give every active user an atom by widening the Baseline through `update_role`
+        — the production path, which exercises the memo invalidation that makes the
+        change visible inside the same request."""
     del user  # baseline applies to everyone; the parameter documents the intent
     from sqlalchemy import select
 
@@ -165,13 +137,9 @@ async def _grant_globally(db, user, permission):
 async def test_doc_binding_enforces_the_global_doc_atoms(db, admin, member, host):
     page = await _page(db, admin)
     binding = parents.binding_for(AttachmentParentType.PAGE.value)
-    # RADD-773 reversed what this used to assert. `page.write` was free for
-    # every active user (spec 43, "a read-only wiki is useless") via a hardcoded
-    # global set — which is how a member granted nothing anywhere could edit any
-    # page on the instance, with no screen saying so. It is an ordinary grant
-    # now: absent by default, present when the Baseline role or any granted role
-    # carries it. This test is the one place in the suite that behaviour change
-    # is visible, which is the right number.
+    # `page.write` is an ordinary grant (RADD-773): absent by default, present
+    # when the Baseline or any granted role carries it — not a free floor that
+    # let a member with no grants edit any page.
     with pytest.raises(ForbiddenError):
         await binding.require_write(db, member, page.id)
     await _grant_globally(db, member, Permission.PAGE_WRITE)

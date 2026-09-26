@@ -1,18 +1,9 @@
-"""Cached Jira downloads (spec 100) — DB-backed with the Jira client stubbed.
-
-The point of a snapshot is that everything after it is offline: profiling, the
-dry run, the import, a re-import and relinking all read these rows. So the
-invariants tested here are the ones the rest of the pipeline stands on:
-
-- every matching issue is cached, across pages;
-- a TRUNCATED comment/worklog list is backfilled — spec 90 took Jira's inline
-  list at face value and silently dropped 67 of an issue's 87 comments;
-- the instance's own vocabularies are captured, which is what lets the mapping
-  step stop guessing from English names;
-- delete really reclaims the space, including attachment blobs.
-
-The job opens its OWN session and commits, so setup is committed here and
-verification uses a fresh session.
+"""Cached Jira downloads (spec 100), DB-backed with the client stubbed.
+Everything after a snapshot reads these rows offline, so: every matching issue is
+cached across pages; a TRUNCATED comment/worklog list is backfilled (Jira's inline
+list drops the rest); the instance's vocabularies are captured; delete reclaims
+the space, blobs included. The job opens its OWN session and commits, so setup
+is committed and verification uses a fresh session.
 """
 
 import uuid

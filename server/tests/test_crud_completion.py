@@ -9,11 +9,8 @@ Rolled-back transactions on the compose DB.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
@@ -25,30 +22,11 @@ from radd.modules.workflow import service as workflow
 from radd.modules.workflow.schemas import StateCreate
 from radd.modules.workflow.types import StateCategory
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _actor(db) -> User:
-    user = User(
-        email=f"cc-{uuid.uuid4().hex[:8]}@example.com",
-        name="Actor",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def test_state_delete_refuses_default_and_occupied_states(db):
-    actor = await _actor(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"CC{uuid.uuid4().hex[:4].upper()}", name="P")
     )
@@ -78,7 +56,7 @@ async def test_state_delete_refuses_default_and_occupied_states(db):
 
 
 async def test_label_rename_collision_and_delete(db):
-    actor = await _actor(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     suffix = uuid.uuid4().hex[:6]
     first = await labels.create_label(db, LabelCreate(name=f"bug-{suffix}"), actor_id=actor.id)
     second = await labels.create_label(db, LabelCreate(name=f"chore-{suffix}"), actor_id=actor.id)

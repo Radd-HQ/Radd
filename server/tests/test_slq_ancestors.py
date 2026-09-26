@@ -1,16 +1,12 @@
 """SLQ ancestor fields (spec 83): bare `epic`/`parent` + `epic.*`/`parent.*`.
-
-DB-backed (compose Postgres) — flushed, never committed; the session rolls back
-at teardown, so rows never persist. Queries drive through items.list_items q=
-like the other SLQ tests, so compile AND execution are both proven.
+Driven through `items.list_items(q=)`, so compile AND execution are both proven.
+DB-backed; flushed, never committed.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import bulk, service as items
@@ -24,27 +20,12 @@ from radd.modules.workflow import service as workflow
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
 async def actor(db) -> User:
-    user = User(
-        email=f"anc-{uuid.uuid4().hex[:8]}@example.com",
-        name="Ancestor Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Ancestor Tester")
 
 
 async def _project_with_states(db, key_prefix="ANC"):
@@ -372,12 +353,9 @@ async def test_suggest_bare_epic_offers_none_then_item_keys(db, actor):
 
 
 async def test_hydrated_epic_ref_matches_the_slq_epic_field(db, actor):
-    """The board's epic AXIS and SLQ's `epic` field must name the same epic for
-    the same row — the axis groups client-side off `ItemRead.epic`, the query
-    compiles `hierarchy.nearest_epic_case` in SQL, and two definitions of "the
-    epic of an item" would silently disagree (a subtask is two hops from its
-    epic, which no client can walk).
-    """
+    """The board's epic AXIS (`ItemRead.epic`, client-side) and SLQ's `epic`
+    (`hierarchy.nearest_epic_case`, SQL) must name the same epic for the same row
+    — a subtask is two hops from its epic, which no client can walk."""
     project, states = await _project_with_states(db)
     await _ladder(db, actor, project, states)
 

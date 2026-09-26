@@ -1,25 +1,14 @@
-"""Team ownership, delegated management, and the stale-group guard (spec 87,
-reshaped by RADD-829: the guard lives on GROUPS now, and a team reaches the
-directory by holding a group as a member).
-
-The invariants worth pinning:
-  - a team leader administers THEIR team and no other (that is the whole point
-    of per-team delegation over the all-or-nothing team.update atom),
-  - a delegate cannot promote themselves — appointing managers and transferring
-    ownership stay with the owner,
-  - a directory group that vanishes from AD never loses its memberships.
-
-Rolled-back transactions on the compose DB.
+"""Team ownership, delegated management, and the stale-group guard (spec 87; the
+guard lives on GROUPS since RADD-829). Pinned: a leader administers THEIR team and
+no other; a delegate cannot promote themselves (managers and ownership stay with
+the owner); a directory group that vanishes from AD keeps its memberships.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.groups import service as groups_service
 from radd.modules.groups.models import GroupMember
@@ -35,27 +24,7 @@ from radd.modules import workflow as _workflow  # noqa: F401
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name, *, instance_role=InstanceRole.MEMBER, active=True) -> User:
-    user = User(
-        email=f"td-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=instance_role.value,
-        active=active,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _team(db, owner) -> object:
@@ -67,9 +36,9 @@ async def _team(db, owner) -> object:
 async def test_stewardship_is_per_team(db):
     """A manager of one team is nobody on another — the property that makes this
     delegation rather than a global grant."""
-    owner = await _user(db, "Owner")
-    lead = await _user(db, "Team lead")
-    outsider = await _user(db, "Outsider")
+    owner = await make_user(db, name="Owner")
+    lead = await make_user(db, name="Team lead")
+    outsider = await make_user(db, name="Outsider")
     mine = await _team(db, owner)
     theirs = await _team(db, owner)
 
@@ -90,9 +59,9 @@ async def test_stewardship_is_per_team(db):
 
 
 async def test_transfer_keeps_previous_owner_as_manager_and_refuses_inactive(db):
-    owner = await _user(db, "Owner")
-    successor = await _user(db, "Successor")
-    retired = await _user(db, "Retired", active=False)
+    owner = await make_user(db, name="Owner")
+    successor = await make_user(db, name="Successor")
+    retired = await make_user(db, name="Retired", active=False)
     team = await _team(db, owner)
 
     with pytest.raises(ConflictError):
@@ -112,7 +81,7 @@ async def test_delete_refuses_while_the_team_grants_project_access(db):
     from radd.modules.projects import service as projects_service
     from radd.modules.projects.schemas import ProjectCreate
     
-    owner = await _user(db, "Owner", instance_role=InstanceRole.ADMIN)
+    owner = await make_user(db, role=InstanceRole.ADMIN, name="Owner")
     team = await _team(db, owner)
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"TD{uuid.uuid4().hex[:4].upper()}", name="P")
@@ -147,10 +116,10 @@ async def test_group_carried_membership_expands_into_the_team(db):
     """RADD-829: a team holding a GROUP counts the group's people (nesting
     included) as members everywhere membership is asked — and stays hand-
     editable for direct user rows, because no team is directory-owned now."""
-    owner = await _user(db, "Owner")
-    direct = await _user(db, "Direct")
-    via_group = await _user(db, "Via Group")
-    via_nested = await _user(db, "Via Nested")
+    owner = await make_user(db, name="Owner")
+    direct = await make_user(db, name="Direct")
+    via_group = await make_user(db, name="Via Group")
+    via_nested = await make_user(db, name="Via Nested")
     team = await _team(db, owner)
 
     parent = await groups_service.upsert_group(db, dn="CN=parent,DC=t", name="Parent")
@@ -181,7 +150,7 @@ async def test_group_carried_membership_expands_into_the_team(db):
 async def test_subject_graph_is_memoised_per_request(db):
     """RADD-830: the closure runs on the hottest path — one resolution per
     request per actor, identity-asserted (`is`, not `==`)."""
-    user = await _user(db, "Memoised")
+    user = await make_user(db, name="Memoised")
     group = await groups_service.upsert_group(db, dn="CN=memo,DC=t", name="Memo")
     db.add(GroupMember(group_id=group.id, user_id=user.id))
     await db.flush()
@@ -201,7 +170,7 @@ async def test_group_cycle_terminates_and_depth_fails_closed(db):
     await groups_service.set_parents(db, a, [b.id])
     await groups_service.set_parents(db, b, [c.id])
     await groups_service.set_parents(db, c, [a.id])
-    user = await _user(db, "Cycled")
+    user = await make_user(db, name="Cycled")
     db.add(GroupMember(group_id=a.id, user_id=user.id))
     await db.flush()
     resolved = await groups_service.user_group_ids(db, user.id)
@@ -211,7 +180,7 @@ async def test_group_cycle_terminates_and_depth_fails_closed(db):
 
 
 async def test_vanished_ad_group_never_loses_its_memberships(db, monkeypatch):
-    member = await _user(db, "Synced")
+    member = await make_user(db, name="Synced")
     group = await groups_service.upsert_group(db, dn="CN=gone,DC=t", name="Gone")
     db.add(GroupMember(group_id=group.id, user_id=member.id))
     await db.flush()
@@ -268,7 +237,7 @@ async def test_unreachable_directory_is_not_a_missing_group(db, monkeypatch):
 
 
 async def test_unknown_manager_is_refused(db):
-    owner = await _user(db, "Owner")
+    owner = await make_user(db, name="Owner")
     team = await _team(db, owner)
     with pytest.raises(ConflictError):
         await teams_service.replace_managers(db, team.id, [uuid.uuid4()], actor_id=owner.id)

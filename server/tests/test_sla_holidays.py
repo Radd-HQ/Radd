@@ -1,28 +1,15 @@
-"""RADD-1031 — holidays pause the SLA clock, through the kernel socket.
-
-The claim that they already did was false in code: `slas/timers.py` knew about
-the work week and a daily window and nothing else, so a P2 filed at 17:00 the
-evening before a two-day studio shutdown breached during the shutdown. These
-tests cover the seam end to end:
-
-* the pure math (a holiday is a whole-day pause, like a weekend);
-* the live path — a holiday recorded in `leave` moves an open timer's deadline;
-* what must NOT pause it — one person's leave, because an item's timer has no
-  person to be absent;
-* parity with the provider gone, which is what "slas works without leave" means.
+"""Holidays pause the SLA clock through the kernel socket (RADD-1031): the pure
+math (a holiday pauses a whole day, like a weekend); a holiday recorded in `leave`
+moves an open timer's deadline; one person's leave does NOT (an item's timer has
+no person to be absent); and slas behaves the same with the provider gone.
 """
 
 import uuid
 from datetime import date, datetime, timedelta
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.kernel.registry import registries
 from radd.kernel.sockets import Socket
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.leave import service as leave
@@ -78,35 +65,10 @@ def test_slas_never_learns_leave_exists():
 # --- live: the socket, the provider, and the clock ---
 
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"slahol-{uuid.uuid4().hex[:8]}@example.com",
-        name="Desk Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 async def _filed_item(db, admin, project_id):
-    """An item whose creation is pinned to FILED, so the timer math is fixed.
-
-    Assigned on the loaded instance rather than by UPDATE + expire: the SLA
-    evaluator re-reads the item through the same identity map, and an expired
-    attribute would lazy-load in a sync context (MissingGreenlet).
-    """
+    """An item whose creation is pinned to FILED. Assigned on the loaded instance, not
+    by UPDATE + expire: the evaluator re-reads through the same identity map, and an
+    expired attribute would lazy-load in a sync context (MissingGreenlet)."""
     read = await items_service.create_item(
         db, ItemCreate(project_id=project_id, title="Printer on fire"), admin
     )

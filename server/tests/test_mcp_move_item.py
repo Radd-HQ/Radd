@@ -7,10 +7,7 @@ projects, a real admin, the old key still resolving afterwards.
 
 import uuid
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import mcptools
@@ -18,16 +15,6 @@ from radd.modules.items.service import create_item, find_item_by_key
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def test_move_item_over_mcp_keeps_identity_and_redirects(db):

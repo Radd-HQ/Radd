@@ -8,13 +8,8 @@ service-level suites)."""
 import uuid
 from datetime import date
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.cycles import service as cycles_service
 from radd.modules.cycles.models import ItemCycleRecord
 from radd.modules.cycles.schemas import CycleCreate
@@ -23,28 +18,6 @@ from radd.modules.items.filters import ItemListFilters
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"ch-{uuid.uuid4().hex[:8]}@example.com",
-        name="Cycle History Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def _records(db, item_id):

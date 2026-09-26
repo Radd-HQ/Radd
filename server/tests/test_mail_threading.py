@@ -1,14 +1,9 @@
 """Inbound mail: threading, idempotency and the loop guards (RADD-951 wave).
 
-The acceptance criteria for this feature are almost entirely about things that
-fail SILENTLY and LATE — a reply that opens a duplicate ticket, a retry that
-becomes a second one, an autoresponder that runs until someone notices. None of
-them raise, so none of them are caught by anything except a test that walks the
-path.
-
-The pure halves (candidate extraction, quote stripping, HTML, loop verdicts) are
-tested on fixture strings; the threading and dedup halves go through a real
-session, because the invariant is about what the WRITE PATH stored.
+These fail SILENTLY and LATE — a reply that opens a duplicate ticket, a retry that
+becomes a second one, an autoresponder loop — so only a test that walks the path
+catches them. Pure halves run on fixture strings; threading and dedup go through a
+real session, because the invariant is what the WRITE PATH stored.
 """
 
 import uuid
@@ -16,9 +11,7 @@ from email.message import EmailMessage
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
@@ -29,16 +22,6 @@ from radd.modules.mailintake.models import MailMessage, MailSender, MailSource
 from radd.modules.mailintake.types import MailDirection, MailSenderKind, MailSourceKind
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture
@@ -245,14 +228,9 @@ async def test_a_colleague_may_thread_by_subject_key_on_any_issue(db, world):
 
 
 async def test_a_stranger_naming_an_issue_key_opens_a_new_one_instead(db, world):
-    """RADD-981. `[PROJ-412]` is a guessable string in a text field — keys are
-    sequential — and the subject key was the ONLY check on it. So a stranger who
-    typed one wrote into somebody else's ticket, and the outbound consumer then
-    mailed their words to that ticket's requester.
-
-    Refused, not dropped: a stranger with the wrong subject line is still a
-    person asking for help, so the message becomes a new routed issue.
-    """
+    """RADD-981: `[PROJ-412]` is a guessable string, so a stranger naming a key must
+    not write into (and get mailed onward from) someone else's ticket. Refused, not
+    dropped: the message becomes a new routed issue."""
     _, project, item = world
     key = f"{project.key}-{item.number}"
     outcome = await _accept(
@@ -323,13 +301,9 @@ async def _comments_on(db, item_id):
 
 
 async def test_an_agents_mailed_reply_is_their_own_comment(db, world):
-    """Every inbound reply used to be a SYSTEM comment with the sender named in
-    the body. For a customer with no account that is the only honest answer; for
-    a colleague replying to a notification it was wrong in four places at once —
-    the issue read as if a robot had spoken, the outbound consumer's SYSTEM gate
-    refused to relay it to the requester, the SLA response timer skipped it as a
-    non-answer, and notify (which excludes the ACTOR) notified the agent of
-    their own comment while nobody else's exclusion applied."""
+    """A colleague's mailed reply is THEIR comment, not a SYSTEM one: as SYSTEM it read
+    as a robot, the outbound gate refused to relay it, the SLA timer skipped it, and
+    notify told the agent about their own comment."""
     actor, project, item = world
     await threading.record(
         db, message_id="<sent-a1@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
@@ -716,15 +690,9 @@ async def test_a_reply_advances_only_the_sender_s_own_last_message(db, world):
 
 
 async def test_an_agent_raised_issue_gains_its_requester_when_they_write_in(db, world):
-    """An issue raised in the UI has no contact at all, so a customer's mail onto
-    that thread produced a comment nobody could answer — the reply consumer plans
-    nothing without a recipient. The first external person to WRITE is the
-    requester, whether or not the issue was born from mail.
-
-    Threaded on a HEADER, the way this reaches an agent-raised issue in
-    practice: somebody was mailed about it (notify, or a `send_email` action),
-    and the customer replied to that message.
-    """
+    """The first external person to WRITE onto an issue with no contact becomes its
+    requester, so the reply consumer has someone to answer. Threaded on a HEADER, as
+    it happens in practice: the customer replied to a mail about the issue."""
     _, project, item = world
     await threading.record(
         db,
@@ -747,12 +715,8 @@ async def test_an_agent_raised_issue_gains_its_requester_when_they_write_in(db, 
     assert await _contacts(db, item.id) == {"cass@vip.example.com": True}
 
 
-# --- what a receipt automation reads (RADD-995, RADD-1318) ---------------------
-#
-# The built-in receipt is gone; the "Acknowledge new email tickets" template
-# answers `mail.received` with created_item=true, addressed to
-# `{{payload.sender}}`. RADD-995's rule — a receipt answers a MESSAGE, account
-# or not — therefore lives in what the event carries.
+# --- what mail.received carries (RADD-995, RADD-1318) ----------------------------
+# A receipt answers a MESSAGE, account or not, so the event names the sender.
 
 
 async def _received(db, item_id) -> dict:
@@ -877,15 +841,9 @@ async def test_a_list_address_is_not_treated_as_a_loop(db, world):
 
 
 async def test_mail_from_the_sending_identity_into_the_polled_box_is_a_loop(db, world):
-    """The failure the Migadu topology makes reachable: Radd sends as `agent@`,
-    polls `help@`, and its own message arrives back in the box it reads.
-
-    Driven through `registry.own_addresses` — the ONE definition since RADD-970
-    deleted the env-only `loops.own_addresses` beside it. Two definitions of
-    "us" is how the guard comes to fire on the webhook path and not the polled
-    one, silently; so the guard is tested against the set production builds,
-    from the ROWS an admin actually configured.
-    """
+    """Radd sends as `agent@` and polls `help@`, so its own message can come back.
+    Driven through `registry.own_addresses`, the ONE definition of "us" built from the
+    configured rows — two definitions let the guard fire on one path and not the other."""
     _, project, _ = world
     db.add(MailSource(
         name=f"in-{uuid.uuid4().hex[:6]}", kind=MailSourceKind.IMAP.value,

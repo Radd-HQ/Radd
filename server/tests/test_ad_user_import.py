@@ -9,13 +9,10 @@ ever wrote got orphaned.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth import service as auth_service
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole, UserSource
+from radd.modules.auth.types import UserSource
 from radd.modules.ldap import userimport
 from radd.modules.ldap.types import (
     DirectoryUser,
@@ -23,6 +20,8 @@ from radd.modules.ldap.types import (
     ImportResolution,
     ImportStatus,
 )
+
+from _factories import make_user
 
 
 def _dir_user(username, email, name) -> DirectoryUser:
@@ -113,28 +112,9 @@ def test_an_account_is_reported_once_under_its_strongest_match():
 # --- the write verbs (DB-backed) ---
 
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, email, name, *, source=UserSource.LOCAL) -> User:
-    user = User(
-        email=email, name=name, source=source, instance_role=InstanceRole.MEMBER.value
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
 async def test_overwrite_adopts_ad_identity_and_keeps_the_id(db):
     suffix = uuid.uuid4().hex[:6]
-    legacy = await _user(db, f"jsmith-{suffix}@old.example", "J Smith")
+    legacy = await make_user(db, name="J Smith", email=f"jsmith-{suffix}@old.example")
     original_id = legacy.id
     directory = _dir_user(f"jsmith-{suffix}", f"jsmith-{suffix}@corp.example", "Jane Smith")
 
@@ -152,8 +132,10 @@ async def test_overwrite_adopts_ad_identity_and_keeps_the_id(db):
 
 async def test_overwrite_refuses_to_steal_an_email_from_another_account(db):
     suffix = uuid.uuid4().hex[:6]
-    legacy = await _user(db, f"jsmith-{suffix}@old.example", "J Smith")
-    await _user(db, f"jsmith-{suffix}@corp.example", "Jane Smith", source=UserSource.LDAP)
+    legacy = await make_user(db, name="J Smith", email=f"jsmith-{suffix}@old.example")
+    await make_user(
+        db, name="Jane Smith", email=f"jsmith-{suffix}@corp.example", source=UserSource.LDAP
+    )
     directory = _dir_user(f"jsmith-{suffix}", f"jsmith-{suffix}@corp.example", "Jane Smith")
 
     # Two accounts exist; overwriting would collide on the unique email. The 409
@@ -164,8 +146,10 @@ async def test_overwrite_refuses_to_steal_an_email_from_another_account(db):
 
 async def test_merge_folds_the_lookalike_into_the_directory_account(db):
     suffix = uuid.uuid4().hex[:6]
-    current = await _user(db, f"jsmith-{suffix}@corp.example", "Jane S", source=UserSource.LDAP)
-    legacy = await _user(db, f"jsmith-{suffix}@old.example", "Jane Smith")
+    current = await make_user(
+        db, name="Jane S", email=f"jsmith-{suffix}@corp.example", source=UserSource.LDAP
+    )
+    legacy = await make_user(db, name="Jane Smith", email=f"jsmith-{suffix}@old.example")
     directory = _dir_user(f"jsmith-{suffix}", f"jsmith-{suffix}@corp.example", "Jane Smith")
 
     user, created = await userimport.apply_resolution(
@@ -183,7 +167,9 @@ async def test_merge_folds_the_lookalike_into_the_directory_account(db):
 
 async def test_merge_into_itself_is_refused(db):
     suffix = uuid.uuid4().hex[:6]
-    current = await _user(db, f"jsmith-{suffix}@corp.example", "Jane Smith", source=UserSource.LDAP)
+    current = await make_user(
+        db, name="Jane Smith", email=f"jsmith-{suffix}@corp.example", source=UserSource.LDAP
+    )
     directory = _dir_user(f"jsmith-{suffix}", f"jsmith-{suffix}@corp.example", "Jane Smith")
 
     with pytest.raises(ConflictError, match="nothing to merge"):
@@ -192,7 +178,7 @@ async def test_merge_into_itself_is_refused(db):
 
 async def test_skip_writes_nothing_and_create_still_links_by_email(db):
     suffix = uuid.uuid4().hex[:6]
-    legacy = await _user(db, f"jsmith-{suffix}@old.example", "Jane Smith")
+    legacy = await make_user(db, name="Jane Smith", email=f"jsmith-{suffix}@old.example")
     directory = _dir_user(f"jsmith-{suffix}", f"jsmith-{suffix}@corp.example", "Jane Smith")
 
     user, created = await userimport.apply_resolution(db, directory, ImportResolution.SKIP, None)
@@ -216,7 +202,7 @@ async def test_overwrite_and_merge_require_a_target(db):
 async def test_planner_sees_the_real_roster(db):
     """End-to-end shape: the planner runs against actual rows, not fixtures."""
     suffix = uuid.uuid4().hex[:6]
-    legacy = await _user(db, f"pkumar-{suffix}@old.example", f"Priya Kumar {suffix}")
+    legacy = await make_user(db, name=f"Priya Kumar {suffix}", email=f"pkumar-{suffix}@old.example")
     directory = _dir_user(f"pkumar-{suffix}", f"pkumar-{suffix}@corp.example", f"Priya Kumar {suffix}")
 
     candidates = userimport.plan_user_import([directory], await auth_service.list_users(db))

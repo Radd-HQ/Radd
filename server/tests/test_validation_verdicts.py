@@ -11,43 +11,20 @@ import uuid
 from pathlib import Path
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
-from radd.modules.auth.models import User
 from radd.modules.automations import service as automations_service, validation
 from radd.modules.automations.schemas import RuleCreate
 from radd.modules.automations.types import TYPE_VERDICT_BLOCK, TYPE_VERDICT_WARN
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(email=f"verd-{uuid.uuid4().hex[:8]}@example.com", name="Verdict Admin", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_project
 
 
 @pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"VD{uuid.uuid4().hex[:4].upper()}", name="Verdicts")
-    )
+    return await make_project(db, "VD")
 
 
 @pytest.fixture

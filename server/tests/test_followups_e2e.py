@@ -6,15 +6,10 @@ real services against live Postgres in a rolled-back transaction (nothing persis
 - timelog_hours_per_day resolves through the scalar cascade (spec 50 follow-up).
 """
 
-import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate, FieldDefinitionUpdate
 from radd.modules.fields.types import FieldType
@@ -28,28 +23,6 @@ from radd.modules.timelogging.schemas import EstimateSet
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"fu-{uuid.uuid4().hex[:8]}@example.com",
-        name="Followup Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 @pytest.fixture

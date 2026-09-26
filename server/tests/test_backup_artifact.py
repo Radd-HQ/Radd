@@ -148,7 +148,7 @@ def test_tampering_with_the_manifest_breaks_the_payload(tmp_path):
     invalidates the payload rather than silently changing what it claims."""
     path = tmp_path / art.new_artifact_name()
     key = _key()
-    manifest = _write(path, key)
+    _write(path, key)
 
     raw = path.read_bytes()
     edited = raw.replace(b'"radd_version":"0.1.0"', b'"radd_version":"9.9.9"')

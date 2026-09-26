@@ -13,9 +13,7 @@ import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.auth.models import User
 from radd.modules.auth.scopes import parse_scope
@@ -25,25 +23,11 @@ from radd.modules.cycles import directory
 from radd.modules.cycles.schemas import CycleCreate, CycleUpdate
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
+
+from _factories import make_project
 
 # The package re-exports its APIRouter as `router`; the route functions live in the module.
 cycles_router = importlib.import_module("radd.modules.cycles.router")
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _project(db, stem):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"{stem}{uuid.uuid4().hex[:4].upper()}", name=stem))
 
 
 async def _user(db, scope=None):
@@ -56,7 +40,7 @@ async def _user(db, scope=None):
 
 
 async def test_a_project_manager_runs_their_projects_cycles_and_nothing_else(db):
-    mine, theirs = await _project(db, "MN"), await _project(db, "TH")
+    mine, theirs = await make_project(db, "MN"), await make_project(db, "TH")
     lead = await _user(db, {"projects": {str(mine.id): ["project.manage", "item.read"]}, "global": ["cycle.read"]})
 
     homed = await cycles_router.create_cycle(CycleCreate(name="Sprint 1", project_id=mine.id), db, lead)
@@ -74,7 +58,7 @@ async def test_a_project_manager_runs_their_projects_cycles_and_nothing_else(db)
 
 
 async def test_a_projects_cycles_are_its_own_plus_those_holding_its_issues(db):
-    mine, theirs = await _project(db, "MN"), await _project(db, "TH")
+    mine, theirs = await make_project(db, "MN"), await make_project(db, "TH")
     admin = await _user(db)
     await cycles_router.create_cycle(CycleCreate(name="Own", project_id=mine.id), db, admin)
     shared = await cycles_router.create_cycle(CycleCreate(name="Shared", project_id=theirs.id), db, admin)

@@ -10,26 +10,13 @@ the HTTP behaviour on both sides of it.
 import uuid
 
 import httpx
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.app import create_app
-from radd.config import settings
 from radd.db import get_session
 from radd.modules.auth import authz, service as auth
 from radd.modules.auth.schemas import UserCreate
 from radd.modules.auth.types import SESSION_COOKIE_NAME, InstanceRole
 from radd.modules.auth.types import LoginMethod
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _person(db, role: InstanceRole):

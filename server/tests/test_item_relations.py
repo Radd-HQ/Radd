@@ -1,25 +1,18 @@
 """Items enforce relations (RADD-817): item.read@own / @team / item.update@own.
 
-The Done-when scenario, executed: a role granting `item.read@own` scoped to
-one project produces an account that sees exactly its own reported issues —
-in the list, in the count, on a single read, through the child-surface seam,
-and in search — and a write qualified `@own` refuses someone else's row.
-
-The Baseline is EMPTIED per test (the RADD-773 pattern): it seeds `item.read`
-unqualified, which is `@any` and would swamp every relation under test.
-
-Rolled-back transactions on the compose DB.
+A project-scoped `item.read@own` sees exactly its own reported issues — list,
+count, single read, child surfaces, search — and an `@own` write refuses someone
+else's row. The Baseline is EMPTIED per test: its unqualified `item.read` is `@any`
+and would swamp every relation under test. Rolled back, never committed.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError, NotFoundError
 from radd.modules.auth import authz, roles as auth_roles
-from radd.modules.auth.models import GlobalRoleGrant, User
+from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey
 
@@ -36,24 +29,7 @@ from radd.modules.search import indexer, service as search_service
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name, role="member") -> User:
-    user = User(
-        email=f"ir-{uuid.uuid4().hex[:8]}@example.com", name=name, instance_role=role
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _empty_baseline(db):
@@ -76,8 +52,8 @@ async def _grant(db, user, project, atoms):
 async def scenario(db):
     """One project; admin seeds three issues: the restricted user's own, their
     team's, and a stranger's. Returns (project, restricted, admin, ids)."""
-    admin = await _user(db, "IR Admin", role="admin")
-    restricted = await _user(db, "Restricted")
+    admin = await make_user(db, role="admin", name="IR Admin")
+    restricted = await make_user(db, name="Restricted")
     await _empty_baseline(db)
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"IR{uuid.uuid4().hex[:4].upper()}", name="R")

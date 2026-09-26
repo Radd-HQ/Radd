@@ -17,9 +17,9 @@ from radd.modules.auth import grants, principals, public_access, roles, service 
 from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.schemas import UserCreate
 from radd.modules.auth.types import SESSION_COOKIE_NAME, BuiltinRoleKey, GrantScopeKind, InstanceRole
-from radd.modules.projects import service as projects
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.auth.types import LoginMethod
+
+from _factories import make_project
 
 
 @pytest.fixture
@@ -46,12 +46,6 @@ async def _person(db, *, role: InstanceRole = InstanceRole.MEMBER):
     )
 
 
-async def _project(db):
-    return await projects.create_project(
-        db, ProjectCreate(key=f"PA{uuid.uuid4().hex[:5].upper()}", name="Switchable")
-    )
-
-
 async def _principal_grants(db, project):
     rows = await db.execute(
         select(GlobalRoleGrant.user_id, GlobalRoleGrant.role_id).where(
@@ -63,7 +57,7 @@ async def _principal_grants(db, project):
 
 
 async def test_switches_write_and_remove_the_two_grants(db):
-    project = await _project(db)
+    project = await make_project(db, "PA")
     public_role = await roles.role_by_key(db, BuiltinRoleKey.PUBLIC.value)
     contributor = await roles.role_by_key(db, BuiltinRoleKey.CONTRIBUTOR.value)
     assert await public_access.public_access(db, project.id) == public_access.PublicAccess()
@@ -87,7 +81,7 @@ async def test_switches_write_and_remove_the_two_grants(db):
 async def test_contributions_need_a_public_project(db):
     from radd.exceptions import ConflictError
 
-    project = await _project(db)
+    project = await make_project(db, "PA")
     with pytest.raises(ConflictError, match="public"):
         await public_access.set_public_access(db, project, public=False, contributions=True, actor_id=None)
 
@@ -96,7 +90,7 @@ async def test_http_switches_are_the_grants_the_world_reads_by(db):
     from radd.app import create_app
     from radd.db import get_session
 
-    project = await _project(db)
+    project = await make_project(db, "PA")
     admin = await _person(db, role=InstanceRole.ADMIN)
     outsider = await _person(db)
     admin_cookie = await auth.create_session(db, admin, method=LoginMethod.PASSWORD)

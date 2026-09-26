@@ -11,9 +11,7 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -28,26 +26,7 @@ from radd.modules.views.models import ViewMember
 from radd.modules.views.schemas import ViewCreate
 from radd.modules.views.types import ViewType
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name: str, role: InstanceRole = InstanceRole.ADMIN) -> User:
-    user = User(
-        email=f"vm-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=role.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _run(db, query: str, actor: User) -> set[uuid.UUID]:
@@ -87,7 +66,7 @@ async def _roadmap_with_items(db, actor):
 
 
 async def test_membership_roundtrip_and_slq_field(db):
-    actor = await _user(db, "Owner")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Owner")
     view, pinned, loose = await _roadmap_with_items(db, actor)
 
     await views_service.add_member(db, view.id, pinned.id, actor=actor)
@@ -116,11 +95,11 @@ async def test_membership_roundtrip_and_slq_field(db):
 
 
 async def test_add_member_gates_and_validates(db):
-    actor = await _user(db, "Owner")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Owner")
     view, pinned, _ = await _roadmap_with_items(db, actor)
 
     # Spec 57 privacy: a stranger can't SEE the un-shared view — 404, not 403.
-    stranger = await _user(db, "Stranger", role=InstanceRole.MEMBER)
+    stranger = await make_user(db, name="Stranger")
     with pytest.raises(NotFoundError):
         await views_service.add_member(db, view.id, pinned.id, actor=stranger)
 

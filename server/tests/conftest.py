@@ -1,21 +1,12 @@
 """Shared test setup.
 
-Database: the suite is SELF-CONTAINED. Before any test module is imported, this
-conftest repoints the app at a throwaway `radd_test` database (same Postgres
-server as the configured `settings.database_url`; override the whole URL via
-RADD_TEST_DATABASE_URL), and a session-scoped fixture re-creates it and migrates
-it to head. The dev database is never touched — setup refuses to run when the
-resolved test URL names the same database as the configured dev URL.
+The suite runs against a throwaway `radd_test` database (override with
+RADD_TEST_DATABASE_URL), re-created and migrated once per session; setup refuses
+a URL naming the dev database. This must run before anything imports `radd.db`,
+whose engine is built from `settings.database_url` at import time.
 
-The kernel contribution registries (event types, triggers, capabilities, …) are
-*boot state*: `create_app()` populates them by calling `load_plugins`. Unit tests
-that exercise services directly without booting the app still need that state —
-e.g. `automations.catalog.triggers()` is derived live from the event-type registry
-(spec 93, chokepoint-1 inversion). This autouse fixture loads the full plugin set
-before every test, exactly as the app does at startup, so the registry is always
-the complete, current boot state regardless of any test that reloads it.
-
-Cheap: module imports are cached, so this is a dict rebuild per test.
+The kernel registries are boot state `create_app()` fills via `load_plugins`;
+the autouse fixture reloads the full plugin set before every test.
 """
 
 import os
@@ -24,13 +15,10 @@ from pathlib import Path
 import psycopg
 import pytest
 from sqlalchemy.engine import make_url
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 # --- Throwaway test database --------------------------------------------------
-# Must run BEFORE anything imports `radd.db`: the engine and SessionLocal are
-# built from `settings.database_url` at import time. conftest is imported before
-# every test module, so setting RADD_DATABASE_URL here (plus mutating the
-# settings singleton) covers radd.db, alembic's env.py, and the per-file
-# fixtures that build engines from `settings.database_url` at runtime.
+# Must run before anything imports radd.db (see the module docstring).
 from radd.config import settings  # noqa: E402
 
 _TEST_DB_NAME = "radd_test"
@@ -86,21 +74,10 @@ def _migrate_database() -> None:
 
 
 def _seed_builtin_roles() -> None:
-    """Seed the builtin roles, exactly as app startup does.
-
-    Not optional since RADD-773. What every active user holds is the BASELINE
-    role row now, not a constant — so a database without it gives every actor an
-    empty permission set, and tests that touch a real session then behave
-    differently depending on whether some earlier test happened to seed it.
-
-    That is not hypothetical: `pytest tests/test_portal.py` alone failed with
-    "item.read denied" while the full suite passed, because another module's
-    fixture had seeded the row first. A suite whose result depends on which
-    subset you run is worse than one that fails.
-    """
+    """Seed the builtin roles as startup does. Required: every user's floor is the
+    Baseline ROW (RADD-773), so without it a test's permissions depend on whether an
+    earlier test happened to seed it."""
     import asyncio
-
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     from radd.modules.auth import roles
 
@@ -137,10 +114,34 @@ def _fresh_test_database():
     yield
 
 
+from _factories import make_user  # noqa: E402
 from radd.kernel import load_plugins  # noqa: E402
+from radd.modules.auth.types import InstanceRole  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _kernel_registries_loaded():
     load_plugins(settings.modules)
     yield
+
+
+@pytest.fixture
+async def db():
+    """A session on the test database; everything it wrote is rolled back."""
+    engine = create_async_engine(settings.database_url)
+    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+        yield session
+        await session.rollback()
+    await engine.dispose()
+
+
+@pytest.fixture
+async def admin(db):
+    """An instance admin."""
+    return await make_user(db, role=InstanceRole.ADMIN, name="Admin")
+
+
+@pytest.fixture
+def actor(admin):
+    """`admin`, under the name the item tests give whoever acts."""
+    return admin

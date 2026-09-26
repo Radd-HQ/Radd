@@ -12,9 +12,7 @@ DB-backed; flushed, never committed.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.ai import nlrepair
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
@@ -24,16 +22,6 @@ from radd.modules.fields.types import FieldType
 from radd.modules.items import slq
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

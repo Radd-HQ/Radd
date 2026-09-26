@@ -13,11 +13,8 @@ from radd.modules.teams.models import Team, TeamMember
 from radd.modules.groups.service import Group
 from radd.modules.sso import registry, service
 from radd.modules.sso.schemas import SsoProviderUpdate
-import test_sso_providers
 from test_sso_providers import _provider
 from radd.modules.auth.types import LoginMethod
-
-db = test_sso_providers.db  # the shared fixture, found by name
 
 
 @pytest.fixture

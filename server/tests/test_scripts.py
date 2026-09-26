@@ -8,11 +8,10 @@ import uuid
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.kernel import registries
-from radd.modules.auth.models import ApiToken, User
+from radd.modules.auth.models import ApiToken
 from radd.modules.automations import service as automations
 from radd.modules.automations.schemas import RuleCreate
 from radd.modules.scripts import interpreter, nodes, runner, service
@@ -20,24 +19,6 @@ from radd.modules.scripts.schemas import InterpreterSettings, PackageCreate, Run
 from radd.modules.scripts.types import NODE_DECIDE, NODE_RUN, UNAVAILABLE_PORT
 
 PY = sys.executable
-
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(email=f"scr-{uuid.uuid4().hex[:8]}@example.com", name="Script Admin", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
 
 
 # --- the child contract ------------------------------------------------------

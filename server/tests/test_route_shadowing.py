@@ -1,26 +1,8 @@
-"""A registered route must also be REACHABLE.
-
-This file exists because `/pages/search` was neither. RADD-701 moved page search
-from `/docs/search` to `/pages/search` and left the declaration at the bottom of
-`pages/router.py`, 190 lines below `@router.get("/pages/{page_id}")`. Starlette
-matches in DECLARATION order, so every call was answered by the earlier route
-with `page_id="search"` — a 422 about UUID parsing, from an endpoint the caller
-never asked for.
-
-Nothing caught it. The route imported, registered, and appeared in the OpenAPI
-schema; `/docs` listed it; a reader of the source saw a perfectly ordinary
-handler. Only calling it revealed anything, and no test called it (RADD-761).
-
-The check is over the ASSEMBLED app rather than the source, because a module's
-routes are mounted by its plugin at startup and the order that decides matching
-is the order they end up in — not the order they are written in any one file.
-
-Reaching them means walking through FastAPI's `_IncludedRouter` wrappers, which
-is the same trap that once made plugin unmount a silent no-op: `include_router`
-appends a wrapper whose own `path` is `None`, so a scan over `app.routes` sees
-83 entries, almost all of them `None`, and finds nothing wrong with anything.
-The first version of this test passed against the very bug it was written for.
-"""
+"""A registered route must also be REACHABLE: Starlette matches in declaration
+order, so a literal `/x/search` declared after `/x/{id}` answers a 422 about
+parsing "search" (RADD-761). Checked over the ASSEMBLED app, walking
+`effective_candidates()` through `_IncludedRouter` wrappers — their own `path` is
+None, and a scan over `app.routes` passes vacuously (the first version did)."""
 
 import re
 
@@ -45,12 +27,9 @@ def _is_greedy(path: str) -> bool:
 
 
 def _flatten(routes) -> list[tuple[str, set[str]]]:
-    """Every real route, in the order matching actually considers them.
-
-    `_IncludedRouter` is a wrapper with no path of its own; `effective_candidates()`
-    is what it consults, and it may hold further wrappers. Low-priority routes
-    are appended after its own, which is where they are tried.
-    """
+    """Every real route, in the order matching considers them: `_IncludedRouter`
+    consults `effective_candidates()` (which may nest), and low-priority routes are
+    appended after its own."""
     flat: list[tuple[str, set[str]]] = []
     for route in routes:
         candidates = getattr(route, "effective_candidates", None)
@@ -93,14 +72,9 @@ def shadowed(flat: list[tuple[str, set[str]]]) -> list[str]:
 
 
 def test_no_route_is_shadowed_by_an_earlier_pattern(monkeypatch):
-    """No literal path may sit behind a parameter route of the same shape.
-
-    No lifespan: `create_app` mounts every plugin's routers itself, so the table
-    is complete before startup runs. Starting one anyway made the suite hang
-    about one run in three — `test_app_startup` already runs the real lifespan,
-    and a second set of startup hooks in the same process is a cost with nothing
-    to buy.
-    """
+    """No literal path may sit behind a parameter route of the same shape. No
+    lifespan: `create_app` mounts every router itself, and a second set of startup
+    hooks in one process made the suite hang about one run in three."""
     monkeypatch.setattr(settings, "backup_tools_optional", True)
     flat = _flatten(create_app().routes)
 

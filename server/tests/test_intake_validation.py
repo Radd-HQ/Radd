@@ -1,16 +1,11 @@
-"""Spec 119: intake validation as an automation graph.
+"""Spec 119: intake validation as an automation graph. Pinned:
 
-The claims under test are the ones the rest of the feature stands on:
-
-* a VALIDATE trigger is indexed into `automation_validations` the way an event
-  trigger is indexed into `automation_triggers` — rebuilt wholesale, so removing
-  a target removes the governance;
-* resolution UNIONS the three axes (project, issue type, form) and never runs one
-  graph twice for a draft that matches it on two of them;
-* the walk collects findings and APPLIES NOTHING — the action that would have
-  labelled the draft did not;
+* VALIDATE triggers index into `automation_validations`, rebuilt wholesale, so
+  removing a target removes the governance;
+* resolution UNIONS project, issue type and form, and never runs a graph twice;
+* the walk collects findings and APPLIES NOTHING;
 * the write path refuses a trigger that governs nothing and a check that says
-  nothing, because both of those store as "configured" and then do nothing at all.
+  nothing — both would store as "configured" and do nothing.
 """
 
 import uuid
@@ -50,34 +45,17 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.auth.types import LoginMethod
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(app_settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_project, make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(
-        email=f"iv-{uuid.uuid4().hex[:8]}@example.com",
-        name="Intake admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Intake admin")
 
 
 @pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"IV{uuid.uuid4().hex[:4].upper()}", name="Intake validation")
-    )
+    return await make_project(db, "IV", "Intake validation")
 
 
 def _validate_trigger(targets: list[dict]) -> dict:
@@ -331,12 +309,9 @@ async def test_builtin_and_custom_field_shapes_are_accepted(db, admin, project):
 
 
 async def test_an_event_gate_under_a_validate_trigger_is_refused(db, admin, project):
-    """There is no event. `gate.field_changed` reads a diff a submission does not
-    have, so it answers a constant — and the branch behind the port it never
-    takes is a check that looks configured and can never run. The same reasoning
-    that refuses a gate under a SCHEDULE trigger, which is where the precedent
-    is; it was simply never extended to this third sentinel.
-    """
+    """There is no event: `gate.field_changed` reads a diff a submission lacks, so it
+        answers a constant and the branch behind its other port can never run (the
+        same reason a gate under a SCHEDULE trigger is refused)."""
     with pytest.raises(ConflictError, match="has no event"):
         await _graph(
             db,
@@ -590,15 +565,10 @@ async def test_findings_from_several_graphs_concatenate_and_the_strictest_mode_w
 async def test_an_advisory_finding_does_not_block_under_a_co_governing_required_graph(
     db, admin, project
 ):
-    """The bug this test exists for: `mode` is aggregated over EVERY governing
-    graph, so "there are findings and the mode is required" refused a draft that
-    satisfied the required graph and only tripped the advisory one — while
-    `POST /items`, which runs the required bindings alone, accepted the same
-    draft. The button and the API disagreed about the same rules.
-
-    The required graph passes here because its check sits behind a filter the
-    draft does not match, which is exactly how a conditional check is written.
-    """
+    """`mode` is aggregated over EVERY governing graph, so "findings + required"
+        refused a draft that passed the required graph and only tripped the advisory
+        one, while `POST /items` (required bindings only) accepted it. The required
+        graph passes here because its check sits behind a filter the draft misses."""
     await _graph(
         db,
         admin,
@@ -658,15 +628,10 @@ async def test_an_advisory_finding_does_not_block_under_a_co_governing_required_
 
 
 async def test_an_ordinary_walk_collects_no_findings(db, admin, project):
-    """A `validation.fail` under a MANUAL trigger records nothing.
-
-    The spec claimed this from the start ("on an ordinary event walk nothing is
-    collecting") and the executor did the opposite: it handed every walk the
-    report's list, so a check wired into an event graph accumulated findings
-    nobody would ever read, and `preview`'s `matched` went true for a graph that
-    would apply nothing. Now the walk reads its collecting-ness off the TRIGGER
-    it started from.
-    """
+    """A `validation.fail` under a MANUAL trigger records nothing: the walk reads its
+        collecting-ness off the TRIGGER it started from. Otherwise an event graph
+        accumulates findings nobody reads and `preview.matched` goes true for a graph
+        that would apply nothing."""
     rule = await automations_service.create_rule(
         db,
         RuleCreate(
@@ -710,15 +675,10 @@ async def test_a_validate_graph_still_reports_its_findings_on_a_dry_run(db, admi
 async def test_a_walk_that_aborts_the_transaction_is_a_503_not_a_500(
     db, admin, project, monkeypatch
 ):
-    """A DBAPI error inside the walk is SWALLOWED by design — a contributed node
-    that raises takes its fallback port so one unreachable provider cannot stop
-    a graph with other branches. In Postgres that leaves the transaction
-    aborted: every later statement fails, the intake savepoint's RELEASE fails,
-    and the person submitting gets a 500 from a create that was fine.
-
-    So the walk runs inside its own savepoint, and a broken one is a clean
-    `ValidationUnavailable` with a usable session behind it.
-    """
+    """A DBAPI error inside the walk is swallowed by design (the node takes its
+        fallback port), but in Postgres it leaves the transaction aborted and the
+        intake savepoint's RELEASE fails with a 500. So the walk runs in its own
+        savepoint, and a broken one is a clean `ValidationUnavailable`."""
     await _advisory_graph(db, admin, project)
     project_id = project.id
     before = await _count_items(db, project_id)
@@ -766,14 +726,9 @@ async def _advisory_graph(db, admin, project, message="Consider adding a screens
 
 
 async def _count_items(db, project_id: uuid.UUID) -> int:
-    """Takes the ID, not the ORM row, and that is not fussiness.
-
-    Rolling back a SAVEPOINT expires the states it touched, and reading an
-    expired attribute from SYNCHRONOUS code — which is what `project.id` inside
-    a `select(...)` builder is — attempts IO outside the greenlet context and
-    raises `MissingGreenlet`. Every call site in the app reads only the verdict
-    after a rollback, so nothing is exposed to this; a test that holds the row
-    across the flow is, and would report it as a product bug."""
+    """Takes the ID, not the ORM row: rolling back a SAVEPOINT expires the states it
+        touched, and reading `project.id` in a sync `select(...)` builder then raises
+        `MissingGreenlet` — a test artefact that would read as a product bug."""
     rows = await db.execute(select(WorkItem.id).where(WorkItem.project_id == project_id))
     return len(list(rows.scalars()))
 
@@ -919,17 +874,10 @@ async def test_an_import_is_not_intake(db, admin, project):
 async def test_a_refused_create_leaves_the_session_clean_for_a_caller_that_carries_on(
     db, admin, project
 ):
-    """The importer's shape: `except Exception`, record a skip, keep going, and
-    commit the batch at the end.
-
-    Before this, `create_item` had already flushed the row, its labels and its
-    mentions when the hook refused it — only the caller's own rollback took them
-    back. A caller that swallowed the error committed a half-created orphan: an
-    item with no `item.created` event, invisible to search and to every consumer
-    that reads the outbox. The refusal now rolls back to a savepoint taken
-    before the insert, so the promise holds whatever the caller does with the
-    exception.
-    """
+    """The importer's shape: `except Exception`, record a skip, commit the batch.
+        The refusal rolls back to a savepoint taken before the insert, so a caller
+        that swallows it cannot commit a half-created item with no `item.created`
+        event (invisible to search and every outbox consumer)."""
     await _required_graph(db, admin, project)
     project_id = project.id
     before = await _count_items(db, project_id)
@@ -965,15 +913,10 @@ async def test_the_suppress_scope_is_the_seam_a_machine_channel_uses(db, admin, 
 async def test_a_monitoring_webhook_is_not_asked_for_repro_steps(
     db, admin, project, monkeypatch
 ):
-    """The Alertmanager receiver at its real call site.
-
-    A required check refusing here raises out of the webhook handler, which
-    answers Alertmanager with a 5xx it retries forever — and the alert nobody
-    can see is the one that matters. The mail poller is the same failure with a
-    quieter shape (it marks the message Seen and the request is simply gone),
-    and it takes the same seam; there is no cheap fixture for a live IMAP
-    round trip, so this is the one that stands for both.
-    """
+    """The Alertmanager receiver at its real call site: a required check refusing
+        here would 5xx the webhook, which Alertmanager retries forever. The mail
+        poller takes the same seam (and would silently lose the message); there is
+        no cheap IMAP fixture, so this stands for both."""
     from radd.modules.alertmanager import service as alertmanager_service
     from radd.modules.alertmanager.models import AlertReceiver
 
@@ -1001,16 +944,10 @@ async def test_a_monitoring_webhook_is_not_asked_for_repro_steps(
 
 
 async def test_disabling_the_plugin_disables_the_enforcement(db, admin, project):
-    """`HookRegistry.on()` appends and nothing takes it back, so the handler
-    survives the unmount that removes this module's routes and atoms — and went
-    on refusing creations from a plugin that was turned off.
-
-    The kernel registry is the fact it now consults, which is the same seam
-    `ai.features.plugin_loaded` uses for every sideways call into a disableable
-    module. Driven here through the REAL unmount (`registries.unregister_plugin`)
-    rather than a flag of the module's own, because a flag would be a second
-    copy of the answer.
-    """
+    """`HookRegistry.on()` handlers survive the unmount, so enforcement consults the
+        kernel registry instead (the `ai.features.plugin_loaded` seam). Driven through
+        the REAL unmount (`registries.unregister_plugin`): a module flag would be a
+        second copy of the answer."""
     from radd.kernel.registry import registries
     from radd.modules.automations import plugin as automations_plugin
 
@@ -1100,13 +1037,9 @@ async def _form(db, admin, project, *, type_name=None):
 
 
 async def test_a_form_resolves_the_type_its_submissions_will_carry(db, admin, project):
-    """A form's submitter never picks a type — `submit_form` resolves the form's
-    `type_name` default and `create_item` falls back to the project's default —
-    so a TYPE-targeted binding was invisible to both form pages: the button said
-    "Submit", nothing promised a check, and the rules announced themselves for
-    the first time in a 422. The resolution is server-side, on the payload each
-    page already fetches.
-    """
+    """A submitter never picks a type (`type_name` default, else the project's), so
+        a TYPE-targeted binding was invisible on both form pages until a 422. The
+        resolution is server-side, on the payload each page already fetches."""
     from radd.modules.forms import service as forms_service
 
     bug = await itemtypes_service.create_type(
@@ -1155,19 +1088,11 @@ async def test_a_form_with_no_type_default_falls_back_to_the_projects(db, admin,
 
 
 async def test_the_catalog_serves_the_checks_own_ports(db, admin):
-    """The canvas draws a node's handles before the server has ever seen the
-    graph, so what it draws is whatever the catalog told it.
-
-    `ai.validate` is a GATE, and a gate's kind-level ports are true/false — so a
-    client with nothing better to go on drew TRUE/FALSE on a node that emits
-    pass/fail/unavailable, and every edge dragged off those handles was refused
-    by `graph.validate` on save. The fix is that a node with FIXED ports says so,
-    and the catalog carries the declaration.
-
-    `ai.classify` proves the other half: its ports are the answers being typed,
-    so it declares none and the editor computes them locally. An empty list here
-    is a positive statement, not a gap.
-    """
+    """The canvas draws handles from the catalog before the server sees the graph.
+        `ai.validate` is a gate with FIXED ports (pass/fail/unavailable), not the
+        kind-level true/false, or every edge off those handles fails on save.
+        `ai.classify` declares none: its ports are its answers, computed locally, so
+        an empty list is a positive statement."""
     from radd.modules.automations.router import get_catalog
 
     catalog = await get_catalog(db, admin)
@@ -1225,12 +1150,9 @@ async def test_the_checks_ports_are_wireable_and_a_gates_are_not(db, admin, proj
 async def test_the_ai_node_contributes_findings_through_the_real_walk(
     db, admin, project, monkeypatch
 ):
-    """`ctx.add_finding` is the seam a node in ANOTHER module reaches the
-    collection through, and this is the only test that exercises it with the
-    real `_NodeContext` rather than a stand-in. The provider is mocked; the
-    field vocabulary is resolved against the live registry on purpose, so the
-    unknown-key degradation is proven against real data.
-    """
+    """The only test of `ctx.add_finding` through the real `_NodeContext` (the seam
+        another module's node reaches the collection by). The provider is mocked; the
+        field vocabulary is the live registry, so unknown-key degradation is real."""
     from radd.modules.ai import automation_node_validate as ai_validate
 
     async def _enabled(_session, _feature):
@@ -1317,15 +1239,10 @@ async def test_an_ai_outage_does_not_block_intake(db, admin, project, monkeypatc
 async def test_a_spent_budget_reaches_the_ai_node_and_does_not_block_intake(
     db, admin, project, monkeypatch
 ):
-    """The wall-clock budget, end to end (spec 119).
-
-    The walk holds the project's number lock, so a verdict cannot be allowed to
-    take as long as the provider feels like taking. `run_graphs` sets one
-    deadline for every governing graph, `walk` carries it, and the node asks
-    before it spends a round trip — with the budget at zero the provider is
-    never called at all, and the draft is created, because an overloaded model
-    server must not become a closed intake.
-    """
+    """The wall-clock budget end to end: the walk holds the project's number lock,
+        so `run_graphs` sets one deadline, `walk` carries it and the node checks it
+        before a round trip. At zero the provider is never called and the draft is
+        created — an overloaded model server must not close intake."""
     from radd.modules.ai import automation_node_validate as ai_validate
 
     async def _never(_ctx, _params):  # pragma: no cover - must not be called

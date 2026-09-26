@@ -10,9 +10,7 @@ import uuid
 
 import pytest
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.comments import service as comments
@@ -22,24 +20,6 @@ from radd.modules.comments.schemas import CommentCreate
 from radd.modules.comments.types import CommentParentType
 from radd.modules.pages import service as pages_service, spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db):
-    user = User(email=f"pc-{uuid.uuid4().hex[:8]}@example.com", name="PC", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
 
 
 @pytest.fixture
@@ -200,16 +180,10 @@ async def test_an_ordinary_thread_comment_has_no_anchor(db, admin, page):
 
 
 async def test_editing_a_page_notifies_its_watchers_but_not_the_editor(db, admin, page):
-    """The point of the feature: a silently changed runbook is the failure mode
-    for a wiki that documents operations. And nobody wants an inbox entry telling
-    them about their own edit.
-
-    Spec 118 moved the fan-out off the save request and onto the outbox, so the
-    edit is followed by a consumer pass — and the watcher is an ADMIN, because
-    the notification now passes `page_access` per recipient like every other
-    notification passes `item.read`. A bare account would be refused, and this
-    test would pass by being refused rather than by the rule it is about.
-    """
+    """A silently changed runbook is the failure mode; the editor is not told about
+        their own edit. The fan-out runs on the outbox (spec 118), and the watcher is
+        an ADMIN because it passes `page_access` per recipient — a bare account would
+        be refused, passing for the wrong reason."""
     from radd.modules.events import service as events_service
     from radd.modules.notify import consumer
     from radd.modules.notify.models import Notification
@@ -268,12 +242,9 @@ async def test_watching_twice_is_a_double_click_not_an_error(db, admin, page):
 
 
 def test_every_registered_parent_declares_how_it_dies():
-    """The guard that makes the polymorphic parent safe to extend.
-
-    A plugin registering a `CommentParent` gets cleanup for free — but only
-    because the GC builds its event map from the registry. A binding with no
-    `deleted_event` would leave its comments orphaned forever, invisibly. This
-    fails the build instead."""
+    """A `CommentParent` gets cleanup only because the GC builds its event map from
+        the registry: a binding with no `deleted_event` would orphan its comments
+        forever, invisibly. This fails the build instead."""
     from radd.modules.comments.parents import bindings
 
     registered = bindings()

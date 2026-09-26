@@ -6,11 +6,8 @@ import uuid
 from datetime import date, timedelta
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.leave import service as leave
 from radd.modules.leave.schemas import LeaveCreate
@@ -18,28 +15,9 @@ from radd.modules.leave.types import LeaveKind
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
+from _factories import make_user
+
 TODAY = date(2026, 7, 30)
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, *, admin: bool = False) -> User:
-    user = User(
-        email=f"leave-{uuid.uuid4().hex[:8]}@example.com",
-        name="Leave Tester",
-        instance_role=(InstanceRole.ADMIN if admin else InstanceRole.MEMBER).value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 def _span(days: int = 2) -> dict:
@@ -47,7 +25,7 @@ def _span(days: int = 2) -> dict:
 
 
 async def test_own_leave_defaults_to_actor(db):
-    actor = await _user(db)
+    actor = await make_user(db)
     period = await leave.create(db, actor, LeaveCreate(label="PTO", **_span()))
     assert period.user_id == actor.id
     assert period.kind == LeaveKind.LEAVE.value
@@ -55,13 +33,13 @@ async def test_own_leave_defaults_to_actor(db):
 
 
 async def test_stranger_cannot_record_others_leave(db):
-    actor, other = await _user(db), await _user(db)
+    actor, other = await make_user(db), await make_user(db)
     with pytest.raises(ForbiddenError):
         await leave.create(db, actor, LeaveCreate(user_id=other.id, **_span()))
 
 
 async def test_steward_covers_for_member(db):
-    steward, member = await _user(db), await _user(db)
+    steward, member = await make_user(db), await make_user(db)
     team = await teams_service.create_team(
         db, TeamCreate(name=f"T-{uuid.uuid4().hex[:6]}", owner_id=steward.id), actor_id=steward.id
     )
@@ -71,7 +49,8 @@ async def test_steward_covers_for_member(db):
 
 
 async def test_holiday_is_admin_only_and_expands_to_members(db):
-    admin, member, outsider = await _user(db, admin=True), await _user(db), await _user(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN)
+    member, outsider = await make_user(db), await make_user(db)
     team = await teams_service.create_team(
         db, TeamCreate(name=f"H-{uuid.uuid4().hex[:6]}"), actor_id=admin.id
     )
@@ -90,7 +69,7 @@ async def test_holiday_is_admin_only_and_expands_to_members(db):
 
 
 async def test_current_reports_longest_absence_per_user(db):
-    actor = await _user(db)
+    actor = await make_user(db)
     await leave.create(db, actor, LeaveCreate(label="short", start_date=TODAY, end_date=TODAY))
     await leave.create(
         db, actor, LeaveCreate(label="long", start_date=TODAY, end_date=TODAY + timedelta(days=9))
@@ -104,7 +83,7 @@ async def test_current_reports_longest_absence_per_user(db):
 
 
 async def test_subject_validation(db):
-    actor = await _user(db, admin=True)
+    actor = await make_user(db, role=InstanceRole.ADMIN)
     team = await teams_service.create_team(
         db, TeamCreate(name=f"V-{uuid.uuid4().hex[:6]}"), actor_id=actor.id
     )

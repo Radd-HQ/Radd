@@ -8,10 +8,7 @@ notification's detail, so the check saw no teams and admitted every holder of
 
 import uuid
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth import authz, roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
@@ -27,22 +24,7 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, name: str, role: str = "member") -> User:
-    user = User(email=f"ict-{uuid.uuid4().hex[:8]}@example.com", name=name, instance_role=role)
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _grant(db, user: User, project, atoms: list[str]) -> None:
@@ -60,10 +42,10 @@ async def test_a_team_narrowed_internal_comment_reaches_only_its_team(db):
     await db.flush()
     authz.forget_baseline(db)
 
-    admin = await _user(db, "ICT Admin", role="admin")
-    insider = await _user(db, "Insider")
-    outsider = await _user(db, "Outsider")
-    manager = await _user(db, "Manager")
+    admin = await make_user(db, role="admin", name="ICT Admin")
+    insider = await make_user(db, name="Insider")
+    outsider = await make_user(db, name="Outsider")
+    manager = await make_user(db, name="Manager")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"IC{uuid.uuid4().hex[:4].upper()}", name="ICT")
     )

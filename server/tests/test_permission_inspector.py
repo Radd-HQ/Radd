@@ -12,9 +12,7 @@ DB-backed; flushed, never committed.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.access import inspect as access_inspect, service as access_service
 from radd.modules.access.types import Access, GrantSubject
 from radd.modules.auth import authz, grants as auth_grants, roles as auth_roles
@@ -26,18 +24,8 @@ from radd.modules.fields.schemas import FieldDefinitionCreate
 from radd.modules.fields.types import FieldType
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_project
 
 
 @pytest.fixture
@@ -53,12 +41,6 @@ async def member(db) -> User:
     return user
 
 
-async def _project(db, prefix="IN"):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"{prefix}{uuid.uuid4().hex[:4].upper()}", name="P")
-    )
-
-
 async def _role(db, name, permissions):
     return await auth_roles.create_role(
         db, RoleCreate(key=f"insp{uuid.uuid4().hex[:6]}", name=name, permissions=permissions)
@@ -66,7 +48,7 @@ async def _role(db, name, permissions):
 
 
 async def test_sources_carry_channel_scope_and_backlink(db, member):
-    project = await _project(db)
+    project = await make_project(db, 'IN', "P")
     role = await _role(db, "Painters", ["item.update"])
     db.add(GlobalRoleGrant(project_id=project.id, user_id=member.id, role_id=role.id))
     await db.flush()
@@ -85,7 +67,7 @@ async def test_sources_carry_channel_scope_and_backlink(db, member):
 
 
 async def test_sources_name_the_carrying_team(db, member):
-    project = await _project(db)
+    project = await make_project(db, 'IN', "P")
     role = await _role(db, "Wranglers", ["cycle.create"])
     team = await teams_service.create_team(db, TeamCreate(name=f"T{uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, member.id)
@@ -122,7 +104,7 @@ async def test_sources_resolve_a_space_scope(db, member):
 
 
 async def test_resource_access_names_subject_label_and_default(db, member):
-    project = await _project(db)
+    project = await make_project(db, 'IN', "P")
     definition = await fields_service.create_field(
         db,
         FieldDefinitionCreate(project_ids=[project.id], key="sal", name="Salary", type=FieldType.TEXT),
@@ -162,7 +144,7 @@ async def test_resource_access_names_subject_label_and_default(db, member):
 
 
 async def test_team_access_reports_project_and_global_grants(db, member):
-    project = await _project(db)
+    project = await make_project(db, 'IN', "P")
     role = await _role(db, "Crew", ["item.read"])
     team = await teams_service.create_team(db, TeamCreate(name=f"T{uuid.uuid4().hex[:6]}"))
     db.add(GlobalRoleGrant(project_id=project.id, team_id=team.id, role_id=role.id))

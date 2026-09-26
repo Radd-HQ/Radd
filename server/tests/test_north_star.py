@@ -10,9 +10,7 @@ import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.kernel import registries
 from radd.modules.auth.types import all_permission_keys
 from radd.modules.milestones.models import Milestone
@@ -34,16 +32,6 @@ def _load_milestones(_kernel_registries_loaded):
     for spec in milestones_plugin.entities:
         kentities.register_entity(spec)
     yield
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 # --- auto-wiring: the feature lights up with zero edits elsewhere ---

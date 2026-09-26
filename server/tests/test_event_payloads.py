@@ -1,20 +1,7 @@
-"""One shape for item-scoped event payloads (RADD-922).
-
-The stream had fourteen. The issue key was `key` on item and CSAT events,
-`item_key` on SLA and page-link events, and absent from the other nine.
-`project_id` was on two families out of fourteen. `item_id` was on everything
-EXCEPT the item events, which carried `id`.
-
-Nothing enforced a shape, so every new emitter invented one, and every consumer
-grew a branch per spelling — `notify/consumer.py` resolved the key four ways,
-`googlechat/formatter.py` branched on it, `search/indexer.py` opened with a
-silent `if "project_id" not in payload: return`.
-
-These tests are the enforcement. The first is a SOURCE SCAN: it parses every
-`emit()` call in the codebase and fails when an item-scoped one does not build
-`payload["item"]`. That is deliberately structural rather than behavioural —
-a behavioural test can only cover the events a fixture happens to fire, and the
-whole failure mode here is the emitter nobody thought about.
+"""One shape for item-scoped event payloads (RADD-922): every item-scoped emit()
+builds `payload["item"]` and nobody reintroduces `item_key`/`item_id`. Enforced by
+a SOURCE SCAN of every emit() call, because a behavioural test only covers the
+events a fixture happens to fire.
 """
 
 from __future__ import annotations
@@ -28,22 +15,11 @@ from radd.modules.items.service.refs import REQUIRED_KEYS
 
 ROOT = pathlib.Path(__file__).resolve().parents[1] / "src" / "radd"
 
-#: Event types that name an item but are NOT item-scoped triggers, so they carry
-#: their own shape. `notification.created` is an internal realtime signal fired
-#: once per recipient in a fan-out loop — resolving a ref per notification would
-#: be N queries to describe something no automation can subscribe to.
-NOT_ITEM_SCOPED = {"notification.created"}
-
-
 def _emit_calls():
-    """(file, line, entity_type expr, payload SOURCE) for every emit() call.
-
-    Payloads built as a local variable (`payload = {...}` a few lines above, or a
-    `_sla_payload(...)` helper) are resolved to every expression assigned to that
-    name in the file. Without that, half the emitters read as an opaque `payload`
-    and the check would pass by not looking — the vacuous-test failure mode this
-    file exists to prevent.
-    """
+    """(file, line, entity_type expr, payload SOURCE) for every emit() call. A
+    payload built in a local variable resolves to every expression assigned to it;
+    otherwise half the emitters read as an opaque `payload` and the check passes
+    by not looking."""
     for path in sorted(ROOT.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text())

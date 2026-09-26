@@ -1,10 +1,5 @@
-"""Unit tests for intake-form submission validation (spec 17) — the registry core.
-
-The novel invariant a form adds on top of the field registry is its *own* `required`
-overrides: a form field may be required even when the underlying registry field is not.
-That check is pure (`forms/validation.py`), so it is unit-tested here without a DB; the
-end-to-end submit flow (defaults resolution + registry validation) is exercised by
-`scripts/demo_forms.sh`.
+"""Intake-form validation (spec 17): a form field may be required even when its
+registry field is not. Pure (`forms/validation.py`), no DB.
 """
 
 from radd.modules.forms.validation import (

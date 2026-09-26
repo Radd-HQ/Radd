@@ -1,22 +1,7 @@
-"""The architecture ratchet (RADD-885) — CLAUDE.md rule 1, enforced.
-
-Two assertions over the real import graph (AST-walked, deferred imports
-included), so a violation fails the suite instead of surfacing in an audit
-years later:
-
-1. **Models are module-private beyond the spine.** The de-facto spine the
-   2026-08 audit measured is wider than the written one: `WorkItem` (14 FK
-   dependents), `workflow.State` (every item query joins it) and `Team` (8
-   dependents) join `User`/`Project` as READ-ONLY blessings — reads may join
-   them; writes still go through the owner's service. Everything else's
-   `models.py` is off-limits, with the audit's remaining findings frozen in
-   `MODEL_IMPORT_ALLOWLIST` — a burn-down list (RADD-886..892). Fixing a seam
-   removes its entry; ADDING one needs a reason reviewed here.
-
-2. **Imports are declared.** Every `radd.modules.X` import in module Y appears
-   in Y's `depends_on` (load-ordering) or `weak_depends` (declared, not
-   ordered: deferred reverse reaches + feature-detected seams). No allowlist —
-   this one holds outright.
+"""CLAUDE.md rule 1, enforced over the real import graph (deferred imports too):
+1. Beyond the spine (`SPINE`: reads only), a module's `models.py` is private; an
+   entry in `MODEL_IMPORT_ALLOWLIST` needs a reason reviewed here.
+2. Every `radd.modules.X` import is declared in `depends_on` or `weak_depends`.
 """
 
 import ast
@@ -26,19 +11,12 @@ from pathlib import Path
 MODULES_DIR = Path(__file__).resolve().parents[1] / "src" / "radd" / "modules"
 KERNEL_DIR = MODULES_DIR.parent / "kernel"
 
-#: Rule-1 spine: models importable by everyone. items/workflow/teams/fields are
-#: READ-ONLY blessings (the audit's §3b/§3d reality — WorkItem has 14 FK
-#: dependents, every item query joins State, and FieldDefinition is the
-#: custom-field vocabulary every list surface renders); auth carries User (the
-#: original exception) and projects Project. Writes still go through the
-#: owner's service, always.
+#: Rule-1 spine: models every module may import for READS (FKs, joins); writes
+#: still go through the owner's service.
 SPINE = {"auth", "projects", "items", "workflow", "teams", "fields"}
 
-#: (importing module, imported module) pairs the audit found reaching a
-#: non-spine models.py — frozen so the class cannot GROW. Shrunk by the
-#: RADD-887/888 seam work and EMPTIED by RADD-892, which inverted auth's reach
-#: into `pages.models` into a registered GrantScopeSpec. An addition needs a
-#: reason reviewed here; the burn-down is finished.
+#: (importing module, imported module) pairs allowed to reach a non-spine
+#: models.py. Empty since RADD-892; an addition needs a reason reviewed here.
 MODEL_IMPORT_ALLOWLIST: set[tuple[str, str]] = set()
 
 
@@ -163,12 +141,9 @@ def test_weak_depends_name_real_modules():
 
 def test_core_modules_never_reach_optional_plugins():
     """RADD-1349: a core module may not depend on, weakly depend on, or import an
-    OPTIONAL plugin. The audit found 25 such reaches guarded by `except
-    ImportError` (plugin code is always importable, so it never fired) or by
-    `settings.modules` (boot config — blind to a runtime disable), which kept core
-    code calling plugins an admin had switched off. RADD-1383–1387 inverted every
-    one: the core dispatches a hook or reads a kernel socket, and the plugin
-    registers. Optional→optional weak edges (slas → csat) stay legal."""
+    OPTIONAL plugin — `except ImportError` never fires and `settings.modules` is blind
+    to a runtime disable; the core dispatches a hook or reads a kernel socket instead.
+    Optional→optional weak edges (slas → csat) stay legal."""
     import importlib
 
     plugins = {}

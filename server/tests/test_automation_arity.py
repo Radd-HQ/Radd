@@ -1,25 +1,8 @@
-"""Node arity: once for the set, or once per item (RADD-918/919).
-
-There is no LOOP in an automation graph. A back-edge would break the DAG the
-validator rejects cycles against, and a nested-scope executor would grow every
-budget and every report entry a dimension. What replaced it is a property of each
-node — does it see the SET, or each ITEM — which needs no new graph shape,
-because an action passes its input through either way and a router's ports mean
-the same thing at both granularities.
-
-These pin the parts that are easy to get subtly wrong:
-
-* the defaults reproduce the pre-arity behaviour EXACTLY, which is what makes it
-  a no-migration change;
-* a gate emits only the branch it took (it used to emit an empty packet on the
-  other one, which fired every universal action wired there);
-* a per-item router PARTITIONS rather than routing;
-* an action that runs once over a single item still gets that item, so
-  `{{item.key}}` resolves on an ordinary event-triggered run.
-
-Executor tests stub `_load` and `_one` — the fan-out SHAPE is what is new here,
-and re-testing the planner through it would only make the failures harder to
-read. The planner has its own tests in test_automations.py.
+"""Node arity — once for the set, or once per item (RADD-918/919) — is what
+replaces a loop construct. Pinned: the defaults reproduce pre-arity behaviour
+exactly; a gate emits only the branch it took; a per-item router partitions; a
+once-over-one-item action still sees `{{item.key}}`. Executor tests stub
+`_load`/`_one`; the planner is tested in test_automations.py.
 """
 
 import uuid
@@ -494,20 +477,6 @@ async def test_a_per_item_router_without_plan_items_falls_back_to_one_call_each(
 
 
 # --- the search node, and what the API refuses to store -----------------------
-
-
-@pytest.fixture
-async def db():
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    from radd.config import settings
-
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
 
 
 @pytest.fixture

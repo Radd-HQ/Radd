@@ -6,13 +6,8 @@ Rolled-back transactions on the compose DB."""
 
 import uuid
 
-import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.views import defaults as views_defaults, service as views_service
 from radd.modules.views.models import View
 from radd.modules.views.schemas import ViewCreate, ViewUpdate
@@ -20,32 +15,12 @@ from radd.modules.views.types import ShareLevel, ViewType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _member(db, name) -> User:
-    """An active user holds the global member floor (spec 86)."""
-    user = User(
-        email=f"rv-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def test_roadmap_view_type_accepted_on_create_and_patch(db):
     run = uuid.uuid4().hex[:8]
-    member = await _member(db, "Planner")
+    member = await make_user(db, name="Planner")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"RV{run[:4].upper()}", name="Roadmaps")
     )
@@ -87,7 +62,7 @@ async def test_roadmap_view_type_accepted_on_create_and_patch(db):
 
 async def test_project_seeds_roadmap_view_idempotently(db):
     run = uuid.uuid4().hex[:8]
-    member = await _member(db, "Reader")
+    member = await make_user(db, name="Reader")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"RS{run[:4].upper()}", name="Seeded")
     )

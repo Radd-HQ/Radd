@@ -15,25 +15,13 @@ import json
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.forgejo import service
 from radd.modules.forgejo.models import ForgejoConnection
 from radd.modules.forgejo.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
 from radd.exceptions import ConflictError
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _sign(body: bytes, secret: str) -> str:

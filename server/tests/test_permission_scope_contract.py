@@ -1,29 +1,7 @@
-"""Every permission scope the server can serve must be one the SPA renders.
-
-This file exists because the roles matrix quietly stopped showing the page
-atoms. RADD-791 moved `page.read/write/manage/delete` from GLOBAL to a new
-SPACE scope — the right call, since a page had no scope to be checked against
-and per-space access was inexpressible without one. The server half was
-complete: the enum, the catalog, `role_grants.space_id`, the grant UI.
-
-The SPA's `PermissionScope` never learned the word. `PermissionMatrix` renders
-by iterating its own scope list and filtering the catalog to each one, so the
-four space-scoped rows matched no group and rendered nowhere: no error, no
-empty state, no console warning. An admin opening Settings → Roles simply could
-not see or grant the page permissions, and the only visible symptom was a user
-who "should" have had access not having it (RADD-808).
-
-Nothing could have caught it. The atoms are strings on the wire and the scope
-is a string beside them; TypeScript types the field as the client's union and
-casts the JSON into it without complaint. This is the same class as RADD-701's
-renamed constants and RADD-761's shadowed route — a contract with no compiler
-behind it — so it gets the same treatment: a test that reads what the client
-actually declares, rather than a promise to remember.
-
-The assertion runs in BOTH directions deliberately. A scope the client lacks is
-invisible atoms; a scope the client lists that the server never emits is dead
-UI that reads as supported. Both were true here at once.
-"""
+"""Every permission scope the server serves must be one the SPA declares, and
+vice versa (RADD-808: the SPA never learned RADD-791's SPACE scope, so the roles
+matrix silently dropped the page atoms). Atoms and scopes are strings on the
+wire; no compiler catches this, so the test reads what the client declares."""
 
 import re
 from pathlib import Path
@@ -36,11 +14,6 @@ _WEB = Path(__file__).resolve().parents[2] / "web" / "src"
 _TYPES = _WEB / "lib" / "types" / "permissions.ts"
 _MATRIX = _WEB / "components" / "settings" / "PermissionMatrix.tsx"
 
-#: RADD-814 retired the `instance` tier (zero atoms, no resolution branch) on
-#: both sides at once, so nothing is exempt any more: every declared scope must
-#: be populated, and every populated scope must be declared.
-_UNPOPULATED: set[PermissionScope] = set()
-
 
 def _declared_scopes() -> set[str]:
     """The scope values the SPA's `PermissionScope` const declares."""
@@ -48,19 +21,6 @@ def _declared_scopes() -> set[str]:
     block = re.search(r"export const PermissionScope = \{(.*?)\n\} as const;", body, re.S)
     assert block, f"could not find the PermissionScope const in {_TYPES}"
     return set(re.findall(r'^\s*(?:/\*.*?\*/\s*)?\w+:\s*"([^"]+)"', block.group(1), re.M))
-
-
-def _rendered_scopes() -> set[str]:
-    """The scopes `PermissionMatrix` actually iterates.
-
-    Declaring a scope is not rendering one: the matrix walks SCOPE_ORDER, so a
-    value present in the type and absent from that array is exactly as invisible
-    as it was before — which is the failure this test is named for.
-    """
-    body = _MATRIX.read_text()
-    block = re.search(r"const SCOPE_ORDER = \[(.*?)\] as const;", body, re.S)
-    assert block, f"could not find SCOPE_ORDER in {_MATRIX}"
-    return set(re.findall(r"PermissionScope\.(\w+)", block.group(1)))
 
 
 @pytest.mark.skipif(not _TYPES.exists(), reason="SPA sources not present in this checkout")

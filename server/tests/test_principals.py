@@ -25,9 +25,9 @@ from radd.modules.auth.types import (
     Permission,
     UserSource,
 )
-from radd.modules.projects import service as projects
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.auth.types import LoginMethod
+
+from _factories import make_project
 
 
 @pytest.fixture
@@ -51,12 +51,6 @@ async def _person(db, *, role: InstanceRole = InstanceRole.MEMBER) -> User:
             password=f"pw-{uuid.uuid4().hex}",
             instance_role=role,
         ),
-    )
-
-
-async def _project(db):
-    return await projects.create_project(
-        db, ProjectCreate(key=f"P{uuid.uuid4().hex[:6].upper()}", name="Maybe public")
     )
 
 
@@ -88,12 +82,12 @@ async def test_anyone_holds_no_floor(db):
     grants written against the principal rows — so with none, nothing."""
     anyone = await db.get(User, principals.ANYONE_ID)
     assert await authz.effective_permissions(db, anyone) == frozenset()
-    project = await _project(db)
+    project = await make_project(db, "P")
     assert await authz.effective_permissions(db, anyone, project=project) == frozenset()
 
 
 async def test_a_public_grant_reaches_everyone(db):
-    project = await _project(db)
+    project = await make_project(db, "P")
     await _grant(db, BuiltinRoleKey.PUBLIC, principals.ANYONE_ID, project)
     anyone = await db.get(User, principals.ANYONE_ID)
     person = await _person(db)
@@ -109,7 +103,7 @@ async def test_a_public_grant_reaches_everyone(db):
 
 
 async def test_a_contributor_grant_reaches_accounts_but_never_the_world(db):
-    project = await _project(db)
+    project = await make_project(db, "P")
     await _grant(db, BuiltinRoleKey.CONTRIBUTOR, principals.SIGNED_IN_ID, project)
     person = await _person(db)
     anyone = await db.get(User, principals.ANYONE_ID)
@@ -136,8 +130,8 @@ async def test_http_anonymous_reads_exactly_the_public_project(db):
     from radd.app import create_app
     from radd.db import get_session
 
-    public = await _project(db)
-    private = await _project(db)
+    public = await make_project(db, "P")
+    private = await make_project(db, "P")
     await _grant(db, BuiltinRoleKey.PUBLIC, principals.ANYONE_ID, public)
     await db.flush()
 
@@ -179,8 +173,8 @@ async def test_http_a_fresh_account_contributes_only_where_signed_in_users_may(d
     from radd.modules.items.models import WorkItem
     from sqlalchemy import select
 
-    public = await _project(db)
-    private = await _project(db)
+    public = await make_project(db, "P")
+    private = await make_project(db, "P")
     await _grant(db, BuiltinRoleKey.PUBLIC, principals.ANYONE_ID, public)
     await _grant(db, BuiltinRoleKey.CONTRIBUTOR, principals.SIGNED_IN_ID, public)
     person = await _person(db)

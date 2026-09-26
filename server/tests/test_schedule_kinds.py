@@ -200,20 +200,6 @@ async def test_a_schedule_trigger_is_validated_when_the_automation_is_saved(db, 
 
 
 @pytest.fixture
-async def db():
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    from radd.config import settings
-
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
-
-
-@pytest.fixture
 async def admin(db):
     from radd.modules.auth.models import User
     from radd.modules.auth.types import InstanceRole

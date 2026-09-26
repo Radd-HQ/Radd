@@ -1,21 +1,10 @@
 """Mail configuration as rows, and the wiring that makes it reachable (RADD-958).
 
-The routing engine shipped before this and was **dead code**: nothing created a
-source, nothing passed `source_id`, so `routing.decide` returned "no source" and
-exited on every message. Its tests passed because they constructed rows and
-passed the id by hand — honest tests of the engine that proved nothing about
-whether production could ever call it.
-
-So the assertions here are deliberately about REACHABILITY, not about matching:
-that env seeds a row, that a source's own default is used, that a polled source
-carries its id into intake, and that seeding is once-only. The matching itself is
-`test_mail_routing.py`'s job.
-
-The last section is RADD-979's, and it is the same shape of question one step
-further out: a source now names the SENDER that answers for it, so what is
-pinned is that the binding is reachable from every message the transport sends —
-the reply, the acknowledgement and (in `test_notify_mailer.py`) notification
-mail — because all three ride one resolution point.
+The assertions are about REACHABILITY, not matching (that is
+`test_mail_routing.py`): the routing engine once shipped as dead code whose tests
+passed by passing a source id by hand. Pinned: env seeds a row once, a source's
+own default is used, a polled source carries its id into intake, and a source's
+SENDER answers every message the transport sends for it (RADD-979).
 """
 
 import uuid
@@ -26,7 +15,6 @@ import pytest
 
 from radd.modules.mailintake.types import SentMailKind
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import smtp
 from radd.clock import utcnow
@@ -62,16 +50,6 @@ from radd.modules.mailintake.types import (
 )
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture
@@ -162,14 +140,9 @@ async def _item(db, item_id):
 
 
 async def test_the_dry_run_parses_addresses_the_way_a_real_message_does(db, world):
-    """Found by running it: the preview built its `recipients` by splitting the
-    raw input on commas, so `Pipeline Team <PIPELINE@radd-hq.com>` produced the
-    whole display-name string and matched no rule — while the SAME address in a
-    real message matched fine.
-
-    A dry run that disagrees with the live chain is worse than no dry run: it
-    reports a working rule as broken and sends someone off to fix nothing.
-    """
+    """The preview must parse addresses as a real message does: splitting on commas
+    turned `Pipeline Team <PIPELINE@radd-hq.com>` into a display-name string that
+    matched no rule, so the dry run reported a working rule as broken."""
     from radd.modules.mailintake.rules_router import preview_routing
     from radd.modules.mailintake.config_schemas import RoutingPreviewRequest
 
@@ -292,20 +265,9 @@ async def test_own_addresses_unions_every_row(db):
 
 
 def test_the_poll_loop_starts_without_any_mail_env_at_all(monkeypatch):
-    """**The regression this issue exists for**, and the only place it is
-    visible: the gate is on the LOOP, so no amount of exercising `run_once`
-    catches it.
-
-    `enabled` was `run_workers and bool(settings.mail_imap_host)`. RADD-958 moved
-    mailboxes into `mail_sources` rows and left that line alone, so on an
-    instance configured entirely through Settings → Email the poller task was
-    never even created — a complete row, a lit capability pill, and a mailbox
-    filling up in silence.
-
-    It now reads `run_workers` alone, matching the outbound consumer that always
-    had that posture. Asserted on the private predicate deliberately: calling
-    `start()` would begin polling, and the predicate IS the bug.
-    """
+    """The poll loop's gate is `run_workers` alone: gating it on `mail_imap_host`
+    meant a rows-only instance never created the poller task. Asserted on the private
+    predicate because calling `start()` would begin polling."""
     from radd.modules.mailintake import dispatcher
 
     monkeypatch.setattr(settings, "mail_imap_host", "")
@@ -320,13 +282,9 @@ def test_the_poll_loop_starts_without_any_mail_env_at_all(monkeypatch):
 
 
 class _SessionHandle:
-    """Hands the poller the TEST transaction instead of a committed one.
-
-    `poller.run_once` opens its own `SessionLocal` — right in production, and
-    invisible to a test whose rows are never committed. `commit` becomes a flush
-    for the same reason: the fixture's rollback has to stay in charge, or a
-    poller test leaves a project and an item in the test database.
-    """
+    """Hands the poller the TEST transaction: `poller.run_once` opens its own
+    `SessionLocal`, invisible to uncommitted rows, and `commit` becomes a flush so the
+    fixture's rollback stays in charge."""
 
     def __init__(self, session) -> None:
         self._session = session
@@ -360,15 +318,9 @@ async def poll_against_the_test_session(db, monkeypatch):
 async def test_the_poller_polls_a_row_configured_instance_with_no_env(
     db, world, monkeypatch, poll_against_the_test_session
 ):
-    """One poll, end to end, on an instance with NO mail environment at all: the
-    row's resolved host is dialled, the message becomes an item in the source's
-    default project, the uid is flagged `\\Seen`, and the ack is handed the item
-    it acknowledges.
-
-    The loop's gate is its sibling above — `run_once` was always callable, which
-    is exactly why the bug survived RADD-958. This test is the other half: that
-    a tick with rows and no env does the whole job.
-    """
+    """One tick with rows and NO mail env does the whole job: the row's resolved host
+    is dialled, the message becomes an item in the source's default project, the uid
+    is flagged `\\Seen`, and the ack is handed the item it acknowledges."""
     _, default, _ = world
     source = MailSource(
         name="Rows only", kind=MailSourceKind.IMAP.value, address="help@radd-hq.com",
@@ -409,14 +361,9 @@ async def test_the_poller_polls_a_row_configured_instance_with_no_env(
 async def test_the_poller_does_nothing_at_all_with_no_polled_sources(
     db, monkeypatch, poll_against_the_test_session
 ):
-    """The other half of the gate. The loop now starts on `run_workers` alone,
-    so "is there anything to poll" is asked here, once a tick.
-
-    The `own_addresses` trap is the load-bearing assertion: it says the early
-    return happens BEFORE the second query, so the tick an instance with no
-    mailboxes pays every 60 seconds forever is exactly one indexed SELECT. A
-    gate that costs the whole read is a gate someone eventually removes.
-    """
+    """With no polled sources a tick returns BEFORE the second query (the
+    `own_addresses` trap), so an instance with no mailboxes pays one indexed SELECT a
+    minute — a gate that costs the whole read is a gate someone eventually removes."""
     def fake_fetch(row):  # pragma: no cover - the assertion is that it never runs
         raise AssertionError(f"dialled {row.name} with no polled sources")
 
@@ -535,12 +482,8 @@ async def test_the_capability_snapshot_tracks_rows_not_env(db):
 
 
 async def test_a_preset_kind_answers_the_connection_the_row_leaves_blank():
-    """The spec-110 rule, copied: the ROW STORES BLANK where the preset answers.
-
-    Baking `smtp.gmail.com` into the row at save time looks identical on day one
-    and is wrong the day the preset changes — every existing row would keep the
-    old value. So the row holds nothing and resolution happens on the way out.
-    """
+    """The ROW STORES BLANK where the preset answers (the spec-110 rule): baking
+    `smtp.gmail.com` in at save time would be wrong the day the preset changes."""
     row = MailSender(
         name="Gmail", kind=MailSenderKind.GOOGLE.value, host="", port=0,
         from_address="Radd Support <support@radd-hq.com>", starttls=False,
@@ -704,15 +647,9 @@ async def test_a_google_sender_dispatches_to_the_smtp_transport(db, world, monke
 
 
 async def test_a_hostless_preset_row_is_what_the_transport_sends_through(db, world, monkeypatch):
-    """The seam between the RADD-968 transport and RADD-969 resolution.
-
-    `outbound_configured` and `default_sender` both used to read `row.host`, and
-    a Gmail row stores none — so notification mail and requester replies would
-    have reported "nothing to send from" on an instance whose settings page said
-    it was configured, while the test button sent fine. Both now go through
-    `resolve`, and the transport dispatches through `senders.sender_for`, which
-    is the only reason a preset sender works for anything but the test.
-    """
+    """A Gmail row stores no host, so `outbound_configured` and `default_sender` must
+    go through `resolve`, and the transport through `senders.sender_for` — reading
+    `row.host` reported "nothing to send from" while the test button worked."""
     from radd import smtp
     from radd.modules.items import service as items_service
     from radd.modules.items.schemas import ItemCreate
@@ -791,14 +728,9 @@ async def test_every_kind_has_a_preset_entry():
 
 
 class _FakeSmtp:
-    """Enough of smtplib.SMTP to capture what was composed and WHICH relay it
-    was handed to.
-
-    The DIAL is the load-bearing half here. Two senders compose byte-identical
-    bodies for the same message, so a test that only inspects the content cannot
-    tell which identity the recipient actually saw — the host and the `From`
-    line are the only things that differ.
-    """
+    """Enough of smtplib.SMTP to capture what was composed and WHICH relay it was
+    handed to. The dial is what matters: two senders compose byte-identical bodies, so
+    only the host and the `From` line show which identity the recipient saw."""
 
     sent: list[EmailMessage] = []
     dialled: list[tuple[str, int]] = []
@@ -835,13 +767,9 @@ def relay(monkeypatch):
 
 @pytest.fixture
 async def no_senders(db):
-    """Disable every `mail_senders` row already committed to the test database.
-
-    `default_sender` reads the table, not a fixture — a row another module
-    committed would otherwise decide which relay these tests dial, and "the
-    binding was used" would be true by accident. Inside the transaction, so it
-    rolls back with everything else.
-    """
+    """Disable every committed `mail_senders` row: `default_sender` reads the table,
+    so another module's row would otherwise pick the relay and "the binding was used"
+    would be true by accident. Rolls back with the transaction."""
     await db.execute(update(MailSender).values(enabled=False))
 
 
@@ -914,17 +842,9 @@ def _flush_instead_of_commit(db):
 async def test_the_ack_and_the_reply_both_leave_from_the_source_they_arrived_at(
     db, world, relay, no_senders, monkeypatch
 ):
-    """RADD-979, driven through two of the three real callers.
-
-    Before it, every outbound message left from the single default sender: a
-    ticket raised at `help@` was answered by `agent@`, so the address the
-    requester wrote to never appeared on anything Radd sent back. The fix is ONE
-    resolution point inside the transport — which is exactly why proving it for
-    the acknowledgement and the reply says something about notification mail
-    too (the "acknowledgement" leg here is an automation's threaded Send email —
-    the same transport call the desk's receipt makes), and why the third leg is driven for real in `test_notify_mailer.py`
-    rather than re-implemented here.
-    """
+    """RADD-979: a reply and an acknowledgement leave from the source the ticket
+    arrived at, through ONE resolution point in the transport — which is why the third
+    leg, notification mail, is driven for real in `test_notify_mailer.py`."""
     actor, project, _ = world
     house = _relay_row(db, "House", "smtp.house.test", "agent@radd-hq.com", is_default=True)
     desk = _relay_row(db, "Desk", "smtp.desk.test", "help@radd-hq.com")
@@ -1096,16 +1016,9 @@ async def test_deleting_the_bound_sender_nulls_the_binding_and_not_the_source(
 
 
 async def test_the_origin_is_the_earliest_inbound_source_not_the_latest(db, world):
-    """A long thread gains addresses: someone CCs a second mailbox on message
-    four, and that message is recorded against its own source too. Taking the
-    NEWEST would hand the conversation's identity to whichever box happened to
-    be copied in last — changing the From address mid-conversation for the one
-    person who never asked for it.
-
-    Timestamps are set explicitly because Postgres' `now()` is the TRANSACTION
-    timestamp: rows written together tie, so relying on insert order would
-    assert nothing at all about the ORDER BY.
-    """
+    """The conversation keeps its EARLIEST source: a mailbox CC'd on message four
+    must not change the From address mid-thread. Timestamps are explicit because
+    `now()` is the transaction timestamp, so insert order would assert nothing."""
     actor, project, _ = world
     first = _mailbox(db, project, address="help@radd-hq.com")
     second = _mailbox(db, project, address="sales@radd-hq.com")

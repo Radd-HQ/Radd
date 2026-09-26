@@ -1,36 +1,18 @@
-"""RADD-1085 — what leaves the building is gated on field grants.
-
-Event payloads deliberately carry the FULL item for in-process consumers; a
-webhook endpoint can hold no grant and sit in no team, so restricted values
-must be redacted at the delivery seam, and the search headline must not read
-out a description the item API would blank.
-
-Grant rows here are FLUSHED, never committed: a committed read grant would
-gate snippets instance-wide for every later test in the run (the exact
-cross-test pollution RADD-845's first cut demonstrated).
+"""RADD-1085: what leaves the building is gated on field grants. Payloads carry the
+FULL item for in-process consumers, so a webhook (no grant, no team) gets restricted
+values redacted at the delivery seam, and the search headline must not read out a
+description the item API would blank. Grant rows are FLUSHED, never committed: a
+committed read grant would gate snippets instance-wide for every later test.
 """
 
 import uuid
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.access.models import AccessGrant
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.items.redaction import redact_item_payload
 from radd.modules.webhooks.service import _outbound_payload
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 # --- the pure redactor -------------------------------------------------------

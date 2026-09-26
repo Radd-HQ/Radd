@@ -1,15 +1,8 @@
-"""Merge coverage oracle: every place a user id is stored must be handled.
-
-A merge moves the survivor's id into every place the old id was used. The failure
-mode is silent — a column nobody added to `_MERGE_REPOINT` keeps pointing at a
-row that no longer exists (or, on a CASCADE column, is simply deleted along with
-it), and nothing errors. That is how `global_role_grants` and `team_managers`
-came to be dropped on every merge: both are CASCADE, both were missed, and the
-symptom was only "my permissions vanished".
-
-So this walks the MAPPER METADATA rather than trusting the lists, and fails when
-a user-bearing column is not covered. A new module that stores a user id has to
-say what a merge should do with it.
+"""Merge coverage oracle: every column storing a user id must be handled by a merge.
+A column missing from `_MERGE_REPOINT` fails silently — it dangles, or on CASCADE is
+deleted with the old row (how merges dropped `global_role_grants` and
+`team_managers`). So this walks the MAPPER METADATA rather than trusting the lists:
+a new module that stores a user id must say what a merge does with it.
 """
 
 import pytest

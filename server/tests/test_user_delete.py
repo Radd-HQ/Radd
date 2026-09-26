@@ -1,17 +1,9 @@
 """Hard-deleting a user, with their work reassigned (spec 89).
 
-Spec 87 dropped the `user.delete` atom on the reasoning that accounts are only
-ever deactivated or merged; spec 89 reinstates it. The invariants that matter:
-
-  - nothing the person authored is lost — it lands on the named successor,
-  - EXCEPT worklogs, which are discarded rather than moved, so nobody is
-    credited with hours they did not work,
-  - the row actually goes, which means every FK referencing it must have been
-    dealt with first (13 columns would otherwise block, several more would
-    silently dangle),
-  - you cannot delete yourself, or orphan work by omitting a successor.
-
-Rolled-back transactions on the compose DB.
+Nothing the person authored is lost — it lands on the named successor — EXCEPT
+worklogs, which are discarded so nobody is credited with hours they did not work;
+the row actually goes (every FK to it handled first); and you cannot delete
+yourself or orphan work by omitting a successor. Rolled back, never committed.
 """
 
 import uuid
@@ -19,9 +11,7 @@ from datetime import date
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules import workflow  # noqa: F401 — registers the default-state hook
 from radd.modules.auth import service as auth_service
@@ -35,16 +25,6 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import enablement as timelog_enablement, service as timelog_service
 from radd.modules.timelogging.schemas import WorklogCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _user(db, label, *, role=InstanceRole.ADMIN, active=True) -> User:
@@ -178,19 +158,10 @@ async def test_every_blocking_reference_is_covered(db):
 
 
 async def test_delete_destroys_federated_identities_rather_than_handing_them_over(db):
-    """RADD-783: a successor inherits the WORK, never the credentials.
-
-    `user_identities` sits in `_MERGE_REPOINT` because a MERGE should move it —
-    folding a duplicate into the real account must not cost either door its
-    ability to open. `delete_user` shares that list, so the deleted account's
-    (provider, subject) pair was handed to the successor, and the next SSO login
-    with the deleted address signed in AS the successor.
-
-    That is an account takeover by anyone who still controls the IdP subject,
-    and it was reported from the live instance by the person it happened to.
-    Same shape of argument as worklogs, one step more serious: crediting the
-    wrong hours corrupts a report, inheriting a credential hands over an account.
-    """
+    """RADD-783: a successor inherits the WORK, never the credentials. `delete_user`
+    shares merge's `_MERGE_REPOINT`, where `user_identities` belongs for a MERGE — so
+    the deleted account's (provider, subject) went to the successor, and the next SSO
+    login with the deleted address signed in AS them: an account takeover."""
     from sqlalchemy import text as sql
 
     from radd.modules.sso.models import SsoProvider, UserIdentity

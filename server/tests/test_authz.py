@@ -71,19 +71,10 @@ ATTACHING = {Permission.ATTACHMENT_CREATE, "attachment.delete@own", Permission.P
 
 
 def patch_lookups(monkeypatch, *, permission_sets=(), global_permission_sets=(), baseline=None):
-    """THREE DB lookups to stub: the per-project role grants, (spec 87) the
-    instance-wide ones, and (RADD-773) the Baseline role's permissions.
-
-    That third one is new, and it is the change in a sentence: the floor used to
-    be a constant that needed no query, and is now a row an admin can edit.
-    `baseline=` defaults to the seeded set so these tests describe a stock
-    instance; pass your own to model an admin who has retuned it.
-
-    Patched on `authz_core` (RADD-902: the pure core + `effective_permissions`/
-    `require` live in `radd.modules.auth.authz_core` now — `authz.py` only
-    re-exports them, and a monkeypatch on the facade's re-exported attribute
-    would not reach the call site running in `authz_core`'s own globals).
-    """
+    """Stub the three lookups: project-scoped grants, instance-wide grants, and the
+        Baseline role's permissions (`baseline=` defaults to the seeded set). Patched on
+        `authz_core`: a monkeypatch on the `authz` facade's re-export does not reach the
+        call site."""
 
     async def fake_permission_sets(session, user_id, project):
         return [list(permissions) for permissions in permission_sets]
@@ -230,13 +221,9 @@ BASELINE = frozenset(builtin_role(BuiltinRoleKey.BASELINE).permissions)
 
 
 def test_baseline_is_seeded_read_only():
-    """The seed is a policy decision, so it is worth asserting rather than assuming.
-
-    RADD-773 deliberately narrowed it: `page.write`, `cycle.manage` and
-    `timesheet.view` used to be free for every active user via a second hardcoded
-    set, which is how a member with no grants anywhere could edit any wiki page
-    and delete any cycle. Anything beyond reading now has to be granted.
-    """
+    """The seed is a policy decision, so it is asserted: anything beyond reading must
+        be granted (RADD-773 took `page.write`, `cycle.manage` and `timesheet.view` off
+        the free floor)."""
     # RADD-816 widened the seed deliberately: the Q4 author-own rights and the
     # F6 catalog reads become GRANTS everyone holds — explainable and revocable
     # — instead of hardcoded checks and vacuous member-floor gates. RADD-825
@@ -272,12 +259,8 @@ def test_baseline_is_seeded_read_only():
 
 
 def test_combiners_hold_no_opinion_without_a_baseline():
-    """No baseline argument -> no floor. The default fails CLOSED.
-
-    An absent Baseline row (a database mid-migration) must not silently
-    reinstate the permissive floor this replaced, so the default is empty rather
-    than the old viewer set.
-    """
+    """No baseline argument -> no floor: the default fails CLOSED, so an absent
+        Baseline row (a database mid-migration) cannot reinstate a permissive floor."""
     assert combine_permissions(instance_role=InstanceRole.MEMBER, permission_sets=[]) == frozenset()
     assert global_scope_permissions(InstanceRole.MEMBER.value) == frozenset()
 
@@ -500,47 +483,15 @@ def test_role_delete_rules():
     roles.ensure_deletable(StubRole(), referenced=False)  # custom + unreferenced: fine
 
 
-# Field-level visibility moved to per-role/team grants (spec 07) — see test_field_grants.py.
-
-
 # --- the member-floor people directory (RADD-769) ---------------------------
 
 
 def test_user_directory_entry_exposes_no_administrative_fields():
-    """The directory is safe because of its SHAPE, not because of a gate.
-
-    `GET /users/directory` is open to anyone with an account — the finding
-    behind RADD-769 is that naming a colleague is not an administrative act, and
-    gating it on `user.manage` put a 403 on nearly every issue and page an
-    ordinary member opened. What keeps that from becoming the admin directory in
-    disguise is that this model carries none of what `UserRead` does.
-
-    So this asserts the EXCLUSION, not the inclusion: adding `email` (or the
-    instance role, or sign-in history) back onto the entry would publish it to
-    every account in the instance, and would do it silently.
-
-    REVISED (RADD-869): `source` moved to the exposed side. Which auth backend
-    an account uses is not a secret the way an address is, and without it a
-    picker rendered a service account exactly like a colleague — defeating the
-    "never mistaken for a person" intent the service-accounts module states.
-    REVISED AGAIN (RADD-938): `has_access` joined it, and it is a different KIND
-    of field — not a fact about the account at all, but about the CALLER's
-    project. It is populated only when the caller passes a `project_id` and can
-    see that project themselves; otherwise it stays None. Ungated it would have
-    turned an open "who exists" directory into "who is on what", enumerable for
-    projects the caller cannot see.
-
-    REVISED AGAIN (RADD-1034): `external` joined it — narrower than exposing
-    `source` a second time, it answers one boolean ("is this row a stranger who
-    emailed the desk") instead of handing the SPA the `email` sentinel to
-    hardcode. It defaults False and is only ever True on rows the caller opted
-    into via `include_requesters=true` (see `test_user_directory.py`).
-
-    REVISED AGAIN (RADD-1295): `avatar_url` joined it for the reason
-    `avatar_color`/`avatar_emoji` are here — it is what a picker DRAWS. It is
-    the person's chosen picture (or their sign-in provider's), served at a
-    versioned URL, not an administrative fact about the account.
-    """
+    """The member-floor directory is safe by its SHAPE: `UserDirectoryEntry` is open
+        to every account (RADD-769), so this pins the EXCLUSION of administrative fields —
+        adding `email`, the instance role or sign-in history would publish them to
+        everyone, silently. `has_access` is populated only for a project the caller can
+        see; `external` only on rows the caller opted into (`include_requesters`)."""
     from radd.modules.auth.schemas import UserDirectoryEntry, UserRead
 
     exposed = set(UserDirectoryEntry.model_fields)

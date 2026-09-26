@@ -7,35 +7,16 @@ but rolled back. Pins the wiring so a locked field is disabled up front instead 
 
 import uuid
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.access import service as access
 from radd.modules.access.types import Access, GrantSubject
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate
 from radd.modules.fields.types import FieldType
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"FW{uuid.uuid4().hex[:6].upper()}", name="Writability")
-    )
+from _factories import make_project
 
 
 async def _team(db):
@@ -57,7 +38,7 @@ async def _readonly(db, project, *, teams=(), manage=False):
 
 
 async def test_readonly_reflects_custom_and_builtin_write_grants(db):
-    project = await _project(db)
+    project = await make_project(db, "FW")
     team = await _team(db)
     tag = uuid.uuid4().hex[:6]
 
@@ -102,7 +83,7 @@ async def test_readonly_reflects_custom_and_builtin_write_grants(db):
 
 
 async def test_no_grants_means_nothing_readonly(db):
-    project = await _project(db)
+    project = await make_project(db, "FW")
     tag = uuid.uuid4().hex[:6]
     await fields_service.create_field(
         db,
@@ -114,8 +95,8 @@ async def test_no_grants_means_nothing_readonly(db):
 
 
 async def test_scoped_grant_is_readonly_only_in_its_project(db):
-    a = await _project(db)
-    b = await _project(db)
+    a = await make_project(db, "FW")
+    b = await make_project(db, "FW")
     team = await _team(db)
     tag = uuid.uuid4().hex[:6]
     # A GLOBAL field, but a write grant SCOPED to project A only.

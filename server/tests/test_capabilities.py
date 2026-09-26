@@ -1,8 +1,5 @@
-"""Chokepoint-2 parity (spec 93): the /capabilities registry must reproduce the
-provider flags the old inlined `/instance/status` computed. Each plugin's
-`CapabilitySpec.check()` replicates the exact `bool(settings.*)` expression the
-endpoint used to inline, so `instance_status` (now a registry consumer) is
-byte-for-byte equivalent for any config. Pure: reads the registry + settings.
+"""/capabilities is built from each plugin's `CapabilitySpec`; these pin the
+registered set and what each check reads.
 """
 
 from radd.config import settings
@@ -23,17 +20,13 @@ def test_all_expected_capabilities_registered():
 
 def test_capability_checks_match_the_old_inline_logic():
     cm = _map()
-    # `sso` moved to a DB snapshot in spec 110 — asserted below with the other
-    # registry-backed capabilities, not against the (now seed-only) env vars.
+    # `sso` reads a DB snapshot: asserted below with the other registry-backed ones.
     assert cm["ldap"]["enabled"] == bool(settings.ldap_url and settings.ldap_user_domain)
     assert cm["ldap"]["bind_account"] == bool(
         settings.ldap_url and settings.ldap_bind_dn and settings.ldap_bind_password
     )
-    # RADD-1389: outbound email is mailintake's, read from sender ROWS (below).
-    assert "smtp" not in cm
-    # RADD-1279: the "mfa" capability is GONE — it reported that TOTP ships,
-    # which read like enforcement. The policy is the `require_mfa` setting.
-    assert "mfa" not in cm
+    assert "smtp" not in cm  # outbound mail is read from sender ROWS (below)
+    assert "mfa" not in cm  # the policy is the `require_mfa` setting
     assert cm["workers"]["enabled"] == settings.run_workers
 
 

@@ -1,25 +1,15 @@
-"""Replies on every comment surface, each with an audience bounded by its
-thread's (RADD-1246):
-
-- an INTERNAL thread forces internal replies (a public one is refused) and
-  lets a reply only NARROW the thread's teams;
-- a PUBLIC thread takes public replies and internal ones, and the internal
-  ones are invisible to a reader who may not read internal comments;
-- narrowing an internal root pulls its wider replies in;
-- an issue comment, a page's general discussion and an annotation are all
-  roots; a reply to a reply is still refused.
-
-DB-backed, flushed never committed. Scoped keys stand in for less-privileged
-people: an admin whose token scope lacks `comment.read_internal` reads exactly
-what a member without the atom reads.
+"""Replies on every comment surface, audience bounded by the thread's (RADD-1246):
+an INTERNAL thread forces internal replies that may only NARROW its teams (and
+narrowing the root pulls wider replies in); a PUBLIC thread takes both, internal
+ones hidden from readers without `comment.read_internal`; issue comments, page
+discussion and annotations are all roots; a reply to a reply is refused. Scoped
+keys stand in for less-privileged people. Flushed, never committed.
 """
 
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.scopes import parse_scope
@@ -38,16 +28,6 @@ from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 
 INTERNAL, PUBLIC = CommentVisibility.INTERNAL, CommentVisibility.PUBLIC
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _admin(db, name: str, *, scope: list[str] | None = None) -> User:

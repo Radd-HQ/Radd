@@ -1,18 +1,8 @@
-"""Quiet events (spec 100) — `events.quiet()` marks a scope's events `silent`, and
-the consumers that reach OUTSIDE the instance skip them.
-
-This is the invariant a bulk import depends on: 45k imported issues must not send
-45k notifications, fire 45k webhook deliveries or trigger the automation rules of
-a workflow the work never actually went through. Equally load-bearing is the
-asymmetry — the search index and the activity feed DO consume silent events,
-because an imported issue must be findable and must have history.
-
-The wedge case is called out explicitly: consumers skip silent events inside their
-loop and still advance the cursor past them. Filtering them out in SQL instead
-would leave a batch of nothing but silent events looking like an empty stream, and
-the cursor would never move past them.
-
-DB-backed tests are flushed, never committed; the session rolls back at teardown.
+"""`events.quiet()` marks a scope's events `silent`; consumers that reach OUTSIDE
+the instance skip them (an import must not notify, deliver webhooks or fire
+automations), while search and the activity feed still consume them. Consumers
+skip silent events IN the loop and still advance the cursor — filtering them in
+SQL would leave an all-silent batch looking empty and the cursor stuck.
 """
 
 import asyncio
@@ -21,9 +11,7 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.automations.engine import should_process
@@ -40,27 +28,12 @@ from radd.modules.webhooks import service as webhooks
 from radd.modules.webhooks.models import WebhookDelivery, WebhookEndpoint
 from radd.modules.webhooks.types import CONSUMER_NAME as WEBHOOK_CONSUMER
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
 async def actor(db) -> User:
-    user = User(
-        email=f"quiet-{uuid.uuid4().hex[:8]}@example.com",
-        name="Quiet Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Quiet Tester")
 
 
 async def _emit(db, *, silent_scope: bool) -> Event:

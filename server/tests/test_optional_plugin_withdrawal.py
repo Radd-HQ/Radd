@@ -1,24 +1,9 @@
-"""RADD-1387 — core modules stop reaching into optional plugins.
-
-`automations` imported `leave`, `mailintake` and `participants`, and
-`attachments` imported `ai`, each behind a `settings.modules` check or a
-`plugin_loaded()` guard. `settings.modules` is BOOT config: a plugin disabled at
-runtime leaves the kernel registries, and those calls kept running. Each reach
-is now something the optional plugin CONTRIBUTES, so withdrawing the plugin
-withdraws the behaviour. This module pins both halves against the real plugins,
-withdrawn the way the plugin manager does it (`registries.unregister_plugin`):
-
-* round-robin asks the PERSON_AVAILABILITY socket — leave withdrawn, nobody is
-  away (and nothing crashes); registered, the away member is skipped;
-* Send email (and Add participant) are nodes mailintake (participants)
-  contribute under the keys they always had — a graph STORED before the move
-  loads and dry-runs unchanged; withdrawn, the node leaves the catalog and the
-  stored graph reports the engine's unknown-action failure for that node;
-* the `llm` storage routing rule is ai's provider on STORAGE_ROUTING_RULE —
-  withdrawn, the type is not offered, a new one is refused, and a stored one
-  falls through to the default host.
-
-DB-backed, flushed never committed; the session rolls back at teardown.
+"""Core modules reach optional plugins only through what the plugin contributes
+(RADD-1387), so withdrawing a plugin (`registries.unregister_plugin`, as the
+plugin manager does) withdraws the behaviour: PERSON_AVAILABILITY (leave), the
+Send email / Add participant nodes (stored graphs load unchanged and fail cleanly
+when withdrawn), and the `llm` storage rule (ai). `settings.modules` is boot
+config and cannot see a runtime disable.
 """
 
 import importlib
@@ -27,35 +12,19 @@ from contextlib import contextmanager
 from datetime import date
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.kernel.registry import registries
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
+
+from _factories import make_user
 
 automations_router = importlib.import_module("radd.modules.automations.router")
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
 async def admin(db) -> User:
-    user = User(
-        email=f"withdraw-{uuid.uuid4().hex[:8]}@example.com",
-        name="Withdraw Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Withdraw Admin")
 
 
 @contextmanager

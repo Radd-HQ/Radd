@@ -7,24 +7,12 @@ the live API hot-mounts on.
 """
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.pluginmgr import service
 from radd.modules.pluginmgr.types import PluginState
 
 MILESTONES = "radd.milestones"
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def test_lists_core_and_installable_with_state(db):

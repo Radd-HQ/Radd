@@ -12,11 +12,8 @@ Rolled-back transactions on the compose DB.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
@@ -24,24 +21,7 @@ from radd.modules.views import service as views_service
 from radd.modules.views.schemas import ViewCreate, ViewUpdate
 from radd.modules.views.types import ShareLevel, ViewType
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, role=InstanceRole.ADMIN) -> User:
-    user = User(
-        email=f"bc-{uuid.uuid4().hex[:8]}@example.com", name="Board Tester", instance_role=role.value
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_user
 
 
 async def _board(db, actor, **kwargs):
@@ -56,7 +36,7 @@ async def _board(db, actor, **kwargs):
 
 
 async def test_presence_round_trips_with_the_bucket_order_idiom(db):
-    actor = await _user(db)
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Board Tester")
     created = await _board(db, actor)
     assert created.collapse_empty_columns is False and created.hidden_columns is None
 
@@ -82,9 +62,9 @@ async def test_presence_is_edit_gated(db):
     """A VIEWER — someone the view is shared with read-only — can see the board
     but cannot reshape it for everyone. (A stranger gets a 404: the view is
     invisible to them, which is the stronger refusal.)"""
-    owner = await _user(db)
+    owner = await make_user(db, role=InstanceRole.ADMIN, name="Board Tester")
     created = await _board(db, owner, global_access=ShareLevel.VIEWER)
-    bystander = await _user(db, InstanceRole.MEMBER)
+    bystander = await make_user(db, name="Board Tester")
     assert (await views_service.get_view_read(db, created.id, bystander)).can_edit is False
     with pytest.raises(ForbiddenError):
         await views_service.update_view(

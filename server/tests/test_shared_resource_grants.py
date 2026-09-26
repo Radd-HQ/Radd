@@ -4,10 +4,8 @@ from datetime import timedelta
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.clock import utcnow
-from radd.config import settings
 from radd.modules.access import service as grants
 from radd.modules.access.types import GrantEffect, GrantSubject
 from radd.modules.auth import service as auth
@@ -23,15 +21,6 @@ from radd.modules.teams.schemas import TeamCreate
 from radd.modules.views import service as views
 from radd.modules.views.schemas import ViewCreate
 from radd.modules.auth.types import LoginMethod
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.mark.parametrize("resource", ["view", "dashboard"])

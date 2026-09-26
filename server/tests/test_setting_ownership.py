@@ -1,17 +1,9 @@
 """Every scalar setting is declared by the module that reads it (RADD-891).
 
-`settings/types.py::SettingKey` used to enumerate every feature module's
-tunables — `ai_*`, `ldap_*`, `csat_enabled`, `release_*`,
-`workflow_transition_mode`, `estimation_points`, the timesheet keys — in one
-hardcoded `SETTINGS_REGISTRY` dict, while the kernel `SettingSpec` /
-`RaddPlugin.settings_keys` fields that exist for exactly that (mirroring
-`PermissionSpec`, spec 93) were read by nothing. Mirrors
-`test_permission_ownership.py`'s fix for `auth.types.Permission` one registry
-over: the registry is the catalog now, the enum is the typed alias surface
-call sites hold, and this file asserts BOTH directions plus the ownership rule
-itself: `settings` declares no keys of its own — it is pure cascade mechanism.
-
-Pure/in-memory — reads the registry conftest's autouse fixture loads.
+The kernel registry (each plugin's `settings_keys`) is the catalog and `SettingKey`
+the typed alias call sites hold, so this asserts both directions, one owner per
+key, and that `settings` itself declares none — it is pure cascade mechanism.
+In-memory: reads the registry conftest's autouse fixture loads.
 """
 
 from radd.kernel import registries
@@ -101,15 +93,9 @@ def test_every_key_default_resolves():
 
 
 def test_every_section_is_a_usable_slug():
-    """RADD-930: `section` places a key on a settings surface, and the SPA
-    matches it EXACTLY (a page claims `x`, which also takes `x.<card>`). It is a
-    wire constant with no compiler behind it, so a stray capital or trailing
-    space produces a key that is simply never claimed.
-
-    That failure is deliberately survivable — a General page renders the
-    REMAINDER, so an unclaimed key still appears, just in the wrong place. This
-    test is what turns "wrong place, nobody notices" into a red suite.
-    """
+    """`section` is a wire constant the SPA matches EXACTLY (a page claims `x` and
+    `x.<card>`), so a stray capital leaves a key unclaimed — which the General page
+    survives by rendering it in the wrong place, where nobody notices."""
     for plugin in registries.plugins.values():
         for spec in plugin.settings_keys:
             section = spec.section

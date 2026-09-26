@@ -9,9 +9,7 @@ escalation primitive rather than a restriction.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import UnauthorizedError
 from radd.modules.auth import authz, scopes, service, service_accounts
 from radd.modules.auth.models import User
@@ -21,34 +19,12 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.auth.types import LoginMethod
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_project
 
 
 @pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"SA{uuid.uuid4().hex[:4].upper()}", name="Service accounts")
-    )
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"sa-admin-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_project(db, "SA")
 
 
 # --- the ceiling ---

@@ -2,12 +2,10 @@
 shape; a dry run leaves none; the newest run rides the rule read; old rows are
 swept."""
 
-import uuid
 from datetime import timedelta
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.clock import utcnow
 from radd.config import settings
@@ -20,32 +18,14 @@ from radd.modules.events import service as events
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEvent, Priority
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import InstanceRole
 
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
+from _factories import make_project, make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(email=f"runs-{uuid.uuid4().hex[:8]}@example.com", name="Runs Admin", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"RN{uuid.uuid4().hex[:4].upper()}", name="Runs")
-    )
+    return await make_user(db, role=InstanceRole.ADMIN, name="Runs Admin")
 
 
 def _graph(project_key: str, action: dict) -> RuleCreate:
@@ -77,7 +57,7 @@ async def _head(db) -> int:
 
 
 async def test_an_applying_run_is_recorded_in_the_dry_run_shape(db, admin):
-    project = await _project(db)
+    project = await make_project(db, "RN", "Runs")
     rule = await automations.create_rule(
         db, _graph(project.key, {"type": "action.set_priority", "params": {"priority": "high"}}), admin.id
     )
@@ -109,7 +89,7 @@ async def test_an_applying_run_is_recorded_in_the_dry_run_shape(db, admin):
 
 
 async def test_a_dry_run_records_nothing(db, admin):
-    project = await _project(db)
+    project = await make_project(db, "RN", "Runs")
     rule = await automations.create_rule(
         db, _graph(project.key, {"type": "action.set_priority", "params": {"priority": "high"}}), admin.id
     )
@@ -119,7 +99,7 @@ async def test_a_dry_run_records_nothing(db, admin):
 
 
 async def test_a_skipped_action_reads_as_nothing_to_do_with_the_reason_kept(db, admin):
-    project = await _project(db)
+    project = await make_project(db, "RN", "Runs")
     rule = await automations.create_rule(
         db, _graph(project.key, {"type": "action.set_assignee", "params": {"assignee": "nobody@example.invalid"}}), admin.id
     )
@@ -135,7 +115,7 @@ async def test_a_skipped_action_reads_as_nothing_to_do_with_the_reason_kept(db, 
 
 
 async def test_a_walk_that_raises_is_recorded_as_failed_and_emits(db, admin, monkeypatch):
-    project = await _project(db)
+    project = await make_project(db, "RN", "Runs")
     rule = await automations.create_rule(
         db, _graph(project.key, {"type": "action.set_priority", "params": {"priority": "high"}}), admin.id
     )
@@ -160,7 +140,7 @@ async def test_a_walk_that_raises_is_recorded_as_failed_and_emits(db, admin, mon
 
 
 async def test_old_runs_are_swept_and_recent_ones_kept(db, admin, monkeypatch):
-    project = await _project(db)
+    project = await make_project(db, "RN", "Runs")
     rule = await automations.create_rule(
         db, _graph(project.key, {"type": "action.set_priority", "params": {"priority": "high"}}), admin.id
     )

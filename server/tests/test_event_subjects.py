@@ -1,19 +1,10 @@
 """The contribution seam: kernel-owned subjects, plugin-owned data and behaviour
 (RADD-923).
 
-RADD-922 unified fourteen hand-built payload shapes and left an AST test to keep
-them unified — a test only necessary because the shape was still hand-built. This
-deletes the failure mode instead: an emitter passes IDS and the kernel writes the
-ref, so it cannot write a different one.
-
-The other half is symmetry. A plugin could contribute an event and a gate but not
-an ACTION: `executor._run_action` did `ActionType(node.type)`, which raises for
-anything outside the built-in enum, logged "unknown action type", and dropped the
-node. So a plugin could say "when my deployment finishes" and "if the AI thinks
-it's risky", and never "…then do my thing".
-
-The milestones plugin is the acceptance test for both, because it is the only one
-that adds a whole feature from one directory.
+An emitter passes IDS and the kernel writes the ref, so no emitter can write a
+different shape; and a plugin can contribute an ACTION, not just an event and a
+gate (an unknown action type used to be logged and dropped). The milestones plugin
+is the acceptance test for both: it adds a whole feature from one directory.
 """
 
 from __future__ import annotations
@@ -62,20 +53,6 @@ class _StubSession:
                 return False
 
         return _Savepoint()
-
-
-@pytest.fixture
-async def db():
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    from radd.config import settings
-
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
 
 
 @pytest.fixture
@@ -166,21 +143,10 @@ async def test_a_none_subject_is_recorded_as_none_not_omitted(db):
 
 
 async def test_a_hard_deleted_page_still_names_itself(db, world):
-    """A subject ref is resolved by READING the row, so the emit has to happen
-    while there is one.
-
-    `page.deleted` declares `page` and `page_space` as subjects (spec 118 — a
-    space subscription is matched on that id, and a notification links by slug).
-    The hard-delete path deleted the row, flushed, and emitted afterwards, so the
-    kernel's `session.get` missed and the payload carried `"page": null` — on the
-    ONE event about a page nobody can look up afterwards, which is exactly when a
-    consumer cannot recover the ref for itself. A declaration a code path does not
-    keep is worse than no declaration: the loader checks that the ref EXISTS, not
-    that it resolved.
-
-    Ordering inside the transaction is invisible — the outbox row and the
-    deletion commit together or not at all — so the fix is to emit first.
-    """
+    """A subject ref is resolved by READING the row, so `page.deleted` must emit before
+    the hard delete — emitting after it carried `"page": null` on the one event about
+    a page nobody can look up afterwards. (The loader checks that a subject is
+    declared, not that it resolved.)"""
     from sqlalchemy import select
 
     from radd.modules.events.models import Event

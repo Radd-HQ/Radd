@@ -1,24 +1,7 @@
-"""Every RBAC atom is declared by the module that enforces it (RADD-890).
-
-`auth/types.py::Permission` used to enumerate every feature module's atoms —
-`item.*`, `page.*`, `worklog.*`, `sla.*`, `vcsconn.*` — so adding a permission
-anywhere meant editing auth, while the kernel permissions registry that exists
-for exactly that had one client (`milestones`). Two parallel systems: plugins
-contributed, core modules edited auth.
-
-The registry is the catalog now, and the enum is the typed alias surface call
-sites hold. That split is only safe while the two agree, so this file asserts
-BOTH directions:
-
-  - registry ⊇ enum: every atom has an owner, with the same scope auth records.
-  - registry ⊆ enum: nothing is contributed that the alias cannot name (the
-    thing that lets `Permission.ITEM_READ` keep working unchanged).
-
-Plus the ownership rule itself: auth declares governance atoms only. An atom
-added to auth's manifest that belongs to a feature fails here, which is the
-regression this issue exists to prevent.
-
-Pure/in-memory — reads the registry conftest's autouse fixture loads.
+"""Every RBAC atom is declared by the module that enforces it (RADD-890): the
+kernel permissions registry is the catalog and `auth.types.Permission` the typed
+alias surface, so this asserts both directions (registry ⊇ enum with matching
+scopes; registry ⊆ enum) and that auth's manifest declares governance atoms only.
 """
 
 from radd.kernel import registries

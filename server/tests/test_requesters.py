@@ -9,24 +9,12 @@ the second email), and the anonymous /public/forms surface is gone entirely.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import UnauthorizedError
 from radd.modules.auth import authz, grants, service as auth
 from radd.modules.auth.roles import role_by_key
 from radd.modules.auth.types import BuiltinRoleKey, Permission, UserSource
 from radd.modules.auth.types import LoginMethod
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def _email_user(db):

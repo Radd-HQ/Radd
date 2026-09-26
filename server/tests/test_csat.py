@@ -1,16 +1,11 @@
-"""CSAT surveys (spec 65), driven through the real services against live
-Postgres in a rolled-back transaction (test_public_forms idiom):
+"""CSAT surveys (spec 65), through the real services against live Postgres in a
+rolled-back transaction; `radd.smtp.send_message` is monkeypatched.
 
-- sender decision: setting off / SMTP off / no recipient → skip; the mail
-  contact beats the reporter; one survey per item lifetime (reopen→re-resolve
-  never resends). Events come from REAL item.updated emissions so the payload
-  shape assumption (changes diff + state embed w/ category) stays verified.
-- public flow: unknown token 404, rating bounds 422, responded_at stamped once,
-  re-submits allowed (latest wins), csat.responded emitted.
-- report: csat_avg/csat_count on the SLA report (slas's GET /sla-report) are
-  pinned in tests/test_sla_depth.py, csat loaded and unloaded (RADD-1386).
-
-Send paths never touch the network: `radd.smtp.send_message` is monkeypatched.
+- sender: setting off / no mail / no recipient → skip; the mail contact beats the
+  reporter; one survey per item lifetime. Events come from REAL item.updated
+  emissions, so the payload-shape assumption stays verified.
+- public flow: unknown token 404, rating bounds 422, latest re-submit wins,
+  csat.responded emitted. The SLA report's CSAT columns are in test_sla_depth.py.
 """
 
 import uuid
@@ -19,7 +14,6 @@ from email.message import EmailMessage
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import smtp
 from radd.config import settings
@@ -45,28 +39,6 @@ from radd.modules.projects.schemas import ProjectCreate
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"csat-{uuid.uuid4().hex[:8]}@example.com",
-        name="CSAT Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-@pytest.fixture
 async def project(db):
     return await projects_service.create_project(
         db, ProjectCreate(key="CS65", name="Service desk")
@@ -75,25 +47,16 @@ async def project(db):
 
 @pytest.fixture
 async def no_senders(db):
-    """Disable every `mail_senders` row already in the test database.
-
-    Since RADD-983 the survey's guard is `outbound_configured`, which reads the
-    TABLE as well as the environment — so a row some other module committed
-    would otherwise decide whether these tests think mail is configured. Inside
-    the transaction, so it rolls back with everything else.
-    """
+    """Disable every `mail_senders` row: the guard `outbound_configured` reads the
+    TABLE as well as the environment, so a row another module committed would decide
+    whether mail looks configured. Rolls back with the transaction."""
     await db.execute(update(MailSender).values(enabled=False))
 
 
 @pytest.fixture
 def smtp_on(monkeypatch):
-    """The environment relay configured + captured — never a real send.
-
-    Still the ENV leg on purpose: it is the configuration these decision tests
-    were written against, and the rows-only leg (an instance with no
-    `RADD_SMTP_*` at all, which is what radd-hq.com runs) gets its own test
-    below rather than quietly replacing this one.
-    """
+    """The environment relay, configured and captured. Still the ENV leg on purpose:
+    the rows-only leg (no `RADD_SMTP_*`, as radd-hq.com runs) has its own test."""
     from radd import smtp as smtp_util
 
     sent: list[tuple[tuple, dict]] = []
@@ -131,12 +94,8 @@ class _FakeSmtp:
 
 @pytest.fixture
 def rows_only(monkeypatch):
-    """A captured socket and NO environment relay (RADD-983).
-
-    The whole point of the rows-only test: with `RADD_SMTP_HOST` empty, a
-    message that goes out went out through a `mail_senders` row, so "the survey
-    was sent" cannot be true by way of a fallback nobody configured.
-    """
+    """A captured socket and NO environment relay (RADD-983): a message that goes out
+    went through a `mail_senders` row, never a fallback nobody configured."""
     _FakeSmtp.sent = []
     _FakeSmtp.dialled = []
     monkeypatch.setattr(smtp.smtplib, "SMTP", _FakeSmtp)
@@ -205,15 +164,8 @@ async def test_sender_skips_when_setting_off(db, admin, project, smtp_on):
 async def test_sender_skips_when_there_is_nowhere_to_send_from(
     db, admin, project, no_senders, monkeypatch
 ):
-    """No `mail_senders` row AND no environment relay.
-
-    The guard used to be `settings.smtp_host` alone (RADD-983), so an instance
-    configured entirely through Settings → Email — sender rows, no
-    `RADD_SMTP_*`, which is exactly how radd-hq.com runs — skipped every survey
-    silently: the guard returned None, the cursor advanced and nothing was
-    logged. `no_senders` is therefore load-bearing here: without it this test
-    would pass for the wrong reason on a database where any relay row exists.
-    """
+    """No `mail_senders` row AND no environment relay. `no_senders` is load-bearing:
+    without it this passes for the wrong reason on any database holding a relay row."""
     await _enable_csat(db, project)
     monkeypatch.setattr(settings, "smtp_host", "")
     item = await _item(db, admin, project)
@@ -275,16 +227,9 @@ async def test_sender_skips_without_recipient(db, admin, project, smtp_on):
 
 
 async def test_a_service_account_reporter_is_never_surveyed(db, admin, project, smtp_on):
-    """The reporter leg asked `reporter.active`, which a spec-113 SERVICE
-    account and the system actor both pass (RADD-983).
-
-    Not a hypothetical: the system actor is the reporter of every item mail
-    intake creates, so the two accounts with no mailbox at all were among the
-    likeliest to be surveyed — and both bounce, which is what got the relay
-    rate-limited in the RADD-996 incident. The rule now comes from
-    `mailintake.service.mailable_user`, stated once for CSAT and the send_email
-    automation action alike.
-    """
+    """`reporter.active` admits a spec-113 SERVICE account and the system actor — the
+    reporter of every mail-intake item, and neither has a mailbox (RADD-983/996). The
+    rule is `mailintake.service.mailable_user`, shared with the send_email action."""
     await _enable_csat(db, project)
     robot = User(
         email=f"robot-{uuid.uuid4().hex[:8]}@service.radd.local",
@@ -309,20 +254,9 @@ DESK_FROM = "support@radd-hq.com"
 async def test_a_rows_only_instance_sends_the_survey_through_its_sender_row(
     db, admin, project, no_senders, rows_only
 ):
-    """The whole of RADD-983 for CSAT, end to end and with the environment empty.
-
-    Before it, the survey gated on `settings.smtp_host` and delivered through
-    `radd.smtp` off the environment. On an instance configured only through
-    Settings → Email that is TWO failures at once: the guard skips, and even if
-    it had not, there is no relay to dial. Nothing was logged either way, so the
-    feature was simply absent.
-
-    Four things are asserted because each of them is one the raw-SMTP path could
-    not do: the ROW's relay was dialled (the environment has no host at all),
-    the message left as the row's identity, the survey THREADS onto the ticket's
-    existing conversation, and the send is reported as `mail.sent` rather than
-    being knowable only from a log.
-    """
+    """RADD-983 for CSAT with the environment empty: the ROW's relay is dialled, the
+    message leaves as the row's identity, threads onto the ticket's conversation, and
+    is reported as `mail.sent`."""
     await _enable_csat(db, project)
     db.add(
         MailSender(

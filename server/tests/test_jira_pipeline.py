@@ -1,16 +1,8 @@
-"""The cache-first import pipeline (spec 100), end to end against a real database.
-
-The whole point of the rebuild is that these steps are separable and repeatable:
-profile a cached snapshot → decide every mapping → provision real targets → dry
-run → import → relink → roll back. So this walks exactly that, and pins the
-invariants each step exists for:
-
-- the plan is pre-filled, and everything UNUSED defaults to ignore;
-- the dry run writes NOTHING but predicts what the import will do;
-- an import preserves Jira numbers, dates and authorship, and is SILENT;
-- an unresolvable cross-project link parks as a pending ref and RESOLVES when its
-  target is imported later — the thing spec 90 could never do;
-- rollback puts the database back.
+"""The cache-first Jira import (spec 100) end to end: profile → plan → provision →
+dry run → import → relink → roll back. Pinned: UNUSED mappings default to ignore;
+the dry run writes NOTHING; an import keeps Jira numbers, dates and authorship and
+is SILENT; an unresolvable cross-project link parks and RESOLVES when its target
+arrives; rollback restores the database.
 """
 
 import uuid

@@ -12,9 +12,7 @@ import uuid
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.kernel import registries
 from radd.modules.audit import service as audit
@@ -31,36 +29,17 @@ from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, *, role: InstanceRole, name: str) -> User:
-    user = User(
-        email=f"ledger-{uuid.uuid4().hex[:8]}@example.com", name=name, instance_role=role.value
-    )
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_project, make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    return await _user(db, role=InstanceRole.ADMIN, name="Ledger Admin")
+    return await make_user(db, role=InstanceRole.ADMIN, name="Ledger Admin")
 
 
 @pytest.fixture
 async def project(db, admin):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"LG{uuid.uuid4().hex[:4].upper()}", name="Ledger"), actor_id=admin.id
-    )
+    return await make_project(db, "LG", "Ledger", actor=admin)
 
 
 @pytest.fixture
@@ -152,7 +131,7 @@ def test_catalog_labels_every_registered_type():
 
 
 async def test_project_manager_reads_only_their_project(db, admin, project, item):
-    manager = await _user(db, role=InstanceRole.MEMBER, name="Manager")
+    manager = await make_user(db, name="Manager")
     other = await projects_service.create_project(
         db, ProjectCreate(key=f"OT{uuid.uuid4().hex[:4].upper()}", name="Other"), actor_id=admin.id
     )
@@ -213,8 +192,8 @@ async def test_access_endpoint_uses_the_exact_ledger_scope(db, admin, project):
     from radd.modules.audit.router import audit_access
     from radd.modules.auth.scopes import parse_scope
 
-    manager = await _user(db, role=InstanceRole.MEMBER, name="Scoped manager")
-    outsider = await _user(db, role=InstanceRole.MEMBER, name="Outsider")
+    manager = await make_user(db, name="Scoped manager")
+    outsider = await make_user(db, name="Outsider")
     other = await projects_service.create_project(
         db, ProjectCreate(key=f"AC{uuid.uuid4().hex[:4].upper()}", name="Other scope"), actor_id=admin.id
     )

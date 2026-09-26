@@ -15,9 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.alertmanager import service
@@ -30,16 +28,6 @@ from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEvent
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _app(db) -> FastAPI:

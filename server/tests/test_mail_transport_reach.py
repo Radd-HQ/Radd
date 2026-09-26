@@ -1,27 +1,9 @@
-"""Every sender rides the transport (RADD-983), and terminal failures are
-visible (RADD-1036).
+"""The digest and the `send_email` action ride the one mail transport (RADD-983),
+and terminal failures are visible (RADD-1036). CSAT's leg lives in test_csat.py.
 
-**The bug.** Three senders never got the RADD-958 treatment: the CSAT survey,
-the notification DIGEST, and the `send_email` automation action all gated on
-`settings.smtp_host` and delivered through `radd.smtp` off the environment. On
-an instance configured entirely through Settings → Email — sender ROWS, no
-`RADD_SMTP_*`, which is how radd-hq.com itself runs — each of them skipped, and
-skipped SILENTLY: the guard returned, the cursor advanced, no line was logged.
-They also skipped everything the transport had grown around them since:
-threading, the per-source sender identity (RADD-979), `mail.sent`/`mail.failed`,
-and the robot guard (RADD-996).
-
-CSAT's leg is in `test_csat.py`, beside its other decision tests. This file
-takes the two that had no home: the digest and the automation action, plus the
-two properties that only exist once mail leaves through one seam —
-
-* **loop safety.** `mail.sent` and `mail.failed` ARE automation triggers. The
-  comment the engine's email branch used to carry said "nothing is emitted —
-  inherently loop-safe", and routing the send through the transport ends that.
-  What holds instead is `executor._one`'s `events.automated()` scope, and the
-  test below is the one that says so out loud.
-* **mail health.** A terminal delivery failure was two events in a stream
-  nobody aggregated. `mail_health` is the seam Settings → Monitoring reads.
+* loop safety: `mail.sent`/`mail.failed` are triggers, so what holds is
+  `executor._one`'s `events.automated()` scope — asserted below;
+* mail health: `mail_health` is the seam Settings → Monitoring reads.
 """
 
 import smtplib
@@ -33,7 +15,6 @@ import pytest
 
 from radd.modules.mailintake.types import SentMailKind
 from sqlalchemy import update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import smtp
 from radd.clock import utcnow
@@ -92,23 +73,9 @@ class _FakeSmtp:
 
 
 @pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
 def rows_only(monkeypatch):
-    """A captured socket and NO environment relay.
-
-    `smtp_host` empty is the whole point: a message that goes out went out
-    through a `mail_senders` row, so none of these assertions can be true by way
-    of a fallback nobody configured.
-    """
+    """A captured socket and NO environment relay: with `smtp_host` empty, a
+    message that goes out went through a `mail_senders` row, never a fallback."""
     _FakeSmtp.sent = []
     _FakeSmtp.dialled = []
     _FakeSmtp.fail = False
@@ -209,14 +176,9 @@ async def _mail_events(db, event_type: MailEvent):
 async def test_the_digest_sends_on_a_rows_only_instance(
     db, world, sender_row, rows_only, quiet_backlog
 ):
-    """The digest had NEVER used a sender row — it dialled `radd.smtp` off the
-    environment and gated on `settings.smtp_host`, so on a rows-only instance it
-    returned 0 forever and stamped nothing.
-
-    `state_changed` is deliberately not mailed by default, so the row is
-    the digest's by construction rather than by the per-event mailer having
-    passed over it.
-    """
+    """The digest sends through a sender row on a rows-only instance. The row is
+    `state_changed`, which is not mailed per event by default, so it is the
+    digest's by construction."""
     _agent, _project, item = world
     watcher = await _person(db, "Wanda")
     await _notify(
@@ -242,13 +204,9 @@ async def test_the_digest_sends_on_a_rows_only_instance(
 async def test_a_digest_failure_is_an_event_and_not_an_exception(
     db, world, sender_row, rows_only, quiet_backlog
 ):
-    """Two properties in one tick.
-
-    The transport never raises, so one unreachable address costs the batch
-    nothing — the loop keeps going and banks the failure on the row instead of
-    unwinding out of `run_batch`. And the failure is now a `mail.failed` event,
-    which is the only reason Settings → Monitoring can show it at all.
-    """
+    """The transport never raises, so one unreachable address costs the batch
+    nothing (the failure is banked on the row), and the failure is a `mail.failed`
+    event — the only way Settings → Monitoring can show it."""
     _agent, _project, item = world
     watcher = await _person(db, "Wanda")
     await _notify(
@@ -300,17 +258,9 @@ async def test_the_send_email_action_leaves_through_the_sender_row(
 
 
 async def test_an_automations_own_mail_event_cannot_retrigger_it(db, sender_row, rows_only):
-    """THE LOOP-SAFETY PROPERTY, stated where it can fail.
-
-    `mail.sent` and `mail.failed` are declared triggers, so an automation that
-    sends mail now emits an event its own rule could match — which is a spin,
-    not a feature. What prevents it is `executor._one`: `_apply_plan` runs
-    inside `with events.automated()`, so every event the send emits is marked
-    automation-caused and `should_process` rejects it. The engine's email branch
-    used to justify itself with "nothing is emitted — inherently loop-safe", and
-    that sentence stopped being true the moment the send moved onto the
-    transport.
-    """
+    """THE LOOP-SAFETY PROPERTY: `mail.sent`/`mail.failed` are triggers, so a
+    sending automation emits an event its own rule could match. `executor._one`
+    runs `_apply_plan` inside `events.automated()`, so `should_process` rejects it."""
     from radd.modules.events import service as events
 
     before = await events_service.latest_event_id(db)
@@ -415,13 +365,9 @@ async def test_mail_health_is_quiet_until_something_fails(db, world, sender_row,
 async def test_mail_health_reports_the_count_the_last_error_and_the_give_ups(
     db, world, sender_row, rows_only
 ):
-    """The endpoint's whole contract, on the seam that computes it.
-
-    A terminal failure has to be COUNTED SEPARATELY: "a relay blipped once and
-    the retry worked" is not the same news as "four attempts failed and nobody
-    is going to hear from us", and the ladder stamps the row either way, so the
-    events are the only place the difference survives.
-    """
+    """The endpoint's contract on the seam that computes it. Give-ups are COUNTED
+    SEPARATELY from retried blips: the ladder stamps the row either way, so the
+    events are the only place the difference survives."""
     _agent, _project, item = world
     rows_only.fail = True
 

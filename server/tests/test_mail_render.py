@@ -1,24 +1,10 @@
-"""One mail rendering layer (RADD-967), narrowed to the requester (RADD-968).
-
-The outbound reply had NO tests before RADD-967 — which is how it shipped for two
-waves as the bare comment body: no author, no issue key, no link, plain text
-only. So this file covers both halves of that gap.
-
-- **Who** gets an outbound reply: the external `mail_contact`, and only them.
-  RADD-968 deleted the watcher loop here — it was a SECOND fan-out beside the
-  one that decides the inbox, and the two disagreed about permissions, teams and
-  mutes. Users are mailed by `notify.mailer` now (`test_notify_mailer.py`), so
-  what is pinned here is the leg notify structurally cannot serve plus the guard
-  against mailing a staff member twice.
-- **What it says**: text AND html, both carrying the author, the body and the
-  issue URL; the footer differing by why the recipient is on the thread.
-- **Escaping**: a comment is markdown, never markup — a `<script>` in a comment
-  and a `<b>` in someone's display name arrive as text in the html part.
-- **The digest**: nine notification types, nine distinct lines (there used to be
-  four, with five types collapsing into "commented"), issue lines linking the
-  issue and a page line linking the page.
-- **Transport**: `send_message(html_body=…)` produces multipart/alternative with
-  the text part FIRST, and still reports the Message-ID that went on the wire.
+"""The one mail rendering layer (RADD-967), narrowed to the requester (RADD-968).
+- Who: the external `mail_contact` only; users are mailed by `notify.mailer`, and
+  a staff member is never mailed twice.
+- What: text AND html with author, body and issue URL; the footer says why the
+  recipient is on the thread; a comment is markdown, never markup.
+- The digest: one distinct line per notification type.
+- Transport: multipart/alternative, text part first, Message-ID reported.
 """
 
 import uuid
@@ -26,7 +12,6 @@ from email.message import EmailMessage
 
 import pytest
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd import mailrender, smtp
 from radd.config import settings
@@ -56,17 +41,9 @@ from radd.modules.notify.types import NotificationType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
+from _factories import make_user
+
 BASE_URL = "https://radd.example.com"
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture(autouse=True)
@@ -96,13 +73,6 @@ async def world(db):
     return agent, project, item
 
 
-async def _user(db, *, name: str, email: str, active: bool = True) -> User:
-    user = User(email=email, name=name, active=active, instance_role=InstanceRole.MEMBER.value)
-    db.add(user)
-    await db.flush()
-    return user
-
-
 def _sender_row() -> MailSender:
     """A sender row, never added to a session — `_thread_headers` only reads it."""
     return MailSender(
@@ -119,16 +89,11 @@ def _sender_row() -> MailSender:
 
 
 async def test_the_outbound_reply_goes_to_the_contact_and_no_watcher(db, world):
-    """RADD-968: watchers are notify's fan-out, not this one.
-
-    Mailing them from here too meant a watcher who had lost `item.read` still
-    received the comment, a participant-TEAM member received nothing, and a muted
-    type was muted in-app only — three disagreements between the mail and the
-    inbox that only one fan-out can end.
-    """
+    """RADD-968: watchers are notify's fan-out, not this one — a second fan-out
+    here disagreed with the inbox about read access, teams and mutes."""
     agent, _project, item = world
     suffix = uuid.uuid4().hex[:8]
-    watcher = await _user(db, name="Wanda Watcher", email=f"wanda-{suffix}@example.com")
+    watcher = await make_user(db, name="Wanda Watcher", email=f"wanda-{suffix}@example.com")
     await notify_service.add_watchers(db, item.id, [agent.id, watcher.id, SYSTEM_ACTOR_ID])
     await mail_service.upsert_contact(
         db, item.id, email="Customer@vip.example.com", name="Cass Customer"
@@ -143,7 +108,8 @@ async def test_an_item_with_no_contact_mails_nobody_from_here(db, world):
     """The whole leg is the external requester. No contact, no outbound reply —
     the people on the issue are reached by notify."""
     _agent, _project, item = world
-    await notify_service.add_watchers(db, item.id, [(await _user(db, name="W", email=f"w-{uuid.uuid4().hex[:8]}@example.com")).id])
+    watcher = await make_user(db, name="W", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
+    await notify_service.add_watchers(db, item.id, [watcher.id])
 
     assert await reply.recipients_for(db, item.id) == ()
 
@@ -153,9 +119,7 @@ async def test_a_contact_who_is_an_active_user_is_skipped_not_addressed_as_a_cus
     user. Notify mails them as a colleague; sending from here as well would be a
     second copy of the same comment, addressed "you contacted us"."""
     _agent, _project, item = world
-    staff = await _user(
-        db, name="Sam Staff", email=f"sam-{uuid.uuid4().hex[:8]}@example.com"
-    )
+    staff = await make_user(db, name="Sam Staff", email=f"sam-{uuid.uuid4().hex[:8]}@example.com")
     await mail_service.upsert_contact(db, item.id, email=staff.email.upper(), name="Sam")
 
     assert await reply.recipients_for(db, item.id) == ()
@@ -167,16 +131,9 @@ async def test_a_contact_who_is_an_active_user_is_skipped_not_addressed_as_a_cus
 
 
 async def test_the_reply_fans_out_to_every_contact_primary_first(db, world):
-    """RADD-980. A customer CCs their colleague, or the colleague answers instead;
-    both are on the thread, and a reply that reaches one of them is a reply the
-    other never saw — with nothing anywhere admitting it, because a message that
-    WAS sent looks exactly like a message sent to everybody.
-
-    The order is pinned too: primary, then the rest alphabetically. Contacts
-    captured from ONE message share a transaction timestamp, so `created_at`
-    cannot separate them and an id tiebreak would reorder the issue rail on
-    every read.
-    """
+    """RADD-980: every contact on the thread gets the reply. Order is primary, then
+    alphabetical: contacts captured from ONE message share a transaction timestamp,
+    so `created_at` cannot separate them and an id tiebreak would reorder the rail."""
     _agent, _project, item = world
     await mail_service.upsert_contact(db, item.id, email="cass@vip.example.com", name="Cass")
     await mail_service.upsert_contact(
@@ -192,14 +149,10 @@ async def test_the_reply_fans_out_to_every_contact_primary_first(db, world):
 
 
 async def test_one_staff_contact_no_longer_silences_the_whole_reply(db, world):
-    """The active-user skip is per ADDRESS, not per item.
-
-    It was written when a ticket had at most one contact, so `return ()` was the
-    same statement. With three it is not: a colleague copied into a customer's
-    thread would have cancelled the customer's reply as well.
-    """
+    """The active-user skip is per ADDRESS, not per item: a colleague copied into a
+    customer's thread must not cancel the customer's reply."""
     _agent, _project, item = world
-    staff = await _user(db, name="Sam Staff", email=f"sam-{uuid.uuid4().hex[:8]}@example.com")
+    staff = await make_user(db, name="Sam Staff", email=f"sam-{uuid.uuid4().hex[:8]}@example.com")
     await mail_service.upsert_contact(db, item.id, email="cass@vip.example.com", name="Cass")
     await mail_service.upsert_contact(db, item.id, email=staff.email, copied_in=True)
 
@@ -245,13 +198,9 @@ async def test_a_contacts_last_message_is_their_own(db, world):
 
 
 async def test_two_contacts_on_one_item_are_storable_and_one_address_is_not_twice(db, world):
-    """The reshape (`d980contacts`) stated as its observable consequence.
-
-    `item_id` was the PRIMARY KEY, so the first assertion was a unique violation
-    until this migration; `(item_id, email)` is now the constraint, so the second
-    still is — which is what makes `upsert_contact` idempotent across a thread
-    rather than accumulating a row per message.
-    """
+    """`(item_id, email)` is the constraint (`d980contacts`): two contacts per item
+    store, one address twice does not — which keeps `upsert_contact` idempotent
+    across a thread."""
     from sqlalchemy.exc import IntegrityError
 
     from radd.modules.mailintake.models import MailContact
@@ -292,12 +241,8 @@ def test_both_parts_name_the_author_quote_the_comment_and_link_the_issue():
 
 
 def test_the_footer_says_why_this_address_is_on_the_thread():
-    """One comment, one renderer, two channels — and the footer is the only
-    thing that differs. A watcher is a colleague following an issue they can
-    open; the requester is a customer with no account whose only interface is
-    replying. One "you are receiving this" line cannot honestly say both, which
-    is why the body is composed per recipient rather than once.
-    """
+    """One comment, two channels, and only the footer differs: a watcher can open
+    the issue, a requester can only reply — so the body is composed per recipient."""
     planned = _reply()
     requester = reply.render(
         planned,
@@ -413,21 +358,14 @@ async def test_the_planned_reply_names_the_author_and_addresses_the_contact(db, 
 
 
 async def test_an_agents_mailed_reply_is_relayed_and_excludes_them_from_notify(db, world):
-    """RADD-981, at the two seams that read a comment's ACTOR.
-
-    Both were broken by the same fact: a mailed reply was authored by SYSTEM.
-    `should_reply` refuses a SYSTEM comment — deliberately, to stop an
-    inbound-mail comment echoing straight back out — so an agent who answered a
-    customer BY EMAIL was never relayed to that customer, while the same words
-    typed into the UI were. And notify excludes the actor from its fan-out, so
-    with SYSTEM as the actor the agent was notified of their own reply and
-    nobody's exclusion applied.
-    """
+    """RADD-981: an agent's mailed reply is authored by the AGENT, not SYSTEM.
+    `should_reply` refuses SYSTEM comments (so inbound mail never echoes back out),
+    and notify excludes the actor — with SYSTEM as author neither seam worked."""
     from radd.modules.mailintake import parsing as mail_parsing, threading as mail_threading
     from radd.modules.notify import planner
 
     agent, project, item = world
-    colleague = await _user(db, name="Cal", email=f"cal-{uuid.uuid4().hex[:8]}@example.com")
+    colleague = await make_user(db, name="Cal", email=f"cal-{uuid.uuid4().hex[:8]}@example.com")
     await mail_service.upsert_contact(db, item.id, email="cass@vip.example.com", name="Cass")
     await mail_threading.record(
         db, message_id="<told@radd>", item_id=item.id, direction=MailDirection.OUTBOUND
@@ -642,14 +580,9 @@ def test_the_digest_renders_both_parts_and_always_offers_the_inbox():
 
 
 class _FakeSmtp:
-    """Enough of smtplib.SMTP to capture one composed message — and WHICH RELAY
-    it was handed to.
-
-    The dial is recorded because from outside the process that is the only thing
-    that distinguishes a `mail_senders` ROW from the environment relay
-    (RADD-970): the composed message looks the same either way, so a test that
-    only inspects the message cannot tell whether the row was used at all.
-    """
+    """Enough of smtplib.SMTP to capture one composed message and WHICH RELAY was
+    dialled: the message looks the same from a `mail_senders` row or the env relay
+    (RADD-970), so only the dial proves the row was used."""
 
     sent: list[EmailMessage] = []
     dialled: list[tuple[str, int]] = []
@@ -733,13 +666,9 @@ def test_send_message_without_html_stays_a_single_plain_part(monkeypatch):
 
 @pytest.fixture
 async def no_senders(db):
-    """Disable every `mail_senders` row already committed to the test database.
-
-    `registry.default_sender` reads the table, not a fixture — a row another
-    module committed (or an app-startup test seeded from env) would otherwise
-    decide which relay these tests dial, and "the row was used" would be true by
-    accident. Disabled inside the transaction, so it rolls back with everything.
-    """
+    """Disable every committed `mail_senders` row (inside the transaction):
+    `registry.default_sender` reads the table, so a row another module committed
+    would otherwise decide the relay and make "the row was used" true by accident."""
     await db.execute(update(MailSender).values(enabled=False))
 
 
@@ -835,14 +764,9 @@ async def test_a_threaded_automation_email_leaves_through_the_default_sender_row
 
 
 async def test_pinning_the_subject_changes_nothing_a_client_threads_on(db, world):
-    """The design decision, stated where it can be checked: `pin_subject` is a
-    property of the SUBJECT LINE alone.
-
-    Its sibling `test_the_thread_subject_survives_a_rename` pins the unpinned
-    behaviour the reply consumer depends on — one `Re: ` over the stored subject
-    — and this asserts the two differ in exactly that field, so pinning a threaded
-    automation email cannot quietly become a second threading rule.
-    """
+    """`pin_subject` changes the SUBJECT LINE alone: this differs from the unpinned
+    `test_the_thread_subject_survives_a_rename` in exactly that field, so pinning
+    cannot quietly become a second threading rule."""
     _agent, _project, item = world
     inbound_id = await _requester_wrote(db, item, subject="Printer on fire again")
     row = _sender_row()

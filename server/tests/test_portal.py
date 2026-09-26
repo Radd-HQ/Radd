@@ -10,9 +10,7 @@ at teardown, so rows never persist.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -29,49 +27,11 @@ from radd.modules.forms.schemas import (
 from radd.modules.items import service as items_service
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
+from _factories import make_project, make_user
 
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"ptl-{uuid.uuid4().hex[:8]}@example.com",
-        name="Portal Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _member(db, name: str) -> User:
-    """A plain active user: the global member floor grants item.read but NOT item.create."""
-    user = User(
-        email=f"ptl-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=InstanceRole.MEMBER.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
-
-
-async def _project(db):
-    return await projects_service.create_project(
-        db,
-        ProjectCreate(key=f"PT{uuid.uuid4().hex[:4].upper()}", name="Portal P"),
-    )
+# A plain account holds the global member floor: item.read but NOT item.create
+# (spec 86).
 
 
 async def _team(db):
@@ -94,9 +54,9 @@ def _form_ids(groups) -> set[uuid.UUID]:
 
 
 async def test_portal_listing_eligibility(db, admin):
-    project = await _project(db)
-    member = await _member(db, "Member")
-    teammate = await _member(db, "Teammate")
+    project = await make_project(db, "PT")
+    member = await make_user(db, name="Member")
+    teammate = await make_user(db, name="Teammate")
     team = await _team(db)
     await teams_service.add_team_member(db, team.id, teammate.id)
 
@@ -131,9 +91,9 @@ async def test_portal_listing_eligibility(db, admin):
 
 
 async def test_portal_submit_as_sharee_without_item_create(db, admin):
-    project = await _project(db)
-    sharee = await _member(db, "Sharee")
-    bystander = await _member(db, "Bystander")
+    project = await make_project(db, "PT")
+    sharee = await make_user(db, name="Sharee")
+    bystander = await make_user(db, name="Bystander")
     form = await _form(db, admin, project, "Access request")
     await forms_service.update_sharing(
         db, form.id, FormSharingUpdate(shares=[FormShareEntry(user_id=sharee.id)]), admin
@@ -168,8 +128,8 @@ async def test_portal_submit_as_sharee_without_item_create(db, admin):
 
 
 async def test_sharing_put_validation_and_full_replace(db, admin):
-    project = await _project(db)
-    colleague = await _member(db, "Colleague")
+    project = await make_project(db, "PT")
+    colleague = await make_user(db, name="Colleague")
     # Spec 86: any ACTIVE user + any team is a valid subject (the global member
     # floor). Only an INACTIVE user or duplicate entries are rejected.
     inactive = User(
@@ -213,15 +173,11 @@ async def test_sharing_put_validation_and_full_replace(db, admin):
 
 
 async def test_my_requests_is_scoped_by_reporter_not_by_permission(db, admin):
-    """RADD-785: your own request is yours to see, with no `item.read` involved.
-
-    That is the whole point. The configuration that makes a clean requester —
-    a Baseline carrying no read at all — is exactly the one that would otherwise
-    leave them unable to see the ticket they just filed.
-    """
-    project = await _project(db)
-    sharee = await _member(db, "Requester")
-    other = await _member(db, "Someone else")
+    """RADD-785: your own request is yours to see with no `item.read` — the clean
+    requester configuration (a Baseline with no read) must still see what they filed."""
+    project = await make_project(db, "PT")
+    sharee = await make_user(db, name="Requester")
+    other = await make_user(db, name="Someone else")
     form = await _form(db, admin, project, "Access request")
     await forms_service.update_sharing(
         db, form.id, FormSharingUpdate(shares=[FormShareEntry(user_id=sharee.id)]), admin
@@ -240,22 +196,12 @@ async def test_my_requests_is_scoped_by_reporter_not_by_permission(db, admin):
 
 
 async def test_my_requests_exposes_no_issue_contents(db, admin):
-    """The trimming is the security boundary, so it is asserted rather than assumed.
-
-    A requester is scoped by their RELATIONSHIP to the row, not by `item.read`,
-    so this read model must never grow into a back door.
-
-    RADD-797 widened the row deliberately, and this list is the record of what
-    was allowed in and why: a status a requester needs, never issue CONTENT.
-    `assignee` is a name from the member-floor directory (RADD-769), `release` is
-    a version string, and the two numbers are derived from PUBLIC comments only.
-    Still absent, and the point of asserting an EXACT set: description, labels,
-    custom fields, worklogs, history, and anything internal. The description and
-    the public thread moved to `PortalRequestDetail`, behind the same admission
-    rule but as an explicit act of opening one request.
-    """
-    project = await _project(db)
-    sharee = await _member(db, "Requester")
+    """The trimming IS the security boundary: a requester is scoped by relationship,
+    not `item.read`, so this asserts an EXACT field set — status, the assignee's
+    directory name, release version, public-comment counts; never description,
+    labels, custom fields, worklogs, history or anything internal."""
+    project = await make_project(db, "PT")
+    sharee = await make_user(db, name="Requester")
     form = await _form(db, admin, project, "Access request")
     await forms_service.update_sharing(
         db, form.id, FormSharingUpdate(shares=[FormShareEntry(user_id=sharee.id)]), admin

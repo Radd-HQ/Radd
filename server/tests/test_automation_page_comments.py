@@ -1,25 +1,15 @@
-"""Page comments, discussion and replies reach automations (RADD-1248).
-
-- the comment event carries the PAGE ref (title, path, space) and
-  `parent_comment_id`;
-- a comment whose parent is a page runs the itemless path instead of being
-  dropped as "item vanished";
-- `gate.comment` tells a reply from a root, `gate.page_space` a space from
-  another, and the page/comment tokens render;
-- end to end: "on a comment in space runbooks, create an item in OPS naming
-  the page" fires on a page discussion comment AND on a reply, and not on an
-  item comment.
-
-DB-backed, flushed never committed.
+"""Page comments, discussion and replies reach automations (RADD-1248): the event
+carries the PAGE ref and `parent_comment_id`; a page comment runs the itemless path
+instead of being dropped as "item vanished"; `gate.comment` / `gate.page_space`
+route and the page/comment tokens render; end to end, a rule fires on a page
+discussion comment AND a reply, never an item comment. Flushed, never committed.
 """
 
 import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.automations import engine, service as automations, templating
 from radd.modules.automations.conditions import EventFacts
@@ -35,24 +25,14 @@ from radd.modules.pages import service as pages, spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.auth.types import InstanceRole
 
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
+from _factories import make_user
 
 
 @pytest.fixture
 async def admin(db) -> User:
-    user = User(email=f"pc-{uuid.uuid4().hex[:8]}@example.com", name="Page Commenter", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
+    return await make_user(db, role=InstanceRole.ADMIN, name="Page Commenter")
 
 
 async def _space_and_page(db, admin, slug: str):

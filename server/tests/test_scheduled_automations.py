@@ -2,9 +2,9 @@
 
 Pure: next_run math (interval/daily/weekly, TZ, DST-adjacent), schedule-shape
 validation, relative-date literals, the due_soon predicate.
-DB-backed (compose Postgres, rolled back at teardown — the db fixture idiom from
-tests/test_bulk.py): schedule-state bookkeeping on rule writes, the scheduled
-engine path (SLQ-matched item actions, cap, loop guard), due_soon emit-once.
+DB-backed (rolled back at teardown): schedule-state bookkeeping on rule writes,
+the scheduled engine path (search-matched item actions, cap, loop guard),
+due_soon emit-once.
 """
 
 import uuid
@@ -12,7 +12,6 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.automations import engine, service as automations
@@ -25,8 +24,6 @@ from radd.modules.automations.types import (
     AutomationEvent,
     AutomationTrigger,
 )
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
 from radd.modules.events.models import Event
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEvent, Priority
@@ -45,28 +42,6 @@ from radd.exceptions import ConflictError
 def _utcnow() -> datetime:
     """Naive UTC, matching every stored timestamp in the schema."""
     return datetime.now(UTC).replace(tzinfo=None)
-
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(
-        email=f"sched-{uuid.uuid4().hex[:8]}@example.com",
-        name="Sched Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 # --- next_run pure math ---
@@ -188,13 +163,9 @@ async def _project(db, key_prefix="SC"):
 
 
 def _scheduled_rule_data(*, condition_slq="", enabled=True) -> RuleCreate:
-    """A scheduled automation as a graph (spec 116, RADD-1265).
-
-    A schedule has no event and therefore no target item, so the items a run
-    acts on come from a SEARCH node wired after the trigger — the trigger's own
-    `query` param is gone. Putting the SLQ on a filter would leave the
-    automation filtering an empty set — running, matching nothing, and looking
-    perfectly healthy."""
+    """A scheduled automation as a graph (RADD-1265): a schedule has no target
+    item, so its items come from a SEARCH node after the trigger — SLQ on a filter
+    would filter an empty set, match nothing and look perfectly healthy."""
     trigger_params: dict = {
         "event": AutomationTrigger.SCHEDULE.value,
         "schedule": {"kind": "interval", "minutes": 30},
@@ -243,12 +214,9 @@ async def test_schedule_state_synced_on_create_update_enable(db, admin):
 
 
 def _graph(*, trigger_params: dict, extra_nodes=(), extra_edges=()) -> RuleCreate:
-    """A one-action graph with the trigger's params under test.
-
-    Built from a dict rather than by model_copy-ing `_scheduled_rule_data()`:
-    `trigger` and `schedule` are no longer FIELDS of RuleCreate (they are derived
-    from the trigger node), so `model_copy(update={"trigger": ...})` would attach
-    an attribute nothing reads and the assertion would pass vacuously."""
+    """A one-action graph with the trigger's params under test. Built from a dict:
+    `trigger`/`schedule` are derived from the trigger node, not RuleCreate fields,
+    so a `model_copy(update=...)` would set nothing and pass vacuously."""
     return RuleCreate.model_validate(
         {
             "name": "bad",

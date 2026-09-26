@@ -7,9 +7,7 @@ back at teardown."""
 
 import uuid
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.auth import service as auth_service
@@ -23,16 +21,6 @@ from radd.modules.ldap.types import DirectoryUser, SyncKind
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
 from radd.modules.auth.types import LoginMethod
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 def _directory_user(local: str, name: str | None = None) -> DirectoryUser:
@@ -58,13 +46,9 @@ def _stub_directory(monkeypatch, users: list[DirectoryUser], seen_bases: list[st
 
 
 async def test_user_sync_provisions_and_updates_toggle_off(db, monkeypatch):
-    """Toggle off (the default): provision + rename only — nobody deactivated.
-
-    The toggle is cleared inside the test's own rolled-back transaction: the suite
-    runs against a populated dev DB where a real deploy may have enabled the
-    departure sweep at instance scope, and this test asserts the OFF behaviour.
-    Without it, turning the feature on in the product fails its own test — and
-    dangerously so, since the assertion that catches it is `deactivated == 0`."""
+    """Toggle off (the default): provision + rename only — nobody deactivated. The
+    toggle is cleared in the test's own transaction: a database where the departure
+    sweep is on would otherwise fail `deactivated == 0` for the wrong reason."""
     await settings_service.clear_value(
         db, SettingKey.LDAP_USER_SYNC_DEACTIVATE_MISSING, SettingScope.INSTANCE, None
     )

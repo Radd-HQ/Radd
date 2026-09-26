@@ -1,18 +1,9 @@
-"""The SBOM page's pure half, and the one thing it refuses to do (RADD-1065).
-
-`scripts/sbom_page.py` runs in CI at tag time over two CycloneDX documents that
-no test here produces, so what is pinned is the READING: which section a
-component lands in, what its licence column says given the three shapes
-CycloneDX allows, and which components are not packages at all.
-
-Two of these are about a number a reader would trust: the counts in the header
-must be the counts in the tables (they are computed from the same grouping), and
-a package catalogued at six paths must be one row, not six — the real 0.32.0
-image lists every Python package twice (once in `/opt/venv`, once in uv's cache
-layer), so an un-deduped page would claim 138 Python dependencies where 73 ship.
-
-The publish half is covered at its only decision: the page hangs off the
-version's release-notes page or it is not published at all.
+"""The SBOM page's pure half (RADD-1065): which section a component lands in, its
+licence column over the three CycloneDX shapes, and what is not a package at all.
+The header counts must equal the table rows, and a package catalogued at several
+paths is one row (the image lists every Python package twice — venv and uv cache —
+so an un-deduped page claims 138 dependencies where 73 ship). The publish half:
+the page hangs off the version's release-notes page or is not published.
 """
 
 import json

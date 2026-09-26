@@ -1,24 +1,15 @@
-"""Removing a select option, and what happens to the items holding it (RADD-949).
-
-`extend_options` was additive because removal is dangerous — items already store
-the value and would silently become invalid. That is an argument for forcing the
-caller to say what happens to them, which is what `remove_option` does, and the
-invariant worth pinning is the one the argument was about: **no item is left
-storing a value its field no longer offers.**
-
-The rewrites are set-based JSONB statements rather than a read-modify-write loop,
-so they are exactly the kind of code that looks right and does nothing (a `->`
-where `->>` was meant matches no rows and reports success). Every case here
-asserts the item's stored value afterwards, never the return count alone.
+"""Removing a select option makes the caller say what happens to the items holding
+it (RADD-949), so **no item is left storing a value its field no longer offers.**
+The rewrites are set-based JSONB statements — code that can look right and match
+no rows (`->` for `->>`) — so every case asserts the stored value afterwards,
+never the return count alone.
 """
 
 import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.fields import service as fields_service
@@ -30,16 +21,6 @@ from radd.modules.items.models import WorkItem
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

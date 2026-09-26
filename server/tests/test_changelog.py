@@ -1,15 +1,7 @@
-"""The release-notes generator's pure half (RADD-942).
-
-`scripts/changelog.py` is invoked by CI at tag time, so nothing about it runs in
-the app and nothing about it is type-checked against the renderers it feeds. The
-0.25.0 notes shipped with `## What is wrong` as the summary of all twelve
-entries and `<sub>` printed literally beside every one of them — both defects
-are in two pure functions, and both are one assertion each.
-
-What is pinned here is what a RENDERER will do with the output, not just what the
-string looks like: no raw HTML (Radd's CommonMark viewer escapes it), and no
-line that can start a block (an ATX heading interrupts a paragraph, which is how
-a summary escaped the bullet it belonged to).
+"""The release-notes generator's pure half (`scripts/changelog.py`, RADD-942),
+pinned by what a RENDERER does with the output: no raw HTML (Radd's CommonMark
+viewer escapes it), and no line that can start a block (an ATX heading interrupts
+a paragraph — how a summary escaped its bullet).
 """
 
 import sys

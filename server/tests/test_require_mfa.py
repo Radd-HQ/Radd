@@ -12,10 +12,8 @@ import uuid
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.app import create_app
-from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ConflictError
 from radd.modules.auth import mfa_policy, service as auth_service, totp
@@ -25,16 +23,6 @@ from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
 
 PASSWORD = "require-mfa-pass-1"
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 @pytest.fixture

@@ -1,13 +1,6 @@
-"""Seeing what an event carries, and what each node emitted (RADD-921).
-
-Two questions that had no answer in the product. "What is in an `item.updated`
-payload?" — you wrote a dotted path, saved, waited for the event, and learned
-from the absence of an effect that you had guessed wrong. "Which items came out
-of my filter?" — the dry run reported one boolean and a flat list of actions,
-the shape of a linear rule.
-
-The flattening is pure and tested as such. The dry run is tested through the
-executor, because what it reports has to be what the walk actually did.
+"""Seeing what an event carries, and what each node emitted (RADD-921). The
+payload flattening is pure; the dry run is tested through the executor, because
+what it reports has to be what the walk actually did.
 """
 
 import uuid

@@ -1,32 +1,13 @@
-"""Fan-out over the scoped recipient set (spec 118; RADD-1053/1056).
-
-The planner tests in `test_notify.py` are pure and the resolver tests in
-`test_notify_rules.py` are pure. Neither can see the thing this issue actually
-changed: WHO the consumer collects, and which of the four sets it puts them in.
-That answer is built from `notification_rules` rows, team membership and the
-event payload, so these tests drive the real writes and the real consumer.
-
-Three things get their own test because each was previously impossible:
-
-* a PROJECT SUBSCRIBER hears about an issue they have no other connection to;
-* a PAGE COMMENT notifies anybody at all (RADD-1056 — it raised inside the
-  per-event savepoint and was logged and skipped, for the whole life of the
-  feature, including a comment that @-named someone);
-* a page event reaches a SPACE subscriber, which is what the wiki's synchronous
-  fan-out could never have grown.
-
-Every test carries a control. "No notification" is the failure mode of a broken
-consumer as much as of a correct rule, and a test with one recipient cannot tell
-those apart.
+"""Who the consumer collects over the scoped recipient sets (spec 118;
+RADD-1053/1056), through real rules, memberships and the real consumer: project
+subscribers, page-comment recipients, space subscribers. Every test has a
+control — "no notification" is also what a broken consumer produces.
 """
 
 import uuid
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.comments.schemas import CommentCreate
@@ -46,30 +27,13 @@ from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 from radd.modules.workflow import service as workflow_service
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
+from _factories import make_user
 
 
-async def _user(db, name: str, *, admin: bool = True) -> User:
-    """Admin by default. Every notification still passes a permission gate —
-    `item.read` on the project, `page_access` in the space — and a test whose
-    recipients hold nothing would pass by being refused rather than by the rule
-    it claims to be about."""
-    user = User(
-        email=f"fan-{uuid.uuid4().hex[:8]}@example.com",
-        name=name,
-        instance_role=(InstanceRole.ADMIN if admin else InstanceRole.MEMBER).value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
+# Recipients are admins: every notification still passes a permission gate
+# (`item.read` on the project, `page_access` in the space), and a test whose
+# recipients hold nothing would pass by being refused rather than by the rule it
+# claims to be about.
 
 
 async def _rows(db, user: User) -> list[Notification]:
@@ -93,16 +57,10 @@ async def _at_head(db) -> int:
 
 
 async def _drain(db, after: int) -> None:
-    """Run the real dispatcher over the events this test produced.
-
-    `consumer._handle`, not `_consume`, because it does not swallow (`_consume`
-    used to COMMIT as well — RADD-1047 moved that to the session opener, so a
-    committed space no longer leaks into `test_space_scope` from here). `_consume`
-    wraps each event in a SAVEPOINT and logs
-    what raises, which is right in production and is exactly why RADD-1056
-    survived: a page comment raised KeyError, was logged, and looked from the
-    outside like a notification nobody wanted. Here it raises.
-    """
+    """The real dispatcher over this test's events. `consumer._handle`, not
+        `_consume`: `_consume` wraps each event in a SAVEPOINT and logs what raises,
+        which is how RADD-1056 (a page comment raising KeyError) looked like nobody
+        wanting a notification. Here it raises."""
     for event in await events_service.read_after(db, after, 500):
         if event.silent or not consumer.handles(event.event_type):
             continue
@@ -116,9 +74,9 @@ async def test_a_project_subscriber_hears_about_an_issue_they_do_not_watch(db):
     """The reach spec 118 exists for. Before it, `recipient_ids` was watchers ∪
     participant teams, so "tell me what is arriving in this project" had no
     representation at all — you could only find out by looking."""
-    actor = await _user(db, "Ada Agent")
-    subscriber = await _user(db, "Subscriber")
-    stranger = await _user(db, "Stranger")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    subscriber = await make_user(db, role=InstanceRole.ADMIN, name="Subscriber")
+    stranger = await make_user(db, role=InstanceRole.ADMIN, name="Stranger")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"SU{uuid.uuid4().hex[:4].upper()}", name="Subscribed")
     )
@@ -141,8 +99,8 @@ async def test_a_subscriber_who_asked_for_nothing_is_told_nothing(db):
     """A subscription row is not a firehose. `created` is on; `updated` is not
     mentioned, so it falls through to the subscription scope's `off` default —
     which is what keeps a sparse rule from meaning "everything"."""
-    actor = await _user(db, "Ada Agent")
-    subscriber = await _user(db, "Subscriber")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    subscriber = await make_user(db, role=InstanceRole.ADMIN, name="Subscriber")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"SP{uuid.uuid4().hex[:4].upper()}", name="Sparse")
     )
@@ -162,8 +120,8 @@ async def test_a_subscriber_who_asked_for_nothing_is_told_nothing(db):
 async def test_the_generic_update_reaches_a_subscriber_who_asked_for_it(db):
     """The other half of the same rule, and the control for the test above: the
     same event, the same person, one cell different."""
-    actor = await _user(db, "Ada Agent")
-    subscriber = await _user(db, "Subscriber")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    subscriber = await make_user(db, role=InstanceRole.ADMIN, name="Subscriber")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"UP{uuid.uuid4().hex[:4].upper()}", name="Updates")
     )
@@ -189,9 +147,9 @@ async def test_the_my_teams_column_follows_the_items_team(db):
     today, so the rule is matched by intersecting the ITEM's team members with
     everyone who has opted into the column. A subscription to one named team
     could not express "and the ones I join next year"."""
-    actor = await _user(db, "Ada Agent")
-    member = await _user(db, "Member")
-    outsider = await _user(db, "Outsider")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    member = await make_user(db, role=InstanceRole.ADMIN, name="Member")
+    outsider = await make_user(db, role=InstanceRole.ADMIN, name="Outsider")
     team = await teams_service.create_team(db, TeamCreate(name=f"Desk {uuid.uuid4().hex[:6]}"))
     await teams_service.add_team_member(db, team.id, member.id)
     project = await projects_service.create_project(
@@ -234,13 +192,9 @@ async def test_the_my_teams_column_follows_the_items_team(db):
 
 
 async def _assigned_item(db, actor: User, assignee: User, name: str):
-    """An item assigned to someone, whose CREATE event is never drained.
-
-    That is not a shortcut — it is the shape a silent import leaves behind. A
-    bulk import's events carry `silent`, the consumer skips them, and the
-    auto-watch graph therefore never grows from them: an imported item has an
-    assignee and a reporter and NO watcher rows at all.
-    """
+    """An assigned item whose CREATE event is never drained — the shape a silent
+        import leaves: the consumer skips silent events, so the item has an assignee
+        and reporter but NO watcher rows."""
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"OW{uuid.uuid4().hex[:4].upper()}", name=name)
     )
@@ -254,16 +208,13 @@ async def _assigned_item(db, actor: User, assignee: User, name: str):
 
 
 async def test_an_assignee_who_watches_nothing_hears_about_their_own_item(db):
-    """The widening, stated. This person is not a watcher and not a participant;
-    the only thing connecting them to the issue is the assignee field.
-
-    The channel matters as much as the row: `commented` defaults to `both` in
-    `own`, so this is the immediate mailer's queue, not the digest's. On an
-    imported instance that is a real increase in mail on the first comment after
-    the upgrade — which is the fact the spec doc and the migration now carry."""
-    actor = await _user(db, "Ada Agent")
-    assignee = await _user(db, "Assignee")
-    stranger = await _user(db, "Stranger")
+    """The widening: only the assignee field connects this person to the issue.
+        `commented` defaults to `both` in `own`, so this is the immediate mailer's
+        queue — on an imported instance, more mail on the first comment after the
+        upgrade."""
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    assignee = await make_user(db, role=InstanceRole.ADMIN, name="Assignee")
+    stranger = await make_user(db, role=InstanceRole.ADMIN, name="Stranger")
     _project, item = await _assigned_item(db, actor, assignee, "Own scope")
 
     head = await _at_head(db)
@@ -285,8 +236,8 @@ async def test_an_assignee_who_watches_nothing_hears_about_their_own_item(db):
 async def test_a_state_change_reaches_them_the_same_way(db):
     """The other ambient kind an assignee cares about, through the same set —
     inbox-only by default, which is the RADD-686 channel for it."""
-    actor = await _user(db, "Ada Agent")
-    assignee = await _user(db, "Assignee")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    assignee = await make_user(db, role=InstanceRole.ADMIN, name="Assignee")
     project, item = await _assigned_item(db, actor, assignee, "State scope")
     states = await workflow_service.list_states(db, project.id)
     target = next(state for state in states if state.id != item.state.id)
@@ -307,8 +258,8 @@ async def test_the_own_column_is_the_off_switch_for_all_of_it(db):
     Under RADD-686 there was one answer per type for the whole instance, so
     Unwatch was the only lever an assignee had. Spec 118 replaces the lever: the
     `own` column says it, and it says it whether or not they ever watched."""
-    actor = await _user(db, "Ada Agent")
-    assignee = await _user(db, "Assignee")
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    assignee = await make_user(db, role=InstanceRole.ADMIN, name="Assignee")
     _project, item = await _assigned_item(db, actor, assignee, "Silenced")
     await notify_service.set_rules(
         db,
@@ -327,16 +278,11 @@ async def test_the_own_column_is_the_off_switch_for_all_of_it(db):
 
 
 async def test_unwatching_no_longer_silences_an_assignee_and_own_off_still_does(db):
-    """The report this will arrive as. The item is created and drained first, so
-    the assignee IS auto-watched exactly as before; then they unwatch.
-
-    Unwatch removes the PARTICIPATING relation and nothing else — `own` still
-    applies, so they keep hearing about it. Both halves are asserted in one test
-    because the first on its own reads like a bug and the second is the answer to
-    it: the same person, the same unwatched item, one rule row apart.
-    """
-    actor = await _user(db, "Ada Agent")
-    assignee = await _user(db, "Assignee")
+    """Unwatch removes the PARTICIPATING relation only — `own` still applies. Both
+        halves in one test because the first alone reads like a bug and the second
+        answers it: the same person and item, one rule row apart."""
+    actor = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    assignee = await make_user(db, role=InstanceRole.ADMIN, name="Assignee")
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"UW{uuid.uuid4().hex[:4].upper()}", name="Unwatched")
     )
@@ -389,18 +335,12 @@ async def _space_with_page(db, actor: User):
 
 
 async def test_a_page_comment_notifies_the_pages_watchers(db):
-    """RADD-1056, the bug in one test.
-
-    `comments` has been polymorphic since RADD-717, and the notify consumer read
-    `payload["item"]["id"]` unconditionally. A page comment's `item` subject is
-    NULL by construction, so every one of them raised KeyError inside the
-    per-event savepoint, was logged, and was skipped — page comments produced
-    ZERO notifications for the whole life of the feature. Nothing failed loudly,
-    which is how it survived: `page_updated` worked, so the wiki's notifications
-    looked alive.
-    """
-    author = await _user(db, "Ada Agent")
-    watcher = await _user(db, "Watcher")
+    """RADD-1056: comments are polymorphic, but the consumer read
+        `payload["item"]["id"]` unconditionally, so every page comment raised inside
+        the per-event savepoint, was logged and skipped — zero notifications, while
+        `page_updated` made the wiki look alive."""
+    author = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    watcher = await make_user(db, role=InstanceRole.ADMIN, name="Watcher")
     _space, page = await _space_with_page(db, author)
     from radd.modules.pages import watchers as page_watchers
 
@@ -428,8 +368,8 @@ async def test_a_page_comment_notifies_the_pages_watchers(db):
 async def test_a_page_comment_that_names_someone_reaches_them(db):
     """The part of RADD-1056 that reads worst: an @-mention on a wiki page went
     to nobody, and the person who wrote it had every reason to believe it had."""
-    author = await _user(db, "Ada Agent")
-    named = await _user(db, "Named")
+    author = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    named = await make_user(db, role=InstanceRole.ADMIN, name="Named")
     _space, page = await _space_with_page(db, author)
 
     head = await _at_head(db)
@@ -452,9 +392,9 @@ async def test_a_space_subscriber_hears_about_a_new_page(db):
     """`page.created` notified NOBODY before spec 118 — the synchronous fan-out
     was wired to `update_page` alone, so a wiki could gain a page and no watcher
     of anything would learn it existed."""
-    author = await _user(db, "Ada Agent")
-    subscriber = await _user(db, "Subscriber")
-    stranger = await _user(db, "Stranger")
+    author = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    subscriber = await make_user(db, role=InstanceRole.ADMIN, name="Subscriber")
+    stranger = await make_user(db, role=InstanceRole.ADMIN, name="Stranger")
     slug = f"fan-{uuid.uuid4().hex[:8]}"
     space = await spaces.create_space(db, PageSpaceCreate(name=slug, slug=slug), author.id)
     await _subscribe(
@@ -480,8 +420,8 @@ async def test_a_page_edit_reaches_a_space_subscriber_who_never_watched_it(db):
     """The wiki's ambient half. A watcher hears about the page they clicked
     Watch on; a space subscriber hears about the space, which is the only way to
     follow a wiki that is still being written."""
-    author = await _user(db, "Ada Agent")
-    subscriber = await _user(db, "Subscriber")
+    author = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    subscriber = await make_user(db, role=InstanceRole.ADMIN, name="Subscriber")
     space, page = await _space_with_page(db, author)
     await _subscribe(
         db, subscriber, RuleScope.SPACE, space.id, NotificationType.PAGE_UPDATED
@@ -500,17 +440,12 @@ async def test_a_page_edit_reaches_a_space_subscriber_who_never_watched_it(db):
 
 
 async def test_a_page_notification_is_refused_to_someone_who_cannot_read_the_page(db):
-    """The gate the synchronous fan-out never had. RADD-719 wrote a row for
-    whoever had once clicked Watch, whatever the space had decided about them
-    since — so a wiki restriction did not survive being watched first.
-
-    A non-admin with no grant in the space holds no `page.read` there, so the
-    notification is refused; the admin beside them is the control that the
-    fan-out ran at all.
-    """
-    author = await _user(db, "Ada Agent")
-    outsider = await _user(db, "Outsider", admin=False)
-    insider = await _user(db, "Insider")
+    """A watch does not outlive a space restriction: a non-admin with no grant in
+        the space holds no `page.read`, so the notification is refused; the admin
+        beside them is the control that the fan-out ran at all."""
+    author = await make_user(db, role=InstanceRole.ADMIN, name="Ada Agent")
+    outsider = await make_user(db, name="Outsider")
+    insider = await make_user(db, role=InstanceRole.ADMIN, name="Insider")
     _space, page = await _space_with_page(db, author)
     from radd.modules.pages import watchers as page_watchers
 

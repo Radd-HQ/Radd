@@ -11,11 +11,7 @@ from a real ref of that type (never an invented one).
 import importlib
 import uuid
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
-from radd.kernel import load_plugins
 from radd.modules.auth.models import User
 from radd.modules.automations import samples
 from radd.modules.events import service as events
@@ -25,17 +21,6 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
 router = importlib.import_module("radd.modules.automations.router")
-
-
-@pytest.fixture
-async def db():
-    load_plugins(settings.modules)
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def test_a_never_fired_trigger_lists_its_declared_paths(db, monkeypatch):

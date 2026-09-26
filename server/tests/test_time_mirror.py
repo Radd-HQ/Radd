@@ -12,12 +12,9 @@ from datetime import date
 
 import pytest
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.auth import authz
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
@@ -31,31 +28,18 @@ from radd.modules.vcs import timemirror
 from radd.modules.vcs.models import VcsPendingWorklog, VcsUserLink
 from radd.modules.vcs.types import VcsMatchedBy, VcsProvider
 
+from _factories import make_user
+
 GITLAB = VcsProvider.GITLAB
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _user(db, email: str, name: str) -> User:
-    user = User(email=email, name=name, instance_role=InstanceRole.ADMIN.value)
-    db.add(user)
-    await db.flush()
-    return user
 
 
 @pytest.fixture
 async def world(db):
     """An admin, a project with time logging ON, two items, and a category."""
     suffix = uuid.uuid4().hex[:6]
-    admin = await _user(db, f"tm-admin-{suffix}@example.com", "Mirror Admin")
+    admin = await make_user(
+        db, role=InstanceRole.ADMIN, name="Mirror Admin", email=f"tm-admin-{suffix}@example.com"
+    )
     project = await projects_service.create_project(
         db, ProjectCreate(key=f"TM{suffix[:4].upper()}", name="Time mirror")
     )
@@ -219,7 +203,12 @@ async def test_no_known_key_anywhere_writes_nothing(db, world):
 
 async def test_author_by_email_then_map_then_parked(db, world):
     admin = world["admin"]
-    other = await _user(db, f"tm-other-{uuid.uuid4().hex[:6]}@example.com", "Other Person")
+    other = await make_user(
+        db,
+        role=InstanceRole.ADMIN,
+        name="Other Person",
+        email=f"tm-other-{uuid.uuid4().hex[:6]}@example.com",
+    )
     connection = world["connection"]
     scope = "pr:group/repo:3"
     report = await _reconcile(
@@ -272,7 +261,12 @@ async def test_parked_entries_follow_the_source_too(db, world):
 
 async def test_manual_map_beats_an_earlier_email_match(db, world):
     admin = world["admin"]
-    other = await _user(db, f"tm-manual-{uuid.uuid4().hex[:6]}@example.com", "Manual Person")
+    other = await make_user(
+        db,
+        role=InstanceRole.ADMIN,
+        name="Manual Person",
+        email=f"tm-manual-{uuid.uuid4().hex[:6]}@example.com",
+    )
     connection = world["connection"]
     assert await timemirror.resolve_author(db, provider=GITLAB, connection_id=connection, username="hj", email=admin.email) == admin.id
     await timemirror.set_user_link(db, provider=GITLAB, connection_id=connection, username="HJ", user_id=other.id, actor_id=admin.id)

@@ -1,17 +1,11 @@
-"""Field mapping for the import wizard (spec 90) — the pure suggestion +
-validation logic, plus DB-backed plan CRUD.
-
-The suggestions are what make the wizard usable (300 fields pre-filled, not
-blank), and the validation is the guard that stops a bad mapping reaching the
-importer — both worth pinning.
-"""
+"""Field mapping for the import wizard (spec 90): the pure suggestions (what
+pre-fills 300 fields) and the validation that stops a bad mapping reaching the
+importer."""
 
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.fields.types import FieldType
 from radd.modules.jiraimport.mapping import slug, suggest_mappings, validate_mappings
 from radd.modules.jiraimport.schemas import FieldMappingEntry
@@ -152,29 +146,10 @@ def test_validate_passes_a_clean_set():
     assert validate_mappings(good, existing) == []
 
 
-# --- DB-backed plan CRUD ---
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
 def test_a_native_concept_beats_a_matching_custom_field():
-    """Precedence, stated once: a field whose NAME is a native Radd concept is
-    suggested as NATIVE even when a custom field of the same slug already exists.
-
-    Story points are the case that forced the decision. Radd has a first-class
-    `estimate_points` column (spec 70) that velocity, burndown and SLQ `points`
-    read; routing Jira's points into a look-alike custom field would leave all
-    three empty. The same rule already applied to Epic Link → PARENT. The grid is
-    editable, so an admin who really wants the custom field changes that one row.
-    """
+    """A field whose NAME is a native Radd concept is suggested as NATIVE even when
+    a same-slug custom field exists: Story Points in a look-alike custom field would
+    leave velocity, burndown and SLQ `points` (all on `estimate_points`) empty."""
     fields = [_field("customfield_1", "Story Points", inferred_type=InferredType.NUMBER)]
 
     (suggestion,) = suggest_mappings(fields, existing_keys={"story_points"})

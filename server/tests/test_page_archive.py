@@ -11,38 +11,15 @@ Two contracts the archive browser stands on, at the service seam:
 
 import uuid
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
-from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.events.models import Event
 from radd.modules.pages import service as pages_service, spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.pages.types import PageEvent
 
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-async def _admin(db) -> User:
-    admin = User(
-        email=f"arc-{uuid.uuid4().hex[:8]}@example.com",
-        name="Admin",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(admin)
-    await db.flush()
-    return admin
+from _factories import make_user
 
 
 async def _tree(db, actor):
@@ -66,7 +43,7 @@ async def _tree(db, actor):
 
 
 async def test_the_archived_listing_marks_exactly_the_archived_rows(db):
-    admin = await _admin(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN)
     space, root, mid, leaf, other = await _tree(db, admin)
     await pages_service.archive_page(db, mid.id, admin.id)
 
@@ -86,7 +63,7 @@ async def test_the_archived_listing_marks_exactly_the_archived_rows(db):
 
 
 async def test_restoring_a_page_under_an_archived_ancestor_restores_the_chain(db):
-    admin = await _admin(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN)
     space, root, mid, leaf, other = await _tree(db, admin)
     await pages_service.archive_page(db, leaf.id, admin.id)
     await pages_service.archive_page(db, mid.id, admin.id)
@@ -119,7 +96,7 @@ async def test_bulk_restore_and_delete_report_per_page(db):
     from radd.modules.pages.models import Page
     from radd.modules.auth.types import Permission
 
-    admin = await _admin(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN)
     space, root, mid, leaf, other = await _tree(db, admin)
 
     async def guard(permission):

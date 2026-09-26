@@ -10,9 +10,7 @@ at teardown, so rows never persist.
 import uuid
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.approvals import service as approvals
 from radd.modules.approvals.gate import ApprovalGate
@@ -35,28 +33,6 @@ from radd.modules.workflow.schemas import TransitionCreate, TransitionRule
 from radd.modules.workflow.types import TransitionCheck, TransitionMode
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(config.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
-
-
-@pytest.fixture
-async def actor(db) -> User:
-    user = User(
-        email=f"apr-{uuid.uuid4().hex[:8]}@example.com",
-        name="Approval Tester",
-        instance_role=InstanceRole.ADMIN.value,
-    )
-    db.add(user)
-    await db.flush()
-    return user
 
 
 async def _member(db, name: str, project=None) -> User:

@@ -8,48 +8,25 @@ Actions run as each automation's AUTHOR (a real person), which is the "works
 with act_as" half: causation is the event's marker, not who acted.
 """
 
-import uuid
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.exceptions import ConflictError
-from radd.modules.auth.models import User
 from radd.modules.automations import engine, service as automations
 from radd.modules.automations.schemas import RuleCreate
 from radd.modules.events.models import Event
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEvent
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
-from radd.modules.projects import service as projects_service
-from radd.modules.projects.schemas import ProjectCreate
 
-
-@pytest.fixture
-async def db():
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
-
-
-@pytest.fixture
-async def admin(db) -> User:
-    user = User(email=f"chain-{uuid.uuid4().hex[:8]}@example.com", name="Chain Admin", instance_role="admin")
-    db.add(user)
-    await db.flush()
-    return user
+from _factories import make_project
 
 
 @pytest.fixture
 async def project(db):
-    return await projects_service.create_project(
-        db, ProjectCreate(key=f"CH{uuid.uuid4().hex[:4].upper()}", name="Chaining")
-    )
+    return await make_project(db, "CH")
 
 
 def _rule(name: str, project_key: str, action: dict, *, include_automated: bool = False) -> RuleCreate:

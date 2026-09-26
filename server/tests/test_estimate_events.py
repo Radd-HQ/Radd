@@ -6,11 +6,8 @@ reach it: set/clear_estimate wrote the row and told nobody.
 
 import uuid
 
-import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.events.models import Event
@@ -21,16 +18,6 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import enablement, service as timelogging
 from radd.modules.timelogging.schemas import EstimateSet
 from radd.modules.timelogging.types import TimelogEntity, WorklogEvent
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine.dispose()
 
 
 async def test_set_and_clear_emit_under_item_estimate(db):

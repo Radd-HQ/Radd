@@ -1,21 +1,10 @@
 """Automation dataflow: named node outputs and the packet variable bag (spec 120).
 
-Before this an automation graph could route on what a node decided and never
-READ it. `ai.classify` picked "Bug" out of four answers, sent the packet down the
-Bug branch — and the only way to act on that was a hardcoded action per branch.
-The value the model produced existed for one instant inside the executor.
-
-What these pin is the part that is easy to get subtly wrong, which is not the
-happy path:
-
-* the bag is a property of the PACKET, so a value produced on one branch is not
-  readable on a branch that never ran;
-* fan-in merges in TOPOLOGICAL order, so "the later producer wins" means the one
-  that actually ran second rather than whichever edge was stored first;
-* a per-item run produces N answers and publishes none of them, because the bag
-  has one slot per node and picking one silently would be a wrong write;
-* the write path refuses a token naming a node that is not there — the failure
-  mode this whole spec is about is an action that quietly does not happen.
+Pinned, the parts easy to get subtly wrong: the bag belongs to the PACKET (a value
+from a branch that never ran is not readable); fan-in merges in TOPOLOGICAL order;
+a per-item run publishes none of its N answers (one slot per node); and the write
+path refuses a token naming a missing node — an action that quietly does not
+happen is the failure mode this spec is about.
 """
 
 import uuid
@@ -410,20 +399,6 @@ def test_reserved_roots_are_derived_from_the_token_catalogue():
 
 
 @pytest.fixture
-async def db():
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    from radd.config import settings
-
-    engine_ = create_async_engine(settings.database_url)
-    maker = async_sessionmaker(engine_, expire_on_commit=False)
-    async with maker() as session:
-        yield session
-        await session.rollback()
-    await engine_.dispose()
-
-
-@pytest.fixture
 async def admin(db):
     from radd.modules.auth.models import User
     from radd.modules.auth.types import InstanceRole
@@ -786,17 +761,11 @@ async def _guarded_project(db, admin):
 
 
 async def test_a_workflow_guard_refusal_leaves_the_item_where_it_was(db, admin):
-    """THE placement bug, and the reason this test drives a real session.
-
-    `items.update_item` mutates the row and THEN asks `check_transition`. The
-    first version of this caught the refusal INSIDE the invocation's savepoint,
-    so `__aexit__` committed it — the item landed in the state the guard had just
-    refused, with no `item.updated` event (the check raises before `_finish`), so
-    no history, no notification, no reindex — while the run report said "skipped".
-
-    A fake session with a no-op `__aexit__` cannot see any of that, which is
-    exactly how the first version of this test passed against the broken code.
-    """
+    """Drives a real session on purpose: `items.update_item` mutates the row and
+    THEN asks `check_transition`, so a refusal caught inside the invocation's
+    savepoint was committed — the item landed in the refused state with no event,
+    while the report said "skipped". A fake session with a no-op `__aexit__` passed
+    against exactly that bug."""
     from radd.modules.items.models import WorkItem
 
     project, start, target = await _guarded_project(db, admin)
@@ -1056,12 +1025,9 @@ async def test_the_full_triage_chain_resolves_end_to_end(db, admin, registered, 
 
 
 async def test_a_rendered_custom_field_value_the_registry_refuses_is_a_skip(db, admin):
-    """The miss-skip promise has to cover the field REGISTRY too.
-
-    A tokenized custom field is exactly where a model answers with something
-    outside a select's options; before this it raised out of `_apply_plan` into
-    the executor's generic handler — a dry run saying "Would apply", a live run
-    logging a crash, and nothing recorded against the action."""
+    """The miss-skip covers the field REGISTRY too: a model's answer outside a
+    select's options must be a recorded skip, not a raise out of `_apply_plan` (a dry
+    run saying "Would apply" while the live run crashed)."""
     from radd.modules.fields import service as fields_service
     from radd.modules.fields.schemas import FieldDefinitionCreate
 
@@ -1134,12 +1100,9 @@ async def test_a_rendered_create_item_field_the_schema_refuses_is_a_skip(db, adm
 
 
 async def test_a_newline_in_a_rendered_header_is_collapsed(db, admin, monkeypatch):
-    """`EmailMessage` under the default policy REFUSES a header with a newline,
-    so a subject rendered from model output could raise inside the transport —
-    a dry run saying "Would apply" and a live run that never sent anything.
-
-    Send email is mailintake's node since RADD-1387, so it renders through the
-    engine's node context — the same seam, and the same collapsing."""
+    """`EmailMessage` REFUSES a header with a newline, so a subject rendered from
+    model output would raise inside the transport. Send email (mailintake's node)
+    renders through the engine's node context, which collapses it."""
     from radd.modules.mailintake import automation_email, service as mail_service
 
     async def configured(_session):
