@@ -347,3 +347,46 @@ async def test_restricted_page_discussion_uses_the_page_read_boundary(db):
             await read(db, page.id, reader, "page")
     with pytest.raises(NotFoundError):
         await comments.create_comment(db, page.id, CommentCreate(body="should refuse"), reader, "page")
+
+
+async def test_the_label_index_answers_with_only_the_readable_pages(db):
+    """RADD-1415: `GET /pages/by-label/{name}` 500'd whenever the label had a page
+    in a readable space — the filter read `page_id` off rows that only have `id`."""
+    import httpx
+
+    from radd.app import create_app
+    from radd.db import get_session
+    from radd.modules.auth import service as auth_service
+    from radd.modules.auth.types import LoginMethod
+    from radd.modules.pages import labels as page_labels
+
+    admin = await _admin(db)
+    readable_space = await _space(db, admin)
+    closed_space = await _space(db, admin, name="Finance")
+    open_page = await _page(db, readable_space, admin, title="Runbook")
+    restricted_page = await _page(db, readable_space, admin, title="Salary bands")
+    elsewhere = await _page(db, closed_space, admin, title="Budget")
+    label = f"idx-{uuid.uuid4().hex[:8]}"
+    for page in (open_page, restricted_page, elsewhere):
+        await page_labels.set_labels(db, page.id, [label], admin.id)
+    reader = await _user(db, "Reader")
+    await _grant_space_read(db, reader, readable_space)
+    await _restrict(db, restricted_page, admin, user_id=admin.id)
+
+    app = create_app()
+
+    async def override():
+        yield db
+
+    app.dependency_overrides[get_session] = override
+    cookie = await auth_service.create_session(db, reader, method=LoginMethod.PASSWORD)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+        cookies={"radd_session": cookie},
+    ) as client:
+        response = await client.get(f"/api/v1/pages/by-label/{label}")
+
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()] == [str(open_page.id)]
+

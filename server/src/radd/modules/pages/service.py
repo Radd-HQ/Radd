@@ -920,12 +920,12 @@ async def drop_restricted_labelled(session: AsyncSession, actor: "User", rows: l
     pages = list(
         (
             await session.execute(
-                select(Page).where(Page.id.in_([row.page_id for row in rows]))
+                select(Page).where(Page.id.in_([row.id for row in rows]))
             )
         ).scalars()
     )
     readable = await page_access.readable_page_ids(session, actor, pages)
-    return [row for row in rows if row.page_id in readable]
+    return [row for row in rows if row.id in readable]
 
 
 async def space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
