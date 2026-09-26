@@ -47,38 +47,9 @@ export type ValidationModeValue = (typeof ValidationMode)[keyof typeof Validatio
 export const VERDICT_BLOCK_TYPE = "verdict.block";
 export const VERDICT_WARN_TYPE = "verdict.warn";
 
-/** Shape of a scheduled rule's `schedule` (spec 69, mirror of ScheduleKind). */
-export const ScheduleKind = {
-  interval: "interval",
-  daily: "daily",
-  weekly: "weekly",
-  monthly: "monthly",
-  cron: "cron",
-} as const;
-export type ScheduleKindValue = (typeof ScheduleKind)[keyof typeof ScheduleKind];
-
-/** interval: {minutes >= 5}; daily: {time "HH:MM"}; weekly: {time, weekdays
- * (0=Mon, non-empty)}; monthly: {time, day}; cron: {expression}. Times run on
- * the server's scheduler timezone. */
-export interface RuleSchedule {
-  kind: ScheduleKindValue;
-  minutes?: number | null;
-  time?: string | null;
-  weekdays?: number[] | null;
-  /** Monthly: day of the month, clamped to the month's last day. */
-  day?: number | null;
-  /** Cron: a five-field expression, validated server-side. */
-  expression?: string | null;
-}
-
-/** POST /automations/schedule/preview — when a candidate schedule would run.
- * Computed on the server so the answer is the engine's own arithmetic, and
- * `error` carries the refusal the save would give (RADD-912). */
-export interface SchedulePreview {
-  timezone: string;
-  next_runs: string[];
-  error: string | null;
-}
+// Scheduling is shared platform vocabulary, also consumed by Backups.
+import type { ScheduleConfig as RuleSchedule, ScheduleKindValue } from "@radd/plugin-sdk";
+export { ScheduleKind, type ScheduleKindValue, type ScheduleConfig as RuleSchedule, type SchedulePreview } from "@radd/plugin-sdk";
 
 /** One subscribable event type, from GET /automations/catalog (spec 58). */
 export interface TriggerInfo {

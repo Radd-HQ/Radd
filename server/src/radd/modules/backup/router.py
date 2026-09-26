@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd import backup as core
 from radd.backup import artifact as art, store
 from radd.config import settings
+from radd.schedule_preview import SchedulePreviewRead, SchedulePreviewRequest, preview_schedule as schedule_preview
 from radd.db import commit_before_streaming, get_session
 from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.auth import authz
@@ -45,6 +46,13 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 def _require_instance_admin(actor: User) -> None:
     if not authz.is_instance_admin(actor):
         raise ForbiddenError("backups require an instance admin")
+
+
+@router.post("/schedule/preview", response_model=SchedulePreviewRead)
+async def preview_schedule(data: SchedulePreviewRequest, user: CurrentUser) -> SchedulePreviewRead:
+    """Backup-owned preview, available independently of Automations."""
+    _require_instance_admin(user)
+    return schedule_preview(data, settings.scheduler_tz)
 
 
 def _as_backup(stored: core.StoredBackup) -> BackupRead:

@@ -506,14 +506,17 @@
     "issue": null
   },
   "docs/modules.md": {
-    "sha256": "83372bf6f8488daa3d112857a4cb2d2792a65cc5953d63a587d67ca60fe0c37d",
+    "sha256": "baf7e6f9678f3a86f4cd99f16b17174cfd580e7f927690013e396f02da420a14",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "docs/performance-safety-audit.md": {
     "sha256": "103b850cbfe71ea293d998895fd8449ee03f8a4764199133d84bf080dcbda7d9",
@@ -551,14 +554,17 @@
     "issue": null
   },
   "docs/plugin-platform.md": {
-    "sha256": "161ae3b0ed32f40eda1f2c55e949b1506e6fc947779b50dd4028292a00dccae3",
+    "sha256": "0a573803a6d0c71e78d824fe3175fd2c578ed9bc77e700ce1fbe1bc91d276f4a",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "docs/plugin-ui.md": {
     "sha256": "f5e56d76214f2ac3b229c9596c7889d131119e090efbb45fc1e4a7c4d31f8437",
@@ -2052,14 +2058,17 @@
     "issue": null
   },
   "research/plugin-isolation/README.md": {
-    "sha256": "d3a4df4350aa8e19720ff2da2890958e00589bb8a9e2ce6934fff0324f17021e",
+    "sha256": "f53c5c5e2dfe5b0eaf4d58d31b1486a230361fb626858d1eb61ca63f7f76ecce",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "research/review-2026-09-25/FIXES.md": {
     "sha256": "247e2f0759a2a12cb87c1e1d28fd6baefb175deb7f2d58bff79200f4d80925c2",
@@ -5303,14 +5312,17 @@
     "issue": null
   },
   "server/src/radd/modules/automations/__init__.py": {
-    "sha256": "3c9419422d3b6e568d37ab3e008d6f92c9ecdc5e4c6d2369d664634d5880d360",
+    "sha256": "b5c4110fb6323266654e80d14bf056403fedf9d7a2deef1fc54351bd61085cb6",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
       "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/automations/builtin_actions.py": {
     "sha256": "b0dc0a159b098e0498d48eddb7bb985915b02af94ae11a1ce4ed0aac549247ca",
@@ -5432,14 +5444,17 @@
     "issue": null
   },
   "server/src/radd/modules/automations/router.py": {
-    "sha256": "0cff6365ab3bdc40e1aa030a5245ccaa8e869c290b0c6414993ad9c9266ef517",
+    "sha256": "71e9405edece85a757f551eb70aef0bd5c49c503eb8c81f7c66cd6404d62b36d",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
       "Canvas manifest and registered node ownership metadata verified; full backend ownership/dependency review still pending.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/automations/runs.py": {
     "sha256": "acefd0e438a5d5431384a1e26fc5e66ad0c64552f37eb685c448b97b4f5f111a",
@@ -5463,14 +5478,17 @@
     "issue": null
   },
   "server/src/radd/modules/automations/schemas.py": {
-    "sha256": "246bdb005838b311120f8b573cf73fbf15c4c37213c094bfa0bf3e609194a1ca",
+    "sha256": "639a9a28d4998ad384af81e918e18a3df15cd3c0a39ad87202a038a00aba5c87",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
       "Canvas manifest and registered node ownership metadata verified; full backend ownership/dependency review still pending.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/automations/search.py": {
     "sha256": "b6d03f339dfe40c5f506c73131f873e3369e48f1405d058a4aa9f26179fe4331",
@@ -5538,6 +5556,16 @@
     ],
     "issue": "RADD-1354"
   },
+  "server/src/radd/modules/automations/ui/src/ScheduleEditor.tsx": {
+    "sha256": "977f806d4f263a9ece09440d04b5688d9db587598aace254575c4e24c716c560",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
   "server/src/radd/modules/automations/ui/src/automation-layout.ts": {
     "sha256": "20fb04121ee9af6804f3df1af09f693f173fd366dedf644e3977f43f98022ac2",
     "status": "reviewed",
@@ -5589,14 +5617,16 @@
     "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/ui/src/index.tsx": {
-    "sha256": "d6ef3890621994652be23af1ccc4b7823ebb9acafa715505db38396434d43660",
+    "sha256": "79c9d7179e6b688631d97d61ed04e63a83361b078376204be244acef7b85868d",
     "status": "reviewed",
     "owner": "automations",
     "evidence": [
       "Owner implementation; explicit shape inputs, real-bundle lifecycle and existing editor/version integration verified. Remaining module migration is tracked separately.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/automations/ui/src/node-shapes.ts": {
     "sha256": "7f11680996148efd0d4944af2b0dcc9f11e009e9701bc47802585833428f6abe",
@@ -5618,6 +5648,16 @@
     ],
     "issue": "RADD-1354"
   },
+  "server/src/radd/modules/automations/ui/src/schedule-contract.ts": {
+    "sha256": "0f17f66038882b53cbbf4d0f4cffd66c7b7d6d98a25e6405859a478ef2cf08e7",
+    "status": "reviewed",
+    "owner": "automations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
   "server/src/radd/modules/automations/ui/src/shape-contract.ts": {
     "sha256": "848fbcb815fdaa5b0b4402ac37ea9e2e2bd436dd50738d89260a2f95be66d896",
     "status": "reviewed",
@@ -5629,14 +5669,17 @@
     "issue": "RADD-1354"
   },
   "server/src/radd/modules/automations/ui/src/types.ts": {
-    "sha256": "24ba7a27983cee825edc6f64d9e7592484185f901f17890e837c3f0677825c94",
+    "sha256": "97988340912169cbce5df76796150d88cafc4ba1cdfb40579f71cf458b10436c",
     "status": "partially_reviewed",
     "owner": "automations",
     "evidence": [
       "Moved graph contracts/catalog helpers to owner. Full legacy wire, schema-default and palette semantics review remains in RADD-1347.",
-      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs"
+      "research/plugin-isolation/README.md: RADD-1354 verification; web/scripts/browser-automation-canvas.mjs",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1354"
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/automations/ui/tsconfig.json": {
     "sha256": "efb528691060367101ec4110e27ba4409776f044ff16b4d2a8edb309fbb900a8",
@@ -5695,11 +5738,15 @@
     "issue": null
   },
   "server/src/radd/modules/backup/__init__.py": {
-    "sha256": "b4697f7cba96bf025022d2287eed890edf4e39cfc0b6cf3702260d96e0c9dafb",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "7ac2978abca1d00d8a6f4cf4641b99adfdde29a07f1b4126568c05b8c9cf9a04",
+    "status": "partially_reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+    ],
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/backup/models.py": {
     "sha256": "f05be770fd054496d001bad81a4ebdc075e0688009f2da29cd4c1dbc058815bb",
@@ -5709,11 +5756,15 @@
     "issue": null
   },
   "server/src/radd/modules/backup/router.py": {
-    "sha256": "bda0b909e212cee9024eff97ac2c05b461df34dc376f54c199187d1e960dd01f",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6f276ef6be6a97f6744108efde722005bc12f1684db85ec9d8e5b9c214fa9cad",
+    "status": "partially_reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+    ],
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/backup/scheduler.py": {
     "sha256": "cd89d8368646e304b15dca84f587e0ab01b6bdc21bbd9a6a9148c85e8148cd4d",
@@ -5735,6 +5786,66 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "server/src/radd/modules/backup/ui/package.json": {
+    "sha256": "0731c5d394a2084cc25e381fa518edb28320656c96c8fc46779b5351981f1300",
+    "status": "reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
+  "server/src/radd/modules/backup/ui/src/ScheduleEditor.tsx": {
+    "sha256": "1f88452ca4c4f756bb44fd1bd4fccd7465d68c12293f818f98d2aaa8ef6a60b7",
+    "status": "reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
+  "server/src/radd/modules/backup/ui/src/index.tsx": {
+    "sha256": "2084f20134b28ffbdb674af9649c47b579938cf8685d35d8a65946d976e2a04b",
+    "status": "reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
+  "server/src/radd/modules/backup/ui/src/schedule-contract.ts": {
+    "sha256": "66637be20bc96397043fd7e59b1492eda141657a212c6c4ab0b073681383ae3b",
+    "status": "reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
+  "server/src/radd/modules/backup/ui/tsconfig.json": {
+    "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
+    "status": "reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
+  "server/src/radd/modules/backup/ui/vite.config.mjs": {
+    "sha256": "3476b8f6c5cd8d605d67d7444449d6c96564a6dea216a8a06b03741b196389a0",
+    "status": "reviewed",
+    "owner": "backup",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
   },
   "server/src/radd/modules/canned/__init__.py": {
     "sha256": "6636b551b1472be59b35cc6afdb9680f8f5ea07c01feff107de02cbfbb436403",
@@ -10997,6 +11108,16 @@
     "evidence": [],
     "issue": null
   },
+  "server/src/radd/schedule_preview.py": {
+    "sha256": "e6409d3acb8db44940d806dbcd481567662b589cbed1730e43a6f57abaff23a1",
+    "status": "reviewed",
+    "owner": "platform scheduling",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
   "server/src/radd/schema_version.py": {
     "sha256": "de77c58cf3483e8e573150e84efd2f4287aa6f411007944defc74342dd434d7c",
     "status": "unreviewed",
@@ -12712,6 +12833,16 @@
     "evidence": [],
     "issue": null
   },
+  "server/tests/test_schedule_preview_ownership.py": {
+    "sha256": "89c344f7a83696cbe5e9621bfc4dd23e39f0fc7867408e085da6ba8da0812827",
+    "status": "reviewed",
+    "owner": "platform tooling and transitional integrations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
   "server/tests/test_scheduled_automations.py": {
     "sha256": "4d764ad50db0609ddf1218e1c1c4f500b60b7042c3b10daffcbb9caa97a47b77",
     "status": "unreviewed",
@@ -13259,14 +13390,17 @@
     "issue": null
   },
   "web/package.json": {
-    "sha256": "269f922f26d26864a41ccdf0a5aa696105f45422ba32d863cef17bd373658b9f",
+    "sha256": "9ea3f5e4be0850fc6555b224182dedff555046fb6b430f7e4c95ea6ec0206bb1",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "web/packages/plugin-sdk/LICENSE": {
     "sha256": "c6596eb7be8581c18be736c846fb9173b69eccf6ef94c5135893ec56bd92ba08",
@@ -13357,14 +13491,17 @@
     "issue": "RADD-1356"
   },
   "web/packages/plugin-sdk/src/index.ts": {
-    "sha256": "9a3a73f816412921c21ffa796da60758f6e3c0e27ca83dfb51acd3c080700448",
+    "sha256": "c50ff4e3b39cefa26bacd44d24d0212ba29109dfb9ecac6d80430251581eaef6",
     "status": "partially_reviewed",
-    "owner": "platform",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "web/packages/plugin-sdk/src/options.tsx": {
     "sha256": "4cbaf0efbf8426e9cd32b3b9875885a93abc0a59de84cca5887c0b7e06d12adc",
@@ -13414,6 +13551,26 @@
       "Query owner/lifecycle implementation reviewed; 12 actual-bundle query groups, source collision/cancellation/consumer behavior, 59 frontend tests and host + 23 builds verified."
     ],
     "issue": "RADD-1361"
+  },
+  "web/packages/plugin-sdk/src/schedule-editor.tsx": {
+    "sha256": "1c905e7324da09ab17f05ef60441de6a599b486a664020d338e53184018faebf",
+    "status": "reviewed",
+    "owner": "platform scheduling",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
+  "web/packages/plugin-sdk/src/schedule.ts": {
+    "sha256": "3d802c56811797893b57ba17daff54895c29c883ffe30c427ceacb14ca715195",
+    "status": "reviewed",
+    "owner": "platform scheduling",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
   },
   "web/packages/plugin-sdk/src/schema-defaults.ts": {
     "sha256": "c26a4e338405235afe1cfe1b28ff53441aee17e4467ad8933e4e15560c2d18e0",
@@ -13500,14 +13657,16 @@
     "issue": null
   },
   "web/packages/plugin-sdk/src/version.ts": {
-    "sha256": "4d60d14e321551a07f4e8a9011936e737ce6db7b5126fef22c11f1ce6200df5e",
-    "status": "partially_reviewed",
-    "owner": "platform",
+    "sha256": "57d98c7e345a4a8d67654ddce4ecc647a8456b3361f050728cebd865f4d17789",
+    "status": "reviewed",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "web/packages/plugin-sdk/tsconfig.json": {
     "sha256": "42eb4e344662e04e1c33a4896ee265875261797d64a0c4f9379ad7b86155eba0",
@@ -13583,14 +13742,17 @@
     "issue": null
   },
   "web/public/shared/radd-plugin-sdk.js": {
-    "sha256": "15eacf7fc40201e54f55f51bbe25c00762fc65a12f7effea584b80320ea57545",
+    "sha256": "63b9009aa5fd9726f6cd7e1035ddd138f8ad0835672a190b32380a51f206d57a",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "web/public/shared/react-dom-client.js": {
     "sha256": "7f77c7fcf2095f1ed7fd3c955b4531b8e8bb8fc97c907abd3b8019e0b0157892",
@@ -13729,11 +13891,14 @@
     "issue": "RADD-1359"
   },
   "web/scripts/automation-model.test.mjs": {
-    "sha256": "bddf0febce6953b25f9df637ece41b85686913ff0560103351688020abc99a30",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "6008c1979f8829403538a4c0f32841c28d14e0b2032b119d2fa3d87eed1cb082",
+    "status": "reviewed",
+    "owner": "platform tooling and transitional integrations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
   },
   "web/scripts/automations-arity-proof.mjs": {
     "sha256": "dddf14d355e0f1d7a9842eb29a8c32e17116cebf7650e6e614c9af70fc61c0b3",
@@ -13964,6 +14129,16 @@
     "evidence": [],
     "issue": null
   },
+  "web/scripts/browser-schedule-contributions.mjs": {
+    "sha256": "29ac26d83b8e1e5801936312113db23dfc6579f5161d13f326ded038c6304575",
+    "status": "reviewed",
+    "owner": "platform tooling and transitional integrations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
+  },
   "web/scripts/browser-second-review.mjs": {
     "sha256": "2c87e9adf822a2a4058640ba4c5950524a3cd1075faf1d80cd986d3ebfa096ce",
     "status": "unreviewed",
@@ -14148,14 +14323,17 @@
     "issue": null
   },
   "web/scripts/gen-shared-shims.mjs": {
-    "sha256": "79c6c93634dd524efee3e5f2dd551033d95e81e016be3353a0331fdede8f51f1",
+    "sha256": "7bd4981754be54838828eff0a82ecc2d9e5281684c4c8ce298dd338f4d8176ec",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "web/scripts/grouped-pagination-proof.mjs": {
     "sha256": "0019d9fd3dd43ea4cdcb117f450e1a1c9f4200d550fdac34fe5fe73c334ae93b",
@@ -14417,14 +14595,17 @@
     "issue": null
   },
   "web/scripts/plugin-boundaries.test.mjs": {
-    "sha256": "f48b07bd439c3db07c03750d197bda7a9e65b22d0b58bf26fea4ca928409a52b",
+    "sha256": "8c90975e27629d5ca235d2be3254dbc4b6769bdfda8fe4b1dfe0ec3c81f5260a",
     "status": "partially_reviewed",
-    "owner": "mixed/transitional",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "research/plugin-isolation/README.md#radd-1361-verification",
-      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review."
+      "Catalog contribution scope verified; remaining ownership, unrelated behavior and compatibility consumers still require review.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1361"
+    "issue": "RADD-1362"
   },
   "web/scripts/plugin-contribution-proof.mjs": {
     "sha256": "82e2933ae53fde1d6d0eca6c0e172d280f36c7057c5949ea66371a977ddb4e2e",
@@ -14585,6 +14766,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/scripts/schedule.test.mjs": {
+    "sha256": "145e2a5883dff00dcdbd38dc5aa8e5e6f2ff7980490896dfda428646657cac9d",
+    "status": "reviewed",
+    "owner": "platform scheduling",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
   },
   "web/scripts/schema-defaults.test.mjs": {
     "sha256": "e10686ffdc0104f6fd7a6f66b9088d6a00f4763fd30882898ef1a675bc6bad2c",
@@ -14945,13 +15136,6 @@
     "evidence": [],
     "issue": null
   },
-  "web/src/components/ScheduleEditor.tsx": {
-    "sha256": "e917065369e69bf064e6b4391d67f7907f412578539f3627519bc4c8b4728151",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
-  },
   "web/src/components/Select.tsx": {
     "sha256": "ac9470c93c720789abc764f7c2ce6c2bf256eeac41a8f6bb75e35b7a4fe99980",
     "status": "unreviewed",
@@ -15101,14 +15285,17 @@
     "issue": "RADD-1361"
   },
   "web/src/components/automations/GraphInspector.tsx": {
-    "sha256": "d8fc43dc9747f610da538e7be7ebcb00d46a673d88f628abc00efac67c45db5c",
+    "sha256": "01900f461fbc33a5bbd850f8dde88f7310310a39edb67558dac9bcfeb262d749",
     "status": "partially_reviewed",
-    "owner": "see scoped evidence",
+    "owner": "platform tooling and transitional integrations",
     "evidence": [
       "Reviewed only the RADD-1356 shared schema/code-control change; remaining file behavior and ownership require full inventory review.",
-      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks."
+      "research/plugin-isolation/README.md: RADD-1356 verification; host + 13 remote builds, 51 frontend tests, 19 focused backend tests, 13 shared-control and 15 canvas browser checks.",
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
     ],
-    "issue": "RADD-1356"
+    "issue": "RADD-1362"
   },
   "web/src/components/automations/LazyGraphCanvas.tsx": {
     "sha256": "7330ae9f0cb82943a13ae5b49378f608c1728dc59347a28bb94604e80c513a56",
@@ -15154,6 +15341,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/src/components/automations/ScheduleEditor.tsx": {
+    "sha256": "094f8fc038dce351415c82b66d3b3656fce36de4e3350535e3d8c965bee34e13",
+    "status": "reviewed",
+    "owner": "platform tooling and transitional integrations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
   },
   "web/src/components/automations/SearchFields.tsx": {
     "sha256": "5371c0ce62c840fe24b789db04ac36ca9f0d999de38c641d6f8a09266ece8a87",
@@ -15205,6 +15402,16 @@
     "owner": null,
     "evidence": [],
     "issue": null
+  },
+  "web/src/components/backup/ScheduleEditor.tsx": {
+    "sha256": "7fb7e2de71fb9aa2bf239a7a74fa771acb2bb9d2abae5bfd4fab2096d86eed88",
+    "status": "reviewed",
+    "owner": "platform tooling and transitional integrations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built."
+    ],
+    "issue": "RADD-1362"
   },
   "web/src/components/board/BoardCard.tsx": {
     "sha256": "2619fb4c1e6f2bea4c3344a08f50591c2bcb09e5fcd77dcd143b237b1b7b265d",
@@ -19054,11 +19261,15 @@
     "issue": null
   },
   "web/src/routes/settings/backups.tsx": {
-    "sha256": "0bdd01cdac3d71ff3b849231e68f22a232c5a05a9c98b6dafe6fdf4abee64df8",
-    "status": "unreviewed",
-    "owner": null,
-    "evidence": [],
-    "issue": null
+    "sha256": "f1b91a7209e517d65d11f347d2763590f315ae45680399b9b9f2e69d7d65a4ff",
+    "status": "partially_reviewed",
+    "owner": "platform tooling and transitional integrations",
+    "evidence": [
+      "RADD-1362: read the scheduling change against actual shared radd.schedule ownership; see research/plugin-isolation/README.md RADD-1362 evidence.",
+      "63 frontend and 65 focused backend tests; actual-bundle scheduling 13 groups (12 requests, 2 aborts), existing automation canvas 15 groups; host plus 24 remotes built.",
+      "Only the scheduling change is verified here; remaining feature ownership and unrelated contents still require inventory review."
+    ],
+    "issue": "RADD-1362"
   },
   "web/src/routes/settings/canned.tsx": {
     "sha256": "e48e3424ef203a8cee1b71f72cf7c00ca0bd5634adb1e8fd88e5c251553e5bc2",

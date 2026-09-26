@@ -7,6 +7,9 @@ from radd.modules.comments.types import CommentVisibility
 from radd.modules.items.enums import ItemKind, ItemVisibility, Priority
 
 from radd import schedule as schedule_math
+# Compatibility exports; both consumers use the platform schedule contract.
+from radd.schedule_preview import SchedulePreviewRead, SchedulePreviewRequest  # noqa: F401
+
 
 from . import catalog
 from .templating import TOKEN_RE
@@ -463,27 +466,6 @@ class ScheduleConfig(BaseModel):
         schedule_math.validate_config(self.model_dump(exclude_none=True))
         return self
 
-
-class SchedulePreviewRequest(BaseModel):
-    """A candidate schedule, not necessarily a valid one — the point of the
-    endpoint is to say WHY when it is not, so this deliberately does not reuse
-    `ScheduleConfig` (whose validator would 422 with pydantic's wrapping before
-    the handler could phrase the answer)."""
-
-    kind: str
-    minutes: int | None = None
-    time: str | None = Field(default=None, max_length=10)
-    weekdays: list[int] | None = None
-    day: int | None = None
-    expression: str | None = Field(default=None, max_length=200)
-
-
-class SchedulePreviewRead(BaseModel):
-    """The next few occurrences, or the reason there are none."""
-
-    timezone: str
-    next_runs: list[UtcDatetime] = []
-    error: str | None = None
 
 
 

@@ -178,3 +178,40 @@ test('catalog transport belongs to owners and contributed-query registry has no 
   assert(!consumer.some(n=>n.type==='ImportDeclaration'&&n.source.value.includes('/queries')));
   assert(!consumer.some(n=>n.type==='CallExpression'&&n.callee?.name==='useQuery'));
 });
+
+test('schedule arithmetic UI is generic and both owners supply their own transport',()=>{
+  for(const file of ['web/packages/plugin-sdk/src/schedule.ts','web/packages/plugin-sdk/src/schedule-editor.tsx']){
+    const ast=nodes(file);
+    assert(!ast.some(n=>n.type==='ImportDeclaration'&&/api|modules|web\/src/.test(n.source.value)),file);
+    assert(!ast.some(n=>n.type==='StringLiteral'&&/automations|backups|Create issue/.test(n.value)),file);
+  }
+  assert(!files('web/src').includes('web/src/components/ScheduleEditor.tsx'));
+  for(const owner of ['automations','backup']){
+    const ast=nodes(`web/src/components/${owner}/ScheduleEditor.tsx`);
+    assert(ast.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='@radd/plugin-sdk'||n.source.value.endsWith('/schedule-contract')));
+    assert(!ast.some(n=>n.type==='CallExpression'&&['useState','useEffect','useQuery'].includes(n.callee?.name)));
+    const implementation=nodes(`server/src/radd/modules/${owner}/ui/src/ScheduleEditor.tsx`);
+    const endpoints=implementation.filter(n=>n.type==='StringLiteral'&&n.value.startsWith('/')).map(n=>n.value);
+    assert.deepEqual(endpoints,[owner==='backup'?'/backups/schedule/preview':'/automations/schedule/preview']);
+  }
+});
+
+test('federation shim exports every runtime value in the public SDK',()=>{
+  function exportsOf(file){
+    const names=[];
+    for(const node of nodes(file)){
+      if(node.type==='ExportAllDeclaration'&&node.exportKind!=='type'){
+        assert(node.source.value.startsWith('.'),'only local SDK star exports are supported');
+        names.push(...exportsOf(path.resolve(path.dirname(file),node.source.value+'.ts')));
+      }
+      if(node.type!=='ExportNamedDeclaration'||node.exportKind==='type')continue;
+      if(node.declaration?.type==='FunctionDeclaration')names.push(node.declaration.id.name);
+      if(node.declaration?.type==='VariableDeclaration')for(const declaration of node.declaration.declarations){
+        assert.equal(declaration.id.type,'Identifier');names.push(declaration.id.name);
+      }
+      for(const specifier of node.specifiers??[])if(specifier.exportKind!=='type')names.push(specifier.exported.name??specifier.exported.value);
+    }
+    return names;
+  }
+  assert.deepEqual(exportsOf('web/public/shared/radd-plugin-sdk.js').sort(),exportsOf('web/packages/plugin-sdk/src/index.ts').sort());
+});

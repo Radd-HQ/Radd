@@ -28,6 +28,7 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1359 | Owner-contributed team relationships/audiences | Verified; Waiting for release |
 | RADD-1360 | Fields-owned controls and generic input primitives | Verified; Waiting for release |
 | RADD-1361 | Owner catalog queries and nonvisual contribution lifecycle | Verified; Waiting for release |
+| RADD-1362 | Independent scheduling contributions and preview lifecycle | Verified; Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -47,9 +48,9 @@ Declared core status is recorded, not accepted as an exemption. Every module mus
 | attachments | default | 0 | events, projects, auth, items, access, groups, teams | Pending |
 | audit | default | 0 | events, auth, projects, items | Pending |
 | auth | default | 2 | events, projects | Option contributions verified (RADD-1357); remaining review pending |
-| automations | default | 11 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
+| automations | default | 13 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
 | avatars | default | 0 | auth, attachments | Pending |
-| backup | default | 0 | auth, events | Pending |
+| backup | default | 3 | auth, events | Schedule contribution verified (RADD-1362); full settings/backend review pending |
 | canned | default | 0 | events, projects, auth, items | Pending |
 | capabilities | default | 0 | auth | Pending |
 | collab | False | 0 | auth, pages | Pending |
@@ -453,3 +454,57 @@ Those, compatibility-query consumers, field/label settings, other automation
 queries/inspectors, navigation and all remaining partial/unreviewed artifacts still
 need migration. The new nonvisual contract enables that work; it does not establish
 full platform separation by itself.
+
+## RADD-1362 verification
+
+The former host ScheduleEditor mixed shared scheduling inputs with an Automations
+endpoint and automation-specific guidance, including when rendered inside Backups.
+Actual backend review established a legitimate shared platform contract:
+`radd.schedule` already owns arithmetic for both independent schedulers. SDK 1.10
+now owns controlled schedule inputs and types; Automations and Backup each contribute
+their editor, transport and contextual help. `radd.schedule_preview` holds the shared
+preview schema/arithmetic. `/backups/schedule/preview` requires instance admin access
+and works with no Automations route. The existing Automations preview policy remains
+authenticated arithmetic. No schedule rows, enablement choices or retention settings
+are changed by this migration.
+
+Preview transport aborts on draft changes or contribution withdrawal, including a
+pending debounce. Results are scoped to each draft transition, so A → B → A cannot
+revive A's previous dates. HTTP failure shows retry; server validation refusal shows
+its error. Custom saved intervals remain visible and unchanged. The shared control
+names scheduler and reader timezones and follows the current input theme. Visual
+review led to stronger helper-text contrast. Feature instruction text belongs to the
+owning wrapper. Host backup settings and automation graph inspector now render thin
+slot adapters, but their other feature ownership remains unfinished.
+
+The first actual-bundle run caught a missing federation export, which a successful
+host/remote build did not catch. The shared shim was corrected, and an AST safeguard
+now compares its runtime exports against the SDK entry point, including type-only
+and star exports. The automation algorithm test loads the actual shared schedule
+contract in its isolated test directory.
+
+Evidence:
+- Host plus 24 remotes built; 63 frontend tests passed.
+- 65 focused backend tests passed: preview ownership, schedule kinds, scheduled
+  automations, module contracts, kernel contracts and route shadowing. Ruff passed
+  for the changed backend logic and new tests.
+- `browser-schedule-contributions.mjs`: 13 groups against actual Automations and
+  Backup bundles. Covers absent owners, independent backup operation, saved custom
+  intervals, kind/weekday/time edits, cron examples/refusals, in-flight cancellation,
+  A → B → A, withdrawal/re-enable, failed previews/retry, failed remote recovery,
+  debounce withdrawal, theme/contrast, and the actual host Backup settings modal.
+  The proof performs no persistent writes.
+- `browser-automation-canvas.mjs`: all 15 existing graph/lifecycle groups passed,
+  including the actual host editor and version preview.
+- Local server was reloaded and both owner manifests/bundles and preview endpoints
+  were probed with an ephemeral admin token, then the token was discarded. Valid
+  seven-minute schedules return five UTC runs; one-minute schedules return a
+  refusal. Leave/GitHub/Forgejo remain disabled and the loaded plugin set is unchanged.
+- Screenshots inspected: `/tmp/radd-schedule-contributions-light.png`,
+  `/tmp/radd-schedule-contributions-dark.png`, `/tmp/radd-backup-schedule.png`.
+  Logs are `/tmp/radd-1362-{build,unit,backend,browser,canvas,reload}.log`.
+
+Remaining work includes the full automation editor, audit history contribution,
+public cross-plugin contracts, Backup settings ownership, and every other partial
+or unreviewed inventory artifact. This stage does not establish complete plugin
+isolation.

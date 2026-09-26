@@ -5,8 +5,9 @@ import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 const dir=mkdtempSync(join(tmpdir(),'radd-graph-model-'));
+writeFileSync(join(dir,'schedule.ts'),readFileSync('web/packages/plugin-sdk/src/schedule.ts','utf8'));
 for(const file of ['types','shape-contract','automation-outputs','automation-layout']) {
- const source=readFileSync(`server/src/radd/modules/automations/ui/src/${file}.ts`,'utf8').replace(/from "\.\/([\w-]+)"/g,'from "./$1.ts"');
+ const source=readFileSync(`server/src/radd/modules/automations/ui/src/${file}.ts`,'utf8').replaceAll('from "@radd/plugin-sdk"','from "./schedule.ts"').replace(/from "\.\/([\w-]+)"/g,'from "./$1.ts"');
  writeFileSync(join(dir,file+'.ts'),source);
 }
 const {shapeKey}=await import(join(dir,'shape-contract.ts'));

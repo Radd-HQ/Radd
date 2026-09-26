@@ -608,6 +608,32 @@ field settings/navigation, display cells or automation inspector ownership. In
 particular, the settings sidebar still queries `/fields/settings-summary`; that
 remaining dependency is recorded in the audit.
 
+### Shared scheduling inputs and owner contributions (RADD-1362)
+
+SDK 1.10 exports `ScheduleConfig`, `ScheduleKind`, `defaultSchedule`,
+`isScheduleValid` (form completeness only), `SchedulePreview` and `ScheduleEditor`.
+The control takes `value`, `onChange`, and a stable
+`previewSchedule(config, signal): Promise<SchedulePreview>`. It knows no feature
+endpoints or action policy. Schedule arithmetic is a legitimate shared platform
+contract: `radd.schedule` already drives the independent Backup and Automations
+schedulers. This does not classify either feature as platform UI.
+
+Automations and Backup contribute their editors to `automations.schedule.editor`
+and `backup.schedule.editor` respectively, supplying their own transport and help.
+Backup serves `/backups/schedule/preview` with its instance-admin gate; Automations
+retains `/automations/schedule/preview` with its authenticated arithmetic policy.
+Both delegate to `radd.schedule_preview`; no consumer imports the other's schemas.
+
+Preview identity changes on every draft transition, retry and transport replacement.
+A 350 ms debounce cancels on unmount; its HTTP signal aborts superseded requests.
+Late results cannot update a new draft. Even A → B → A edits get a fresh preview.
+Failures are shown with retry, and withdrawal preserves the caller's saved config.
+The control identifies scheduler and reader timezones and retains nonpreset saved
+intervals. Host adapters and the remaining host-owned feature pages are transitional.
+
+The public SDK export list and generated federation shim are checked against each
+other so an SDK addition cannot pass the unit gate while missing its runtime export.
+
 ### Data-only query contributions (RADD-1361)
 
 SDK 1.9 supports `PluginModule.querySources` and

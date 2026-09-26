@@ -29,8 +29,8 @@ import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { formatDateTime } from "../../lib/dates";
-import { ScheduleEditor, isScheduleValid } from "../../components/ScheduleEditor";
-import { ScheduleKind, type RuleSchedule } from "../../lib/types";
+import { ScheduleEditor, isScheduleValid } from "../../components/backup/ScheduleEditor";
+import { ScheduleKind, type ScheduleConfig as RuleSchedule } from "@radd/plugin-sdk";
 
 const POLL_MS = 2000;
 

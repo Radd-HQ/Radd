@@ -7,13 +7,14 @@ need — schedule rows, run rows, HTTP, and the events that reach the audit log.
 """
 
 from radd.backup.types import BackupEvent
-from radd.kernel import EventTypeSpec, RaddPlugin
+from radd.kernel import EventTypeSpec, RaddPlugin, PluginUiManifest
 
 from . import scheduler
 from .router import router
 
 plugin = RaddPlugin(
     name="backup",
+    ui=PluginUiManifest(remote="/plugins/backup/remoteEntry.js", ui_api_version="1.10.0"),
     description="Scheduled and on-demand encrypted backups of the database and attachments, with restore.",
     depends_on=("auth", "events"),
     routers=(router,),

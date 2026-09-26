@@ -1,5 +1,15 @@
 # Module map
 
+RADD-1362: Automations and Backup own their schedule editor contributions and
+preview endpoints (`automations.schedule.editor`, `backup.schedule.editor`).
+The SDK 1.10 schedule control is domain-independent: controlled schedule inputs
+and a caller-supplied preview function. Shared vocabulary reflects `radd.schedule`,
+which already drives both schedulers; `radd.schedule_preview` now provides their
+common preview schema/arithmetic. Backup previews require instance admin access
+and work without Automations. Draft replacement/withdrawal cancels preview requests;
+custom saved intervals remain visible. Host scheduling paths are temporary slot
+adapters. Full backup settings and automation editor migration remain outstanding.
+
 RADD-1361: Fields and Labels contribute data-only catalog sources (`fields.catalog`,
 `labels.catalog`) through SDK 1.9. Owners hold transport, row types and entity cache
 metadata. Automations' picker data consumes their availability/error/result state;

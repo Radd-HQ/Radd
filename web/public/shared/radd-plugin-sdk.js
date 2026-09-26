@@ -4,6 +4,10 @@ const M = globalThis.__RADD_SHARED__ && globalThis.__RADD_SHARED__["@radd/plugin
 if (!M) throw new Error("radd federation: shared module @radd/plugin-sdk not registered by host");
 export const UI_API_VERSION = M["UI_API_VERSION"];
 export const isUiApiCompatible = M["isUiApiCompatible"];
+export const ScheduleEditor = M["ScheduleEditor"];
+export const ScheduleKind = M["ScheduleKind"];
+export const defaultSchedule = M["defaultSchedule"];
+export const isScheduleValid = M["isScheduleValid"];
 export const SlotId = M["SlotId"];
 export const Slot = M["Slot"];
 export const useSlot = M["useSlot"];

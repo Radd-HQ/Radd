@@ -58,7 +58,7 @@ const ACTION_TYPE_PREFIX = "action.";
 import { Button, ButtonVariant } from "../Button";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
-import { ScheduleEditor, defaultSchedule } from "../ScheduleEditor";
+import { ScheduleEditor, defaultSchedule } from "./ScheduleEditor";
 
 import type { NodeShapes } from "../../lib/node-shapes";
 

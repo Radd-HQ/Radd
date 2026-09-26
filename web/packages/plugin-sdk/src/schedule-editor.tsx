@@ -1,15 +1,8 @@
-import { useEffect, useState } from "react";
-
-import { api } from "../lib/api";
-import { Callout, CalloutKind } from "./Callout";
-import { shortDateTime } from "../lib/dates";
-import {
-  ScheduleKind,
-  type RuleSchedule,
-  type SchedulePreview,
-  type ScheduleKindValue,
-} from "../lib/types";
-import { SelectField } from "./SelectField";
+import { useEffect, useMemo, useReducer, useState } from "react";
+import { Callout, CalloutKind, SelectField } from "./host";
+import { Button } from "./primitives";
+import { shortDateTime, readerTimeZone, browserTimeZone } from "./dates";
+import { ScheduleKind, defaultSchedule, type ScheduleConfig, type ScheduleKindValue, type SchedulePreview } from "./schedule";
 
 /** Preset interval choices (minutes) — the spec-69 minutes/hours select. */
 const INTERVAL_PRESETS: { minutes: number; label: string }[] = [
@@ -46,99 +39,43 @@ const CRON_EXAMPLES: { expression: string; label: string }[] = [
   { expression: "30 6 1 1,4,7,10 *", label: "06:30 quarterly" },
 ];
 
-export function defaultSchedule(kind: ScheduleKindValue): RuleSchedule {
-  switch (kind) {
-    case ScheduleKind.interval:
-      return { kind, minutes: 60 };
-    case ScheduleKind.daily:
-      return { kind, time: "09:00" };
-    case ScheduleKind.monthly:
-      // The 1st, because "monthly" almost always means the start of the month
-      // and the alternative is asking someone to pick a number before they have
-      // said what they want.
-      return { kind, time: "09:00", day: 1 };
-    case ScheduleKind.cron:
-      return { kind, expression: "0 9 * * 1" };
-    default:
-      return { kind, time: "09:00", weekdays: [0] };
-  }
-}
-
-/** A schedule the API will accept: interval has minutes; daily/weekly have a
- * time; weekly has at least one weekday. */
-export function isScheduleValid(schedule: RuleSchedule): boolean {
-  if (schedule.kind === ScheduleKind.interval) return Boolean(schedule.minutes);
-  // Only a shape check — whether the expression PARSES, and whether it fires
-  // more often than the floor allows, is the server's answer. A second cron
-  // parser in the browser would be a second thing to be wrong.
-  if (schedule.kind === ScheduleKind.cron) return Boolean(schedule.expression?.trim());
-  if (!schedule.time) return false;
-  if (schedule.kind === ScheduleKind.monthly) {
-    const day = schedule.day ?? 0;
-    return day >= 1 && day <= 31;
-  }
-  return schedule.kind !== ScheduleKind.weekly || (schedule.weekdays?.length ?? 0) > 0;
-}
-
 const timeInputClasses =
   "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
-  "focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]";
+  "focus:outline-2 focus:outline-offset-1 focus:outline-focus";
 
 
-/** Debounce before asking the server, so typing a cron expression character by
- * character does not fire six requests and settle on whichever answers last. */
-const PREVIEW_DEBOUNCE_MS = 350;
-
-/** When this schedule would actually run, straight from the engine's own math.
- *
- * Not computed here. A cron parser in the browser would be a second thing to be
- * wrong, and the preview's whole value is that it agrees with what the server
- * will do — including the refusals, which arrive as `error` and are shown before
- * the form is saved rather than as a 409 afterwards.
- */
-function useSchedulePreview(schedule: RuleSchedule): SchedulePreview | null {
-  const [preview, setPreview] = useState<SchedulePreview | null>(null);
-  const key = JSON.stringify(schedule);
-
-  useEffect(() => {
-    let live = true;
-    const timer = setTimeout(() => {
-      api
-        .post<SchedulePreview>("/automations/schedule/preview", JSON.parse(key))
-        .then((result) => {
-          if (live) setPreview(result);
-        })
-        .catch(() => {
-          // A failed preview is not a failed form — it stays silent and the save
-          // path keeps its own validation.
-          if (live) setPreview(null);
-        });
-    }, PREVIEW_DEBOUNCE_MS);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [key]);
-
-  return preview;
+export interface ScheduleEditorProps {
+  value: ScheduleConfig;
+  onChange: (schedule: ScheduleConfig) => void;
+  previewSchedule: (schedule: ScheduleConfig, signal: AbortSignal) => Promise<SchedulePreview>;
 }
 
-/** The schedule editor, shared by automations and backups (RADD-912).
- *
- * It lives here rather than under `automations/` because both features store the
- * same config and validate it through the same rules on the server. Backups
- * previously hardcoded "daily", so monthly and cron were reachable through the
- * API and invisible in the product — which is the same shape of gap that had
- * a studio file a request for scheduling that already half-existed. */
-export function ScheduleEditor({
-  value,
-  onChange,
-}: {
-  value: RuleSchedule;
-  onChange: (schedule: RuleSchedule) => void;
-}) {
-  const preview = useSchedulePreview(value);
+/** A preview belongs to one draft and mount. Never display a previous draft's
+ * response while debouncing, and stop the transport when replaced or withdrawn. */
+function useSchedulePreview(value: ScheduleConfig, fetchPreview: ScheduleEditorProps["previewSchedule"]) {
+  const key = JSON.stringify(value);
+  const [attempt, retry] = useReducer((n: number) => n + 1, 0);
+  // An A → B → A edit must not resurrect the first A response.
+  const identity = useMemo(() => ({key, attempt, fetchPreview}), [key, attempt, fetchPreview]);
+  const [result, setResult] = useState<{identity: typeof identity; preview?: SchedulePreview; failed?: boolean} | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void fetchPreview(JSON.parse(key), controller.signal).then(preview => {
+        if (!controller.signal.aborted) setResult({identity, preview});
+      }).catch(() => {
+        if (!controller.signal.aborted) setResult({identity, failed: true});
+      });
+    }, 350);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [identity, key, fetchPreview]);
+  const current = result?.identity === identity ? result : null;
+  return {preview: current?.preview, failed: current?.failed, pending: !current, retry};
+}
 
+/** Controlled scheduling inputs. Owners provide transport and contextual help. */
+export function ScheduleEditor({value, onChange, previewSchedule}: ScheduleEditorProps) {
+  const {preview, failed, pending, retry} = useSchedulePreview(value, previewSchedule);
   const toggleWeekday = (day: number) => {
     const current = value.weekdays ?? [];
     const next = current.includes(day)
@@ -155,6 +92,7 @@ export function ScheduleEditor({
           value={value.kind}
           onChange={(event) => onChange(defaultSchedule(event.target.value as ScheduleKindValue))}
         >
+          {!Object.values(ScheduleKind).includes(value.kind) && <option value={value.kind}>{value.kind} (unavailable)</option>}
           {(Object.values(ScheduleKind) as ScheduleKindValue[]).map((kind) => (
             <option key={kind} value={kind}>
               {KIND_LABELS[kind]}
@@ -169,6 +107,9 @@ export function ScheduleEditor({
               onChange({ ...value, minutes: Number(event.target.value) })
             }
           >
+            {!INTERVAL_PRESETS.some(preset => preset.minutes === (value.minutes ?? 60)) && (
+              <option value={String(value.minutes)}>Every {value.minutes} minutes (saved interval)</option>
+            )}
             {INTERVAL_PRESETS.map((preset) => (
               <option key={preset.minutes} value={preset.minutes}>
                 {preset.label}
@@ -214,7 +155,7 @@ export function ScheduleEditor({
             className={timeInputClasses + " w-24"}
             aria-label="Day of the month"
           />
-          <span className="font-normal text-[11px] text-fg-faint">
+          <span className="font-normal text-[11px] text-fg-secondary">
             Months without that day use their last one — the 31st runs on 28 February.
           </span>
         </label>
@@ -225,7 +166,7 @@ export function ScheduleEditor({
           <span className="text-xs font-medium text-fg-secondary">Start from</span>
           <div className="flex flex-wrap gap-1.5">
             {CRON_EXAMPLES.map((example) => (
-              <button
+              <Button variant="ghost" size="sm"
                 key={example.expression}
                 type="button"
                 onClick={() => onChange({ ...value, expression: example.expression })}
@@ -239,10 +180,10 @@ export function ScheduleEditor({
                 }
               >
                 {example.label}
-              </button>
+              </Button>
             ))}
           </div>
-          <span className="text-[11px] text-fg-faint">
+          <span className="text-[11px] text-fg-secondary">
             Five fields: minute, hour, day of month, month, day of week. It cannot run more
             often than every 5 minutes.
           </span>
@@ -255,7 +196,7 @@ export function ScheduleEditor({
             {WEEKDAYS.map((name, day) => {
               const selected = (value.weekdays ?? []).includes(day);
               return (
-                <button
+                <Button variant="ghost" size="sm"
                   key={name}
                   type="button"
                   onClick={() => toggleWeekday(day)}
@@ -268,7 +209,7 @@ export function ScheduleEditor({
                   }
                 >
                   {name}
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -278,12 +219,17 @@ export function ScheduleEditor({
       {/* What this schedule actually does. It is the only readable form of a cron
           expression, and it is where the monthly clamp becomes visible: the 31st
           previews as 31 Aug, 30 Sep, 31 Oct rather than needing a paragraph. */}
+      {pending && <p role="status" className="text-xs text-fg-secondary">Checking next runs…</p>}
+      {failed && <div role="status" className="flex items-center gap-2 text-xs text-fg-secondary">
+        Preview unavailable. Your schedule is preserved.
+        <Button variant="ghost" size="sm" onClick={retry}>Retry preview</Button>
+      </div>}
       {preview?.error ? (
         <Callout kind={CalloutKind.danger}>{preview.error}</Callout>
       ) : preview && preview.next_runs.length > 0 ? (
         <div className="flex flex-col gap-1">
           <span className="text-xs font-medium text-fg-secondary">Next runs</span>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-secondary">
             {preview.next_runs.map((iso) => (
               <span key={iso}>{shortDateTime(iso)}</span>
             ))}
@@ -291,14 +237,8 @@ export function ScheduleEditor({
         </div>
       ) : null}
 
-      <p className="text-[11px] text-fg-faint">
-        Times run on the server's scheduler timezone (one instance clock).{" "}
-        <strong className="font-medium text-fg-secondary">
-          A schedule can create issues:
-        </strong>{" "}
-        add a <em>Create issue</em> action and it runs once per occurrence — recurring maintenance
-        tickets, periodic reviews, and the like. With a filter, item actions apply to every issue
-        it matches (max 200, rank order).
+      <p className="text-[11px] text-fg-secondary">
+        {preview ? `Schedule timezone: ${preview.timezone}. Next runs are displayed in your timezone (${readerTimeZone() || browserTimeZone()}).` : "Times use the server's scheduler timezone."}
       </p>
     </div>
   );
