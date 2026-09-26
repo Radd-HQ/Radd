@@ -11,7 +11,7 @@ FROM docker.io/library/node:22-slim AS web
 WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
 # The WORKSPACE manifests must exist before `npm ci` — web/package.json declares
-# `workspaces: [packages/*, remotes/*]`, and npm resolves `@radd/plugin-sdk` from
+# `workspaces: [packages/*]`, and npm resolves `@radd/plugin-sdk` from
 # the tree, not the registry. Without this the install dies on a 404 (which is
 # what broke this image between spec 94 and 99). Copying the whole directory
 # keeps a future workspace package working with no edit here.

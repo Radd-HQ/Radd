@@ -30,3 +30,34 @@ var/
 .mcp.json
 # RADD-1374: the plugin-isolation hash ledger is local working data.
 research/plugin-isolation/ledger/
+
+# Any other env file (.env.local, .env.production …); the template stays tracked.
+.env.*
+!.env.example
+# TypeScript incremental state (web/tsconfig.*.tsbuildinfo and every plugin ui/).
+*.tsbuildinfo
+# Logs and coverage never belong in the tree.
+*.log
+.coverage
+htmlcov/
+# Personal editor / OS files.
+.idea/
+.vscode/
+.DS_Store
+# Proof screenshots: some proofs write resolve("scripts", "<name>.png") relative to cwd.
+**/scripts/*.png
+# docshot.mjs's default output directory.
+web/shots/
+# Generated media is never source: GitHub refuses files over 100 MB, and the video
+# productions under docs/ run to gigabytes. Negate a path here if a test ever needs one.
+*.mp4
+*.mov
+*.webm
+*.zip
+docs/campaigns/
+docs/tutorials/
+# Research run evidence stays local (the markdown carries the findings; the audit-2026-09-09
+# rule generalised). Harness scripts that a README documents how to rerun are still tracked.
+research/**/*.json
+research/**/*.txt
+research/**/*.png
