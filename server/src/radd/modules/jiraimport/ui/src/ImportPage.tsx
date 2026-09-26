@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Database } from "lucide-react";
-import { Callout, EmptyState, ErrorText, SettingsPage, Spinner, useCurrentUser } from "@radd/plugin-sdk";
+import { Callout, EmptyState, ErrorText, SettingsPage, Spinner, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { statusQuery } from "./api";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { PlanEditor } from "./PlanEditor";
 import { PlansPanel } from "./PlansPanel";
 import { RunsPanel } from "./RunsPanel";
 import { SnapshotsPanel } from "./SnapshotsPanel";
-import { INSTANCE_ADMIN } from "./types";
 
 const TITLE = "Import from Jira";
 const HISTORY = { entities: ["jira_connection"] };
@@ -32,7 +31,7 @@ const PROCEDURE =
  */
 export function JiraImportPage() {
   const me = useCurrentUser();
-  const isAdmin = me?.instance_role === INSTANCE_ADMIN;
+  const isAdmin = useIsInstanceAdmin();
   const status = useQuery({ ...statusQuery(), enabled: isAdmin });
   const [planId, setPlanId] = useState<string | null>(null);
   const [focus, setFocus] = useState<{ section: string; mappingKey: string; nonce: number } | null>(

@@ -83,6 +83,7 @@ export { api, ApiError, API_BASE, provideApiTransport, errorMessage, type Paged,
 export {
   useCurrentUser,
   useIsAuthenticated,
+  useIsInstanceAdmin,
   usePermissions,
   useCapabilities,
   useHasPlugin,

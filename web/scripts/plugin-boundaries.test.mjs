@@ -421,6 +421,18 @@ test('status colours use the status-* tokens that exist (RADD-1388)',()=>{
   assert.match('text-danger-text',new RegExp(guessed.source),'the pattern must catch the class it was written for');
 });
 
+test('plugin UIs ask the SDK whether the user is an instance admin, never `instance_role` (RADD-1422)',()=>{
+  // `instance_role` is the account's column; `global_role` is what the server's bypass answers for
+  // the credential, and it is what `useIsInstanceAdmin`/`usePermissions` read. Five pages compared
+  // the account column, so an admin page could disagree with the API behind it.
+  const reads=file=>nodes(file)
+    .filter(n=>['MemberExpression','OptionalMemberExpression','ObjectProperty'].includes(n.type)&&(n.property??n.key)?.name==='instance_role')
+    .map(n=>`${file}:${n.loc.start.line}`);
+  assert(reads('web/packages/plugin-sdk/src/hooks.ts').length>0,'the scan must see the SDK\'s own read');
+  const found=[...files('server/src/radd/modules'),...files('examples')].filter(f=>f.includes('/ui/src/')).flatMap(reads);
+  assert.deepEqual(found,[]);
+});
+
 test('every plugin nav icon is a name the one icon registry ships (RADD-1390)',()=>{
   // Manifests name icons; the host resolves them through lib/icons.ts. A second, PascalCase
   // whitelist in the settings nav needed a host edit per plugin, and Automations' "Zap" was never

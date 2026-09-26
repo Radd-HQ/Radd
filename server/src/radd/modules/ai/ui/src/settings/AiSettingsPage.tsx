@@ -1,10 +1,9 @@
 import { Lock } from "lucide-react";
-import { EmptyState, SettingsPage, Spinner, useCurrentUser } from "@radd/plugin-sdk";
+import { EmptyState, SettingsPage, Spinner, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { FeaturesSection } from "./FeaturesSection";
 import { PresetsSection } from "./PresetsSection";
 import { ProvidersSection } from "./ProvidersSection";
 import { RolesSection } from "./RolesSection";
-import { INSTANCE_ADMIN_ROLE } from "./types";
 
 /**
  * Settings → AI (spec 101; the ai plugin's own page since RADD-1379) — instance admins only (the
@@ -13,6 +12,7 @@ import { INSTANCE_ADMIN_ROLE } from "./types";
  */
 export function AiSettingsPage() {
   const me = useCurrentUser();
+  const isAdmin = useIsInstanceAdmin();
 
   return (
     <SettingsPage history={{ entities: ["ai_provider", "ai_role", "ai_preset", "scoped_setting"] }}
@@ -20,7 +20,7 @@ export function AiSettingsPage() {
       description="Model providers, what each model is used for, which AI features are on, and the editor prompt library. A feature runs when its toggle is on and its role has a provider.">
       {!me ? (
         <Spinner label="Loading…" />
-      ) : me.instance_role !== INSTANCE_ADMIN_ROLE ? (
+      ) : !isAdmin ? (
         <EmptyState icon={Lock} message="Only instance admins can manage AI settings." />
       ) : (
         <div className="flex flex-col gap-8">

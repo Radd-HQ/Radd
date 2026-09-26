@@ -59,6 +59,7 @@ export const provideApiTransport = M["provideApiTransport"];
 export const errorMessage = M["errorMessage"];
 export const useCurrentUser = M["useCurrentUser"];
 export const useIsAuthenticated = M["useIsAuthenticated"];
+export const useIsInstanceAdmin = M["useIsInstanceAdmin"];
 export const usePermissions = M["usePermissions"];
 export const useCapabilities = M["useCapabilities"];
 export const useHasPlugin = M["useHasPlugin"];

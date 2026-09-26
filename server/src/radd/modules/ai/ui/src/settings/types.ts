@@ -105,8 +105,5 @@ export const AiPath = {
  */
 export const AiEntity = { provider: "aiProvider", role: "aiRole", preset: "aiPreset" } as const;
 
-/** The instance role that may manage AI (the API 403s everyone else). */
-export const INSTANCE_ADMIN_ROLE = "admin";
-
 /** Section headings on the page share one style. */
 export const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";

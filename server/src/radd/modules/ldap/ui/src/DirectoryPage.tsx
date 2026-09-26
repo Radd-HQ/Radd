@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Lock } from "lucide-react";
-import { EmptyState, ScopedSettings, SettingsPage, Spinner, useCapabilities, useCurrentUser } from "@radd/plugin-sdk";
+import { EmptyState, ScopedSettings, SettingsPage, Spinner, useCapabilities, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { GroupsTab } from "./GroupsTab";
 import { StatusRow } from "./StatusRow";
 import { sectionHeadClasses } from "./sync";
@@ -18,7 +18,7 @@ type DirectoryTab = (typeof DIRECTORY_TABS)[number][0];
 export function DirectorySettingsPage() {
   const [tab, setTab] = useState<DirectoryTab>("connection");
   const me = useCurrentUser();
-  const isInstanceAdmin = me?.instance_role === "admin";
+  const isInstanceAdmin = useIsInstanceAdmin();
   // What this plugin and the workers report as capabilities (RADD-1389) — the host's
   // /instance/status schema that used to carry these flags is gone.
   const caps = useCapabilities();

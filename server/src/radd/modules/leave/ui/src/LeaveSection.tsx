@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { api, invalidatePluginData, shortDate, todayIso, Button, IconButton, Select, Spinner, TextField, tokens, useCurrentUser } from "@radd/plugin-sdk";
+import { api, invalidatePluginData, shortDate, todayIso, Button, IconButton, Select, Spinner, TextField, tokens, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
 
 type Kind = "leave" | "holiday";
 interface Period {
@@ -20,12 +20,13 @@ function ErrorText({ error }: { error: unknown }) {
 /** Both settings sections belong to Leave; the host owns only the slot anchors. */
 export function LeaveSection({ kind }: { kind: Kind }) {
   const user = useCurrentUser();
+  const isAdmin = useIsInstanceAdmin();
   const holiday = kind === "holiday";
   const periods = useQuery({
     queryKey: ["leave", holiday ? "holidays" : "mine"],
     queryFn: ({ signal }) => api.get<Period[]>(holiday ? "/leave/holidays" : "/leave/mine", { signal }),
   });
-  const readonly = holiday && user?.instance_role !== "admin";
+  const readonly = holiday && !isAdmin;
   return (
     <section aria-label={holiday ? "Holidays" : "Leave"} style={holiday ? { marginBottom: 32 } : { marginTop: 32, paddingTop: 24, borderTop: `1px solid ${tokens.border}` }}>
       <h2 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 600, color: tokens.heading }}>{holiday ? "Holidays" : "Leave"}</h2>

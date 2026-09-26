@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, todayIso, useCurrentUser, Button, ButtonVariant, QueryError, SettingsPage, Spinner } from "@radd/plugin-sdk";
+import { api, todayIso, useCurrentUser, useIsInstanceAdmin, Button, ButtonVariant, QueryError, SettingsPage, Spinner } from "@radd/plugin-sdk";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { PlanEditor } from "./PlanEditor";
 import { RunsPanel } from "./RunsPanel";
@@ -8,8 +8,6 @@ import { SnapshotsPanel } from "./SnapshotsPanel";
 import { ConfluencePath, confluenceKeys, plansQuery } from "./queries";
 import type { ConfluenceMappingSection, ConfluenceSnapshot } from "./types";
 
-/** The role the server's importer routes require (`authz.is_instance_admin`). */
-const INSTANCE_ADMIN = "admin";
 const TITLE = "Import from Confluence";
 const DESCRIPTION =
   "Connect your Confluence Server or Data Center → download spaces or pages once → review mappings → " +
@@ -27,7 +25,7 @@ const DESCRIPTION =
  */
 export function ConfluenceImportPage() {
   const me = useCurrentUser();
-  const isAdmin = me?.instance_role === INSTANCE_ADMIN;
+  const isAdmin = useIsInstanceAdmin();
   const client = useQueryClient();
   const [planId, setPlanId] = useState("");
   const [focus, setFocus] = useState<{

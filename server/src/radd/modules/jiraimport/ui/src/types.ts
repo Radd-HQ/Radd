@@ -1,9 +1,6 @@
 /** Jira importer wire shapes (specs 90, 100): connections, downloads and runs.
  * The plan's nine mapping tables are in `plan-types.ts`. */
 
-/** The instance role (`/auth/me` → `instance_role`) every importer endpoint requires. */
-export const INSTANCE_ADMIN = "admin";
-
 export interface JiraConnectionStatus {
   configured: boolean; // at least one connection row exists
   ok: boolean;

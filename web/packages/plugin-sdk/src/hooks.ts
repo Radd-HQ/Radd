@@ -33,13 +33,25 @@ export function useIsAuthenticated(): boolean {
   return Boolean(me && !me.anonymous);
 }
 
+const INSTANCE_ADMIN_ROLE = "admin";
+
+/** `global_role` is what the server's bypass (authz.is_admin) answers for THIS credential, and what
+ *  the host's own checker reads (RADD-1392). `instance_role` is only the account's column; a page
+ *  gating on it can offer what its API refuses, or hide what it allows. */
+function isInstanceAdmin(me: Me | null): boolean {
+  return (me?.global_role ?? me?.instance_role ?? ANONYMOUS_ROLE) === INSTANCE_ADMIN_ROLE;
+}
+
+/** Whether the signed-in credential is an instance admin (false while `/auth/me` loads). */
+export function useIsInstanceAdmin(): boolean {
+  return isInstanceAdmin(useCurrentUser());
+}
+
 /** Global + project permission checks off the current user / a project's `permissions`. */
 export function usePermissions(): Permissions {
   const me = useCurrentUser();
   // Instance admins hold everything; the flat `permissions` array is the global union.
-  // `global_role` is the server's credential-aware bypass (authz.is_admin) and what the host's
-  // own checker reads, so a plugin page answers as the host's did (RADD-1392).
-  const isAdmin = (me?.global_role ?? me?.instance_role ?? ANONYMOUS_ROLE) === "admin";
+  const isAdmin = isInstanceAdmin(me);
   const globalSet = new Set<PermissionValue>(me?.permissions ?? []);
   return {
     global: (atom) => isAdmin || globalSet.has(atom),
