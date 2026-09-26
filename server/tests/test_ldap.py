@@ -141,3 +141,40 @@ async def test_connection_resolves_through_the_cascade():
     await engine.dispose()
     # the rollback discarded the write the overlay was refreshed with — reseed
     service._conn = service._env_conn()
+
+
+async def test_login_without_admin_groups_leaves_the_role_alone(monkeypatch):
+    """RADD-1416: no admin groups configured = no role opinion (the SSO rule), so
+    an admin signing in through the directory is not demoted to member."""
+    import uuid
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from radd.config import settings as config
+    from radd.kernel import load_plugins
+    from radd.modules.auth.models import User
+    from radd.modules.auth.types import InstanceRole, UserSource
+    from radd.modules.ldap import service
+    from radd.modules.ldap.types import DirectoryUser
+
+    load_plugins(config.modules)
+    engine = create_async_engine(config.database_url)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+    async with maker() as session:
+        email = f"adm-{uuid.uuid4().hex[:8]}@example.com"
+        admin = User(
+            email=email, name="Ada", source=UserSource.LDAP.value,
+            instance_role=InstanceRole.ADMIN.value,
+        )
+        session.add(admin)
+        await session.flush()
+        directory_user = DirectoryUser(username="ada", email=email, name="Ada", is_admin=False)
+
+        _overlay(monkeypatch, admin_groups="")
+        assert (await service.provision(session, directory_user)).instance_role == InstanceRole.ADMIN.value
+
+        # With admin groups configured the directory decides: not a member ⇒ member.
+        _overlay(monkeypatch, admin_groups="Radd Admins")
+        assert (await service.provision(session, directory_user)).instance_role == InstanceRole.MEMBER.value
+        await session.rollback()
+    await engine.dispose()

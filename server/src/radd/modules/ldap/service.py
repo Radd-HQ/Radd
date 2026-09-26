@@ -373,8 +373,8 @@ async def find_or_create_user(
 
 
 async def provision(session: AsyncSession, directory_user: DirectoryUser) -> User:
-    """Find-or-create the user and re-sync the instance role from the directory
-    admin mapping (spec 86: any active user holds the global member floor)."""
+    """Find-or-create the user and, when admin groups are configured, re-sync the
+    instance role from them (spec 86: any active user holds the global member floor)."""
     existing = await auth_service.get_user_by_email(session, directory_user.email)
     if existing is None and not settings.ldap_auto_provision:
         raise ForbiddenError(
@@ -385,8 +385,12 @@ async def provision(session: AsyncSession, directory_user: DirectoryUser) -> Use
         raise ForbiddenError("account is deactivated")
 
     before = auth_service.directory_snapshot(user)
-    role = InstanceRole.ADMIN.value if directory_user.is_admin else InstanceRole.MEMBER.value
-    user.instance_role = role  # re-synced per login (admin group in ⇒ admin, out ⇒ member)
+    # No admin groups configured = no role opinion (the SSO rule, `sso.service._syncs_roles`):
+    # writing MEMBER here would demote every admin who signs in through the directory.
+    if admin_group_names():
+        user.instance_role = (
+            InstanceRole.ADMIN.value if directory_user.is_admin else InstanceRole.MEMBER.value
+        )
     if not created:
         # RADD-1320: a promotion or demotion by the directory is a `user.updated`.
         await auth_service.record_user_changes(session, user, before, actor_id=user.id)
@@ -397,6 +401,6 @@ async def provision(session: AsyncSession, directory_user: DirectoryUser) -> Use
         entity_type=LdapEntity.LDAP,
         entity_id=user.id,
         actor_id=user.id,
-        payload={"email": user.email, "username": directory_user.username, "role": role},
+        payload={"email": user.email, "username": directory_user.username, "role": user.instance_role},
     )
     return user

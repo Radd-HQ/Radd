@@ -10,6 +10,7 @@ not reach. One test per event, each against live Postgres (rolled back).
 """
 
 import uuid
+from dataclasses import replace
 from datetime import date, timedelta
 from types import SimpleNamespace
 
@@ -120,6 +121,8 @@ async def test_ldap_sign_in_creates_then_updates_through_auth(db, monkeypatch):
     from radd.modules.ldap.types import DirectoryUser
 
     monkeypatch.setattr(settings, "ldap_auto_provision", True)
+    # The directory has a role opinion only when admin groups are configured (RADD-1416).
+    monkeypatch.setattr(ldap, "_conn", replace(ldap._conn, admin_groups="Radd Admins"))
     email = f"dir-{uuid.uuid4().hex[:8]}@example.com"
     head = await _head(db)
     user = await ldap.provision(db, DirectoryUser(username="dir", email=email, name="Dee", is_admin=False))
