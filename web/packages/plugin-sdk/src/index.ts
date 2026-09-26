@@ -81,6 +81,7 @@ export { api, ApiError, API_BASE, provideApiTransport, errorMessage, type Paged,
 
 export {
   useCurrentUser,
+  useIsAuthenticated,
   usePermissions,
   useCapabilities,
   useHasPlugin,
@@ -153,3 +154,36 @@ export { invalidateEntities } from "./cache";
 export { SlqField, PageQueryFilter, ViewSelect, SharingDialog, ReportWidget, ItemKeyLink, ItemPeek, MissingPluginType } from "./host-surfaces";
 export type { SlqFieldProps, PageQueryFilterProps, ViewSelectProps, SharingDialogProps, SharedResourceSave, ReportWidgetProps, ItemKeyLinkProps, ItemPeekProps, MissingPluginTypeProps } from "./host-registry";
 export { ChartHeightContext } from "./chart-height";
+// Documents (RADD-1392): the `radd:*` block registry and its contexts are shared state, the text
+// helpers are shared by the host editor and plugin surfaces, and the editor, viewer, markdown, AI
+// and live-editing surfaces are the host's, bridged.
+export {
+  MarkdownSourceContext, PageExtensionCtx, usePageExtensionContext, registerPageExtension, pageExtensions,
+  lookupPageExtension, extensionNameOf, extensionNameOfInfo, splitExtensionBlocks, parseExtensionParams,
+  ExtensionCard, UnknownExtension, ExtensionError,
+  type PageExtension, type PageExtensionContext, type BodySegment,
+} from "./page-extensions";
+export { headingAnchorId, headingsOf, type OutlineHeading } from "./markdown-outline";
+export { ANCHOR_CONTEXT_CHARS, makeAnchor, locateAnchor, orderByAnchor, type TextAnchor, type AnchorLocation } from "./anchoring";
+export {
+  registerTextProjection, textNodesOf, renderedText, rangeForOffsets, revealTextOffset, offsetsForSelection,
+  scrollRangeIntoView,
+} from "./dom-text";
+export {
+  RichEditor, RichViewer, Markdown, AiReadMenu, AiResultsPane, EditingNow, useLiveSession, LiveRole,
+  type RichEditorProps, type RichViewerProps, type MarkdownProps, type AiReadMenuProps, type AiResultsPaneProps,
+  type EditingNowProps, type AiRun, type TaskToggle, type InlineAnchorRef, type LiveRoom, type LiveRoleValue,
+  type LivePerson, type LiveSession, type LiveSessionOptions,
+} from "./host-document";
+export {
+  CommentReplies, CommentHistory, CopyCommentLink, ThreadBadge, ThreadFilter, ResolveThreadButton, CommentSection,
+  useCommentFeed, useLinkedComment, useLandOnComment, useThreadExpansion, commentHref, repliesLabel, threadRuleClass,
+  sendTaskToggle,
+  type CommentRow, type CommentAnchor, type CommentSectionValue, type CommentFeed, type CommentFeedOptions,
+  type CommentLocation, type ThreadExpansion, type CommentRepliesProps, type CommentHistoryProps,
+} from "./host-comments";
+export {
+  DropdownMenu, Popover, AccessGrantsEditor, ScopedAccess, StateCategoryDot, SidebarSection, SidebarLink, useDismiss,
+  type MenuItem, type MenuTriggerProps, type DropdownMenuProps, type PopoverProps, type AccessGrantsEditorProps,
+  type ScopedAccessProps, type SidebarSectionProps, type SidebarLinkProps,
+} from "./host-kit";

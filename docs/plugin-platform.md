@@ -517,6 +517,8 @@ bundled manifest); `plugin-boundaries.test.mjs` (no `web/src` import of plugin s
 path, the generated list in sync); `plugin-loader.test.mjs` (boot registration, withdrawal and
 return without duplicates, a same-named remote ignored).
 
+**The wiki is bundled too (RADD-1392).** Pages became core, and its whole UI moved into `pages/ui/src`: the host router mounts the package's route exports (`@radd-plugin-ui/pages/index-page|space-page|print-page`, lazily) at the addresses the package declares (`PageRoute`), settings and the sidebar section arrive through slots, and the editor, comment kit and access editors it shares with the host come through the SDK host bridge (`docs/plugin-ui.md`). A core package may export implementation the host imports (queries, links); a cross-PLUGIN import stays contract-only.
+
 **Public contracts.** The host and other packages import a plugin's types and contracts only through
 its package `exports` (`@radd-plugin-ui/<plugin>/<file>`), never by relative source path.
 

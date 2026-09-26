@@ -63,3 +63,22 @@ export interface EntitySearchGroup {
 export interface EntitySearchResponse {
   groups: EntitySearchGroup[];
 }
+
+/** GET /search/deflect (spec 66) — KB deflection under the new-issue title:
+ * pages pages that may already answer it + previously RESOLVED items. */
+export interface DeflectPage {
+  id: string;
+  space_id: string;
+  title: string;
+  space_name: string;
+}
+
+export interface DeflectItem {
+  key: string;
+  title: string;
+}
+
+export interface DeflectResponse {
+  docs: DeflectPage[];
+  items: DeflectItem[];
+}

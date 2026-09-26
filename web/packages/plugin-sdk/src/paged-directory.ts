@@ -6,6 +6,8 @@ export interface PagedDirectoryQuery<T> {
   queryKey: readonly unknown[];
   queryFn: (context: { signal: AbortSignal }) => Promise<Paged<T>>;
   meta?: Record<string, unknown>;
+  /** Hold the directory back (a folded sidebar section). */
+  enabled?: boolean;
 }
 /** Search + bounded paging over a provider's directory; the provider owns data and scope. Pages
  * are shared across consumers and the previous page stays up while the next loads (RADD-1373). */

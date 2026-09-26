@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckCheck, Inbox, X } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { usePeek } from "../../lib/hooks";
-import { pagePermalink } from "../../lib/page-links";
+import { pagePermalink } from "@radd-plugin-ui/pages/links";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationsRead,

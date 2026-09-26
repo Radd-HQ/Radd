@@ -75,12 +75,21 @@ async function main() {
     spaceId = setup.space.id;
     context.setup = { item: setup.item.key, publicRoot: setup.publicRoot?.id, internalRoot: setup.internalRoot?.id, discussion: setup.discussion?.id };
 
+    // RADD-1335: the composer opens from the thread's Reply button (and stays open after a post).
+    const openComposer = async (rootId) => {
+      await waitFor(`[data-comment-replies="${rootId}"] [data-open-reply], [data-comment-replies="${rootId}"] [data-reply-composer]`);
+      if (await session.eval(`!!document.querySelector('[data-comment-replies="${rootId}"] [data-open-reply]')`)) {
+        await session.click(`[data-comment-replies="${rootId}"] [data-open-reply]`, () => true);
+      }
+    };
     // --- 1 + 2: a reply, then an INTERNAL reply, under a public issue comment ----
     await session.navigate(`${baseUrl}/issues/${setup.item.key}`, 2500);
     await waitFor(`[data-thread-toggle="${setup.publicRoot.id}"]`);
     const toggleBefore = await session.eval(`document.querySelector('[data-thread-toggle="${setup.publicRoot.id}"]')?.textContent?.trim() ?? null`);
     await session.click(`[data-thread-toggle="${setup.publicRoot.id}"]`, () => true);
     await sleep(800);
+    await openComposer(setup.publicRoot.id);
+    await waitFor(`[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]`);
     const form = await session.eval(`(() => {
       const box = document.querySelector('[data-comment-replies="${setup.publicRoot.id}"]');
       return box ? { present: true, internalSwitch: Boolean(box.querySelector("[data-reply-internal]")), locked: Boolean(box.querySelector('[data-reply-audience="locked"]')) } : { present: false };
@@ -89,6 +98,7 @@ async function main() {
     checks.publicThreadOffersAnInternalSwitch = toggleBefore === "Reply" && form.present && form.internalSwitch && !form.locked;
     // The reply composer is the rich editor: focus its document, then type.
     const typeReply = async (rootId, text) => {
+      await openComposer(rootId);
       // A posted reply renders through a read-only ProseMirror as well, so the
       // composer's editor must be addressed by its own wrapper, never "the
       // first .ProseMirror in the box".
@@ -101,6 +111,7 @@ async function main() {
     };
     // Parity with the top-level composer: same editor, same affordances (the
     // AI toolbar icon is the marker the render proofs already use).
+    await openComposer(setup.publicRoot.id);
     await waitFor(`[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer] .ProseMirror`);
     await sleep(300);
     const parity = await session.eval(`(() => {
@@ -134,6 +145,8 @@ async function main() {
     // --- 3: the internal thread is locked, and the server refuses a public reply ---
     await session.click(`[data-thread-toggle="${setup.internalRoot.id}"]`, () => true);
     await sleep(800);
+    await openComposer(setup.internalRoot.id);
+    await waitFor(`[data-comment-replies="${setup.internalRoot.id}"] [data-reply-composer]`);
     const locked = await session.eval(`(() => {
       const box = document.querySelector('[data-comment-replies="${setup.internalRoot.id}"]');
       return box ? { locked: Boolean(box.querySelector('[data-reply-audience="locked"]')), internalSwitch: Boolean(box.querySelector("[data-reply-internal]")), label: box.querySelector('button[type="submit"]')?.textContent?.trim() } : null;
@@ -194,7 +207,7 @@ async function main() {
     await session.screenshot(resolve("scripts", "comment-replies-proof-page.png"));
   } finally {
     await session.eval(`(async () => { ${API}
-      ${spaceId ? `await api("DELETE", "/page-spaces/${spaceId}");` : ""}
+      ${spaceId ? `await api("DELETE", "/page-spaces/${spaceId}?force=true");` : ""}
       ${projectId ? `await api("DELETE", "/projects/${projectId}");` : ""}
     })()`).catch(() => null);
     await close();

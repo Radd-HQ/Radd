@@ -119,12 +119,6 @@ export const apiPortalFormSubmitPath = (formId: string) =>
 /** Public (unauthenticated) form path (spec 62): GET renders, POST submits. */
 /** Tokened KB deflection for the public form page (spec 74) — docs only. */
 /** The shareable public submit URL shown in the form builder (spec 62). */
-/** The shareable public-KB URL shown next to a space's Public toggle (spec 74). */
-/** Spec 121 §5: a public space's shareable URL is its ORDINARY wiki URL. */
-export const spacePublicUrl = (spaceSlug: string) => `${window.location.origin}/pages/${spaceSlug}`;
-/** Spec 121 §5: the space's public-access switch. */
-export const apiPageSpacePublicAccessPath = (spaceId: string) =>
-  `${ApiPath.pageSpaces}/${spaceId}/public-access`;
 /** Public (unauthenticated) CSAT survey path (spec 65): GET renders, POST rates. */
 export const apiPublicCsatPath = (token: string) => `/public/csat/${encodeURIComponent(token)}`;
 
@@ -155,26 +149,10 @@ export const apiCannedRenderPath = (responseId: string) =>
   `${apiCannedResponsePath(responseId)}/render`;
 export const apiSlaPolicyPath = (policyId: string) => `${ApiPath.slaPolicies}/${policyId}`;
 
-/** Pages paths (spec 43). */
-export const apiPageSpacePath = (spaceId: string) => `${ApiPath.pageSpaces}/${spaceId}`;
-export const apiPageSpacePagesPath = (spaceId: string) => `${ApiPath.pageSpaces}/${spaceId}/pages`;
-export const apiPagePath = (pageId: string) => `${ApiPath.pages}/${pageId}`;
-export const apiPageTasksPath = (pageId: string) => `${apiPagePath(pageId)}/tasks`;
-export const apiPageUnarchivePath = (pageId: string) =>
-  `${ApiPath.pages}/${pageId}/unarchive`;
-export const apiPageVersionsPath = (pageId: string) =>
-  `${ApiPath.pages}/${pageId}/versions`;
-export const apiPageVersionPath = (pageId: string, version: number) =>
-  `${ApiPath.pages}/${pageId}/versions/${version}`;
-export const apiPageRestorePath = (pageId: string) => `${ApiPath.pages}/${pageId}/restore`;
 /** Collaborative editing (spec 122): join a page's room as editor or observer;
- *  the socket itself is `COLLAB_WS_PATH/{pageId}?session=` (ui.ts). */
+ *  the socket itself is `COLLAB_WS_PATH/{pageId}?session=` (ui.ts). The wiki's own
+ *  endpoints are the pages plugin's (RADD-1392). */
 export const apiCollabJoinPath = (pageId: string) => `/collab/pages/${pageId}/join`;
-export const apiPageItemsPath = (pageId: string) => `${ApiPath.pages}/${pageId}/items`;
-export const apiPageItemPath = (pageId: string, itemId: string) =>
-  `${ApiPath.pages}/${pageId}/items/${itemId}`;
-/** Pages linked to an issue (the issue page's Pages row). */
-export const apiItemPagesPath = (itemId: string) => `${ApiPath.items}/${itemId}/pages`;
 
 /** AI paths (spec 46): on-demand summary + candidate duplicates for an item. */
 export const apiItemAiSummarizePath = (itemId: string) =>
@@ -214,18 +192,3 @@ export const apiNotificationsReadAllPath = () => `${ApiPath.notifications}/read-
 export const apiItemWatchPath = (itemId: string) => `${ApiPath.items}/${itemId}/watch`;
 export const apiItemWatchersPath = (itemId: string) => `${ApiPath.items}/${itemId}/watchers`;
 
-/** GET /pages/{id}/backlinks — what links here (RADD-713). */
-export const apiPageBacklinksPath = (pageId: string) => `/pages/${pageId}/backlinks`;
-
-/** PUT /pages/{id}/labels — full replacement (RADD-718). */
-export const apiPageLabelsPath = (pageId: string) => `/pages/${pageId}/labels`;
-
-/** GET /pages/by-label/{name} — the self-maintaining index (RADD-718). */
-export const apiPagesByLabelPath = (name: string) =>
-  `/pages/by-label/${encodeURIComponent(name)}`;
-
-/** GET /pages/{id}/export — the page and its subtree as a markdown zip (RADD-721). */
-export const apiPageExportPath = (pageId: string) => `/pages/${pageId}/export`;
-
-/** GET/PUT/DELETE /pages/{id}/watch (RADD-719). */
-export const apiPageWatchPath = (pageId: string) => `/pages/${pageId}/watch`;

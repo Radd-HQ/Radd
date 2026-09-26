@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useNavFacts } from "../../lib/nav-facts";
 import { RoutePath } from "../../lib/constants";
+import { PageRoute } from "@radd-plugin-ui/pages/links";
 import { notificationsBadgeQuery } from "../../lib/queries";
 import { openCommandPalette } from "../CommandPalette";
 import { modShortcut } from "../../lib/platform";
@@ -55,7 +56,7 @@ const DESTINATIONS: RailDestination[] = [
   { to: RoutePath.portal, icon: ConciergeBell, label: "Portal" },
   { to: RoutePath.projects, icon: Layers, label: "Projects", exact: true },
   // RADD-1242: the wiki was only reachable by expanding the rail first.
-  { to: RoutePath.pages, icon: BookOpen, label: "Pages" },
+  { to: PageRoute.pages, icon: BookOpen, label: "Pages" },
   { to: RoutePath.reports, icon: BarChart3, label: "Reports" },
   { to: RoutePath.timesheet, icon: Clock, label: "Timesheet" },
 ];

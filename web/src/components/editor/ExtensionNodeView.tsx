@@ -3,14 +3,8 @@ import { createPortal } from "react-dom";
 import { useNodeViewContext } from "@prosemirror-adapter/react";
 import { Pencil, Trash2 } from "lucide-react";
 import { CONFIG_ON_INSERT, configOnInsertKey } from "./extension-node";
-import {
-  ExtensionError,
-  UnknownExtension,
-  lookupPageExtension,
-  parseExtensionParams,
-} from "../../lib/page-extensions";
+import { ExtensionError, UnknownExtension, lookupPageExtension, parseExtensionParams } from "@radd/plugin-sdk";
 import { ExtensionConfig } from "./ExtensionConfig";
-import "../pages/extensions"; // side-effect: registers the first-party extensions
 
 /**
  * An extension block, rendered LIVE inside the editor (RADD-746).

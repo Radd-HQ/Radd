@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
-import { MoreHorizontal, type LucideIcon } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode, type Ref } from "react";
+import { MoreHorizontal } from "lucide-react";
 
 /**
  * Trigger-anchored action menu (the "⋯"/chevron companion to ContextMenu):
@@ -13,7 +13,8 @@ export type DropdownMenuItem =
   | {
       kind: "action";
       label: string;
-      icon?: LucideIcon;
+      /** Any icon component: lucide, or one a plugin passes through the SDK. */
+      icon?: ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }>;
       onSelect: () => void;
       danger?: boolean;
       disabled?: boolean;

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Me, Page } from "../../../lib/types";
+import type { Me } from "../../../lib/types";
+import type { Page } from "@radd-plugin-ui/pages/types";
 import { CollabRole, type CollabRoleValue, type PresenceSnapshot } from "./model";
 import { presenceColor } from "./presence-color";
 import { usePresence } from "./presence";
-import { isRejoinCode, openCollabRoom, type CollabRoom } from "./provider";
+import type { CollabRoom } from "./provider";
 import { COLLAB_REJOIN_LIMIT } from "../../../lib/constants";
 import { startSaver, type Saver } from "./saver";
 
@@ -34,7 +35,8 @@ export interface CollabSession {
 export interface CollabSessionOptions {
   pageId: string;
   role: CollabRoleValue | null;
-  user: Me | null;
+  /** Only who they are is read: the SDK's signed-in user is enough (RADD-1392). */
+  user: Pick<Me, "id" | "name" | "avatar_color" | "avatar_emoji"> | null;
   /** The editor's live markdown (a ref read, never a captured value). */
   getMarkdown: () => string;
   onSaved?: (page: Page) => void;
@@ -78,7 +80,9 @@ export function useCollabSession({
     let disposed = false;
     let opened: CollabRoom | null = null;
     const identity = { id: userId, avatar_color: avatarColor };
-    openCollabRoom({
+    // The transport (yjs + y-websocket) loads with the first room, not with the shell: this hook
+    // is provided to plugins at startup (RADD-1392), so a static import would ship it to everyone.
+    void import("./provider").then(({ isRejoinCode, openCollabRoom }) => disposed ? null : openCollabRoom({
       pageId,
       role,
       user: { id: userId, name: userName, color: presenceColor(identity), emoji: avatarEmoji },
@@ -114,7 +118,9 @@ export function useCollabSession({
       () => {
         if (!disposed) setFailed(true);
       },
-    );
+    )).catch(() => {
+      if (!disposed) setFailed(true);
+    });
     return () => {
       disposed = true;
       const saver = saverRef.current;

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RoutePath } from "./constants";
 import { useCurrentUser, useIsAuthenticated, usePermissions } from "./hooks";
-import { pageSpaceSummaryQuery } from "./queries";
+import { pageSpaceSummaryQuery } from "@radd-plugin-ui/pages/queries";
 import { dashboardSummaryQuery } from "@radd-plugin-ui/dashboards/queries";
 import { Permission } from "./types";
 import { projectSummaryQuery } from "@radd-plugin-ui/projects/directory-queries";

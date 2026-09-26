@@ -1,4 +1,4 @@
-import type { PageExtensionSpec } from "../../lib/types";
+import type { PageExtensionSpec } from "@radd-plugin-ui/pages/types";
 
 /**
  * Reading a `PageExtensionSpec.params_schema` as a form (RADD-747).

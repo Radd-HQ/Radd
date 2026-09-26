@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { visit } from "unist-util-visit";
 import type { Node as UnistNode, Parent } from "unist";
-import { extensionNameOfInfo } from "../../lib/page-extensions";
+import { extensionNameOfInfo } from "@radd/plugin-sdk";
 
 /**
  * `radd:*` fences as a real editor node (RADD-746).

@@ -82,7 +82,8 @@ try {
 
   await session.navigate(`${baseUrl}/pages/${space.slug}`, 2500);
   const opened = await session.eval(`(()=>{
-    const btn = [...document.querySelectorAll("button")].find(b=>b.textContent.trim().startsWith("New page"));
+    // The TREE's New page: the top bar's context-aware "New page" (RADD-1236) creates a blank page at once.
+    const btn = [...document.querySelectorAll('nav[aria-label="Page tree"] button')].find(b=>b.textContent.trim().startsWith("New page"));
     if (!btn) return false;
     btn.click();
     return true;
@@ -118,7 +119,7 @@ try {
   checks["unknown {{severity}} survives as a prompt"] = body.includes("{{severity}}");
 } finally {
   try {
-    if (pageId) await api("DELETE", `/pages/${pageId}`);
+    if (pageId) await api("DELETE", `/pages/${pageId}?hard=true`);
     if (templateId) await api("DELETE", `/page-templates/${templateId}`);
   } catch {
     /* best effort */

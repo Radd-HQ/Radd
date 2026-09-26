@@ -1,5 +1,6 @@
 import { roleChange } from "./change-format";
 import { optionContributions } from "./options";
+import { peopleSource } from "./people";
 import { ChangeLine, SlotId, type HistoryChange, definePlugin, DIRECTORY_SELECT_SLOT, PagedDirectorySelect, api, type DirectoryChoice, type DirectorySelectProps } from "@radd/plugin-sdk";
 
 /** Auth owns who can be selected from the people directory. */
@@ -13,7 +14,7 @@ function PersonSelect(props: DirectorySelectProps) {
   })} />;
 }
 
-export default definePlugin({ contributions: [...optionContributions,{
+export default definePlugin({ querySources: [peopleSource], contributions: [...optionContributions,{
   id: "role-change-line", slot: SlotId.entityChangeLine, match: "role", toggleable: false,
   render: props => <ChangeLine change={roleChange(props.change as HistoryChange)} />,
 },{

@@ -90,11 +90,16 @@ try {
     return { remote: caps.remotes.find((r) => r.name === "ldap")?.remote_entry ?? null,
       nav: caps.nav.filter((n) => n.plugin === "ldap").map((n) => n.path),
       loaded: resources.some((n) => n.includes("/plugins/ldap/remoteEntry.js")),
-      hostChunk: resources.filter((n) => /\\/assets\\/directory-[^/]*\\.js/.test(n)) };
+      assets: resources.filter((n) => /\\/assets\\/[^/]*\\.js/.test(n)) };
   })()`);
   check("the page comes from /plugins/ldap/", provenance.loaded && provenance.remote?.startsWith("/plugins/ldap/remoteEntry.js"), JSON.stringify(provenance));
   check("the nav entry is the plugin's manifest", provenance.nav.join() === "/settings/directory", JSON.stringify(provenance.nav));
-  check("no host directory chunk loaded", provenance.hostChunk.length === 0, JSON.stringify(provenance.hostChunk));
+  // By CONTENT, not chunk name: other bundled code may legitimately be called "directory" (the
+  // wiki's space directory hook is). What must not load is a host copy of THIS page.
+  const hostChunk = await session.eval(`Promise.all(${JSON.stringify(provenance.assets)}.map((url) =>
+    fetch(url).then((r) => r.text()).then((body) => body.includes("Bind (service) account") ? url : null)))
+    .then((hits) => hits.filter(Boolean))`);
+  check("no host chunk carries the Directory page", provenance.assets.length > 0 && hostChunk.length === 0, JSON.stringify(hostChunk));
 
   // 2. every section.
   const statusRows = await waitFor(session, `(() => { const rows = [...document.querySelectorAll("[data-directory-status]")];

@@ -21,9 +21,11 @@ import type { LucideIcon } from "lucide-react";
 import { useNavFacts } from "../lib/nav-facts";
 import { PALETTE_SEARCH_LIMIT, RoutePath, SEARCH_DEBOUNCE_MS } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
-import { pagePermalink } from "../lib/page-links";
-import { aiStatusQuery, pageSearchQuery, searchQuery, semanticSearchQuery, entitySearchQuery } from "../lib/queries";
-import { AiFeature, Permission, type EntityHit, type PageSearchResult, type SearchResult, type SemanticDoc, type SemanticItem } from "../lib/types";
+import { PageRoute, pagePermalink } from "@radd-plugin-ui/pages/links";
+import { pageSearchQuery } from "@radd-plugin-ui/pages/queries";
+import type { PageSearchResult } from "@radd-plugin-ui/pages/types";
+import { aiStatusQuery, searchQuery, semanticSearchQuery, entitySearchQuery } from "../lib/queries";
+import { AiFeature, Permission, type EntityHit, type SearchResult, type SemanticDoc, type SemanticItem } from "../lib/types";
 import { NewItemModal } from "./items/NewItemModal";
 import { listRecentItems } from "../lib/recent";
 import { projectsQuery, projectByKeyQuery } from "@radd-plugin-ui/projects/directory-queries";
@@ -77,7 +79,7 @@ const STATIC_GOTOS: GotoEntry[] = [
   { label: "Starred", icon: Star, to: RoutePath.starred },
   { label: "Projects", icon: Layers, to: RoutePath.projects },
   // RADD-1241: the wiki is a destination like the others (gated by facts.docs).
-  { label: "Pages", icon: BookOpen, to: RoutePath.pages },
+  { label: "Pages", icon: BookOpen, to: PageRoute.pages },
   { label: "Reports", icon: BarChart3, to: RoutePath.reports },
   { label: "Timesheet", icon: Clock, to: RoutePath.timesheet },
   { label: "Settings", icon: Settings, to: RoutePath.settings },

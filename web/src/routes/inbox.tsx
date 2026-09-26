@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCheck, Inbox } from "lucide-react";
 import { RoutePath } from "../lib/constants";
-import { pagePermalink } from "../lib/page-links";
+import { pagePermalink } from "@radd-plugin-ui/pages/links";
 import {
   useMarkAllNotificationsRead,
   useMarkNotificationsRead,

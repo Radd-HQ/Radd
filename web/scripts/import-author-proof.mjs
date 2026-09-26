@@ -11,18 +11,23 @@ try {
 import {createRoot} from 'react-dom/client';
 import {createRouter,createRootRoute,createRoute,RouterProvider} from '@tanstack/react-router';
 import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import './src/host-components';
+import './src/host-kit';
+import './src/host-documents';
 import {StorageChoiceProvider} from './src/components/attachments/StorageChoiceProvider';
-import {PageComments} from './src/components/pages/PageComments';
-import {PageInlineComments} from './src/components/pages/PageInlineComments';
+import {PageComments} from '../server/src/radd/modules/pages/ui/src/view/PageComments';
+import {PageInlineComments} from '../server/src/radd/modules/pages/ui/src/view/PageInlineComments';
 import {CommentsThread} from './src/components/items/CommentsThread';
-import {authStateQuery,pageCommentFeedQuery,itemCommentFeedQuery} from './src/lib/queries';
+import {authStateQuery,itemCommentFeedQuery} from './src/lib/queries';
 import './src/index.css';
 const client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});
 client.setQueryData(authStateQuery.queryKey,{status:'anonymous'});
 const row={id:'unknown',entity_id:'fixture',entity_type:'page',author:null,body:'Historical comment with no author',visibility:'public',visible_to_teams:[],created_at:'2018-04-25T05:46:56Z',updated_at:'2018-04-25T05:46:56Z',anchor:null,resolved_at:null,resolved_by:null};
 const data=(r)=>({pages:[{comments:[r],older_cursor:null}],pageParams:[null]});
-client.setQueryData(pageCommentFeedQuery('fixture').queryKey,data(row));
-client.setQueryData(pageCommentFeedQuery('fixture','inline').queryKey,data({...row,id:'inline',anchor:{quote:'Quoted text',prefix:'',suffix:''}}));
+// The wiki's comments come through the host's comment kit (RADD-1392): one feed per parent and section.
+const pageFeed=(section)=>['comments','page','fixture','feed',{section,unresolvedOnly:false}];
+client.setQueryData(pageFeed('discussion'),data(row));
+client.setQueryData(pageFeed('inline'),data({...row,id:'inline',anchor:{quote:'Quoted text',prefix:'',suffix:''}}));
 client.setQueryData(itemCommentFeedQuery('fixture').queryKey,data({...row,entity_type:'item'}));
 function Proof(){const ref=useRef(null);return <QueryClientProvider client={client}><StorageChoiceProvider><main style={{padding:32}}><h1>Imported comments</h1><div id="issue"><CommentsThread item={{id:'fixture',key:'TEST-1',labels:[],assignee:null}} project={{id:'p',permissions:[]}} /></div><PageComments pageId="fixture" canComment={false}/><div ref={ref}>Quoted text</div><PageInlineComments pageId="fixture" bodyRef={ref} bodyVersion={1} canComment={false}/></main></StorageChoiceProvider></QueryClientProvider>}
 const rootRoute=createRootRoute({component:Proof});

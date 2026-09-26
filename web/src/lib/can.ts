@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { usePermissions } from "./hooks";
-import type { PageSpace } from "./types";
+import type { PageSpace } from "@radd-plugin-ui/pages/types";
 import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**

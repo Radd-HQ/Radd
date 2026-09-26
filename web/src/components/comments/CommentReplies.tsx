@@ -223,10 +223,3 @@ export function CommentReplies({
     </div>
   );
 }
-
-/** The label of the toggle that opens a thread: what is there, or what you can do. */
-export function repliesLabel(row: Comment, expanded: boolean, canReply: boolean): string {
-  if (expanded) return row.reply_count ? `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}` : "Hide replies";
-  if (row.reply_count) return `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}`;
-  return canReply ? "Reply" : "View thread";
-}

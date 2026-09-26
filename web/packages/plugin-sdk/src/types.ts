@@ -22,6 +22,8 @@ export interface Me extends UserRef {
   permissions: PermissionValue[];
   manages_teams?: boolean;
   timezone?: string;
+  /** Spec 121: a visitor browsing as the Anyone principal, not a signed-in account. */
+  anonymous?: boolean;
 }
 
 export interface Project {

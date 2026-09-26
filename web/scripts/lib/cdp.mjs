@@ -120,6 +120,13 @@ export async function openBrowser({ port, profile, width = 1440, height = 1000, 
   // against fixed code, depending on what was cached. Always fetch fresh.
   await send("Network.enable");
   await send("Network.setCacheDisabled", { cacheDisabled: true });
+  // Chrome keeps 250 resource-timing entries and then DROPS the rest. A plain home-page load now
+  // fetches ~210 script chunks, so any request after that went unrecorded — and every "X was not
+  // loaded" check read an empty list and passed without looking (RADD-1392 merge). Raise the cap on
+  // every document before its first script runs.
+  await send("Page.addScriptToEvaluateOnNewDocument", {
+    source: "performance.setResourceTimingBufferSize(100000);",
+  });
   await send("Emulation.setDeviceMetricsOverride",
     { width, height, deviceScaleFactor: scale, mobile: false });
 

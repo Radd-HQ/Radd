@@ -1,8 +1,9 @@
 import type { Doc } from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { api } from "../../../lib/api";
-import { COLLAB_AUTOSAVE_MS, apiPagePath } from "../../../lib/constants";
-import type { Page, PageUpdate } from "../../../lib/types";
+import { COLLAB_AUTOSAVE_MS } from "../../../lib/constants";
+import { pagePath } from "@radd-plugin-ui/pages/endpoints";
+import type { Page, PageUpdate } from "@radd-plugin-ui/pages/types";
 import { electSaver } from "./model";
 
 /**
@@ -64,7 +65,7 @@ export function startSaver({
     const markdown = getMarkdown();
     if (!final && markdown === lastSaved) return;
     try {
-      const page = await api.patch<Page>(apiPagePath(pageId), body(markdown, final));
+      const page = await api.patch<Page>(pagePath(pageId), body(markdown, final));
       lastSaved = markdown;
       onSaved?.(page);
     } catch (error) {
@@ -101,7 +102,7 @@ export function startSaver({
   const onPageHide = () => {
     if (stopped || !isSaver()) return;
     // Best effort: the page is going away, so this cannot be awaited.
-    void api.patch<Page>(apiPagePath(pageId), body(getMarkdown(), true), { keepalive: true }).catch(() => {});
+    void api.patch<Page>(pagePath(pageId), body(getMarkdown(), true), { keepalive: true }).catch(() => {});
   };
 
   doc.on("update", onDocUpdate);

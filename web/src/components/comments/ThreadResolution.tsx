@@ -5,13 +5,16 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath } from "../../lib/constants";
 import { relativeTime } from "@radd/plugin-sdk";
 import type { Comment } from "../../lib/types";
+
+/** What the thread chrome reads — a plugin's comment rows satisfy it too (RADD-1392). */
+type ThreadRow = Pick<Comment, "id" | "is_thread" | "resolved_at" | "resolver_name">;
 import { Button } from "../Button";
 
 /**
  * A thread's status chip, for the comment header: what makes a resolvable
  * thread read as one rather than as an ordinary comment with replies.
  */
-export function ThreadBadge({ comment }: { comment: Comment }) {
+export function ThreadBadge({ comment }: { comment: ThreadRow }) {
   if (!comment.is_thread) return null;
   const resolved = !!comment.resolved_at;
   const who = comment.resolver_name ? ` by ${comment.resolver_name}` : "";
@@ -33,7 +36,7 @@ export function ThreadBadge({ comment }: { comment: Comment }) {
 }
 
 /** Resolve / Reopen, on the root: lifecycle belongs to the thread, never a reply. */
-export function ResolveThreadButton({ comment }: { comment: Comment }) {
+export function ResolveThreadButton({ comment }: { comment: ThreadRow }) {
   const client = useQueryClient();
   const change = useMutation({
     mutationFn: () => api.post<Comment>(`${apiCommentPath(comment.id)}/${comment.resolved_at ? "reopen" : "resolve"}`, {}),
@@ -71,7 +74,14 @@ export function ThreadFilter({ unresolvedOnly, onChange }: { unresolvedOnly: boo
 }
 
 /** The left rule that marks a thread card: accent while open, green once resolved. */
-export function threadRuleClass(comment: Comment): string {
+export function threadRuleClass(comment: ThreadRow): string {
   if (!comment.is_thread) return "";
   return " border-l-2 " + (comment.resolved_at ? "border-l-status-success" : "border-l-accent");
+}
+
+/** The label of the toggle that opens a thread: what is there, or what you can do. */
+export function repliesLabel(row: Pick<Comment, "reply_count">, expanded: boolean, canReply: boolean): string {
+  if (expanded) return row.reply_count ? `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}` : "Hide replies";
+  if (row.reply_count) return `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}`;
+  return canReply ? "Reply" : "View thread";
 }

@@ -12,10 +12,18 @@ const ownerKeys = Object.assign({}, ...['projects','cycles'].map(owner => {
   const name=owner==='projects'?'projectQueryKeys':'cycleDirectoryKeys';
   return evaluate(readFileSync(new URL('../../server/src/radd/modules/'+owner+'/ui/src/query-keys.ts',import.meta.url),'utf8'),{},[name]);
 }));
+// The wiki's queries are the pages plugin's (RADD-1392); its endpoints and links carry no imports.
+const pagesSource = file => readFileSync(new URL(`../../server/src/radd/modules/pages/ui/src/${file}`, import.meta.url), "utf8");
+const pageEndpoints = evaluate(pagesSource("endpoints.ts"), {}, ["PageApi", "itemPagesPath", "pageBacklinksPath",
+  "pageItemsPath", "pagePath", "pageVersionPath", "pageVersionsPath", "pageWatchPath", "pagesByLabelPath", "spacePagesPath"]);
+const { encodePath } = evaluate(pagesSource("links.ts"), {}, ["encodePath"]);
+const pageQueries = evaluate(pagesSource("queries.ts"), {
+  ...pageEndpoints, encodePath, queryOptions: x => x, api: {}, ApiError: Error, keepPreviousData: undefined,
+}, ["pageSearchQuery", "pageSpaceSummaryQuery", "pageSpacesPageQuery", "pageSpaceByIdentityQuery"]);
 let factories = source("queries/shared.ts");
 for (const [file, names] of [
   ["items", ["commentsQuery"]], ["activity", ["linkSearchQuery"]],
-  ["ai-search", ["searchQuery", "similarToTextQuery"]], ["pages", ["pageSearchQuery"]],
+  ["ai-search", ["searchQuery", "similarToTextQuery"]],
 ]) {
   const code = source(`queries/${file}.ts`);
   for (const name of names) {
@@ -25,8 +33,9 @@ for (const [file, names] of [
 }
 const { Entity, entityMeta } = evaluate(source("cache.ts"), {}, ["Entity", "entityMeta"]);
 const { invalidateEntities } = evaluate(readFileSync(new URL("../packages/plugin-sdk/src/cache.ts", import.meta.url), "utf8"), {}, ["invalidateEntities"]);
-const names = ["commentsQuery", "linkSearchQuery", "searchQuery", "similarToTextQuery", "pageSearchQuery"];
-const queries = evaluate(factories, { ...ownerKeys, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined }, names);
+const names = ["commentsQuery", "linkSearchQuery", "searchQuery", "similarToTextQuery"];
+const queries = { ...evaluate(factories, { ...ownerKeys, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined }, names),
+  pageSearchQuery: pageQueries.pageSearchQuery };
 for (const [name, a, b] of [
   ["linkSearchQuery", ["p", "q", "a", 20], ["p", "q", "b", 20]],
   ["searchQuery", ["q", 5], ["q", 20]],
@@ -136,9 +145,7 @@ assert.equal(seriesReads, 2, "another reader's series change refetches the direc
 stopSeries();
 unobserveSeries();
 client.clear();
-const wikiFactories = evaluate(source("queries/shared.ts") + "\n" + source("queries/pages.ts"), {
-  ...ownerKeys, CYCLES_PAGE_SIZE, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined,
-}, ["pageSpaceSummaryQuery", "pageSpacesPageQuery", "pageSpaceByIdentityQuery"]);
+const wikiFactories = pageQueries;
 const wikiCalls = [0, 0, 0];
 const wikiObservers = [wikiFactories.pageSpaceSummaryQuery(), wikiFactories.pageSpacesPageQuery("later", 2), wikiFactories.pageSpaceByIdentityQuery("later-space")]
   .map((options, index) => new QueryObserver(client, {

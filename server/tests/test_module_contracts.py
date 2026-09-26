@@ -177,7 +177,7 @@ def test_core_modules_never_reach_optional_plugins():
         if plugin is not None:
             plugins[module] = plugin
     optional = {name for name, plugin in plugins.items() if not plugin.core}
-    assert {"pages", "ai", "approvals", "mailintake"} <= optional, "the check needs real optional plugins"
+    assert {"collab", "ai", "approvals", "mailintake"} <= optional, "the check needs real optional plugins"
 
     reaches = []
     for module, plugin in plugins.items():

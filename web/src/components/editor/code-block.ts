@@ -1,5 +1,5 @@
 import { EditorState as CmState, Compartment } from "@codemirror/state";
-import { registerTextProjection } from "../../lib/dom-text";
+import { registerTextProjection } from "@radd/plugin-sdk";
 import {
   EditorView as CmView,
   keymap,

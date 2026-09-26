@@ -14,10 +14,12 @@ import {
   RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_LIMIT, ITEMS_PAGE_LIMIT_PHONE, ITEMS_PAGE_SIZES,
   ITEMS_PAGE_SIZE_STORAGE_KEY,
 } from "./constants";
-import { allowedTransitionsQuery, authStateQuery, capabilitiesQuery, fieldWritabilityQuery, effectiveScreenQuery, statesQuery, instanceConfigQuery, itemByKeyQuery, pageSpaceSummaryQuery, resolvedSettingQuery, slqValidateQuery } from "./queries";
+import { allowedTransitionsQuery, authStateQuery, capabilitiesQuery, fieldWritabilityQuery, effectiveScreenQuery, statesQuery, instanceConfigQuery, itemByKeyQuery, resolvedSettingQuery, slqValidateQuery } from "./queries";
 import { DEFAULT_DURATION_CONFIG, type DurationConfig } from "./duration";
 import { AuthStatus, type AuthState, currentPath } from "./auth";
-import { InstanceRole, Permission, SettingKey, type Item, type Me, type PageSpace, type PermissionValue } from "./types";
+import { InstanceRole, Permission, SettingKey, type Item, type Me, type PermissionValue } from "./types";
+import { pageSpaceSummaryQuery } from "@radd-plugin-ui/pages/queries";
+import type { PageSpace } from "@radd-plugin-ui/pages/types";
 
 /** Auth state from the boot query; the app-layout gate guarantees it resolved. */
 export function useAuthState(): AuthState | undefined {

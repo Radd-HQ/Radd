@@ -26,11 +26,20 @@ export function useCurrentUser(): Me | null {
   return data ?? null;
 }
 
+/** A signed-in account, not a visitor (spec 121: `/auth/me` answers a visitor as the Anyone
+ *  principal, so `useCurrentUser()` alone does not say who can write). */
+export function useIsAuthenticated(): boolean {
+  const me = useCurrentUser();
+  return Boolean(me && !me.anonymous);
+}
+
 /** Global + project permission checks off the current user / a project's `permissions`. */
 export function usePermissions(): Permissions {
   const me = useCurrentUser();
   // Instance admins hold everything; the flat `permissions` array is the global union.
-  const isAdmin = (me?.instance_role ?? ANONYMOUS_ROLE) === "admin";
+  // `global_role` is the server's credential-aware bypass (authz.is_admin) and what the host's
+  // own checker reads, so a plugin page answers as the host's did (RADD-1392).
+  const isAdmin = (me?.global_role ?? me?.instance_role ?? ANONYMOUS_ROLE) === "admin";
   const globalSet = new Set<PermissionValue>(me?.permissions ?? []);
   return {
     global: (atom) => isAdmin || globalSet.has(atom),

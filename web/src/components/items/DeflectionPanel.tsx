@@ -6,7 +6,7 @@ import { useOpenIssueRef } from "../../lib/hooks";
 import { deflectQuery } from "../../lib/queries";
 import type { DeflectPage, DeflectItem } from "../../lib/types";
 import { SimilarHoverCard, useIssuePreview } from "./SimilarHoverCard";
-import { pagePermalink } from "../../lib/page-links";
+import { pagePermalink } from "@radd-plugin-ui/pages/links";
 import { useDebounced } from "@radd/plugin-sdk";
 
 interface DeflectionPanelProps {

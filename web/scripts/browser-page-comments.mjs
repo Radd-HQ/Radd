@@ -35,7 +35,7 @@ const server = http.createServer(async (req, res) => {
     requests.push({route, method: req.method});
     let data = [], status = 200;
     if (route === "/auth/me") data = user;
-    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS, "pages"], ui: []};
+    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: CORE_PLUGINS, ui: []};
     else if (route === "/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 0, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 1, permissions: ["*"]};

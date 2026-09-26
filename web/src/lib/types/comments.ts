@@ -8,7 +8,7 @@ import type { UserRef } from "./items";
 import type { CommentVisibilityValue } from "@radd-plugin-ui/comments/visibility";
 
 /** Where an inline comment points (RADD-726) — a text-quote selector, not an
- *  offset. See `lib/anchoring.ts` for why. */
+ *  offset. See the SDK's `anchoring.ts` for why. */
 export interface CommentAnchor {
   quote: string;
   prefix?: string;

@@ -162,21 +162,8 @@ export const RoutePath = {
   /** Canned responses admin (spec 30, global manage). */
   settingsCanned: `${SETTINGS_SEGMENT}/${SettingsSection.canned}`,
   settingsServiceAccounts: `${SETTINGS_SEGMENT}/${SettingsSection.serviceAccounts}`,
-  /** Pages (spec 43; RADD-702; RADD-1233): spaces index (also the permalink
-   *  resolver — `/pages?pageId=<number>`), a space's tree, and the canonical
-   *  page URL — `/pages/<space>/<slug>/<slug>/…`, a PATH through the tree
-   *  carried by the splat. A single segment may be a number or an id: such
-   *  links resolve, and the page view rewrites the URL to the canonical path,
-   *  so no link ever shared can rot. Build them with `lib/page-links.ts`. */
-  pages: "/pages",
-  pageSpace: "/pages/$spaceSlug",
-  page: "/pages/$spaceSlug/$",
-  /** RADD-733: the print view — a TOP-LEVEL route, outside the app layout,
-   *  because the layout is exactly what must not be in the output. Under its
-   *  own prefix since RADD-1233: a path can end in anything, so nothing may
-   *  hang a literal AFTER the page segment. */
-  pagePrint: "/print/pages/$spaceSlug/$",
-  /** Page spaces admin (spec 43, doc.manage). */
+  /** The wiki's own addresses are the pages plugin's `PageRoute` (RADD-1392). Page spaces admin
+   *  (spec 43) is its settings page; the host keeps the nav row, which asks about ANY space. */
   settingsPages: `${SETTINGS_SEGMENT}/${SettingsSection.pages}`,
   /** PUBLIC pages (spec 74) — root-level, outside the auth gate. */
   // Kept until V1: the instance is public and old /kb links live in the wild (RADD-896).

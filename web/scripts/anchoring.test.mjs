@@ -14,7 +14,7 @@ import { join } from "node:path";
 
 const dir = mkdtempSync(join(tmpdir(), "anchor-"));
 const file = join(dir, "anchoring.ts");
-writeFileSync(file, readFileSync("web/src/lib/anchoring.ts", "utf8"));
+writeFileSync(file, readFileSync("web/packages/plugin-sdk/src/anchoring.ts", "utf8"));
 const { makeAnchor, locateAnchor, orderByAnchor } = await import(file);
 
 let failures = 0;

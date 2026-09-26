@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { AuthStatus } from "./lib/auth";
 import { ProjectSettingsSection, RoutePath, SettingsSection } from "./lib/constants";
 import { authStateQuery } from "./lib/queries";
+import { PageRoute } from "@radd-plugin-ui/pages/links";
 const AppLayout = lazyRouteComponent(() => import("./routes/app-layout"), "AppLayout");
 import { PluginPage } from "./components/shell/PluginPage";
 import { SettingsPluginPage } from "./components/shell/SettingsPluginPage";
@@ -62,11 +63,11 @@ const WebhooksSettingsPage = lazyRouteComponent(() => import("./routes/settings/
 const NotificationSettingsPage = lazyRouteComponent(() => import("./routes/settings/notifications"), "NotificationSettingsPage");
 const ProfileSettingsPage = lazyRouteComponent(() => import("./routes/settings/profile"), "ProfileSettingsPage");
 const InstanceSettingsPage = lazyRouteComponent(() => import("./routes/settings/instance"), "InstanceSettingsPage");
-const PagesSettingsPage = lazyRouteComponent(() => import("./routes/settings/pages"), "PagesSettingsPage");
 const ViewPage = lazyRouteComponent(() => import("./routes/view"), "ViewPage");
-const PagesIndexPage = lazyRouteComponent(() => import("./routes/pages-index"), "PagesIndexPage");
-const PageSpacePage = lazyRouteComponent(() => import("./routes/page-space"), "PageSpacePage");
-const PagePrintPage = lazyRouteComponent(() => import("./routes/page-print"), "PagePrintPage");
+// The wiki is the pages plugin's bundled UI (RADD-1392): its routes mount here, lazily.
+const PagesIndexPage = lazyRouteComponent(() => import("@radd-plugin-ui/pages/index-page"), "PagesIndexPage");
+const PageSpacePage = lazyRouteComponent(() => import("@radd-plugin-ui/pages/space-page"), "PageSpacePage");
+const PagePrintPage = lazyRouteComponent(() => import("@radd-plugin-ui/pages/print-page"), "PagePrintPage");
 const DashboardPage = lazyRouteComponent(() => import("@radd-plugin-ui/dashboards/page"), "DashboardPage");
 
 /**
@@ -113,7 +114,7 @@ const legacyKbIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.legacyKb,
   beforeLoad: () => {
-    throw redirect({ to: RoutePath.pages, replace: true });
+    throw redirect({ to: PageRoute.pages, replace: true });
   },
   component: () => null,
 });
@@ -122,7 +123,7 @@ const legacyKbSpaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: RoutePath.legacyKbSpace,
   beforeLoad: ({ params }) => {
-    throw redirect({ to: RoutePath.pageSpace, params, replace: true });
+    throw redirect({ to: PageRoute.space, params, replace: true });
   },
   component: () => null,
 });
@@ -132,7 +133,7 @@ const legacyKbPageRoute = createRoute({
   path: RoutePath.legacyKbPage,
   beforeLoad: ({ params }) => {
     throw redirect({
-      to: RoutePath.page,
+      to: PageRoute.page,
       params: { spaceSlug: params.spaceSlug, _splat: params.pageSlug },
       replace: true,
     });
@@ -343,7 +344,7 @@ const dashboardRoute = createRoute({
 /** Pages (spec 43): spaces index, a space's two-pane tree, the canonical page URL. */
 const docsIndexRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: RoutePath.pages,
+  path: PageRoute.pages,
   component: PagesIndexPage,
   // `?pageId=<number>` is the page PERMALINK (RADD-1233): the index resolves
   // it and redirects to the page's current path. The OPTIONAL key keeps
@@ -362,7 +363,7 @@ const docsIndexRoute = createRoute({
 
 const docSpaceRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: RoutePath.pageSpace,
+  path: PageRoute.space,
   component: PageSpacePage,
   // `?archived=1` opens the space's archive browser (RADD-1228). Same
   // normalisation as the print route: the router JSON-parses search values.
@@ -377,7 +378,7 @@ const docSpaceRoute = createRoute({
 
 const pageRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: RoutePath.page,
+  path: PageRoute.page,
   component: PageSpacePage,
   validateSearch: withCommentLink,
 });
@@ -386,7 +387,7 @@ const pageRoute = createRoute({
  *  sidebar and tree rail are precisely what a printed page must not contain. */
 const pagePrintRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: RoutePath.pagePrint,
+  path: PageRoute.print,
   component: PagePrintPage,
   // The router JSON-parses search values, so `?subpages=1` arrives as the
   // NUMBER 1 — comparing against the string silently dropped the key and the
@@ -535,13 +536,6 @@ const settingsServiceAccountsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: SettingsSection.serviceAccounts,
   component: ServiceAccountsSettingsPage,
-});
-
-/** Page spaces admin (spec 43). */
-const settingsDocsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.pages,
-  component: PagesSettingsPage,
 });
 
 /** Attachment storage hosts (spec 102) — instance-admin only. */
@@ -709,7 +703,6 @@ const routeTree = rootRoute.addChildren([
       settingsPluginsRoute,
       settingsCannedRoute,
       settingsServiceAccountsRoute,
-      settingsDocsRoute,
       settingsStorageRoute,
       settingsSignInRoute,
     settingsWebhooksRoute,

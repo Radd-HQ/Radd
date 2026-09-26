@@ -37,7 +37,7 @@ import { Blocks, Sparkles, type LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { aiErrorText, isAiGone } from "../../lib/ai";
 import { jiraToMarkdown } from "../../lib/jira-markup";
-import { MarkdownSourceCtx } from "../../lib/markdown";
+import { MarkdownSourceContext } from "@radd/plugin-sdk";
 import { entitySearchQuery, searchQuery, usersQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
 import { useEditorAi, type AiRun } from "./ai";
@@ -77,7 +77,7 @@ import {
 import { mentionChipsPlugin } from "./chips";
 import { PlainEditor, type PlainEditorApi } from "./PlainEditor";
 import type { QuickAction } from "../items/quick-actions";
-import type { PageExtensionSpec } from "../../lib/types";
+import type { PageExtensionSpec } from "@radd-plugin-ui/pages/types";
 import "./editor.css";
 import "./rich-editor.css";
 
@@ -194,7 +194,7 @@ const SOURCE_DEBOUNCE_MS = 300;
  * editor-owned DOM. It renders no element of its own — four context providers
  * and the portal list — so it costs nothing on a surface with no node views.
  *
- * `MarkdownSourceCtx` sits ABOVE it on purpose, and the reason is easy to get
+ * `MarkdownSourceContext` sits ABOVE it on purpose, and the reason is easy to get
  * wrong: the adapter renders its portals as a SIBLING of `children`, so a
  * provider inside the inner component would not reach them. A live `radd:toc`
  * reads its headings from that context, so it has to wrap the portal list, not
@@ -204,11 +204,11 @@ export function RichEditor(props: RichEditorProps) {
   // The live markdown, for extensions that read the document they sit in.
   const [source, setSource] = useState(() => jiraToMarkdown(props.value));
   return (
-    <MarkdownSourceCtx.Provider value={source}>
+    <MarkdownSourceContext.Provider value={source}>
       <ProsemirrorAdapterProvider>
         <RichEditorInner {...props} onSourceChange={setSource} />
       </ProsemirrorAdapterProvider>
-    </MarkdownSourceCtx.Provider>
+    </MarkdownSourceContext.Provider>
   );
 }
 

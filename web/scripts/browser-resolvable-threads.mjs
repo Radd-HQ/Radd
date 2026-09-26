@@ -105,8 +105,8 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(200, {"content-type": mime}); res.end(readFileSync(file));
 });
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-const until = async (predicate, label) => {
-  for (let i = 0; i < 150; i++) {if (await predicate()) return; await new Promise(resolve => setTimeout(resolve, 50));}
+const until = async (predicate, label, attempts = 150) => {
+  for (let i = 0; i < attempts; i++) {if (await predicate()) return; await new Promise(resolve => setTimeout(resolve, 50));}
   throw Error(label);
 };
 let browser;
@@ -135,7 +135,7 @@ try {
   await s.click('[data-thread-toggle="locked"]');
   await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-open-reply]')`), "reply action missing");
   await s.click('[data-comment-replies="locked"] [data-open-reply]');
-  await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [contenteditable="true"]')`), "locked thread reply composer missing");
+  await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [contenteditable="true"]')`), "locked thread reply composer missing", 400); // the lazily mounted rich editor: < 1 s alone, slower under the full suite
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-reply-unresolve]')`), false, "Reply and unresolve offered against the rule");
   await s.click('[data-thread-toggle="locked"]');
   if (await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute("aria-expanded") === "false"`)) await s.click('[data-thread-toggle="thread"]');

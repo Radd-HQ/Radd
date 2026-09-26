@@ -4,13 +4,22 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "vite build"
-  },
   "dependencies": {
-    "@radd/plugin-sdk": "*"
+    "@radd/plugin-sdk": "*",
+    "@radd-plugin-ui/labels": "*"
   },
   "exports": {
-    "./lookup-contract": "./src/lookup-contract.ts"
+    ".": "./src/index.tsx",
+    "./lookup-contract": "./src/lookup-contract.ts",
+    "./types": "./src/types.ts",
+    "./links": "./src/links.ts",
+    "./queries": "./src/queries.ts",
+    "./endpoints": "./src/endpoints.ts",
+    "./index-page": "./src/routes/PagesIndexPage.tsx",
+    "./space-page": "./src/routes/PageSpacePage.tsx",
+    "./print-page": "./src/routes/PagePrintPage.tsx"
+  },
+  "radd": {
+    "bundled": true
   }
 }

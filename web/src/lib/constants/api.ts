@@ -117,14 +117,7 @@ export const ApiPath = {
   // One key's cascade-RESOLVED value (spec 70) — readable by any member.
   scopedSettingsResolve: "/scoped-settings/resolve",
   // Builtin-field write rules (spec 36).
-  // Pages (spec 43).
-  pageSpaces: "/page-spaces",
-  pageExtensions: "/pages/extensions",
-  pageTemplates: "/page-templates",
-  pages: "/pages",
-  docsSearch: "/pages/search",
-  // AI layer (spec 46) — the status gate + natural-language → SLQ.
-  pagesReindex: "/pages/reindex",
+  // The wiki's endpoints are the pages plugin's `PageApi` (RADD-1392).
   webhooks: "/webhooks",
   aiStatus: "/ai/status",
   // Similar issues for a TEXT seed (read-mode AI menu on comments).

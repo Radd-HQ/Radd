@@ -1,4 +1,5 @@
-/** Exercise each owner's actual option contribution (bundled core owners + the Pages remote) and the SDK controls. */
+/** Exercise each owner's actual option contribution (every owner is a bundled core plugin since RADD-1392), the SDK
+ *  controls, and an optional owner's failed remote — a fixture remote, since no optional plugin contributes a directory. */
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -8,24 +9,30 @@ import { openBrowser } from './lib/cdp.mjs';
 import { CORE_PLUGINS } from './lib/core-plugins.mjs';
 const dist = new URL('../dist/', import.meta.url).pathname;
 const owners = {users:'auth','users/directory':'auth',roles:'auth','roles/assignable':'auth',teams:'teams','teams/directory':'teams',states:'workflow','issue-types':'itemtypes',releases:'releases',forms:'forms','page-spaces':'pages',groups:'groups'};
+// The optional owner: a remote contributing a directory through the same SDK contract a real one would.
+const optionalOwners = {'fixture-things':'optional-owner'};
 const enabled = new Set(['fixture']), broken = new Set(), versions = {}, requests = [];
 let hold = false, release, aborted = 0, refuse = false, suffix = '';
 const harness = `import{createElement as h,useState}from'react';import{definePlugin,SlotId,SettingsPage,OptionChoices,OptionSelect,OptionTextField,OptionNameValues}from'@radd/plugin-sdk';
 function Harness(){const[resource,setResource]=useState('users');const[kind,setKind]=useState('select');const[value,setValue]=useState('saved');const[names,setNames]=useState(['legacy']);const[scope,setScope]=useState({});const[canBrowse,setCanBrowse]=useState(true);const[open,setOpen]=useState(true);const[presets,setPresets]=useState([]);window.__options={setResource,setKind,setValue,value,names,setNames,setScope,setCanBrowse,setOpen,setPresets};const props={resource,label:'Target',value,onChange:setValue,scope,canBrowse,presets};return h(SettingsPage,{title:'Option contribution proof'},h('div',{'data-option-proof':true},kind==='choices'?(open?h(OptionChoices,{resource,scope,canBrowse,presets,selectedValues:names,onSelect:r=>setValue(r.value),onClose:()=>setOpen(false),footer:h('span',{},'Caller footer')}):null):kind==='text'?h(OptionTextField,{...props,suggestions:['{{item.key}}']}):kind==='names'?h(OptionNameValues,{resource,scope,canBrowse,label:'Names',value:names,onChange:setNames}):h(OptionSelect,props)));}
 export default definePlugin({contributions:[{id:'options-proof',slot:SlotId.settingsPage,match:'/settings/options-proof',render:()=>h(Harness)}]});`;
+const optionalOwner = `import{api,definePlugin,optionContribution}from'@radd/plugin-sdk';
+export default definePlugin({contributions:[optionContribution({resource:'fixture-things',noun:'fixture things',meta:{entities:['project','role']},
+  fetch:({q,limit,offset,scope,signal})=>api.getPaged('/fixture-things/options',{signal,query:{...scope,q,limit:String(limit),offset:String(offset)}}),
+  resolve:({value,scope,signal})=>api.get('/fixture-things/options',{signal,query:{...scope,value,limit:'1'}})})]});`;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://fixture'), p = url.pathname;
   if (p.startsWith('/plugins/')) {
     const [, , name, ...parts] = p.split('/');
     if (broken.has(name)) {res.writeHead(404);res.end();return;}
     res.setHeader('content-type','text/javascript');
-    res.end(name === 'fixture' ? harness : readFileSync(new URL(`../../server/src/radd/modules/${name}/ui/dist/${parts.join('/')}`,import.meta.url)));
+    res.end(name === 'fixture' ? harness : name === 'optional-owner' ? optionalOwner : readFileSync(new URL(`../../server/src/radd/modules/${name}/ui/dist/${parts.join('/')}`,import.meta.url)));
     return;
   }
   if (p.startsWith('/api/')) {
     let data = [];
     const resource = p.slice('/api/v1/'.length).replace(/\/options$/,'');
-    if (p.endsWith('/options') && Object.hasOwn(owners, resource)) {
+    if (p.endsWith('/options') && (Object.hasOwn(owners, resource) || Object.hasOwn(optionalOwners, resource))) {
       const query = Object.fromEntries(url.searchParams);
       requests.push({resource,...query});
       // Captured before a delayed response, so a stale reply cannot silently become fresh.
@@ -83,7 +90,7 @@ try {
     assert.equal(await s.eval("document.querySelectorAll('[data-option-proof] label').length"),1);
     await ev("window.__options.setValue('saved')");
   }
-  checks.push('all twelve sources from eight actual owners (seven bundled, Pages remote) resolve, browse, withdraw and restore with saved values, owner endpoints and cache metadata');
+  checks.push('all twelve sources from eight actual owners (all bundled) resolve, browse, withdraw and restore with saved values, owner endpoints and cache metadata');
 
   await ev("window.__options.setResource('users')");await until(()=>text('users choice 001'),'people ready');await s.click('[data-option-proof] button');
   await until(()=>text('users choice 050'),'first page');await s.click('button[aria-label="Next people"]');
@@ -119,13 +126,15 @@ try {
   hold=false;release();release=undefined;suffix=' fresh!';enabled.add('groups');await refresh();await until(()=>text('groups choice 001 fresh!'),'resolution recovered from a new read, not the held reply');
   checks.push('saved-value resolution is canceled on withdrawal and cannot display a late result');
 
-  // Groups is bundled and cannot fail to load; Pages (page-spaces) is still a remote that can.
-  await ev("window.__options.setResource('page-spaces')");await until(()=>text('page-spaces choice 001'),'optional owner ready');
-  broken.add('pages');versions.pages=2;await refresh();await until(()=>s.consoleErrors.some(e=>e.includes('"pages" failed to load')),'failed remote quarantined');
+  // Every core owner is bundled and cannot fail to load (RADD-1373; Pages since RADD-1392). An optional owner's
+  // remote can, and no optional plugin contributes a directory, so a fixture remote plays that owner.
+  enabled.add('optional-owner');await refresh();
+  await ev("window.__options.setResource('fixture-things')");await until(()=>text('fixture-things choice 001'),'optional owner ready');
+  broken.add('optional-owner');versions['optional-owner']=2;await refresh();await until(()=>s.consoleErrors.some(e=>e.includes('"optional-owner" failed to load')),'failed remote quarantined');
   await until(()=>text('saved (unavailable)'),'failed remote');assert.equal(await s.eval('window.__options.value'),'saved');
-  broken.delete('pages');versions.pages=3;await refresh();await until(()=>text('page-spaces choice 001'),'remote recovered');
+  broken.delete('optional-owner');versions['optional-owner']=3;await refresh();await until(()=>text('fixture-things choice 001'),'remote recovered');
   assert.equal(await s.eval("document.querySelectorAll('[data-option-proof] label').length"),1);
-  checks.push('a failed optional owner bundle (Pages) preserves the value and recovers through a new activation');
+  checks.push('a failed optional owner bundle (a fixture remote contributing a directory) preserves the value and recovers through a new activation');
   await ev("window.__options.setResource('groups')");await until(()=>text('groups choice 001 fresh'),'groups again');
 
   refuse=true;await ev("window.__options.setValue('groups-3')");await until(()=>text('Directory denied'),'denied resolution');assert(!await text('groups choice 001 fresh'));

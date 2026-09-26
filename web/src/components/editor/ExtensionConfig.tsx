@@ -4,12 +4,8 @@ import { Modal } from "../Modal";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import { SelectField } from "../SelectField";
-import { pageExtensionsQuery } from "../../lib/queries";
-import {
-  ExtensionCard,
-  lookupPageExtension,
-  parseExtensionParams,
-} from "../../lib/page-extensions";
+import { pageExtensionsQuery } from "@radd-plugin-ui/pages/queries";
+import { ExtensionCard, lookupPageExtension, parseExtensionParams } from "@radd/plugin-sdk";
 import {
   FieldKind,
   fieldsOf,

@@ -1,7 +1,8 @@
 """RADD-810 — the client-gate scope audit, as a test.
 
-Every `perms.global(Permission.X)` in the SPA where X is not a GLOBAL-scope
-atom is the RADD-808/810 failure shape: a holder of the atom at its real scope
+Every `perms.global(Permission.X)` in the SPA — the host and the plugin UI
+packages, whose atom constants (`PagePermission`, …) are read the same way —
+where X is not a GLOBAL-scope atom is the RADD-808/810 failure shape: a holder of the atom at its real scope
 fails a global question, so the control silently vanishes for exactly the
 people it was built for. The ten shipped instances are fixed (space-scoped
 sites resolve against their space via RADD-814's `can({space})` leg,
@@ -23,6 +24,9 @@ from radd.modules.auth.types import PermissionScope, permission_scope_of
 
 _WEB = Path(__file__).resolve().parents[2] / "web" / "src"
 _TYPES = _WEB / "lib" / "types" / "permissions.ts"
+#: Plugin UI packages ship their own atom constants (RADD-1392: the wiki's
+#: `PagePermission`), so their call sites are audited too.
+_MODULES = Path(__file__).resolve().parents[1] / "src" / "radd" / "modules"
 
 _MARKER = "deliberately-global"
 #: How many lines above a call site the marker comment may sit (JSX block
@@ -30,23 +34,30 @@ _MARKER = "deliberately-global"
 _MARKER_REACH = 8
 
 
+def _sources() -> list[Path]:
+    roots = [_WEB, *(ui for ui in _MODULES.glob("*/ui/src"))]
+    return [path for root in roots for path in root.rglob("*.ts*") if "node_modules" not in path.parts]
+
+
 def _client_atoms() -> dict[str, str]:
-    """The SPA's Permission const: {constName: atom string}."""
+    """Every atom constant: {"Permission.name": atom, "PagePermission.name": atom, …}."""
     body = _TYPES.read_text()
     block = re.search(r"export const Permission = \{(.*?)\n\} as const;", body, re.S)
     assert block, f"could not find the Permission const in {_TYPES}"
-    return dict(re.findall(r'(\w+):\s*"([^"]+)"', block.group(1)))
+    atoms = {f"Permission.{name}": atom for name, atom in re.findall(r'(\w+):\s*"([^"]+)"', block.group(1))}
+    for path in _sources():
+        for const, inner in re.findall(r"export const (\w+Permission) = \{(.*?)\} as const;", path.read_text(), re.S):
+            atoms |= {f"{const}.{name}": atom for name, atom in re.findall(r'(\w+):\s*"([^"]+)"', inner)}
+    return atoms
 
 
 def _global_call_sites() -> list[tuple[Path, int, str, list[str]]]:
-    """(file, line-no, const-name, preceding-lines) for every `.global(Permission.X)`."""
+    """(file, line-no, const-name, preceding-lines) for every `.global(<X>Permission.name)`."""
     sites = []
-    for path in _WEB.rglob("*.ts*"):
-        if "node_modules" in path.parts:
-            continue
+    for path in _sources():
         lines = path.read_text().splitlines()
         for index, line in enumerate(lines):
-            for match in re.finditer(r"\.global\(\s*Permission\.(\w+)", line):
+            for match in re.finditer(r"\.global\(\s*(\w*Permission\.\w+)", line):
                 context = lines[max(0, index - _MARKER_REACH) : index + 1]
                 sites.append((path, index + 1, match.group(1), context))
     return sites
@@ -59,7 +70,7 @@ def test_no_unannotated_global_check_of_a_scoped_atom():
     for path, line_no, const_name, context in _global_call_sites():
         atom = atoms.get(const_name)
         if atom is None:
-            violations.append(f"{path}:{line_no} uses unknown Permission.{const_name}")
+            violations.append(f"{path}:{line_no} uses unknown {const_name}")
             continue
         if permission_scope_of(atom) is PermissionScope.GLOBAL:
             continue
@@ -67,7 +78,7 @@ def test_no_unannotated_global_check_of_a_scoped_atom():
             annotated += 1
             continue
         violations.append(
-            f"{path.relative_to(_WEB)}:{line_no} asks globally about "
+            f"{path.name}:{line_no} asks globally about "
             f"'{atom}' (scope: {permission_scope_of(atom).value}) — resolve against "
             f"the real scope, or annotate with '{_MARKER}: <why>' if the server "
             "genuinely checks it globally"

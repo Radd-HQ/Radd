@@ -7,15 +7,15 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import {
   PALETTE_SEARCH_LIMIT,
   SEARCH_DEBOUNCE_MS,
-  apiPageItemPath,
-  apiPageItemsPath,
 } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { pageSearchQuery, itemPagesQuery } from "../../lib/queries";
-import { Permission, type PageLinkedItem, type Item } from "../../lib/types";
+import { itemPagesQuery, pageSearchQuery } from "@radd-plugin-ui/pages/queries";
+import { pageItemPath, pageItemsPath } from "@radd-plugin-ui/pages/endpoints";
+import { Permission, type Item } from "../../lib/types";
+import type { PageLinkedItem } from "@radd-plugin-ui/pages/types";
 import { Button } from "../Button";
 import { IconButton, ErrorText, useDebounced } from "@radd/plugin-sdk";
-import { pagePermalink } from "../../lib/page-links";
+import { pagePermalink } from "@radd-plugin-ui/pages/links";
 
 /**
  * Docs block INSIDE the Related links card (spec 43): pages pages linked to
@@ -70,7 +70,7 @@ export function ItemPagesSection({ item }: { item: Item }) {
 function UnlinkButton({ pageId, item }: { pageId: string; item: Item }) {
   const queryClient = useQueryClient();
   const remove = useMutation({
-    mutationFn: () => api.delete<void>(apiPageItemPath(pageId, item.id)),
+    mutationFn: () => api.delete<void>(pageItemPath(pageId, item.id)),
     onSettled: () => void invalidateEntities(queryClient, Entity.page),
   });
   return (
@@ -95,7 +95,7 @@ function LinkDocPicker({ item }: { item: Item }) {
 
   const link = useMutation({
     mutationFn: (pageId: string) =>
-      api.post<PageLinkedItem>(apiPageItemsPath(pageId), { item_key: item.key }),
+      api.post<PageLinkedItem>(pageItemsPath(pageId), { item_key: item.key }),
     onSuccess: () => {
       setQuery("");
       setOpen(false);

@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ComponentType, HTMLAttributes, ReactNode } from "react";
 import { CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 
 export const CalloutKind = {
@@ -33,8 +33,9 @@ const kindIcons: Record<CalloutKindValue, LucideIcon> = {
 interface CalloutProps extends HTMLAttributes<HTMLDivElement> {
   kind: CalloutKindValue;
   children: ReactNode;
-  /** Leading icon; default per kind, `null` for none. */
-  icon?: LucideIcon | null;
+  /** Leading icon; default per kind, `null` for none. Any icon component, so one a plugin passes
+   *  through the SDK fits as well as a lucide one. */
+  icon?: ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }> | null;
   /** Layout/typography overrides (padding, text size, border-dashed). */
   className?: string;
 }

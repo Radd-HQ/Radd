@@ -1,5 +1,5 @@
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { locateAnchor, type TextAnchor } from "../../lib/anchoring";
+import { locateAnchor, type TextAnchor } from "@radd/plugin-sdk";
 
 /**
  * Which inline comments an AI review would strand (RADD-1274).
@@ -11,7 +11,7 @@ import { locateAnchor, type TextAnchor } from "../../lib/anchoring";
  * click that removes the passages.
  *
  * Both documents are read the way the page rail reads the rendered body: text
- * runs joined with nothing between them (`lib/dom-text.ts::renderedText`), so
+ * runs joined with nothing between them (the SDK's `dom-text.ts::renderedText`), so
  * a quote that located there locates here.
  */
 export interface InlineAnchorRef {

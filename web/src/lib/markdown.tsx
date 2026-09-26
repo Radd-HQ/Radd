@@ -3,17 +3,18 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { jiraToMarkdown } from "./jira-markup";
-import { headingAnchorId } from "./markdown-outline";
 import { MermaidDiagram } from "../components/editor/MermaidDiagram";
 import { isMermaid } from "../components/editor/mermaid";
 import { useOpenIssueRef } from "./hooks";
 import {
   ExtensionError,
+  MarkdownSourceContext,
   UnknownExtension,
   extensionNameOf,
+  headingAnchorId,
   lookupPageExtension,
   parseExtensionParams,
-} from "./page-extensions";
+} from "@radd/plugin-sdk";
 
 /**
  * Read-mode markdown renderer. Built on **remark** — the exact parser Milkdown/Crepe
@@ -112,10 +113,6 @@ function textOf(node: ReactNode): string {
 
 /** Per-render duplicate counter, so `## Setup` twice yields setup / setup-2. */
 const HeadingIdCtx = createContext<Map<string, number>>(new Map());
-
-/** The markdown SOURCE of the current render — `radd:toc` reads headings from
- *  it, because the rendered tree does not exist yet when the block renders. */
-export const MarkdownSourceCtx = createContext<string>("");
 
 const components = {
   h1: heading(HEADING.h1, 1),
@@ -304,8 +301,10 @@ export function Markdown({ text }: { text: string }) {
   const md = useMemo(() => jiraToMarkdown(text), [text]);
   // One counter per render pass, so duplicate headings get stable -2/-3 ids.
   const headingIds = useMemo(() => new Map<string, number>(), [md]);
+  // The SOURCE is what a `radd:toc` reads headings from: the rendered tree does not exist yet
+  // when the block renders.
   return (
-    <MarkdownSourceCtx.Provider value={md}>
+    <MarkdownSourceContext.Provider value={md}>
       <HeadingIdCtx.Provider value={headingIds}>
         <div className="radd-markdown break-words text-[13px] leading-relaxed text-fg">
           <ReactMarkdown remarkPlugins={[remarkGfm, remarkRaddTokens]} components={components}>
@@ -313,6 +312,6 @@ export function Markdown({ text }: { text: string }) {
           </ReactMarkdown>
         </div>
       </HeadingIdCtx.Provider>
-    </MarkdownSourceCtx.Provider>
+    </MarkdownSourceContext.Provider>
   );
 }

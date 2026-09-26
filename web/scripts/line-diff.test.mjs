@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 const dir = mkdtempSync(join(tmpdir(), "linediff-"));
 const file = join(dir, "line-diff.ts");
-writeFileSync(file, readFileSync("web/src/lib/line-diff.ts", "utf8"));
+writeFileSync(file, readFileSync("server/src/radd/modules/pages/ui/src/line-diff.ts", "utf8"));
 const { diffLines, collapseUnchanged, diffStats } = await import(file);
 
 let failures = 0;

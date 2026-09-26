@@ -8,7 +8,6 @@ PATCH contract).
 
 from radd.kernel import EntityLinkSpec
 from radd.kernel import IntegrationSpec
-from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
@@ -40,7 +39,6 @@ plugin = RaddPlugin(
         EntityLinkSpec('page_space', ('/settings/pages',)),
         EntityLinkSpec('page', ('/pages?pageId={refs.page.number}', '/pages?pageId={refs.page.id}')),
     ),
-    ui=PluginUiManifest(remote="/plugins/pages/remoteEntry.js", ui_api_version="1.9.0"),
     automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
     searchables=(PAGE_SEARCHABLE,),  # RADD-1327
     token_providers=(PAGE_TOKENS,),
@@ -81,7 +79,6 @@ plugin = RaddPlugin(
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_PAGE_SPEC,),
-    core=False,  # optional plugin — disableable via the plugin manager
     description=(
         "The wiki: page spaces, page trees, version history and links to issues."
     ),

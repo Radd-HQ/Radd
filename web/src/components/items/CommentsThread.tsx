@@ -28,10 +28,10 @@ import { Spinner } from "../Spinner";
 import { TeamAudience } from "../teams/TeamAudience";
 import { CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE, COMMENT_AUDIENCE_COPY } from "./CommentAudienceNames";
 import { QueryError } from "../QueryError";
-import { CommentReplies, repliesLabel } from "../comments/CommentReplies";
+import { CommentReplies } from "../comments/CommentReplies";
 import { CopyCommentLink } from "../comments/CopyCommentLink";
 import { issueCommentHref, useLandOnComment, useLinkedComment } from "../../lib/comment-links";
-import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from "../comments/ThreadResolution";
+import { ResolveThreadButton, ThreadBadge, ThreadFilter, repliesLabel, threadRuleClass } from "../comments/ThreadResolution";
 
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";

@@ -4,7 +4,7 @@ import { registerDismiss } from "../../lib/dismiss-stack";
 import { useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { Link, useLocation, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useDisabledNavPaths } from "@radd/plugin-sdk";
+import { Slot, SlotId, useDisabledNavPaths } from "@radd/plugin-sdk";
 import {
   BarChart3,
   Clock,
@@ -44,7 +44,6 @@ import { ViewModal } from "../views/ViewModal";
 import { useSidebarPrefs } from "./sidebar-prefs";
 import { useViewDirectory } from "../../lib/useSharedDirectory";
 import { SidebarDirectory } from "./SidebarDirectory";
-import { SidebarSpaces } from "./SidebarSpaces";
 import { useCycleDirectory } from "../../lib/useCycleDirectory";
 import { PluginNavIcon } from "./PluginNavIcon";
 import { SidebarRail } from "./SidebarRail";
@@ -382,8 +381,9 @@ export function Sidebar() {
           </div>
         )}
 
-        <SidebarSpaces collapsed={sectionCollapsed("pages")} onToggle={() => toggleSection("pages")}
-          canManage={perms.anySpace(Permission.pageManage)} />
+        {/* The wiki's spaces: the pages plugin's section (RADD-1392); the fold stays ours. */}
+        <Slot id={SlotId.sidebarSection} match="pages" collapsed={sectionCollapsed("pages")}
+          onToggle={() => toggleSection("pages")} />
 
         {(cycleCount > 0 || canManageCycles) && (
           <div className="mt-3">

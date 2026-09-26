@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { iconOrFallback } from "../../lib/icons";
-import { pageExtensionsQuery } from "../../lib/queries";
-import type { PageExtensionSpec } from "../../lib/types";
+import { pageExtensionsQuery } from "@radd-plugin-ui/pages/queries";
+import type { PageExtensionSpec } from "@radd-plugin-ui/pages/types";
 import { configOnInsertKey, RADD_EXTENSION_NODE } from "./extension-node";
 
 /**

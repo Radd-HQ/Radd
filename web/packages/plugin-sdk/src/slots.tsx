@@ -69,6 +69,10 @@ export const SlotId = {
   // --- global / other surfaces ---
   /** Nav rows in the left sidebar. Props: {}. */
   sidebarNav: "sidebar.nav",
+  /** A folding section of the left sidebar, placed by the host and matched by `match` = the
+   *  section key (the wiki's spaces are "pages"). Props: { collapsed, onToggle } — the fold is
+   *  the host's persisted sidebar preference. */
+  sidebarSection: "sidebar.section",
   /** A full plugin page mounted at a nav path (matched by `match` = pathname). Props: { path }. */
   routePage: "route.page",
   /** A dashboard widget type. Props: { config, widget, filterQuery } — the widget's stored

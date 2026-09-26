@@ -27,13 +27,16 @@ import {
 import { ContextMenu } from "../ContextMenu";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { ApiPath, RoutePath } from "../../lib/constants";
-import { pageLink } from "../../lib/page-links";
+import { RoutePath } from "../../lib/constants";
+import { pageLink } from "@radd-plugin-ui/pages/links";
+import { PageApi } from "@radd-plugin-ui/pages/endpoints";
 import { usePermissions, useIsAuthenticated } from "../../lib/hooks";
-import { pageByPathQuery, pageSpaceByIdentityQuery, viewQuery } from "../../lib/queries";
+import { viewQuery } from "../../lib/queries";
+import { pageByPathQuery, pageSpaceByIdentityQuery } from "@radd-plugin-ui/pages/queries";
 import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
-import { Permission, type Page, type PageCreate, type View } from "../../lib/types";
+import { Permission, type View } from "../../lib/types";
+import type { Page, PageCreate } from "@radd-plugin-ui/pages/types";
 import { NewItemModal } from "../items/NewItemModal";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { Button } from "../Button";
@@ -262,7 +265,7 @@ function NewPageButton({ spaceSlug, pagePath }: { spaceSlug: string; pagePath: s
   const page = useQuery({ ...pageByPathQuery(spaceSlug, pagePath), enabled: Boolean(pagePath) });
   const create = useMutation({
     mutationFn: () =>
-      api.post<Page>(ApiPath.pages, {
+      api.post<Page>(PageApi.pages, {
         space_id: space.data!.id,
         parent_id: page.data?.id ?? null,
         title: "Untitled",

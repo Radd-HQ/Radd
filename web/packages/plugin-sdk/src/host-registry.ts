@@ -1,4 +1,7 @@
 import { useSyncExternalStore, type ComponentType, type ReactNode, type ChangeEventHandler, type ButtonHTMLAttributes, type InputHTMLAttributes, type HTMLAttributes } from "react";
+import type { DocumentHost } from "./host-document";
+import type { CommentHost } from "./host-comments";
+import type { KitHost } from "./host-kit";
 
 export interface CodeEditorProps {
   value: string;
@@ -40,7 +43,11 @@ export interface SelectFieldProps {
 export type ButtonVariantValue = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { variant?: ButtonVariantValue; size?: "sm" | "md" }
 export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> { label?: string; hint?: string; error?: string }
-export interface CalloutProps extends HTMLAttributes<HTMLDivElement> { kind: "info" | "success" | "warning" | "danger"; children: ReactNode }
+export interface CalloutProps extends HTMLAttributes<HTMLDivElement> {
+  kind: "info" | "success" | "warning" | "danger"; children: ReactNode;
+  /** Replaces the kind's icon; null shows none. */
+  icon?: ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }> | null;
+}
 export interface ModalProps { title?: string; onClose: () => void; children: ReactNode; wide?: boolean; extraWide?: boolean }
 export interface DirectoryPagerProps { page: number; pageSize: number; total: number; busy: boolean; onPage: (page: number) => void; label: string }
 export interface ListSearchInputProps { value: string; onChange: (next: string) => void; placeholder: string; ariaLabel?: string; total?: number; matched: number; noun: string; className?: string }
@@ -125,7 +132,9 @@ export interface MissingPluginTypeProps { typeKey: string; kind: "view" | "widge
 export const ToastKind = { success: "success", error: "error" } as const;
 export type ToastKindValue = (typeof ToastKind)[keyof typeof ToastKind];
 
-export interface HostComponents {
+/** Everything the host provides. The document, comment and kit families are declared beside their
+ *  wrappers (RADD-1392). */
+export interface HostComponents extends DocumentHost, CommentHost, KitHost {
   Avatar?: ComponentType<AvatarProps>;
   DirectoryPager?: ComponentType<DirectoryPagerProps>;
   ListSearchInput?: ComponentType<ListSearchInputProps>;
