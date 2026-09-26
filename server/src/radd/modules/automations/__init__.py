@@ -126,7 +126,7 @@ plugin = RaddPlugin(
     # RADD-1387: no longer leave, mailintake or participants — away-skipping
     # reads the PERSON_AVAILABILITY socket, and send_email / add_participant
     # are nodes those plugins contribute themselves.
-    weak_depends=("notify", "pages", "forms"),
+    weak_depends=("notify", "forms"),
     routers=(router, intake_router),
     exception_handlers=(
         (ValidationBlocked, _validation_blocked_handler),

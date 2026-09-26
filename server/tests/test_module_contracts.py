@@ -159,3 +159,31 @@ def test_weak_depends_name_real_modules():
             if name not in known:
                 bad.append(f"{module}.weak_depends names unknown module {name!r}")
     assert not bad, "\n".join(bad)
+
+
+def test_core_modules_never_reach_optional_plugins():
+    """RADD-1349: a core module may not depend on, weakly depend on, or import an
+    OPTIONAL plugin. The audit found 25 such reaches guarded by `except
+    ImportError` (plugin code is always importable, so it never fired) or by
+    `settings.modules` (boot config — blind to a runtime disable), which kept core
+    code calling plugins an admin had switched off. RADD-1383–1387 inverted every
+    one: the core dispatches a hook or reads a kernel socket, and the plugin
+    registers. Optional→optional weak edges (slas → csat) stay legal."""
+    import importlib
+
+    plugins = {}
+    for module in _all_modules():
+        plugin = getattr(importlib.import_module(f"radd.modules.{module}"), "plugin", None)
+        if plugin is not None:
+            plugins[module] = plugin
+    optional = {name for name, plugin in plugins.items() if not plugin.core}
+    assert {"pages", "ai", "approvals", "mailintake"} <= optional, "the check needs real optional plugins"
+
+    reaches = []
+    for module, plugin in plugins.items():
+        if not plugin.core:
+            continue
+        declared = set(plugin.depends_on) | set(getattr(plugin, "weak_depends", ()))
+        reaches += [f"{module} declares {name}" for name in sorted(declared & optional)]
+        reaches += [f"{where} imports {target}" for target, _, where in _module_edges(module) if target in optional]
+    assert not reaches, "core modules reaching optional plugins:\n  " + "\n  ".join(reaches)
