@@ -63,7 +63,6 @@ TARGET_ATTACHMENTS = 94_585
 TARGET_TEAMS = 2_293  # total incl. existing
 TARGET_COMPONENTS = 2_016  # -> labels
 TARGET_FIELDS = 319  # total incl. existing
-TARGET_TYPE_NAMES = 61
 TARGET_STATUS_NAMES = 107
 TARGET_SCREENS = 375
 
@@ -417,7 +416,7 @@ def main() -> None:
         by_cat.setdefault(cat, []).append(name)
 
     state_rows, proj_states = [], {}  # pid -> {"default","mid","by_cat"}
-    for pid, key, _, _, pstart in projects:
+    for pid, _, _, _, pstart in projects:
         picks: list[tuple[str, str]] = []
         picks.append((rng.choice(by_cat["triage"] + by_cat["backlog"]
                                  + by_cat["todo"]), None))  # default, cat fixed below
@@ -432,7 +431,7 @@ def main() -> None:
         info = {"by_cat": {}, "default": None, "mid": None}
         for pos, (name, cat) in enumerate(picks, start=1):
             sid = uuid.uuid4()
-            state_rows.append((sid, pid, name, cat, pos, pos == 1,
+            state_rows.append((sid, pid, name, cat, cat, pos, pos == 1,
                               datetime.fromtimestamp(pstart), NOW))
             info["by_cat"].setdefault(cat, []).append(sid)
             if pos == 1:
@@ -440,8 +439,9 @@ def main() -> None:
         info["mid"] = info["by_cat"]["in_progress"][0]
         proj_states[pid] = info
     cur.executemany(
-        "INSERT INTO states (id, project_id, name, category, position, "
-        "is_default, created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+        "INSERT INTO states (id, project_id, name, category, category_key, "
+        "position, is_default, created_at, updated_at) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
         state_rows)
     log(f"projects + {len(state_rows)} states")
 
@@ -563,17 +563,17 @@ def main() -> None:
         existing_teams.add(name)
         tid = uuid.uuid4()
         owner = rng.choice(active_ids) if rng.random() < 0.3 else None
-        team_rows.append((tid, name[:200], "local", owner, NOW, NOW))
+        team_rows.append((tid, name[:200], owner, NOW, NOW))
         n_members = min(int(nprng.negative_binomial(1.2, 0.25)), 40)
         for u in rng.sample(active_ids, min(n_members, len(active_ids))):
-            member_rows.append((tid, u, "manual"))
+            member_rows.append((tid, u))
         if owner and rng.random() < 0.5:
             manager_rows.append((tid, owner))
     cur.executemany(
-        "INSERT INTO teams (id, name, source, owner_id, created_at, updated_at) "
-        "VALUES (%s,%s,%s,%s,%s,%s)", team_rows)
+        "INSERT INTO teams (id, name, owner_id, created_at, updated_at) "
+        "VALUES (%s,%s,%s,%s,%s)", team_rows)
     cur.executemany(
-        "INSERT INTO team_members (team_id, user_id, source) VALUES (%s,%s,%s)",
+        "INSERT INTO team_members (team_id, user_id) VALUES (%s,%s)",
         member_rows)
     cur.executemany(
         "INSERT INTO team_managers (team_id, user_id) VALUES (%s,%s)",
@@ -581,14 +581,14 @@ def main() -> None:
     team_ids = [t[0] for t in team_rows]
     log(f"{len(team_rows)} teams ({len(member_rows)} memberships)")
 
-    # Project members (RBAC realism).
+    # Project members (RBAC realism): a Member grant scoped to the project.
     pm_rows = []
     for pid, *_ in projects:
         for u in rng.sample(active_ids, min(rng.randint(5, 40), len(active_ids))):
-            pm_rows.append((pid, u, member_role_id))
+            pm_rows.append((uuid.uuid4(), member_role_id, u, pid))
     cur.executemany(
-        "INSERT INTO project_members (project_id, user_id, role_id) "
-        "VALUES (%s,%s,%s)", pm_rows)
+        "INSERT INTO global_role_grants (id, role_id, user_id, project_id) "
+        "VALUES (%s,%s,%s,%s)", pm_rows)
 
     # Screens: 375 total = 4 per project + 1 extra for the first 47.
     screen_rows, sfield_rows = [], []
@@ -642,7 +642,7 @@ def main() -> None:
         "start_date, target_date, archived_at, custom_fields, created_at, "
         "updated_at) FROM STDIN"
     ) as copy:
-        for pid, pkey, _, size, pstart in projects:
+        for pid, _, _, size, pstart in projects:
             info = proj_states[pid]
             tids = proj_types[pid]
             type_w = [4.0 if i < 2 else 1.0 for i in range(len(tids))]
@@ -753,10 +753,10 @@ def main() -> None:
     csizes = lognormal_sizes(nprng, TARGET_COMMENTS, 176, 341, 18_000)
     written = 0
     with cur.copy(
-        "COPY comments (id, item_id, author_id, body, visibility, created_at, "
-        "updated_at) FROM STDIN"
+        "COPY comments (id, entity_type, entity_id, author_id, body, visibility, "
+        "created_at, updated_at) FROM STDIN"
     ) as copy:
-        for pid, metas in item_meta:
+        for _, metas in item_meta:
             for iid, cts, uts, idx in metas:
                 n = int(ccounts[idx])
                 if n == 0:
@@ -766,7 +766,7 @@ def main() -> None:
                 for k in range(n):
                     dt = datetime.fromtimestamp(float(ts[k]))
                     copy.write_row((
-                        uuid.uuid4(), iid, user_ids[int(authors[k])],
+                        uuid.uuid4(), "item", iid, user_ids[int(authors[k])],
                         tg.doc(int(csizes[written])),
                         "internal" if rng.random() < 0.02 else "public",
                         dt, dt))
@@ -778,7 +778,6 @@ def main() -> None:
     # ------------------------------------------------------- attachments ----
     t_a = time.time()
     exts, mimes, ws = zip(*CONTENT_TYPES)
-    wsum = sum(ws)
     asizes = lognormal_sizes(nprng, TARGET_ATTACHMENTS, 226_000, 374_000,
                              500_000_000)
     written_a = 0
@@ -787,7 +786,7 @@ def main() -> None:
         "size_bytes, storage_name, storage_host_id, state, created_by, "
         "created_at) FROM STDIN"
     ) as copy:
-        for pid, metas in item_meta:
+        for _, metas in item_meta:
             for iid, cts, uts, idx in metas:
                 for _ in range(int(acounts[idx])):
                     k = rng.choices(range(len(exts)), weights=ws)[0]
@@ -888,7 +887,8 @@ def main() -> None:
         LEFT JOIN LATERAL (
             SELECT string_agg(c.body, E'\n' ORDER BY c.created_at) AS txt
             FROM comments c
-            WHERE c.item_id = wi.id AND c.visibility = 'public') cagg ON true
+            WHERE c.entity_type = 'item' AND c.entity_id = wi.id
+              AND c.visibility = 'public') cagg ON true
         WHERE wi.project_id = ANY(%s)""", (pids,))
     log(f"  search_index rows: {cur.rowcount:,} ({time.time() - t_s:.0f}s)")
     for i, pid in enumerate(pids, 1):
@@ -920,7 +920,7 @@ def main() -> None:
     for t in ["work_items", "comments", "events", "search_index", "attachments",
               "item_labels", "projects", "states", "issue_types", "labels",
               "teams", "team_members", "field_definitions", "screens",
-              "screen_fields", "views", "project_members"]:
+              "screen_fields", "views", "global_role_grants"]:
         cur.execute(f"VACUUM ANALYZE {t}")
     log(f"done in {(time.time() - t0) / 60:.1f} min")
 
