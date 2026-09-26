@@ -877,6 +877,13 @@ Automation backend services and action dependency ownership are still under the
 full audit; this change does not certify them or the remaining host VCS/Email UI.
 See `docs/plugin-platform.md` and the RADD-1365 inventory evidence.
 
+RADD-1371 fixes two things that move broke. Trigger owners come from
+`registries.event_owners()`, which counts events an `EntitySpec` DERIVES as well
+as declared `event_types` — the catalog had KeyError'd (500) on
+`milestone.created` whenever Milestones was on. "Page is in space" matches a
+saved space ID or slug: the picker stores IDs since RADD-1365, the ref carries
+both, older graphs hold slugs.
+
 RADD-1366 moves version-control settings into VCS and connector remotes.
 `vcs/ui` owns the provider-neutral page (hosts, repository rows, identity map);
 GitHub, Forgejo and GitLab each contribute one tab carrying only their WORDING

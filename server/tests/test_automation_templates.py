@@ -102,3 +102,16 @@ async def test_withdrawn_owner_disappears_from_catalog_and_templates(db, admin):
         assert not any(template.plugin == "github" for template in await router.list_templates(db, admin))
     finally:
         registries.register_plugin(plugin)
+
+
+async def test_catalog_owns_entity_derived_triggers(db, admin):
+    """RADD-1371: an EntitySpec plugin's derived events (milestone.created …)
+    are triggers with an owner — the catalog 500'd on them with Milestones on."""
+    load_plugins((*settings.modules, "radd.modules.milestones"))
+    try:
+        assert "radd.milestones" in registries.plugins
+        result = await router.get_catalog(db, admin)
+        owned = {trigger.event_type: trigger.plugin for trigger in result.triggers}
+        assert owned.get("milestone.created") == "milestones"
+    finally:
+        load_plugins(settings.modules)

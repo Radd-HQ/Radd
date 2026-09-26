@@ -385,6 +385,22 @@ class KernelRegistries:
         """Event types that are automation triggers — chokepoint-1 inversion."""
         return {k: v for k, v in self.event_types.items() if v.trigger}
 
+    def event_owners(self) -> dict[str, str]:
+        """Which plugin contributed each registered event type — declared in its
+        `event_types` OR derived from one of its EntitySpecs (RADD-1371: the
+        automation catalog read only the former, so any EntitySpec plugin's
+        `<entity>.created` trigger had no owner and the catalog 500'd)."""
+        from .entities import _event_types
+
+        owners: dict[str, str] = {}
+        for plugin in self.plugins.values():
+            for entity in plugin.entities:
+                for event in _event_types(entity):
+                    owners.setdefault(str(event.event_type), plugin.name)
+            for event in plugin.event_types:
+                owners[str(event.event_type)] = plugin.name
+        return owners
+
     def integration(self, socket: str, name: str) -> IntegrationSpec | None:
         return self.integrations.get((socket, name))
 

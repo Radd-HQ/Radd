@@ -183,7 +183,11 @@ def page_space_is(payload: dict[str, Any], params: dict[str, Any]) -> bool:
 
     A page event carries a top-level `page_space` ref; a page comment carries
     the space inside its `page` ref. Either is the answer; an event about no
-    page answers False. Slugs, because that is what people read in the bar.
+    page answers False.
+
+    A saved value is a space ID (what the space picker stores since RADD-1365,
+    and what survives a rename) or a slug (graphs saved before it, and what
+    people type); the ref carries both, so either matches (RADD-1371).
     """
     wanted = {str(v).strip().lower() for v in (params.get("spaces") or []) if str(v).strip()}
     if not wanted:
@@ -192,8 +196,8 @@ def page_space_is(payload: dict[str, Any], params: dict[str, Any]) -> bool:
     if not isinstance(space, dict):
         page = payload.get("page")
         space = page.get("space") if isinstance(page, dict) else None
-    slug = space.get("slug") if isinstance(space, dict) else None
-    hit = bool(slug) and str(slug).lower() in wanted
+    keys = {str(space.get(k)).lower() for k in ("id", "slug") if space.get(k)} if isinstance(space, dict) else set()
+    hit = bool(keys & wanted)
     return not hit if params.get("negate") else hit
 
 

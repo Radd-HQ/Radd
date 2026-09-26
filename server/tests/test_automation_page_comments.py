@@ -129,6 +129,12 @@ def test_gate_page_space_reads_either_ref_shape():
     assert page_space_is(page_comment, {"spaces": ["other"], "negate": True})
     assert not page_space_is(item_comment, {"spaces": ["runbooks"]})
     assert not page_space_is(page_comment, {"spaces": []})
+    # RADD-1371: the space picker stores IDs; a ref carrying both matches either.
+    space_id = str(uuid.uuid4())
+    with_id = _facts(page={"id": "p"}, page_space={"id": space_id, "slug": "runbooks"}).payload
+    assert page_space_is(with_id, {"spaces": [space_id]})
+    assert page_space_is(with_id, {"spaces": ["runbooks"]})
+    assert not page_space_is(with_id, {"spaces": [str(uuid.uuid4())]})
 
 
 def test_page_and_comment_tokens_render_from_the_refs():
