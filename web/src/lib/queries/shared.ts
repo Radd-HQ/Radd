@@ -151,13 +151,8 @@ export const queryKeys = {
   aiStatus: ["aiStatus"] as const,
   // Editor AI (spec 103) — the curated action menu behind the editor's AI entry.
   aiEditorActions: ["aiEditorActions"] as const,
-  // AI provider registry (spec 101) — Settings → AI.
   ssoProviders: ["ssoProviders"] as const,
   ssoKinds: ["ssoKinds"] as const,
-  aiProviders: ["aiProviders"] as const,
-  aiRoles: ["aiRoles"] as const,
-  aiPresets: ["aiPresets"] as const,
-  aiEmbeddingCoverage: ["aiEmbeddingCoverage"] as const,
   // Mail configuration (RADD-958/969) — Settings → Email.
   mailSources: ["mailSources"] as const,
   mailSenders: ["mailSenders"] as const,

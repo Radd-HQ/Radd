@@ -198,13 +198,6 @@ export const apiItemSimilarPath = (itemId: string) => `${ApiPath.items}/${itemId
 export const apiItemAiSimilarReasonsPath = (itemId: string) =>
   `${ApiPath.items}/${itemId}/ai/similar/reasons`;
 
-/** AI provider registry paths (spec 101) — instance admin only. */
-export const apiAiProviderPath = (providerId: string) => `${ApiPath.aiProviders}/${providerId}`;
-export const apiAiProviderTestPath = (providerId: string) =>
-  `${apiAiProviderPath(providerId)}/test`;
-export const apiAiRolePath = (role: string) => `${ApiPath.aiRoles}/${role}`;
-export const apiAiPresetPath = (presetId: string) => `${ApiPath.aiPresets}/${presetId}`;
-
 /** SSO provider paths (spec 110) — instance admin only. */
 export const apiSsoProviderPath = (providerId: string) => `${ApiPath.ssoProviders}/${providerId}`;
 export const apiSsoProviderTestPath = (providerId: string) =>

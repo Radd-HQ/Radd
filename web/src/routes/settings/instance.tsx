@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, ChevronRight, MinusCircle } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
-import { instanceStatusQuery } from "../../lib/queries";
+import { capabilitiesQuery, instanceStatusQuery } from "../../lib/queries";
 import { type InstanceStatus } from "../../lib/types";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { Spinner } from "../../components/Spinner";
 import { QueryError } from "../../components/QueryError";
+import { settingsPathForPlugin } from "./layout";
 
 /** A read-only enabled/disabled (or value) badge for one deploy subsystem
  * (shared with the Directory page's status card, spec 85). `detail` adds a
@@ -60,6 +61,9 @@ export function StatusPill({
 }
 
 function StatusGrid({ status }: { status: InstanceStatus }) {
+  // The AI page is the ai plugin's (RADD-1379): its link comes from the plugin's
+  // manifest, so a disabled plugin leaves a plain status row, not a dead link.
+  const { data: manifest } = useQuery(capabilitiesQuery);
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       <StatusPill label="OIDC SSO" on={status.sso_enabled} />
@@ -85,7 +89,7 @@ function StatusGrid({ status }: { status: InstanceStatus }) {
       <StatusPill
         label="AI provider"
         value={status.ai_provider || "Off"}
-        to={RoutePath.settingsAi}
+        to={settingsPathForPlugin("ai", manifest)?.to}
       />
       {/* Clicking opens Settings → Storage (spec 102) — hosts + delivery live there. */}
       <StatusPill

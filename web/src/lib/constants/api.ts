@@ -166,17 +166,11 @@ export const ApiPath = {
   pagesReindex: "/pages/reindex",
   webhooks: "/webhooks",
   aiStatus: "/ai/status",
-  aiLocalEmbed: "/ai/local-embed",
   // Similar issues for a TEXT seed (read-mode AI menu on comments).
   aiSimilar: "/ai/similar",
   // Editor AI (spec 103) — the curated action menu + the SSE writing stream.
   aiEditorActions: "/ai/editor/actions",
   aiEditorStream: "/ai/editor/stream",
-  // AI provider registry (spec 101) — instance admin: providers, roles, presets.
-  aiProviders: "/ai/providers",
-  aiRoles: "/ai/roles",
-  aiPresets: "/ai/presets",
-  aiEmbeddingCoverage: "/ai/embeddings/coverage",
   // SSO provider registry (spec 110) — instance admin: Settings → Sign-in.
   ssoProviders: "/sso/providers",
   ssoKinds: "/sso/kinds",

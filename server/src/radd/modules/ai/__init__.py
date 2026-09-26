@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec
-from radd.kernel import PluginUiManifest, RaddPlugin
+from radd.kernel import NavItemSpec, PluginUiManifest, RaddPlugin
 from radd.kernel import SettingSpec
 
 from . import registry
@@ -88,8 +88,15 @@ from . import automation_node_generate as ai_automation_node_generate  # noqa: E
 
 plugin = RaddPlugin(
     # RADD-1325: this plugin's automation-node inspectors ship in its own UI
-    # remote (./ui), registered through `automation.node.inspector`.
-    ui=PluginUiManifest(remote="/plugins/ai/remoteEntry.js", ui_api_version="1.3.0"),
+    # remote (./ui), registered through `automation.node.inspector`. RADD-1379:
+    # Settings → AI is that remote's page too (it edits the `ai` settings section
+    # through the SDK's ScopedSettings, hence 1.14.0); disabling the plugin
+    # withdraws the page and its nav entry with it.
+    ui=PluginUiManifest(
+        remote="/plugins/ai/remoteEntry.js", ui_api_version="1.14.0",
+        nav=(NavItemSpec(key="ai", label="AI", path="/settings/ai", section="settings",
+                         group="Server", icon="Sparkles", order=25, requires_admin=True),),
+    ),
     name="ai",
     entity_links=(
         EntityLinkSpec('ai_provider', ('/settings/ai',)),

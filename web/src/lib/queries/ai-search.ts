@@ -22,10 +22,13 @@ import type {
 /**
  * GET /ai/status (spec 46) — gates every AI affordance. A 404 (module not
  * mounted) rejects; consumers treat error/undefined as disabled and render
- * nothing. Transient config, no entity tags.
+ * nothing. Tagged with the provider/role entities because the ai plugin's
+ * settings page (RADD-1379) invalidates by tag: a provider or role change there
+ * refreshes this gate without either side knowing the other's query keys.
  */
 export const aiStatusQuery = queryOptions({
   queryKey: queryKeys.aiStatus,
+  meta: entityMeta(Entity.aiProvider, Entity.aiRole),
   queryFn: ({ signal }) => api.get<AiStatus>(ApiPath.aiStatus, { signal }),
   staleTime: 60_000,
   retry: false,
@@ -38,6 +41,8 @@ export const aiStatusQuery = queryOptions({
  */
 export const aiEditorActionsQuery = queryOptions({
   queryKey: queryKeys.aiEditorActions,
+  // The enabled presets are part of the menu; editing one on Settings → AI refreshes it.
+  meta: entityMeta(Entity.aiPreset),
   queryFn: ({ signal }) => api.get<AiEditorAction[]>(ApiPath.aiEditorActions, { signal }),
   staleTime: 60_000,
   retry: false,

@@ -60,7 +60,6 @@ const BackupsSettingsPage = lazyRouteComponent(() => import("./routes/settings/b
 const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/plugins"), "PluginsSettingsPage");
 const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
 const ServiceAccountsSettingsPage = lazyRouteComponent(() => import("./routes/settings/service-accounts"), "ServiceAccountsSettingsPage");
-const AiSettingsPage = lazyRouteComponent(() => import("./routes/settings/ai"), "AiSettingsPage");
 const StorageSettingsPage = lazyRouteComponent(() => import("./routes/settings/storage"), "StorageSettingsPage");
 const EmailSettingsPage = lazyRouteComponent(() => import("./routes/settings/email"), "EmailSettingsPage");
 const SignInSettingsPage = lazyRouteComponent(() => import("./routes/settings/sign-in"), "SignInSettingsPage");
@@ -586,13 +585,6 @@ const settingsDocsRoute = createRoute({
   component: PagesSettingsPage,
 });
 
-/** AI providers/roles/toggles/presets (spec 101) — instance-admin only. */
-const settingsAiRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.ai,
-  component: AiSettingsPage,
-});
-
 /** Attachment storage hosts (spec 102) — instance-admin only. */
 const settingsStorageRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -771,7 +763,6 @@ const routeTree = rootRoute.addChildren([
       settingsCannedRoute,
       settingsServiceAccountsRoute,
       settingsDocsRoute,
-      settingsAiRoute,
       settingsStorageRoute,
   settingsEmailRoute,
       settingsSignInRoute,

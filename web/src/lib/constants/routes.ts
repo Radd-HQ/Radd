@@ -44,8 +44,6 @@ export const SettingsSection = {
   plugins: "plugins",
   // Backups (spec 99) — schedules, artifacts, restore. Instance admin only.
   backups: "backups",
-  // AI provider registry + roles + feature toggles + presets (spec 101) — admin only.
-  ai: "ai",
   // Attachment storage hosts + delivery (spec 102) — admin only.
   storage: "storage",
   // Mail sources/senders + the routing chain (RADD-958) — admin only.
@@ -169,8 +167,6 @@ export const RoutePath = {
   settingsTimelogging: `${SETTINGS_SEGMENT}/${SettingsSection.timelogging}`,
   /** Audit log (admin): every attributable change across the server. */
   settingsBackups: `${SETTINGS_SEGMENT}/${SettingsSection.backups}`,
-  /** AI providers, model roles, feature toggles, preset prompts (spec 101, admin). */
-  settingsAi: `${SETTINGS_SEGMENT}/${SettingsSection.ai}`,
   /** Attachment storage hosts + delivery modes (spec 102, admin). */
   settingsStorage: `${SETTINGS_SEGMENT}/${SettingsSection.storage}`,
   /** Mail sources, senders and routing rules (RADD-958, admin). */

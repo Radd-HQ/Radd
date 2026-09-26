@@ -203,14 +203,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         show: (g) => g.anySpace(Permission.pageManage),
       },
       {
-        // AI provider registry + roles + feature toggles + presets (spec 101).
-        to: RoutePath.settingsAi,
-        label: "AI",
-        icon: Sparkles,
-        plugin: "ai",
-        show: (g) => g.instanceAdmin,
-      },
-      {
         // Attachment storage hosts + delivery modes (spec 102).
         to: RoutePath.settingsStorage,
         label: "Storage",
@@ -343,7 +335,7 @@ export function SettingsLayout() {
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing };
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch, BellRing, Sparkles };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);

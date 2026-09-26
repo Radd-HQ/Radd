@@ -71,6 +71,20 @@ test('Monitoring UI consumes contributions instead of importing AI or mail featu
   assert.deepEqual(violations,[]);
 });
 
+test('Settings → AI is the ai plugin\'s page: the host has no route, registry endpoint or query for it (RADD-1379)',()=>{
+  for (const file of ['web/src/routes/settings/ai.tsx','web/src/lib/queries/ai-admin.ts',
+    ...['Features','Presets','Providers','Roles'].map(name=>`web/src/components/settings/Ai${name}Section.tsx`)]) assert(!existsSync(file),file);
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    if (node.type==='StringLiteral' && /^\/(?:settings\/ai|ai\/(?:providers|roles|presets|local-embed|embeddings))(?:\/|$)/.test(node.value)) {
+      violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
+    }
+  }
+  assert.deepEqual(violations,[]);
+  const page=files('server/src/radd/modules/ai/ui/src').flatMap(nodes);
+  assert(page.some(n=>n.type==='StringLiteral'&&n.value==='/settings/ai'),'the remote contributes the page');
+});
+
 
 test('host directory adapter owns no queries or feature implementation',()=>{
   // RADD-1375: the compatibility adapter is gone; callers use the SDK DirectorySelect directly.

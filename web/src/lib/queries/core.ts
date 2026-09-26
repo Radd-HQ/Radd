@@ -1,4 +1,4 @@
-/** Auth state, instance status/config, capabilities, plugins, and scoped settings. */
+/** Auth state + the caller's preferences, instance status/config, capabilities, plugins, and scoped settings. */
 
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
@@ -85,3 +85,11 @@ export const totpStatusQuery = queryOptions({
   queryFn: ({ signal }) => api.get<TotpStatus>(ApiPath.totp, { signal }),
   retry: false,
 });
+
+/** The signed-in user's server-side preferences dict (spec 94; PUT shallow-merges). */
+export const mePreferencesQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.mePreferences,
+    queryFn: ({ signal }) => api.get<Record<string, unknown>>(ApiPath.mePreferences, { signal }),
+    staleTime: 60_000,
+  });

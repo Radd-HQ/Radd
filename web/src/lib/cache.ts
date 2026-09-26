@@ -55,6 +55,11 @@ export const Entity = {
   docSpace: "docSpace",
   page: "page",
   dashboard: "dashboard",
+  // The ai plugin's settings page invalidates these (RADD-1379); the host's AI
+  // gate and editor-action menu declare them.
+  aiProvider: "aiProvider",
+  aiRole: "aiRole",
+  aiPreset: "aiPreset",
 } as const;
 
 export type EntityTag = (typeof Entity)[keyof typeof Entity];
