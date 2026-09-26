@@ -17,14 +17,11 @@
  * the collapsed MORE FIELDS section, and the control is a button rather than a
  * labelled combobox, so it is reached from its label's ancestors.
  */
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const { session, close } = await openBrowser({ port: 9387, profile: "/tmp/radd-people-picker", width: 1500, height: 1250, scale: 1 });
-await session.navigate(baseUrl, 1500);
-await session.login(baseUrl, email, password);
+import { report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
+const { session, close, baseUrl } = await startProof({
+  port: 9387, profile: "/tmp/radd-people-picker", width: 1500, height: 1250, scale: 1, base: "http://localhost:8000",
+});
 const key = await session.eval(
   `(async()=>{const r=await fetch("/api/v1/items?limit=1",{credentials:"include"});
      const j=await r.json(); return (j.items||j)[0].key;})()`);

@@ -23,19 +23,17 @@
  * Usage: node scripts/mail-settings-proof.mjs <baseUrl> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, email, password] = process.argv.slice(2);
-const PORT = 9455;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-mail-settings-proof");
+const SHOT = outputPath("mail-settings.png");
+const PRESET_SHOT = outputPath("mail-settings-preset.png");
 
 async function main() {
-  const { session } = await openBrowser({ port: PORT, profile: PROFILE });
-  const checks = {};
-
-  await session.navigate(baseUrl + "/", 1200);
-  await session.login(baseUrl, email, password);
-  checks["headless chrome reports a real pointer"] = await session.hoverCapable();
+  const { session, baseUrl, hoverCapable } = await startProof({
+    port: 9455, profile: resolve(process.env.TMPDIR || "/tmp", "radd-mail-settings-proof"),
+  });
+  const checks = { "headless chrome reports a real pointer": hoverCapable };
 
   // --- the overview row links here (the ask) ---
   await session.navigate(`${baseUrl}/settings/instance`, 2500);
@@ -109,12 +107,13 @@ async function main() {
   let form = { open: false };
   let custom = { hasHost: false };
   let hook = { hasSenderBinding: false };
-  let presetShot = null;
+  let presetShot = false;
   if (page.addSource) {
     await session.click("button", (t) => /^new source$/i.test(t.trim()));
     await sleep(900);
     form = await readForm();
-    presetShot = await session.send("Page.captureScreenshot", { format: "png" });
+    await session.screenshot(PRESET_SHOT);
+    presetShot = true;
 
     // Switch the kind to the hand-configured IMAP one: the connection fields
     // must COME BACK. Asserting only that Gmail hides them would pass just as
@@ -152,7 +151,7 @@ async function main() {
   checks["…reading as the default sender until one is chosen"] =
     form.senderReadsAsDefault === true && hook.senderReadsAsDefault === true;
 
-  const shot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(SHOT);
   checks["no console errors"] = session.consoleErrors.length === 0;
 
   const failed = report(checks, {
@@ -163,13 +162,8 @@ async function main() {
     hook,
     consoleErrors: session.consoleErrors.slice(0, 5),
   });
-  const { writeFileSync } = await import("node:fs");
-  writeFileSync("/tmp/mail-settings.png", Buffer.from(shot.data, "base64"));
-  if (presetShot) {
-    writeFileSync("/tmp/mail-settings-preset.png", Buffer.from(presetShot.data, "base64"));
-    console.log("shot: /tmp/mail-settings-preset.png (the Gmail form)");
-  }
-  console.log("shot: /tmp/mail-settings.png");
+  if (presetShot) console.log(`shot: ${PRESET_SHOT} (the Gmail form)`);
+  console.log(`shot: ${SHOT}`);
   process.exit(failed ? 1 : 0);
 }
 

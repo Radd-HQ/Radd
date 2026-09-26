@@ -1,37 +1,19 @@
 /**
- * Spec 116 / RADD-916: a branching automation can be BUILT on the canvas,
- * without switching back to the form.
- *
- * This is the interaction the whole phase exists for, so it is driven through
- * the real UI rather than the API: open a linear automation, switch to Graph,
- * add a Filter and an Action from the palette, and check the palette actually
- * put them in the graph.
- *
- * The API-level branching proof lives in automations-graph-proof.mjs; this one
- * is about the affordances existing and working where a person clicks.
+ * Spec 116 / RADD-916: nodes added from the node panel land inside the canvas, arrive unwired
+ * (and say so), and open in the inspector.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { clickPanelRow, openEditor, searchNodes } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9337, profile: "/tmp/radd-canvas-edit" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9337, profile: "/tmp/radd-canvas-edit", base: "http://localhost:8000",
+});
 
 // A plain LINEAR automation — the canvas has to be able to grow it into a
 // branching one, which is the point.
 const created = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "canvas edit proof",
     enabled: false,
     nodes: [
@@ -41,20 +23,10 @@ const created = await session.eval(
     edges: [{ source: "trigger", port: "out", target: "a0" }],
   }),
 );
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const rule = parsed(created);
 
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("canvas edit proof"));` +
-    `if(el) el.click(); return !!el;})()`,
-);
+await openEditor(session, baseUrl, "canvas edit proof");
 await sleep(1500);
-
-// Switch to the Graph tab.
-// The graph IS the editor now — there is no Form/Graph switch to press.
-const switched = true;
-await sleep(2500);
 
 const before = await session.eval(`document.querySelectorAll("[data-node-id]").length`);
 // The node PANEL, not the old "Add node" toolbar text.
@@ -65,23 +37,13 @@ const paletteVisible = await session.eval(
 // Add a Filter, then an Action, from the node PANEL. (The old top palette bar
 // this used to click was replaced by the side panel; clicking by bare label
 // silently found nothing and the proof reported "added" as false.)
-const addFromPanel = (term, re) =>
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    if(!i) return false;
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,${JSON.stringify(term)}); i.dispatchEvent(new Event("input",{bubbles:true}));
-    return true;})()`;
-const clickPanelRow = (re) =>
-  `(()=>{const b=[...document.querySelectorAll("[data-node-panel] li button")]
-     .find(n=>${re}.test(n.textContent)); if(b) b.click(); return !!b;})()`;
-
-await session.eval(addFromPanel("filter items"));
+await session.eval(searchNodes("filter issues"));
 await sleep(700);
-const addedFilter = await session.eval(clickPanelRow("/filter items/i"));
+const addedFilter = await session.eval(clickPanelRow(/filter issues/i));
 await sleep(900);
-await session.eval(addFromPanel("add label"));
+await session.eval(searchNodes("add label"));
 await sleep(700);
-const addedAction = await session.eval(clickPanelRow("/add label/i"));
+const addedAction = await session.eval(clickPanelRow(/add label/i));
 await sleep(1200);
 
 const after = await session.eval(`document.querySelectorAll("[data-node-id]").length`);
@@ -108,14 +70,9 @@ const inspectorOpen = await session.eval(
   `/Select a node to edit it/i.test(document.body.innerText) === false`,
 );
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-canvas-edit.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-canvas-edit.png"));
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checks = {
@@ -130,7 +87,7 @@ const checks = {
   kinds,
   warnsAboutUnwiredNodes: warnsUnwired,
   inspectorOpen,
-  screenshot: "/tmp/radd-canvas-edit.png",
+  screenshot: outputPath("radd-canvas-edit.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

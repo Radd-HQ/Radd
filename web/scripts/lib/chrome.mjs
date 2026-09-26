@@ -1,10 +1,5 @@
-/**
- * Finding and launching the browser the proofs drive (RADD-757).
- *
- * Extracted because the launch ARGUMENTS are load-bearing and were duplicated
- * across seven scripts, which is how the blind spot below would drift back in
- * one proof at a time.
- */
+/** Finding and launching the browser the proofs drive (RADD-757): the launch ARGUMENTS are
+ *  load-bearing, so they live in one place. */
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
@@ -28,29 +23,18 @@ export function findChrome() {
 }
 
 /**
- * Make headless Chrome admit it has a mouse.
- *
- * `--headless=new` reports `(hover: none)` and `(pointer: none)` at BASELINE —
- * before any emulation — and `Emulation.setEmulatedMedia` with `hover`/`pointer`
- * features does not change it. Tailwind v4 emits every `hover:` and
- * `group-hover:` utility inside `@media (hover: hover)`, so without this flag a
- * proof never sees hover-revealed chrome styled at all.
- *
- * That failure is indistinguishable from a product bug and points the wrong way:
- * `:hover` matches the element, the class is present, the selector matches, and
- * the computed style is still the un-hovered one. It cost most of an hour on
- * RADD-746 and nearly produced a "fix" to code that was already correct. The
- * inverse is worse — a genuinely broken hover affordance cannot be caught by a
- * proof that never renders hover styling.
- *
- * hover 2 = hover, pointer 4 = fine. Survives `Emulation.setDeviceMetricsOverride`.
+ * Make headless Chrome admit it has a mouse. `--headless=new` reports `(hover: none)` and
+ * `(pointer: none)` at baseline (setEmulatedMedia cannot change it) and Tailwind v4 wraps every
+ * `hover:`/`group-hover:` in `@media (hover: hover)`, so without this flag hover-revealed chrome
+ * is never styled — which reads exactly like a product bug (RADD-746).
+ * hover 2 = hover, pointer 4 = fine; survives setDeviceMetricsOverride.
  */
 export const HOVER_CAPABLE =
   "--blink-settings=primaryHoverType=2,availableHoverTypes=2," +
   "primaryPointerType=4,availablePointerTypes=4";
 
 /** The flags every proof shares. `port` and `profile` are per-proof. */
-export function chromeArgs({ port, profile, extra = [] }) {
+export function chromeArgs({ port, profile }) {
   return [
     "--headless=new",
     "--no-sandbox",
@@ -59,7 +43,6 @@ export function chromeArgs({ port, profile, extra = [] }) {
     HOVER_CAPABLE,
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${profile}`,
-    ...extra,
     "about:blank",
   ];
 }

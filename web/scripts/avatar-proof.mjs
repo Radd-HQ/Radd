@@ -17,13 +17,10 @@
  */
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { clickAt, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { clickAt, openBrowser, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: avatar-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
+const { baseUrl, email: adminEmail, password: adminPassword } = proofArgs();
 const PORT = 9499;
 const TMP = process.env.TMPDIR || "/tmp";
 const PROFILE = resolve(TMP, "radd-avatar-proof");
@@ -33,17 +30,6 @@ const KEY = `AV${STAMP.slice(-4).toUpperCase()}`;
 const PERSON = `avatar-${STAMP}@example.test`;
 const PASSWORD = "avatar-proof-pass-1";
 const SOURCE = resolve(TMP, "radd-avatar-proof-source.png");
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 /** The first avatar inside `scope`: what it renders and what it loaded. */
 const avatarIn = (scope) => `(() => {
@@ -74,7 +60,7 @@ i.save(${JSON.stringify(SOURCE)})`]);
   try {
     await session.navigate(baseUrl + "/login", 800);
     await session.login(baseUrl, adminEmail, adminPassword);
-    fixture = await session.eval(`(async () => { ${API}
+    fixture = await session.eval(`(async () => { ${PAGE_API}
       const person = await api("POST", "/users", { email: ${JSON.stringify(PERSON)}, name: "Pictured Person", password: ${JSON.stringify(PASSWORD)} });
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Avatar proof" });
       const item = await api("POST", "/items", { project_id: project.body.id, title: "A parent" });
@@ -139,7 +125,7 @@ i.save(${JSON.stringify(SOURCE)})`]);
   } finally {
     if (fixture) {
       await loginAs(adminEmail, adminPassword).catch(() => null);
-      context.cleanup = await session.eval(`(async () => { ${API}
+      context.cleanup = await session.eval(`(async () => { ${PAGE_API}
         return {
           project: (await api("DELETE", "/projects/${fixture.project.id}")).status,
           person: (await api("DELETE", "/users/${fixture.person.id}")).status,

@@ -6,15 +6,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "bursts-"));
-const file = join(dir, "notification-bursts.ts");
-// The module imports only a type; strip it so plain node can load the file.
-writeFileSync(file, readFileSync("web/src/lib/notification-bursts.ts", "utf8").replace(/^import type .*$/m, ""));
-const { groupNotificationBursts } = await import(file);
+const { groupNotificationBursts } = await importTs("web/src/lib/notification-bursts.ts");
 
 const n = (id, type, actor, target, extra = {}) => ({
   id, type, actor: actor ? { id: actor, name: actor } : null, item_id: null, detail: { page_id: target }, read: false, ...extra,

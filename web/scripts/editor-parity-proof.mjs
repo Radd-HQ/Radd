@@ -16,7 +16,7 @@
  * Usage: node scripts/editor-parity-proof.mjs <baseUrl> <spaceSlug> <projectKey> <email> <password>
  */
 import { resolve } from "node:path";
-import { HOVER_CAPABLE_PROBE, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { HOVER_CAPABLE_PROBE, openBrowser, report, sleep, waitFor } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, projectKey, email, password] = process.argv.slice(2);
 const PORT = 9460;
@@ -34,14 +34,6 @@ const SEED = [
   "> quoted",
   "",
 ].join("\n");
-
-async function waitFor(session, expression, tries = 24) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(expression)) return true;
-    await sleep(250);
-  }
-  return false;
-}
 
 /** What an editor on the current page offers. */
 const SURFACE = `(() => {
@@ -147,21 +139,20 @@ async function main() {
   }
 
   // --- NewItemModal ---------------------------------------------------------
-  await session.navigate(`${baseUrl}/`, 2500);
+  // On a project's page the top bar's "New issue" opens the modal for that project.
+  await session.navigate(`${baseUrl}/p/${projectKey}`, 2500);
   await session.eval(`(() => {
     const b = [...document.querySelectorAll("button")]
-      .find((x) => /^new item$/i.test((x.textContent || "").trim()) ||
-                   /New item/.test(x.getAttribute("title") || "") ||
-                   /New item/.test(x.getAttribute("aria-label") || ""));
+      .find((x) => (x.textContent || "").trim() === "New issue");
     b?.click();
   })()`);
   await sleep(900);
-  // It may open a project picker first; take the first project offered.
+  // Without create rights there it opens a project picker first; take the first project offered.
   await session.eval(`(() => {
-    const item = document.querySelector('[role="menu"] [role="menuitem"], [role="listbox"] [role="option"]');
-    item?.click();
+    const search = document.querySelector('[role="dialog"] input[placeholder^="Search projects"]');
+    search?.closest('[role="dialog"]').querySelector("li button")?.click();
   })()`);
-  await waitFor(session, `!!document.querySelector('[role="dialog"] .ProseMirror')`, 40);
+  await waitFor(session, `!!document.querySelector('[role="dialog"] .ProseMirror')`, { attempts: 40 });
   await sleep(900);
   const newItem = await session.eval(SURFACE);
 

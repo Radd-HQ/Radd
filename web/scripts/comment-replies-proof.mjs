@@ -15,53 +15,23 @@
  * Fixtures are deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep, waitForSelector } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: comment-replies-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9498;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-comment-replies-proof");
 const STAMP = Date.now().toString(36).slice(-5);
 const KEY = `CR${STAMP.slice(-4).toUpperCase()}`;
 const SLUG = `replies-proof-${STAMP}`;
 
-const API = `
-  const api = async (method, path, body, headers = {}) => {
-    // With an Authorization header the page's own session cookie must NOT
-    // ride along, or the server answers as the signed-in admin.
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json", ...headers },
-      credentials: headers.authorization ? "omit" : "same-origin",
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
-
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
-  // Lazy chunks (the rich editor) and the item page itself render on their own
-  // schedule: poll for a selector instead of trusting a fixed settle time.
-  const waitFor = async (selector, timeoutMs = 12000) => {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      if (await session.eval(`Boolean(document.querySelector(${JSON.stringify(selector)}))`)) return true;
-      await sleep(250);
-    }
-    return false;
-  };
+  const { session, close, baseUrl, loginStatus } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
-  const context = { key: KEY, slug: SLUG };
+  const context = { key: KEY, slug: SLUG, login: loginStatus };
   let projectId = null;
   let spaceId = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    context.login = await session.login(baseUrl, adminEmail, adminPassword);
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Replies proof" });
       const item = await api("POST", "/items", { project_id: project.body.id, title: "Threaded issue" });
       const publicRoot = await api("POST", "/items/" + item.body.id + "/comments", { body: "A public question" });
@@ -77,19 +47,19 @@ async function main() {
 
     // RADD-1335: the composer opens from the thread's Reply button (and stays open after a post).
     const openComposer = async (rootId) => {
-      await waitFor(`[data-comment-replies="${rootId}"] [data-open-reply], [data-comment-replies="${rootId}"] [data-reply-composer]`);
+      await waitForSelector(session, `[data-comment-replies="${rootId}"] [data-open-reply], [data-comment-replies="${rootId}"] [data-reply-composer]`);
       if (await session.eval(`!!document.querySelector('[data-comment-replies="${rootId}"] [data-open-reply]')`)) {
         await session.click(`[data-comment-replies="${rootId}"] [data-open-reply]`, () => true);
       }
     };
     // --- 1 + 2: a reply, then an INTERNAL reply, under a public issue comment ----
     await session.navigate(`${baseUrl}/issues/${setup.item.key}`, 2500);
-    await waitFor(`[data-thread-toggle="${setup.publicRoot.id}"]`);
+    await waitForSelector(session, `[data-thread-toggle="${setup.publicRoot.id}"]`);
     const toggleBefore = await session.eval(`document.querySelector('[data-thread-toggle="${setup.publicRoot.id}"]')?.textContent?.trim() ?? null`);
     await session.click(`[data-thread-toggle="${setup.publicRoot.id}"]`, () => true);
     await sleep(800);
     await openComposer(setup.publicRoot.id);
-    await waitFor(`[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]`);
+    await waitForSelector(session, `[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]`);
     const form = await session.eval(`(() => {
       const box = document.querySelector('[data-comment-replies="${setup.publicRoot.id}"]');
       return box ? { present: true, internalSwitch: Boolean(box.querySelector("[data-reply-internal]")), locked: Boolean(box.querySelector('[data-reply-audience="locked"]')) } : { present: false };
@@ -102,17 +72,17 @@ async function main() {
       // A posted reply renders through a read-only ProseMirror as well, so the
       // composer's editor must be addressed by its own wrapper, never "the
       // first .ProseMirror in the box".
-      await waitFor(`[data-comment-replies="${rootId}"] [data-reply-composer] .ProseMirror`);
+      await waitForSelector(session, `[data-comment-replies="${rootId}"] [data-reply-composer] .ProseMirror`);
       await session.click(`[data-comment-replies="${rootId}"] [data-reply-composer] .ProseMirror`, () => true);
       await session.send("Input.insertText", { text });
       // The editor reports its markdown on its own tick; the Reply button
       // enabling is the signal the draft has reached React state.
-      await waitFor(`[data-comment-replies="${rootId}"] button[type="submit"]:not([disabled])`);
+      await waitForSelector(session, `[data-comment-replies="${rootId}"] button[type="submit"]:not([disabled])`);
     };
     // Parity with the top-level composer: same editor, same affordances (the
     // AI toolbar icon is the marker the render proofs already use).
     await openComposer(setup.publicRoot.id);
-    await waitFor(`[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer] .ProseMirror`);
+    await waitForSelector(session, `[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer] .ProseMirror`);
     await sleep(300);
     const parity = await session.eval(`(() => {
       const reply = document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]');
@@ -135,23 +105,23 @@ async function main() {
     await session.click(`[data-comment-replies="${setup.publicRoot.id}"] button[type="submit"]`, () => true);
     // The list refetches after the post; poll for the second row rather than
     // trusting a fixed delay (the rich editor's remount shares the same tick).
-    await waitFor(`[data-comment-replies="${setup.publicRoot.id}"] [data-reply-visibility="internal"]`);
+    await waitForSelector(session, `[data-comment-replies="${setup.publicRoot.id}"] [data-reply-visibility="internal"]`);
     const replies = await session.eval(`[...document.querySelectorAll('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-visibility]')].map((n) => [n.getAttribute("data-reply-visibility"), n.textContent.includes("Internal")])`);
     context.publicReplies = { submitLabel, replies };
     checks.publicAndInternalRepliesLandUnderThePublicThread =
       submitLabel === "Reply internally" && replies.length === 2 && replies[0][0] === "public" && replies[1][0] === "internal" && replies[1][1] === true;
-    await session.screenshot(resolve("scripts", "comment-replies-proof-issue.png"));
+    await session.screenshot(outputPath("comment-replies-proof-issue.png"));
 
     // --- 3: the internal thread is locked, and the server refuses a public reply ---
     await session.click(`[data-thread-toggle="${setup.internalRoot.id}"]`, () => true);
     await sleep(800);
     await openComposer(setup.internalRoot.id);
-    await waitFor(`[data-comment-replies="${setup.internalRoot.id}"] [data-reply-composer]`);
+    await waitForSelector(session, `[data-comment-replies="${setup.internalRoot.id}"] [data-reply-composer]`);
     const locked = await session.eval(`(() => {
       const box = document.querySelector('[data-comment-replies="${setup.internalRoot.id}"]');
       return box ? { locked: Boolean(box.querySelector('[data-reply-audience="locked"]')), internalSwitch: Boolean(box.querySelector("[data-reply-internal]")), label: box.querySelector('button[type="submit"]')?.textContent?.trim() } : null;
     })()`);
-    const refused = await session.eval(`(async () => { ${API}
+    const refused = await session.eval(`(async () => { ${PAGE_API}
       const pub = await api("POST", "/comments/${setup.internalRoot.id}/replies", { body: "leak", visibility: "public" });
       const ok = await api("POST", "/comments/${setup.internalRoot.id}/replies", { body: "inherits internal" });
       return { pub: pub.status, ok: ok.status, okVisibility: ok.body?.visibility };
@@ -165,7 +135,7 @@ async function main() {
     // author always sees their own comment, so the reader must be someone else.
     // The project goes public with contributions, which is what gives a
     // signed-in member item.read + comment.write and nothing internal.
-    const colleague = await session.eval(`(async () => { ${API}
+    const colleague = await session.eval(`(async () => { ${PAGE_API}
       const me = await api("GET", "/auth/me");
       const user = await api("POST", "/users", { email: "replies-proof-${STAMP}@example.com", name: "Proof Colleague", password: "change-me-too" });
       const access = await api("PUT", "/projects/${projectId}/public-access", { public: true, contributions: true });
@@ -187,11 +157,11 @@ async function main() {
     context.scoped = scoped;
     checks.aReaderWithoutTheAtomSeesOnlyThePublicReply =
       (scoped.login === 200 || scoped.login === 204) && scoped.replies.join() === "public" && JSON.stringify(scoped.counts) === JSON.stringify([["public", 1]]);
-    await session.eval(`(async () => { ${API} await api("DELETE", "/users/${colleague.user?.id}?reassign_to=${colleague.me}"); })()`).catch(() => null);
+    await session.eval(`(async () => { ${PAGE_API} await api("DELETE", "/users/${colleague.user?.id}?reassign_to=${colleague.me}"); })()`).catch(() => null);
 
     // --- 4: a page discussion comment takes a reply ----------------------------
     await session.navigate(`${baseUrl}/pages/${SLUG}/${setup.page.path}`, 2500);
-    await waitFor(`[data-thread-toggle="${setup.discussion.id}"]`);
+    await waitForSelector(session, `[data-thread-toggle="${setup.discussion.id}"]`);
     const pageToggle = await session.eval(`document.querySelector('[data-thread-toggle="${setup.discussion.id}"]')?.textContent?.trim() ?? null`);
     await session.click(`[data-thread-toggle="${setup.discussion.id}"]`, () => true);
     await sleep(800);
@@ -204,9 +174,9 @@ async function main() {
     })`);
     context.page = { pageToggle, ...pageReplies };
     checks.pageDiscussionTakesAPublicReply = pageToggle === "Reply" && pageReplies.replies === 1 && pageReplies.internalSwitch === false;
-    await session.screenshot(resolve("scripts", "comment-replies-proof-page.png"));
+    await session.screenshot(outputPath("comment-replies-proof-page.png"));
   } finally {
-    await session.eval(`(async () => { ${API}
+    await session.eval(`(async () => { ${PAGE_API}
       ${spaceId ? `await api("DELETE", "/page-spaces/${spaceId}?force=true");` : ""}
       ${projectId ? `await api("DELETE", "/projects/${projectId}");` : ""}
     })()`).catch(() => null);

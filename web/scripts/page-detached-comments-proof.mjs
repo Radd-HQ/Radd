@@ -12,11 +12,9 @@
  *   node scripts/page-detached-comments-proof.mjs [baseUrl] [email] [password]
  */
 import { mkdir } from "node:fs/promises";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { report, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const baseUrl = process.argv[2] || process.env.RADD_PROOF_BASE_URL || "http://127.0.0.1:8000";
-const email = process.argv[3] || process.env.RADD_PROOF_EMAIL || "admin@example.com";
-const password = process.argv[4] || process.env.RADD_PROOF_PASSWORD || "change-me";
 const output = process.env.RADD_PROOF_OUTPUT_DIR || "/tmp/radd-detached-comments-proof";
 
 const P1 = "The cache is invalidated on write and never on read.";
@@ -26,25 +24,15 @@ const BEFORE = `# Runbook\n\n${P1}\n\n${P2}\n\n${P3}\n`;
 // P1 survives; P2 is gone; P3 appears twice with identical context.
 const AFTER = `# Runbook\n\n${P1}\n\nA new paragraph about something else.\n\n${P3}\n\n${P3}\n`;
 
-async function waitFor(session, expression, tries = 40) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(expression)) return true;
-    await sleep(500);
-  }
-  return false;
-}
-
 async function main() {
   await mkdir(output, { recursive: true });
-  const { session, close } = await openBrowser({ port: 9535, profile: output + "/chrome", width: 1440, height: 1100 });
-  const checks = {};
+  const { session, close, baseUrl, loginStatus, hoverCapable } = await startProof({
+    port: 9535, profile: output + "/chrome", width: 1440, height: 1100,
+  });
+  const checks = { loggedIn: loginStatus === 204, hoverCapable };
   const api = (expression) => session.eval(`(async () => { ${expression} })()`);
   let page = null;
   try {
-    await session.navigate(baseUrl + "/login", 1200);
-    checks.loggedIn = (await session.login(baseUrl, email, password)) === 204;
-    checks.hoverCapable = await session.hoverCapable();
-
     page = await api(`
       const spaces = await (await fetch("/api/v1/page-spaces", {credentials:"include"})).json();
       const space = spaces[0];
@@ -67,7 +55,7 @@ async function main() {
     checks.seeded = Boolean(page?.id && page.kept && page.removed && page.ambiguous);
 
     await session.navigate(`${baseUrl}/pages/${page.space}/${page.slug}`, 2500);
-    checks.railLoaded = await waitFor(session, `!!document.querySelector("[data-inline-comment-rail] [data-thread]")`, 30);
+    checks.railLoaded = await waitFor(session, `!!document.querySelector("[data-inline-comment-rail] [data-thread]")`);
     await sleep(800);
     const rail = await session.eval(`(() => {
       const rail = document.querySelector("[data-inline-comment-rail]");
@@ -98,11 +86,11 @@ async function main() {
 
     // --- one action, one confirm
     await session.click("[data-detached-comments] button", (t) => t.trim() === "Resolve all");
-    checks.confirmAsked = await waitFor(session, `!!document.querySelector("[role=dialog]") && /Resolve these 2 comments/.test(document.querySelector("[role=dialog]").textContent)`, 10);
+    checks.confirmAsked = await waitFor(session, `!!document.querySelector("[role=dialog]") && /Resolve these 2 comments/.test(document.querySelector("[role=dialog]").textContent)`, { attempts: 20 });
     await session.screenshot(output + "/confirm.png");
     await session.click("[role=dialog] button", (t) => t.trim() === "Resolve 2");
-    checks.groupGoneAfterResolve = await waitFor(session, `!document.querySelector("[data-detached-comments]")`, 20);
-    checks.resolvedToggleShowsTwo = await waitFor(session, `[...document.querySelectorAll("[data-inline-comment-rail] button")].some((b) => b.textContent.trim() === "Resolved (2)")`, 20);
+    checks.groupGoneAfterResolve = await waitFor(session, `!document.querySelector("[data-detached-comments]")`, { attempts: 40 });
+    checks.resolvedToggleShowsTwo = await waitFor(session, `[...document.querySelectorAll("[data-inline-comment-rail] button")].some((b) => b.textContent.trim() === "Resolved (2)")`, { attempts: 40 });
     await session.click("[data-inline-comment-rail] button", (t) => t.trim() === "Resolved (2)");
     await sleep(500);
     const resolvedCards = await session.eval(`(() => {

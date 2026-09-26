@@ -17,7 +17,7 @@
  *   node scripts/confluence-import-proof.mjs <baseUrl> <spaceSlug> <pageSlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, outputPath, report, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, pageSlug, email, password] = process.argv.slice(2);
 const PORT = 9451;
@@ -79,8 +79,6 @@ async function main() {
 
   await session.navigate(baseUrl + "/", 1200);
   await session.login(baseUrl, email, password);
-  // Headless Chrome reports (hover: none) at BASELINE, and Tailwind gates every
-  // hover: utility on it — so an unstyled affordance would read as a product bug.
   checks["headless chrome reports a real pointer"] = await session.hoverCapable();
 
   // --- the settings surface ---
@@ -90,7 +88,7 @@ async function main() {
   checks["…with a connections panel"] = settings.connections;
   checks["…and a downloads panel"] = settings.downloads;
   checks["…and it renders before anything is configured"] = settings.prompts;
-  const settingsShot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("confluence-settings.png"));
 
   // --- the imported page ---
   await session.navigate(`${baseUrl}/pages/${spaceSlug}/${pageSlug}`, 3000);
@@ -107,19 +105,14 @@ async function main() {
   checks["an unresolved image is still an <img>, not literal text"] =
     page.literalImageMarkdown === false;
   checks["no fence leaked as literal text"] = page.leakedFence === false;
-  const pageShot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("confluence-page.png"));
 
   report(checks, { settings, page });
-  return { settingsShot: settingsShot.data, pageShot: pageShot.data };
 }
 
 main()
-  .then(async (shots) => {
-    const { writeFile } = await import("node:fs/promises");
-    const dir = process.env.PROOF_OUT || "/tmp";
-    await writeFile(`${dir}/confluence-settings.png`, Buffer.from(shots.settingsShot, "base64"));
-    await writeFile(`${dir}/confluence-page.png`, Buffer.from(shots.pageShot, "base64"));
-    console.log(`screenshots: ${dir}/confluence-settings.png, ${dir}/confluence-page.png`);
+  .then(() => {
+    console.log(`screenshots: ${outputPath("confluence-settings.png")}, ${outputPath("confluence-page.png")}`);
     process.exit(0);
   })
   .catch((error) => {

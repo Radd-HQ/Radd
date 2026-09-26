@@ -1,14 +1,9 @@
-/** Built-SPA smoke check: no database, credentials, external API or LLM needed. */
+/** RADD-988: the storage host dialog's "email images" opt-in, against a fixture API. */
 import assert from "node:assert/strict";
-import http from "node:http";
-import { readFileSync, existsSync, statSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { openBrowser } from "./lib/cdp.mjs";
+import { serveBuiltSpa } from "./lib/spa-server.mjs";
 
-const dist = fileURLToPath(new URL("../dist/", import.meta.url));
-// RADD-988: built SPA against a local fixture API; no live settings are changed.
 const rows = ["General", "Private"].map((name, index) => ({
   id: `00000000-0000-4000-8000-00000000000${index}`, name, host_type: "filesystem",
   endpoint: "", access_key: "", has_secret_key: false, bucket: "", region: "", secure: false,
@@ -17,8 +12,7 @@ const rows = ["General", "Private"].map((name, index) => ({
   attachment_count: 0, total_bytes: 0,
 }));
 const writes = [];
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, "http://localhost");
+const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/api/")) {
     let data = [];
     if (req.method === "PATCH" && url.pathname.includes("/storage/hosts/")) {
@@ -36,15 +30,10 @@ const server = http.createServer(async (req, res) => {
     else if (url.pathname.endsWith("/ai/status")) data = {enabled: false, features: {}};
     else if (url.pathname.endsWith("/instance")) data = {work_week_days: ["mon"], timelog_hours_per_day: 8, timelog_days_per_week: 5};
     else if (url.pathname.includes("/audit")) data = [];
-    res.writeHead(200, {"content-type": "application/json"}); res.end(JSON.stringify(data)); return;
+    res.writeHead(200, {"content-type": "application/json"}); res.end(JSON.stringify(data)); return true;
   }
-  let file = path.resolve(dist, "." + url.pathname);
-  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(dist, "index.html");
-  const mime = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".html": "text/html"}[path.extname(file)] ?? "application/octet-stream";
-  res.writeHead(200, {"content-type": mime}); res.end(readFileSync(file));
 });
-await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-const base = `http://127.0.0.1:${server.address().port}`;
+const base = spa.origin;
 let browser;
 try {
   browser = await openBrowser({port: Number(process.env.RADD_BROWSER_PORT ?? 18791), profile: await mkdtemp("/tmp/radd-email-storage-"), scale: 1});
@@ -84,11 +73,11 @@ try {
   await new Promise(resolve => setTimeout(resolve, 300));
   assert.equal(writes[1].email_images_allowed, false);
   assert(!await s.eval(`document.body.innerText.includes('Email images')`));
-  await s.click('button', text => text === "Add host");
+  await s.click('button', text => text === "New host");
   assert.equal(await s.eval(checkbox + '.checked'), false);
   assert.equal(s.consoleErrors.filter(e => !e.includes("WebSocket")).length, 0, s.consoleErrors.join("\n"));
   console.log("Storage email opt-in: default off, selective enable, PATCH payload, reopen persistence, private exclusion, visible layout, disable, new-host default and clean console passed.");
 } catch (error) {
   if (browser) { console.error(browser.session.consoleErrors); console.error(await browser.session.eval("document.body.innerText")); await browser.session.screenshot("/tmp/radd-988-proof-failure.png"); }
   throw error;
-} finally { browser?.close(); server.close(); }
+} finally { browser?.close(); await spa.close(); }

@@ -14,16 +14,11 @@
  *   5. re-listing ai restores each exactly once.
  */
 import assert from "node:assert/strict";
-import http from "node:http";
-import {readFileSync, existsSync, statSync} from "node:fs";
 import {mkdtemp} from "node:fs/promises";
-import path from "node:path";
-import {fileURLToPath} from "node:url";
-import {openBrowser} from "./lib/cdp.mjs";
+import {openBrowser, until} from "./lib/cdp.mjs";
 import {CORE_PLUGINS} from "./lib/core-plugins.mjs";
+import {serveBuiltSpa} from "./lib/spa-server.mjs";
 
-const dist = fileURLToPath(new URL("../dist/", import.meta.url));
-const aiDist = fileURLToPath(new URL("../../server/src/radd/modules/ai/ui/dist/", import.meta.url));
 let aiEnabled = true, aiVersion = 1;
 const echo = `import{paletteMode,queryInputMode,definePlugin}from'@radd/plugin-sdk';
 export default definePlugin({contributions:[
@@ -41,14 +36,12 @@ const item = (n, title) => ({id: `issue-${n}`, key: `MOD-${n}`, project_id: proj
 const items = [item(1, "Render farm runs out of disk"), item(2, "Nightly render retries forever")];
 const SLQ = "author = me AND issue.project = MOD";
 const requests = [], asks = [], timesheets = [];
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, "http://fixture");
+const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/plugins/")) {
     requests.push({route: url.pathname, method: req.method});
-    if (url.pathname.startsWith("/plugins/echo/")) {res.writeHead(200, {"content-type": "text/javascript"}); res.end(echo); return;}
-    const file = path.join(aiDist, url.pathname.slice("/plugins/ai/".length));
-    if (!url.pathname.startsWith("/plugins/ai/") || !existsSync(file)) {res.writeHead(404); res.end(); return;}
-    res.writeHead(200, {"content-type": "text/javascript"}); res.end(readFileSync(file)); return;
+    if (url.pathname.startsWith("/plugins/echo/")) {res.writeHead(200, {"content-type": "text/javascript"}); res.end(echo); return true;}
+    if (!url.pathname.startsWith("/plugins/ai/")) {res.writeHead(404); res.end(); return true;}
+    return false;
   }
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
@@ -74,7 +67,7 @@ const server = http.createServer(async (req, res) => {
     else if (route === "/search") data = {results: []};
     else if (route === "/search/entities") data = {groups: []};
     else if (route.startsWith("/pages/search") || route.endsWith("/search/pages")) data = {results: []};
-    else if (route === "/auth/me/preferences" || route === "/preferences") data = {};
+    else if (route === "/auth/me/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};
     else if (route === "/projects/project" || route === "/projects/by-key/MOD") data = project;
@@ -92,25 +85,17 @@ const server = http.createServer(async (req, res) => {
     else if (route.includes("/resolve")) data = {value: false};
     else if (route.endsWith("/timelogging")) data = {enabled: false};
     res.writeHead(200, {"content-type": "application/json", "X-Total-Count": String(Array.isArray(data) ? data.length : 0)});
-    res.end(JSON.stringify(data)); return;
+    res.end(JSON.stringify(data)); return true;
   }
-  let file = path.resolve(dist, "." + url.pathname);
-  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(dist, "index.html");
-  const mime = {".js": "text/javascript", ".css": "text/css", ".html": "text/html"}[path.extname(file)] ?? "application/octet-stream";
-  res.writeHead(200, {"content-type": mime}); res.end(readFileSync(file));
 });
-await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-const base = `http://127.0.0.1:${server.address().port}`;
+const base = spa.origin;
 const checks = [];
 let browser;
 try {
   browser = await openBrowser({port: 18861, profile: await mkdtemp("/tmp/radd-contributed-modes-"), scale: 1});
   const s = browser.session;
-  const until = async (expression, label, attempts = 200) => {
-    for (let i = 0; i < attempts; i++) {if (await s.eval(expression)) return; await new Promise(r => setTimeout(r, 40));}
-    const palette = await s.eval(`document.querySelector('[role=dialog][aria-label="Command palette"]')?.innerText ?? null`);
-    throw Error(label + ": " + (palette !== null ? "palette: " + palette : (await s.eval("document.body.innerText")).slice(0, 600)));
-  };
+  const palette = async () => "palette: " + await s.eval(`document.querySelector('[role=dialog][aria-label="Command palette"]')?.innerText ?? null`);
+  const wait = (expression, label) => until(s, expression, label, {describe: palette});
   const press = async (key, code, keyCode, modifiers = 0) => {
     for (const type of ["rawKeyDown", "keyUp"]) await s.send("Input.dispatchKeyEvent", {type, key, code, windowsVirtualKeyCode: keyCode, modifiers});
   };
@@ -124,13 +109,13 @@ try {
   const openPalette = async () => {
     await press("k", "KeyK", 75, 2);
     // The palette focuses its input a tick after opening; typing before that goes nowhere.
-    await until(`document.activeElement === document.querySelector('${PALETTE} input[aria-label="Search"]')`, "palette open and focused");
+    await wait(`document.activeElement === document.querySelector('${PALETTE} input[aria-label="Search"]')`, "palette open and focused");
   };
 
   // 3. The timesheet's bar: empty, so it opens on the first available mode — Ask, ai's.
   await s.navigate(`${base}/timesheet`);
   assert(await s.eval(`matchMedia("(hover: hover)").matches`), "the browser must report a hover-capable pointer");
-  await until(`!!document.querySelector('input[aria-label="Ask AI for a query"]')`, "the bar opens on Ask");
+  await wait(`!!document.querySelector('input[aria-label="Ask AI for a query"]')`, "the bar opens on Ask");
   assert(requests.some(r => r.route === "/plugins/ai/remoteEntry.js"), "the ai remote bundle was loaded");
   assert.deepEqual(await owners("query.input.mode"), ["ai", "echo"]);
   assert.deepEqual(await toggles(), [["SLQ", "false"], ["Ask", "true"]], "echo's items-only mode is not offered on the worklog dialect");
@@ -142,17 +127,17 @@ try {
   // mod+I toggles.
   await s.click('input[aria-label="Ask AI for a query"]');
   await press("i", "KeyI", 73, 2);
-  await until(`!!document.querySelector('textarea[aria-label="SLQ query"]') && !document.querySelector('input[aria-label="Ask AI for a query"]')`, "mod+I to SLQ");
+  await wait(`!!document.querySelector('textarea[aria-label="SLQ query"]') && !document.querySelector('input[aria-label="Ask AI for a query"]')`, "mod+I to SLQ");
   assert.deepEqual(await toggles(), [["SLQ", "true"], ["Ask", "false"]]);
   await press("i", "KeyI", 73, 2);
-  await until(`document.activeElement?.getAttribute("aria-label") === "Ask AI for a query"`, "mod+I back to Ask, focused");
+  await wait(`document.activeElement?.getAttribute("aria-label") === "Ask AI for a query"`, "mod+I back to Ask, focused");
   checks.push("mod+I toggles SLQ ⇄ Ask, and a user switch focuses the new input");
 
   // A question compiles to worklog SLQ, lands in the editor with its explanation, and runs.
   await typeText("my worklogs on MOD issues");
   await press("Enter", "Enter", 13);
-  await until(`document.querySelector('textarea[aria-label="SLQ query"]')?.value === ${JSON.stringify(SLQ)}`, "the answer lands as SLQ");
-  await until(`document.querySelector("[data-query-explanation]")?.textContent === "Your own worklogs on MOD issues."`, "the explanation shows");
+  await wait(`document.querySelector('textarea[aria-label="SLQ query"]')?.value === ${JSON.stringify(SLQ)}`, "the answer lands as SLQ");
+  await wait(`document.querySelector("[data-query-explanation]")?.textContent === "Your own worklogs on MOD issues."`, "the explanation shows");
   assert.deepEqual(asks.at(-1), {question: "my worklogs on MOD issues", dialect: "worklog"});
   for (let i = 0; i < 100 && !timesheets.includes(SLQ); i++) await new Promise(r => setTimeout(r, 40));
   assert(timesheets.includes(SLQ), "the timesheet ran the generated query: " + JSON.stringify(timesheets));
@@ -161,7 +146,7 @@ try {
 
   // A URL-carried query opens SLQ even with a mode available.
   await s.navigate(`${base}/timesheet?q=${encodeURIComponent("author = me")}`);
-  await until(`document.querySelector('textarea[aria-label="SLQ query"]')?.value === "author = me" && document.querySelectorAll('[role=group][aria-label="Query mode"] button').length === 2`, "URL query opens SLQ");
+  await wait(`document.querySelector('textarea[aria-label="SLQ query"]')?.value === "author = me" && document.querySelectorAll('[role=group][aria-label="Query mode"] button').length === 2`, "URL query opens SLQ");
   assert.deepEqual(await toggles(), [["SLQ", "true"], ["Ask", "false"]]);
   checks.push("a URL-carried query opens the bar in SLQ, with Ask still offered");
 
@@ -169,12 +154,12 @@ try {
   await s.eval("window.__sameDocument = true");
   await openPalette();
   await typeText("render farm disk");
-  await until(`[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("search by meaning"))`, "the Ask entry");
+  await wait(`[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("search by meaning"))`, "the Ask entry");
   assert.deepEqual(await owners("palette.mode"), ["ai", "echo"]);
   const entries = (await paletteRows()).map(r => r.text).filter(t => t.includes("“render farm disk”")).sort();
   assert.deepEqual(entries, ["Ask: “render farm disk” — search by meaning", "Echo: “render farm disk” — say it back"]);
   await s.click(`${PALETTE} button`, text => text.includes("search by meaning"));
-  await until(`document.querySelector('${PALETTE} input').placeholder === "Search by meaning…" && document.querySelector('${PALETTE}').textContent.includes("Semantic matches")`, "Ask answered");
+  await wait(`document.querySelector('${PALETTE} input').placeholder === "Search by meaning…" && document.querySelector('${PALETTE}').textContent.includes("Semantic matches")`, "Ask answered");
   const rows = await paletteRows();
   assert.deepEqual(rows.map(r => r.text), ["MOD-1 Render farm runs out of disk 91%", "MOD-2 Nightly render retries forever 71%", "Render farm runbook 42%"]);
   assert.equal(await s.eval(`document.querySelectorAll('${PALETTE} .max-h-\\\\[50vh\\\\] button svg').length`), 1, "the page row draws the mode's icon");
@@ -182,34 +167,34 @@ try {
   assert.equal(requests.filter(r => r.route === "/search/semantic").at(-1).q, "render farm disk");
   await s.screenshot("/tmp/radd-contributed-modes-palette.png");
   await press("ArrowDown", "ArrowDown", 40);
-  await until(`[...document.querySelectorAll('${PALETTE} .max-h-\\\\[50vh\\\\] button')][1]?.className.includes("bg-accent/15")`, "ArrowDown moves the active row");
+  await wait(`[...document.querySelectorAll('${PALETTE} .max-h-\\\\[50vh\\\\] button')][1]?.className.includes("bg-accent/15")`, "ArrowDown moves the active row");
   await press("Enter", "Enter", 13);
-  await until(`location.pathname === "/issues/MOD-2" && !document.querySelector('${PALETTE}')`, "Enter navigates to the row");
+  await wait(`location.pathname === "/issues/MOD-2" && !document.querySelector('${PALETTE}')`, "Enter navigates to the row");
   assert.equal(await s.eval("window.__sameDocument"), true, "no reload");
   checks.push("the palette offers Ask from the ai remote; its answer renders as the palette's rows (key pill, icon, score), ArrowDown moves the active row and Enter navigates in the same document");
 
   // 2. A text answer streams.
   await openPalette();
   await typeText("hello");
-  await until(`[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("say it back"))`, "the Echo entry");
+  await wait(`[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("say it back"))`, "the Echo entry");
   await s.click(`${PALETTE} button`, text => text.includes("say it back"));
-  await until(`document.querySelector("[data-palette-answer-text]")?.textContent === "Heard: hello"`, "the text streams");
+  await wait(`document.querySelector("[data-palette-answer-text]")?.textContent === "Heard: hello"`, "the text streams");
   await s.eval("window.__echoRelease()");
-  await until(`document.querySelector("[data-palette-answer-text]")?.textContent === "Heard: hello (done)"`, "the text settles");
+  await wait(`document.querySelector("[data-palette-answer-text]")?.textContent === "Heard: hello (done)"`, "the text settles");
   assert(await s.eval(`document.querySelector('${PALETTE}').textContent.includes("Echo")`), "the text answer's heading");
   await press("Escape", "Escape", 27);
-  await until(`document.querySelector('${PALETTE} input')?.placeholder === "Search issues, or jump to…"`, "Esc backs out of the mode");
+  await wait(`document.querySelector('${PALETTE} input')?.placeholder === "Search issues, or jump to…"`, "Esc backs out of the mode");
   await press("Escape", "Escape", 27);
-  await until(`!document.querySelector('${PALETTE}')`, "Esc closes the palette");
+  await wait(`!document.querySelector('${PALETTE}')`, "Esc closes the palette");
   checks.push("a mode that answers in text streams it into the palette before it settles; Esc leaves the mode, then closes");
 
   // 4. Withdrawal, on an open timesheet with a query bar.
   await s.navigate(`${base}/timesheet`);
   await s.eval("window.__sameDocument = true");
-  await until(`!!document.querySelector('input[aria-label="Ask AI for a query"]')`, "Ask before withdrawal");
+  await wait(`!!document.querySelector('input[aria-label="Ask AI for a query"]')`, "Ask before withdrawal");
   const before = aiRequests();
   aiEnabled = false; await refresh();
-  await until(`!document.querySelector('[role=group][aria-label="Query mode"]') && !!document.querySelector('textarea[aria-label="SLQ query"]')`, "the bar is plain SLQ");
+  await wait(`!document.querySelector('[role=group][aria-label="Query mode"]') && !!document.querySelector('textarea[aria-label="SLQ query"]')`, "the bar is plain SLQ");
   assert.deepEqual(await owners("query.input.mode"), ["echo"]);
   assert.deepEqual(await owners("palette.mode"), ["echo"]);
   await s.click('textarea[aria-label="SLQ query"]');
@@ -218,7 +203,7 @@ try {
   assert.equal(await s.eval(`!!document.querySelector('input[aria-label="Ask AI for a query"]') || !!document.querySelector('[role=group][aria-label="Query mode"]')`), false, "mod+I offers nothing");
   await openPalette();
   await typeText("render farm");
-  await until(`[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("say it back"))`, "echo still offered");
+  await wait(`[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("say it back"))`, "echo still offered");
   assert.equal(await s.eval(`[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("search by meaning"))`), false, "no Ask entry");
   await new Promise(r => setTimeout(r, 1200));
   assert.equal(aiRequests(), before, "no request reached /ai, /search/semantic, /slq/nl or /plugins/ai after withdrawal");
@@ -229,13 +214,13 @@ try {
 
   // 5. Re-listing restores each exactly once.
   aiEnabled = true; aiVersion += 1; await refresh();
-  await until(`document.querySelectorAll('[role=group][aria-label="Query mode"] button').length === 2`, "the toggle returns");
+  await wait(`document.querySelectorAll('[role=group][aria-label="Query mode"] button').length === 2`, "the toggle returns");
   // Nobody chose a mode on this page (mod+I offered nothing while withdrawn) and the bar is empty:
   // it opens on Ask again, as it did on arrival.
   assert.deepEqual(await toggles(), [["SLQ", "false"], ["Ask", "true"]]);
   await openPalette();
   await typeText("render farm");
-  await until(`[...document.querySelectorAll('${PALETTE} button')].filter((b) => b.innerText.includes("search by meaning")).length === 1`, "Ask returns once");
+  await wait(`[...document.querySelectorAll('${PALETTE} button')].filter((b) => b.innerText.includes("search by meaning")).length === 1`, "Ask returns once");
   assert.deepEqual(await owners("palette.mode"), ["ai", "echo"]);
   assert.deepEqual(await owners("query.input.mode"), ["ai", "echo"]);
   await press("Escape", "Escape", 27);
@@ -248,6 +233,6 @@ try {
   throw error;
 } finally {
   await browser?.close();
-  server.closeAllConnections();
-  server.close();
+  spa.server.closeAllConnections();
+  await spa.close();
 }

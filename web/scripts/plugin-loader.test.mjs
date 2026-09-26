@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
+import { importTs } from './lib/load-ts.mjs';
 
 let serial = 0;
 async function fixture(importer, statics = {}) {
@@ -28,14 +27,12 @@ async function fixture(importer, statics = {}) {
     statics,
     importer,
   };
-  const source = readFileSync('web/src/lib/plugin-loader.ts', 'utf8')
+  const loader = await importTs('web/src/lib/plugin-loader.ts', (source) => source
     .replace(/import \{[\s\S]*?\} from "@radd\/plugin-sdk";/,
       `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources, registerLiveDocumentSource, unregisterLiveDocumentSources, setRemotesLoading} = globalThis.${key};`)
     // Bundled core plugins are exercised by the browser proofs; the remote lifecycle is tested here.
     .replace(/import \{ STATIC_PLUGINS \} from "[^"]+";/, `const STATIC_PLUGINS = globalThis.${key}.statics;`)
-    .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`);
-  const js = stripTypeScriptTypes(source, { mode: 'transform' });
-  const loader = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+    .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`));
   return { ...loader, slots, dataSources, querySources, commandSources, liveDocuments };
 }
 const remote = (url = 'v1') => [{ name: 'fixture', remote_entry: url, ui_api_version: '1.0' }];
@@ -142,8 +139,7 @@ test('a stalled import becomes a visible error and cannot register after timeout
 
 
 test('SDK version gate rejects remotes requiring newer APIs', async () => {
-  const js = stripTypeScriptTypes(readFileSync('web/packages/plugin-sdk/src/version.ts','utf8'));
-  const sdk = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+  const sdk = await importTs('web/packages/plugin-sdk/src/version.ts');
   for (const version of ['1.0.0','1.1.0','1.2.0','1.3.0',sdk.UI_API_VERSION]) assert(sdk.isUiApiCompatible(version));
   for (const version of ['2.0.0','1.999.0',sdk.UI_API_VERSION.replace(/\d+$/, n => String(Number(n) + 1)),'','1.garbage.0']) assert(!sdk.isUiApiCompatible(version));
 });

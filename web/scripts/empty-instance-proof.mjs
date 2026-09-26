@@ -21,9 +21,9 @@
  *   node scripts/empty-instance-proof.mjs <baseUrl> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, email, password] = process.argv.slice(2);
 const PORT = 9459;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-empty-instance-proof");
 
@@ -61,12 +61,9 @@ const TIMESHEET_PROBE = `(() => {
 })()`;
 
 async function main() {
-  const { session } = await openBrowser({ port: PORT, profile: PROFILE });
+  const { session, baseUrl, hoverCapable } = await startProof({ port: PORT, profile: PROFILE });
   const checks = {};
-
-  await session.navigate(baseUrl + "/", 1200);
-  await session.login(baseUrl, email, password);
-  checks["headless chrome reports a real pointer"] = await session.hoverCapable();
+  checks["headless chrome reports a real pointer"] = hoverCapable;
 
   // Precondition: the instance really is empty, or every check below is vacuous.
   const total = await session.eval(

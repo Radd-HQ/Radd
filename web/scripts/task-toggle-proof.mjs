@@ -20,13 +20,9 @@
  * Fixtures are deleted at the end.
  */
 import { resolve } from "node:path";
-import { clickAt, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { clickAt, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: task-toggle-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9498;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-task-toggle-proof");
 const SHOTS = resolve(process.env.TMPDIR || "/tmp", "radd-task-toggle-proof-shots");
@@ -43,17 +39,6 @@ const DESCRIPTION = [
 ].join("\n");
 const COMMENT = "- [ ] Reply to the reporter\n- [ ] Close the thread";
 const PAGE = ["- [ ] Before the block", "", "```radd:toc", "```", "", "- [ ] After the block"].join("\n");
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 // :is(), because a bare comma list inside a compound selector ("[x] .a, .b")
 // matches ".b" ANYWHERE — the first run clicked the description for the comment.
@@ -79,15 +64,13 @@ const measure = (scope) => `(() => {
 })()`;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1400, height: 1000, scale: 2 });
+  const { session, close, baseUrl } = await startProof({ port: PORT, profile: PROFILE, width: 1400, height: 1000, scale: 2 });
   const send = session.send;
   const checks = {};
   const context = { key: KEY };
   let fixture = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    await session.login(baseUrl, adminEmail, adminPassword);
-    fixture = await session.eval(`(async () => { ${API}
+    fixture = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Task toggle proof" });
       const item = await api("POST", "/items", { project_id: project.body.id, title: "Checklist item", description: ${JSON.stringify(DESCRIPTION)} });
       const comment = await api("POST", "/items/" + item.body.id + "/comments", { body: ${JSON.stringify(COMMENT)} });
@@ -131,7 +114,7 @@ async function main() {
     const editorsBefore = await session.eval(`document.querySelectorAll(".ProseMirror[contenteditable=true]").length`);
     await clickAt(send, "[data-proof-target]");
     await sleep(1800);
-    const after = await session.eval(`(async () => { ${API}
+    const after = await session.eval(`(async () => { ${PAGE_API}
       return { description: (await api("GET", "/items/${fixture.item.id}")).body.description,
         editorOpen: document.querySelectorAll(".ProseMirror[contenteditable=true]").length > ${editorsBefore} };
     })()`);
@@ -149,7 +132,7 @@ async function main() {
     })()`);
     context.commentClick = await clickAt(send, `[data-comment-id="${fixture.comment.id}"] ${LABEL}`);
     await sleep(1800);
-    const comment = await session.eval(`(async () => { ${API}
+    const comment = await session.eval(`(async () => { ${PAGE_API}
       const feed = await api("GET", "/items/${fixture.item.id}/comments");
       const rows = Array.isArray(feed.body) ? feed.body : (feed.body.comments ?? feed.body.items ?? []);
       return rows.find((c) => c.id === ${JSON.stringify(fixture.comment.id)})?.body ?? null;
@@ -158,14 +141,14 @@ async function main() {
     checks["4. a comment's box ticks in place"] = comment === "- [x] Reply to the reporter\n- [ ] Close the thread";
 
     // 6 — refused, not overwritten: edit behind the viewer's back, then tick.
-    await session.eval(`(async () => { ${API}
+    await session.eval(`(async () => { ${PAGE_API}
       const current = (await api("GET", "/items/${fixture.item.id}")).body.description;
       await api("PATCH", "/items/${fixture.item.id}", { description: current + "\\n\\nEdited elsewhere." });
     })()`);
     // The viewer still shows the old text until the live update lands; tick immediately.
     await clickAt(send, `[data-task-toggle] ${LABEL}`);
     await sleep(1800);
-    const stale = await session.eval(`(async () => { ${API}
+    const stale = await session.eval(`(async () => { ${PAGE_API}
       return (await api("GET", "/items/${fixture.item.id}")).body.description;
     })()`);
     checks["6. a stale tick is refused and the other edit survives"] =
@@ -180,7 +163,7 @@ async function main() {
     })()`);
     await clickAt(send, "[data-proof-page-target]");
     await sleep(1800);
-    const page = await session.eval(`(async () => { ${API} return (await api("GET", "/pages/${fixture.page.id}")).body; })()`);
+    const page = await session.eval(`(async () => { ${PAGE_API} return (await api("GET", "/pages/${fixture.page.id}")).body; })()`);
     context.page = { labels: pageLabels, version: page.version, body: page.body };
     checks["5a. ticking the box after a radd block flips THAT line"] =
       pageLabels === 2 && page.body.includes("- [ ] Before the block") && page.body.includes("- [x] After the block");
@@ -188,7 +171,7 @@ async function main() {
     await session.screenshot(resolve(SHOTS, "page.png"));
   } finally {
     if (fixture) {
-      context.cleanup = await session.eval(`(async () => { ${API}
+      context.cleanup = await session.eval(`(async () => { ${PAGE_API}
         return {
           page: (await api("DELETE", "/pages/${fixture.page.id}?hard=true")).status,
           space: (await api("DELETE", "/page-spaces/${fixture.space.id}")).status,

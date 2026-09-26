@@ -24,11 +24,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, report, sleep, waitFor } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
+const { baseUrl, email, password } = proofArgs();
 const standIn = process.env.RADD_PROOF_STAND_IN_MODEL === "1";
 const PROJECT = process.env.RADD_PROOF_PROJECT ?? "GRQ";
 const QUESTION = "issues about the render farm";
@@ -39,15 +38,6 @@ const context = { model: standIn ? "stand-in (answered in the browser)" : "live 
 // What only the modes say: endpoints and copy. A host chunk carrying any of them carries a mode.
 const MARKERS = ["/search/semantic", "/slq/nl", "search by meaning", "Search by meaning", "Semantic matches",
   "the answer lands as an SLQ query", "Ask AI for a query"];
-
-async function waitFor(session, expression, attempts = 80, every = 250) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(every);
-  }
-  return session.eval(expression);
-}
 
 const { session, close } = await openBrowser({ port: 9533, profile: resolve(process.env.TMPDIR || "/tmp", "radd-contributed-modes-proof") });
 const press = async (key, code, keyCode, modifiers = 0) => {
@@ -102,7 +92,7 @@ try {
   await session.navigate(`${baseUrl}/p/${PROJECT}/v/${list.id}`, 1500);
   check("the browser reports a hover-capable pointer", await session.hoverCapable());
   const askInput = 'input[aria-label="Ask AI for a query"]';
-  check("an empty bar opens on Ask", await waitFor(session, `!!document.querySelector('${askInput}')`, 120));
+  check("an empty bar opens on Ask", await waitFor(session, `!!document.querySelector('${askInput}')`, { attempts: 120 }));
   const loaded = await session.eval(`({
     remote: performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.includes("/plugins/ai/")),
     bar: globalThis.__RADD_SLOT_REGISTRY__.forSlot("query.input.mode").map((e) => e.plugin),
@@ -115,8 +105,8 @@ try {
   await session.click(askInput);
   await session.send("Input.insertText", { text: QUESTION });
   await press("Enter", "Enter", 13);
-  const slq = await waitFor(session, `(() => { const t = document.querySelector('textarea[aria-label="SLQ query"]'); return t && t.value ? t.value : ""; })()`, 120);
-  const explanation = await waitFor(session, `document.querySelector("[data-query-explanation]")?.textContent ?? ""`, 40);
+  const slq = await waitFor(session, `(() => { const t = document.querySelector('textarea[aria-label="SLQ query"]'); return t && t.value ? t.value : ""; })()`, { attempts: 120 });
+  const explanation = await waitFor(session, `document.querySelector("[data-query-explanation]")?.textContent ?? ""`, { attempts: 40 });
   const asked = await session.eval("window.__asks.at(-1)");
   context.slq = slq;
   context.explanation = explanation;
@@ -128,7 +118,7 @@ try {
   const shown = await waitFor(session, `(() => {
     const keys = [...new Set([...document.querySelectorAll("[data-list-scroll] a[href^='/issues/']")].map((a) => decodeURIComponent(a.getAttribute("href").slice(8))))].sort();
     return keys.length === ${expected.length} ? keys : null;
-  })()`, 120);
+  })()`, { attempts: 120 });
   check("the list runs the applied query: its rows are exactly GET /items?q=<slq> in the project",
     expected.length > 0 && JSON.stringify(shown) === JSON.stringify(expected),
     `${shown?.length ?? "(no match)"} shown vs ${expected.length} from the API`);
@@ -136,20 +126,20 @@ try {
 
   // 4. The timesheet asks in the worklog dialect.
   await session.navigate(`${baseUrl}/timesheet`, 1500);
-  await waitFor(session, `!!document.querySelector('${askInput}')`, 120);
+  await waitFor(session, `!!document.querySelector('${askInput}')`, { attempts: 120 });
   await session.click(askInput);
   await session.send("Input.insertText", { text: "my own worklogs" });
   await press("Enter", "Enter", 13);
-  await waitFor(session, `document.querySelector('textarea[aria-label="SLQ query"]')?.value ?? ""`, 120);
+  await waitFor(session, `document.querySelector('textarea[aria-label="SLQ query"]')?.value ?? ""`, { attempts: 120 });
   const worklogAsk = await session.eval("window.__asks.at(-1)");
   check("the timesheet's bar asks in the worklog dialect", worklogAsk?.dialect === "worklog", JSON.stringify(worklogAsk));
 
   // 2. The palette's Ask.
   await session.eval("window.__sameDocument = true");
   await press("k", "KeyK", 75, 2);
-  await waitFor(session, `document.activeElement === document.querySelector('${PALETTE} input[aria-label="Search"]')`, 40);
+  await waitFor(session, `document.activeElement === document.querySelector('${PALETTE} input[aria-label="Search"]')`, { attempts: 40 });
   await session.send("Input.insertText", { text: "render farm" });
-  const entry = await waitFor(session, `[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("search by meaning"))`, 60);
+  const entry = await waitFor(session, `[...document.querySelectorAll('${PALETTE} button')].some((b) => b.innerText.includes("search by meaning"))`, { attempts: 60 });
   check("the palette offers Ask", entry);
   check("the palette's Ask is contributed by the ai remote alone",
     JSON.stringify(await session.eval(`globalThis.__RADD_SLOT_REGISTRY__.forSlot("palette.mode").map((e) => e.plugin)`)) === '["ai"]');
@@ -158,17 +148,17 @@ try {
     const buttons = [...document.querySelectorAll('${PALETTE} .max-h-\\\\[50vh\\\\] button')];
     return buttons.length >= 2 && document.querySelector('${PALETTE}').textContent.includes("Semantic matches")
       ? buttons.map((b) => b.innerText.replace(/\\s+/g, " ").trim()) : null;
-  })()`, 120);
+  })()`, { attempts: 120 });
   check("Ask answers as the palette's own rows (key, title, score)", rows && rows.every((r) => /^[A-Z][A-Z0-9]*-\d+ .+ \d+%$/.test(r)), JSON.stringify(rows?.slice(0, 3)));
   check("the palette asked with what was typed", (await session.eval("window.__semantic.at(-1)")) === "render farm");
   await session.screenshot("/tmp/radd-contributed-modes-proof-palette.png");
   await press("ArrowDown", "ArrowDown", 40);
   const second = rows?.[1]?.split(" ")[0];
-  const moved = await waitFor(session, `[...document.querySelectorAll('${PALETTE} .max-h-\\\\[50vh\\\\] button')][1]?.className.includes("bg-accent/15")`, 20);
+  const moved = await waitFor(session, `[...document.querySelectorAll('${PALETTE} .max-h-\\\\[50vh\\\\] button')][1]?.className.includes("bg-accent/15")`, { attempts: 20 });
   check("ArrowDown moves the active row", moved);
   await press("Enter", "Enter", 13);
   const landed = await waitFor(session, `location.pathname === "/issues/${second}" && !document.querySelector('${PALETTE}')
-    && document.body.innerText.includes(${JSON.stringify(second ?? "")})`, 80);
+    && document.body.innerText.includes(${JSON.stringify(second ?? "")})`, { attempts: 80 });
   check("Enter opens the second row's issue in the same document", landed && (await session.eval("window.__sameDocument")) === true, second);
 
   // 5. The host carries neither mode — by CONTENT.
@@ -196,5 +186,5 @@ try {
 } finally {
   await close();
 }
-const failed = report(Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])), { proof: "contributed modes (RADD-1400)", ...context });
+const failed = report(checks, { proof: "contributed modes (RADD-1400)", ...context });
 process.exit(failed ? 1 : 0);

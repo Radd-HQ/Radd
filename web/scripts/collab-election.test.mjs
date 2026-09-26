@@ -9,15 +9,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "collab-"));
-const file = join(dir, "model.ts");
-// The model is the collab plugin's (RADD-1397): it moved with co-editing's UI into its remote.
-writeFileSync(file, readFileSync("server/src/radd/modules/collab/ui/src/model.ts", "utf8"));
-const { electSaver, presenceSnapshot, CollabRole, EMPTY_PRESENCE } = await import(file);
+const { electSaver, presenceSnapshot, CollabRole, EMPTY_PRESENCE } = await importTs("server/src/radd/modules/collab/ui/src/model.ts");
 
 const ann = { id: "u-ann", name: "Ann", color: "var(--chart-todo)", emoji: null };
 const bob = { id: "u-bob", name: "Bob", color: "#336699", emoji: "🦊" };

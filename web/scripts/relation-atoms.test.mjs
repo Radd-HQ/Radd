@@ -8,26 +8,13 @@
  * that row — no error, no visible change, just a narrower floor for everyone on
  * the instance. That is the case this file exists for.
  */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "relatoms-"));
-const file = join(dir, "permissions.ts");
-writeFileSync(file, readFileSync("web/src/lib/types/permissions.ts", "utf8"));
-const { heldRelations, withRelations, RELATION_ANY } = await import(file);
+const { heldRelations, withRelations, RELATION_ANY } = await importTs("web/src/lib/types/permissions.ts");
 
-let failures = 0;
-const check = (label, actual, expected) => {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) {
-    console.log(`FAIL ${label}\n  got      ${a}\n  expected ${e}`);
-    failures++;
-  } else {
-    console.log(`ok   ${label}`);
-  }
-};
+const check = (label, actual, expected) => test(label, () => assert.deepStrictEqual(actual, expected));
 
 // The seeded Baseline, which is the shape that matters most.
 const BASELINE = [
@@ -99,6 +86,3 @@ check(
   heldRelations(withRelations(BASELINE, "label.read", []), "comment.write"),
   ["own", "participant"],
 );
-
-console.log(failures ? `\n${failures} FAILED` : "\nall passed");
-process.exit(failures ? 1 : 0);

@@ -13,26 +13,10 @@
  * Usage: node scripts/email-automatic-messages-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9481;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-email-messages-proof-profile");
 const KEYS = ["mail_send_ack", "mail_ack_body", "mail_send_resolved"];
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 40) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
 
 const instanceRows = (session) => session.eval(`(async () => {
   const r = await fetch("/api/v1/scoped-settings?scope=instance");
@@ -41,12 +25,11 @@ const instanceRows = (session) => session.eval(`(async () => {
     .map((row) => [row.key, { value: row.value, set_here: row.set_here, multiline: row.multiline }]));
 })()`);
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9481, profile: resolve(process.env.TMPDIR || "/tmp", "radd-email-messages-proof-profile"),
+});
 let before = {};
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
   before = await instanceRows(session);
   check("the API serves the three email settings, receipt text marked multiline",
     KEYS.every((key) => key in before) && before.mail_ack_body.multiline === true, JSON.stringify(before));
@@ -96,7 +79,7 @@ try {
   check("the receipt text autosaves on blur with its line breaks", stored === "Thanks {{requester_name}}.\n\nTracked as {{key}}.", JSON.stringify(stored));
   const height = await session.eval(`document.querySelector('[data-setting="mail_ack_body"] textarea').getBoundingClientRect().height`);
   check("the textarea is tall enough for a paragraph", height >= 90, `${height}px`);
-  await session.screenshot(resolve("scripts", "email-automatic-messages-proof.png"));
+  await session.screenshot(outputPath("email-automatic-messages-proof.png"));
 } finally {
   // 4. put the instance back.
   try {
@@ -115,8 +98,4 @@ try {
     await close();
   }
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "email automatic messages" },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "email automatic messages" });

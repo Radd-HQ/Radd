@@ -29,14 +29,10 @@ import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { clickAt, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { clickAt, PAGE_API, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8116", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9516;
 const TMP = process.env.TMPDIR || "/tmp";
-const PROFILE = resolve(TMP, "radd-sla-settings-queue-proof-profile");
 const SHOTS = process.env.RADD_PROOF_SHOTS ?? TMP;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SERVER = resolve(HERE, "../../server");
@@ -44,22 +40,6 @@ const key = `SQ${Date.now().toString(36).slice(-4).toUpperCase()}`;
 const POLICY = "Queue proof";
 const POLICY_ROW = JSON.stringify(`[data-sla-policy="${POLICY}"]`);
 const QUEUE = "Triage queue proof";
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
 
 // A clock starts at the issue's created_at: move two of them into the past.
 const BACKDATE = `
@@ -90,16 +70,15 @@ const minutesOf = (label) => {
   return match[1] ? Number(match[1]) * 1440 : Number(match[2] ?? 0) * 60 + Number(match[3]);
 };
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1440, height: 1000, scale: 1 });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9516, profile: resolve(TMP, "radd-sla-settings-queue-proof-profile"), width: 1440, height: 1000, scale: 1,
+  base: "http://127.0.0.1:8116",
+});
 const send = session.send;
 let world = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-
   // 1. The world, over REST.
-  world = await session.eval(`(async () => { ${API}
+  world = await session.eval(`(async () => { ${PAGE_API}
     const project = await api("POST", "/projects", { key: ${JSON.stringify(key)}, name: "SLA settings + queue proof" });
     const id = project.body.id;
     const policy = await api("POST", "/sla-policies", { project_id: id, name: ${JSON.stringify(POLICY)},
@@ -144,7 +123,7 @@ try {
   await sleep(200);
   await clickAt(send, '[data-sla-policy-form="edit"] button[type=submit]', (t) => t.trim().startsWith("Save changes"));
   await waitFor(session, `!document.querySelector('[data-sla-policy-form="edit"]')`);
-  const saved = await session.eval(`(async () => { ${API}
+  const saved = await session.eval(`(async () => { ${PAGE_API}
     return (await api("GET", "/sla-policies?project_id=" + ${JSON.stringify(world.projectId)})).body; })()`);
   const summary = await waitFor(session, `(() => { const t = document.querySelector(${POLICY_ROW})?.textContent ?? "";
     return t.includes("warn 15m before") ? t : ""; })()`);
@@ -155,10 +134,10 @@ try {
   await session.screenshot(resolve(SHOTS, "sla-settings-queue-proof-settings.png"));
 
   // 3. The queue, with the policy enabled only while it renders.
-  const enabled = await session.eval(`(async () => { ${API}
+  const enabled = await session.eval(`(async () => { ${PAGE_API}
     return (await api("PATCH", "/sla-policies/" + ${JSON.stringify(world.policyId)}, { enabled: true })).status; })()`);
   check("the policy is enabled for the queue step", enabled === 200, String(enabled));
-  const truth = await session.eval(`(async () => { ${API}
+  const truth = await session.eval(`(async () => { ${PAGE_API}
     const q = "project_id=" + ${JSON.stringify(world.projectId)};
     const rows = await api("GET", "/sla-queue-items?" + q + "&limit=50&offset=0");
     const ranked = await api("GET", "/items?" + q + "&limit=50&offset=0");
@@ -205,7 +184,7 @@ try {
     && !a.closest('[data-view-type-section]')).length`);
   check("…and not among the project's ordinary views", elsewhere === 0, String(elsewhere));
   await session.screenshot(resolve(SHOTS, "sla-settings-queue-proof-queue.png"));
-  const disabled = await session.eval(`(async () => { ${API}
+  const disabled = await session.eval(`(async () => { ${PAGE_API}
     return (await api("PATCH", "/sla-policies/" + ${JSON.stringify(world.policyId)}, { enabled: false })).status; })()`);
   check("the policy is disabled again", disabled === 200, String(disabled));
 
@@ -222,7 +201,7 @@ try {
   check("no host chunk carries the SLA settings page or the queue", hostHits.length === 0, JSON.stringify(hostHits));
   check("the slas remote carries the settings page", settingsCopy.every((marker) => remote.includes(marker)),
     JSON.stringify(settingsCopy.filter((marker) => !remote.includes(marker))));
-  const manifest = await session.eval(`(async () => { ${API} return (await api("GET", "/capabilities")).body; })()`);
+  const manifest = await session.eval(`(async () => { ${PAGE_API} return (await api("GET", "/capabilities")).body; })()`);
   const queueType = manifest.view_types.find((t) => t.key === "slas.queue");
   check("the slas manifest declares the queue: a list surface over /sla-queue-items, in the Queues section",
     queueType?.list_surface?.rows_path === "/sla-queue-items" && queueType.sidebar_section === "Queues"
@@ -234,7 +213,7 @@ try {
 } finally {
   // 5. Clean up: the issues and the policy cascade with the project.
   if (world?.projectId) {
-    const cleaned = await session.eval(`(async () => { ${API}
+    const cleaned = await session.eval(`(async () => { ${PAGE_API}
       if (${JSON.stringify(world.policyId ?? "")}) await api("PATCH", "/sla-policies/" + ${JSON.stringify(world.policyId ?? "")}, { enabled: false });
       const v = ${JSON.stringify(world.queueId ?? "")} ? await api("DELETE", "/views/" + ${JSON.stringify(world.queueId ?? "")}) : { status: 0 };
       const p = await api("DELETE", "/projects/" + ${JSON.stringify(world.projectId)});
@@ -245,8 +224,4 @@ try {
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "SLA settings page + queue views (RADD-1396)", key },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "SLA settings page + queue views (RADD-1396)", key });

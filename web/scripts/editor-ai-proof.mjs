@@ -19,24 +19,11 @@
  * real backend; the report says which model answered. No provider or role is ever changed.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
 const standIn = process.env.RADD_PROOF_STAND_IN_MODEL === "1";
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
 const context = {};
-
-async function waitFor(session, expression, attempts = 60, every = 250) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(every);
-  }
-  return session.eval(expression);
-}
 
 /** The reading pane's answer once it is one: settled (not "Reading…"), long enough, and not an
  *  error — an unreachable provider renders its message in the same pane, which must not pass. */
@@ -51,7 +38,9 @@ const paneAnswer = (min) => `(() => {
 const ORIGINAL ="Teh first paragraph have sevral speling mistakes and it read badly.\n\nThe second paragraph is fine and should stay as it is.";
 const COMMENT = "We shipped the fix on Tuesday. The regression came back after the cache flush on Wednesday, so we reverted the change and will retry next week after the database upgrade lands.";
 
-const { session, close } = await openBrowser({ port: 9521, profile: resolve(process.env.TMPDIR || "/tmp", "radd-editor-ai-proof") });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9521, profile: resolve(process.env.TMPDIR || "/tmp", "radd-editor-ai-proof"),
+});
 const api = (method, path, body) => session.eval(`fetch("/api/v1${path}", {method: ${JSON.stringify(method)}, credentials: "include",
   headers: {"Content-Type": "application/json"}${body ? `, body: JSON.stringify(${JSON.stringify(body)})` : ""}})
   .then(async (r) => ({status: r.status, body: r.status === 204 ? null : await r.json().catch(() => null)}))`);
@@ -84,9 +73,6 @@ try {
       if (standIn && url.includes("/ai/summarize/stream")) return Promise.resolve(sse("A stand-in digest of the whole issue, long enough to read as an answer."));
       return original(input, init);
     };` });
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, String(status));
 
   const projects = await api("GET", "/projects?limit=5");
   const project = projects.body?.[0];
@@ -99,11 +85,10 @@ try {
   context.issue = key;
 
   await session.navigate(`${baseUrl}/issues/${key}`, 500);
-  check("the browser reports a hover-capable pointer", await session.hoverCapable());
   // The composer's toolbar button appears once the whole editor-AI gate has loaded (status,
   // preferences AND the curated actions) — the read menu's Summarize waits on the same gate.
   await waitFor(session, `!!document.querySelector('[aria-label="AI actions for this comment"]') && !!document.querySelector("[data-ai-rail]")
-    && !!document.querySelector('.radd-rich-editor [role="toolbar"] svg.radd-ai-toolbar-icon')`, 120);
+    && !!document.querySelector('.radd-rich-editor [role="toolbar"] svg.radd-ai-toolbar-icon')`, { attempts: 120 });
   const loaded = await session.eval(`({
     remote: performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.includes("/plugins/ai/")),
     owners: Object.fromEntries(["editor.toolbar.action", "editor.selection.action", "content.read.action", "issue.rail.top", "item.draft.assist"]
@@ -117,12 +102,12 @@ try {
 
   // The rail card's Summarize: the whole issue, in the host's reading pane.
   await session.click("[data-ai-rail] button", (t) => t.trim() === "Summarize");
-  const railSummary = await waitFor(session, paneAnswer(40), 240);
+  const railSummary = await waitFor(session, paneAnswer(40), { attempts: 240 });
   check("the rail card's Summarize answers in the reading pane", railSummary && !String(railSummary).startsWith("ERROR"), String(railSummary).slice(0, 120));
   context.issueSummary = String(railSummary).slice(0, 200);
   check("the pane is labelled as the AI's answer", await session.eval(`document.querySelector("[data-reading-panel]")?.getAttribute("aria-label")`) === "AI results — Summary");
   await session.click('[data-reading-panel] button[aria-label^="Close"]');
-  await waitFor(session, `!document.querySelector("[data-reading-panel]")`, 20);
+  await waitFor(session, `!document.querySelector("[data-reading-panel]")`, { attempts: 20 });
 
   // A rendered comment's read menu.
   // The reading column re-centres as the pane closes; a click aimed mid-shift can miss, so aim
@@ -130,11 +115,11 @@ try {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await session.hover('[aria-label="AI actions for this comment"]');
     await session.click('[aria-label="AI actions for this comment"]');
-    if (await waitFor(session, `!!document.querySelector("[data-ai-read-panel]")`, 8)) break;
+    if (await waitFor(session, `!!document.querySelector("[data-ai-read-panel]")`, { attempts: 8 })) break;
   }
   check("a rendered comment's read menu opens", await session.eval(`!!document.querySelector("[data-ai-read-panel]")`));
   await session.click("[data-ai-read-panel] button", (t) => t.trim() === "Summarize");
-  const commentSummary = await waitFor(session, paneAnswer(20), 240);
+  const commentSummary = await waitFor(session, paneAnswer(20), { attempts: 240 });
   check("a rendered comment's read-menu Summarize produces text", commentSummary && !String(commentSummary).startsWith("ERROR"), String(commentSummary).slice(0, 120));
   context.commentSummary = String(commentSummary).slice(0, 200);
   const summaryRequest = await session.eval(`window.__streams.at(-1)`);
@@ -148,7 +133,7 @@ try {
   // The EDITABLE one: the read-only viewer shares `.radd-rich-editor` and can still be mounted for a
   // moment, and a selection inside it rightly gets no selection actions (a flake before this).
   const editable = `[...document.querySelectorAll(".radd-rich-editor:not(.radd-rich-viewer)")].find((e) => e.innerText.includes("sevral") && e.querySelector('.ProseMirror[contenteditable="true"]'))`;
-  await waitFor(session, `!!${editable}`, 40);
+  await waitFor(session, `!!${editable}`, { attempts: 40 });
   await session.eval(`${editable}.setAttribute("data-proof-desc", "")`);
   const selected = await session.eval(`(() => {
     const pm = document.querySelector("[data-proof-desc] .ProseMirror"); pm.focus();
@@ -156,17 +141,17 @@ try {
     range.setStart(text, 0); range.setEnd(text, text.length);
     const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range); return selection.toString();
   })()`);
-  const button = await waitFor(session, `!!document.querySelector("[data-editor-selection-actions] [data-ai-selection-button]")`, 40);
+  const button = await waitFor(session, `!!document.querySelector("[data-editor-selection-actions] [data-ai-selection-button]")`, { attempts: 40 });
   check("Ask AI appears over the selection, placed by the editor", button, selected);
   await session.click("[data-ai-selection-button]");
-  await waitFor(session, `!!document.querySelector("[data-ai-selection-menu]")`, 20);
+  await waitFor(session, `!!document.querySelector("[data-ai-selection-menu]")`, { attempts: 20 });
   await session.click("[data-ai-selection-menu] button", (t) => t.trim() === "Fix grammar only");
-  const streaming = await waitFor(session, `!!document.querySelector("[data-proof-desc] [data-editor-run-panel]")`, 40, 100);
+  const streaming = await waitFor(session, `!!document.querySelector("[data-proof-desc] [data-editor-run-panel]")`, { attempts: 40, every: 100 });
   check("the run band opens in the editor's chrome", streaming);
   const reviewing = await waitFor(session, `(() => {
     const band = document.querySelector("[data-proof-desc] [data-editor-run-panel]");
     return band && /to review/.test(band.innerText) ? document.querySelectorAll("[data-proof-desc] .milkdown-diff-controls").length : 0;
-  })()`, 240);
+  })()`, { attempts: 240 });
   check("the live provider's reply lands in the host's per-block review", reviewing > 0,
     `${reviewing} pair(s); band: ${await session.eval(`document.querySelector("[data-proof-desc] [data-editor-run-panel]")?.innerText ?? "(closed)"`)}; ` +
     `page says: ${await session.eval(`[...document.querySelectorAll("[role=status], [role=alert]")].map((e) => e.innerText).join(" / ")`)}`);
@@ -174,14 +159,14 @@ try {
   check("the captured selection travelled with the run", sent?.action_id === "fix_grammar" && sent?.selection?.includes("sevral"),
     JSON.stringify({ action: sent?.action_id, selection: sent?.selection })?.slice(0, 160));
   await session.click("[data-proof-desc] [data-editor-run-panel] button", (t) => /accept all/i.test(t));
-  await waitFor(session, `!document.querySelector("[data-proof-desc] [data-editor-run-panel]")`, 20);
+  await waitFor(session, `!document.querySelector("[data-proof-desc] [data-editor-run-panel]")`, { attempts: 20 });
   const edited = await session.eval(`document.querySelector("[data-proof-desc] .ProseMirror").innerText`);
   check("Accept all applies the correction in the editor", !edited.includes("sevral") && edited.includes("second paragraph"), edited.slice(0, 160));
   await sleep(500);
   await session.click("button", (t) => t.trim() === "Save");
-  await waitFor(session, `!document.querySelector("[data-proof-desc]")`, 40);
+  await waitFor(session, `!document.querySelector("[data-proof-desc]")`, { attempts: 40 });
   const read = await waitFor(session, `fetch("/api/v1/items/${itemId}", {credentials: "include"}).then((r) => r.json())
-    .then((item) => item.description !== ${JSON.stringify(ORIGINAL)} ? item.description : "")`, 20);
+    .then((item) => item.description !== ${JSON.stringify(ORIGINAL)} ? item.description : "")`, { attempts: 20 });
   check("the saved description reads back over the API, corrected, with the untouched paragraph intact",
     read && !read.includes("sevral") && read.includes("The second paragraph is fine"), String(read).slice(0, 200));
   context.savedDescription = String(read).slice(0, 200);
@@ -192,10 +177,10 @@ try {
   const form = portal.body?.flatMap?.((group) => group.forms)[0];
   if (form) {
     await session.navigate(`${baseUrl}/portal/forms/${form.id}`, 500);
-    await waitFor(session, `!!document.querySelector("form input:not([type=hidden]):not([type=checkbox])")`, 40);
+    await waitFor(session, `!!document.querySelector("form input:not([type=hidden]):not([type=checkbox])")`, { attempts: 40 });
     await session.click("form input:not([type=hidden]):not([type=checkbox])");
     await session.send("Input.insertText", { text: "Render farm crash when submitting comp jobs" });
-    const similar = await waitFor(session, `document.querySelectorAll("[data-ai-draft-similar] li a[href^='/issues/']").length`, 80);
+    const similar = await waitFor(session, `document.querySelectorAll("[data-ai-draft-similar] li a[href^='/issues/']").length`, { attempts: 80 });
     check("the submission form's Similar issues come from the remote, as the host's issue rows", similar > 0, `${similar} row(s) on ${form.name}`);
   } else {
     check("a portal form to exercise the draft assist on", false, "none on this instance");
@@ -218,5 +203,4 @@ try {
   }
   await close();
 }
-const failed = report(Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])), { proof: "editor AI (RADD-1395)", ...context });
-process.exit(failed ? 1 : 0);
+finish({ proof: "editor AI (RADD-1395)", ...context });

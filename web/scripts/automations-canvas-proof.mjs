@@ -7,27 +7,17 @@
  * result: node count, that the nodes occupy distinct non-zero boxes, that the
  * edge paths exist, and that both filter ports are drawn.
  *
- * Writes /tmp/radd-canvas.png so the layout can be looked at, not just counted.
+ * Writes radd-canvas.png (lib/cdp outputPath) so the layout can be looked at, not just counted.
  *
  * Usage: node scripts/automations-canvas-proof.mjs [--base http://localhost:8000]
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { openEditor } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9334, profile: "/tmp/radd-canvas-proof" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9334, profile: "/tmp/radd-canvas-proof", base: "http://localhost:8000",
+});
 
 const branching = {
   name: "canvas proof (branching)",
@@ -44,16 +34,10 @@ const branching = {
     { source: "f", port: "unmatched", target: "cold" },
   ],
 };
-const created = await session.eval(post("/automations", branching));
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const created = await session.eval(pageFetch("POST", "/automations", branching));
+const rule = parsed(created);
 
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-// Open it: the row's edit affordance carries the rule name.
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("canvas proof"));` +
-    `if(el) el.click(); return !!el;})()`,
-);
+await openEditor(session, baseUrl, branching.name);
 
 let measured = null;
 for (let i = 0; i < 40 && !measured; i++) {
@@ -87,14 +71,9 @@ const boxes = measured?.boxes ?? [];
 const distinctPositions = new Set(boxes.map((b) => `${b.x},${b.y}`)).size;
 const allVisible = boxes.every((b) => b.w > 40 && b.h > 20);
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-canvas.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-canvas.png"));
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checks = {
@@ -109,7 +88,7 @@ const checks = {
   edgesHaveVisibleStroke: measured?.edgesHaveVisibleStroke ?? false,
   edgeStrokes: measured?.edgeStrokes ?? [],
   sourceHandlesDrawn: measured?.handles ?? 0,
-  screenshot: "/tmp/radd-canvas.png",
+  screenshot: outputPath("radd-canvas.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

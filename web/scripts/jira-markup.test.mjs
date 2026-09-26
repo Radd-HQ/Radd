@@ -8,28 +8,15 @@
  *
  * The transform is pure, so test it purely.
  *
- * Run from the repo root: node web/scripts/jira-markup.test.mjs
+ * Run from the repo root: node --test web/scripts/jira-markup.test.mjs
  */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "jiramarkup-"));
-const file = join(dir, "jira-markup.ts");
-writeFileSync(file, readFileSync("web/src/lib/jira-markup.ts", "utf8"));
-const { jiraToMarkdown } = await import(file);
+const { jiraToMarkdown } = await importTs("web/src/lib/jira-markup.ts");
 
-let failures = 0;
-const check = (label, actual, expected) => {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) {
-    console.log(`FAIL ${label}\n  got      ${a}\n  expected ${e}`);
-    failures++;
-  } else {
-    console.log(`ok   ${label}`);
-  }
-};
+const check = (label, actual, expected) => test(label, () => assert.deepStrictEqual(actual, expected));
 
 // --- RADD-1006: `{{` must not make a markdown body "Jira" -------------------
 //
@@ -106,6 +93,3 @@ check(
 );
 check("plain markdown is returned untouched", jiraToMarkdown("# Title\n\nBody.\n"), "# Title\n\nBody.\n");
 check("empty input is safe", jiraToMarkdown(""), "");
-
-console.log(failures ? `\n${failures} failure(s)` : "\nall cases passed");
-process.exit(failures ? 1 : 0);

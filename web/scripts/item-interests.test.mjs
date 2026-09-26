@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { stripTypeScriptTypes } from "node:module";
+import { evaluateTs } from "./lib/load-ts.mjs";
 
-const source = readFileSync("web/src/lib/item-interests.ts", "utf8");
-const code = stripTypeScriptTypes(source).replaceAll("export ", "");
-const { itemInterests } = Function(`${code}; return { itemInterests };`)();
+const { itemInterests } = evaluateTs(readFileSync("web/src/lib/item-interests.ts", "utf8"), {}, ["itemInterests"]);
 assert.equal(itemInterests(undefined), undefined);
 const item = { id: "self", parent: { id: "parent" }, epic: { id: "parent" }, links: {
   incoming: [{ item: { id: "related" } }], outgoing: [{ item: { id: "other" } }],

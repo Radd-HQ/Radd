@@ -10,20 +10,11 @@
  * Usage: node scripts/image-resize-proof.mjs <baseUrl> <spaceSlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { HOVER_CAPABLE_PROBE, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { HOVER_CAPABLE_PROBE, openBrowser, report, sleep, waitForSelector } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, email, password] = process.argv.slice(2);
 const PORT = 9457;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-image-proof");
-
-/** Poll for an element instead of guessing at a sleep. */
-async function waitFor(session, selector, tries = 24) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(`!!document.querySelector(${JSON.stringify(selector)})`)) return true;
-    await sleep(250);
-  }
-  return false;
-}
 
 async function main() {
   const { session } = await openBrowser({ port: PORT, profile: PROFILE, width: 1440, height: 1100 });
@@ -129,7 +120,6 @@ async function main() {
     return {
       present: !!block,
       handle: !!document.querySelector("[data-image-handle]"),
-      crepeImages: document.querySelectorAll(".milkdown-image-block").length,
       width: block ? block.getAttribute("data-width") : null,
     };
   })()`);
@@ -170,7 +160,7 @@ async function main() {
 
   // --- and it SURVIVES a reload, in read mode ------------------------------
   await session.navigate(`${baseUrl}/pages/${spaceSlug}/${setup.slug}`, 2000);
-  await waitFor(session, "[data-image-block] img");
+  await waitForSelector(session, "[data-image-block] img");
   const inReadMode = await session.eval(`(() => {
     const block = document.querySelector("[data-image-block]");
     const anyImg = [...document.querySelectorAll("img")].map((i) => i.getAttribute("src")).slice(0, 6);
@@ -196,7 +186,7 @@ async function main() {
   // Comments mount on approach (the thread is lazy), so scroll to the bottom
   // and then wait for the image rather than assuming a sleep covers both.
   await session.eval(`window.scrollTo(0, document.body.scrollHeight)`);
-  await waitFor(session, "[data-image-block][data-width='320'] img");
+  await waitForSelector(session, "[data-image-block][data-width='320'] img");
   const inComment = await session.eval(`(() => {
     const blocks = [...document.querySelectorAll("[data-image-block]")];
     const commented = blocks.find((b) => b.getAttribute("data-width") === "320");
@@ -222,7 +212,7 @@ async function main() {
       decoded.small?.w === 480 && decoded.full?.w === 2000,
     "it is still an image, served inline": /^image\//.test(bytes.contentType || ""),
     "a resized variant is cacheable": /immutable/.test(bytes.cache || ""),
-    "the editor renders our image view": inEditor.present === true && inEditor.crepeImages === 0,
+    "the editor renders our image view": inEditor.present === true,
     "an attachment image offers a resize handle": inEditor.handle === true,
     "dragging sets a width": width > 0 && width < 2000,
     "and the image is drawn at it": Math.abs(afterDrag.renderedWidth - width) <= 2,

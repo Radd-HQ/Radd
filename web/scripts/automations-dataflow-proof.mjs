@@ -7,13 +7,8 @@
  * value, and the dry run reports what each token became — including, on purpose,
  * one that becomes something the project does not have.
  *
- * NO LIVE MODEL. A twenty-line HTTP server in this file speaks the OpenAI
- * completions shape and answers with a fixed object, registered as an ordinary
- * AI provider row. That is deliberately at the HTTP layer rather than a
- * monkeypatch: everything between the node and the wire — the feature gate, the
- * role resolution, the JSON-Schema request, the structured extraction — is the
- * real code, and a stub any higher up would skip the parts that have actually
- * broken before.
+ * NO LIVE MODEL: a local server answers the OpenAI completions shape with a fixed object,
+ * registered as an ordinary provider row, so everything between the node and the wire is real.
  *
  * Asserts:
  *   - a freshly dropped `ai.generate` arrives NAMED, and the canvas shows it;
@@ -27,28 +22,15 @@
  *     the SKIP and the vocabulary, rather than "would apply";
  *   - both themes.
  *
- * Setup (throwaway instance — never the dev stack on :8000):
- *   cd server
- *   uv run python -c "import asyncio;from sqlalchemy.ext.asyncio import create_async_engine;\
- *     e=create_async_engine('postgresql+psycopg://radd:radd@localhost:5455/postgres',isolation_level='AUTOCOMMIT');\
- *     asyncio.run((lambda: e.connect().__aenter__())())"   # or psql: CREATE DATABASE radd_proof_s120
- *   RADD_DATABASE_URL=postgresql+psycopg://radd:radd@localhost:5455/radd_proof_s120 \
- *     RADD_BACKUP_TOOLS_OPTIONAL=true uv run alembic upgrade head
- *   RADD_DATABASE_URL=… uv run python -m radd.seed --email proof@radd.local \
- *     --password proof-1073 --name "Proof User"
- *   RADD_DATABASE_URL=… RADD_RUN_WORKERS=false \
- *     uv run uvicorn --factory radd.app:create_app --host 127.0.0.1 --port 8124
+ * Setup: a throwaway instance on :8124 (never the dev stack) with RADD_RUN_WORKERS=false and a
+ * seeded proof@radd.local / proof-1073 (`python -m radd.seed`).
  *
  * Usage: node scripts/automations-dataflow-proof.mjs [--base http://127.0.0.1:8124]
  */
 import { createServer } from "node:http";
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
-
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://127.0.0.1:8124";
-const email = process.env.RADD_PROOF_EMAIL ?? "proof@radd.local";
-const password = process.env.RADD_PROOF_PASSWORD ?? "proof-1073";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { clickPanelRow, openEditor, SAVE, SAVE_STATE, searchNodes } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
 const MODEL_PORT = 8125;
 const NODE_NAME = "triage";
@@ -86,24 +68,15 @@ const model = createServer((request, response) => {
 });
 await new Promise((resolve) => model.listen(MODEL_PORT, "127.0.0.1", resolve));
 
-const { session, close } = await openBrowser({ port: 9357, profile: "/tmp/radd-dataflow-proof" });
+const { session, close, baseUrl, loginStatus, hoverCapable } = await startProof({
+  port: 9357, profile: "/tmp/radd-dataflow-proof",
+  base: "http://127.0.0.1:8124", email: "proof@radd.local", password: "proof-1073",
+});
 const done = (failed) => {
   model.close();
   close();
   process.exit(failed ? 1 : 0);
 };
-
-const api = (method, path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},` +
-  `credentials:"include",headers:{"Content-Type":"application/json"}` +
-  (body === undefined ? "" : `,body:JSON.stringify(${JSON.stringify(body)})`) +
-  `});return {status:r.status, body: await r.text()};})()`;
-
-const parsed = (result) => (result.status < 300 ? JSON.parse(result.body) : null);
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-const hoverCapable = await session.hoverCapable();
 
 // --- the world ----------------------------------------------------------------
 
@@ -111,7 +84,7 @@ const suffix = Date.now().toString(36).slice(-4).toUpperCase();
 
 const provider = parsed(
   await session.eval(
-    api("POST", "/ai/providers", {
+    pageFetch("POST", "/ai/providers", {
       name: `fake ${suffix}`,
       wire_shape: "openai",
       base_url: `http://127.0.0.1:${MODEL_PORT}/v1`,
@@ -120,30 +93,30 @@ const provider = parsed(
   ),
 );
 const roleSet = await session.eval(
-  api("PUT", "/ai/roles/chat", { provider_id: provider?.id, model: "" }),
+  pageFetch("PUT", "/ai/roles/chat", { provider_id: provider?.id, model: "" }),
 );
 
 const project = parsed(
   await session.eval(
-    api("POST", "/projects", { key: `DF${suffix}`, name: `Dataflow ${suffix}` }),
+    pageFetch("POST", "/projects", { key: `DF${suffix}`, name: `Dataflow ${suffix}` }),
   ),
 );
 const item = parsed(
   await session.eval(
-    api("POST", "/items", {
+    pageFetch("POST", "/items", {
       project_id: project?.id,
       title: "Checkout is down for every customer",
       description: "Since the 14:00 deploy the payment page 500s for everyone.",
     }),
   ),
 );
-const states = parsed(await session.eval(api("GET", `/states?project_id=${project?.id}`)));
+const states = parsed(await session.eval(pageFetch("GET", `/states?project_id=${project?.id}`)));
 const stateNames = (states ?? []).map((state) => state.name);
 
 const ruleName = `triage chain ${suffix}`;
 const rule = parsed(
   await session.eval(
-    api("POST", "/automations", {
+    pageFetch("POST", "/automations", {
       name: ruleName,
       enabled: false,
       orientation: "vertical",
@@ -154,28 +127,6 @@ const rule = parsed(
 );
 
 // --- probes -------------------------------------------------------------------
-
-const OPEN_RULE = `(() => {
-  const button = document.querySelector('[aria-label="Edit ${ruleName}"]');
-  if (button) button.click();
-  return Boolean(button);
-})()`;
-
-const SEARCH_NODES = (text) => `(() => {
-  const input = document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-  if (!input) return false;
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-  setter.call(input, ${JSON.stringify(text)});
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  return true;
-})()`;
-
-const ADD_NODE = (label) => `(() => {
-  const row = [...document.querySelectorAll("[data-node-panel] li button")]
-    .find((b) => new RegExp(${JSON.stringify(label)}, "i").test(b.textContent || ""));
-  if (row) row.click();
-  return Boolean(row);
-})()`;
 
 /** The name the inspector shows for the selected node, plus whether it flagged
  * an error. */
@@ -205,7 +156,7 @@ const SET_FIELD = (labelPattern, value) => `(() => {
   return true;
 })()`;
 
-/** The generate form's own rows — the shape SchemaFields cannot render. */
+/** The generate form's own rows — the shape SchemaForm cannot render. */
 const GENERATE_FORM = `(() => {
   const rows = [...document.querySelectorAll("[data-generate-field]")];
   const fields = document.querySelector("[data-schema-fields]");
@@ -345,20 +296,6 @@ const CANVAS_NAMES = `(() => Object.fromEntries(
   ]),
 ))()`;
 
-const SAVE = `(() => {
-  const button = [...document.querySelectorAll("button[type=submit]")]
-    .find((b) => /save changes|create automation/i.test(b.textContent || ""));
-  if (!button) return false;
-  button.click();
-  return true;
-})()`;
-
-const SAVE_STATE = `(() => {
-  const text = document.body.innerText;
-  const match = text.match(/Rejected on save:[^\\n]*/);
-  return { rejected: match ? match[0] : null, saved: /\\bSaved\\b/.test(text) };
-})()`;
-
 const RUN_TEST = `(() => {
   const button = [...document.querySelectorAll("button")].find((b) => /^Run$/.test((b.textContent || "").trim()));
   if (!button) return false;
@@ -382,29 +319,16 @@ const TEST_RESULT = `(() => {
   return { produced, actions };
 })()`;
 
-async function openEditor() {
-  await session.navigate(`${baseUrl}/settings/automations`, 2200);
-  const opened = await session.eval(OPEN_RULE);
-  await sleep(2500);
-  return opened;
-}
-
-/** Select a node on the canvas by the type printed on its card.
- *
- * A REAL click through the input pipeline, not a synthesised MouseEvent: React
- * Flow's pointer handler reads `event.view.document`, and a hand-built event
- * carries `view: null`. The matcher is built with `new Function` because
- * `clickAt` STRINGIFIES it into the page, where a closed-over variable does not
- * exist — an arrow function capturing `type` throws a ReferenceError that reads
- * like a product bug. */
+/** Select a node by the type on its card with a REAL click: React Flow's pointer handler reads
+ *  `event.view.document`, which a synthesised MouseEvent leaves null. */
 const selectNode = (type) => session.click(`[data-node-type="${type}"]`, () => true);
 
 // --- 1. drop the generate node and configure it -------------------------------
 
-const opened = await openEditor();
-await session.eval(SEARCH_NODES("generate"));
+const opened = await openEditor(session, baseUrl, ruleName);
+await session.eval(searchNodes("generate"));
 await sleep(600);
-const addedGenerate = await session.eval(ADD_NODE("generate with ai"));
+const addedGenerate = await session.eval(clickPanelRow(/generate with ai/i));
 await sleep(1400);
 
 const autoName = await session.eval(NAME_FIELD);
@@ -449,25 +373,22 @@ await session.click(`[data-generate-field="2"] button[aria-label]`, () => true);
 await sleep(300);
 const formAfter = await session.eval(GENERATE_FORM);
 
-const saveOne = await session.eval(SAVE);
+await session.eval(SAVE);
 await sleep(1600);
 const savedGenerate = await session.eval(SAVE_STATE);
 
 // --- 2. wire the actions ------------------------------------------------------
 //
-// The NODES are added and configured in the editor; the EDGES are written
-// through the API. React Flow's connection is a pointer drag between two 9px
-// handles across a zoomed, panned canvas — synthesising it would be a proof of
-// the harness's arithmetic rather than of this feature, and no proof in this
-// repo does it.
+// Edges go in over the API: synthesising a drag between two 9px handles on a zoomed canvas
+// would prove the harness's arithmetic, not the feature.
 
-const stored = (parsed(await session.eval(api("GET", "/automations"))) ?? []).find(
+const stored = (parsed(await session.eval(pageFetch("GET", "/automations"))) ?? []).find(
   (entry) => entry.id === rule?.id,
 );
 const generateNode = (stored?.nodes ?? []).find((node) => node.type === "ai.generate");
 
 await session.eval(
-  api("PATCH", `/automations/${rule?.id}`, {
+  pageFetch("PATCH", `/automations/${rule?.id}`, {
     nodes: [
       ...(stored?.nodes ?? []),
       {
@@ -499,7 +420,7 @@ await session.eval(
 
 // --- 3. the token picker, from a node BELOW the producer ----------------------
 
-await openEditor();
+await openEditor(session, baseUrl, ruleName);
 await selectNode("action.set_priority");
 await sleep(900);
 await session.eval(TOKEN_MODE("Priority"));
@@ -585,12 +506,12 @@ await session.eval(`(() => {
 await sleep(800);
 await session.eval(TOKEN_MODE("Priority"));
 await sleep(300);
-const exitedTokenMode = await session.eval(`(() => {
+await session.eval(`(() => {
   const wrap = document.querySelector('[data-tokenizable="Priority"]');
   const toggle = wrap && wrap.querySelector("button[aria-pressed]");
   if (toggle && toggle.getAttribute("aria-pressed") === "true") toggle.click();
   return null;
-})()` + `; null`);
+})()`);
 await sleep(400);
 const restored = await session.eval(CONTROL_STATE);
 
@@ -604,8 +525,7 @@ await session.eval(SAVE);
 await sleep(1700);
 const savedChain = await session.eval(SAVE_STATE);
 
-const shotLight = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-1073-builder.png", Buffer.from(shotLight.data, "base64"));
+await session.screenshot(outputPath("radd-1073-builder.png"));
 
 // --- 4. run it ----------------------------------------------------------------
 
@@ -638,8 +558,7 @@ const ran = await session.eval(RUN_TEST);
 await sleep(3500);
 const result = await session.eval(TEST_RESULT);
 
-const shotRun = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-1073-dryrun.png", Buffer.from(shotRun.data, "base64"));
+await session.screenshot(outputPath("radd-1073-dryrun.png"));
 
 // --- 5. both themes -----------------------------------------------------------
 
@@ -667,14 +586,13 @@ for (const theme of ["dark", "light"]) {
     };
     return { token: seen(token), detail: seen(detail) };
   })()`);
-  const shot = await session.send("Page.captureScreenshot", { format: "png" });
-  writeFileSync(`/tmp/radd-1073-dryrun-${theme}.png`, Buffer.from(shot.data, "base64"));
+  await session.screenshot(outputPath(`radd-1073-dryrun-${theme}.png`));
 }
 
 // --- teardown -----------------------------------------------------------------
 
-if (rule) await session.eval(api("DELETE", `/automations/${rule.id}`));
-if (provider) await session.eval(api("DELETE", `/ai/providers/${provider.id}`));
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
+if (provider) await session.eval(pageFetch("DELETE", `/ai/providers/${provider.id}`));
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const producedFor = (name) =>
@@ -777,12 +695,8 @@ const failed = report(
     run: result,
     saves: { generate: savedGenerate, chain: savedChain },
     themes,
-    screenshots: [
-      "/tmp/radd-1073-builder.png",
-      "/tmp/radd-1073-dryrun.png",
-      "/tmp/radd-1073-dryrun-dark.png",
-      "/tmp/radd-1073-dryrun-light.png",
-    ],
+    screenshots: ["radd-1073-builder.png", "radd-1073-dryrun.png", "radd-1073-dryrun-dark.png",
+      "radd-1073-dryrun-light.png"].map(outputPath),
     consoleErrors: session.consoleErrors
       .filter((line) => !/plugin UI .* failed to load \(quarantined\)/.test(line))
       .slice(0, 5),

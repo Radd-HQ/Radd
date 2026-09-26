@@ -1,16 +1,11 @@
-/** RADD-1282: browser contract for issue threads and workflow rule preservation. */
+/** Linked-comment reveal, one-open-thread toggles, symbol picker, signature collapse (RADD-1337) and My Work widget resize, against a fixture API. */
 import assert from "node:assert/strict";
-import http from "node:http";
-import {readFileSync, existsSync, statSync} from "node:fs";
 import {mkdtemp} from "node:fs/promises";
-import path from "node:path";
-import {fileURLToPath} from "node:url";
-import {openBrowser} from "./lib/cdp.mjs";
+import {openBrowser, until} from "./lib/cdp.mjs";
 import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
+import {serveBuiltSpa} from "./lib/spa-server.mjs";
 
-const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 // RADD-1401: a mailed body's signature is folded by the mailintake remote's `content.body` claim.
-const mailDist = fileURLToPath(new URL("../../server/src/radd/modules/mailintake/ui/dist/", import.meta.url));
 const user = {id: "admin", name: "Review Owner", email: "fixture@example.test", global_role: "admin", permissions: ["*"], timezone: "UTC"};
 const project = {id: "project", key: "THR", name: "Thread review", permissions: ["*"], created_at: "2026-01-01"};
 const states = ["Open", "Done"].map((name, i) => ({id: `state-${i}`, name, category: i ? "done" : "todo", category_key: i ? "done" : "todo", position: i, project_id: project.id}));
@@ -37,13 +32,7 @@ let threadPolicy = {default: "author", overrides: []};
 const issueTypes = [{id: "type-bug", project_id: "project", name: "Bug", color: "#ff0000", position: 0, is_default: true},
   {id: "type-review", project_id: "project", name: "Review", color: "#00ff00", position: 1, is_default: false}];
 let failResolve = false;
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, "http://fixture");
-  if (url.pathname.startsWith("/plugins/mailintake/")) {
-    const file = path.join(mailDist, url.pathname.slice("/plugins/mailintake/".length));
-    if (!existsSync(file)) {res.writeHead(404); res.end(); return;}
-    res.writeHead(200, {"content-type": "text/javascript"}); res.end(readFileSync(file)); return;
-  }
+const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
     let raw = ""; for await (const chunk of req) raw += chunk;
@@ -59,7 +48,6 @@ const server = http.createServer(async (req, res) => {
     else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS, "mailintake"],
       remotes: [{name: "mailintake", remote_entry: "/plugins/mailintake/remoteEntry.js", ui_api_version: "1.19.0"}]};
     else if (route.endsWith("/mail-contacts")) data = [];
-    else if (route === "/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};
     else if (route === "/projects/project" || route === "/projects/by-key/THR") data = project;
@@ -92,7 +80,6 @@ const server = http.createServer(async (req, res) => {
     else if (route === "/projects/project/thread-resolution") data = threadPolicy = req.method === "PUT" ? body : threadPolicy;
     else if (route === "/issue-types") data = issueTypes;
     else if (route === "/transitions/transition" && req.method === "PATCH") data = transition = {...transition, ...body};
-    else if (route === "/settings/scoped") data = [{key: "workflow_transition_mode", value: "guards", default: "off", set_here: true}];
     else if (route.endsWith("/sla")) data = {entries: []};
     else if (route.endsWith("/watchers")) data = {watching: false, watchers: []};
     else if (route.includes("/notifications")) data = {items: [], notifications: [], unread_count: 0, total: 0};
@@ -101,26 +88,17 @@ const server = http.createServer(async (req, res) => {
     else if (route.includes("/resolve")) data = {value: false};
     else if (route.endsWith("/timelogging")) data = {enabled: false};
     res.writeHead(status, {"content-type": "application/json", "X-Total-Count": String(Array.isArray(data) ? data.length : 0)});
-    res.end(JSON.stringify(data)); return;
+    res.end(JSON.stringify(data)); return true;
   }
-  let file = path.resolve(dist, "." + url.pathname);
-  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(dist, "index.html");
-  const mime = {".js": "text/javascript", ".css": "text/css", ".html": "text/html"}[path.extname(file)] ?? "application/octet-stream";
-  res.writeHead(200, {"content-type": mime}); res.end(readFileSync(file));
 });
-await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-const until = async (predicate, label) => {
-  for (let i = 0; i < 150; i++) {if (await predicate()) return; await new Promise(resolve => setTimeout(resolve, 50));}
-  throw Error(label);
-};
 let browser;
 try {
   browser = await openBrowser({port: 18859, profile: await mkdtemp("/tmp/radd-issue-features-"), scale: 1});
   const s = browser.session;
-  const base = `http://127.0.0.1:${server.address().port}`;
+  const base = spa.origin;
   const button = text => s.eval(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === ${JSON.stringify(text)})?.click()`);
   await s.navigate(base + "/issues/THR-1?comment=reply");
-  await until(() => s.eval(`!!document.querySelector('[data-comment-id="reply"][data-comment-linked]')`), "linked reply not revealed");
+  await until(s, () => s.eval(`!!document.querySelector('[data-comment-id="reply"][data-comment-linked]')`), "linked reply not revealed");
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute('aria-expanded')`), "true");
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="locked"]').getAttribute('aria-expanded')`), "false");
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-replies="thread"] [contenteditable=true]')`), false, "reading replies opened composer");
@@ -129,28 +107,28 @@ try {
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute('aria-expanded')`), "true", "opening another thread closed first");
   await new Promise(resolve => setTimeout(resolve, 4500));
   assert(await s.eval(`!!document.querySelector('[data-comment-id="reply"][data-comment-linked]')`), "highlight disappeared before ten seconds");
-  await until(() => s.eval(`!!document.querySelector('[aria-label="Emoji and symbols"]')`), "symbol picker unavailable");
+  await until(s, () => s.eval(`!!document.querySelector('[aria-label="Emoji and symbols"]')`), "symbol picker unavailable");
   await s.click('[aria-label="Emoji and symbols"]');
   await s.click('[aria-label="warning attention"]');
-  await until(() => s.eval(`Array.from(document.querySelectorAll('[contenteditable=true]')).some(e => e.innerText.includes('⚠'))`), "symbol did not enter editor");
+  await until(s, () => s.eval(`Array.from(document.querySelectorAll('[contenteditable=true]')).some(e => e.innerText.includes('⚠'))`), "symbol did not enter editor");
   assert(await s.eval(`document.body.innerText.includes('Sender authentication warning')`), 'signature hid authentication warning');
   assert.equal(await s.eval(`document.body.innerText.includes('Best regards,')`), false, 'signature not initially collapsed');
   await s.eval(`Array.from(document.querySelectorAll('summary')).find(e=>e.textContent==='Show signature').click()`);
-  await until(() => s.eval(`document.body.innerText.includes('Best regards,')`), 'signature did not expand');
+  await until(s, () => s.eval(`document.body.innerText.includes('Best regards,')`), 'signature did not expand');
   await button('Not a signature');
-  await until(() => s.eval(`!Array.from(document.querySelectorAll('summary')).some(e=>e.textContent==='Show signature')`), 'signature annotation not restored');
+  await until(s, () => s.eval(`!Array.from(document.querySelectorAll('summary')).some(e=>e.textContent==='Show signature')`), 'signature annotation not restored');
   await s.screenshot('/tmp/radd-issue-features-comments.png');
   await new Promise(resolve => setTimeout(resolve, 5700));
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-id="reply"][data-comment-linked]')`), false, "highlight never cleared");
   await s.navigate(base + '/');
-  await until(() => s.eval(`!!document.querySelector('[data-widget-id="w1"]')`), "My Work widgets missing");
+  await until(s, () => s.eval(`!!document.querySelector('[data-widget-id="w1"]')`), "My Work widgets missing");
   assert.equal(await s.eval(`!!document.querySelector('[aria-label="Widget width"]')`), false, "resize controls escaped edit mode");
   await button('Customize');
-  await until(() => s.eval(`!!document.querySelector('[aria-label="Widget width"]')`), "edit sizing missing");
+  await until(s, () => s.eval(`!!document.querySelector('[aria-label="Widget width"]')`), "edit sizing missing");
   await s.click('[aria-label="Widget width"]');
   await s.send('Input.dispatchKeyEvent', {type:'keyDown', key:'ArrowUp', code:'ArrowUp'});
   await s.send('Input.dispatchKeyEvent', {type:'keyUp', key:'ArrowUp', code:'ArrowUp'});
-  await until(() => s.eval(`document.querySelector('[aria-label="Widget width"]').value === '8'`), 'keyboard resize failed');
+  await until(s, () => s.eval(`document.querySelector('[aria-label="Widget width"]').value === '8'`), 'keyboard resize failed');
   await button('Cancel');
   assert.equal(workWidgets[0].width,7, 'Cancel saved layout');
   await button('Customize');
@@ -160,15 +138,15 @@ try {
   await s.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:box.x+100,y:box.y+80,button:'left',buttons:1});
   await s.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:box.x+100,y:box.y+80,button:'left',clickCount:1});
   await button('Save');
-  await until(() => workWidgets[0].height === 440 && workWidgets[0].width > 7, 'drag resize did not persist');
-  await until(() => s.eval(`!document.querySelector('[aria-label="Widget width"]')`), "Save did not leave edit mode");
+  await until(s, () => workWidgets[0].height === 440 && workWidgets[0].width > 7, 'drag resize did not persist');
+  await until(s, () => s.eval(`!document.querySelector('[aria-label="Widget width"]')`), "Save did not leave edit mode");
   await s.click('[data-widget-id="w1"] button[aria-expanded]');
-  await until(() => workWidgets[0].collapsed, 'normal-mode collapse not persisted');
+  await until(s, () => workWidgets[0].collapsed, 'normal-mode collapse not persisted');
   await s.navigate(base + '/');
-  await until(() => s.eval(`document.querySelector('[data-widget-id="w1"]')?.dataset.collapsed === 'true'`), 'saved collapsed state did not reload');
+  await until(s, () => s.eval(`document.querySelector('[data-widget-id="w1"]')?.dataset.collapsed === 'true'`), 'saved collapsed state did not reload');
   await s.screenshot('/tmp/radd-issue-features-dashboard.png');
   console.log(JSON.stringify({passed:true, checks:['resolution defaults','independent threads','composer on demand','readable reply control','10 second highlight','Unicode symbol insertion','edit-only resize','cancel leaves server unchanged','pointer resize saved','collapse saved across reload']}));
 } catch(error) {
   if(browser) { await browser.session.screenshot('/tmp/radd-issue-features-failure.png'); console.error(await browser.session.eval('document.body.innerText')); }
   throw error;
-} finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
+} finally { await browser?.close(); await spa.close(); }

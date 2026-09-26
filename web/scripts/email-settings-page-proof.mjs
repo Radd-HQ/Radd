@@ -20,36 +20,16 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9501;
 const TMP = process.env.TMPDIR || "/tmp";
-const PROFILE = resolve(TMP, "radd-email-settings-page-proof-profile");
 const stamp = Date.now().toString(36);
 const key = `ES${stamp.slice(-4).toUpperCase()}`;
 const sourceName = `Email proof ${stamp}`;
 const renamed = `${sourceName} renamed`;
 const KEYS = ["mail_send_ack", "mail_ack_body", "mail_send_resolved"];
 const PAGE_COPY = "Where mail arrives, where it is sent from";
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 40) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
 
 /** Type into the dialog field whose label reads `label`, the way React sees typing. */
 const typeInto = (session, label, value) => session.eval(`(() => {
@@ -63,6 +43,10 @@ const typeInto = (session, label, value) => session.eval(`(() => {
   return true;
 })()`);
 
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9501, profile: resolve(TMP, "radd-email-settings-page-proof-profile"),
+});
+
 // 1. the build: the page is in the remote, and nowhere in the host.
 const web = fileURLToPath(new URL("..", import.meta.url));
 const assets = readdirSync(resolve(web, "dist/assets"));
@@ -73,16 +57,10 @@ check("no host asset carries the page's copy", hostCopy.length === 0, hostCopy.j
 const remote = readFileSync(resolve(web, "../server/src/radd/modules/mailintake/ui/dist/remoteEntry.js"), "utf8");
 check("the mailintake remote does", remote.includes(PAGE_COPY));
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
 let world = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-  check("headless chrome reports a real pointer", await session.hoverCapable());
-
   // 2. the world: a project, and a source that is off (nothing polls or accepts it).
-  world = await session.eval(`(async () => { ${API}
+  world = await session.eval(`(async () => { ${PAGE_API}
     const project = await api("POST", "/projects", { key: ${JSON.stringify(key)}, name: "Email proof project" });
     const source = await api("POST", "/mail/sources", { name: ${JSON.stringify(sourceName)}, kind: "webhook", enabled: false,
       address: ${JSON.stringify(`${stamp}@example.test`)}, default_project_id: project.body.id, secret: "proof" });
@@ -135,7 +113,7 @@ try {
     String(dialog).slice(0, 300));
   check("the name field takes typing", await typeInto(session, "Name", renamed));
   await session.click('[role="dialog"] button', (text) => text.trim() === "Save");
-  const saved = await waitFor(session, `(async () => { ${API}
+  const saved = await waitFor(session, `(async () => { ${PAGE_API}
     const mine = (await api("GET", "/mail/sources")).body.find((s) => s.id === ${JSON.stringify(world.sourceId)});
     return mine && mine.name === ${JSON.stringify(renamed)} ? mine : null;
   })()`);
@@ -146,7 +124,7 @@ try {
     saved?.enabled === false && saved?.default_project_id === world.projectId && saved?.has_secret === true, JSON.stringify(saved)?.slice(0, 200));
 
   // 6. the two host links into the page, neither naming it.
-  const content = await session.eval(`(async () => { ${API}
+  const content = await session.eval(`(async () => { ${PAGE_API}
     return (await api("GET", "/projects/" + ${JSON.stringify(world.projectId)} + "/content")).body; })()`);
   const blocker = content?.blockers?.find((b) => b.id === world.sourceId);
   check("the project's delete blocker links to the page by the owner's entity link",
@@ -163,7 +141,7 @@ try {
   await session.click('[role="dialog"] button', (text) => text.trim() === "Delete");
   await waitFor(session, `[...document.querySelectorAll('[role="dialog"] button')].some((b) => b.textContent.trim() === "Delete source")`);
   await session.click('[role="dialog"] button', (text) => text.trim() === "Delete source");
-  const gone = await waitFor(session, `(async () => { ${API}
+  const gone = await waitFor(session, `(async () => { ${PAGE_API}
     return !(await api("GET", "/mail/sources")).body.some((s) => s.id === ${JSON.stringify(world.sourceId)}); })()`);
   check("the source is deleted through the page", gone);
   if (gone) world.sourceId = null;
@@ -171,7 +149,7 @@ try {
   check("no console errors", session.consoleErrors.length === 0, session.consoleErrors.slice(0, 3).join(" | "));
 } finally {
   if (world?.projectId) {
-    const cleaned = await session.eval(`(async () => { ${API}
+    const cleaned = await session.eval(`(async () => { ${PAGE_API}
       const s = ${JSON.stringify(world.sourceId)} ? (await api("DELETE", "/mail/sources/" + ${JSON.stringify(world.sourceId)})).status : 204;
       const p = (await api("DELETE", "/projects/" + ${JSON.stringify(world.projectId)})).status;
       return [s, p];
@@ -180,8 +158,4 @@ try {
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "email settings page", key, source: sourceName },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "email settings page", key, source: sourceName });

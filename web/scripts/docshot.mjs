@@ -46,7 +46,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
-import { openDocsBrowser, capture, goto, waitForSelector } from "./lib/docshot.mjs";
+import { waitForSelector } from "./lib/cdp.mjs";
+import { openDocsBrowser, capture, goto } from "./lib/docshot.mjs";
 
 const argv = process.argv.slice(2);
 const mode = argv[0];

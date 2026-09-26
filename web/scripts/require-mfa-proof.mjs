@@ -21,13 +21,10 @@
 import { createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
-import { clickAt, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { clickAt, openBrowser, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: require-mfa-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
+const { baseUrl, email: adminEmail, password: adminPassword } = proofArgs();
 const PORT = 9497;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-require-mfa-proof");
 const SHOTS = resolve(process.env.TMPDIR || "/tmp", "radd-require-mfa-proof-shots");
@@ -52,17 +49,6 @@ function totpCode(secret) {
   return String(value % 1_000_000).padStart(6, "0");
 }
 
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
-
 async function main() {
   execFileSync("mkdir", ["-p", SHOTS]);
   const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1300, height: 950, scale: 2 });
@@ -80,7 +66,7 @@ async function main() {
     context.adminLogin = await session.login(baseUrl, adminEmail, adminPassword);
 
     // Two throwaway accounts, created by the dev admin.
-    const made = await session.eval(`(async () => { ${API}
+    const made = await session.eval(`(async () => { ${PAGE_API}
       const gate = await api("POST", "/users", { email: ${JSON.stringify(GATE_ADMIN)}, name: "MFA gate admin", password: ${JSON.stringify(PASSWORD)}, instance_role: "admin" });
       const member = await api("POST", "/users", { email: ${JSON.stringify(MEMBER)}, name: "MFA proof member", password: ${JSON.stringify(PASSWORD)} });
       return { gate: gate.body, member: member.body };
@@ -90,21 +76,21 @@ async function main() {
 
     // 1 — the gate admin, NOT enrolled, is refused the switch.
     await signInAs(GATE_ADMIN, PASSWORD);
-    const refused = await session.eval(`(async () => { ${API}
+    const refused = await session.eval(`(async () => { ${PAGE_API}
       return api("PUT", "/scoped-settings", { key: "require_mfa", scope: "instance", scope_id: null, value: true });
     })()`);
     checks["1. an un-enrolled admin cannot turn require_mfa on (409)"] =
       refused.status === 409 && /set up two-factor/.test(refused.body?.detail ?? "");
 
     // 2 — enrol the gate admin over the self-service API, then flip it.
-    const flipped = await session.eval(`(async () => { ${API}
+    const flipped = await session.eval(`(async () => { ${PAGE_API}
       return (await api("POST", "/auth/totp/setup")).body;
     })()`);
     gateSecret = flipped.secret;
-    await session.eval(`(async () => { ${API}
+    await session.eval(`(async () => { ${PAGE_API}
       return api("POST", "/auth/totp/confirm", { code: ${JSON.stringify(totpCode(flipped.secret))} });
     })()`);
-    const on = await session.eval(`(async () => { ${API}
+    const on = await session.eval(`(async () => { ${PAGE_API}
       return api("PUT", "/scoped-settings", { key: "require_mfa", scope: "instance", scope_id: null, value: true });
     })()`);
     checks["2. an enrolled admin can turn it on"] = on.status === 200 && on.body?.value === true;
@@ -203,7 +189,7 @@ async function main() {
     // 6 — the Users page, as the gate admin.
     await signInAs(GATE_ADMIN, PASSWORD).catch(() => null);
     // The gate admin is enrolled now, so a password alone is refused — use the code step.
-    await session.eval(`(async () => { ${API}
+    await session.eval(`(async () => { ${PAGE_API}
       return api("POST", "/auth/login/totp", { email: ${JSON.stringify(GATE_ADMIN)}, password: ${JSON.stringify(PASSWORD)}, code: ${JSON.stringify(totpCode(flipped.secret))} });
     })()`);
     await session.navigate(baseUrl + "/settings/users", 1500);
@@ -234,7 +220,7 @@ async function main() {
     await session.screenshot(resolve(SHOTS, "sign-in-settings.png"));
 
     // 7 — the Profile panel draws the same QR for self-service setup (the dev admin).
-    await session.eval(`(async () => { ${API}
+    await session.eval(`(async () => { ${PAGE_API}
       await api("PUT", "/scoped-settings", { key: "require_mfa", scope: "instance", scope_id: null, value: false });
     })()`);
     ids.policyOn = false;
@@ -251,7 +237,7 @@ async function main() {
       // With the policy still on, the (un-enrolled) dev admin cannot sign in —
       // the enrolled gate admin switches it off first, through the code step.
       if (ids.policyOn && gateSecret) {
-        await session.eval(`(async () => { ${API}
+        await session.eval(`(async () => { ${PAGE_API}
           await fetch("/api/v1/auth/logout", { method: "POST" });
           await api("POST", "/auth/login/totp", { email: ${JSON.stringify(GATE_ADMIN)}, password: ${JSON.stringify(PASSWORD)}, code: ${JSON.stringify(totpCode(gateSecret || "AAAAAAAA"))} });
           await api("PUT", "/scoped-settings", { key: "require_mfa", scope: "instance", scope_id: null, value: false });
@@ -259,7 +245,7 @@ async function main() {
       }
       await session.eval(`fetch("/api/v1/auth/logout", { method: "POST" })`);
       await session.login(baseUrl, adminEmail, adminPassword);
-      context.cleanup = await session.eval(`(async () => { ${API}
+      context.cleanup = await session.eval(`(async () => { ${PAGE_API}
         const off = await api("PUT", "/scoped-settings", { key: "require_mfa", scope: "instance", scope_id: null, value: false });
         const out = { policyOff: off.status };
         for (const id of ${JSON.stringify([ids.gate, ids.member].filter(Boolean))}) {

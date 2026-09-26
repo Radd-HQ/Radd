@@ -23,27 +23,12 @@
  * The space is deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: page-paths-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9493;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-page-paths-proof");
 const SLUG = `paths-proof-${Date.now().toString(36).slice(-5)}`;
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 const VIEW = `(() => {
   const title = document.querySelector('input[aria-label="Page title"]')?.value ?? null;
@@ -57,9 +42,9 @@ const VIEW = `(() => {
 })()`;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl, loginStatus } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
-  const context = { slug: SLUG };
+  const context = { slug: SLUG, login: loginStatus };
   let spaceId = null;
   const view = () => session.eval(VIEW);
   const expand = async (title) => {
@@ -67,10 +52,7 @@ async function main() {
     await sleep(250);
   };
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    context.login = await session.login(baseUrl, adminEmail, adminPassword);
-
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const space = await api("POST", "/page-spaces", { name: "Paths proof", slug: ${JSON.stringify(SLUG)} });
       const sid = space.body.id;
       const mk = async (title, parent_id) => (await api("POST", "/pages", { space_id: sid, title, body: "body of " + title, parent_id })).body;
@@ -102,7 +84,7 @@ async function main() {
     checks.headerShowsTheNumberAsAPermalink =
       v.permalink?.[0] === `#${setup.laptops.number}` && v.permalink?.[1] === `/pages?pageId=${setup.laptops.number}`;
     checks.breadcrumbsLinkByPath = v.crumbs.some(([t, h]) => t === "Onboarding" && h === p("engineering/onboarding")) && v.crumbs.some(([t, h]) => t === "Engineering" && h === p("engineering"));
-    await session.screenshot(resolve("scripts", "page-paths-proof-nested.png"));
+    await session.screenshot(outputPath("page-paths-proof-nested.png"));
 
     // 2. the permalink redirects to the path
     await session.navigate(`${baseUrl}/pages?pageId=${setup.laptops.number}`, 3000);
@@ -111,7 +93,7 @@ async function main() {
     checks.permalinkRedirectsToThePath = v.path === p("engineering/onboarding/laptops") && v.search === "" && v.title === "Laptops";
 
     // 3. rename + move: the old address still lands, and redirects
-    const moved = await session.eval(`(async () => { ${API}
+    const moved = await session.eval(`(async () => { ${PAGE_API}
       const renamed = await api("PATCH", "/pages/${setup.laptops.id}", { slug: "hardware" });
       const neighbour = (await api("POST", "/pages", { space_id: "${setup.sid}", title: "Hardware", body: "x", parent_id: "${setup.opsOnb.id}" })).body;
       const moved = await api("PATCH", "/pages/${setup.laptops.id}", { parent_id: "${setup.opsOnb.id}" });
@@ -133,12 +115,12 @@ async function main() {
     checks.theNamesakeIsNotConfusedWithIt = v.title === "Hardware" && v.path === p("operations/onboarding/hardware");
 
     // 4. a bare segment that was never an address is not guessed at
-    const bare = await session.eval(`(async () => { ${API} return (await api("GET", "/pages/by-path/${SLUG}/hardware-2")).status; })()`);
+    const bare = await session.eval(`(async () => { ${PAGE_API} return (await api("GET", "/pages/by-path/${SLUG}/hardware-2")).status; })()`);
     context.bare = bare;
     checks.bareSegmentIsNotGuessedAt = bare === 404;
 
     // 5. archived pages do not squat on names
-    const archived = await session.eval(`(async () => { ${API}
+    const archived = await session.eval(`(async () => { ${PAGE_API}
       await api("DELETE", "/pages/${setup.engOnb.id}");
       const fresh = (await api("POST", "/pages", { space_id: "${setup.sid}", title: "Onboarding", body: "new", parent_id: "${setup.eng.id}" })).body;
       return { slug: fresh.slug, path: fresh.path };
@@ -157,7 +139,7 @@ async function main() {
     checks.printViewLivesUnderItsOwnPrefix = print.mounted && print.title === "Laptops" && print.footer.includes(p("operations/onboarding/hardware-2"));
   } finally {
     if (spaceId) {
-      await session.eval(`(async () => { ${API} return (await api("DELETE", "/page-spaces/${spaceId}?force=true")).status; })()`).catch(() => null);
+      await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/page-spaces/${spaceId}?force=true")).status; })()`).catch(() => null);
     }
     await close();
   }

@@ -12,17 +12,12 @@
  *      strip, one bound editor.
  */
 import assert from "node:assert/strict";
-import http from "node:http";
-import { readFileSync, existsSync, statSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { openBrowser } from "./lib/cdp.mjs";
+import { openBrowser, until } from "./lib/cdp.mjs";
 import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 import { createMockLiveRoom } from "./lib/mock-live-room.mjs";
+import { serveBuiltSpa } from "./lib/spa-server.mjs";
 
-const dist = fileURLToPath(new URL("../dist/", import.meta.url));
-const collabDist = fileURLToPath(new URL("../../server/src/radd/modules/collab/ui/dist/", import.meta.url));
 let collabEnabled = true, collabVersion = 1;
 const user = { id: "admin", name: "Fixture Editor", email: "fixture@example.test", global_role: "admin", permissions: ["*"], timezone: "UTC" };
 const colleague = { id: "grace", name: "Grace Fixture", color: "var(--chart-todo)", emoji: null };
@@ -34,13 +29,11 @@ const room = createMockLiveRoom({ peer: colleague });
 const requests = [], patches = [], joins = [];
 let sessions = 0;
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, "http://fixture");
+const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/plugins/")) {
     requests.push({ route: url.pathname, method: req.method });
-    const file = path.join(collabDist, url.pathname.slice("/plugins/collab/".length));
-    if (!url.pathname.startsWith("/plugins/collab/") || !existsSync(file)) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { "content-type": "text/javascript" }); res.end(readFileSync(file)); return;
+    if (!url.pathname.startsWith("/plugins/collab/")) { res.writeHead(404); res.end(); return true; }
+    return false;
   }
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
@@ -67,7 +60,7 @@ const server = http.createServer(async (req, res) => {
         data = page;
       }
     }
-    else if (route === "/preferences" || route === "/auth/me/preferences") data = {};
+    else if (route === "/auth/me/preferences") data = {};
     else if (route === "/projects/summary") data = { total: 0, related_count: 0, permissions: ["*"] };
     else if (route === "/page-spaces/summary") data = { total: 1, permissions: ["*"] };
     else if (route === "/page-spaces") data = [space];
@@ -81,30 +74,21 @@ const server = http.createServer(async (req, res) => {
     else if (route.includes("/resolve")) data = { value: false };
     else if (route === "/users/directory") data = [user, { id: colleague.id, name: colleague.name }];
     res.writeHead(status, { "content-type": "application/json", "X-Total-Count": String(Array.isArray(data) ? data.length : 0) });
-    res.end(JSON.stringify(data)); return;
+    res.end(JSON.stringify(data)); return true;
   }
   if (url.pathname.startsWith("/shared/")) requests.push({ route: url.pathname, method: req.method });
-  const candidate = path.join(dist, url.pathname);
-  const file = existsSync(candidate) && statSync(candidate).isFile() ? candidate : path.join(dist, "index.html");
-  res.writeHead(200, { "content-type": file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : "text/html" });
-  res.end(readFileSync(file));
 });
-server.on("upgrade", (req, socket) => {
+spa.server.on("upgrade", (req, socket) => {
   requests.push({ route: new URL(req.url, "http://fixture").pathname.replace("/api/v1", ""), method: "UPGRADE" });
   if (collabEnabled && req.url.startsWith("/api/v1/collab/pages/page")) room.upgrade(req, socket);
   else socket.destroy();
 });
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 
 const checks = [];
 let browser;
 try {
   browser = await openBrowser({ port: 18871, profile: await mkdtemp("/tmp/radd-live-editing-"), width: 1500, height: 1000, scale: 1 });
   const s = browser.session;
-  const until = async (expression, label, attempts = 250) => {
-    for (let i = 0; i < attempts; i++) { if (await s.eval(expression)) return; await new Promise((r) => setTimeout(r, 40)); }
-    throw Error(label + ": " + (await s.eval("document.body.innerText")).slice(0, 800));
-  };
   const count = (selector) => s.eval(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
   const refresh = () => s.eval("window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['capabilities']})");
   const collabRequests = () => requests.filter((r) => /^\/(?:plugins\/collab\/|collab\/)/.test(r.route.replace(/^\/api\/v1/, ""))).length;
@@ -120,10 +104,10 @@ try {
   };
 
   // --- 1. collab listed: a reader is present, an editor is live ---
-  await s.navigate(`http://127.0.0.1:${server.address().port}/pages/handbook/live-page`);
+  await s.navigate(`${spa.origin}/pages/handbook/live-page`);
   assert(await s.eval(`matchMedia("(hover: hover)").matches`), "the browser must report a hover-capable pointer");
-  await until(`document.body.innerText.includes("The page before anyone edited it.")`, "the page renders");
-  await until(`${PRESENCE}.includes("1 editing") && ${PRESENCE}.includes("1 viewing")`, "the reader sees the colleague in the room");
+  await until(s, `document.body.innerText.includes("The page before anyone edited it.")`, "the page renders");
+  await until(s, `${PRESENCE}.includes("1 editing") && ${PRESENCE}.includes("1 viewing")`, "the reader sees the colleague in the room");
   assert.deepEqual(joins.map((j) => j.role), ["observer"], "reading joins as an observer");
   for (const file of ["/plugins/collab/remoteEntry.js", "/plugins/collab/room.js"]) {
     assert(requests.some((r) => r.route === file), `${file} was loaded`);
@@ -133,8 +117,8 @@ try {
   checks.push("with collab listed, a reader joins as an observer and the remote's presence strip shows the colleague (1 editing · 1 viewing); neither the binding chunk nor the shared editor runtime has loaded");
 
   await s.click("button", (text) => text.trim() === "Edit page");
-  await until(`${EDITOR}?.getAttribute("contenteditable") === "true"`, "the bound editor accepts typing");
-  await until(`${EDITOR}.innerText.includes("The page before anyone edited it.")`, "the seeded document is bound");
+  await until(s, `${EDITOR}?.getAttribute("contenteditable") === "true"`, "the bound editor accepts typing");
+  await until(s, `${EDITOR}.innerText.includes("The page before anyone edited it.")`, "the seeded document is bound");
   assert.deepEqual(joins.map((j) => j.role), ["observer", "editor"]);
   assert(requests.some((r) => r.route === "/plugins/collab/bind-editor.js"), "editing loads the remote's binding");
   for (const shim of ["model", "state", "view"]) {
@@ -149,14 +133,14 @@ try {
   assert(panel.buttons.includes("Done") && !panel.buttons.includes("Save") && !panel.buttons.includes("Cancel"), JSON.stringify(panel.buttons));
   assert.match(panel.bar, /Editing together/);
   assert.equal(panel.saver, "true", "this browser is the elected saver");
-  await until(`${PRESENCE}.includes("2 editing")`, "both editors are present");
+  await until(s, `${PRESENCE}.includes("2 editing")`, "both editors are present");
   await s.screenshot("/tmp/radd-live-editing-live.png");
   checks.push("Edit opens a live session from the collab remote: the host's editor bound to the room (Done, no Save/Cancel, 'Editing together'), the page header says 2 editing, and this client is the elected saver");
 
   const typed = " Typed in the shared copy.";
   await typeAtEnd(typed);
   room.peerWrites("A paragraph from Grace.");
-  await until(`${EDITOR}.innerText.includes("A paragraph from Grace.")`, "the colleague's paragraph arrives in the editor");
+  await until(s, `${EDITOR}.innerText.includes("A paragraph from Grace.")`, "the colleague's paragraph arrives in the editor");
   for (let i = 0; i < 150 && !patches.some((p) => (p.body ?? "").includes("A paragraph from Grace.") && p.body.includes(typed.trim())); i++) {
     await new Promise((r) => setTimeout(r, 40));
   }
@@ -167,7 +151,7 @@ try {
   checks.push("typing and a colleague's paragraph both land in the bound editor, and the elected saver writes both through the page's own PATCH with the session as its voucher (no expected_version)");
 
   await s.click("button", (text) => text.trim() === "Done");
-  await until(`!document.querySelector('[aria-label="Edit page content"]')`, "Done leaves edit mode");
+  await until(s, `!document.querySelector('[aria-label="Edit page content"]')`, "Done leaves edit mode");
   const final = patches.at(-1);
   assert.equal(final.final, true, "Done sends the final save: " + JSON.stringify(final));
   assert.equal(final.collab_session, joins[1].session);
@@ -175,12 +159,12 @@ try {
 
   // --- 2. collab dropped: the ordinary flow, and not one request for collab ---
   collabEnabled = false; await refresh();
-  await until(`!document.querySelector('[aria-label^="In this page:"]')`, "the presence strip is withdrawn");
+  await until(s, `!document.querySelector('[aria-label^="In this page:"]')`, "the presence strip is withdrawn");
   for (let i = 0; i < 100 && room.open > 0; i++) await new Promise((r) => setTimeout(r, 40));
   assert.equal(room.open, 0, "the observer session closed its socket");
   const before = collabRequests();
   await s.click("button", (text) => text.trim() === "Edit page");
-  await until(`${EDITOR}?.getAttribute("contenteditable") === "true"`, "the ordinary editor");
+  await until(s, `${EDITOR}?.getAttribute("contenteditable") === "true"`, "the ordinary editor");
   const legacy = await s.eval(`(() => {
     const panel = document.querySelector('[aria-label="Edit page content"]');
     return { buttons: [...panel.querySelectorAll("button")].map((b) => b.textContent.trim()),
@@ -194,7 +178,7 @@ try {
   await new Promise((r) => setTimeout(r, 400));
   const versionBefore = page.version;
   await s.click("button", (text) => text.trim() === "Save");
-  await until(`!document.querySelector('[aria-label="Edit page content"]')`, "Save leaves edit mode");
+  await until(s, `!document.querySelector('[aria-label="Edit page content"]')`, "Save leaves edit mode");
   const ordinary = patches.at(-1);
   assert.equal(ordinary.expected_version, versionBefore, JSON.stringify(ordinary));
   assert.equal(ordinary.collab_session, undefined);
@@ -208,22 +192,22 @@ try {
   // --- 3. re-listed: the session returns, once ---
   const joinsBefore = joins.length, upgradesBefore = room.upgrades.length;
   collabEnabled = true; collabVersion += 1; await refresh();
-  await until(`${PRESENCE}.includes("1 editing")`, "the presence strip returns");
+  await until(s, `${PRESENCE}.includes("1 editing")`, "the presence strip returns");
   await new Promise((r) => setTimeout(r, 800));
   assert.equal(joins.length - joinsBefore, 1, "one join: " + JSON.stringify(joins.slice(joinsBefore)));
   assert.equal(joins.at(-1).role, "observer");
   assert.equal(room.upgrades.length - upgradesBefore, 1, "one socket");
   assert.equal(await count("[data-editing-now]"), 1, "one presence strip");
   await s.click("button", (text) => text.trim() === "Edit page");
-  await until(`${EDITOR}?.getAttribute("contenteditable") === "true"`, "the bound editor again");
-  await until(`${PRESENCE}.includes("2 editing")`, "both editors again");
+  await until(s, `${EDITOR}?.getAttribute("contenteditable") === "true"`, "the bound editor again");
+  await until(s, `${PRESENCE}.includes("2 editing")`, "both editors again");
   assert.equal(await count('[aria-label="Edit page content"] .ProseMirror'), 1, "one editor");
   assert.equal(await count("[data-editing-now]"), 1);
   assert.equal(await count("[data-collab-saver]"), 1);
   assert.match(await s.eval(`document.querySelector('[aria-label="Edit page content"] .radd-rich-editor').innerText`), /Editing together/);
   assert.equal(joins.at(-1).role, "editor");
   await s.click("button", (text) => text.trim() === "Done");
-  await until(`!document.querySelector('[aria-label="Edit page content"]')`, "Done again");
+  await until(s, `!document.querySelector('[aria-label="Edit page content"]')`, "Done again");
   checks.push("re-listing collab restores the session exactly once: one observer join and one socket, one presence strip, then one bound editor with Done");
 
   const errors = s.consoleErrors.filter((error) => !/Failed to load resource/.test(error));
@@ -238,6 +222,6 @@ try {
 } finally {
   await browser?.close();
   room.close();
-  server.closeAllConnections();
-  server.close();
+  spa.server.closeAllConnections();
+  await spa.close();
 }

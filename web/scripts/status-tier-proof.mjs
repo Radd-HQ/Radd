@@ -15,93 +15,25 @@
  *
  * Usage: node scripts/status-tier-proof.mjs <baseUrl> <email> <password>
  */
-import { spawn } from "node:child_process";
-import { setTimeout as sleep } from "node:timers/promises";
 import { resolve } from "node:path";
-import { chromeArgs, findChrome, HOVER_CAPABLE_PROBE } from "./lib/chrome.mjs";
+import { openBrowser, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, email, password] = process.argv.slice(2);
-const PORT = 9447;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-status-tier-proof-profile");
-
-// A leaked browser is worse than a stale bundle: refuse to reuse one.
-try {
-  await fetch(`http://127.0.0.1:${PORT}/json/version`);
-  console.error(`FATAL: something already listens on :${PORT} — kill it first`);
-  process.exit(1);
-} catch {
-  /* free — good */
-}
-
-const chrome = spawn(findChrome(), chromeArgs({ port: PORT, profile: PROFILE }), {
-  stdio: "ignore",
-});
-
-let ws;
-let nextId = 1;
-const pending = new Map();
-function send(method, params = {}, sessionId) {
-  const id = nextId++;
-  ws.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }));
-  return new Promise((res, rej) => pending.set(id, { res, rej }));
-}
-async function evalInPage(sessionId, expression) {
-  const { result, exceptionDetails } = await send(
-    "Runtime.evaluate",
-    { expression, awaitPromise: true, returnByValue: true },
-    sessionId,
-  );
-  if (exceptionDetails) throw new Error("page eval threw: " + (exceptionDetails.text || ""));
-  return result.value;
-}
 
 async function main() {
-  let version;
-  for (let i = 0; i < 40 && !version; i++) {
-    try {
-      version = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
-    } catch {
-      await sleep(250);
-    }
-  }
-  if (!version) throw new Error("Chrome CDP did not come up");
-
-  ws = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise((res, rej) => {
-    ws.addEventListener("open", res, { once: true });
-    ws.addEventListener("error", rej, { once: true });
+  const { session, close } = await openBrowser({
+    port: 9447, profile: resolve(process.env.TMPDIR || "/tmp", "radd-status-tier-proof-profile"),
   });
-  ws.addEventListener("message", (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) {
-      const { res, rej } = pending.get(m.id);
-      pending.delete(m.id);
-      m.error ? rej(new Error(m.error.message)) : res(m.result);
-    }
-  });
+  await session.navigate(baseUrl + "/", 1200);
+  const hoverCapable = await session.hoverCapable();
+  const loginStatus = await session.login(baseUrl, email, password);
 
-  const { targetId } = await send("Target.createTarget", { url: "about:blank" });
-  const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
-  await send("Page.enable", {}, sessionId);
-  await send("Runtime.enable", {}, sessionId);
-
-  await send("Page.navigate", { url: baseUrl + "/" }, sessionId);
-  await sleep(1200);
-  const hoverCapable = await evalInPage(sessionId, HOVER_CAPABLE_PROBE);
-  const loginStatus = await evalInPage(
-    sessionId,
-    `(async()=>{const r=await fetch("/api/v1/auth/login",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify({ email, password })})});return r.status;})()`,
-  );
-
-  await send("Page.navigate", { url: `${baseUrl}/reports` }, sessionId);
+  await session.navigate(`${baseUrl}/reports`, 0);
   // Wait for a chart polyline/path whose stroke attribute is a var() reference.
   let chartFound = false;
   for (let i = 0; i < 30 && !chartFound; i++) {
     await sleep(500);
-    chartFound = await evalInPage(
-      sessionId,
-      `!!document.querySelector('svg [stroke^="var("]')`,
-    );
+    chartFound = await session.eval(`!!document.querySelector('svg [stroke^="var("]')`);
   }
 
   const MEASURE = `
@@ -142,11 +74,11 @@ async function main() {
       };
     })()`;
 
-  const dark = await evalInPage(sessionId, MEASURE);
-  await evalInPage(sessionId, `document.documentElement.classList.add("light")`);
+  const dark = await session.eval(MEASURE);
+  await session.eval(`document.documentElement.classList.add("light")`);
   await sleep(150);
-  const light = await evalInPage(sessionId, MEASURE);
-  await evalInPage(sessionId, `document.documentElement.classList.remove("light")`);
+  const light = await session.eval(MEASURE);
+  await session.eval(`document.documentElement.classList.remove("light")`);
 
   const expect = {
     dark: { danger: "#ef4444", success: "#34d399", accent: "#6f6ce0" },
@@ -162,14 +94,11 @@ async function main() {
     !dark.chartLineStroke.includes("var("); // the var RESOLVED to a color
 
   console.log(JSON.stringify({ hoverCapable, loginStatus, chartFound, dark, light, pass }, null, 2));
-  await send("Target.closeTarget", { targetId });
-  ws.close();
-  chrome.kill();
+  await close();
   process.exit(pass ? 0 : 1);
 }
 
 main().catch((error) => {
   console.error(error);
-  chrome.kill();
   process.exit(1);
 });

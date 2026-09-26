@@ -6,28 +6,15 @@
  * does a repeated phrase resolve by context, and does it refuse rather than
  * guess when the context cannot choose.
  *
- * Run: node --experimental-strip-types web/scripts/anchoring.test.mjs
+ * Run from the repo root: node --test web/scripts/anchoring.test.mjs
  */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "anchor-"));
-const file = join(dir, "anchoring.ts");
-writeFileSync(file, readFileSync("web/packages/plugin-sdk/src/anchoring.ts", "utf8"));
-const { makeAnchor, locateAnchor, orderByAnchor } = await import(file);
+const { makeAnchor, locateAnchor, orderByAnchor } = await importTs("web/packages/plugin-sdk/src/anchoring.ts");
 
-let failures = 0;
-const check = (label, actual, expected) => {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) {
-    console.log(`FAIL ${label}\n  got      ${a}\n  expected ${e}`);
-    failures++;
-  } else {
-    console.log(`ok   ${label}`);
-  }
-};
+const check = (label, actual, expected) => test(label, () => assert.deepStrictEqual(actual, expected));
 
 const BODY = "Intro paragraph.\n\nThe cache is invalidated on write.\n\nCloser.";
 const start = BODY.indexOf("cache is invalidated");
@@ -83,6 +70,3 @@ check(
   orderByAnchor(BODY, rows).map((r) => r.row.id),
   ["intro", "closer", "gone", "thread"],
 );
-
-console.log(failures ? `\n${failures} FAILED` : "\nall passed");
-process.exit(failures ? 1 : 0);

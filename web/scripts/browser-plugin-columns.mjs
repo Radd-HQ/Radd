@@ -12,14 +12,11 @@
  *   - re-listing restores it all with exactly one fresh read.
  */
 import assert from 'node:assert/strict';
-import http from 'node:http';
-import { readFileSync, existsSync, statSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
-import path from 'node:path';
-import { openBrowser } from './lib/cdp.mjs';
+import { openBrowser, until } from './lib/cdp.mjs';
 import { CORE_PLUGINS } from './lib/core-plugins.mjs';
+import { serveBuiltSpa } from './lib/spa-server.mjs';
 
-const root = new URL('../../', import.meta.url).pathname, dist = path.join(root, 'web/dist');
 const OPTIONAL = new Set(['slas', 'rogue']);
 const enabled = new Set([...CORE_PLUGINS, ...OPTIONAL]);
 const batches = [], aborted = [], writes = [], pending = [], unknown = new Set(), checks = [];
@@ -100,16 +97,9 @@ function api(req, url, body) {
   return [];
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://fixture'), p = url.pathname;
-  if (p.startsWith('/plugins/')) {
-    const [, , name, ...parts] = p.split('/');
-    const file = path.join(root, 'server/src/radd/modules', name, 'ui/dist', ...parts);
-    res.setHeader('content-type', 'text/javascript');
-    if (name === 'rogue') return res.end(rogue);
-    if (!existsSync(file)) { res.statusCode = 404; return res.end(); }
-    return res.end(readFileSync(file));
-  }
+const spa = await serveBuiltSpa(async (req, res, url) => {
+  const p = url.pathname;
+  if (p.startsWith('/plugins/rogue/')) { res.setHeader('content-type', 'text/javascript'); res.end(rogue); return true; }
   if (p.startsWith('/api/')) {
     let raw = ''; for await (const chunk of req) raw += chunk;
     const body = raw ? JSON.parse(raw) : null;
@@ -121,20 +111,16 @@ const server = http.createServer(async (req, res) => {
       res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(data));
     };
     if (hold && p.endsWith('/items/sla/batch')) pending.push(finish); else finish();
-    return;
+    return true;
   }
-  const file = path.join(dist, p), target = existsSync(file) && statSync(file).isFile() ? file : path.join(dist, 'index.html');
-  res.setHeader('content-type', target.endsWith('.js') ? 'text/javascript' : target.endsWith('.css') ? 'text/css' : 'text/html');
-  res.end(readFileSync(target));
 });
 
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 let browser;
 try {
   browser = await openBrowser({ port: 18863, profile: await mkdtemp('/tmp/radd-plugin-columns-'), scale: 1 });
   const s = browser.session;
-  const origin = `http://127.0.0.1:${server.address().port}`;
-  const until = async (fn, label) => { for (let i = 0; i < 250; i++) { if (await fn()) return; await new Promise((r) => setTimeout(r, 40)); } throw Error(`${label}: ${await s.eval('document.body?.innerText ?? ""')} ${JSON.stringify(s.consoleErrors)} unknown=${[...unknown]}`); };
+  const origin = spa.origin;
+  const wait = (fn, label) => until(s, fn, label, { describe: () => `unknown=${[...unknown]}` });
   const count = (selector) => s.eval(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
   const text = (selector) => s.eval(`document.querySelector(${JSON.stringify(selector)})?.textContent?.trim() ?? null`);
   const refresh = () => s.eval("void window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['capabilities']})");
@@ -146,12 +132,12 @@ try {
     return cell ? { text: cell.textContent.trim(), chip: cell.querySelector('[data-sla-chip]')?.dataset.slaChip ?? null } : null; })()`);
   // The match runs in the page, so it is built from source rather than closing over `label`.
   const button = (label) => s.click('button', new Function('text', `return text.trim() === ${JSON.stringify(label)}`));
-  const openDisplay = async () => { await button('Display'); await until(() => s.eval("!!document.querySelector('[role=dialog], [data-popover]') || document.body.innerText.includes('Columns') || document.body.innerText.includes('Card layout')"), 'display menu'); };
+  const openDisplay = async () => { await button('Display'); await wait(() => s.eval("!!document.querySelector('[role=dialog], [data-popover]') || document.body.innerText.includes('Columns') || document.body.innerText.includes('Card layout')"), 'display menu'); };
   const closeOverlays = () => s.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }).then(() => s.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }));
 
   // 1. The list: the column comes from the remote, one batch per page of rows.
   await s.navigate(`${origin}/p/TEST/v/view-list`);
-  await until(async () => (await count('[data-column="slas.timer"]')) === 1 && (await count('[data-sla-cell]')) === 2, 'SLA column rendered');
+  await wait(async () => (await count('[data-column="slas.timer"]')) === 1 && (await count('[data-sla-cell]')) === 2, 'SLA column rendered');
   assert.equal(await text('[data-column="slas.timer"]'), 'SLA');
   assert.deepEqual(await cellOfRow('TEST-1'), { text: 'Breached', chip: 'breached' });
   assert.deepEqual(await cellOfRow('TEST-2'), { text: '1h 30m left', chip: 'ticking' }, 'the nearest-to-breach timer of two');
@@ -179,7 +165,7 @@ try {
 
   await openDisplay();
   await s.click('button[aria-label="Add a column"]');
-  await until(async () => (await count('[role=option]')) > 3, 'column options');
+  await wait(async () => (await count('[role=option]')) > 3, 'column options');
   const offered = await s.eval("[...document.querySelectorAll('[role=option]')].map((el) => el.textContent.trim())");
   assert(offered.includes('Rogue valid'), `a plugin's own namespaced attribute is offered: ${offered}`);
   for (const refused of ['Rogue shadow', 'Rogue field', 'Rogue title', 'Rogue bare']) assert(!offered.includes(refused), `${refused} refused`);
@@ -191,7 +177,7 @@ try {
 
   // 2. The board over the same rows: the card cell, and the batch is shared, not re-asked.
   await go('/p/TEST/v/view-board');
-  await until(async () => (await count('[data-sla-cell]')) === 2 && (await count('[role=button][draggable=true]')) === 3, 'board cards with SLA cells');
+  await wait(async () => (await count('[data-sla-cell]')) === 2 && (await count('[role=button][draggable=true]')) === 3, 'board cards with SLA cells');
   const cardChips = await s.eval("[...document.querySelectorAll('[role=button][draggable=true]')].map((card) => [card.textContent.match(/TEST-\\d/)?.[0], card.querySelector('[data-sla-chip]')?.dataset.slaChip ?? null])");
   assert.deepEqual(Object.fromEntries(cardChips), { 'TEST-1': 'breached', 'TEST-2': 'ticking', 'TEST-3': null });
   assert.equal(batches.length, 1, 'the board shares the list\'s read of the same rows');
@@ -201,7 +187,7 @@ try {
   // 3. The card designer: palette offers it, the preview shows the owner's sample.
   await openDisplay();
   await button('Design card…');
-  await until(() => s.eval("!!document.querySelector('[data-palette-group=plugins]')"), 'designer palette');
+  await wait(() => s.eval("!!document.querySelector('[data-palette-group=plugins]')"), 'designer palette');
   const palette = await s.eval("[...document.querySelectorAll('[data-palette-group=plugins] button')].map((b) => [b.textContent.trim(), b.disabled]).sort()");
   assert.deepEqual(palette, [['Rogue valid', false], ['SLA', true]], 'placed SLA dims; the rogue\'s own attribute is offered');
   assert.equal(await s.eval("document.querySelector('[role=dialog] [data-sla-chip]')?.textContent"), '4h 0m left', 'the preview renders the declared sample');
@@ -212,26 +198,26 @@ try {
 
   // 4. Withdrawal: an in-flight read is aborted; column, cell and palette entry go; saved ids stay.
   await go('/p/TEST/v/view-list');
-  await until(async () => (await count('[data-sla-cell]')) === 2, 'back on the list');
+  await wait(async () => (await count('[data-sla-cell]')) === 2, 'back on the list');
   hold = true;
   await s.eval("void window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['plugin-query','slas']})");
-  await until(() => pending.length > 0, 'a batch read in flight');
+  await wait(() => pending.length > 0, 'a batch read in flight');
   const before = batches.length;
   enabled.delete('slas'); await refresh();
-  await until(async () => (await count('[data-column="slas.timer"]')) === 0, 'column withdrawn');
-  await until(() => aborted.length > 0, 'in-flight batch aborted');
+  await wait(async () => (await count('[data-column="slas.timer"]')) === 0, 'column withdrawn');
+  await wait(() => aborted.length > 0, 'in-flight batch aborted');
   hold = false; while (pending.length) pending.shift()();
   assert.equal(await count('[data-sla-cell]'), 0);
   assert.equal(await s.eval("[...document.querySelectorAll('li')].filter((li) => /TEST-\\d/.test(li.textContent)).length"), 3, 'the rows still render');
   await openDisplay();
-  await until(() => s.eval("!!document.querySelector('[data-unavailable-column=\"slas.timer\"]')"), 'unavailable column in the editor');
+  await wait(() => s.eval("!!document.querySelector('[data-unavailable-column=\"slas.timer\"]')"), 'unavailable column in the editor');
   assert.equal(await text('[data-unavailable-column="slas.timer"]'), 'slas.timer (unavailable)');
   await closeOverlays();
   await go('/p/TEST/v/view-board');
-  await until(async () => (await count('[role=button][draggable=true]')) === 3, 'board without slas');
+  await wait(async () => (await count('[role=button][draggable=true]')) === 3, 'board without slas');
   assert.equal(await count('[data-sla-cell]'), 0, 'no SLA cell on cards');
   await openDisplay(); await button('Design card…');
-  await until(() => s.eval("!!document.querySelector('[data-stale-attrs]')"), 'stale note');
+  await wait(() => s.eval("!!document.querySelector('[data-stale-attrs]')"), 'stale note');
   assert.match(await text('[data-stale-attrs]'), /slas\.timer/);
   assert.deepEqual(await s.eval("[...document.querySelectorAll('[data-palette-group=plugins] button')].map((b) => b.textContent.trim())"), ['Rogue valid']);
   await button('Cancel');
@@ -242,9 +228,9 @@ try {
 
   // 5. Re-listing restores it with exactly one fresh read.
   await go('/p/TEST/v/view-list');
-  await until(async () => (await count('li')) > 0, 'list again');
+  await wait(async () => (await count('li')) > 0, 'list again');
   enabled.add('slas'); await refresh();
-  await until(async () => (await count('[data-column="slas.timer"]')) === 1 && (await count('[data-sla-cell]')) === 2, 'SLA column restored');
+  await wait(async () => (await count('[data-column="slas.timer"]')) === 1 && (await count('[data-sla-cell]')) === 2, 'SLA column restored');
   await new Promise((r) => setTimeout(r, 600));
   assert.equal(batches.length, before + 1, 'exactly one fresh read');
   checks.push('re-listing slas restores the column with exactly one fresh batch read');
@@ -254,5 +240,5 @@ try {
   console.log(JSON.stringify({ passed: true, checks, batches: batches.length, aborted: aborted.length, unknown: [...unknown] }, null, 1));
 } finally {
   hold = false; while (pending.length) pending.shift()();
-  await browser?.close(); server.closeAllConnections(); await new Promise((resolve) => server.close(resolve));
+  await browser?.close(); spa.server.closeAllConnections(); await spa.close();
 }

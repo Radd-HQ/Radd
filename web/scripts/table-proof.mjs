@@ -42,7 +42,6 @@ const SHAPE = `(() => {
     text: rows.map((r) => [...r.children].map((c) => c.textContent.trim()).join("|")).join(" / "),
     columnHandles: document.querySelectorAll('[data-table-handle="column"]').length,
     rowHandles: document.querySelectorAll('[data-table-handle="row"]').length,
-    crepeTables: document.querySelectorAll(".milkdown-table-block").length,
     // prosemirror-tables' own resizing plugin, which preset-gfm ships but does
     // not compose — its presence is a <col> element per column.
     hasColgroup: !!t.querySelector("colgroup"),
@@ -192,7 +191,7 @@ async function main() {
 
   const checks = {
     "the browser reports a hover-capable pointer": hoverCapable === true,
-    "the table renders in our node view": opened.present === true && opened.crepeTables === 0,
+    "the table renders in our node view": opened.present === true,
     "the seeded shape is read correctly": opened.rows === 3 && opened.cols === 3,
     "column resizing is wired (a colgroup exists)": opened.hasColgroup === true,
     // RADD-759 — the table has to LAY OUT, not merely parse.

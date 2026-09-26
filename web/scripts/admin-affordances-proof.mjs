@@ -18,7 +18,7 @@
  *   node scripts/admin-affordances-proof.mjs <baseUrl> <spaceSlug> <pageSlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, outputPath, report, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, pageSlug, email, password] = process.argv.slice(2);
 const PORT = 9453;
@@ -64,7 +64,7 @@ async function main() {
   checks["…offering NO project scope (page grants can't be scoped)"] =
     pageGrants.hasScopeControl === false;
   checks["…and no dangling \"on\""] = pageGrants.saysOn === false;
-  const restrictShot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("admin-restrict.png"));
 
   // --- and the SAME editor on a resource that IS scopeable ---
   // Without this, "no scope control" would pass just as well if the editor were
@@ -96,17 +96,13 @@ async function main() {
       return {
         open: /Remove "/.test(text),
         // The count comes from a dry run — the question has to carry its number.
-        statesUsage: /item(s)? (hold|list) this option|No items use this option/i.test(text),
-        offersDestination: Boolean(
-          [...document.querySelectorAll("label")].find((l) =>
-            /move those items to/i.test(l.textContent || ""))),
-        offersEmpty: /leave empty/i.test(text),
+        statesUsage: /issues? (hold|list) this option|No issues use this option/i.test(text),
       };
     })()`);
   }
   checks["…which opens a dialog rather than removing silently"] = dialog.open === true;
   checks["…that states how many items are affected"] = dialog.statesUsage === true;
-  const optionShot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("admin-option.png"));
 
   // --- RADD-950: labels ---
   await session.navigate(`${baseUrl}/settings/labels`, 3000);
@@ -123,7 +119,7 @@ async function main() {
   checks["labels offer rename"] = labels.rename > 0;
   checks["labels offer delete"] = labels.del > 0;
   checks["…and no longer claim the API lacks them"] = labels.stale === false;
-  const labelShot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("admin-labels.png"));
 
   checks["no console errors"] = session.consoleErrors.length === 0;
 
@@ -136,11 +132,7 @@ async function main() {
     consoleErrors: session.consoleErrors.slice(0, 5),
   });
 
-  const { writeFileSync } = await import("node:fs");
-  writeFileSync("/tmp/admin-restrict.png", Buffer.from(restrictShot.data, "base64"));
-  writeFileSync("/tmp/admin-option.png", Buffer.from(optionShot.data, "base64"));
-  writeFileSync("/tmp/admin-labels.png", Buffer.from(labelShot.data, "base64"));
-  console.log("\nshots: /tmp/admin-restrict.png /tmp/admin-option.png /tmp/admin-labels.png");
+  console.log(`\nshots: ${["admin-restrict", "admin-option", "admin-labels"].map((n) => outputPath(`${n}.png`)).join(" ")}`);
   process.exit(failed ? 1 : 0);
 }
 

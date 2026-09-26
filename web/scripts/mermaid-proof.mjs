@@ -10,7 +10,7 @@
  *   node scripts/mermaid-proof.mjs <baseUrl> <spaceSlug> <pageSlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, outputPath, report, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, pageSlug, email, password] = process.argv.slice(2);
 const PORT = 9457;
@@ -59,17 +59,13 @@ async function main() {
   checks["the broken diagram reports its error"] = seen.reportsAnError === true;
   checks["…without leaking mermaid's own error graphic"] = seen.strayMermaidError === 0;
 
-  const shot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("mermaid.png"));
   report(checks, seen);
-  return shot.data;
 }
 
 main()
-  .then(async (png) => {
-    const { writeFile } = await import("node:fs/promises");
-    const dir = process.env.PROOF_OUT || "/tmp";
-    await writeFile(`${dir}/mermaid.png`, Buffer.from(png, "base64"));
-    console.log(`screenshot: ${dir}/mermaid.png`);
+  .then(() => {
+    console.log(`screenshot: ${outputPath("mermaid.png")}`);
     process.exit(0);
   })
   .catch((error) => {

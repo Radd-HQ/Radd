@@ -18,17 +18,10 @@
  *   (defaults: RADD_PROOF_EMAIL / RADD_PROOF_PASSWORD, else admin@example.com / change-me)
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://localhost:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9471;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-audit-proof-profile");
 const tag = `audit-proof-${Date.now().toString(36)}`;
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
 
 async function rows(session) {
   return session.eval(`(() => [...document.querySelectorAll("[data-audit-row]")].map((tr) => ({
@@ -49,12 +42,11 @@ async function waitForRows(session, predicate, attempts = 20) {
   return rows(session);
 }
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9471, profile: resolve(process.env.TMPDIR || "/tmp", "radd-audit-proof-profile"),
+  base: "http://localhost:8000",
+});
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204 || status === true, `login → ${status}`);
-
   // 1. a real diff to look for: create, then rename, a label.
   const renamed = await session.eval(`(async () => {
     const post = await fetch("/api/v1/labels", { method: "POST", headers: { "content-type": "application/json" },
@@ -81,7 +73,7 @@ try {
     JSON.stringify(row?.changes),
   );
   check("the created row is there too", labelRows.some((x) => x.event === "label.created"), "");
-  await session.screenshot(resolve("scripts", "audit-proof-label.png"));
+  await session.screenshot(outputPath("audit-proof-label.png"));
 
   // 3. changed-field filter: every row's diff mentions Name.
   await session.navigate(`${baseUrl}/settings/audit?field=name`, 1500);
@@ -111,13 +103,9 @@ try {
     return filters ? filters.textContent : "";
   })()`);
   check("filter bar shows the URL's entity and source", /Label/.test(selected) && /People/.test(selected), selected.slice(0, 120));
-  await session.screenshot(resolve("scripts", "audit-proof-page.png"), { fullPage: true });
+  await session.screenshot(outputPath("audit-proof-page.png"), { fullPage: true });
 } finally {
   await close();
 }
 
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "audit-proof", tag },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "audit-proof", tag });

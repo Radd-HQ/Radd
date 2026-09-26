@@ -18,32 +18,13 @@
  * Usage: node scripts/directory-settings-page-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9504;
 const TMP = process.env.TMPDIR || "/tmp";
-const PROFILE = resolve(TMP, "radd-directory-proof-profile");
 const SETTING = "ldap_group_sync_seconds";
 
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
-const readSetting = `(async () => { ${API}
+const readSetting = `(async () => { ${PAGE_API}
   const rows = (await api("GET", "/scoped-settings?scope=instance")).body;
   const row = rows.find((r) => r.key === ${JSON.stringify(SETTING)});
   return row ? { value: String(row.value), set_here: row.set_here } : null;
@@ -59,13 +40,11 @@ const typeInto = (selector, value) => `(() => {
   return true;
 })()`;
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9504, profile: resolve(TMP, "radd-directory-proof-profile"),
+});
 let original = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-  check("hover-capable browser (Tailwind gates hover: on it)", await session.hoverCapable());
   original = await session.eval(readSetting);
   check("the setting to edit exists", original, JSON.stringify(original));
 
@@ -84,7 +63,7 @@ try {
   check("the nav carries Directory once, under Server", nav.count === 1 && nav.inServer && nav.href === "/settings/directory", JSON.stringify(nav));
   check("…between Email and Sign-in, and active", nav.order.indexOf("Email") < nav.order.indexOf("Directory")
     && nav.order.indexOf("Directory") < nav.order.indexOf("Sign-in") && nav.active, JSON.stringify(nav.order));
-  const provenance = await session.eval(`(async () => { ${API}
+  const provenance = await session.eval(`(async () => { ${PAGE_API}
     const caps = (await api("GET", "/capabilities")).body;
     const resources = performance.getEntriesByType("resource").map((e) => e.name);
     return { remote: caps.remotes.find((r) => r.name === "ldap")?.remote_entry ?? null,
@@ -130,7 +109,7 @@ try {
   const searched = await waitFor(session, `(() => { const root = document.querySelector("[data-import-users]");
     const rows = root?.querySelectorAll("[data-directory-user-results] li").length ?? 0;
     const text = root?.textContent ?? "";
-    return rows > 0 || text.includes("No directory users match.") ? { rows, checked: root.querySelectorAll("input:checked").length } : null; })()`, 120);
+    return rows > 0 || text.includes("No directory users match.") ? { rows, checked: root.querySelectorAll("input:checked").length } : null; })()`, { attempts: 120 });
   check("the dialog searches the live directory (nothing selected)", searched && searched.checked === 0, JSON.stringify(searched));
   await session.click('[role="dialog"] button', (text) => text.trim() === "Close");
   check("the import dialog closes", await waitFor(session, `!document.querySelector("[data-import-users]")`));
@@ -142,7 +121,7 @@ try {
     const empty = document.querySelector("[data-directory-groups]")?.textContent.includes("No directory groups match.");
     const line = document.querySelector("[data-group-sync-last-run]")?.textContent ?? "";
     return keys.includes(${JSON.stringify(SETTING)}) && (browse > 0 || empty) && line.startsWith("Linked-team reconcile")
-      ? { keys, browse, line } : null; })()`, 120);
+      ? { keys, browse, line } : null; })()`, { attempts: 120 });
   check("Groups tab: its settings, the live group browse and the reconcile line",
     groups && groups.keys.includes("ldap_group_search_base"), JSON.stringify(groups));
   const mirrored = await waitFor(session, `(() => { const rows = document.querySelectorAll("[data-mirrored-group]").length;
@@ -180,7 +159,7 @@ try {
   if (original) {
     const now = await session.eval(readSetting).catch(() => null);
     if (!now || now.value !== original.value || now.set_here !== original.set_here) {
-      const put = await session.eval(`(async () => { ${API}
+      const put = await session.eval(`(async () => { ${PAGE_API}
         return ${original.set_here}
           ? (await api("PUT", "/scoped-settings", { scope: "instance", key: ${JSON.stringify(SETTING)}, value: ${JSON.stringify(original.value)} })).status
           : (await api("DELETE", "/scoped-settings?scope=instance&key=${SETTING}")).status; })()`).catch(String);
@@ -189,8 +168,4 @@ try {
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "directory settings page (RADD-1381)", baseUrl, setting: SETTING, original },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "directory settings page (RADD-1381)", baseUrl, setting: SETTING, original });

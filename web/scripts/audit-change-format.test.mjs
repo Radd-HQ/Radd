@@ -1,11 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import path from 'node:path';
-import {stripTypeScriptTypes} from 'node:module';
-function moduleUrl(file){let source=stripTypeScriptTypes(readFileSync(file,'utf8'));source=source.replace(/from "(\.[^"]+)"/g,(_match,relative)=>'from '+JSON.stringify(moduleUrl(path.resolve(path.dirname(file),relative+'.ts'))));return `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;}
-const load=file=>import(moduleUrl(file));
-const {itemChange}=await load('server/src/radd/modules/items/ui/src/change-format.ts');
+import {importTs} from './lib/load-ts.mjs';
+const {itemChange}=await importTs('server/src/radd/modules/items/ui/src/change-format.ts');
 test('Items change presentation preserves absent keys, collection members and saved unknown values',()=>{
  assert.deepEqual(itemChange({field:'links'}),{field:'links',name:'Dependencies'});
  assert.deepEqual(itemChange({field:'description'}),{field:'description',name:'Description'});
@@ -18,7 +14,7 @@ test('Items never formats withheld payloads and does not mutate the original cha
  assert.deepEqual(itemChange(change),{field:'priority',name:'Priority',redacted:true});assert.deepEqual(change,before);
 });
 
-const {roleChange}=await load('server/src/radd/modules/auth/ui/src/change-format.ts');
+const {roleChange}=await importTs('server/src/radd/modules/auth/ui/src/change-format.ts');
 test('Auth owns role grant presentation and preserves unknown grant records',()=>{
  const grant={subject:'Alice',role:'manager',scope:'project TEST'};
  assert.deepEqual(roleChange({field:'grants',added:[grant,{future:true}]}),{field:'grants',added:['Alice as manager (project TEST)',{future:true}]});

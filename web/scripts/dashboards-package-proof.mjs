@@ -23,30 +23,17 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9513;
 const TMP = process.env.TMPDIR || "/tmp";
 const WEB = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PACKAGE = resolve(WEB, "../server/src/radd/modules/dashboards/ui/src");
 const NAME = `Package proof ${Date.now().toString(36)}`;
 const KEY = `DP${Date.now().toString(36).slice(-4).toUpperCase()}`;
+const SLOW = { attempts: 80 };
 
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 80) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
+// The lib's PAGE_API plus the raw `text`: My Work is compared byte for byte.
 const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
   headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null, text }; };`;
@@ -55,26 +42,24 @@ const call = (session, method, path, body) =>
 const button = (text, within = "") => `[...document.querySelectorAll(${JSON.stringify(`${within} button`)})]
   .find((b) => b.textContent.trim() === ${JSON.stringify(text)} && !b.disabled)`;
 async function clickButton(session, text, within = "") {
-  const found = await waitFor(session, `Boolean(${button(text, within)})`);
+  const found = await waitFor(session, `Boolean(${button(text, within)})`, SLOW);
   if (!found) throw new Error(`no enabled button "${text}" ${within}`);
   await session.eval(`${button(text, within)}.click()`);
 }
 /** Open the dialog's Type picker and read its options (the house Select, not a native one). */
 async function typeOptions(session) {
   await session.click('[role="dialog"] button[aria-haspopup="listbox"]');
-  const options = await waitFor(session, `(() => { const o = [...document.querySelectorAll('[role="option"]')].map((e) => e.textContent.trim()); return o.length ? o : null; })()`);
+  const options = await waitFor(session, `(() => { const o = [...document.querySelectorAll('[role="option"]')].map((e) => e.textContent.trim()); return o.length ? o : null; })()`, SLOW);
   return options ?? [];
 }
 
-const { session, close } = await openBrowser({ port: PORT, profile: resolve(TMP, "radd-dashboards-package-proof") });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9513, profile: resolve(TMP, "radd-dashboards-package-proof"),
+});
 let dashboardId = null;
 let before = null;
 let fixture = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, String(status));
-
   // 1. The manifest.
   const caps = (await call(session, "GET", "/capabilities")).body;
   const awaiting = caps.widget_types.find((t) => t.key === "approvals");
@@ -105,7 +90,7 @@ try {
   const layout = suggested.body.map((w) => w.id);
   await session.navigate(`${baseUrl}/`, 500);
   const rendered = await waitFor(session, `(() => { const ids = [...document.querySelectorAll(".widget-grid [data-widget-id]")].map((e) => e.dataset.widgetId);
-    return ids.length === ${layout.length} ? ids : null; })()`);
+    return ids.length === ${layout.length} ? ids : null; })()`, SLOW);
   check("My Work renders every widget of the layout on the package canvas", JSON.stringify(rendered) === JSON.stringify(layout), `${JSON.stringify(rendered)} vs ${JSON.stringify(layout)}`);
   await clickButton(session, "Customize");
   await clickButton(session, "Add widget");
@@ -121,12 +106,12 @@ try {
   }
   const row = `document.querySelector('.widget-grid [data-widget-type="approvals"] [data-approvals-awaiting]')`;
   const drawn = await waitFor(session, `(() => { const s = ${row}; if (!s) return null;
-    const link = s.querySelector('a[href="/issues/${fixture.key}"]'); return link ? { text: s.textContent.slice(0, 120), link: link.textContent } : null; })()`);
+    const link = s.querySelector('a[href="/issues/${fixture.key}"]'); return link ? { text: s.textContent.slice(0, 120), link: link.textContent } : null; })()`, SLOW);
   const loaded = await session.eval(`performance.getEntriesByType("resource").map((e) => e.name).filter((n) => n.includes("/plugins/approvals/"))`);
   check("the approvals remote draws the pending request, its key linking to the issue", drawn?.link === fixture.key, JSON.stringify(drawn));
   check("…fetched from /plugins/approvals/", loaded.some((n) => n.includes("/plugins/approvals/remoteEntry.js")), JSON.stringify(loaded));
   await session.click(`.widget-grid [data-widget-type="approvals"] [data-approvals-awaiting] [role="button"]`);
-  const peeked = await waitFor(session, `new URLSearchParams(location.search).get("peek") === ${JSON.stringify(fixture.key)}`);
+  const peeked = await waitFor(session, `new URLSearchParams(location.search).get("peek") === ${JSON.stringify(fixture.key)}`, SLOW);
   check("a click opens the issue in the peek panel", peeked, await session.eval("location.search"));
   if (savedLayout) await clickButton(session, "Cancel");
   const untouched = await call(session, "GET", "/dashboards/my-work/widgets");
@@ -138,29 +123,29 @@ try {
     await session.eval(`document.querySelector('aside button[aria-label="Expand Dashboards"]')?.click()`);
   }
   await clickButton(session, "New dashboard", "aside");
-  await waitFor(session, `Boolean(document.querySelector('[role="dialog"] input'))`);
+  await waitFor(session, `Boolean(document.querySelector('[role="dialog"] input'))`, SLOW);
   await session.click('[role="dialog"] input');
   await session.send("Input.insertText", { text: NAME });
   await clickButton(session, "Create dashboard", '[role="dialog"]');
-  dashboardId = await waitFor(session, `(location.pathname.match(/^\\/dashboards\\/([0-9a-f-]{36})$/) || [])[1] || null`);
+  dashboardId = await waitFor(session, `(location.pathname.match(/^\\/dashboards\\/([0-9a-f-]{36})$/) || [])[1] || null`, SLOW);
   check("New dashboard opens the fresh dashboard", dashboardId, await session.eval("location.pathname"));
-  const listed = await waitFor(session, `[...document.querySelectorAll('aside a[href="/dashboards/${dashboardId}"]')].some((a) => a.textContent.includes(${JSON.stringify(NAME)}))`);
+  const listed = await waitFor(session, `[...document.querySelectorAll('aside a[href="/dashboards/${dashboardId}"]')].some((a) => a.textContent.includes(${JSON.stringify(NAME)}))`, SLOW);
   check("the sidebar lists it", listed);
-  check("the page is the package's", await waitFor(session, `document.querySelector("[data-dashboard-page]")?.dataset.dashboardPage === ${JSON.stringify(dashboardId)}`));
+  check("the page is the package's", await waitFor(session, `document.querySelector("[data-dashboard-page]")?.dataset.dashboardPage === ${JSON.stringify(dashboardId)}`, SLOW));
   await clickButton(session, "Customize");
   await clickButton(session, "Add widget");
   const sharedOptions = await typeOptions(session);
   check("a shared dashboard does not offer the personal type", sharedOptions.includes("Issue count (SLQ)") && !sharedOptions.includes("Awaiting my approval"), JSON.stringify(sharedOptions));
   await session.click('[role="option"]', (text) => text.trim() === "Issue count (SLQ)");
   await clickButton(session, "Add widget", '[role="dialog"]');
-  await waitFor(session, `!document.querySelector('[role="dialog"]')`);
+  await waitFor(session, `!document.querySelector('[role="dialog"]')`, SLOW);
   await clickButton(session, "Save");
   const saved = await waitFor(session, `(async () => { ${API} const d = await api("GET", "/dashboards/${dashboardId}");
-    return d.body?.widgets?.length === 1 ? d.body.widgets[0] : null; })()`);
+    return d.body?.widgets?.length === 1 ? d.body.widgets[0] : null; })()`, SLOW);
   check("the widget is saved", saved?.widget_type === "slq_count", JSON.stringify(saved));
   const total = (await call(session, "GET", "/items/count")).body.total;
   const shown = await waitFor(session, `(() => { const n = document.querySelector('.widget-grid [data-widget-type="slq_count"] p.text-3xl')?.textContent.trim();
-    return n && n !== "…" ? n : null; })()`);
+    return n && n !== "…" ? n : null; })()`, SLOW);
   check("it renders the same total as GET /items/count", shown === String(total), `${shown} vs ${total}`);
   // A report widget: the host's report card through the SDK bridge, sized by the package's grid
   // through the SDK's chart-height context (460px widget → 280px plot; the charts default to 200/220).
@@ -179,13 +164,13 @@ try {
   await session.navigate(`${baseUrl}/dashboards/${dashboardId}`, 500);
   const card = await waitFor(session, `(() => { const s = document.querySelector('.widget-grid [data-widget-type="report_cfd"] section');
     if (!s || s.querySelector('[role="status"]') || s.textContent.includes("Loading")) return null; const svg = s.querySelector("svg[role=img]");
-    return { dashboardFrame: !s.querySelector("h2"), plot: svg ? svg.getAttribute("height") : null, text: s.textContent.slice(0, 80) }; })()`, 240);
+    return { dashboardFrame: !s.querySelector("h2"), plot: svg ? svg.getAttribute("height") : null, text: s.textContent.slice(0, 80) }; })()`, { attempts: 240 });
   check("the host's report card renders inside the widget, in its dashboard frame", card?.dashboardFrame, JSON.stringify(card));
   check(`…with the plot height the widget grants${project.plotted ? "" : " (no project had issues to plot)"}`,
     card && (project.plotted ? card.plot === "280" : card.plot === null), JSON.stringify({ ...card, project: project.key }));
   await clickButton(session, "Delete");
   await clickButton(session, "Delete", '[role="dialog"]');
-  await waitFor(session, `location.pathname === "/"`);
+  await waitFor(session, `location.pathname === "/"`, SLOW);
   const gone = await call(session, "GET", `/dashboards/${dashboardId}`);
   check("Delete removes it", gone.status === 404, String(gone.status));
   if (gone.status === 404) dashboardId = null;
@@ -215,5 +200,4 @@ try {
   if (fixture?.projectId) await call(session, "DELETE", `/projects/${fixture.projectId}`).catch(() => {});
   await close();
 }
-const failed = report(Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])), { proof: "dashboards package" });
-process.exit(failed ? 1 : 0);
+finish({ proof: "dashboards package" });

@@ -14,28 +14,12 @@
  * Usage: node scripts/confluence-import-page-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9506;
 const TMP = process.env.TMPDIR || "/tmp";
-const PROFILE = resolve(TMP, "radd-confluence-page-proof-profile");
 const SHOT = resolve(process.env.PROOF_OUT || TMP, "confluence-import-page-proof.png");
 const TABS = ["Spaces", "Macros", "People", "Restrictions", "Labels", "Jira links"];
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
 
 // Every write the page makes, recorded before any of its code runs.
 const RECORD_WRITES = `(() => {
@@ -48,13 +32,11 @@ const RECORD_WRITES = `(() => {
   };
 })();`;
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9506, profile: resolve(TMP, "radd-confluence-page-proof-profile"),
+});
 let context = {};
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-  check("headless chrome reports a real pointer", await session.hoverCapable());
   await session.send("Page.addScriptToEvaluateOnNewDocument", { source: RECORD_WRITES });
 
   // 1–2. the page and its nav entry.
@@ -115,7 +97,7 @@ try {
         const empty = root.textContent.includes("Nothing of this kind in the download.");
         const loading = root.textContent.includes("Loading choice");
         return rows > 0 || empty ? { rows, empty, loading, actions: root.querySelectorAll(":scope > div table tbody tr td:nth-child(3) button").length } : null;
-      })()`, 20);
+      })()`, { attempts: 20 });
     }
     context.tabs = tabs;
     check("every mapping tab renders its rows or its empty line", TABS.every((t) => tabs[t]), JSON.stringify(tabs));
@@ -135,8 +117,4 @@ try {
 } finally {
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "confluence import page", screenshot: SHOT, ...context },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "confluence import page", screenshot: SHOT, ...context });

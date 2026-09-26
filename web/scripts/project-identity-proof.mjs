@@ -15,38 +15,20 @@
  * Every check is a measurement (DOM text, API read-back), not a screenshot.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: project-identity-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9481;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-project-identity-proof");
 const KEY = `PI${Date.now().toString(36).slice(-4).toUpperCase()}`;
 
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
-
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
   const context = { key: KEY };
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    await session.login(baseUrl, adminEmail, adminPassword);
-
     // --- setup over the API: a project, a space with two pages ---
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Identity proof" });
       const space = await api("POST", "/page-spaces", { slug: ${JSON.stringify(KEY.toLowerCase())}, name: "Identity proof space" });
       const a = await api("POST", "/pages", { space_id: space.body.id, title: "Parent page", body: "a" });
@@ -77,7 +59,7 @@ async function main() {
     })()`);
     await session.click("button", (t) => t.trim() === "Save");
     await sleep(1500);
-    const readBack = await session.eval(`(async () => { ${API}
+    const readBack = await session.eval(`(async () => { ${PAGE_API}
       const r = await api("GET", "/projects/${project.id}");
       return r.body;
     })()`);
@@ -107,7 +89,7 @@ async function main() {
     await sleep(200);
     await session.click("button", (t) => t.trim() === "Move");
     await sleep(1500);
-    const tree = await session.eval(`(async () => { ${API}
+    const tree = await session.eval(`(async () => { ${PAGE_API}
       const r = await api("GET", "/page-spaces/${space.id}/pages");
       const rows = Array.isArray(r.body) ? r.body : (r.body.pages || r.body.items || []);
       const moved = rows.find((p) => p.id === "${b.id}");
@@ -118,7 +100,7 @@ async function main() {
 
     // --- 3. a restricted personal token ---
     await session.navigate(`${baseUrl}/settings/tokens`, 2500);
-    const tokenScope = await session.eval(`(async () => { ${API}
+    const tokenScope = await session.eval(`(async () => { ${PAGE_API}
       const r = await api("POST", "/tokens", { name: "proof restricted", scopes: { global: ["item.read"], projects: {} } });
       const list = await api("GET", "/tokens");
       const mine = (list.body || []).find((t) => t.name === "proof restricted");

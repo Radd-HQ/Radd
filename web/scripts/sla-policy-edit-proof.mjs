@@ -14,30 +14,15 @@
  * The fixture project is deleted at the end.
  */
 import { resolve } from "node:path";
-import { clickAt, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { clickAt, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: sla-policy-edit-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9502;
 const TMP = process.env.TMPDIR || "/tmp";
 const PROFILE = resolve(TMP, "radd-sla-policy-edit-proof");
 const SHOTS = resolve(TMP, "radd-sla-policy-edit-proof-shots");
 const STAMP = Date.now().toString(36).slice(-5);
 const KEY = `SE${STAMP.slice(-4).toUpperCase()}`;
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 const FORM = '[data-sla-policy-form="edit"]';
 
@@ -54,15 +39,13 @@ const startsWith = (text) => new Function("t", `return t.trim().startsWith(${JSO
 const equals = (text) => new Function("t", `return t.trim() === ${JSON.stringify(text)}`);
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1400, height: 1300, scale: 1 });
+  const { session, close, baseUrl } = await startProof({ port: PORT, profile: PROFILE, width: 1400, height: 1300, scale: 1 });
   const send = session.send;
   const checks = {};
   const context = { key: KEY };
   let fixture = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    await session.login(baseUrl, adminEmail, adminPassword);
-    fixture = await session.eval(`(async () => { ${API}
+    fixture = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "SLA edit proof" });
       const states = (await api("GET", "/states?project_id=" + project.body.id)).body;
       const catchAll = await api("POST", "/sla-policies", { project_id: project.body.id, name: "Catch-all", response_minutes: 480, position: 0 });
@@ -73,7 +56,7 @@ async function main() {
       return { project: project.body, states, catchAll: catchAll.body, policy: policy.body };
     })()`);
     const first = [...fixture.states].sort((a, b) => a.position - b.position)[0];
-    const read = () => session.eval(`(async () => { ${API}
+    const read = () => session.eval(`(async () => { ${PAGE_API}
       return (await api("GET", "/sla-policies?project_id=${fixture.project.id}")).body.find((p) => p.id === "${fixture.policy.id}");
     })()`);
 
@@ -152,7 +135,7 @@ async function main() {
     checks["4. Cancel discards the change and closes the editor"] = after?.name === "Edited" && closed;
   } finally {
     if (fixture) {
-      context.cleanup = await session.eval(`(async () => { ${API}
+      context.cleanup = await session.eval(`(async () => { ${PAGE_API}
         return (await api("DELETE", "/projects/${fixture.project.id}")).status;
       })()`).catch((error) => String(error));
     }

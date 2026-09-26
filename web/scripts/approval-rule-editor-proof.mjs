@@ -16,42 +16,20 @@
  * Usage: node scripts/approval-rule-editor-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9507;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-approval-rule-proof-profile");
 const tag = Date.now().toString(36);
 const key = `AR${tag.slice(-4).toUpperCase()}`;
 const teamName = `Approvers ${tag}`;
 
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 40) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
-
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9507, profile: resolve(process.env.TMPDIR || "/tmp", "radd-approval-rule-proof-profile"),
+});
 let world = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-
   // 1. the world.
-  world = await session.eval(`(async () => { ${API}
+  world = await session.eval(`(async () => { ${PAGE_API}
     const me = (await api("GET", "/auth/me")).body;
     const project = await api("POST", "/projects", { key: ${JSON.stringify(key)}, name: "Approval rule proof" });
     const id = project.body.id;
@@ -87,7 +65,7 @@ try {
   const offered = await waitFor(session, `[...document.querySelectorAll('[role="dialog"] button')].some((b) => b.textContent.trim() === ${JSON.stringify(teamName)})`);
   check("the remote's team picker offers the team", offered);
   if (offered) await session.click('[role="dialog"] button', new Function("text", `return text.trim() === ${JSON.stringify(teamName)}`));
-  const saved = await waitFor(session, `(async () => { ${API}
+  const saved = await waitFor(session, `(async () => { ${PAGE_API}
     const rows = (await api("GET", "/projects/${world.projectId}/transitions")).body;
     const rule = rows.find((t) => t.id === "${world.transitionId}")?.rules.find((r) => r.check === "require_approval");
     const ids = (rule?.params.approvers ?? []).map((a) => a.kind + ":" + a.id + ":" + a.name + ":" + (a.required ?? ""));
@@ -108,10 +86,10 @@ try {
   check("the approver editor came from the approvals remote", origin.fetched && origin.active, JSON.stringify(origin));
   await session.eval(`document.querySelector('[data-approval-rule]').scrollIntoView({ block: "center" })`);
   await sleep(300);
-  await session.screenshot(resolve("scripts", "approval-rule-editor-proof.png"));
+  await session.screenshot(outputPath("approval-rule-editor-proof.png"));
 
   // 4. the gate holds.
-  const move = await session.eval(`(async () => { ${API}
+  const move = await session.eval(`(async () => { ${PAGE_API}
     return api("PATCH", "/items/${world.itemId}", { state_id: "${world.doneId}" }); })()`);
   check("a move without approval is refused with the approval message",
     move.status === 422 && move.body.errors?.includes(`approval required (${world.me.name}; 1 of ${teamName})`),
@@ -121,7 +99,7 @@ try {
   check("no console errors", session.consoleErrors.length === 0, JSON.stringify(session.consoleErrors));
 } finally {
   if (world?.projectId) {
-    const cleaned = await session.eval(`(async () => { ${API}
+    const cleaned = await session.eval(`(async () => { ${PAGE_API}
       const p = await api("DELETE", "/projects/${world.projectId}");
       const t = ${world.teamId ? `(await api("DELETE", "/teams/${world.teamId}")).status` : "null"};
       return [p.status, t];
@@ -130,8 +108,4 @@ try {
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "approval rule editor" },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "approval rule editor" });

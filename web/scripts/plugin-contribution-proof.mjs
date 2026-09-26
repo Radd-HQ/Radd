@@ -14,30 +14,13 @@
  *
  * None of this required an edit to `automations`, the kernel, or the SPA.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { openEditor, PANEL_ROWS, searchNodes } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9357, profile: "/tmp/radd-plugin" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
-
-const search = (text) =>
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    if(!i) return false;
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,${JSON.stringify(text)}); i.dispatchEvent(new Event("input",{bubbles:true}));
-    return true;})()`;
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9357, profile: "/tmp/radd-plugin", base: "http://localhost:8000",
+});
 
 // --- the contribution is visible to the whole builder -------------------------
 const catalog = await session.eval(
@@ -61,7 +44,7 @@ const declared = await session.eval(
 
 // --- a graph made only of plugin contributions saves --------------------------
 const created = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "plugin contribution proof",
     enabled: false,
     orientation: "vertical",
@@ -72,11 +55,11 @@ const created = await session.eval(
     edges: [{ source: "trg1", port: "out", target: "act1" }],
   }),
 );
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const rule = parsed(created);
 
 // An invalid enum value is refused by the plugin's OWN schema, on write.
 const refused = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "plugin contribution proof (bad)",
     enabled: false,
     nodes: [
@@ -89,25 +72,17 @@ const refused = await session.eval(
 
 // --- the dry run reaches the contributed action -------------------------------
 const dryRun = await session.eval(
-  post(`/automations/${rule.id}/test`, { item_id: null, trigger_node_id: "trg1" }),
+  pageFetch("POST", `/automations/${rule.id}/test`, { item_id: null, trigger_node_id: "trg1" }),
 );
 const runResult = JSON.parse(dryRun.body);
 
 // --- the editor renders a form from the plugin's schema -----------------------
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("plugin contribution proof"));` +
-    `if(el)el.click();return !!el;})()`,
-);
-await sleep(3000);
+await openEditor(session, baseUrl, "plugin contribution proof");
 
 // It is offered in the palette by its own group.
-await session.eval(search("milestone"));
+await session.eval(searchNodes("milestone"));
 await sleep(800);
-const paletteRows = await session.eval(
-  `[...document.querySelectorAll("[data-node-panel] li button")].map(b=>b.textContent.trim())`,
-);
+const paletteRows = await session.eval(PANEL_ROWS);
 
 // Selecting it shows a GENERATED form, with the enum as a real dropdown.
 await session.eval(
@@ -131,14 +106,9 @@ const generatedForm = await session.eval(`(()=>{
     value: listbox ? listbox.textContent.trim() : "",
   };})()`);
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-plugin.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-plugin.png"));
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 // The node RAN — which is the whole point. Before RADD-923 the executor
@@ -159,7 +129,7 @@ const checks = {
   contributedActionDispatched: dispatched,
   paletteRows,
   generatedForm,
-  screenshot: "/tmp/radd-plugin.png",
+  screenshot: outputPath("radd-plugin.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

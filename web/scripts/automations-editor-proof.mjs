@@ -12,31 +12,21 @@
  * Measured, not eyeballed: presence in the DOM is not visibility, which is the
  * lesson from this feature's first three attempts.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { clickPanelRow, openEditor, PANEL_ROWS, searchNodes } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9340, profile: "/tmp/radd-editor-proof" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9340, profile: "/tmp/radd-editor-proof", base: "http://localhost:8000",
+});
 
 const clickText = (text) =>
   `(()=>{const b=[...document.querySelectorAll("button")].find(n=>n.textContent.trim()===${JSON.stringify(text)});` +
   `if(b) b.click(); return !!b;})()`;
 
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-
 // A graph with TWO triggers — the thing a single column could not hold.
 const created = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "editor proof",
     enabled: false,
     orientation: "vertical",
@@ -51,15 +41,10 @@ const created = await session.eval(
     ],
   }),
 );
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const rule = parsed(created);
 const triggersBack = rule ? rule.triggers.map((t) => t.event_type).sort() : [];
 
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("editor proof"));if(el)el.click();return !!el;})()`,
-);
-await sleep(3000);
+await openEditor(session, baseUrl, "editor proof");
 
 // The canvas is the editor — no Form tab to switch to.
 const noFormTab = await session.eval(
@@ -71,30 +56,14 @@ const panelGroups = await session.eval(
 const hasTriggerGroup = panelGroups.some((g) => /^Triggers/.test(g));
 
 // Search the panel.
-await session.eval(
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    if(!i) return false;
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,"webhook");
-    i.dispatchEvent(new Event("input",{bubbles:true}));
-    return true;})()`,
-);
+await session.eval(searchNodes("webhook"));
 await sleep(700);
-const searchHits = await session.eval(
-  `[...document.querySelectorAll("[data-node-panel] li button")].map(b=>b.textContent.trim())`,
-);
+const searchHits = await session.eval(PANEL_ROWS);
 
 // Clear the search, then add a THIRD trigger from the panel.
-await session.eval(
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,"schedule"); i.dispatchEvent(new Event("input",{bubbles:true})); return true;})()`,
-);
+await session.eval(searchNodes("schedule"));
 await sleep(700);
-const addedTrigger = await session.eval(
-  `(()=>{const b=[...document.querySelectorAll("[data-node-panel] li button")].find(n=>/on a schedule/i.test(n.textContent));
-    if(b) b.click(); return !!b;})()`,
-);
+const addedTrigger = await session.eval(clickPanelRow(/on a schedule/i));
 await sleep(1200);
 const triggerNodesOnCanvas = await session.eval(
   `document.querySelectorAll('[data-node-kind="trigger"]').length`,
@@ -156,14 +125,9 @@ const visuals = await session.eval(`(()=>{
   return {inside, visible, overlapping, staleFormCopy, edgeCount:strokes.length, strokesVisible:strokes.every(s=>!black.includes(s))};
 })()`);
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-editor.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-editor.png"));
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checks = {
@@ -182,7 +146,7 @@ const checks = {
   bottomHandlesWhenVertical: verticalPorts,
   rightHandlesWhenHorizontal: horizontalPorts,
   ...visuals,
-  screenshot: "/tmp/radd-editor.png",
+  screenshot: outputPath("radd-editor.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

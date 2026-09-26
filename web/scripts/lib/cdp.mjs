@@ -1,13 +1,5 @@
-/**
- * The Chrome DevTools Protocol plumbing every proof in this directory repeats
- * (RADD-757).
- *
- * These are not conveniences. Each function encodes a lesson that was paid for
- * once and then had to be copied by hand into the next proof — which is how
- * RADD-742's hit-testing fix ended up in one script while the others kept
- * calling `element.click()`. One module, so a lesson learned in the seventh
- * proof applies to the first.
- */
+/** CDP plumbing shared by every proof (RADD-757). Each helper encodes a lesson paid for once
+ *  (e.g. RADD-742's hit-tested clicks), so a fix here reaches every proof. */
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,13 +20,8 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
   // Proofs hard-code their debug ports; RADD_PROOF_PORT_OFFSET shifts them all, so two runs (two
   // agents, a CI job beside a developer) can use disjoint ranges without editing any proof.
   const port = basePort + (Number(process.env.RADD_PROOF_PORT_OFFSET) || 0);
-  // A browser already listening on this port is a LEFTOVER from a previous run,
-  // and connecting to it is silent poison: it was launched from different code,
-  // possibly with different flags, and every assertion then describes a browser
-  // this run did not configure. It cost an hour once — a proof reported
-  // `(hover: hover)` false while the flag that sets it was right there in the
-  // launch arguments, because the flag went to a process nobody connected to.
-  // Fail loudly instead of inheriting it.
+  // A browser already on this port leaked from an earlier run (other code, other flags);
+  // attaching would make every assertion describe the wrong browser. Fail loudly.
   try {
     const stale = await fetch(`http://127.0.0.1:${port}/json/version`);
     if (stale.ok) {
@@ -61,11 +48,8 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
   });
   let exited = null;
   chrome.on("exit", (code, signal) => { exited = { code, signal }; });
-  // The harness owns the browser's life, not the caller. A proof that throws
-  // before its own cleanup used to leak a headless Chrome per run, and every
-  // proof had to remember the same two `chrome.kill()` calls in its tail.
-  // A proof's Chrome profile under the temp dir is scratch: remove it with the browser. Every run
-  // left 40–60 MB behind, and ~900 of them filled the 16 GB /tmp until Chrome hung at launch.
+  // The harness owns the browser: killed on exit even if the proof throws, and a temp-dir
+  // profile removed with it (~50 MB/run once filled /tmp).
   const scratch = resolvePath(profile).startsWith(resolvePath(tmpdir()) + sep);
   const dispose = () => {
     try { chrome.kill(); } catch { /* already gone */ }
@@ -73,12 +57,8 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
   };
   process.on("exit", dispose);
 
-  // 60 s, not 10 (RADD-1135): a FIRST launch of Google Chrome on a cold GitHub
-  // runner — profile creation, font cache, sandbox setup, under load from a
-  // sibling job — overran the old 40 x 250 ms budget twice in one day, on
-  // commits whose identical smoke passed minutes later. Locally this loop exits
-  // on the first successful poll, typically well under a second, so the budget
-  // only ever costs time when something is actually wrong.
+  // 60 s (RADD-1135): a cold first launch on a GitHub runner overran 10 s; locally this exits
+  // on the first poll.
   let version;
   const deadline = Date.now() + 60_000;
   while (!version && Date.now() < deadline && !exited) {
@@ -144,9 +124,9 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
     { width, height, deviceScaleFactor: scale, mobile: false });
 
   const session = {
+    /** Raw CDP for what the helpers do not cover (extra headers, emulation). */
     send,
     consoleErrors,
-    sessionId,
     eval: (expression) => evalInPage(send, expression),
     click: (selector, match) => clickAt(send, selector, match),
     hover: (selector) => hoverOver(send, selector),
@@ -159,8 +139,6 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
         `credentials:"include",headers:{"Content-Type":"application/json"},` +
         `body:JSON.stringify(${JSON.stringify({ email, password })})});return r.status;})()`),
     hoverCapable: () => evalInPage(send, HOVER_CAPABLE_PROBE),
-    /** Raw CDP for what the helpers do not cover (extra headers, emulation). */
-    send,
     /** PNG screenshot of the viewport (or the full page) to `path`. */
     screenshot: async (path, { fullPage = false } = {}) => {
       const { writeFile } = await import("node:fs/promises");
@@ -185,22 +163,8 @@ export async function openBrowser({ port: basePort, profile, width = 1440, heigh
   };
 }
 
-/**
- * Evaluate an expression in the page and return its value.
- *
- * The error path matters: CDP's `exceptionDetails.text` is usually the useless
- * string "Uncaught". Reporting the exception's own description plus the
- * expression that produced it is the difference between "page eval threw" and
- * knowing which selector came back null.
- */
-/**
- * Page-eval expressions are built as TEMPLATE LITERALS, so a backtick anywhere
- * inside one — most easily in a comment, writing `foo` for emphasis — closes
- * the literal early. The result is a syntax error reported against the HARNESS
- * at some unrelated line, which reads as "my proof file is broken" rather than
- * "I typed a backtick". It cost two debugging rounds in one session, so the
- * check is here rather than in anybody's memory.
- */
+/** A `//` comment containing a backtick inside a page-eval template literal ends the literal and
+ *  surfaces as a syntax error in the harness. */
 function assertNoStrayBacktick(expression) {
   for (const line of expression.split("\n")) {
     const code = line.trim();
@@ -212,6 +176,8 @@ function assertNoStrayBacktick(expression) {
   }
 }
 
+/** Evaluate in the page; errors carry the exception's description and the expression, not CDP's
+ *  bare "Uncaught". */
 export async function evalInPage(send, expression) {
   assertNoStrayBacktick(expression);
   const { result, exceptionDetails } = await send(
@@ -229,18 +195,9 @@ export async function evalInPage(send, expression) {
 }
 
 /**
- * Click an element the way a person does: real mouse events at its centre,
- * dispatched through the browser's input pipeline so HIT-TESTING applies.
- *
- * This is the whole reason proofs are written this way (RADD-742). The first
- * version called `element.click()`, which delivers the event straight to the
- * node and ignores what is painted on top of it. That passed against a menu
- * sitting UNDER its own click-away overlay — a real click closed the menu and
- * inserted nothing, and the proof said "all passed". `element.click()` cannot
- * see a z-index bug; `Input.dispatchMouseEvent` can.
- *
- * Returns what was actually hit, including the full paint stack, so a
- * mis-targeted click reports "intercepted by X" rather than "did nothing".
+ * Click like a person: real mouse events at the centre through the input pipeline, so
+ * hit-testing applies (`element.click()` passed against a menu under its own click-away
+ * overlay — RADD-742). Returns what was hit, with the paint stack.
  */
 export async function clickAt(send, selector, match) {
   const box = await evalInPage(send, `(() => {
@@ -248,12 +205,7 @@ export async function clickAt(send, selector, match) {
     const el = ${match ? `nodes.find((n) => (${match.toString()})(n.textContent || ""))` : "nodes[0]"};
     if (!el) return null;
     const target = el.closest("button") || el;
-    // Scroll it into view first, as a person would. An element inside a scrolling
-    // container still reports a rect when it is below the fold, so clicking its
-    // centre lands wherever that point happens to be — usually on a click-away
-    // overlay, which then reads as the z-index bug of RADD-742 rather than as
-    // "the list scrolled". The extension picker's max-h-80 list hit exactly this
-    // once it grew past four entries.
+    // Scroll into view first: an off-screen element's centre lands on whatever overlays it.
     target.scrollIntoView({ block: "nearest", inline: "nearest" });
     const r = target.getBoundingClientRect();
     const x = r.left + r.width / 2;
@@ -296,11 +248,77 @@ export async function hoverOver(send, selector) {
   return at;
 }
 
-/** Print the checks and return the failure count, so every proof reports alike. */
+/** Poll a page expression until it is truthy; returns that value, or the last (falsy) one. */
+export async function waitFor(session, expression, { attempts = 60, every = 250 } = {}) {
+  for (let i = 0; i < attempts; i += 1) {
+    const value = await session.eval(expression);
+    if (value) return value;
+    await sleep(every);
+  }
+  return session.eval(expression);
+}
+
+/** Poll a selector until it exists, or give up. Returns whether it appeared. */
+export async function waitForSelector(session, selector, { timeoutMs = 20000, stepMs = 250 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const found = await session.eval(`!!document.querySelector(${JSON.stringify(selector)})`);
+    if (found) return true;
+    await sleep(stepMs);
+  }
+  return false;
+}
+
+/**
+ * Wait for `test` (a function, or a page expression) to hold, or throw `label` with what the page
+ * showed. `describe` adds proof-specific context to the failure.
+ */
+export async function until(session, test, label = "condition", { timeoutMs = 30_000, every = 40, describe } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await (typeof test === "function" ? test() : session.eval(test))) return;
+    await sleep(every);
+  }
+  const page = await session.eval(`location.pathname + " :: " + (document.body?.innerText ?? "").slice(0, 800)`)
+    .catch(() => "(page unreadable)");
+  const extra = describe ? `\n  ${await describe()}` : "";
+  throw new Error(`${label}\n  page: ${page}\n  console: ${JSON.stringify(session.consoleErrors.slice(0, 5))}${extra}`);
+}
+
+/** In-page source defining `api(method, path, body)` → `{ status, body }` (parsed JSON or null),
+ *  as the signed-in page. Splice it into an eval: `(async () => { ${PAGE_API} return … })()`. */
+export const PAGE_API = `const api = async (method, path, body) => {
+  const r = await fetch("/api/v1" + path, { method, headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await r.text();
+  return { status: r.status, body: text ? JSON.parse(text) : null };
+};`;
+
+/** A page expression calling the API as the signed-in page; resolves `{ status, body }` with the
+ *  body as raw TEXT (see `parsed`). */
+export const pageFetch = (method, path, body) =>
+  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},credentials:"include",` +
+  `headers:{"Content-Type":"application/json"}${body === undefined ? "" : `,body:JSON.stringify(${JSON.stringify(body)})`}});` +
+  `return {status:r.status, body: await r.text()};})()`;
+
+/** The JSON body of a `pageFetch` result, or null when it failed. */
+export const parsed = (result) => (result.status < 300 ? JSON.parse(result.body) : null);
+
+/** Where a proof writes a screenshot or other output: `$RADD_PROOF_OUTPUT_DIR`, else the temp dir
+ *  — never the source tree. */
+export const outputPath = (name) => resolvePath(process.env.RADD_PROOF_OUTPUT_DIR || tmpdir(), name);
+
+/**
+ * Print the checks and return the failure count, so every proof reports alike. `checks` is
+ * `{ label: ok }` or `[{ name, ok, detail }]` (a failing entry prints its detail).
+ */
 export function report(checks, context) {
   if (context) console.log(JSON.stringify(context, null, 2) + "\n");
+  const rows = Array.isArray(checks)
+    ? checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])
+    : Object.entries(checks);
   let failed = 0;
-  for (const [label, ok] of Object.entries(checks)) {
+  for (const [label, ok] of rows) {
     console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
     if (!ok) failed++;
   }

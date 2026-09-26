@@ -15,7 +15,7 @@
  *   node scripts/confluence-media-proof.mjs <baseUrl> <spaceSlug> <pageSlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, outputPath, report, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, pageSlug, email, password] = process.argv.slice(2);
 const PORT = 9453;
@@ -66,17 +66,13 @@ async function main() {
   checks["…a real duration"] = Number.isFinite(media.duration) && media.duration > 0;
   checks["…and real dimensions"] = media.width > 0 && media.height > 0;
 
-  const shot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("confluence-media.png"));
   report(checks, media);
-  return shot.data;
 }
 
 main()
-  .then(async (png) => {
-    const { writeFile } = await import("node:fs/promises");
-    const dir = process.env.PROOF_OUT || "/tmp";
-    await writeFile(`${dir}/confluence-media.png`, Buffer.from(png, "base64"));
-    console.log(`screenshot: ${dir}/confluence-media.png`);
+  .then(() => {
+    console.log(`screenshot: ${outputPath("confluence-media.png")}`);
     process.exit(0);
   })
   .catch((error) => {

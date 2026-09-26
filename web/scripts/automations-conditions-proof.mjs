@@ -12,44 +12,23 @@
  * Measured, not eyeballed. Presence in the DOM is not visibility, and a form
  * that renders is not a form that is wired.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { clickPanelRow, openEditor, PANEL_ROWS, searchNodes } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9342, profile: "/tmp/radd-conditions" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
-
-const search = (text) =>
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    if(!i) return false;
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,${JSON.stringify(text)}); i.dispatchEvent(new Event("input",{bubbles:true}));
-    return true;})()`;
-
-const clickPanelRow = (re) =>
-  `(()=>{const b=[...document.querySelectorAll("[data-node-panel] li button")]
-     .find(n=>${re}.test(n.textContent)); if(b) b.click(); return !!b;})()`;
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9342, profile: "/tmp/radd-conditions", base: "http://localhost:8000",
+});
 
 // The server decides what the palette can offer.
 const catalog = await session.eval(
   `(async()=>{const r=await fetch("/api/v1/automations/catalog",{credentials:"include"});
     const j=await r.json();
-    return {contributed:(j.contributed_nodes||[]).map(n=>n.key), canActAs:j.can_act_as};})()`,
+    return {nodes:(j.nodes||[]).map(n=>n.type||n.key), canActAs:j.can_act_as};})()`,
 );
 
 const created = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "conditions proof",
     enabled: false,
     orientation: "vertical",
@@ -59,36 +38,24 @@ const created = await session.eval(
     edges: [],
   }),
 );
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const rule = parsed(created);
 
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("conditions proof"));if(el)el.click();return !!el;})()`,
-);
-await sleep(3000);
+await openEditor(session, baseUrl, "conditions proof");
 
 // --- the palette offers named conditions, not the abstract tree ---
-await session.eval(search("changed"));
+await session.eval(searchNodes("changed"));
 await sleep(700);
-const conditionRows = await session.eval(
-  `[...document.querySelectorAll("[data-node-panel] li button")].map(b=>b.textContent.trim())`,
-);
-const offersOldGate = await session.eval(
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,"gate on the event"); i.dispatchEvent(new Event("input",{bubbles:true}));
-    return true;})()`,
-);
+const conditionRows = await session.eval(PANEL_ROWS);
+await session.eval(searchNodes("gate on the event"));
 await sleep(600);
 const oldGateHits = await session.eval(
   `[...document.querySelectorAll("[data-node-panel] li button")].length`,
 );
 
 // --- Field changed shows a real form ---
-await session.eval(search("field changed"));
+await session.eval(searchNodes("field changed"));
 await sleep(600);
-const addedFieldChanged = await session.eval(clickPanelRow("/field changed/i"));
+const addedFieldChanged = await session.eval(clickPanelRow(/field changed/i));
 await sleep(1200);
 const fieldChangedForm = await session.eval(`(()=>{
   const t=document.body.innerText;
@@ -97,9 +64,9 @@ const fieldChangedForm = await session.eval(`(()=>{
 })()`);
 
 // --- the AI classifier: ports follow the answers you type ---
-await session.eval(search("ask the ai"));
+await session.eval(searchNodes("ask the ai"));
 await sleep(600);
-const addedAi = await session.eval(clickPanelRow("/ask the ai/i"));
+const addedAi = await session.eval(clickPanelRow(/ask the ai/i));
 await sleep(1200);
 const portsBefore = await session.eval(
   `(()=>{const n=document.querySelector('[data-node-type="ai.classify"]');
@@ -122,25 +89,20 @@ const portsAfter = await session.eval(
 );
 
 // --- Act as appears on an action for a caller who holds the atom ---
-await session.eval(search("add label"));
+await session.eval(searchNodes("add label"));
 await sleep(600);
-await session.eval(clickPanelRow("/add label/i"));
+await session.eval(clickPanelRow(/add label/i));
 await sleep(1200);
 const actAsShown = await session.eval(`/Act as/i.test(document.body.innerText)`);
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-conditions.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-conditions.png"));
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checks = {
   loginStatus,
-  contributedFromServer: catalog.contributed,
+  aiNodeOffered: (catalog.nodes ?? []).includes("ai.classify"),
   canActAs: catalog.canActAs,
   conditionRowsFound: conditionRows,
   oldGateStillOffered: oldGateHits > 0,
@@ -150,14 +112,14 @@ const checks = {
   typedAnswers,
   aiPortsAfterAnswers: portsAfter,
   actAsShown,
-  screenshot: "/tmp/radd-conditions.png",
+  screenshot: outputPath("radd-conditions.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));
 
 const ok =
   loginStatus === 204 &&
-  catalog.contributed.includes("ai.classify") &&
+  (catalog.nodes ?? []).includes("ai.classify") &&
   conditionRows.some((r) => /field changed/i.test(r)) &&
   !checks.oldGateStillOffered &&
   addedFieldChanged &&

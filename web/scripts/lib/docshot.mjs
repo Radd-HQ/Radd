@@ -1,71 +1,27 @@
 /**
- * Screenshot capture against a RUNNING Radd, for the documentation wave
- * (RADD-1001). Builds on `lib/cdp.mjs`; adds the two things a docs capture
- * needs and a proof does not: a way in without a password, and a guarantee
- * that the browser cannot write.
- *
- * ## Getting in without a password
- *
- * The SPA authenticates with the `radd_session` cookie that `POST /auth/login`
- * sets from an email and password. A PAT cannot be dropped into that cookie —
- * `resolve_session_users` looks the value up as a session row, so a token there
- * resolves to nobody.
- *
- * The way through is already in the server. `auth/deps.py::optional_user`
- * resolves the cookie and THEN falls back to an `Authorization: Bearer
- * radd_pat_…` header. So the unmodified SPA authenticates fine if every
- * same-origin `/api/` request carries that header, which is what the injected
- * wrapper below does. Nothing about the app is stubbed or mocked: it is the
- * real bundle talking to the real API as the real owner.
- *
- * ## Why the gate is here and not in the caller's discipline
- *
- * This browser holds an ADMIN token and points at production, and fan-out
- * agents navigate it. "Do not click Delete" is an instruction, not a safety
- * property, and it fails the first time a capture needs a menu that happens to
- * contain a destructive item.
- *
- * So the same wrapper that adds the header is a write gate: anything to `/api/`
- * that is not a read resolves as a synthetic 403 without touching the network.
- * The hazard is removed by construction. A capture that trips it produces a log
- * line, not a lost row — and the run report names every blocked call, so a
- * panel that failed to render because it needed a write is visible rather than
- * mysterious.
- *
- * `fetch`, `XMLHttpRequest` and `sendBeacon` are all gated. Gating only `fetch`
- * would be the same mistake as trusting the caller: react-query uses `fetch`
- * TODAY, and one upload control on one panel using XHR is enough to defeat it.
+ * Screenshot capture against a RUNNING Radd for documentation (RADD-1001), on lib/cdp.mjs.
+ * Two things a proof does not need:
+ *  - Auth without a password: a PAT cannot go in `radd_session` (looked up as a session row),
+ *    but `auth/deps.py::optional_user` accepts `Authorization: Bearer radd_pat_…`, so an
+ *    injected wrapper adds that header to every same-origin `/api/` call.
+ *  - A write gate by construction: this browser holds an ADMIN token against production, so the
+ *    same wrapper answers every non-read `/api/` call with a synthetic 403 and records it.
+ *    `fetch`, XHR and `sendBeacon` are all gated — one XHR upload control defeats a fetch-only gate.
  */
-import { openBrowser } from "./cdp.mjs";
+import { openBrowser, waitForSelector } from "./cdp.mjs";
 
 /** Methods that only read. Everything else to `/api/` is refused. */
 const READ_METHODS = ["GET", "HEAD", "OPTIONS"];
 
-/**
- * Read-only endpoints that are POSTs anyway.
- *
- * Started EMPTY on purpose, and populated from evidence: run a capture, read
- * the blocked-call report, and add only the paths that turn out to be reads.
- * Guessing produces an allowlist that is both too wide (a write slips through)
- * and too narrow (a panel stays broken).
- *
- * Both entries below are batch READS that take an id list, which is why they
- * are POSTs — a GET cannot carry the body. They fire on an ordinary board or
- * item page load, so without them every such capture reported blocked writes
- * and lost its rollup and time-tracking chrome.
- */
+/** Read-only POSTs (batch reads that carry an id list). Grown only from the blocked-call
+ *  report, never guessed; both fire on an ordinary board/item load. */
 const READ_ONLY_POSTS = [
   "^/api/v1/items/rollup$",
   "^/api/v1/items/timelog/batch$",
 ];
 
-/**
- * The page-context gate. Installed with `Page.addScriptToEvaluateOnNewDocument`
- * so it is in place before the bundle boots and survives every navigation.
- *
- * Written as a function and stringified, rather than as a string, so it is
- * syntax-checked by the same tooling as the rest of the file.
- */
+/** Installed with addScriptToEvaluateOnNewDocument (before the bundle, every navigation);
+ *  stringified from a function so it is syntax-checked. */
 function gateSource(token, readMethods, readOnlyPosts) {
   return `(() => {
   const TOKEN = ${JSON.stringify(token)};
@@ -219,17 +175,6 @@ export async function openDocsBrowser({
   return { session: docs, close };
 }
 
-/** Poll a selector until it exists, or give up. Returns whether it appeared. */
-export async function waitForSelector(session, selector, { timeoutMs = 20000, stepMs = 250 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const found = await session.eval(`!!document.querySelector(${JSON.stringify(selector)})`);
-    if (found) return true;
-    await new Promise((r) => setTimeout(r, stepMs));
-  }
-  return false;
-}
-
 /** Wait until the page stops issuing requests, so a capture is not half-loaded. */
 export async function waitForQuiet(session, { quietMs = 700, timeoutMs = 20000 } = {}) {
   await session.eval(`(() => {
@@ -319,12 +264,9 @@ export async function capture(session, { out, clipTo, fullPage = false, padding 
 export async function goto(session, path, { waitFor, quietMs = 700, timeoutMs = 25000 } = {}) {
   const url = path.startsWith("http") ? path : session.baseUrl.replace(/\/$/, "") + path;
   await session.send("Page.navigate", { url });
-  // Assert the gate HERE rather than at open time. The injected script runs on
-  // document creation, so at `about:blank` it has not run yet and a check there
-  // fails on a perfectly good browser. Checking on every navigation is also
-  // stronger: it catches a gate that stopped applying part-way through a run,
-  // which is the case where writes would actually reach production.
-  if (!(await session.eval(`!!(globalThis.__DOCSHOT__ && globalThis.__DOCSHOT__.version === 1)`))) {
+  // Checked per navigation, not at open (about:blank predates the injected script) — this also
+  // catches a gate that stops applying mid-run.
+  if (!(await session.gateInstalled())) {
     throw new Error(`goto(${path}): the write gate is not installed — refusing to continue`);
   }
   await waitForQuiet(session, { quietMs, timeoutMs });
@@ -332,16 +274,9 @@ export async function goto(session, path, { waitFor, quietMs = 700, timeoutMs = 
     const ok = await waitForSelector(session, waitFor, { timeoutMs });
     if (!ok) throw new Error(`goto(${path}): never saw ${waitFor}`);
   }
-  // A capture of the login screen is the classic silent failure: the image is
-  // real, the run is green, and every screenshot shows a password box.
-  //
-  // The test is the ROUTE, not the presence of a password input. "Any password
-  // field means logged out" is wrong on the settings pages that legitimately
-  // render one — /settings/directory has a bind-account password, /settings/email
-  // an SMTP password — and it refused to capture them at all. A writer worked
-  // around it by navigating in-app, which is one step from working around the
-  // write gate too. A false alarm that trains people to route around the guard
-  // is worse than no guard.
+  // Logged out = on the /login ROUTE, not "a password input exists": /settings/directory and
+  // /settings/email render real password fields, and that false alarm taught writers to route
+  // around the guard.
   const loggedOut = await session.eval(`location.pathname.startsWith("/login")`);
   if (loggedOut) throw new Error(`goto(${path}): landed on the login screen — the token did not authenticate`);
   return url;

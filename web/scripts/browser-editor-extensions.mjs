@@ -12,16 +12,11 @@
  *   5. re-listing ai restores each control exactly once.
  */
 import assert from "node:assert/strict";
-import http from "node:http";
-import {readFileSync, existsSync, statSync} from "node:fs";
 import {mkdtemp} from "node:fs/promises";
-import path from "node:path";
-import {fileURLToPath} from "node:url";
-import {openBrowser} from "./lib/cdp.mjs";
+import {openBrowser, until} from "./lib/cdp.mjs";
 import {CORE_PLUGINS} from "./lib/core-plugins.mjs";
+import {serveBuiltSpa} from "./lib/spa-server.mjs";
 
-const dist = fileURLToPath(new URL("../dist/", import.meta.url));
-const aiDist = fileURLToPath(new URL("../../server/src/radd/modules/ai/ui/dist/", import.meta.url));
 let aiEnabled = true, aiVersion = 1;
 const FENCE = "```radd:media\nsrc: /api/v1/attachments/demo-video\n```";
 const user = {id: "admin", name: "Editor Owner", email: "fixture@example.test", global_role: "admin", permissions: ["*"], timezone: "UTC"};
@@ -36,19 +31,18 @@ const comments = [{id: "c1", body: "A rendered comment the read menu speaks for.
   .map(row => ({...row, entity_type: "item", entity_id: item.id, author: user, visibility: "public", visible_to_teams: [],
     anchor: null, parent_comment_id: null, resolved_at: null, resolved_by: null, created_at: "2026-01-01", updated_at: "2026-01-01"}));
 const REPLACEMENT = "The first paragraph reads smoothly.\n\nThe second paragraph reads smoothly too.\n";
+const SELECTION_REPLY = "opening";
 const requests = [], streams = [], patches = [];
 const sse = (res, chunks) => {
   res.writeHead(200, {"content-type": "text/event-stream"});
   for (const t of chunks) res.write(`data: ${JSON.stringify({t})}\n\n`);
   res.end("event: done\ndata: {}\n\n");
 };
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, "http://fixture");
+const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/plugins/")) {
     requests.push({route: url.pathname, method: req.method});
-    const file = path.join(aiDist, url.pathname.slice("/plugins/ai/".length));
-    if (!url.pathname.startsWith("/plugins/ai/") || !existsSync(file)) {res.writeHead(404); res.end(); return;}
-    res.writeHead(200, {"content-type": "text/javascript"}); res.end(readFileSync(file)); return;
+    if (!url.pathname.startsWith("/plugins/ai/")) {res.writeHead(404); res.end(); return true;}
+    return false;
   }
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
@@ -57,11 +51,14 @@ const server = http.createServer(async (req, res) => {
     requests.push({route, method: req.method, body});
     if (route === "/ai/editor/stream") {
       streams.push(body);
-      // Summaries answer as a summary; any other action is the transform, whose reply DROPS the
-      // protected fence's placeholder — the case RADD-1274 exists for.
-      return sse(res, body.action_id === "summarize_selection" ? ["A short ", "summary of the text."] : [REPLACEMENT.slice(0, 20), REPLACEMENT.slice(20)]);
+      // Summaries answer as a summary; a selection run answers one word for the selection; any other
+      // action is the whole-document transform, whose reply DROPS the protected fence's placeholder —
+      // the case RADD-1274 exists for.
+      sse(res, body.action_id === "summarize_selection" ? ["A short ", "summary of the text."]
+        : body.selection?.trim() ? [SELECTION_REPLY] : [REPLACEMENT.slice(0, 20), REPLACEMENT.slice(20)]);
+      return true;
     }
-    if (route === "/items/issue/ai/summarize/stream") return sse(res, ["The whole issue, ", "summarized."]);
+    if (route === "/items/issue/ai/summarize/stream") {sse(res, ["The whole issue, ", "summarized."]); return true;}
     let data = [];
     if (route === "/auth/me") data = user;
     else if (route.includes("capabilities")) data = {capabilities: [], nav: [], ui: [],
@@ -70,7 +67,7 @@ const server = http.createServer(async (req, res) => {
     else if (route === "/ai/status") data = {enabled: true, stream_responses: true, features: {editor_actions: true, summarize: true, similar_rerank: false}};
     else if (route === "/ai/editor/actions") data = [{id: "improve_writing", label: "Improve writing", kind: "builtin"},
       {id: "summarize_selection", label: "Summarize", kind: "builtin"}];
-    else if (route === "/auth/me/preferences" || route === "/preferences") data = {};
+    else if (route === "/auth/me/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};
     else if (route === "/projects/project" || route === "/projects/by-key/EDX") data = project;
@@ -88,23 +85,14 @@ const server = http.createServer(async (req, res) => {
     else if (route.includes("/resolve")) data = {value: false};
     else if (route.endsWith("/timelogging")) data = {enabled: false};
     res.writeHead(200, {"content-type": "application/json", "X-Total-Count": String(Array.isArray(data) ? data.length : 0)});
-    res.end(JSON.stringify(data)); return;
+    res.end(JSON.stringify(data)); return true;
   }
-  let file = path.resolve(dist, "." + url.pathname);
-  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(dist, "index.html");
-  const mime = {".js": "text/javascript", ".css": "text/css", ".html": "text/html"}[path.extname(file)] ?? "application/octet-stream";
-  res.writeHead(200, {"content-type": mime}); res.end(readFileSync(file));
 });
-await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 const checks = [];
 let browser;
 try {
   browser = await openBrowser({port: 18857, profile: await mkdtemp("/tmp/radd-editor-extensions-"), scale: 1});
   const s = browser.session;
-  const until = async (expression, label, attempts = 200) => {
-    for (let i = 0; i < attempts; i++) {if (await s.eval(expression)) return; await new Promise(r => setTimeout(r, 40));}
-    throw Error(label + ": " + (await s.eval("document.body.innerText")).slice(0, 600));
-  };
   const count = selector => s.eval(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
   const owners = slot => s.eval(`globalThis.__RADD_SLOT_REGISTRY__.forSlot(${JSON.stringify(slot)}).map((e) => e.plugin)`);
   const refresh = () => s.eval("window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['capabilities']})");
@@ -116,13 +104,13 @@ try {
   const openDescription = async () => {
     await s.hover(".group\\/desc");
     await s.click('[aria-label="Edit description"]');
-    await until(`[...document.querySelectorAll(".radd-rich-editor")].some((e) => e.innerText.includes("paragraph"))`, "description editor");
+    await until(s, `[...document.querySelectorAll(".radd-rich-editor")].some((e) => e.innerText.includes("paragraph"))`, "description editor");
     await s.eval(`[...document.querySelectorAll(".radd-rich-editor")].find((e) => e.innerText.includes("paragraph")).setAttribute("data-proof-desc", "")`);
   };
 
-  await s.navigate(`http://127.0.0.1:${server.address().port}/issues/EDX-1`);
+  await s.navigate(`${spa.origin}/issues/EDX-1`);
   assert(await s.eval(`matchMedia("(hover: hover)").matches`), "the browser must report a hover-capable pointer");
-  await until(`!!document.querySelector('[aria-label="AI actions for this comment"]') && !!document.querySelector("[data-ai-rail]")`, "ai read menu and rail");
+  await until(s, `!!document.querySelector('[aria-label="AI actions for this comment"]') && !!document.querySelector("[data-ai-rail]")`, "ai read menu and rail");
   for (const slot of ["content.read.action", "issue.rail.top", "editor.toolbar.action", "editor.selection.action", "item.draft.assist"]) {
     assert.deepEqual(await owners(slot), ["ai"], slot);
   }
@@ -135,25 +123,25 @@ try {
   // A read action answers in the HOST's reading pane.
   await s.hover('[data-comment-id="c1"]');
   await s.click('[aria-label="AI actions for this comment"]');
-  await until(`!!document.querySelector("[data-ai-read-panel]")`, "read menu opened");
+  await until(s, `!!document.querySelector("[data-ai-read-panel]")`, "read menu opened");
   await s.click("[data-ai-read-panel] button", text => text.trim() === "Summarize");
-  await until(`document.querySelector("[data-reading-panel]")?.innerText.includes("summary of the text")`, "summary in the pane");
+  await until(s, `document.querySelector("[data-reading-panel]")?.innerText.includes("summary of the text")`, "summary in the pane");
   await s.screenshot("/tmp/radd-editor-extensions-pane.png");
   assert.equal(await s.eval(`document.querySelector("[data-reading-panel]").getAttribute("aria-label")`), "AI results — Summary");
   assert.equal(streams.at(-1).action_id, "summarize_selection");
   assert.equal(streams.at(-1).document, comments[0].body);
   await s.click('[data-reading-panel] button[aria-label^="Close"]');
-  await until(`!document.querySelector("[data-reading-panel]")`, "pane closed");
+  await until(s, `!document.querySelector("[data-reading-panel]")`, "pane closed");
   checks.push("a comment's read-menu Summarize streams from the ai remote into the host's reading pane");
 
   // The description editor: the toolbar button is the remote's; the review is the host's.
   await openDescription();
-  await until(`!!document.querySelector('${DESC} [role="toolbar"] svg.radd-ai-toolbar-icon')`, "editor with AI button");
+  await until(s, `!!document.querySelector('${DESC} [role="toolbar"] svg.radd-ai-toolbar-icon')`, "editor with AI button");
   const runTransform = async () => {
     await s.click(`${DESC} [role="toolbar"] button[aria-label="AI"]`);
-    await until(`!!document.querySelector("[data-ai-toolbar-menu]")`, "toolbar menu");
+    await until(s, `!!document.querySelector("[data-ai-toolbar-menu]")`, "toolbar menu");
     await s.click("[data-ai-toolbar-menu] button", text => text.trim() === "Improve writing");
-    await until(`document.querySelector("${DESC} [data-editor-run-panel]")?.innerText.includes("to review") && document.querySelectorAll("${DESC} .milkdown-diff-controls").length > 0`, "host review");
+    await until(s, `document.querySelector("${DESC} [data-editor-run-panel]")?.innerText.includes("to review") && document.querySelectorAll("${DESC} .milkdown-diff-controls").length > 0`, "host review");
   };
   await runTransform();
   const sent = streams.at(-1);
@@ -169,20 +157,20 @@ try {
   assert.match(review.note, /left out 1 protected block/);
   assert.equal(review.toolbarDisabled, true, "a second run is not offered during review");
   await s.click(`${DESC} [data-editor-run-panel] button`, text => /reject all/i.test(text));
-  await until(`!document.querySelector("${DESC} [data-editor-run-panel]") && document.querySelectorAll("${DESC} .milkdown-diff-controls").length === 0`, "review rejected");
+  await until(s, `!document.querySelector("${DESC} [data-editor-run-panel]") && document.querySelectorAll("${DESC} .milkdown-diff-controls").length === 0`, "review rejected");
   assert.match(await editorText(), /reads rough/);
   checks.push("the toolbar AI run streams a masked document and lands in the host's per-block review with the transform's note; Reject all leaves the text");
 
   await runTransform();
   await s.click(`${DESC} [data-editor-run-panel] button`, text => /accept all/i.test(text));
-  await until(`!document.querySelector("${DESC} [data-editor-run-panel]")`, "review accepted");
+  await until(s, `!document.querySelector("${DESC} [data-editor-run-panel]")`, "review accepted");
   assert.match(await editorText(), /reads smoothly/);
   // The editor publishes its markdown 200 ms after the last change (Milkdown's listener), as it
   // does for typing; a person pressing Save is slower than that.
   await new Promise(r => setTimeout(r, 400));
   const patchesBefore = patches.length;
   await s.click("button", text => text.trim() === "Save");
-  await until(`!document.querySelector("${DESC}")`, "description saved");
+  await until(s, `!document.querySelector("${DESC}")`, "description saved");
   assert.equal(patches.length, patchesBefore + 1);
   const saved = patches.at(-1)?.description ?? "";
   assert.match(saved, /reads smoothly/);
@@ -198,7 +186,7 @@ try {
     const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range); return selection.toString();
   })()`);
   assert.equal(await selectFirstWord(), "first");
-  await until(`!!document.querySelector("[data-editor-selection-actions] [data-ai-selection-button]")`, "selection action");
+  await until(s, `!!document.querySelector("[data-editor-selection-actions] [data-ai-selection-button]")`, "selection action");
   // Past the fade-in: the chrome is painted above the toolbar it may overlap, and hit-tests as itself.
   await new Promise(r => setTimeout(r, 500));
   const chrome = await s.eval(`(() => {
@@ -209,22 +197,36 @@ try {
   assert(chrome.hit, JSON.stringify(chrome));
   await s.screenshot("/tmp/radd-editor-extensions-selection.png");
   await s.click("[data-ai-selection-button]");
-  await until(`!!document.querySelector("[data-ai-selection-menu]")`, "selection menu");
+  await until(s, `!!document.querySelector("[data-ai-selection-menu]")`, "selection menu");
   await s.click("[data-ai-selection-menu] button", text => text.trim() === "Improve writing");
-  await until(`!!document.querySelector("${DESC} [data-editor-run-panel]")`, "selection run");
+  await until(s, `!!document.querySelector("${DESC} [data-editor-run-panel]")`, "selection run");
   assert.equal(streams.at(-1).selection.trim(), "first", "the captured selection travelled with the run");
-  await until(`document.querySelector("${DESC} [data-editor-run-panel]")?.innerText.includes("to review")`, "selection review");
+  await until(s, `document.querySelector("${DESC} [data-editor-run-panel]")?.innerText.includes("to review")`, "selection review");
+  // Only the selected passage changes: the paragraph outside the selection reads as it did, carries
+  // no diff marks, and no review control follows it.
+  const scoped = await s.eval(`(() => {
+    const pm = document.querySelector("${DESC} .ProseMirror");
+    const second = [...pm.querySelectorAll("p")].find((p) => p.textContent.includes("second paragraph"));
+    const controls = [...pm.querySelectorAll(".milkdown-diff-controls")];
+    return {
+      second: second?.textContent ?? null,
+      marked: second ? second.querySelectorAll('[class*="milkdown-diff"]').length : -1,
+      after: controls.filter((c) => second && (second.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)).length,
+      changed: controls.length > 0 && pm.innerText.includes(${JSON.stringify(SELECTION_REPLY)}),
+    };
+  })()`);
+  assert.deepEqual(scoped, {second: "The second paragraph reads smoothly too.", marked: 0, after: 0, changed: true});
   await s.click(`${DESC} [data-editor-run-panel] button`, text => /reject all/i.test(text));
-  await until(`!document.querySelector("${DESC} [data-editor-run-panel]")`, "selection review rejected");
-  checks.push("Ask AI over a selection sends the captured range and reviews in the same host band");
+  await until(s, `!document.querySelector("${DESC} [data-editor-run-panel]")`, "selection review rejected");
+  checks.push("Ask AI over a selection sends the captured range, changes only that passage (the text outside it is untouched) and reviews in the same host band");
 
   // Withdrawal: the description editor is open, a comment is rendered, the composer is mounted.
   await s.eval("window.__sameDocument = true");
   await selectFirstWord();
-  await until(`!!document.querySelector("[data-ai-selection-button]")`, "selection action before withdrawal");
+  await until(s, `!!document.querySelector("[data-ai-selection-button]")`, "selection action before withdrawal");
   const before = aiRequests();
   aiEnabled = false; await refresh();
-  await until(`!document.querySelector("svg.radd-ai-toolbar-icon") && !document.querySelector("[data-ai-selection-button]")
+  await until(s, `!document.querySelector("svg.radd-ai-toolbar-icon") && !document.querySelector("[data-ai-selection-button]")
     && !document.querySelector('[aria-label^="AI actions for"]') && !document.querySelector("[data-ai-rail]")`, "every ai control withdrawn");
   assert.deepEqual(await owners("editor.toolbar.action"), []);
   assert(await s.eval(`!!document.querySelector("${DESC} .ProseMirror") && window.__sameDocument === true`), "the open editor survived with no reload");
@@ -238,13 +240,13 @@ try {
   aiEnabled = true; aiVersion += 1; await refresh();
   // Two editors are open (the description and the comment composer; a rendered comment shares the
   // class but has no toolbar): one AI button in each.
-  await until(`[...document.querySelectorAll(".radd-rich-editor")].filter((e) => e.querySelector('[role="toolbar"]')).length === 2
+  await until(s, `[...document.querySelectorAll(".radd-rich-editor")].filter((e) => e.querySelector('[role="toolbar"]')).length === 2
     && [...document.querySelectorAll(".radd-rich-editor")].filter((e) => e.querySelector('[role="toolbar"]'))
       .every((e) => e.querySelectorAll('[role="toolbar"] svg.radd-ai-toolbar-icon').length === 1)
     && document.querySelectorAll('[aria-label="AI actions for this comment"]').length === 1
     && document.querySelectorAll("[data-ai-rail]").length === 1`, "ai controls restored");
   await selectFirstWord();
-  await until(`document.querySelectorAll("[data-ai-selection-button]").length === 1`, "selection action restored");
+  await until(s, `document.querySelectorAll("[data-ai-selection-button]").length === 1`, "selection action restored");
   assert.deepEqual(await owners("editor.toolbar.action"), ["ai"]);
   checks.push("re-listing ai restores each control exactly once");
 
@@ -255,6 +257,6 @@ try {
   throw error;
 } finally {
   await browser?.close();
-  server.closeAllConnections();
-  server.close();
+  spa.server.closeAllConnections();
+  await spa.close();
 }

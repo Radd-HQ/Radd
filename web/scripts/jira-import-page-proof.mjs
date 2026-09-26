@@ -18,28 +18,14 @@
  * Usage: node scripts/jira-import-page-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, outputPath, report, waitFor } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9505;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-jira-import-proof-profile");
-const SHOT = resolve(process.env.TMPDIR || "/tmp", "jira-import-page-proof.png");
+const { baseUrl, email, password } = proofArgs();
+const SHOT = outputPath("jira-import-page-proof.png");
 const PROCEDURE = "Connect your source → download once → review mappings → check and dry run → import.";
 
 let writes = [];
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
 
 // Every non-GET the page sends, recorded before any app code runs and kept in
 // sessionStorage so the record survives the proof's full-page navigations.
@@ -58,7 +44,12 @@ const RECORD_WRITES = `(() => {
 
 const NAV = `[...document.querySelectorAll('nav[aria-label="Settings sections"] section')]`;
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const checks = [];
+const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
+
+const { session, close } = await openBrowser({
+  port: 9505, profile: resolve(process.env.TMPDIR || "/tmp", "radd-jira-import-proof-profile"),
+});
 let data = null;
 try {
   await session.send("Page.addScriptToEvaluateOnNewDocument", { source: RECORD_WRITES });
@@ -134,7 +125,7 @@ try {
     for (const [tab, marker] of [["Statuses", /Statuses in use|Not used by this project/], ["People", /Needs a decision|Already matched|Nobody is referenced/]]) {
       await session.click('[aria-label="Mapping tables"] button', new Function("text", `return text.startsWith(${JSON.stringify(tab)})`));
       const shown = await waitFor(session, `(() => { const t = document.querySelector('[data-jira-section="mappings"]')?.innerText ?? "";
-        return ${marker}.test(t) ? t.slice(0, 200) : null; })()`, 20);
+        return ${marker}.test(t) ? t.slice(0, 200) : null; })()`, { attempts: 20 });
       check(`the ${tab} table renders`, Boolean(shown));
     }
     await session.screenshot(SHOT);
@@ -159,8 +150,5 @@ try {
 } finally {
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "jira import page", data, writes, screenshot: SHOT },
-);
+const failed = report(checks, { proof: "jira import page", data, writes, screenshot: SHOT });
 process.exit(failed ? 1 : 0);

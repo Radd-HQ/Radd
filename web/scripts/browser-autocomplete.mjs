@@ -5,7 +5,7 @@ import {readFile,writeFile,mkdtemp} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {build} from '../node_modules/rolldown/dist/index.mjs';
-import {openBrowser} from './lib/cdp.mjs';
+import {openBrowser,until} from './lib/cdp.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const temp=await mkdtemp('/tmp/radd-autocomplete-');
@@ -43,7 +43,6 @@ const server=http.createServer(async(req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 let browser;
-const until=async(predicate,label)=>{for(let i=0;i<100;i++){if(await predicate())return;await new Promise(r=>setTimeout(r,30));}throw Error(label);};
 try{
  browser=await openBrowser({port:18802,profile:await mkdtemp('/tmp/radd-autocomplete-profile-'),scale:1});
  const s=browser.session;
@@ -51,16 +50,16 @@ try{
  const type=async text=>{
   await s.click('#query');await s.eval(`document.querySelector('#query').select()`);
   await s.send('Input.insertText',{text});
-  await until(()=>started.has(text),'request did not start: '+text);
+  await until(s,()=>started.has(text),'request did not start: '+text);
  };
  await type('superseded');await type('dismissed');
- await until(()=>aborted.has('superseded'),'new input kept old request alive');
- await s.click('#close');await until(()=>aborted.has('dismissed'),'dismissal kept request alive');
- await type('old-scope');await s.click('#scope');await until(()=>aborted.has('old-scope'),'scope change kept request alive');
+ await until(s,()=>aborted.has('superseded'),'new input kept old request alive');
+ await s.click('#close');await until(s,()=>aborted.has('dismissed'),'dismissal kept request alive');
+ await type('old-scope');await s.click('#scope');await until(s,()=>aborted.has('old-scope'),'scope change kept request alive');
  await type('old-dialect');assert.equal(started.get('old-dialect').searchParams.get('project_id'),'B');
- await s.click('#dialect');await until(()=>aborted.has('old-dialect'),'dialect change kept request alive');
+ await s.click('#dialect');await until(s,()=>aborted.has('old-dialect'),'dialect change kept request alive');
  await type('unmounted');assert.equal(started.get('unmounted').pathname,'/api/v1/timesheet/slq/suggest');
- await s.click('#unmount');await until(()=>aborted.has('unmounted'),'unmount kept request alive');
+ await s.click('#unmount');await until(s,()=>aborted.has('unmounted'),'unmount kept request alive');
  assert.equal(s.consoleErrors.length,0,s.consoleErrors.join('\n'));
  console.log('SLQ autocomplete: typing, close, project/dialect changes and unmount abort actual HTTP requests.');
 } finally {browser?.close();server.close();}

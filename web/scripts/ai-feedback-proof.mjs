@@ -21,7 +21,7 @@
  * Usage: node scripts/ai-feedback-proof.mjs <baseUrl> <spaceSlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { HOVER_CAPABLE_PROBE, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { HOVER_CAPABLE_PROBE, openBrowser, report, sleep, waitFor } from "./lib/cdp.mjs";
 import { startMockLlm } from "./lib/mock-llm.mjs";
 
 const [baseUrl, spaceSlug, email, password] = process.argv.slice(2);
@@ -54,15 +54,6 @@ const REPLY = [
 /** The words the reply fixes — named, so "the document changed" isn't enough. */
 const FIXED = ["which is fine", "with errors in it", "that also has a problem"];
 const BROKEN = ["wich is fine", "erors in it", "alsoo has a problem"];
-
-/** Wait for a condition rather than guessing at a sleep. */
-async function waitFor(session, expression, tries = 60) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(expression)) return true;
-    await sleep(250);
-  }
-  return false;
-}
 
 /** Toast text on screen — the Toaster is the only role=status that is aria-live. */
 const TOASTS = `[...document.querySelectorAll('[role="status"][aria-live="polite"] span')]
@@ -102,7 +93,7 @@ async function main() {
 
   // Point the chat role at the stand-in, sweeping any leftover from a failed
   // run FIRST — capturing a leftover as "previous" makes the restore faithfully
-  // put the mock back. (Same reasoning as ai-surface-proof; same code.)
+  // put the mock back.
   const previousRole = await session.eval(`(async () => {
     const providers = await (await fetch("/api/v1/ai/providers", {credentials:"include"})).json();
     const leftover = providers.filter((p) => p.name === "feedback-proof-mock");
@@ -194,7 +185,7 @@ async function main() {
 
   // ---------------------------------------------------------------- run 1: Stop
   await startDocumentRun(session);
-  const panelAppeared = await waitFor(session, `!!${PANEL}`, 40);
+  const panelAppeared = await waitFor(session, `!!${PANEL}`, { attempts: 40 });
 
   // The whole bug, measured: where is it, and is it what gets painted there?
   const placement = await session.eval(`(() => {
@@ -237,7 +228,7 @@ async function main() {
   // ---------------------------------------------------------- run 2: Reject all
   await startDocumentRun(session);
   const reviewOpened = await waitFor(session,
-    `document.querySelectorAll(".milkdown-diff-controls").length > 0`, 120);
+    `document.querySelectorAll(".milkdown-diff-controls").length > 0`, { attempts: 120 });
 
   const reviewing = await session.eval(`(() => {
     ${OVERLAPS}
@@ -291,7 +282,7 @@ async function main() {
   // ---------------------------------------------------------- run 3: Accept all
   await startDocumentRun(session);
   const secondReview = await waitFor(session,
-    `document.querySelectorAll(".milkdown-diff-controls").length > 0`, 120);
+    `document.querySelectorAll(".milkdown-diff-controls").length > 0`, { attempts: 120 });
   await session.click("[data-editor-run-panel] button", (t) => /accept all/i.test(t));
   await sleep(1500);
   const afterAccept = await session.eval(`({

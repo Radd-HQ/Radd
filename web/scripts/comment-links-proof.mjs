@@ -18,13 +18,10 @@
  * Fixtures (project, space, colleague) are deleted at the end.
  */
 import { resolve } from "node:path";
-import { clickAt, openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { clickAt, openBrowser, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: comment-links-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
+const { baseUrl, email: adminEmail, password: adminPassword } = proofArgs();
 const PORT = 9500;
 const TMP = process.env.TMPDIR || "/tmp";
 const PROFILE = resolve(TMP, "radd-comment-links-proof");
@@ -34,17 +31,6 @@ const KEY = `CL${STAMP.slice(-4).toUpperCase()}`;
 const COLLEAGUE = `colleague-${STAMP}@example.test`;
 const PASSWORD = "comment-links-pass-1";
 
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
-
 /** Where one comment row is: present, in the viewport, highlighted. */
 const landing = (id) => `(() => {
   const row = document.querySelector('[data-comment-id="${id}"]');
@@ -53,7 +39,8 @@ const landing = (id) => `(() => {
   return { present: true, inView: r.top >= 0 && r.bottom <= innerHeight, ringed: row.hasAttribute("data-comment-linked") };
 })()`;
 
-async function waitFor(session, expression, timeoutMs = 12000) {
+/** Poll a `landing` probe until the row is present AND in the viewport; returns the last probe. */
+async function waitForInView(session, expression, timeoutMs = 12000) {
   const until = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < until) {
@@ -73,7 +60,7 @@ async function main() {
   try {
     await session.navigate(baseUrl + "/login", 800);
     await session.login(baseUrl, adminEmail, adminPassword);
-    fixture = await session.eval(`(async () => { ${API}
+    fixture = await session.eval(`(async () => { ${PAGE_API}
       const me = (await api("GET", "/auth/me")).body;
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Comment links" });
       const item = await api("POST", "/items", { project_id: project.body.id, title: "A long thread" });
@@ -95,14 +82,14 @@ async function main() {
     // 1 — an old comment, beyond the first window.
     const old = fixture.ids[4];
     await session.navigate(`${baseUrl}/issues/${fixture.item.key}?comment=${old}`, 1500);
-    const landed = await waitFor(session, landing(old));
+    const landed = await waitForInView(session, landing(old));
     context.old = landed;
     checks["1. an old comment (126th newest) is in view and ringed"] = !!landed?.inView && landed.ringed;
     await session.screenshot(resolve(SHOTS, "old-comment.png"));
 
     // 2 — a reply: its thread opens.
     await session.navigate(`${baseUrl}/issues/${fixture.item.key}?comment=${fixture.reply.id}`, 1500);
-    const reply = await waitFor(session, landing(fixture.reply.id));
+    const reply = await waitForInView(session, landing(fixture.reply.id));
     context.reply = reply;
     checks["2. a reply's thread opens and the reply is in view"] = !!reply?.inView;
 
@@ -139,7 +126,7 @@ async function main() {
 
     // 5 — a page permalink carries the comment through its redirect.
     await session.navigate(`${baseUrl}/pages?pageId=${fixture.page.number}&comment=${fixture.pageComment.id}`, 1500);
-    const onPage = await waitFor(session, landing(fixture.pageComment.id));
+    const onPage = await waitForInView(session, landing(fixture.pageComment.id));
     const address = await session.eval(`location.pathname + location.search`);
     context.page = { ...onPage, address };
     checks["5. a page permalink lands on the discussion comment"] =
@@ -149,7 +136,7 @@ async function main() {
     // 6 — a real notification: the colleague mentions you in a comment.
     await session.eval(`fetch("/api/v1/auth/logout", { method: "POST" })`);
     await session.login(baseUrl, COLLEAGUE, PASSWORD);
-    const mention = await session.eval(`(async () => { ${API}
+    const mention = await session.eval(`(async () => { ${PAGE_API}
       return (await api("POST", "/items/${fixture.item.id}/comments",
         { body: "Look at this @[${fixture.me.name}](${fixture.me.id})" })).body;
     })()`);
@@ -157,7 +144,7 @@ async function main() {
     await session.login(baseUrl, adminEmail, adminPassword);
     let row = null;
     for (let i = 0; i < 40 && !row; i++) {
-      row = await session.eval(`(async () => { ${API}
+      row = await session.eval(`(async () => { ${PAGE_API}
         const list = (await api("GET", "/notifications?limit=50")).body;
         return (list.notifications ?? []).find((n) => n.detail?.comment_id === ${JSON.stringify(mention.id)}) ?? null;
       })()`);
@@ -170,7 +157,7 @@ async function main() {
       // clickAt ships the matcher to the page as SOURCE, so it cannot close
       // over `fixture` — the key is written into the function instead.
       await clickAt(send, "button, a", new Function("text", `return text.includes(${JSON.stringify(fixture.item.key)})`));
-      const opened = await waitFor(session, landing(mention.id));
+      const opened = await waitForInView(session, landing(mention.id));
       const where = await session.eval(`location.pathname + location.search`);
       context.inbox = { ...opened, where };
       checks["6b. opening it from the Inbox lands ON the comment"] =
@@ -179,7 +166,7 @@ async function main() {
     }
   } finally {
     if (fixture) {
-      context.cleanup = await session.eval(`(async () => { ${API}
+      context.cleanup = await session.eval(`(async () => { ${PAGE_API}
         return {
           page: (await api("DELETE", "/pages/${fixture.page.id}?hard=true")).status,
           space: (await api("DELETE", "/page-spaces/${fixture.space.id}")).status,

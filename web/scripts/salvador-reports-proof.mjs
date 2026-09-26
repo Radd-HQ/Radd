@@ -16,27 +16,12 @@
  * Every check is a measurement. The project is deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: salvador-reports-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9495;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-salvador-reports-proof");
 const KEY = `SR${Date.now().toString(36).slice(-4).toUpperCase()}`;
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 const setValue = (selector, value) => `(() => {
   const input = document.querySelector(${JSON.stringify(selector)});
@@ -48,14 +33,12 @@ const setValue = (selector, value) => `(() => {
 })()`;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl, loginStatus } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
-  const context = { key: KEY };
+  const context = { key: KEY, login: loginStatus };
   let projectId = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    context.login = await session.login(baseUrl, adminEmail, adminPassword);
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Reports proof" });
       const view = await api("POST", "/views", { project_id: project.body.id, name: "Filters", view_type: "list" });
       return { project: project.body, view: view.body };
@@ -90,7 +73,7 @@ async function main() {
     await sleep(900);
     await session.click('[role="dialog"] button[type="submit"]', () => true);
     await sleep(1500);
-    const saved = await session.eval(`(async () => { ${API} return (await api("GET", "/views/${setup.view.id}")).body.quick_filters; })()`);
+    const saved = await session.eval(`(async () => { ${PAGE_API} return (await api("GET", "/views/${setup.view.id}")).body.quick_filters; })()`);
     context.saved = saved;
     checks.unlabelledQuickFilterSurvivesTheSave =
       Array.isArray(saved) && saved.length === 1 && saved[0].query === "assignee = me" && saved[0].name === "assignee = me";
@@ -114,12 +97,12 @@ async function main() {
     }))()`);
     context.orphan = orphan;
     checks.labelWithoutConditionBlocksTheSaveAndSaysWhy = /Orphan/.test(orphan.error ?? "") && orphan.saveDisabled === true;
-    await session.screenshot(resolve("scripts", "salvador-reports-proof-quickfilter.png"));
+    await session.screenshot(outputPath("salvador-reports-proof-quickfilter.png"));
     await session.click('[role="dialog"] button', (t) => t.trim() === "Cancel").catch(() => null);
     await sleep(300);
 
     // --- RADD-1230: created issue → toast → open ------------------------------
-    await session.click("button", (t) => /New item/.test(t));
+    await session.click("button", (t) => t.trim() === "New issue");
     await sleep(800);
     await session.eval(setValue('[role="dialog"] input[placeholder="Short, imperative summary"]', "Jump target"));
     await sleep(200);
@@ -132,10 +115,10 @@ async function main() {
     })()`);
     context.toast = toast;
     checks.creationRaisesAToastNamingTheKey = new RegExp(`Created ${KEY}-\\d+`).test(toast.text ?? "") && /Open/.test(toast.action ?? "");
-    await session.screenshot(resolve("scripts", "salvador-reports-proof-toast.png"));
+    await session.screenshot(outputPath("salvador-reports-proof-toast.png"));
     await session.click("[data-toast-action]", () => true);
     await sleep(1500);
-    const landed = await session.eval(`({ path: location.pathname, title: document.querySelector("h1, [data-item-title], input[aria-label='Title']")?.textContent || document.querySelector("input[aria-label='Title']")?.value || document.title })`);
+    const landed = await session.eval(`({ path: location.pathname, title: document.querySelector("input[aria-label='Title']")?.value ?? null })`);
     context.landed = landed;
     checks.openLandsOnTheNewIssue = new RegExp(`/issues/${KEY}-\\d+$`).test(landed.path);
 
@@ -170,7 +153,7 @@ async function main() {
     checks.lightThemeRemapsTheThumb = Boolean(light) && light !== scroll?.thumbColor;
   } finally {
     if (projectId) {
-      await session.eval(`(async () => { ${API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
+      await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
     }
     await close();
   }

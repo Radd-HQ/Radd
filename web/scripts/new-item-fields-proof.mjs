@@ -27,9 +27,16 @@ try {
   }
   for (const index of [0,1,0]) {
     const project=projects[index];
-    await s.navigate(`${base}/p/${project.key}/issues`, 800);
-    await s.click('button', text=>/^\s*new item\s*$/i.test(text));
-    await sleep(500);
+    await s.navigate(`${base}/p/${project.key}`, 800);
+    await s.click('button', text=>/^\s*new issue\s*$/i.test(text));
+    // The form follows the project's screen (RADD-1292): wait for it to resolve (Labels is
+    // always placed), then open "More fields", where custom fields sit unless a screen
+    // promotes them.
+    for(let i=0;i<100 && !(await s.eval(`(document.querySelector('[role=dialog]')?.innerText ?? '').includes('Labels')`));i++) await sleep(100);
+    if (await s.eval(`!![...document.querySelectorAll('[role=dialog] button')].find(b=>/more fields/i.test(b.textContent||''))`)) {
+      await s.click('[role=dialog] button', text=>/more fields/i.test(text));
+      await sleep(300);
+    }
     if (await s.eval(`document.querySelector('[role=dialog]').innerText.includes('choose a project')`)) {
       await s.click('[role=dialog] input');
       await s.send('Input.insertText', {text:project.key});
@@ -54,7 +61,7 @@ try {
       fill('Title',${JSON.stringify('Scope proof '+Date.now())});
       fill(${JSON.stringify(chosen.name)},'saved value');
     })()`);
-    await s.click('button[type=submit]',text=>/Create item/i.test(text));
+    await s.click('button[type=submit]',text=>/Create issue/i.test(text));
     for(let i=0;i<50 && await s.eval(`!!document.querySelector('[role=dialog]')`);i++) await sleep(100);
     assert.equal(await s.eval(`!!document.querySelector('[role=dialog]')`),false,'Create should succeed');
     const items=await api('GET',`/items?project_id=${project.id}`);

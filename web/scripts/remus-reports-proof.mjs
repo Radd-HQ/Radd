@@ -20,28 +20,17 @@
  * Every check is a measurement. Fixtures are deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: remus-reports-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9496;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-remus-reports-proof");
 const STAMP = Date.now().toString(36).slice(-5);
 const KEY = `RR${STAMP.slice(-4).toUpperCase()}`;
 const SLUG = `remus-proof-${STAMP}`;
 
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
+/** The lib's in-page `api`, plus `mcp(name, args)`: one MCP tools/call as the signed-in page. */
+const API = `${PAGE_API}
   const mcp = async (name, args) => {
     const r = await fetch("/api/v1/mcp", {
       method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
@@ -54,14 +43,12 @@ const API = `
 `;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl, email: adminEmail, loginStatus } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
-  const context = { key: KEY, slug: SLUG };
+  const context = { key: KEY, slug: SLUG, login: loginStatus };
   let projectId = null;
   let spaceId = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    context.login = await session.login(baseUrl, adminEmail, adminPassword);
     const setup = await session.eval(`(async () => { ${API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Remus proof" });
       await api("PUT", "/projects/" + project.body.id + "/timelogging", { enabled: true });
@@ -108,7 +95,7 @@ async function main() {
     context.live = live;
     checks.worklogAppearsWithoutReload = before.note === false && live.note === true;
     checks.relatedLinkAppearsWithoutReload = before.link === false && live.link === true;
-    await session.screenshot(resolve("scripts", "remus-reports-proof-item.png"));
+    await session.screenshot(outputPath("remus-reports-proof-item.png"));
 
     // --- #10: theme toggles and toggles BACK ---------------------------------
     const accountTrigger = `button[aria-haspopup="menu"]`;
@@ -181,7 +168,7 @@ async function main() {
     })()`);
     context.palette = palette;
     checks.goToListsPages = palette.hasGoTo && palette.pages;
-    await session.screenshot(resolve("scripts", "remus-reports-proof-palette.png"));
+    await session.screenshot(outputPath("remus-reports-proof-palette.png"));
     await session.eval(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
     await session.click('button[aria-label="Expand sidebar"]', () => true).catch(() => null);
 

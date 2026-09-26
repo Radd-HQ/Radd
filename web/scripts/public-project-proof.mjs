@@ -18,13 +18,10 @@
  *   node web/scripts/public-project-proof.mjs http://localhost:8000 admin@example.com change-me
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, report } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: public-project-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
+const { baseUrl, email: adminEmail, password: adminPassword } = proofArgs();
 const PORT = 9477;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-public-project-proof");
 const PUBLIC_KEY = "PUBPRF";

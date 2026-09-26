@@ -17,11 +17,9 @@
  */
 import { createServer } from "node:http";
 import { mkdir } from "node:fs/promises";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { report, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const baseUrl = process.argv[2] || process.env.RADD_PROOF_BASE_URL || "http://127.0.0.1:8000";
-const email = process.argv[3] || process.env.RADD_PROOF_EMAIL || "admin@example.com";
-const password = process.argv[4] || process.env.RADD_PROOF_PASSWORD || "change-me";
 const output = process.env.RADD_PROOF_OUTPUT_DIR || "/tmp/radd-ai-protect-proof";
 const MOCK_PORT = 8117;
 const MOCK_NAME = "protect-proof-mock";
@@ -67,27 +65,22 @@ function startMock(port) {
   );
 }
 
-async function waitFor(session, expression, tries = 60) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(expression)) return true;
-    await sleep(500);
-  }
-  return false;
-}
+const SLOW = { every: 500 };
 
 async function main() {
   await mkdir(output, { recursive: true });
   const mock = await startMock(MOCK_PORT);
-  const { session, close } = await openBrowser({ port: 9533, profile: output + "/chrome", width: 1440, height: 1100 });
+  const { session, close, baseUrl, loginStatus, hoverCapable } = await startProof({
+    port: 9533, profile: output + "/chrome", width: 1440, height: 1100,
+  });
   const checks = {};
   const api = (expression) => session.eval(`(async () => { ${expression} })()`);
   let page = null;
   let providerId = null;
   let previousRole = null;
   try {
-    await session.navigate(baseUrl + "/login", 1200);
-    checks.loggedIn = (await session.login(baseUrl, email, password)) === 204;
-    checks.hoverCapable = await session.hoverCapable();
+    checks.loggedIn = loginStatus === 204;
+    checks.hoverCapable = hoverCapable;
 
     // --- the stand-in model takes the chat role for the duration
     previousRole = await api(`
@@ -128,7 +121,7 @@ async function main() {
 
     await session.navigate(`${baseUrl}/pages/${page.space}/${page.slug}`, 2500);
     await session.eval(`(() => { document.querySelector('button[aria-label="Edit page"]')?.click(); })()`);
-    checks.editorOpened = await waitFor(session, `!!document.querySelector(".ProseMirror")`, 30);
+    checks.editorOpened = await waitFor(session, `!!document.querySelector(".ProseMirror")`, { ...SLOW, attempts: 30 });
     await sleep(1500);
     checks.blocksInEditorBefore = await session.eval(
       `!!document.querySelector('.ProseMirror [data-extension="media"]') && !!document.querySelector(".ProseMirror img")`,
@@ -138,7 +131,7 @@ async function main() {
     await session.click('[role="toolbar"] button[aria-label="AI"]');
     await sleep(400);
     await session.click("[data-ai-toolbar-menu] button", (t) => /summar/i.test(t));
-    checks.reviewOpened = await waitFor(session, `document.querySelectorAll(".milkdown-diff-controls").length > 0`, 60);
+    checks.reviewOpened = await waitFor(session, `document.querySelectorAll(".milkdown-diff-controls").length > 0`, SLOW);
     await sleep(500);
     await session.screenshot(output + "/review.png");
 
@@ -157,7 +150,7 @@ async function main() {
 
     // --- accept everything
     await session.click("[data-editor-run-panel] button", (t) => /accept all/i.test(t));
-    checks.reviewClosed = await waitFor(session, `document.querySelectorAll(".milkdown-diff-controls").length === 0`, 30);
+    checks.reviewClosed = await waitFor(session, `document.querySelectorAll(".milkdown-diff-controls").length === 0`, { ...SLOW, attempts: 30 });
     await sleep(3500); // the room's elected saver writes 1.5 s after the change
     await session.screenshot(output + "/accepted.png");
     checks.mediaSurvived = await session.eval(`!!document.querySelector('.ProseMirror [data-extension="media"]')`);

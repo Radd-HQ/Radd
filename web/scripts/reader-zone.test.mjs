@@ -7,25 +7,17 @@
  *
  * Pure module, no DOM — tested here for the same reason plain-text.test.mjs is.
  */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "reader-zone-"));
-const file = join(dir, "dates.ts");
-writeFileSync(file, readFileSync("web/packages/plugin-sdk/src/dates.ts", "utf8"));
 const {
   setReaderTimeZone, readerTimeZone, formatIso, formatDate, formatDateTime,
   shortDate, isoDayOf, todayIso, shiftIsoDay, isoDaysAgo,
-} = await import(file);
+} = await importTs("web/packages/plugin-sdk/src/dates.ts");
 
-let failures = 0;
-const check = (label, actual, expected) => {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a === e) console.log(`ok   ${label}`);
-  else { failures++; console.log(`FAIL ${label}\n     got      ${a}\n     expected ${e}`); }
-};
+// Eager: each case reads the zone set just above it.
+const check = (label, actual, expected) => test(label, () => assert.deepStrictEqual(actual, expected));
 
 // 2026-07-06T09:41:12Z — 21:41 the same day in Auckland (UTC+12), 02:41 in Los Angeles (UTC−7).
 const AT = "2026-07-06T09:41:12Z";
@@ -60,6 +52,3 @@ check("shiftIsoDay crosses a month backward", shiftIsoDay("2026-03-01", -1), "20
 check("isoDaysAgo(0) is today", isoDaysAgo(0), todayIso());
 check("todayIso is the reader's day", todayIso(), isoDayOf(new Date()));
 check("formatDateTime carries a time", /\d:\d\d/.test(formatDateTime(AT)), true);
-
-if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
-console.log("\nall passed");

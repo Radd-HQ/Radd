@@ -19,9 +19,9 @@
  * items, so an empty list cannot pass for a resized one.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, email, password] = process.argv.slice(2);
 const PORT = 9481;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-list-column-resize-proof");
 const DRAG_PX = 120;
@@ -87,10 +87,8 @@ const rowsMatch = (m) => m.rows.every((w) => near(w, m.header));
 const fits = (m) => m.scrollWidth !== null && m.scrollWidth <= m.clientWidth + 1;
 
 async function main() {
-  const { session } = await openBrowser({ port: PORT, profile: PROFILE, width: WIDE, height: 1000, scale: 1 });
-  await session.navigate(baseUrl + "/", 1000);
-  const status = await session.login(baseUrl, email, password);
-  if (status >= 300) throw new Error(`login failed: ${status}`);
+  const { session, baseUrl, loginStatus } = await startProof({ port: PORT, profile: PROFILE, width: WIDE, height: 1000, scale: 1 });
+  if (loginStatus >= 300) throw new Error(`login failed: ${loginStatus}`);
 
   const target = await session.eval(`(async () => {
     const j = (r) => r.json();

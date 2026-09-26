@@ -21,14 +21,12 @@
  *
  * Run against a dev server with the wave's migration applied.
  */
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9371, profile: "/tmp/radd-settings-cleanup" });
+const { session, close, baseUrl, loginStatus, hoverCapable } = await startProof({
+  port: 9371, profile: "/tmp/radd-settings-cleanup", base: "http://localhost:8000",
+});
 
 /** The settings sidebar's visible tab labels. */
 const NAV_LABELS =
@@ -47,10 +45,6 @@ const api = (path) =>
 const post = (path) =>
   `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include"});` +
   `return r.status;})()`;
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-const hoverCapable = await session.hoverCapable();
 
 // --- 1. a plugin's settings tab is a property of the plugin ------------------
 await session.navigate(`${baseUrl}/settings/general`, 2200);
@@ -96,10 +90,23 @@ const projectTimelogging = await session.eval(SETTING_LABELS);
 
 // --- 4. one access model ----------------------------------------------------
 await session.navigate(`${baseUrl}/p/${projectKey}/settings/access`, 2600);
+// The grant control is the panel's "Grant role" dialog (RADD-1115/1121): a subject-kind select
+// (person / team / directory group) and a role chooser.
+const grantOpened = await session.eval(
+  `(()=>{const b=[...document.querySelectorAll('section[aria-label="Project access"] button')]` +
+  `.find(n=>n.textContent.trim()==="Grant role");if(b)b.click();return !!b;})()`,
+);
+await sleep(600);
+const kindSelect = '[role="dialog"] button[aria-label="Grant subject kind"]';
+if (grantOpened && (await session.eval(`!!document.querySelector('${kindSelect}')`))) {
+  await session.click(kindSelect);
+  await sleep(400);
+}
 const access = await session.eval(
-  `({rows:document.querySelectorAll('ul.rounded-lg > li').length,` +
-  ` grantControl: Boolean(document.querySelector('[aria-label="Role to grant"]')),` +
-  ` subjectPicker: Boolean(document.querySelector('input[placeholder*="teams and directory groups"]')),` +
+  `({rows:document.querySelectorAll('section[aria-label="Project access"] li[data-grant-id]').length,` +
+  ` grantControl: Boolean(document.querySelector('[role="dialog"] [aria-label="Choose grant role"]')),` +
+  ` subjectKinds:[...document.querySelectorAll('[role="listbox"][aria-label="Grant subject kind"] [role="option"]')]` +
+  `.map(o=>o.textContent.trim()),` +
   ` legacyHeadings:[...document.querySelectorAll('h3')].map(h=>h.textContent.trim())})`,
 );
 // The endpoints the two folded tables used to serve are gone, not merely unused.
@@ -212,7 +219,8 @@ const failed = report(
       projectTimelogging.includes("Working week"),
 
     "project Access has a grant control": access.grantControl === true,
-    "…over people, teams AND directory groups": access.subjectPicker === true,
+    "…over people, teams AND directory groups": ["Person", "Team", "Directory group"]
+      .every((kind) => access.subjectKinds.includes(kind)),
     "…and no longer splits into two lists":
       !access.legacyHeadings.includes("Direct members") &&
       !access.legacyHeadings.includes("Team attachments"),

@@ -1,24 +1,11 @@
 /** Unit cases for the version diff (RADD-720). */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "linediff-"));
-const file = join(dir, "line-diff.ts");
-writeFileSync(file, readFileSync("server/src/radd/modules/pages/ui/src/line-diff.ts", "utf8"));
-const { diffLines, collapseUnchanged, diffStats } = await import(file);
+const { diffLines, collapseUnchanged, diffStats } = await importTs("server/src/radd/modules/pages/ui/src/line-diff.ts");
 
-let failures = 0;
-const check = (label, actual, expected) => {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) {
-    console.log(`FAIL ${label}\n  got      ${a}\n  expected ${e}`);
-    failures++;
-  } else {
-    console.log(`ok   ${label}`);
-  }
-};
+const check = (label, actual, expected) => test(label, () => assert.deepStrictEqual(actual, expected));
 
 check("identical text has no changes", diffStats(diffLines("a\nb", "a\nb")), { added: 0, removed: 0 });
 
@@ -63,6 +50,3 @@ check(
 );
 
 check("appending to an empty document", diffStats(diffLines("", "hello")), { added: 1, removed: 1 });
-
-console.log(failures ? `\n${failures} FAILED` : "\nall passed");
-process.exit(failures ? 1 : 0);

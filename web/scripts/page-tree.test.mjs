@@ -6,15 +6,12 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { importTs } from "./lib/load-ts.mjs";
 
 const UI = "server/src/radd/modules/pages/ui/src";
-const dir = mkdtempSync(join(tmpdir(), "page-tree-"));
-const file = join(dir, "page-tree.ts");
-writeFileSync(file, readFileSync(`${UI}/view/page-tree.ts`, "utf8"));
-const { ancestorIds, buildTree, descendants, subtreeIds } = await import(file);
+const { ancestorIds, buildTree, descendants, subtreeIds } = await importTs(`${UI}/view/page-tree.ts`);
 
 const row = (id, parent_id, title) => ({ id, parent_id, title });
 // Listed the way the server hands them over — by position, which is not the order people read.

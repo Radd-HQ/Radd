@@ -20,26 +20,13 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
 const web = fileURLToPath(new URL("..", import.meta.url));
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
 
 /** Strings only a wiki component renders — never the sidebar section, which is eager by design. */
 const WIKI_STRINGS = ["Joining the page…", "Pages below this one", "Rebuild link index", "Export as PDF, with subpages", "Passage removed"];
-
-async function waitFor(session, expression, attempts = 75) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(200);
-  }
-  return session.eval(expression);
-}
 
 const api = (session, method, path, body) => session.eval(`fetch("/api/v1${path}", {method: ${JSON.stringify(method)},
   credentials: "include", headers: {"Content-Type": "application/json"}${body ? `, body: ${JSON.stringify(JSON.stringify(body))}` : ""}})
@@ -59,14 +46,12 @@ const spaceName = `RADD-1392 proof ${stamp}`;
 const marker = `edited-${stamp}`;
 let space = null;
 let page = null;
-const { session, close } = await openBrowser({ port: 9512, profile: resolve(process.env.TMPDIR || "/tmp", "radd-pages-package-proof") });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9512, profile: resolve(process.env.TMPDIR || "/tmp", "radd-pages-package-proof"),
+});
 try {
   // window.print() would block headless Chrome; count the calls instead.
   await session.send("Page.addScriptToEvaluateOnNewDocument", { source: "window.__printed = 0; window.print = () => { window.__printed += 1; };" });
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, String(status));
-
   const caps = await session.eval(`fetch("/api/v1/capabilities").then((r) => r.json())`);
   check("pages is enabled and ships no remote (it is bundled)",
     caps.plugins.includes("pages") && !(caps.remotes ?? []).some((r) => r.name === "pages"), JSON.stringify(caps.remotes?.map((r) => r.name)));
@@ -123,7 +108,7 @@ try {
     const done = buttons.find((b) => b.textContent.trim() === "Done" && !b.disabled);
     const save = buttons.find((b) => b.textContent.trim() === "Save" && !b.disabled);
     return done ? "live room" : save ? "single editor" : "";
-  })()`, 150);
+  })()`, { attempts: 150 });
   check("the editor offers its finish control (a live room's Done, or Save)", flow,
     await session.eval(`document.querySelector('[aria-label="Edit page content"]')?.innerText.slice(0, 200)`));
   await sleep(600); // the editor reports its markdown on its own tick
@@ -183,5 +168,4 @@ try {
   }
   await close();
 }
-const failed = report(Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])), { proof: "pages package" });
-process.exit(failed ? 1 : 0);
+finish({ proof: "pages package" });

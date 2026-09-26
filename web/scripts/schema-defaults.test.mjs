@@ -1,11 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
-const dir=mkdtempSync(join(tmpdir(),'radd-schema-defaults-'));
-writeFileSync(join(dir,'schema.ts'),readFileSync('web/packages/plugin-sdk/src/schema-defaults.ts','utf8'));
-const {defaultsFromSchema}=await import(join(dir,'schema.ts'));
+import {importTs} from './lib/load-ts.mjs';
+const {defaultsFromSchema}=await importTs('web/packages/plugin-sdk/src/schema-defaults.ts');
 test('schema starting values retain enum types and nested defaults',()=>{
  const schema={required:['mode','flag'],properties:{mode:{type:'integer',enum:[2,4]},flag:{type:'boolean',enum:[false,true]},options:{type:'object',properties:{summary:{type:'boolean',default:true},comments:{type:'boolean'}}}}};
  assert.deepEqual(defaultsFromSchema(schema),{mode:2,flag:false,options:{summary:true,comments:false}});
@@ -21,4 +17,3 @@ test('object-level defaults override inferred values without losing unnamed fiel
  const schema={type:'object',default:{known:true,extra:'kept'},properties:{known:{type:'boolean'},other:{type:'boolean'}}};
  assert.deepEqual(defaultsFromSchema(schema),{known:true,other:false,extra:'kept'});
 });
-process.on('exit',()=>rmSync(dir,{recursive:true,force:true}));

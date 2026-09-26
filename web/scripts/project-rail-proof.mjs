@@ -12,38 +12,40 @@
  * Asserted from BOTH sides, because either alone passes vacuously:
  *   - an entitled viewer (admin) still sees the full list, so the filter has not
  *     simply broken the rail;
- *   - an @own-only viewer sees none of them individually, plus one row that
- *     accounts for the remainder rather than hiding it;
+ *   - an @own-only viewer is listed only the projects their own work is in
+ *     ("related", RADD-937), and the rail offers the toggle that hides those
+ *     rather than a count row;
  *   - and nothing became UNREACHABLE: the projects index still lists them and
  *     each still opens, so the rail got quieter without losing anything.
  *
  * Drives the real `view-as` preview (RADD-836) rather than logging in as the
  * target, because that is how an admin actually reproduces this.
  */
-import { openBrowser, report } from "./lib/cdp.mjs";
+import { report } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9377, profile: "/tmp/radd-project-rail", base: "http://localhost:8000",
+});
 
-const { session, close } = await openBrowser({ port: 9377, profile: "/tmp/radd-project-rail" });
+/** The rail pages its projects 50 at a time (PROJECTS_PAGE_SIZE). */
+const RAIL_PAGE = 50;
 
-/** Rail state: individually-listed projects + the overflow accounting row. */
+/** Rail state: individually-listed projects + the related-projects toggle (RADD-937). */
 const RAIL =
   `(()=>{const rows=[...document.querySelectorAll('aside a[href^="/p/"]')]` +
   `.filter(a=>/^\\/p\\/[A-Z0-9]+$/.test(new URL(a.href).pathname));` +
-  ` const overflow=[...document.querySelectorAll('aside a')].map(a=>a.textContent.trim())` +
-  `.filter(t=>/more with only your own items/.test(t));` +
-  ` return {listed: rows.length, overflow};})()`;
+  ` const toggle=document.querySelector('aside button[aria-label$="related projects"]');` +
+  ` return {listed: rows.length, relatedToggle: toggle ? toggle.getAttribute("aria-label") : null};})()`;
+
+/** What the server counts for the viewer: every visible project, and those visible only
+ *  through the viewer's own work. */
+const SUMMARY = `(async()=>(await fetch("/api/v1/projects/summary",{credentials:"include"})).json())()`;
 
 const viewAs = (userId) =>
   `(async()=>{const r=await fetch("/api/v1/auth/view-as",{method:"POST",credentials:"include",` +
   `headers:{"Content-Type":"application/json"},body:JSON.stringify({user_id:"${userId}"})});` +
   `return r.status;})()`;
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
 
 // Pick a target from the data rather than hardcoding one: an active account
 // holding NO unqualified item.read anywhere is exactly the shape under test, and
@@ -61,12 +63,17 @@ const target = await session.eval(
 
 await session.navigate(`${baseUrl}/`, 3000);
 const asAdmin = await session.eval(RAIL);
+const adminSummary = await session.eval(SUMMARY);
 
 const viewAsStatus = target ? await session.eval(viewAs(target.id)) : null;
 await session.navigate(`${baseUrl}/`, 3500);
 const asTarget = await session.eval(RAIL);
-// Nothing became UNREACHABLE — that is the whole claim. The projects index (where
-// the overflow row points) still lists them, and each still opens.
+const targetSummary = viewAsStatus === 204 ? await session.eval(SUMMARY) : null;
+// Hidden ("never") lists none of them; the default lists them, one rail page at most.
+const relatedHidden = asTarget.relatedToggle === "Show related projects";
+const hasRelated = (targetSummary?.related_count ?? 0) > 0;
+// Nothing became UNREACHABLE — that is the whole claim. The projects index still
+// lists them, and each still opens.
 //
 // The first version of this check counted issue links on My Work instead, which
 // was wrong twice over: it asserted a property of whichever account the scan
@@ -94,6 +101,9 @@ await session.eval(
   `(async()=>{await fetch("/api/v1/auth/view-as",{method:"DELETE",credentials:"include"});})()`,
 );
 
+if (!hasRelated) {
+  console.log("skip …and the rail offers the toggle that hides them (the previewed account has no related project)\n");
+}
 const failed = report(
   {
     "logged in": loginStatus === 204 || loginStatus === 200,
@@ -101,13 +111,18 @@ const failed = report(
     "view-as started": viewAsStatus === 204,
 
     "an entitled viewer still sees projects listed": asAdmin.listed > 0,
-    "…and gets no overflow row": asAdmin.overflow.length === 0,
+    "…none of them merely related, so there is nothing to hide":
+      adminSummary.related_count === 0 && asAdmin.relatedToggle !== "Hide related projects",
 
-    "an @own-only viewer sees none listed individually": asTarget.listed === 0,
-    "…and the rail accounts for the rest instead of hiding it":
-      asTarget.overflow.length === 1,
-    "…naming the right count":
-      target !== null && asTarget.overflow[0]?.startsWith(String(target.own)),
+    "an @own-only viewer is listed only the projects their own work is in":
+      targetSummary !== null &&
+      targetSummary.total === targetSummary.related_count &&
+      asTarget.listed === (relatedHidden ? 0 : Math.min(targetSummary.related_count, RAIL_PAGE)),
+    // Fixture-dependent: with no related project there is nothing to hide, and the
+    // toggle rightly stays away — omitted (named above) rather than passed vacuously.
+    ...(hasRelated
+      ? { "…and the rail offers the toggle that hides them": asTarget.relatedToggle !== null }
+      : {}),
 
     "the projects index still lists them": indexCount > 0,
     "…and one an @own-only viewer is NOT shown still opens by key":
@@ -115,7 +130,7 @@ const failed = report(
 
     "no console errors": session.consoleErrors.length === 0,
   },
-  { target, asAdmin, asTarget, indexCount, unlistedKey, opensAnyway },
+  { target, asAdmin, adminSummary, asTarget, targetSummary, indexCount, unlistedKey, opensAnyway },
 );
 
 close();

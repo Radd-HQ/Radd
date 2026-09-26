@@ -7,87 +7,68 @@
  * required-mode panel whose text sits under 4.5:1 — all of those compile.
  *
  * NO MODEL IS INVOLVED. The graph is deterministic: a `filter.slq` on the TITLE
- * gates a `validation.fail`, so the same New Item modal produces the fail state
+ * gates a verdict node, so the same New Issue modal produces the fail state
  * for one title and the pass state for another. The `ai.validate` node is
  * exercised by the server suite with the client mocked; a proof that needed a
  * live provider would be a proof that fails when the provider is busy.
  *
  * Asserts, in both themes:
  *   - the button reads "Validate & create" where a graph governs, and plain
- *     "Create item" where none does;
+ *     "Create issue" where none does;
  *   - a failing submission renders the findings panel with the check's message,
  *     and highlights the exact control the finding names;
  *   - the panel is ON SCREEN and inside the modal (a panel appended to the body
  *     at x:-110 was RADD-762's whole lesson);
- *   - "Create anyway" is offered under ADVISORY and absent under REQUIRED;
+ *   - "Create anyway" is offered under a Warn submitter verdict and absent under
+ *     a Block submission one;
  *   - a passing submission closes the modal and creates the item;
  *   - the panel's text clears 4.5:1 against what it actually sits on.
  *
  * Usage: node scripts/intake-validation-proof.mjs [--base http://127.0.0.1:8119]
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
-
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://127.0.0.1:8119";
-const email = process.env.RADD_PROOF_EMAIL ?? "proof@radd.local";
-const password = process.env.RADD_PROOF_PASSWORD ?? "proof-119";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
 const CHECK_MESSAGE = "A crash report needs steps to reproduce and what you expected.";
-const { session, close } = await openBrowser({ port: 9351, profile: "/tmp/radd-intake-validation-proof" });
-
-const api = (method, path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},` +
-  `credentials:"include",headers:{"Content-Type":"application/json"}` +
-  (body === undefined ? "" : `,body:JSON.stringify(${JSON.stringify(body)})`) +
-  `});return {status:r.status, body: await r.text()};})()`;
-
-const parsed = (result) => (result.status < 300 ? JSON.parse(result.body) : null);
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-
-// Headless Chrome reports (hover: none) at baseline, and Tailwind gates every
-// hover: utility on @media (hover: hover) — so a proof without the flag
-// describes un-hovered chrome and calls it a bug.
-const hoverCapable = await session.hoverCapable();
+const { session, close, baseUrl, loginStatus, hoverCapable } = await startProof({
+  port: 9351, profile: "/tmp/radd-intake-validation-proof",
+  base: "http://127.0.0.1:8119", email: "proof@radd.local", password: "proof-119",
+});
 
 // --- the world ---------------------------------------------------------------
 
 const suffix = Date.now().toString(36).slice(-4).toUpperCase();
 const governed = parsed(
-  await session.eval(api("POST", "/projects", { key: `VG${suffix}`, name: "Validated intake" })),
+  await session.eval(pageFetch("POST", "/projects", { key: `VG${suffix}`, name: "Validated intake" })),
 );
 const ungoverned = parsed(
-  await session.eval(api("POST", "/projects", { key: `VU${suffix}`, name: "Plain intake" })),
+  await session.eval(pageFetch("POST", "/projects", { key: `VU${suffix}`, name: "Plain intake" })),
 );
 
-/** A graph whose check fires only for a title containing "crash" — the same
- * modal then produces both states, with no model and no second fixture.
+/** A graph whose verdict fires only for a title containing "crash" — the same
+ * modal then produces both states, with no model and no second fixture. `warn`
+ * is a Warn submitter node (advisory: "Create anyway" is offered), `block` a
+ * Block submission node (required: it is not).
  *
  * The TITLE rather than the priority, because the priority control is the house
  * `SelectField`, not a native `<select>`, and driving a custom listbox from a
  * probe would be testing the harness. The title is a plain input, so what the
  * proof types is what the server receives.
  */
-const graphFor = (mode) => ({
-  name: `intake checks ${mode} ${suffix}`,
+const graphFor = (verdict) => ({
+  name: `intake checks ${verdict} ${suffix}`,
   nodes: [
     {
       id: "trg",
       kind: "trigger",
       type: "trigger.event",
-      params: {
-        event: "validate",
-        targets: [{ kind: "project", id: governed.id }],
-        mode,
-      },
+      params: { event: "validate", targets: [{ kind: "project", id: governed.id }] },
     },
     { id: "f", kind: "filter", type: "filter.slq", params: { slq: 'title ~ "crash"' } },
     {
       id: "chk",
       kind: "action",
-      type: "validation.fail",
+      type: `verdict.${verdict}`,
       params: { message: CHECK_MESSAGE, field: "description" },
     },
   ],
@@ -97,7 +78,7 @@ const graphFor = (mode) => ({
   ],
 });
 
-const advisory = parsed(await session.eval(api("POST", "/automations", graphFor("advisory"))));
+const advisory = parsed(await session.eval(pageFetch("POST", "/automations", graphFor("warn"))));
 
 // --- probes -------------------------------------------------------------------
 
@@ -208,31 +189,16 @@ const contrast = (a, b) => {
 
 /** Open the project, open the modal, fill it, press the button, measure. */
 async function run({ projectKey, title, light, shot }) {
-  await session.navigate(`${baseUrl}/p/${projectKey}/issues`, 1200);
+  await session.navigate(`${baseUrl}/p/${projectKey}`, 1200);
   await session.eval(
     light
       ? `document.documentElement.classList.add("light")`
       : `document.documentElement.classList.remove("light")`,
   );
-  // Real mouse events, not `element.click()` — the pins-bar button opens a
-  // MENU when more than one project is creatable, and only hit-tested input
-  // reproduces that. RADD-742's lesson.
-  await session.click("button", (text) => /^\s*new item\s*$/i.test(text));
-  await sleep(500);
-  const menuOpen = await session.eval(
-    `[...document.querySelectorAll("button[role=menuitem]")].some((b) => (b.textContent || "").startsWith(${JSON.stringify(projectKey)}))`,
-  );
-  if (menuOpen) {
-    // `clickAt` serialises the matcher with `.toString()` and evaluates it IN
-    // THE PAGE, so a closure over `projectKey` arrives as an undefined
-    // reference. Building it from source bakes the value in.
-    const startsWithKey = new Function(
-      "text",
-      `return text.trim().startsWith(${JSON.stringify(projectKey)})`,
-    );
-    await session.click("button[role=menuitem]", startsWithKey);
-  }
-  await sleep(900);
+  // A real, hit-tested click (RADD-742). On a project route the pins-bar button opens that
+  // project's modal directly.
+  await session.click("button", (text) => /^\s*new issue\s*$/i.test(text));
+  await sleep(1400);
   const filled = await session.eval(FILL(title));
   const readback = await session.eval(`(() => {
     const dialog = document.querySelector("[role=dialog]");
@@ -248,10 +214,7 @@ async function run({ projectKey, title, light, shot }) {
   // A picture as well as the numbers: the measurements say the panel is on
   // screen and legible, and the shot is what someone can look at when they
   // disagree.
-  if (shot) {
-    const { data } = await session.send("Page.captureScreenshot", { format: "png" });
-    writeFileSync(shot, Buffer.from(data, "base64"));
-  }
+  if (shot) await session.screenshot(outputPath(shot));
   return { filled, readback, label, measured };
 }
 
@@ -259,33 +222,33 @@ const advisoryDark = await run({
   projectKey: governed.key,
   title: "it crashes on save",
   light: false,
-  shot: "/tmp/radd-s119-findings-dark.png",
+  shot: "radd-s119-findings-dark.png",
 });
 
 /**
  * THE VERDICT WINS OVER THE CACHED CONTEXT (RADD-1060).
  *
  * The modal asks `GET /items/validate/context` once and caches it for a minute.
- * Flipping the binding to REQUIRED while the modal is open and pressing again
- * is the case where the two answers disagree: the cached context still says
- * advisory, the response says required. Rendering the mode from the context
- * read put an advisory panel — and a "Create anyway" button the server would
- * refuse with a 409 — under a required verdict.
+ * Swapping the Warn node for a Block one (the binding becomes REQUIRED) while the
+ * modal is open and pressing again is the case where the two answers disagree:
+ * the cached context still says advisory, the response says required. Rendering
+ * the mode from the context read put an advisory panel — and a "Create anyway"
+ * button the server would refuse with a 409 — under a required verdict.
  *
  * Done here, in the page left open by the run above, and put back afterwards so
  * the rest of the sequence sees the fixture it expects.
  */
-await session.eval(api("PATCH", `/automations/${advisory.id}`, graphFor("required")));
+await session.eval(pageFetch("PATCH", `/automations/${advisory.id}`, graphFor("block")));
 await session.eval(PRESS_SUBMIT);
 await sleep(1400);
 const staleContext = await session.eval(MEASURE);
-await session.eval(api("PATCH", `/automations/${advisory.id}`, graphFor("advisory")));
+await session.eval(pageFetch("PATCH", `/automations/${advisory.id}`, graphFor("warn")));
 
 const advisoryLight = await run({
   projectKey: governed.key,
   title: "it crashes on export",
   light: true,
-  shot: "/tmp/radd-s119-findings-light.png",
+  shot: "radd-s119-findings-light.png",
 });
 
 // The PASS state: same modal, same graph, a priority the filter excludes.
@@ -302,40 +265,36 @@ const plain = await run({
   light: false,
 });
 
-// REQUIRED mode: same fixture, stricter binding. "Create anyway" must be gone.
-await session.eval(api("PATCH", `/automations/${advisory.id}`, graphFor("required")));
+// REQUIRED: same fixture, a Block submission verdict. "Create anyway" must be gone.
+await session.eval(pageFetch("PATCH", `/automations/${advisory.id}`, graphFor("block")));
 const required = await run({
   projectKey: governed.key,
   title: "still crashes",
   light: false,
-  shot: "/tmp/radd-s119-findings-required.png",
+  shot: "radd-s119-findings-required.png",
 });
 
 /**
  * MIXED GOVERNANCE — the case a client cannot compute for itself.
  *
- * Two graphs govern the same draft: one REQUIRED whose check sits behind a
- * filter this draft does not match, one ADVISORY that trips. The strictest mode
- * is "required" — something required IS watching — and nothing required
+ * Two graphs govern the same draft: one REQUIRED (a Block node) behind a
+ * filter this draft does not match, one ADVISORY (a Warn node) that trips. The
+ * strictest mode is "required" — something required IS watching — and nothing required
  * objected, so the server would honour `commit: always`. A client gating the
  * affordance on `mode === "required"` hides a button the server accepts; one
  * gating it on `blocking` matches exactly. `POST /items` accepts this draft too,
  * which is the disagreement the flag closes.
  */
-await session.eval(api("PATCH", `/automations/${advisory.id}`, graphFor("advisory")));
+await session.eval(pageFetch("PATCH", `/automations/${advisory.id}`, graphFor("warn")));
 await session.eval(
-  api("POST", "/automations", {
+  pageFetch("POST", "/automations", {
     name: `unmatched required ${suffix}`,
     nodes: [
       {
         id: "trg",
         kind: "trigger",
         type: "trigger.event",
-        params: {
-          event: "validate",
-          targets: [{ kind: "project", id: governed.id }],
-          mode: "required",
-        },
+        params: { event: "validate", targets: [{ kind: "project", id: governed.id }] },
       },
       // A condition no draft in this proof meets, so this graph governs
       // everything and refuses nothing.
@@ -343,7 +302,7 @@ await session.eval(
       {
         id: "chk",
         kind: "action",
-        type: "validation.fail",
+        type: "verdict.block",
         params: { message: "An outage report needs a severity." },
       },
     ],
@@ -357,11 +316,11 @@ const mixed = await run({
   projectKey: governed.key,
   title: "it crashes on open",
   light: false,
-  shot: "/tmp/radd-s119-findings-mixed.png",
+  shot: "radd-s119-findings-mixed.png",
 });
 
 const itemsAfter = parsed(
-  await session.eval(api("GET", `/items?project_id=${governed.id}`)),
+  await session.eval(pageFetch("GET", `/items?project_id=${governed.id}`)),
 );
 
 const panelContrast = advisoryDark.measured.present
@@ -378,7 +337,7 @@ const failed = report(
     "fixtures created": Boolean(governed && ungoverned && advisory),
 
     "governed: the button says Validate": /validate/i.test(advisoryDark.label || ""),
-    "ungoverned: the button says Create item": /create item/i.test(plain.label || ""),
+    "ungoverned: the button says Create issue": /create issue/i.test(plain.label || ""),
 
     "fail state: the findings panel is rendered": advisoryDark.measured.present === true,
     "fail state: it carries the check's own message":

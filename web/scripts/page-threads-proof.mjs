@@ -14,20 +14,10 @@
  *   node scripts/page-threads-proof.mjs [baseUrl] [email] [password]
  */
 import { mkdir } from "node:fs/promises";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { report, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const baseUrl = process.argv[2] || process.env.RADD_PROOF_BASE_URL || "http://127.0.0.1:8000";
-const email = process.argv[3] || process.env.RADD_PROOF_EMAIL || "admin@example.com";
-const password = process.argv[4] || process.env.RADD_PROOF_PASSWORD || "change-me";
 const output = process.env.RADD_PROOF_OUTPUT_DIR || "/tmp/radd-page-threads-proof";
-
-async function waitFor(session, expression, tries = 40) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(expression)) return true;
-    await sleep(250);
-  }
-  return false;
-}
 
 /** Type into a just-mounted editor; retry until `lit` holds (a fresh Milkdown can
  *  take focus before its listener is attached, dropping the first keystrokes). */
@@ -35,23 +25,22 @@ async function typeInto(session, editorSelector, text, lit) {
   for (let attempt = 0; attempt < 5; attempt++) {
     await session.click(editorSelector);
     await session.send("Input.insertText", { text });
-    if (await waitFor(session, lit, 6)) return true;
+    if (await waitFor(session, lit, { attempts: 6 })) return true;
   }
   return false;
 }
 
 async function main() {
   await mkdir(output, { recursive: true });
-  const { session, close } = await openBrowser({ port: 9537, profile: output + "/chrome", width: 1440, height: 1100 });
-  const checks = {};
+  const { session, close, baseUrl, loginStatus } = await startProof({
+    port: 9537, profile: output + "/chrome", width: 1440, height: 1100,
+  });
+  const checks = { loggedIn: loginStatus === 204 };
   const api = (expression) => session.eval(`(async () => { ${expression} })()`);
   const D = "[data-page-discussion]";
   const card = (id) => `document.querySelector('${D} [data-comment-id="${id}"]')`;
   let context = {};
   try {
-    await session.navigate(baseUrl + "/login", 1200);
-    checks.loggedIn = (await session.login(baseUrl, email, password)) === 204;
-
     // --- the page Discussion ---------------------------------------------------
     const page = await api(`
       const spaces = await (await fetch("/api/v1/page-spaces", {credentials:"include"})).json();

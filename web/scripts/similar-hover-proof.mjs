@@ -13,29 +13,14 @@
  *     that was an issue with no description at all, so the assertion passed by
  *     describing nothing. This proves the WIRING: dwell, position, content,
  *     dismissal.
- *
- *     `(hover: none)` is the headless BASELINE, and
- *     Tailwind gates every `hover:` utility on `@media (hover: hover)` — so a
- *     proof that does not set `primaryHoverType` reports un-hovered styles for
- *     a correctly-hovered element. `lib/chrome.mjs` carries the flag; this
- *     asserts it took, then drives a REAL pointer through CDP rather than a
- *     synthetic MouseEvent, because the dwell timer is on mouseenter.
+ *     Driven by a REAL pointer: the dwell timer is on mouseenter.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9361, profile: "/tmp/radd-hover" });
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-
-// The flag that makes hover assertions mean anything at all.
-const hoverIsReal = await session.eval(`matchMedia("(hover: hover)").matches`);
+const { session, close, baseUrl, loginStatus, hoverCapable: hoverIsReal } = await startProof({
+  port: 9361, profile: "/tmp/radd-hover", base: "http://localhost:8000",
+});
 
 // --- RADD-906: the shortcut hint names a key this keyboard has ---------------
 await session.navigate(`${baseUrl}/my-work`, 2500);
@@ -175,8 +160,7 @@ if (seeded?.origin && seeded?.target) {
   }
 }
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-hover.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-hover.png"));
 
 // Awaited IN THE PAGE. A bare `fetch().then()` handed to eval resolves before
 // the request lands, which is why every earlier run leaked its two fixtures and
@@ -199,7 +183,7 @@ const checks = {
   seedsWereIndexed: indexed,
   teardown,
   hover,
-  screenshot: "/tmp/radd-hover.png",
+  screenshot: outputPath("radd-hover.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

@@ -18,13 +18,10 @@
  * dev stack restarted around the run; see the issue.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, PAGE_API, report, sleep, waitFor } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: collab-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
+const { baseUrl, email: adminEmail, password: adminPassword } = proofArgs();
 const PROFILE = (name) => resolve(process.env.TMPDIR || "/tmp", `radd-collab-proof-${name}`);
 const STAMP = Date.now().toString(36).slice(-5);
 const PEOPLE = {
@@ -33,27 +30,8 @@ const PEOPLE = {
 };
 const SEED_BODY = "The page before anyone edited it.";
 
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, credentials: "include", headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
-
-/** Poll `probe` (a page expression) until it returns a truthy value. */
-async function until(session, expression, { timeoutMs = 5000, everyMs = 200 } = {}) {
-  const start = Date.now();
-  for (;;) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    if (Date.now() - start > timeoutMs) return value;
-    await sleep(everyMs);
-  }
-}
+/** How long a co-editing round trip gets: 5 s, polled every 200 ms. */
+const SYNC = { attempts: 25, every: 200 };
 
 const EDITOR = `document.querySelector(".ProseMirror")`;
 const EDITOR_TEXT = `(${EDITOR}?.innerText ?? "")`;
@@ -63,7 +41,7 @@ const REMOTE_CURSORS = `document.querySelectorAll(".ProseMirror-yjs-cursor").len
 async function enterEdit(session) {
   await session.click("button", (t) => t.trim() === "Edit page");
   // The room is joined and the document bound once the editor is editable.
-  await until(session, `${EDITOR}?.getAttribute("contenteditable") === "true"`, { timeoutMs: 8000 });
+  await waitFor(session, `${EDITOR}?.getAttribute("contenteditable") === "true"`, { attempts: 40, every: 200 });
 }
 
 async function typeAtEnd(session, text) {
@@ -90,7 +68,7 @@ async function main() {
     // --- setup as the admin: two editors, a space, a page ---
     await admin.session.navigate(baseUrl + "/login", 800);
     await admin.session.login(baseUrl, adminEmail, adminPassword);
-    const setup = await admin.session.eval(`(async () => { ${API}
+    const setup = await admin.session.eval(`(async () => { ${PAGE_API}
       const me = (await api("GET", "/auth/me")).body;
       const ensure = async (person) => {
         const found = (await api("GET", "/users?q=" + encodeURIComponent(person.email))).body;
@@ -123,8 +101,8 @@ async function main() {
     // --- both enter edit mode: one seeds, the other syncs ---
     await enterEdit(ada.session);
     await enterEdit(grace.session);
-    const adaSeeded = await until(ada.session, `${EDITOR_TEXT}.includes(${JSON.stringify(SEED_BODY)})`);
-    const graceSynced = await until(grace.session, `${EDITOR_TEXT}.includes(${JSON.stringify(SEED_BODY)})`);
+    const adaSeeded = await waitFor(ada.session, `${EDITOR_TEXT}.includes(${JSON.stringify(SEED_BODY)})`, SYNC);
+    const graceSynced = await waitFor(grace.session, `${EDITOR_TEXT}.includes(${JSON.stringify(SEED_BODY)})`, SYNC);
     checks.bothSeeTheSeededBody = adaSeeded === true && graceSynced === true;
     const graceCount = await grace.session.eval(`(${EDITOR_TEXT}.match(/${SEED_BODY.slice(0, 12)}/g) || []).length`);
     checks.seededExactlyOnce = graceCount === 1;
@@ -149,46 +127,46 @@ async function main() {
     const otherLine = ` The other one answered ${STAMP}.`;
     const t1 = Date.now();
     await typeAtEnd(saver.session, saverLine);
-    const saverSeenByOther = await until(other.session, `${EDITOR_TEXT}.includes(${JSON.stringify(saverLine.trim())})`);
+    const saverSeenByOther = await waitFor(other.session, `${EDITOR_TEXT}.includes(${JSON.stringify(saverLine.trim())})`, SYNC);
     context.saverToOtherMs = Date.now() - t1;
     checks.saverTextReachesOther = saverSeenByOther === true;
-    const firstSave = await until(admin.session, `(async () => { ${API}
+    const firstSave = await waitFor(admin.session, `(async () => { ${PAGE_API}
       return (await api("GET", "/pages/${page.id}")).body.body.includes(${JSON.stringify(saverLine.trim())});
-    })()`, { timeoutMs: 8000, everyMs: 500 });
+    })()`, { attempts: 16, every: 500 });
     checks.saverOwnLineAutosaved = firstSave === true;
     const t2 = Date.now();
     await typeAtEnd(other.session, otherLine);
-    const otherSeenBySaver = await until(saver.session, `${EDITOR_TEXT}.includes(${JSON.stringify(otherLine.trim())})`);
+    const otherSeenBySaver = await waitFor(saver.session, `${EDITOR_TEXT}.includes(${JSON.stringify(otherLine.trim())})`, SYNC);
     context.otherToSaverMs = Date.now() - t2;
     checks.otherTextReachesSaver = otherSeenBySaver === true;
-    const secondSave = await until(admin.session, `(async () => { ${API}
+    const secondSave = await waitFor(admin.session, `(async () => { ${PAGE_API}
       return (await api("GET", "/pages/${page.id}")).body.body.includes(${JSON.stringify(otherLine.trim())});
-    })()`, { timeoutMs: 8000, everyMs: 500 });
+    })()`, { attempts: 16, every: 500 });
     checks.otherLineAutosavedBySaver = secondSave === true;
     context.patchBodies = { saver: await saver.session.eval(`window.__patches`), other: await other.session.eval(`window.__patches`) };
     const adaLine = saver === ada ? saverLine : otherLine;
     const graceLine = saver === grace ? saverLine : otherLine;
 
     // --- cursors and presence ---
-    checks.adaSeesGraceCursor = (await until(ada.session, `${REMOTE_CURSORS} >= 1`)) === true;
-    checks.graceSeesAdaCursor = (await until(grace.session, `${REMOTE_CURSORS} >= 1`)) === true;
-    const adaPresence = await until(ada.session, `${PRESENCE}.includes("editing") ? ${PRESENCE} : ""`);
+    checks.adaSeesGraceCursor = (await waitFor(ada.session, `${REMOTE_CURSORS} >= 1`, SYNC)) === true;
+    checks.graceSeesAdaCursor = (await waitFor(grace.session, `${REMOTE_CURSORS} >= 1`, SYNC)) === true;
+    const adaPresence = await waitFor(ada.session, `${PRESENCE}.includes("editing") ? ${PRESENCE} : ""`, SYNC);
     context.presenceSeenByAda = adaPresence;
     checks.editorsSeeTwoEditing = typeof adaPresence === "string" && adaPresence.includes("2 editing");
-    const readerPresence = await until(admin.session, `${PRESENCE}.includes("2 editing") ? ${PRESENCE} : ""`, { timeoutMs: 8000 });
+    const readerPresence = await waitFor(admin.session, `${PRESENCE}.includes("2 editing") ? ${PRESENCE} : ""`, { attempts: 40, every: 200 });
     context.presenceSeenByReader = readerPresence;
     checks.readerSeesTwoEditing = typeof readerPresence === "string" && readerPresence.includes("2 editing");
 
     // --- the reader gets the saved text through the autosave + realtime ---
-    const readerSees = await until(
+    const readerSees = await waitFor(
       admin.session,
       `document.body.innerText.includes(${JSON.stringify(otherLine.trim())})`,
-      { timeoutMs: 12000, everyMs: 500 },
+      { attempts: 24, every: 500 },
     );
     checks.readerSeesSavedText = readerSees === true;
 
     // --- nothing publishes over live work ---
-    const outside = await admin.session.eval(`(async () => { ${API}
+    const outside = await admin.session.eval(`(async () => { ${PAGE_API}
       return (await api("PATCH", "/pages/${page.id}", { body: "an outside write" })).status;
     })()`);
     context.outsideWriteWhileEditing = outside;
@@ -197,7 +175,7 @@ async function main() {
     // --- reload mid-session: Grace comes back to the same document ---
     await grace.session.navigate(pageUrl, 2500);
     await enterEdit(grace.session);
-    const afterReload = await until(grace.session, `${EDITOR_TEXT}.includes(${JSON.stringify(adaLine.trim())}) && ${EDITOR_TEXT}.includes(${JSON.stringify(graceLine.trim())})`);
+    const afterReload = await waitFor(grace.session, `${EDITOR_TEXT}.includes(${JSON.stringify(adaLine.trim())}) && ${EDITOR_TEXT}.includes(${JSON.stringify(graceLine.trim())})`, SYNC);
     checks.reloadRejoinsIntact = afterReload === true;
 
     // --- both leave; the outside write now succeeds; history stayed short ---
@@ -205,7 +183,7 @@ async function main() {
     await sleep(1500);
     await grace.session.click("button", (t) => t.trim() === "Done");
     await sleep(2500);
-    const after = await admin.session.eval(`(async () => { ${API}
+    const after = await admin.session.eval(`(async () => { ${PAGE_API}
       const versions = (await api("GET", "/pages/${page.id}/versions")).body;
       const saved = (await api("GET", "/pages/${page.id}")).body;
       const write = (await api("PATCH", "/pages/${page.id}", { body: saved.body + "\\n\\nAfter the session." })).status;

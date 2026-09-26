@@ -4,15 +4,10 @@
 //
 //   node --test web/scripts/roadmap-draft.test.mjs   (from the repo root)
 import { strict as assert } from "node:assert";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "draft-ops-"));
-const file = join(dir, "draft-ops.ts");
-writeFileSync(file, readFileSync("web/src/components/roadmap/model/draft-ops.ts", "utf8"));
-const { applyOp } = await import(file);
+const { applyOp } = await importTs("web/src/components/roadmap/model/draft-ops.ts");
 
 const epic = { id: "e1", key: "PX-1", kind: "epic", start_date: "2026-09-01", target_date: "2026-09-20" };
 const child = { id: "c1", key: "PX-2", kind: "issue", parent: { id: "e1", key: "PX-1" }, start_date: null, target_date: null };

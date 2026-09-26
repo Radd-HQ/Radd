@@ -19,31 +19,13 @@
  * Measured, not eyeballed: presence in the DOM is not visibility, and a control
  * that renders is not one that is wired.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { clickPanelRow, openEditor, PANEL_ROWS, searchNodes } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9347, profile: "/tmp/radd-arity" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
-
-const search = (text) =>
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    if(!i) return false;
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,${JSON.stringify(text)}); i.dispatchEvent(new Event("input",{bubbles:true}));
-    return true;})()`;
-
-const clickPanelRow = (re) =>
-  `(()=>{const b=[...document.querySelectorAll("[data-node-panel] li button")]
-     .find(n=>${re}.test(n.textContent)); if(b) b.click(); return !!b;})()`;
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9347, profile: "/tmp/radd-arity", base: "http://localhost:8000",
+});
 
 /** The Run control's state: which options exist, which is checked, which are locked. */
 const readArity = `(()=>{
@@ -61,9 +43,6 @@ const handlesOf = (type) => `(()=>{
   if(!n) return -1;
   return n.parentElement.querySelectorAll(".react-flow__handle-bottom, .react-flow__handle-right").length;})()`;
 
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-
 // The SERVER is the source of truth for how each node type reads its packet.
 const catalog = await session.eval(
   `(async()=>{const r=await fetch("/api/v1/automations/catalog",{credentials:"include"});
@@ -80,7 +59,7 @@ const catalog = await session.eval(
 );
 
 const created = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "arity proof",
     enabled: false,
     orientation: "vertical",
@@ -88,22 +67,15 @@ const created = await session.eval(
     edges: [],
   }),
 );
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const rule = parsed(created);
 
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("arity proof"));if(el)el.click();return !!el;})()`,
-);
-await sleep(3000);
+await openEditor(session, baseUrl, "arity proof");
 
 // --- the search node is offered, and has its own form ---
-await session.eval(search("find issues"));
+await session.eval(searchNodes("find issues"));
 await sleep(700);
-const searchRows = await session.eval(
-  `[...document.querySelectorAll("[data-node-panel] li button")].map(b=>b.textContent.trim())`,
-);
-const addedSearch = await session.eval(clickPanelRow("/find issues/i"));
+const searchRows = await session.eval(PANEL_ROWS);
+const addedSearch = await session.eval(clickPanelRow(/find issues/i));
 await sleep(1200);
 const searchForm = await session.eval(`(()=>{
   const t=document.body.innerText;
@@ -113,9 +85,9 @@ const searchForm = await session.eval(`(()=>{
 const searchArity = await session.eval(readArity);
 
 // --- create_item draws BOTH of its outputs ---
-await session.eval(search("create item"));
+await session.eval(searchNodes("create issue"));
 await sleep(600);
-const addedCreate = await session.eval(clickPanelRow("/create item/i"));
+const addedCreate = await session.eval(clickPanelRow(/create issue/i));
 await sleep(1400);
 const createPorts = await session.eval(handlesOf("action.create_item"));
 const createArity = await session.eval(readArity);
@@ -127,7 +99,7 @@ const badgeBefore = await session.eval(
 // --- switching it to per item writes the param and moves the badge ---
 const switched = await session.eval(`(()=>{
   const group=document.querySelector('[role="radiogroup"][aria-label="Run"]');
-  const perItem=[...group.querySelectorAll('[role="radio"]')].find(b=>/per item/i.test(b.textContent));
+  const perItem=[...group.querySelectorAll('[role="radio"]')].find(b=>/per issue/i.test(b.textContent));
   if(!perItem) return false; perItem.click(); return true;})()`);
 await sleep(1200);
 const badgeAfter = await session.eval(
@@ -136,9 +108,9 @@ const badgeAfter = await session.eval(
 );
 
 // --- an action with only one coherent reading shows no control at all ---
-await session.eval(search("add label"));
+await session.eval(searchNodes("add label"));
 await sleep(600);
-await session.eval(clickPanelRow("/add label/i"));
+await session.eval(clickPanelRow(/add label/i));
 await sleep(1200);
 const labelArity = await session.eval(readArity);
 
@@ -146,9 +118,9 @@ const labelArity = await session.eval(readArity);
 // Its blank params name the `reporter` ROLE, so a freshly dropped node must
 // already be per item: it is the only mode in which that recipient resolves,
 // and the server refuses to store the other pairing.
-await session.eval(search("send email"));
+await session.eval(searchNodes("send email"));
 await sleep(600);
-await session.eval(clickPanelRow("/send email/i"));
+await session.eval(clickPanelRow(/send email/i));
 await sleep(1300);
 const emailArityWithRole = await session.eval(readArity);
 
@@ -165,14 +137,9 @@ const typedAddress = await session.eval(`(()=>{
 await sleep(1300);
 const emailArityWithAddress = await session.eval(readArity);
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-arity.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-arity.png"));
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checked = (state) => (state ?? []).find((option) => option.checked)?.label ?? null;
@@ -192,11 +159,11 @@ const checks = {
   badgeAfter,
   addLabelHasNoRunControl: labelArity === null,
   emailWithRole: checked(emailArityWithRole),
-  emailOnceLocked: (emailArityWithRole ?? []).some((o) => /all items/i.test(o.label) && o.disabled),
+  emailOnceLocked: (emailArityWithRole ?? []).some((o) => /all issues/i.test(o.label) && o.disabled),
   typedAddress,
   emailWithAddress: checked(emailArityWithAddress),
   emailUnlockedByAddress: (emailArityWithAddress ?? []).every((o) => !o.disabled),
-  screenshot: "/tmp/radd-arity.png",
+  screenshot: outputPath("radd-arity.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));
@@ -220,9 +187,9 @@ const ok =
   checks.createItemRunOptions.length === 2 &&
   badgeBefore?.trim() === "once" &&
   switched &&
-  badgeAfter?.trim() === "per item" &&
+  badgeAfter?.trim() === "per issue" &&
   checks.addLabelHasNoRunControl &&
-  checks.emailWithRole === "Once per item" &&
+  checks.emailWithRole === "Once per issue" &&
   checks.emailOnceLocked &&
   typedAddress &&
   checks.emailUnlockedByAddress &&

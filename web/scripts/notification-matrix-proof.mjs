@@ -1,44 +1,21 @@
 /**
- * Render proof for the scoped notification matrix (spec 118, RADD-1055).
- *
- * `tsc` and `vite build` cannot see any of what matters here:
- *
- *  - that the grid LAYS OUT as a matrix — one row per kind from the SERVER's
- *    vocabulary, one cell per relationship column, the columns holding their x
- *    across every row. A wrong `gridTemplateColumns` type-checks and ships a
- *    single column of stray buttons, and a failed preferences fetch renders
- *    zero rows, which looks the same as "the page is fine, there is nothing to
- *    configure";
- *  - that a PERSONAL kind's other columns are DISABLED. That is the whole
- *    "addressed at you, so it follows the Mine column" rule at the surface, and
- *    it is a runtime property of state that arrived over the wire — a broken
- *    query, a renamed field or an inverted test all compile;
- *  - that INHERITANCE is visible AND correct. Every unset cell resolves to
- *    something, and a control that renders inherited as "off" lies about the two
- *    cases a preference exists to distinguish — but so does one that renders it
- *    as a value the server would not deliver, which is what a subscription cell
- *    did while it borrowed the "Mine" column's answer;
- *  - that a cell edit ROUND-TRIPS: the menu opens on a real click (through
- *    hit-testing, so an overlay bug is caught), the PUT lands, the response is
- *    written into the cache, and the cell re-renders from it;
- *  - both THEMES, because the cell's lit/unlit channel marks are the only thing
- *    carrying the value and a token that resolves in one theme and not the
- *    other is invisible to every other gate.
- *
- * The account's real rules are read first and PUT back verbatim at the end, so
- * a run against a live instance leaves no residue.
+ * Render proof for the scoped notification matrix (spec 118, RADD-1055). What tsc cannot see:
+ *  - it lays out as a matrix: one row per SERVER kind, one cell per relationship column, columns
+ *    aligned across rows (a bad gridTemplateColumns or a failed fetch both type-check);
+ *  - a PERSONAL kind's other columns are disabled (it follows the Mine column);
+ *  - every unset cell shows what the server would actually deliver — not "off", and not the Mine
+ *    column's answer on a subscription cell;
+ *  - a cell edit round-trips: hit-tested click, PUT, cache, re-render;
+ *  - both themes (the lit/unlit marks are the only carrier of the value).
+ * The account's rules are read first and PUT back verbatim.
  *
  * Usage: node scripts/notification-matrix-proof.mjs <baseUrl> <email> <password>
  */
-import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, email, password] = process.argv.slice(2);
-const PORT = 9457;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-notification-matrix-proof");
 const PREFS = "/api/v1/notifications/preferences";
-const OUT = (name) => resolve(process.env.TMPDIR || "/tmp", name);
 /** `NOTIFICATION_KINDS` members — 13 since spec 118 added created / updated /
  *  page_created. A literal, because the proof runs in a browser against a built
  *  bundle and has no import of the vocabulary; a check that accepted "some rows"
@@ -84,20 +61,17 @@ const SET_THEME = (theme) => `(() => {
 })()`;
 
 const SHOT = async (session, name, context) => {
-  const shot = await session.send("Page.captureScreenshot", { format: "png" });
-  const path = OUT(name);
-  writeFileSync(path, Buffer.from(shot.data, "base64"));
+  const path = outputPath(name);
+  await session.screenshot(path);
   context.screenshots = [...(context.screenshots || []), path];
 };
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
-  const checks = {};
+  const { session, close, baseUrl, hoverCapable } = await startProof({
+    port: 9457, profile: resolve(process.env.TMPDIR || "/tmp", "radd-notification-matrix-proof"),
+  });
+  const checks = { "headless chrome reports a real pointer": hoverCapable };
   const context = {};
-
-  await session.navigate(baseUrl + "/", 1200);
-  await session.login(baseUrl, email, password);
-  checks["headless chrome reports a real pointer"] = await session.hoverCapable();
 
   const original = await session.eval(
     `(async()=>{const r=await fetch("${PREFS}",{credentials:"include"});return r.json();})()`,
@@ -216,22 +190,28 @@ async function main() {
     (original.rules || []).filter((r) => r.scope_id).map(subscriptionKey),
   );
   const before = await session.eval(`document.querySelectorAll("[data-subscription]").length`);
-  const targets = await session.eval(`(() => {
-    const select = document.querySelector('[aria-label="Subscription target"]');
-    return select ? (select.textContent || "").trim() : null;
-  })()`);
   context.subscriptionsBefore = before;
-  context.subscriptionPicker = targets;
-  const hasTargets = Boolean(targets) && !/Nothing left/.test(targets);
-  checks["the subscription picker offers something to subscribe to"] = hasTargets;
-  if (hasTargets) {
-    await session.click('[aria-label="Subscription target"]');
+  // The target picker is a dialog with one button per target (RADD-1115); an empty
+  // directory says "No matching subscription targets." instead.
+  await session.click('[aria-label="Subscription target"]');
+  let targets = null;
+  for (let i = 0; i < 20 && !targets?.settled; i++) {
     await sleep(300);
-    // `[role="option"]` ALONE. A comma group here matched an unrelated `li
-    // button` earlier in the document — `querySelectorAll` returns document
-    // order, not selector order — so the proof clicked a nav item, navigated
-    // away, and reported "adding a subscription renders nothing".
-    await session.click('[role="option"]');
+    targets = await session.eval(`(() => {
+      const dialog = document.querySelector('[role="dialog"][aria-label^="Subscribe to a"]');
+      if (!dialog) return null;
+      const rows = dialog.querySelectorAll("ul li button").length;
+      return { rows, settled: rows > 0 || /No matching subscription targets/.test(dialog.textContent || "") };
+    })()`);
+  }
+  context.subscriptionPicker = targets;
+  const hasTargets = Boolean(targets?.rows);
+  checks["the subscription picker offers something to subscribe to"] = hasTargets;
+  if (targets && !hasTargets) await session.click('[role="dialog"] [aria-label="Close"]');
+  if (hasTargets) {
+    // Scoped to the DIALOG: an unscoped `li button` once matched a nav item earlier in the
+    // document, and the proof clicked it and navigated away.
+    await session.click('[role="dialog"] ul li button');
     await sleep(300);
     await session.click("button", (text) => text.trim() === "Add");
     let added = before;

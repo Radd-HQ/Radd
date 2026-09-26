@@ -22,32 +22,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8114", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9514;
 const TMP = process.env.TMPDIR || "/tmp";
-const PROFILE = resolve(TMP, "radd-sla-columns-proof-profile");
 const HERE = dirname(fileURLToPath(import.meta.url));
 const key = `SC${Date.now().toString(36).slice(-4).toUpperCase()}`;
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
 
 /** The chip the remote must draw for a batch entry — its own rules, restated as the oracle. */
 function expectedChip(timers) {
@@ -75,15 +55,14 @@ function agrees(label, expected) {
     : Math.abs(minutes - expected.minutes) <= 1);
 }
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9514, profile: resolve(TMP, "radd-sla-columns-proof-profile"),
+  base: "http://127.0.0.1:8114",
+});
 let world = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-
   // 1. The world, over REST.
-  world = await session.eval(`(async () => { ${API}
+  world = await session.eval(`(async () => { ${PAGE_API}
     const project = await api("POST", "/projects", { key: ${JSON.stringify(key)}, name: "SLA columns proof" });
     const id = project.body.id;
     const gold = await api("POST", "/sla-policies", { project_id: id, name: "Gold", priorities: ["high"],
@@ -108,7 +87,7 @@ try {
   check("the list view stores the plugin's column id", JSON.stringify(world.listColumns) === '["priority","slas.timer","state"]',
     JSON.stringify(world.listColumns));
 
-  const direct = async () => session.eval(`(async () => { ${API}
+  const direct = async () => session.eval(`(async () => { ${PAGE_API}
     const r = await api("POST", "/items/sla/batch", { item_ids: ${JSON.stringify(world.items.map((i) => i.id))} });
     return r.body; })()`);
 
@@ -156,7 +135,7 @@ try {
   await waitFor(session, `document.querySelectorAll('[data-plugin-section="slas"] [data-sla-chip]').length === 2`);
   const rail = await session.eval(`[...document.querySelectorAll('[data-plugin-section="slas"] li')]
     .map((li) => [li.firstElementChild.textContent.trim(), li.querySelector('[data-sla-chip]').textContent])`);
-  const itemSla = await session.eval(`(async () => { ${API} return (await api("GET", "/items/${gold.id}/sla")).body; })()`);
+  const itemSla = await session.eval(`(async () => { ${PAGE_API} return (await api("GET", "/items/${gold.id}/sla")).body; })()`);
   const railWanted = itemSla.entries.flatMap((entry) => entry.timers.map((t) => [t.kind, expectedChip([{ ...t, policy_name: entry.policy_name }])]));
   check("rail: the SLA section (issue.panel.section) equals GET /items/{id}/sla",
     rail.length === railWanted.length && rail.every(([kind, label], i) => kind === railWanted[i][0] && agrees(label, railWanted[i][1])),
@@ -172,7 +151,7 @@ try {
 } finally {
   // 5. Clean up: issues, policies and default views cascade with the project.
   if (world?.projectId) {
-    const cleaned = await session.eval(`(async () => { ${API}
+    const cleaned = await session.eval(`(async () => { ${PAGE_API}
       const views = [${JSON.stringify(world.listId ?? "")}, ${JSON.stringify(world.boardId ?? "")}].filter(Boolean);
       const v = await Promise.all(views.map((id) => api("DELETE", "/views/" + id)));
       const p = await api("DELETE", "/projects/" + ${JSON.stringify(world.projectId)});
@@ -183,8 +162,4 @@ try {
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "SLA columns (RADD-1394)", key },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "SLA columns (RADD-1394)", key });

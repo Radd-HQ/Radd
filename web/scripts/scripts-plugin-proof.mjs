@@ -16,31 +16,20 @@
  * Usage: node scripts/scripts-plugin-proof.mjs [--base http://localhost:8000]
  * Needs uv on the host and a Python 3.12 it can provide (it downloads one).
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { openEditor } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9360, profile: "/tmp/radd-scripts" });
-
-const api = (method, path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},credentials:"include",` +
-  `headers:{"Content-Type":"application/json"}${body === undefined ? "" : `,body:JSON.stringify(${JSON.stringify(body)})`}});` +
-  `return {status:r.status, body: await r.text()};})()`;
-const parsed = (r) => (r.status < 300 ? JSON.parse(r.body) : null);
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9360, profile: "/tmp/radd-scripts", base: "http://localhost:8000",
+});
 
 // --- the interpreter, by API (a real uv build; slow the first time) ----------
-const before = parsed(await session.eval(api("GET", "/scripts/interpreter")));
+const before = parsed(await session.eval(pageFetch("GET", "/scripts/interpreter")));
 const built = before?.status === "ready"
   ? before
-  : parsed(await session.eval(api("POST", "/scripts/interpreter/rebuild", { python_version: "3.12" })));
-const pkg = parsed(await session.eval(api("POST", "/scripts/packages", { spec: "six>=1.16" })));
+  : parsed(await session.eval(pageFetch("POST", "/scripts/interpreter/rebuild", { python_version: "3.12" })));
+const pkg = parsed(await session.eval(pageFetch("POST", "/scripts/packages", { spec: "six>=1.16" })));
 
 // --- the bodies (RADD-1272: a script lives on its node) --------------------------
 const suffix = Math.random().toString(36).slice(2, 6);
@@ -56,13 +45,13 @@ const BROKEN_BODY = "def main(ctx):\n    raise ValueError('deliberate')\n";
 const ROUTER_BODY = "def main(ctx):\n    return 'left' if ctx.items and 'left' in ctx.items[0]['title'] else 'right'\n";
 
 // Run now, by API, with a pasted packet — the commenter needs a real item.
-const project = parsed(await session.eval(api("POST", "/projects", { key: `SP${suffix.toUpperCase()}`, name: `Scripts ${suffix}` })));
-const item = parsed(await session.eval(api("POST", "/items", { project_id: project?.id, title: "go left please" })));
+const project = parsed(await session.eval(pageFetch("POST", "/projects", { key: `SP${suffix.toUpperCase()}`, name: `Scripts ${suffix}` })));
+const item = parsed(await session.eval(pageFetch("POST", "/items", { project_id: project?.id, title: "go left please" })));
 // The inspector's Test box, by API: the body as typed, seeded by key.
-const runNow = parsed(await session.eval(api("POST", "/scripts/run", { body: COMMENTER_BODY, item_key: item?.key ?? "", timeout: 60 })));
+const runNow = parsed(await session.eval(pageFetch("POST", "/scripts/run", { body: COMMENTER_BODY, item_key: item?.key ?? "", timeout: 60 })));
 
 // --- an automation that runs it, decides with one, and hits the broken one ----
-const rule = parsed(await session.eval(api("POST", "/automations", {
+const rule = parsed(await session.eval(pageFetch("POST", "/automations", {
   name: `scripts proof ${suffix}`, enabled: true, orientation: "vertical",
   nodes: [
     { id: "trg1", kind: "trigger", type: "trigger.event", params: { event: "item.updated" } },
@@ -80,16 +69,16 @@ const rule = parsed(await session.eval(api("POST", "/automations", {
     { source: "run1", port: "out", target: "bad1" },
   ],
 })));
-await session.eval(api("PATCH", `/items/${item?.id}`, { title: "go left please, renamed" }));
+await session.eval(pageFetch("PATCH", `/items/${item?.id}`, { title: "go left please, renamed" }));
 let runs = [];
 for (let attempt = 0; attempt < 40 && runs.length === 0; attempt++) {
   await sleep(1500);
-  runs = parsed(await session.eval(api("GET", `/automations/${rule?.id}/runs`))) ?? [];
+  runs = parsed(await session.eval(pageFetch("GET", `/automations/${rule?.id}/runs`))) ?? [];
 }
 const run = runs[0] ?? null;
-const detail = run ? parsed(await session.eval(api("GET", `/automations/${rule?.id}/runs/${run.id}`))) : null;
-const comments = parsed(await session.eval(api("GET", `/items/${item?.id}/comments`)));
-const itemAfter = parsed(await session.eval(api("GET", `/items/${item?.id}`)));
+const detail = run ? parsed(await session.eval(pageFetch("GET", `/automations/${rule?.id}/runs/${run.id}`))) : null;
+const comments = parsed(await session.eval(pageFetch("GET", `/items/${item?.id}/comments`)));
+const itemAfter = parsed(await session.eval(pageFetch("GET", `/items/${item?.id}`)));
 const nodeResult = (id) => detail?.report?.nodes?.find((n) => n.node_id === id);
 const actionOf = (id) => detail?.report?.would_apply?.find((a) => a.node_id === id);
 
@@ -99,13 +88,12 @@ const pageState = await session.eval(`(()=>({
   status: document.querySelector("[data-scripts-interpreter] [data-interpreter-status]")?.getAttribute("data-interpreter-status") ?? null,
   packages: [...document.querySelectorAll("[data-scripts-packages] [data-package]")].map(li=>li.getAttribute("data-package")+":"+li.querySelector("[data-package-status]")?.getAttribute("data-package-status")),
   contract: (document.querySelector("[data-scripts-contract]")?.innerText ?? "").includes("def main(ctx)"),
-  library: Boolean(document.querySelector("[data-scripts-library]")),
   navGroupOfScripts: (()=>{const a=[...document.querySelectorAll("nav a, aside a")].find(x=>/^Scripts$/.test(x.textContent.trim())); let el=a; while(el&&!/Server|Issues|People|Account/.test(el.previousElementSibling?.textContent??"")&&el.parentElement) el=el.parentElement; return el?.previousElementSibling?.textContent?.trim() ?? null;})(),
   navText: (document.querySelector("nav")||document.body).innerText.replace(/\s+/g," ").slice(0,400),
 }))()`);
 // The Package index form (RADD-1277): type a mirror with a password, tick Offline,
 // Save — the row holds it, the read model masks the password, the chip appears.
-const indexBefore = parsed(await session.eval(api("GET", "/scripts/interpreter")));
+const indexBefore = parsed(await session.eval(pageFetch("GET", "/scripts/interpreter")));
 const indexShown = await session.eval(`Boolean(document.querySelector("[data-scripts-index] input[type=checkbox]"))`);
 await session.eval(`(()=>{const i=document.querySelector("[data-scripts-index] input:not([type=checkbox])");` +
   `const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set;set.call(i,"http://radd:hunter2@mirror.local/simple");` +
@@ -119,16 +107,11 @@ const indexState = await session.eval(`(()=>({
   offline: document.querySelector("[data-scripts-index] input[type=checkbox]")?.checked ?? null,
   wheelhouse: (document.querySelector("[data-scripts-index]")?.innerText ?? "").includes("/wheels"),
 }))()`);
-const indexAfter = parsed(await session.eval(api("GET", "/scripts/interpreter")));
-await session.eval(api("PUT", "/scripts/interpreter", { index_url: indexBefore?.index_url ?? "", offline: indexBefore?.offline ?? false }));
+const indexAfter = parsed(await session.eval(pageFetch("GET", "/scripts/interpreter")));
+await session.eval(pageFetch("PUT", "/scripts/interpreter", { index_url: indexBefore?.index_url ?? "", offline: indexBefore?.offline ?? false }));
 
 // The inspector: open the proof automation, select the run node, see the editor + Test box.
-await session.navigate(`${baseUrl}/settings/automations`, 2500);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes(${JSON.stringify(`scripts proof ${suffix}`)}));if(el)el.click();return !!el;})()`,
-);
-await sleep(2500);
+await openEditor(session, baseUrl, `scripts proof ${suffix}`);
 await session.eval(`(()=>{const b=document.querySelector(".react-flow__controls-fitview"); if(b) b.click(); return !!b;})()`);
 await sleep(600);
 await session.click('[data-node-type="script.run"]', () => true);
@@ -137,13 +120,12 @@ const editorShown = await session.eval(`Boolean(document.querySelector("[data-sc
 const editorText = await session.eval(`(document.querySelector("[data-script-node] .cm-content")||{innerText:""}).innerText.includes("add_comment")`);
 const testBoxShown = await session.eval(`Boolean(document.querySelector("[data-script-node] [data-script-test]"))`);
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-scripts.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-scripts.png"));
 
 // --- cleanup -----------------------------------------------------------------------
-if (rule) await session.eval(api("DELETE", `/automations/${rule.id}`));
-if (item) await session.eval(api("DELETE", `/items/${item.id}`));
-if (pkg) await session.eval(api("DELETE", `/scripts/packages/${pkg.id}`));
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
+if (item) await session.eval(pageFetch("DELETE", `/items/${item.id}`));
+if (pkg) await session.eval(pageFetch("DELETE", `/scripts/packages/${pkg.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const scriptedComment = (comments?.items ?? comments ?? []).find?.((c) => /Scripted hello/.test(c.body)) ?? null;
@@ -170,7 +152,7 @@ const checks = {
   indexShown,
   indexState,
   indexAfter: indexAfter && { index_url: indexAfter.index_url, offline: indexAfter.offline, wheelhouses: indexAfter.wheelhouses },
-  screenshot: "/tmp/radd-scripts.png",
+  screenshot: outputPath("radd-scripts.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));
@@ -190,7 +172,7 @@ const ok =
   (itemAfter?.labels ?? []).includes("greeted-1") &&
   pageState.status === "ready" &&
   pageState.packages.includes("six:installed") &&
-  pageState.contract && !pageState.library &&
+  pageState.contract &&
   editorShown && editorText && testBoxShown &&
   indexShown && indexState.chip === "offline" && indexState.offline === true && indexState.wheelhouse &&
   indexState.url === "http://radd:***@mirror.local/simple" && indexAfter?.index_url === "http://radd:***@mirror.local/simple" &&

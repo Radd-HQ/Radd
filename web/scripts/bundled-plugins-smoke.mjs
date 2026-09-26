@@ -11,30 +11,14 @@
  * Usage: node scripts/bundled-plugins-smoke.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(200);
-  }
-  return session.eval(expression);
-}
-
-const { session, close } = await openBrowser({ port: 9486, profile: resolve(process.env.TMPDIR || "/tmp", "radd-bundled-smoke") });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9486, profile: resolve(process.env.TMPDIR || "/tmp", "radd-bundled-smoke"),
+});
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, String(status));
-
   const caps = await session.eval(`fetch("/api/v1/capabilities").then((r) => r.json())`);
   const coreRemotes = (caps.remotes ?? []).filter((remote) => CORE_PLUGINS.includes(remote.name)).map((remote) => remote.name);
   check("no core plugin is served as a remote", coreRemotes.length === 0, coreRemotes.join(","));
@@ -68,5 +52,4 @@ try {
 } finally {
   await close();
 }
-const failed = report(Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])), { proof: "bundled plugins smoke" });
-process.exit(failed ? 1 : 0);
+finish({ proof: "bundled plugins smoke" });

@@ -17,31 +17,11 @@
  * Usage: node scripts/ai-settings-page-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9502;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-ai-settings-proof-profile");
 const tag = `proof-${Date.now().toString(36)}`;
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 40) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
-const presetFromApi = `(async () => { ${API} return (await api("GET", "/ai/presets")).body.find((p) => p.name === ${JSON.stringify(tag)}) ?? null; })()`;
+const presetFromApi = `(async () => { ${PAGE_API} return (await api("GET", "/ai/presets")).body.find((p) => p.name === ${JSON.stringify(tag)}) ?? null; })()`;
 
 /** Set a React-controlled input or textarea the way React sees it. */
 const setValue = (selector, value) => `(() => {
@@ -53,15 +33,12 @@ const setValue = (selector, value) => `(() => {
   return true;
 })()`;
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9502, profile: resolve(process.env.TMPDIR || "/tmp", "radd-ai-settings-proof-profile"),
+});
 let created = false;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  check("headless Chrome is hover-capable", await session.hoverCapable());
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-
-  const truth = await session.eval(`(async () => { ${API}
+  const truth = await session.eval(`(async () => { ${PAGE_API}
     const caps = (await api("GET", "/capabilities")).body;
     return { providers: (await api("GET", "/ai/providers")).body, roles: (await api("GET", "/ai/roles")).body,
       settings: (await api("GET", "/scoped-settings?scope=instance")).body.filter((r) => r.key.startsWith("ai_")).map((r) => r.key),
@@ -111,7 +88,7 @@ try {
     truth.settings.length >= 10 && truth.settings.every((key) => rendered.features.includes(key)),
     JSON.stringify({ api: truth.settings.length, page: rendered.features.length }));
   check("the presets section renders its form", rendered.presets);
-  await session.screenshot(resolve("scripts", "ai-settings-page-proof.png"), { fullPage: true });
+  await session.screenshot(outputPath("ai-settings-page-proof.png"), { fullPage: true });
 
   // 3. the provider form (read-only).
   const first = truth.providers[0];
@@ -181,14 +158,10 @@ try {
   check("no console errors", session.consoleErrors.length === 0, JSON.stringify(session.consoleErrors));
 } finally {
   if (created) {
-    const cleaned = await session.eval(`(async () => { ${API} const p = await ${presetFromApi};
+    const cleaned = await session.eval(`(async () => { ${PAGE_API} const p = await ${presetFromApi};
       return p ? (await api("DELETE", "/ai/presets/" + p.id)).status : 204; })()`);
     check("the throwaway preset is deleted again", cleaned === 204, String(cleaned));
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "ai settings page", baseUrl },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "ai settings page", baseUrl });

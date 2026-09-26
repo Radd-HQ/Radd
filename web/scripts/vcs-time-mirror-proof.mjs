@@ -23,7 +23,7 @@
  * worklog on the item, which is deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, outputPath, PAGE_API, report, sleep, waitForSelector } from "./lib/cdp.mjs";
 
 const [baseUrl, adminEmail, adminPassword, itemKey] = process.argv.slice(2);
 if (!baseUrl || !adminEmail || !adminPassword || !itemKey) {
@@ -32,26 +32,9 @@ if (!baseUrl || !adminEmail || !adminPassword || !itemKey) {
 }
 const PORT = 9512;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-vcs-time-mirror-proof");
-const SHOTS = resolve(process.cwd(), "web/scripts");
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, { method, headers: { "content-type": "application/json" }, credentials: "same-origin", body: body === undefined ? undefined : JSON.stringify(body) });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 async function main() {
   const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
-  const waitFor = async (selector, timeoutMs = 12000) => {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      if (await session.eval(`Boolean(document.querySelector(${JSON.stringify(selector)}))`)) return true;
-      await sleep(250);
-    }
-    return false;
-  };
   const checks = {};
   const context = { itemKey };
   let handLogged = null;
@@ -61,7 +44,7 @@ async function main() {
 
     // --- 1. one page, three tabs, URL-carried ---
     await session.navigate(`${baseUrl}/settings/vcs?host=gitlab`, 2500);
-    await waitFor('[role="tablist"][aria-label="Version control hosts"]');
+    await waitForSelector(session, '[role="tablist"][aria-label="Version control hosts"]');
     const tabs = await session.eval(`(() => {
       const list = document.querySelector('[role="tablist"][aria-label="Version control hosts"]');
       const items = [...(list?.querySelectorAll('[role="tab"]') ?? [])];
@@ -74,14 +57,14 @@ async function main() {
     checks.oneNavEntry = tabs.navEntries.length === 1 && tabs.navEntries[0] === "Version control";
 
     await session.navigate(`${baseUrl}/settings/vcs?host=github`, 2500);
-    await waitFor('[role="tablist"][aria-label="Version control hosts"]');
+    await waitForSelector(session, '[role="tablist"][aria-label="Version control hosts"]');
     const redirected = await session.eval(`({ path: location.pathname, search: location.search, selected: document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim() })`);
     context.redirected = redirected;
     checks.githubTabSelectedFromUrl = redirected.path.endsWith("/settings/vcs") && redirected.search.includes("host=github") && redirected.selected === "GitHub";
 
     // --- 2. the GitLab tab's body ---
     await session.navigate(`${baseUrl}/settings/vcs?host=gitlab`, 2500);
-    await waitFor('[aria-label^="Work category for time mirrored from"]');
+    await waitForSelector(session, '[aria-label^="Work category for time mirrored from"]');
     // The identities card is collapsed by default when nothing is unmatched — open it.
     await session.eval(`(() => { const b = [...document.querySelectorAll('button[aria-expanded]')].find((x) => /Time-tracking identities/i.test(x.textContent)); if (b && b.getAttribute("aria-expanded") === "false") b.click(); })()`);
     await sleep(600);
@@ -90,7 +73,7 @@ async function main() {
       const categorySelects = document.querySelectorAll('[aria-label^="Work category for time mirrored from"]');
       const projectSelects = [...document.querySelectorAll('[data-repo]')].filter((row) => /Default project/.test(row.textContent));
       return {
-        hasConnection: /Cinesite GitLab|GitLab/.test(text) && document.querySelectorAll('section header').length >= 1,
+        hasConnection: /GitLab/.test(text) && document.querySelectorAll('section header').length >= 1,
         repos: [...document.querySelectorAll('.font-mono')].map((n) => n.textContent.trim()).filter((t) => t.includes("/")),
         categorySelects: categorySelects.length, projectSelects: projectSelects.length,
         identitiesOpen: /mapped accounts/i.test(text),
@@ -103,10 +86,10 @@ async function main() {
     checks.gitlabTabListsRepoWithProjectAndCategory = gitlabTab.repos.length >= 1 && gitlabTab.categorySelects >= 1 && gitlabTab.projectSelects >= 1;
     checks.identityMapShowsEmailMatch = gitlabTab.identitiesOpen && gitlabTab.mappedRow;
     checks.noUnmatchedAuthors = gitlabTab.unmatchedEmpty;
-    await session.screenshot(resolve(SHOTS, "vcs-time-mirror-proof-settings.png"));
+    await session.screenshot(outputPath("vcs-time-mirror-proof-settings.png"));
 
     // --- 3 + 4. the issue: badges in the Work log tab, disabled controls in the rail ---
-    handLogged = await session.eval(`(async () => { ${API}
+    handLogged = await session.eval(`(async () => { ${PAGE_API}
       const item = await api("GET", "/items/by-key/" + ${JSON.stringify(itemKey)});
       const itemId = item.body?.id;
       const w = await api("POST", "/items/" + itemId + "/worklogs", { time_spent: "15m", note: "hand-logged for the proof" });
@@ -134,10 +117,10 @@ async function main() {
     context.plainRows = plainRows.length;
     checks.mirroredControlsDisabledWithReason = mirroredRows.length >= 1 && mirroredRows.every((r) => r.disabled && /change it there/i.test(r.reason));
     checks.handLoggedRowStaysEditable = plainRows.length >= 1 && plainRows.every((r) => !r.disabled);
-    await session.screenshot(resolve(SHOTS, "vcs-time-mirror-proof-issue.png"));
+    await session.screenshot(outputPath("vcs-time-mirror-proof-issue.png"));
 
     // The server refuses too — the UI treatment is not the only guard.
-    const refusal = await session.eval(`(async () => { ${API}
+    const refusal = await session.eval(`(async () => { ${PAGE_API}
       const item = await api("GET", "/items/by-key/" + ${JSON.stringify(itemKey)});
       const tl = await api("GET", "/items/" + item.body.id + "/timelog");
       const mirrored = tl.body.entries.find((e) => e.external_source);
@@ -160,11 +143,11 @@ async function main() {
     const timesheet = await session.eval(`(() => ({ badges: [...document.querySelectorAll('span')].filter((s) => /^from GitLab$/.test(s.textContent.trim())).length, rows: document.querySelectorAll('tbody tr').length }))()`);
     context.timesheet = timesheet;
     checks.timesheetBadgesMirroredRows = timesheet.badges >= 1;
-    await session.screenshot(resolve(SHOTS, "vcs-time-mirror-proof-timesheet.png"));
+    await session.screenshot(outputPath("vcs-time-mirror-proof-timesheet.png"));
     context.sheet = sheet;
   } finally {
     if (handLogged?.worklogId) {
-      await session.eval(`(async () => { ${API} await api("DELETE", "/worklogs/" + ${JSON.stringify(handLogged.worklogId)}); })()`).catch(() => {});
+      await session.eval(`(async () => { ${PAGE_API} await api("DELETE", "/worklogs/" + ${JSON.stringify(handLogged.worklogId)}); })()`).catch(() => {});
     }
     process.exitCode = report(checks, context) ? 1 : 0;
     close();

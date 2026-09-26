@@ -12,24 +12,15 @@
  *
  * Cleans up everything it creates.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9346, profile: "/tmp/radd-pagetpl-proof" });
-
-const apiCall = (method, path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},credentials:"include",` +
-  `headers:{"Content-Type":"application/json"}${body ? `,body:JSON.stringify(${JSON.stringify(body)})` : ""}});` +
-  `const t=await r.text();return JSON.stringify({status:r.status, body:t});})()`;
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9346, profile: "/tmp/radd-pagetpl-proof", base: "http://localhost:8000",
+});
 
 const api = async (method, path, body) => {
-  const raw = await session.eval(apiCall(method, path, body));
-  const { status, body: text } = JSON.parse(raw);
+  const { status, body: text } = await session.eval(pageFetch(method, path, body));
   let parsed = null;
   try {
     parsed = text ? JSON.parse(text) : null;
@@ -46,8 +37,6 @@ let templateId = null;
 let pageId = null;
 
 try {
-  await session.navigate(baseUrl, 1500);
-  const loginStatus = await session.login(baseUrl, email, password);
   checks["login succeeds"] = loginStatus === 200 || loginStatus === 204;
 
   // A template to find in the UI.
@@ -70,10 +59,7 @@ try {
   checks["settings: Page templates section renders"] = settings.section;
   checks["settings: created template is listed"] = settings.listed;
   checks["settings: New template button present"] = settings.newBtn;
-  {
-    const shot = await session.send("Page.captureScreenshot", { format: "png" });
-    writeFileSync("/tmp/pagetpl-settings.png", Buffer.from(shot.data, "base64"));
-  }
+  await session.screenshot(outputPath("pagetpl-settings.png"));
 
   // 2) The page tree's New page button becomes a menu.
   const spaces = await api("GET", "/page-spaces");
@@ -95,10 +81,7 @@ try {
   ).then(JSON.parse);
   checks["tree: menu offers Blank page"] = menuItems.includes("Blank page");
   checks["tree: menu offers the template"] = menuItems.some((t) => t.includes(templateName));
-  {
-    const shot = await session.send("Page.captureScreenshot", { format: "png" });
-    writeFileSync("/tmp/pagetpl-menu.png", Buffer.from(shot.data, "base64"));
-  }
+  await session.screenshot(outputPath("pagetpl-menu.png"));
 
   // 3) Choosing the template creates a RENDERED page.
   await session.eval(`(()=>{

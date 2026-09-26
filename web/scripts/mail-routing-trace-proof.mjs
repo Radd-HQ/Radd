@@ -1,46 +1,21 @@
 /**
- * Render proof for the mail routing trace (RADD-994).
- *
- * The panel's whole job is answering "why didn't my rule fire", and every bug
- * this proof pins was a way of answering it with silence — none of which `tsc`
- * can see, because a rule that is absent from a list renders perfectly.
- *
- *  - **All five statuses reach the DOM, in chain order.** A rule switched off, a
- *    rule below the winner and a rule that was deleted used to be the same
- *    nothing. The proof builds one chain that produces declined / errored /
- *    matched / disabled / not_reached in that order and reads them back off
- *    `data-rule-status`, which is the wire contract; the labels beside them are
- *    prose and will be reworded.
- *  - **The detail is readable, not clipped.** It shipped inside a `flex-[2]
- *    truncate` span with no title attribute — the most informative field on the
- *    panel ("the classifier failed (TimeoutError)"), cut off in a modal with no
- *    way to widen it. The check measures: the detail line must wrap BELOW the
- *    rule name and fit its own box. Against the old markup the errored rule's
- *    52-character detail overflows a ~160px column, so this fails.
- *  - **A rule that matched while naming no project says so.** Two wrong
- *    sentences were available and the code used both — `decide` said "rule: X",
- *    naming a destination the rule never chose, and the dry run recomputed the
- *    line from `project_id` into "no rule matched", denying the match entirely.
- *    Either one sends an admin to debug the rule that behaved.
- *  - **The rule editor states the answer the admin did not write.** The model is
- *    always offered "None of these"; a category list that hides it gets fought
- *    in the prompt or duplicated as an "Other" row.
- *
- * The DECLINE wording ("…declined — the model answered 'None of these'") is
- * pinned by `test_mail_routing.py` instead: reaching it needs a real chat role
- * and a model round trip, which a render proof has no business arranging.
- *
- * Seeds its own source + chain over the API and deletes them again — the rules
- * cascade with the source, so the instance is left as it was found.
+ * Render proof for the mail routing trace (RADD-994): "why didn't my rule fire" is never
+ * answered with silence.
+ *  - all five statuses reach the DOM in chain order (declined / errored / matched / disabled /
+ *    not_reached), read off `data-rule-status` (the wire contract, not the prose);
+ *  - the detail wraps below the rule name and fits its box (it shipped truncated, no title);
+ *  - a rule that matched while naming no project says so;
+ *  - the rule editor states the implicit "None of these" answer.
+ * The DECLINE wording needs a real chat role: pinned by test_mail_routing.py instead.
+ * Seeds its own source + chain and deletes them (rules cascade with the source).
  *
  * Usage: node scripts/mail-routing-trace-proof.mjs <baseUrl> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { proofArgs, startProof } from "./lib/proof.mjs";
 
-const [baseUrl, email, password] = process.argv.slice(2);
-const PORT = 9459;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-mail-trace-proof");
+const { baseUrl } = proofArgs();
 
 /** The address the sample message is delivered to — unique per run, so a
  *  leftover source from an interrupted run cannot answer for this one. */
@@ -54,20 +29,8 @@ const SENDER = "probe@customer.example";
 const ERRORED_DETAIL = "no categories configured — this rule can never match";
 
 /** Run `fetch` inside the page so the session cookie applies. */
-function apiCall(session, method, path, body) {
-  const payload = body === undefined ? "undefined" : JSON.stringify(JSON.stringify(body));
-  return session.eval(`(async () => {
-    const body = ${payload};
-    const r = await fetch(${JSON.stringify("/api/v1" + path)}, {
-      method: ${JSON.stringify(method)},
-      credentials: "include",
-      headers: body ? { "Content-Type": "application/json" } : {},
-      body: body || undefined,
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  })()`);
-}
+const apiCall = (session, method, path, body) => session.eval(
+  `(async () => { ${PAGE_API} return api(${JSON.stringify(method)}, ${JSON.stringify(path)}, ${JSON.stringify(body)}); })()`);
 
 async function seed(session) {
   const projects = await apiCall(session, "GET", "/projects");
@@ -233,14 +196,12 @@ function readTrace(session) {
 }
 
 async function main() {
-  const { session } = await openBrowser({ port: PORT, profile: PROFILE });
-  const checks = {};
+  const { session, hoverCapable } = await startProof({
+    port: 9459, profile: resolve(process.env.TMPDIR || "/tmp", "radd-mail-trace-proof"),
+  });
+  const checks = { "headless chrome reports a real pointer": hoverCapable };
   let seeded = null;
   let failed = 1;
-
-  await session.navigate(baseUrl + "/", 1200);
-  await session.login(baseUrl, email, password);
-  checks["headless chrome reports a real pointer"] = await session.hoverCapable();
 
   try {
     seeded = await seed(session);

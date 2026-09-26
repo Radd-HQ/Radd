@@ -10,49 +10,30 @@
  *   node scripts/release-transitions-proof.mjs [baseUrl] [email] [password]
  */
 import { mkdir } from "node:fs/promises";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, report, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const baseUrl = process.argv[2] || process.env.RADD_PROOF_BASE_URL || "http://127.0.0.1:8000";
-const email = process.argv[3] || process.env.RADD_PROOF_EMAIL || "admin@example.com";
-const password = process.argv[4] || process.env.RADD_PROOF_PASSWORD || "change-me";
 const output = process.env.RADD_PROOF_OUTPUT_DIR || "/tmp/radd-release-transitions-proof";
-
-async function waitFor(session, expression, tries = 40) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(expression)) return true;
-    await sleep(250);
-  }
-  return false;
-}
 
 async function main() {
   await mkdir(output, { recursive: true });
-  const { session, close } = await openBrowser({ port: 9538, profile: output + "/chrome", width: 1440, height: 1100 });
-  const checks = {};
-  const api = (body) => session.eval(`(async () => {
-    const call = async (method, path, data) => {
-      const r = await fetch("/api/v1" + path, { method, credentials: "include",
-        headers: {"Content-Type": "application/json"}, body: data === undefined ? undefined : JSON.stringify(data) });
-      const text = await r.text();
-      return { status: r.status, body: text ? JSON.parse(text) : null };
-    };
-    ${body}
-  })()`);
+  const { session, close, baseUrl, loginStatus } = await startProof({
+    port: 9538, profile: output + "/chrome", width: 1440, height: 1100,
+  });
+  const checks = { loggedIn: loginStatus === 204 };
+  const inPage = (body) => session.eval(`(async () => { ${PAGE_API} ${body} })()`);
   let world = null;
   try {
-    await session.navigate(baseUrl + "/login", 1200);
-    checks.loggedIn = (await session.login(baseUrl, email, password)) === 204;
-
-    world = await api(`
+    world = await inPage(`
       const key = "RT" + Math.random().toString(36).slice(2, 6).toUpperCase();
-      const project = (await call("POST", "/projects", { key, name: "Release transitions proof" })).body;
-      const waiting = (await call("POST", "/states", { project_id: project.id, name: "Waiting for release", category: "done" })).body;
-      const states = (await call("GET", "/states?project_id=" + project.id)).body;
+      const project = (await api("POST", "/projects", { key, name: "Release transitions proof" })).body;
+      const waiting = (await api("POST", "/states", { project_id: project.id, name: "Waiting for release", category: "done" })).body;
+      const states = (await api("GET", "/states?project_id=" + project.id)).body;
       const done = states.find(s => s.name === "Done");
-      const transition = (await call("POST", "/transitions", { project_id: project.id, from_state_id: waiting.id, to_state_id: done.id })).body;
-      await call("PUT", "/scoped-settings", { scope: "project", scope_id: project.id, key: "workflow_transition_mode", value: "guards" });
-      const item = (await call("POST", "/items", { project_id: project.id, title: "Ship me" })).body;
-      await call("PATCH", "/items/" + item.id, { state_id: waiting.id });
+      const transition = (await api("POST", "/transitions", { project_id: project.id, from_state_id: waiting.id, to_state_id: done.id })).body;
+      await api("PUT", "/scoped-settings", { scope: "project", scope_id: project.id, key: "workflow_transition_mode", value: "guards" });
+      const item = (await api("POST", "/items", { project_id: project.id, title: "Ship me" })).body;
+      await api("PATCH", "/items/" + item.id, { state_id: waiting.id });
       return { key, projectId: project.id, waiting: waiting.id, done: done.id, transition: transition.id, item: item.id, itemKey: item.key };`);
     checks.seeded = Boolean(world?.transition && world.item);
 
@@ -65,7 +46,7 @@ async function main() {
       `(() => { const b = document.querySelector('[data-transition-requires-release]'); return !!b && b.checked && b.disabled; })()`);
     await session.screenshot(output + "/workflow.png");
 
-    const refused = await api(`return await call("PATCH", "/items/${world.item}", { state_id: "${world.done}" });`);
+    const refused = await inPage(`return await api("PATCH", "/items/${world.item}", { state_id: "${world.done}" });`);
     checks.handMoveRefusedWithoutRelease = refused.status >= 400 && JSON.stringify(refused.body).includes("a release is required");
 
     await session.navigate(`${baseUrl}/p/${world.key}/releases`, 2500);
@@ -73,12 +54,12 @@ async function main() {
       `document.querySelector('[data-release-shipping]')?.textContent.includes("Waiting for release → Done")`);
     await session.screenshot(output + "/releases.png");
 
-    const shipped = await api(`
-      await call("POST", "/releases", { project_id: "${world.projectId}", name: "1.0", version: "1.0.0", status: "released" });
-      return (await call("GET", "/items/${world.item}")).body;`);
+    const shipped = await inPage(`
+      await api("POST", "/releases", { project_id: "${world.projectId}", name: "1.0", version: "1.0.0", status: "released" });
+      return (await api("GET", "/items/${world.item}")).body;`);
     checks.publishingShipsWithRelease = shipped.state?.id === world.done && shipped.release?.version === "1.0.0";
   } finally {
-    if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
+    if (world?.projectId) await inPage(`return (await api("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();
   }
   process.exit(report(checks) ? 1 : 0);

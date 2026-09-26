@@ -11,33 +11,16 @@
  * Usage: node scripts/history-links-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://localhost:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9472;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-history-links-proof-profile");
 const tag = `hist-proof-${Date.now().toString(36)}`;
 
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 24) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9472, profile: resolve(process.env.TMPDIR || "/tmp", "radd-history-links-proof-profile"),
+  base: "http://localhost:8000",
+});
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-
   // 1. a team, renamed.
   const team = await session.eval(`(async () => {
     const post = await fetch("/api/v1/teams", { method: "POST", headers: { "content-type": "application/json" },
@@ -76,7 +59,7 @@ try {
     return list ? list.textContent : "";
   })()`);
   check("the history shows the rename as Name: old → new", /team updated/i.test(rowText) && rowText.includes("Name:") && rowText.includes(`${tag}-renamed`), String(rowText).slice(0, 200));
-  await session.screenshot(resolve("scripts", "history-links-proof-team.png"));
+  await session.screenshot(outputPath("history-links-proof-team.png"));
 
   // 3. the footer link on a settings page, and where it goes.
   await session.navigate(`${baseUrl}/settings/roles`, 1500);
@@ -100,13 +83,9 @@ try {
     const href = await waitFor(session, `document.querySelector("[data-settings-history] a")?.getAttribute("href") ?? ""`);
     check("a project settings page links the project's trail", href.includes(`project=${project.id}`) && /entity=state/.test(href), String(href));
   }
-  await session.screenshot(resolve("scripts", "history-links-proof-page.png"), { fullPage: true });
+  await session.screenshot(outputPath("history-links-proof-page.png"), { fullPage: true });
 } finally {
   await close();
 }
 
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "history-links-proof", tag },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "history-links-proof", tag });

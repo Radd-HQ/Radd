@@ -4,23 +4,24 @@
  * API and show on the providers table. Runs against a local instance that has
  * an OpenAI-shape provider named by RADD_PROOF_PROVIDER (default "VLLM").
  *
- *   node scripts/ai-provider-options-proof.mjs
- *   (defaults: RADD_PROOF_EMAIL / RADD_PROOF_PASSWORD, else admin@example.com / change-me)
+ *   node scripts/ai-provider-options-proof.mjs [baseUrl] [email] [password]
+ *   (defaults: RADD_PROOF_BASE_URL / RADD_PROOF_EMAIL / RADD_PROOF_PASSWORD, else
+ *    http://127.0.0.1:8000 / admin@example.com / change-me)
  *
  * Leaves the provider as it found it: the parameter it writes is removed at the end.
  */
 import { mkdir, writeFile } from "node:fs/promises";
-import { openBrowser, sleep } from "./lib/cdp.mjs";
+import { sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const baseUrl = process.env.RADD_PROOF_BASE_URL || "http://127.0.0.1:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
 const providerName = process.env.RADD_PROOF_PROVIDER ?? "VLLM";
 const output = process.env.RADD_PROOF_OUTPUT_DIR || "/tmp/radd-ai-provider-options-proof";
 await mkdir(output, { recursive: true });
 
-const { session, close } = await openBrowser({ port: 9531, profile: output + "/chrome", width: 1440, height: 1000 });
-const checks = {};
+const { session, close, baseUrl, loginStatus, hoverCapable } = await startProof({
+  port: 9531, profile: output + "/chrome", width: 1440, height: 1000,
+});
+const checks = { hoverCapable, loggedIn: loginStatus === 204 };
 const dialogTextarea = '[role=dialog] textarea';
 const dialogCheckbox = '[role=dialog] input[type=checkbox]';
 const dialogSubmit = '[role=dialog] button[type=submit]';
@@ -49,9 +50,6 @@ const openEdit = async () => {
 };
 
 try {
-  await session.navigate(baseUrl + "/login", 1500);
-  checks.hoverCapable = await session.hoverCapable();
-  checks.loggedIn = (await session.login(baseUrl, email, password)) === 204;
   await session.navigate(baseUrl + "/settings/ai", 2500);
 
   const before = await providerFromApi();

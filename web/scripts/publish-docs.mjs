@@ -12,8 +12,7 @@
  * it is used. So a page is matched by slug under its parent and PATCHed, and an
  * attachment is matched by filename on the page and reused.
  *
- * This whole script is a REST fallback. The `radd` MCP server can read a page
- * and search pages, and cannot create or edit one; see RADD-1005.
+ * REST only; MCP create_page/update_page (RADD-1005) could now replace it.
  *
  * Usage:
  *   node scripts/publish-docs.mjs --root <dir> [--space radd]

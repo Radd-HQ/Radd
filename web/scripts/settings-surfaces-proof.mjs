@@ -10,29 +10,13 @@
  * Usage: node scripts/settings-surfaces-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(200);
-  }
-  return session.eval(expression);
-}
-
-const { session, close } = await openBrowser({ port: 9490, profile: resolve(process.env.TMPDIR || "/tmp", "radd-settings-surfaces-proof") });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9490, profile: resolve(process.env.TMPDIR || "/tmp", "radd-settings-surfaces-proof"),
+});
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, String(status));
-
   const rows = await session.eval(`fetch("/api/v1/scoped-settings?scope=instance").then((r) => r.json())`);
   const unhomed = rows.filter((r) => !r.homed).map((r) => r.label || r.key);
   check("some instance rows are homed by their plugins, some are left for General",
@@ -59,5 +43,4 @@ try {
 } finally {
   await close();
 }
-const failed = report(Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])), { proof: "settings surfaces" });
-process.exit(failed ? 1 : 0);
+finish({ proof: "settings surfaces" });

@@ -45,7 +45,6 @@ const PROBE = `(() => {
     language: block.getAttribute("data-language"),
     isCmEditor: !!cm,
     stillPre: !!block.querySelector("pre"),
-    crepeBlocks: document.querySelectorAll(".milkdown-code-block").length,
     text: content ? content.textContent : "",
     tokenCount: tokens.length,
     distinctColors,
@@ -152,7 +151,6 @@ async function main() {
     "the browser reports a hover-capable pointer": hoverCapable === true,
     "read mode renders our code block": read.present === true,
     "edit mode renders our code block": edit.present === true,
-    "no Crepe code block anywhere": read.crepeBlocks === 0 && edit.crepeBlocks === 0,
     // The timing lesson, asserted rather than tripped over.
     "the mode loaded: it is a .cm-editor, not a <pre>":
       read.isCmEditor === true && read.stillPre === false,

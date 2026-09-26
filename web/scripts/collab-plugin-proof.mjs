@@ -14,25 +14,16 @@
  *   4. no console errors in either browser.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, PAGE_API, report, sleep, waitFor } from "./lib/cdp.mjs";
+import { proofArgs } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
+const { baseUrl, email, password } = proofArgs();
 const STAMP = Date.now().toString(36).slice(-6);
 const SEED = `A throwaway page for the collab plugin proof ${STAMP}.`;
 const checks = [];
 const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
 const context = {};
 
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, { method, credentials: "include",
-      headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 const EDITOR = `document.querySelector('[aria-label="Edit page content"] .ProseMirror')`;
 const EDITOR_TEXT = `(${EDITOR}?.innerText ?? "")`;
 const SAVER = `(document.querySelector("[data-collab-saver]")?.getAttribute("data-collab-saver") ?? "absent")`;
@@ -43,15 +34,6 @@ const SIGNATURES = {
   "y-prosemirror": "\"y-sync\"",
   collab: "/collab/pages",
 };
-
-async function waitFor(session, expression, { timeoutMs = 10_000, everyMs = 200 } = {}) {
-  const start = Date.now();
-  for (;;) {
-    const value = await session.eval(expression);
-    if (value || Date.now() - start > timeoutMs) return value;
-    await sleep(everyMs);
-  }
-}
 
 /** The login endpoint throttles bursts: retry until it lets us in. */
 async function signIn(session) {
@@ -100,7 +82,7 @@ try {
   check("collab is enabled and declares its remote at UI API 1.17.0",
     remote?.remote_entry.startsWith("/plugins/collab/remoteEntry.js") && remote.ui_api_version === "1.17.0", JSON.stringify(remote));
 
-  created = await one.session.eval(`(async () => { ${API}
+  created = await one.session.eval(`(async () => { ${PAGE_API}
     const space = (await api("POST", "/page-spaces", { name: "Collab plugin proof ${STAMP}", slug: "collab-plugin-${STAMP}" })).body;
     const page = (await api("POST", "/pages", { space_id: space.id, title: "Shared ${STAMP}", body: ${JSON.stringify(SEED)} })).body;
     return { space: { id: space.id, slug: space.slug }, page: { id: page.id, slug: page.slug, path: page.path } };
@@ -113,7 +95,7 @@ try {
     await browser.session.navigate(pageUrl, 1500);
     await waitFor(browser.session, `document.body.innerText.includes(${JSON.stringify(SEED)})`);
     await browser.session.click("button", (text) => text.trim() === "Edit page");
-    await waitFor(browser.session, `${EDITOR}?.getAttribute("contenteditable") === "true"`, { timeoutMs: 15_000 });
+    await waitFor(browser.session, `${EDITOR}?.getAttribute("contenteditable") === "true"`);
   }
   const bound = await Promise.all([one, two].map((b) => b.session.eval(`({
     editable: ${EDITOR}?.getAttribute("contenteditable"),
@@ -148,10 +130,10 @@ try {
   context.texts = texts;
   check("the two documents converge", texts[0] === texts[1] && texts[0].includes(saverLine.trim()) && texts[0].includes(otherLine.trim()));
 
-  const persisted = await waitFor(one.session, `(async () => { ${API}
+  const persisted = await waitFor(one.session, `(async () => { ${PAGE_API}
     const body = (await api("GET", "/pages/${created.page.id}")).body.body;
     return body.includes(${JSON.stringify(saverLine.trim())}) && body.includes(${JSON.stringify(otherLine.trim())}) ? body : "";
-  })()`, { timeoutMs: 12_000, everyMs: 500 });
+  })()`, { attempts: 24, every: 500 });
   context.autosaved = persisted;
   check("the elected saver's autosave persisted both lines (read back over the API)", Boolean(persisted));
 
@@ -179,7 +161,7 @@ try {
   await saver.session.click("button", (text) => text.trim() === "Done");
   await waitFor(saver.session, `!document.querySelector('[aria-label="Edit page content"]')`);
   await sleep(1500);
-  const after = await one.session.eval(`(async () => { ${API}
+  const after = await one.session.eval(`(async () => { ${PAGE_API}
     return (await api("GET", "/pages/${created.page.id}")).body; })()`);
   context.final = { version: after.version, body: after.body };
   check("after Done the persisted body holds the seed and both lines",
@@ -190,7 +172,7 @@ try {
   check("no console errors", errors.one.length === 0 && errors.two.length === 0, JSON.stringify(errors).slice(0, 400));
 } finally {
   if (created?.page?.id) {
-    const cleanup = await one.session.eval(`(async () => { ${API}
+    const cleanup = await one.session.eval(`(async () => { ${PAGE_API}
       const page = (await api("DELETE", "/pages/${created.page.id}?hard=true")).status;
       const space = (await api("DELETE", "/page-spaces/${created.space.id}?force=true")).status;
       const gone = (await api("GET", "/pages/${created.page.id}")).status;
@@ -201,5 +183,5 @@ try {
   }
   await Promise.all([one.close(), two.close()]);
 }
-const failed = report(Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])), context);
+const failed = report(checks, context);
 process.exit(failed ? 1 : 0);

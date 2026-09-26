@@ -20,27 +20,12 @@
  * The throwaway project is deleted at the end through RADD-1174's endpoint.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: board-collapse-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9485;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-board-collapse-proof");
 const KEY = `BC${Date.now().toString(36).slice(-4).toUpperCase()}`;
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 const COLUMNS = `(() => [...document.querySelectorAll("[data-board-column]")].map((el) => ({
   key: el.dataset.boardColumn, collapsed: el.dataset.collapsed, width: Math.round(el.getBoundingClientRect().width),
@@ -51,16 +36,13 @@ async function columns(session) {
 }
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1600, height: 1000 });
+  const { session, close, baseUrl } = await startProof({ port: PORT, profile: PROFILE, width: 1600, height: 1000 });
   const checks = {};
   const context = { key: KEY };
   let projectId = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    await session.login(baseUrl, adminEmail, adminPassword);
-
     // --- setup: project + state board + one issue ---
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Collapse proof" });
       const view = await api("POST", "/views", { project_id: project.body.id, name: "Collapse board", view_type: "board", group_by: "state" });
       const item = await api("POST", "/items", { project_id: project.body.id, title: "the only card" });
@@ -82,7 +64,7 @@ async function main() {
     checks.everyStateIsAColumn = cols.length === states.length && cols.every((c) => c.collapsed === "false" && c.width >= 300);
 
     // --- 2. switch on: empty ones are rails ---
-    const on = await session.eval(`(async () => { ${API} return (await api("PATCH", "/views/${view.id}", { collapse_empty_columns: true })).status; })()`);
+    const on = await session.eval(`(async () => { ${PAGE_API} return (await api("PATCH", "/views/${view.id}", { collapse_empty_columns: true })).status; })()`);
     checks.switchSaved = on === 200;
     await session.navigate(`${baseUrl}/p/${KEY}/v/${view.id}`, 2500);
     cols = await columns(session);
@@ -91,7 +73,7 @@ async function main() {
     const full = cols.find((c) => c.key === occupied);
     checks.emptyColumnsAreRails = rails.length === emptyStates.length && rails.every((c) => c.collapsed === "true" && c.width <= 48);
     checks.occupiedColumnIsFull = Boolean(full && full.collapsed === "false" && full.width >= 300);
-    await session.screenshot(resolve("scripts", "board-collapse-proof-rails.png"));
+    await session.screenshot(outputPath("board-collapse-proof-rails.png"));
 
     // --- 3. hover expands one rail in place ---
     const target = emptyStates[0];
@@ -136,16 +118,16 @@ async function main() {
     })()`);
     context.dropped = dropped;
     await sleep(1500);
-    const moved = await session.eval(`(async () => { ${API} const r = await api("GET", "/items/${item.id}"); return r.body.state; })()`);
+    const moved = await session.eval(`(async () => { ${PAGE_API} const r = await api("GET", "/items/${item.id}"); return r.body.state; })()`);
     context.movedTo = moved;
     checks.dropMovedTheIssueIntoTheEmptyState = moved && moved.id === target.id;
     cols = await columns(session);
     checks.previousColumnCollapsesAfterTheMove = cols.some((c) => c.key === occupied && c.collapsed === "true");
-    await session.screenshot(resolve("scripts", "board-collapse-proof-after-drop.png"));
+    await session.screenshot(outputPath("board-collapse-proof-after-drop.png"));
 
     // --- 5. a hidden column is gone, and the menu says so ---
     const hide = emptyStates[1] ?? emptyStates[0];
-    const hid = await session.eval(`(async () => { ${API} return (await api("PATCH", "/views/${view.id}", { hidden_columns: [${JSON.stringify(hide.id)}] })).status; })()`);
+    const hid = await session.eval(`(async () => { ${PAGE_API} return (await api("PATCH", "/views/${view.id}", { hidden_columns: [${JSON.stringify(hide.id)}] })).status; })()`);
     checks.hiddenSaved = hid === 200;
     await session.navigate(`${baseUrl}/p/${KEY}/v/${view.id}`, 2500);
     cols = await columns(session);
@@ -161,7 +143,7 @@ async function main() {
     context.menu = menu;
     checks.menuListsHiddenColumnAsHidden = menu.rowPresent && menu.pressed === "true" && /^Show /.test(menu.label ?? "");
     checks.menuShowsSwitchOn = menu.collapseChecked === true;
-    await session.screenshot(resolve("scripts", "board-collapse-proof-menu.png"));
+    await session.screenshot(outputPath("board-collapse-proof-menu.png"));
     await session.click(`[data-bucket-row='${hide.id}'] button[aria-pressed]`, () => true);
     await sleep(1200);
     cols = await columns(session);
@@ -171,7 +153,7 @@ async function main() {
     throw error;
   } finally {
     if (projectId) {
-      await session.eval(`(async () => { ${API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
+      await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
     }
     await close();
   }

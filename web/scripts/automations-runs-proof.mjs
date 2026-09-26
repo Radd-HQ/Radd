@@ -13,33 +13,22 @@
  *
  * Usage: node scripts/automations-runs-proof.mjs [--base http://localhost:8000]
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { openRule } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9357, profile: "/tmp/radd-runs" });
-
-const api = (method, path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},credentials:"include",` +
-  `headers:{"Content-Type":"application/json"}${body === undefined ? "" : `,body:JSON.stringify(${JSON.stringify(body)})`}});` +
-  `return {status:r.status, body: await r.text()};})()`;
-const parsed = (r) => (r.status < 300 ? JSON.parse(r.body) : null);
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9357, profile: "/tmp/radd-runs", base: "http://localhost:8000",
+});
 
 // --- fixtures: a project, an item, an automation that labels it on update ----
 const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-const project = parsed(await session.eval(api("POST", "/projects", { key: `RH${suffix}`, name: `Runs ${suffix}` })));
+const project = parsed(await session.eval(pageFetch("POST", "/projects", { key: `RH${suffix}`, name: `Runs ${suffix}` })));
 const item = parsed(
-  await session.eval(api("POST", "/items", { project_id: project?.id, title: "Runs proof item" })),
+  await session.eval(pageFetch("POST", "/items", { project_id: project?.id, title: "Runs proof item" })),
 );
 const created = await session.eval(
-  api("POST", "/automations", {
+  pageFetch("POST", "/automations", {
     name: `runs proof ${suffix}`,
     enabled: true,
     orientation: "vertical",
@@ -60,16 +49,16 @@ const created = await session.eval(
 const rule = parsed(created);
 
 // --- fire it: an update the consumer will pick up ---------------------------
-const updated = await session.eval(api("PATCH", `/items/${item?.id}`, { title: "Runs proof item, renamed" }));
+const updated = await session.eval(pageFetch("PATCH", `/items/${item?.id}`, { title: "Runs proof item, renamed" }));
 // The consumer polls every second; give it a few.
 let runs = [];
 for (let attempt = 0; attempt < 12 && runs.length === 0; attempt++) {
   await sleep(1000);
-  runs = parsed(await session.eval(api("GET", `/automations/${rule?.id}/runs`))) ?? [];
+  runs = parsed(await session.eval(pageFetch("GET", `/automations/${rule?.id}/runs`))) ?? [];
 }
 const run = runs[0] ?? null;
-const detail = run ? parsed(await session.eval(api("GET", `/automations/${rule?.id}/runs/${run.id}`))) : null;
-const itemAfter = parsed(await session.eval(api("GET", `/items/${item?.id}`)));
+const detail = run ? parsed(await session.eval(pageFetch("GET", `/automations/${rule?.id}/runs/${run.id}`))) : null;
+const itemAfter = parsed(await session.eval(pageFetch("GET", `/items/${item?.id}`)));
 const skipped = detail?.report?.would_apply?.find((a) => a.node_id === "act2") ?? null;
 const applied = detail?.report?.would_apply?.find((a) => a.node_id === "act1") ?? null;
 
@@ -82,10 +71,7 @@ const listChip = await session.eval(
 );
 
 // --- the editor's Runs tab ---------------------------------------------------
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes(${JSON.stringify(`runs proof ${suffix}`)}));if(el)el.click();return !!el;})()`,
-);
+await session.eval(openRule(`runs proof ${suffix}`));
 await sleep(2500);
 const openedTab = await session.eval(
   `(()=>{const tab=[...document.querySelectorAll('[role="tab"]')].find(t=>/^Runs$/.test(t.textContent.trim()));
@@ -108,12 +94,11 @@ const canvasRun = await session.eval(
   `[...document.querySelectorAll("[data-node-run]")].map(d=>d.getAttribute("data-node-run"))`,
 );
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-runs.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-runs.png"));
 
 // --- cleanup -----------------------------------------------------------------
-if (rule) await session.eval(api("DELETE", `/automations/${rule.id}`));
-if (item) await session.eval(api("DELETE", `/items/${item.id}`));
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
+if (item) await session.eval(pageFetch("DELETE", `/items/${item.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checks = {
@@ -131,7 +116,7 @@ const checks = {
   nodeRows,
   actionRows,
   canvasRun,
-  screenshot: "/tmp/radd-runs.png",
+  screenshot: outputPath("radd-runs.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

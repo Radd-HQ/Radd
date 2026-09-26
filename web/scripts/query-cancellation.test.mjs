@@ -1,13 +1,9 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {stripTypeScriptTypes} from 'node:module';
 import {QueryClient, QueryObserver, InfiniteQueryObserver} from '../node_modules/@tanstack/react-query/build/modern/index.js';
+import {evaluateTs as evaluate} from './lib/load-ts.mjs';
 
 const source=path=>readFileSync(new URL('../src/lib/'+path,import.meta.url),'utf8');
-function evaluate(code,imports,names){
-  const js=stripTypeScriptTypes(code).replace(/^import[\s\S]*?from ["'][^"']+["'];\n/gm,'').replace(/^export \{[^}]+\} from ["'][^"']+["'];\n/gm,'').replaceAll('export ','');
-  return Function(...Object.keys(imports),js+';return {'+names.join(',')+'}')( ...Object.values(imports));
-}
 const ownerKeys = Object.assign({}, ...['projects','cycles'].map(owner => {
   const name=owner==='projects'?'projectQueryKeys':'cycleDirectoryKeys';
   return evaluate(readFileSync(new URL('../../server/src/radd/modules/'+owner+'/ui/src/query-keys.ts',import.meta.url),'utf8'),{},[name]);

@@ -17,23 +17,13 @@
  * Measured, not eyeballed: a panel that renders is not one that is wired, and a
  * count that appears is not one that came from the walk.
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { openEditor } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9353, profile: "/tmp/radd-visibility" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9353, profile: "/tmp/radd-visibility", base: "http://localhost:8000",
+});
 
 // --- the endpoint reads REAL events -----------------------------------------
 const sampled = await session.eval(
@@ -55,7 +45,7 @@ const unknown = await session.eval(
 // The gate tests an actor nobody matches, so its `true` branch is NEVER taken —
 // which must read differently from a filter that matched nothing.
 const created = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "visibility proof",
     enabled: false,
     orientation: "vertical",
@@ -75,20 +65,15 @@ const created = await session.eval(
     ],
   }),
 );
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const rule = parsed(created);
 
 // --- the API half of the dry run, seeded and unseeded ------------------------
 const unseeded = await session.eval(
-  post(`/automations/${rule.id}/test`, { item_id: null, trigger_node_id: "trg1" }),
+  pageFetch("POST", `/automations/${rule.id}/test`, { item_id: null, trigger_node_id: "trg1" }),
 );
 const unseededResult = JSON.parse(unseeded.body);
 
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("visibility proof"));if(el)el.click();return !!el;})()`,
-);
-await sleep(3000);
+await openEditor(session, baseUrl, "visibility proof");
 
 // --- the trigger's payload panel --------------------------------------------
 await session.eval(
@@ -147,14 +132,9 @@ const canvasRun = await session.eval(
   `[...document.querySelectorAll("[data-node-run]")].map(d=>d.getAttribute("data-node-run"))`,
 );
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-visibility.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-visibility.png"));
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const gateResult = unseededResult.nodes?.find((n) => n.node_id === "gate1");
@@ -179,7 +159,7 @@ const checks = {
   nodeRows,
   portLabels,
   canvasRun,
-  screenshot: "/tmp/radd-visibility.png",
+  screenshot: outputPath("radd-visibility.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

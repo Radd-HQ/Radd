@@ -74,7 +74,7 @@ async function main() {
   // Close the panel (Escape) and open a SMALL select: State (a handful of rows).
   await session.eval(`document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); "ok"`);
   await sleep(200);
-  const openedSmall = await session.eval(OPEN_BY_LABEL("State"));
+  await session.eval(OPEN_BY_LABEL("State"));
   await sleep(300);
   const small = await session.eval(PANEL_PROBE);
 

@@ -14,38 +14,19 @@
  *   - delete by the inspector button -> still works
  *   - the deletion SURVIVES a save/reload, not just the local state
  */
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { clickPanelRow, openEditor, SAVE, searchNodes } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9343, profile: "/tmp/radd-delete-proof" });
-
-const post = (path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:"POST",credentials:"include",` +
-  `headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify(body)})});` +
-  `return {status:r.status, body: await r.text()};})()`;
-
-const addFromPanel = (term, re) => [
-  `(()=>{const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
-    if(!i) return false;
-    const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
-    setter.call(i,${JSON.stringify(term)}); i.dispatchEvent(new Event("input",{bubbles:true}));
-    return true;})()`,
-  `(()=>{const b=[...document.querySelectorAll("[data-node-panel] li button")]
-     .find(n=>${re}.test(n.textContent)); if(b) b.click(); return !!b;})()`,
-];
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9343, profile: "/tmp/radd-delete-proof", base: "http://localhost:8000",
+});
 
 const nodeIds = `[...document.querySelectorAll("[data-node-id]")].map(n=>n.getAttribute("data-node-id")).sort()`;
 const edgeCount = `document.querySelectorAll(".react-flow__edge-path").length`;
 
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-
 const created = await session.eval(
-  post("/automations", {
+  pageFetch("POST", "/automations", {
     name: "delete proof",
     enabled: false,
     orientation: "vertical",
@@ -56,20 +37,14 @@ const created = await session.eval(
     edges: [{ source: "trg1", port: "out", target: "act1" }],
   }),
 );
-const rule = created.status < 300 ? JSON.parse(created.body) : null;
+const rule = parsed(created);
 
-await session.navigate(`${baseUrl}/settings/automations`, 2000);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes("delete proof"));if(el)el.click();return !!el;})()`,
-);
-await sleep(3000);
+await openEditor(session, baseUrl, "delete proof");
 
 // 1. Add a filter.
-const [searchFilter, clickFilter] = addFromPanel("filter items", "/filter items/i");
-await session.eval(searchFilter);
+await session.eval(searchNodes("filter issues"));
 await sleep(700);
-await session.eval(clickFilter);
+await session.eval(clickPanelRow(/filter issues/i));
 await sleep(1200);
 const afterAdd = await session.eval(nodeIds);
 
@@ -102,10 +77,9 @@ await sleep(1200);
 const afterKeyDelete = await session.eval(nodeIds);
 
 // 3. THE BUG: add another node and see whether the deleted one returns.
-const [searchLabel, clickLabel] = addFromPanel("add label", "/add label/i");
-await session.eval(searchLabel);
+await session.eval(searchNodes("add label"));
 await sleep(700);
-await session.eval(clickLabel);
+await session.eval(clickPanelRow(/add label/i));
 await sleep(1400);
 const afterSecondAdd = await session.eval(nodeIds);
 const resurrected = afterSecondAdd.some((id) => /flt/.test(id));
@@ -118,10 +92,7 @@ await sleep(1200);
 const afterButtonDelete = await session.eval(nodeIds);
 
 // 5. It has to survive a SAVE, not just local state.
-await session.eval(
-  `(()=>{const b=[...document.querySelectorAll("button")].find(n=>/save changes/i.test(n.textContent));
-    if(b) b.click(); return !!b;})()`,
-);
+await session.eval(SAVE);
 await sleep(2500);
 // The list, not a single GET — there is no GET /automations/{id} route.
 const stored = await session.eval(
@@ -131,11 +102,7 @@ const stored = await session.eval(
     return mine ? mine.nodes.map(n=>n.id).sort() : null;})()`,
 );
 
-if (rule) {
-  await session.eval(
-    `fetch("/api/v1/automations/${rule.id}",{method:"DELETE",credentials:"include"}).then(r=>r.status)`,
-  );
-}
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checks = {

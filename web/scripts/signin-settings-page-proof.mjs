@@ -21,29 +21,10 @@
  */
 import { mkdtemp } from "node:fs/promises";
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9503;
 const tag = `Proof OIDC ${Date.now().toString(36)}`;
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 40) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
 
 /** Set a controlled input's value the way React notices. */
 const typeInto = (selector, value) => `(() => {
@@ -60,15 +41,12 @@ const labelled = (text) => `(() => {
   return label ? (label.htmlFor ? "#" + CSS.escape(label.htmlFor) : null) : null;
 })()`;
 
-const { session, close } = await openBrowser({
-  port: PORT, profile: await mkdtemp(resolve(process.env.TMPDIR || "/tmp", "radd-signin-proof-")),
+const { session, close, check, finish, baseUrl, email, password } = await startProof({
+  port: 9503, profile: await mkdtemp(resolve(process.env.TMPDIR || "/tmp", "radd-signin-proof-")),
 });
 let createdId = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-  const existing = await session.eval(`(async () => { ${API} return (await api("GET", "/sso/providers")).body; })()`);
+  const existing = await session.eval(`(async () => { ${PAGE_API} return (await api("GET", "/sso/providers")).body; })()`);
   check("the registry answers (sso is enabled here)", Array.isArray(existing), JSON.stringify(existing)?.slice(0, 200));
 
   // 1. one page, both sections.
@@ -112,14 +90,14 @@ try {
   const rows = await session.eval(`[...document.querySelectorAll("[data-sso-provider]")].map((r) => r.getAttribute("data-sso-provider"))`);
   check("every existing provider renders as a row", existing.length > 0 && existing.every((p) => rows.includes(p.name)),
     JSON.stringify({ api: existing.map((p) => p.name), rows }));
-  await session.screenshot(resolve("scripts", "signin-settings-page-proof.png"), { fullPage: true });
+  await session.screenshot(outputPath("signin-settings-page-proof.png"), { fullPage: true });
 
   // 4. create a disabled throwaway OIDC provider through the dialog, then remove it.
   await session.click("[data-sso-providers] button", (text) => text.trim() === "New provider");
   await waitFor(session, `Boolean(document.querySelector("[data-sso-provider-form]"))`);
   const providerSelect = await session.eval(labelled("Provider"));
   // The kinds catalog loads after the dialog opens; its options are the select's.
-  await waitFor(session, `(async () => { ${API} return ((await api("GET", "/sso/kinds")).body ?? []).length > 0; })()`);
+  await waitFor(session, `(async () => { ${PAGE_API} return ((await api("GET", "/sso/kinds")).body ?? []).length > 0; })()`);
   await sleep(300);
   await session.click(providerSelect);
   await waitFor(session, `[...document.querySelectorAll('[role="option"]')].some((o) => o.textContent.includes("other OIDC issuer"))`);
@@ -136,7 +114,7 @@ try {
     return box ? !box.checked : false;
   })()`);
   await session.click("[data-sso-provider-form] button", (text) => text.trim() === "Create provider");
-  const created = await waitFor(session, `(async () => { ${API}
+  const created = await waitFor(session, `(async () => { ${PAGE_API}
     const mine = ((await api("GET", "/sso/providers")).body ?? []).find((p) => p.name === ${JSON.stringify(tag)});
     return mine && !document.querySelector("[data-sso-provider-form]") && document.querySelector('[data-sso-provider="${tag}"]')
       ? { id: mine.id, kind: mine.kind, enabled: mine.enabled, issuer: mine.issuer } : null;
@@ -150,7 +128,7 @@ try {
   await session.click(`[aria-label="Remove ${tag}"]`);
   await waitFor(session, `[...document.querySelectorAll('[role="dialog"] button')].some((b) => b.textContent.trim() === "Remove")`);
   await session.click('[role="dialog"] button', (text) => text.trim() === "Remove");
-  const gone = await waitFor(session, `(async () => { ${API}
+  const gone = await waitFor(session, `(async () => { ${PAGE_API}
     const still = ((await api("GET", "/sso/providers")).body ?? []).some((p) => p.name === ${JSON.stringify(tag)});
     return !still && !document.querySelector('[data-sso-provider="${tag}"]');
   })()`);
@@ -222,8 +200,4 @@ try {
   check("no console errors", session.consoleErrors.length === 0, JSON.stringify(session.consoleErrors));
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "sign-in settings page (RADD-1380)" },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "sign-in settings page (RADD-1380)" });

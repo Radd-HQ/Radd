@@ -21,27 +21,12 @@
  * The space is deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: page-archive-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9491;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-page-archive-proof");
 const SLUG = `archive-proof-${Date.now().toString(36).slice(-5)}`;
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 const TREE = `(() => {
   const tree = document.querySelector("[data-page-tree]");
@@ -74,15 +59,12 @@ const PAGE = `(() => {
 })()`;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl, loginStatus } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
-  const context = { slug: SLUG };
+  const context = { slug: SLUG, login: loginStatus };
   let spaceId = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    context.login = await session.login(baseUrl, adminEmail, adminPassword);
-
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const space = await api("POST", "/page-spaces", { name: "Archive proof", slug: ${JSON.stringify(SLUG)} });
       const sid = space.body.id;
       const mk = async (title, parent_id) => (await api("POST", "/pages", { space_id: sid, title, body: "body of " + title, parent_id })).body;
@@ -115,7 +97,7 @@ async function main() {
     const midRow = t.rows?.find((r) => r.title === "Mid");
     checks.rowShowsPathAndSubpages = Boolean(midRow) && /Root/.test(midRow.meta) && /1 subpage/.test(midRow.meta) && /Archived/.test(midRow.meta);
     checks.browserUrlIsCarried = await session.eval(`location.search.includes("archived")`);
-    await session.screenshot(resolve("scripts", "page-archive-proof-browser.png"));
+    await session.screenshot(outputPath("page-archive-proof-browser.png"));
 
     // 3. open Mid read-only
     await session.click("[data-archived-page] a", (text) => text.trim() === "Mid");
@@ -125,7 +107,7 @@ async function main() {
     checks.archivedPageShowsBanner = /archived/.test(p.banner ?? "") && p.bannerRestore && p.bannerArchiveLink;
     checks.archivedPageIsReadOnly = p.titleReadOnly === true && !p.hasEdit && !p.hasArchive && !p.hasChangeUrl;
     checks.managerKeepsPermanentDelete = p.hasDeletePermanently === true;
-    await session.screenshot(resolve("scripts", "page-archive-proof-readonly.png"));
+    await session.screenshot(outputPath("page-archive-proof-readonly.png"));
 
     // 4. restore Mid from the browser: Mid AND Leaf come back, Other stays.
     await session.navigate(spaceUrl + "?archived=1", 2500);
@@ -150,7 +132,7 @@ async function main() {
     checks.countDropsAfterRestore = t.count === "1";
 
     // 5. a restore under an archived ancestor warns and restores the chain
-    const nested = await session.eval(`(async () => { ${API}
+    const nested = await session.eval(`(async () => { ${PAGE_API}
       const l = await api("DELETE", "/pages/${setup.leaf.id}");
       const m = await api("DELETE", "/pages/${setup.mid.id}");
       return [l.status, m.status];
@@ -182,7 +164,7 @@ async function main() {
 
     // 6. RADD-1249: search, select, restore many. Archive Leaf and (still) Other;
     //    "Le" narrows to Leaf; select-all selects what is shown; bulk restore.
-    await session.eval(`(async () => { ${API} await api("DELETE", "/pages/${setup.leaf.id}"); })()`);
+    await session.eval(`(async () => { ${PAGE_API} await api("DELETE", "/pages/${setup.leaf.id}"); })()`);
     await session.navigate(spaceUrl + "?archived=1", 2500);
     await session.eval(`(() => {
       const el = document.querySelector("[data-archived-search]");
@@ -217,7 +199,7 @@ async function main() {
 
     // 7. Bulk delete with a skip: Mid archived while Leaf is live under it is
     //    refused per page; Other goes. The refused row says why and stays.
-    await session.eval(`(async () => { ${API} await api("DELETE", "/pages/${setup.mid.id}"); })()`);
+    await session.eval(`(async () => { ${PAGE_API} await api("DELETE", "/pages/${setup.mid.id}"); })()`);
     await session.navigate(spaceUrl + "?archived=1", 2500);
     await session.click("[data-archived-select-all]", () => true);
     await sleep(200);
@@ -227,7 +209,7 @@ async function main() {
     const deleteDialog = await session.eval(`document.querySelector('[role="dialog"]')?.textContent ?? ""`);
     await session.click('[role="dialog"] button', (text) => text.trim() === "Delete");
     await sleep(1500);
-    const afterDelete = await session.eval(`(async () => { ${API}
+    const afterDelete = await session.eval(`(async () => { ${PAGE_API}
       const rows = [...document.querySelectorAll("[data-archived-page]")].map((li) => ({ title: li.querySelector("a")?.textContent.trim(), skipped: li.querySelector("[data-archived-skipped]")?.textContent ?? null }));
       const other = (await api("GET", "/pages/${setup.other.id}")).status;
       const mid = (await api("GET", "/pages/${setup.mid.id}")).status;
@@ -239,7 +221,7 @@ async function main() {
       afterDelete.rows.length === 1 && afterDelete.rows[0].title === "Mid" && /non-archived child/.test(afterDelete.rows[0].skipped ?? "");
   } finally {
     if (spaceId) {
-      await session.eval(`(async () => { ${API} return (await api("DELETE", "/page-spaces/${spaceId}?force=true")).status; })()`).catch(() => null);
+      await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/page-spaces/${spaceId}?force=true")).status; })()`).catch(() => null);
     }
     await close();
   }

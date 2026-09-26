@@ -1,8 +1,7 @@
 /**
- * Render proof for page extensions (RADD-709/710/715), over the DevTools Protocol.
- * Zero npm deps — same pattern as `render-proof.mjs`.
+ * Render proof for page extensions (RADD-709/710/715).
  *
- * Why this script exists at all: page bodies render through Crepe, not
+ * Why this script exists at all: page bodies render through the Milkdown viewer, not
  * react-markdown, and an earlier attempt wired the extension registry into the
  * wrong renderer. Worse, the check written to catch that PASSED on the failure,
  * because it looked for the callout's title text — which also appears verbatim
@@ -16,48 +15,20 @@
  *
  * Usage: node scripts/page-extensions-proof.mjs <baseUrl> <spaceSlug> <pageSlug> <email> <password>
  */
-import { spawn } from "node:child_process";
-import { setTimeout as sleep } from "node:timers/promises";
 import { resolve } from "node:path";
-import { chromeArgs, findChrome, HOVER_CAPABLE_PROBE } from "./lib/chrome.mjs";
+import { openBrowser, report, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, pageSlug, email, password] = process.argv.slice(2);
-const PORT = 9447;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-page-ext-proof");
-
-const chrome = spawn(
-  findChrome(),
-  chromeArgs({ port: PORT, profile: PROFILE }),
-  { stdio: "ignore" },
-);
-
-const consoleErrors = [];
-let ws;
-let nextId = 1;
-const pending = new Map();
-
-function send(method, params = {}, sessionId) {
-  const id = nextId++;
-  ws.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }));
-  return new Promise((res, rej) => pending.set(id, { res, rej }));
-}
-async function evalInPage(sessionId, expression) {
-  const { result, exceptionDetails } = await send(
-    "Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, sessionId,
-  );
-  if (exceptionDetails) throw new Error("page eval threw: " + (exceptionDetails.text || ""));
-  return result.value;
-}
 
 /** Runs IN the page. Returns everything the assertions need, in one round trip. */
 const PROBE = `(() => {
   const body = document.querySelector('[data-page-body]');
   if (!body) return { mounted: false };
-  // A code block is a <pre> only until Crepe's CodeMirror mode finishes loading,
+  // A code block is a <pre> only until its CodeMirror view finishes loading,
   // after which it is a .cm-editor with no <pre> at all. Asserting on <pre>
   // alone made this proof time-dependent: it passed when it happened to read
   // the page before the swap and failed after. Cover both.
-  const CODE = 'pre, .cm-editor, .milkdown-code-block';
+  const CODE = 'pre, .cm-editor';
   const inPre = (el) => !!el.closest(CODE);
   const texts = (sel) => [...body.querySelectorAll(sel)].map((e) => e.textContent || "");
   const pres = texts(CODE);
@@ -104,49 +75,12 @@ const PROBE = `(() => {
 })()`;
 
 async function main() {
-  let version;
-  for (let i = 0; i < 40 && !version; i++) {
-    try { version = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json(); }
-    catch { await sleep(250); }
-  }
-  if (!version) throw new Error("Chrome CDP did not come up");
-
-  ws = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise((res, rej) => {
-    ws.addEventListener("open", res, { once: true });
-    ws.addEventListener("error", rej, { once: true });
+  const { session, close } = await openBrowser({
+    port: 9447, profile: resolve(process.env.TMPDIR || "/tmp", "radd-page-ext-proof"),
   });
-  ws.addEventListener("message", (ev) => {
-    const m = JSON.parse(ev.data);
-    if (m.id && pending.has(m.id)) {
-      const { res, rej } = pending.get(m.id);
-      pending.delete(m.id);
-      m.error ? rej(new Error(m.error.message)) : res(m.result);
-    } else if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") {
-      consoleErrors.push(m.params.args.map((a) => a.value ?? a.description ?? "").join(" "));
-    } else if (m.method === "Runtime.exceptionThrown") {
-      consoleErrors.push("EXCEPTION: " + (m.params.exceptionDetails?.exception?.description || ""));
-    }
-  });
-
-  const { targetId } = await send("Target.createTarget", { url: "about:blank" });
-  const { sessionId } = await send("Target.attachToTarget", { targetId, flatten: true });
-  await send("Page.enable", {}, sessionId);
-  await send("Runtime.enable", {}, sessionId);
-  // The profile dir persists between runs, so Chrome happily serves the PREVIOUS
-  // bundle — which made this proof report failures against fixed code and passes
-  // against broken code, depending on what was cached. Always fetch fresh.
-  await send("Network.enable", {}, sessionId);
-  await send("Network.setCacheDisabled", { cacheDisabled: true }, sessionId);
-  await send("Emulation.setDeviceMetricsOverride",
-    { width: 1440, height: 1000, deviceScaleFactor: 2, mobile: false }, sessionId);
-
-  await send("Page.navigate", { url: baseUrl + "/" }, sessionId);
-  await sleep(1200);
-  await evalInPage(sessionId,
-    `(async()=>{const r=await fetch("/api/v1/auth/login",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(${JSON.stringify({ email, password })})});return r.status;})()`);
-
-  await send("Page.navigate", { url: `${baseUrl}/pages/${spaceSlug}/${pageSlug}` }, sessionId);
+  await session.navigate(baseUrl + "/", 1200);
+  await session.login(baseUrl, email, password);
+  await session.navigate(`${baseUrl}/pages/${spaceSlug}/${pageSlug}`, 0);
 
   // Wait for EVERY piece, not just the first one to arrive. CodeMirror blocks
   // mount later than the extension cards, so breaking on "toc is present" left
@@ -155,7 +89,7 @@ async function main() {
   let probe = { mounted: false };
   for (let i = 0; i < 60; i++) {
     await sleep(500);
-    probe = await evalInPage(sessionId, PROBE);
+    probe = await session.eval(PROBE);
     if (
       probe.mounted &&
       probe.tocPresent &&
@@ -173,7 +107,7 @@ async function main() {
   // The ToC's first link must actually move the page to its heading.
   let anchorWorks = false;
   if (probe.tocLinks?.length) {
-    anchorWorks = await evalInPage(sessionId, `(() => {
+    anchorWorks = await session.eval(`(() => {
       const body = document.querySelector('[data-page-body]');
       const link = body.querySelector('[data-extension="toc"] a[href^="#"]');
       const id = link.getAttribute('href').slice(1);
@@ -208,20 +142,19 @@ async function main() {
     }
     return out;
   })()`;
-  const contrastDark = await evalInPage(sessionId, CONTRAST);
-  await evalInPage(sessionId, `document.documentElement.classList.add("light")`);
+  const contrastDark = await session.eval(CONTRAST);
+  await session.eval(`document.documentElement.classList.add("light")`);
   await sleep(400);
-  const contrastLight = await evalInPage(sessionId, CONTRAST);
-  await evalInPage(sessionId, `document.documentElement.classList.remove("light")`);
+  const contrastLight = await session.eval(CONTRAST);
+  await session.eval(`document.documentElement.classList.remove("light")`);
   await sleep(300);
 
-  const shot = await send("Page.captureScreenshot", { format: "png" }, sessionId);
+  if (process.env.RADD_SHOT) {
+    await session.screenshot(process.env.RADD_SHOT);
+    console.log(`screenshot -> ${process.env.RADD_SHOT}\n`);
+  }
 
-  // RADD-757: assert the launch flag took. Headless Chrome reports
-  // `(hover: none)` by default and Tailwind v4 gates every `hover:`/
-  // `group-hover:` utility on `@media (hover: hover)`, so without it this
-  // proof silently stops seeing hover-revealed UI at all.
-  const hoverCapable = await evalInPage(sessionId, HOVER_CAPABLE_PROBE);
+  const hoverCapable = await session.hoverCapable();
   const checks = {
     "the browser reports a hover-capable pointer": hoverCapable === true,
     "page body mounted": probe.mounted === true,
@@ -247,25 +180,13 @@ async function main() {
       && Object.values(contrastLight).every((c) => c.ink >= 4.5),
     "callout border clears 3:1 in both themes":
       [...Object.values(contrastDark), ...Object.values(contrastLight)].every((c) => c.border >= 3),
-    "no console errors": consoleErrors.length === 0,
+    "no console errors": session.consoleErrors.length === 0,
   };
-
-  console.log(JSON.stringify({ probe, anchorWorks, contrastDark, contrastLight, consoleErrors }, null, 2));
-  console.log("");
-  let failed = 0;
-  for (const [label, ok] of Object.entries(checks)) {
-    console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
-    if (!ok) failed++;
-  }
-  if (process.env.RADD_SHOT) {
-    const { writeFileSync } = await import("node:fs");
-    writeFileSync(process.env.RADD_SHOT, Buffer.from(shot.data, "base64"));
-    console.log(`\nscreenshot -> ${process.env.RADD_SHOT}`);
-  }
-  console.log(failed ? `\n${failed} FAILED` : "\nall passed");
+  const failed = report(checks, { probe, anchorWorks, contrastDark, contrastLight, consoleErrors: session.consoleErrors });
+  await close();
   return failed;
 }
 
 main()
-  .then((failed) => { chrome.kill(); process.exit(failed ? 1 : 0); })
-  .catch((err) => { console.error(err); chrome.kill(); process.exit(2); });
+  .then((failed) => process.exit(failed ? 1 : 0))
+  .catch((err) => { console.error(err); process.exit(2); });

@@ -15,8 +15,6 @@
  *  - **every control is reachable by keyboard.** Real buttons, no `tabindex=-1`,
  *    and Enter on a focused button runs it.
  *
- * Plus the removal itself: no editor may render Crepe's top bar.
- *
  * Usage: node scripts/editor-toolbar-proof.mjs <baseUrl> <spaceSlug> <email> <password>
  */
 import { resolve } from "node:path";
@@ -64,7 +62,6 @@ async function main() {
     const controls = bar ? [...bar.querySelectorAll("button")] : [];
     return {
       ours: !!bar,
-      crepeTopBars: document.querySelectorAll(".milkdown-top-bar").length,
       controlCount: controls.length,
       // Keyboard reachability: a real button with no negative tabindex.
       unreachable: controls
@@ -170,7 +167,6 @@ async function main() {
   const checks = {
     "the browser reports a hover-capable pointer": hoverCapable === true,
     "the editor renders our toolbar": chrome.ours === true && chrome.controlCount >= 10,
-    "no editor renders Crepe's top bar": chrome.crepeTopBars === 0,
     "every control is keyboard reachable": chrome.unreachable.length === 0,
     "no control is clipped out of the bar": chrome.overflowing === 0,
     // The complaint, as an assertion: a press alone must do nothing.

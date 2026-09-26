@@ -14,28 +14,13 @@
  * Every check is a measurement. The project is deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: pager-size-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9487;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-pager-size-proof");
 const KEY = `PG${Date.now().toString(36).slice(-4).toUpperCase()}`;
 const TOTAL = 60;
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 const STATE = (key) => `(() => {
   const main = document.querySelector("main") ?? document.body;
@@ -53,17 +38,15 @@ const STATE = (key) => `(() => {
 })()`;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
   const context = { key: KEY };
   let projectId = null;
   const state = () => session.eval(STATE(KEY));
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    await session.login(baseUrl, adminEmail, adminPassword);
     await session.eval(`localStorage.removeItem("radd.itemsPageSize")`);
 
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Pager proof" });
       const view = await api("POST", "/views", { project_id: project.body.id, name: "Pager list", view_type: "list" });
       let created = 0;
@@ -95,7 +78,7 @@ async function main() {
     checks.pageShows25Rows = s.rows === 25;
     checks.pageOneOfThree = s.current === "1" && s.pages.includes("3") && !s.pages.includes("4");
     checks.totalUnchanged = s.total === String(TOTAL);
-    await session.screenshot(resolve("scripts", "pager-size-proof.png"));
+    await session.screenshot(outputPath("pager-size-proof.png"));
 
     // 3. reload keeps it; the last page holds the remainder
     await session.navigate(url, 3000);
@@ -110,7 +93,7 @@ async function main() {
   } finally {
     await session.eval(`localStorage.removeItem("radd.itemsPageSize")`).catch(() => null);
     if (projectId) {
-      await session.eval(`(async () => { ${API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
+      await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
     }
     await close();
   }

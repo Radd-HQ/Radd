@@ -6,28 +6,15 @@
  * dropped is appended rather than lost; a selection cut from a document shares
  * the document's ids; and prose is untouched.
  *
- * Run: node --experimental-strip-types web/scripts/ai-protect.test.mjs
+ * Run from the repo root: node --test web/scripts/ai-protect.test.mjs
  */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "ai-protect-"));
-const file = join(dir, "ai-protect.ts");
-writeFileSync(file, readFileSync("server/src/radd/modules/ai/ui/src/editor/protect.ts", "utf8"));
-const { maskProtected, restoreProtected, droppedCount, placeholderFor } = await import(file);
+const { maskProtected, restoreProtected, droppedCount, placeholderFor } = await importTs("server/src/radd/modules/ai/ui/src/editor/protect.ts");
 
-let failures = 0;
-const check = (label, actual, expected) => {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) {
-    console.log(`FAIL ${label}\n  got      ${a}\n  expected ${e}`);
-    failures++;
-  } else {
-    console.log(`ok   ${label}`);
-  }
-};
+const check = (label, actual, expected) => test(label, () => assert.deepStrictEqual(actual, expected));
 
 const MEDIA = '```radd:media\n{"src": "/api/v1/attachments/abc", "kind": "video", "title": "Standup.mp4"}\n```';
 const IMAGE = "![whiteboard](/api/v1/attachments/def?w=640)";
@@ -66,8 +53,3 @@ check("a tilde fence is a block", maskProtected(tilde).kept[0].text, "~~~~radd:t
 check("an unterminated fence runs to the end", maskProtected("```radd:mermaid\ngraph TD").kept[0].text, "```radd:mermaid\ngraph TD");
 check("an ordinary code fence is prose to the model", maskProtected("```python\nprint(1)\n```").kept.length, 0);
 
-if (failures) {
-  console.log(`${failures} failure(s)`);
-  process.exit(1);
-}
-console.log("all ai-protect cases pass");

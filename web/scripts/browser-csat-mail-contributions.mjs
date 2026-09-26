@@ -15,18 +15,14 @@
  *   5. with mailintake withdrawn — no reload — the comment reads whole, as any other comment.
  */
 import assert from "node:assert/strict";
-import http from "node:http";
-import {readFileSync, existsSync, statSync} from "node:fs";
+import {existsSync} from "node:fs";
 import {mkdtemp} from "node:fs/promises";
-import path from "node:path";
-import {fileURLToPath} from "node:url";
-import {openBrowser} from "./lib/cdp.mjs";
+import {openBrowser, until} from "./lib/cdp.mjs";
 import {CORE_PLUGINS} from "./lib/core-plugins.mjs";
+import {remoteFile, serveBuiltSpa} from "./lib/spa-server.mjs";
 
-const dist = fileURLToPath(new URL("../dist/", import.meta.url));
-const remoteDist = (name) => fileURLToPath(new URL(`../../server/src/radd/modules/${name}/ui/dist/`, import.meta.url));
-const REMOTES = {csat: remoteDist("csat"), mailintake: remoteDist("mailintake")};
-for (const [name, dir] of Object.entries(REMOTES)) assert(existsSync(path.join(dir, "remoteEntry.js")), `build the ${name} remote first (node scripts/build-all.mjs)`);
+const REMOTES = ["csat", "mailintake"];
+for (const name of REMOTES) assert(existsSync(remoteFile(name, "remoteEntry.js")), `build the ${name} remote first (node scripts/build-all.mjs)`);
 
 const anyone = {id: "anyone", name: "Anyone", email: "", anonymous: true, global_role: "member", instance_role: "member", permissions: [], timezone: ""};
 const admin = {id: "admin", name: "Desk Agent", email: "agent@example.test", global_role: "admin", instance_role: "admin", permissions: ["*"], timezone: "UTC"};
@@ -48,14 +44,11 @@ const comments = [{id: "mailed", entity_type: "item", entity_id: item.id, author
   parent_comment_id: null, resolved_at: null, resolved_by: null, created_at: "2026-01-01", updated_at: "2026-01-01", can_resolve: false}];
 
 let requests = [];
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, "http://fixture");
+const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/plugins/")) {
-    const [, , name, ...rest] = url.pathname.split("/");
     requests.push({route: url.pathname, method: req.method});
-    const file = REMOTES[name] && path.join(REMOTES[name], rest.join("/"));
-    if (!file || !existsSync(file)) {res.writeHead(404); res.end(); return;}
-    res.writeHead(200, {"content-type": "text/javascript"}); res.end(readFileSync(file)); return;
+    if (!REMOTES.includes(url.pathname.split("/")[2])) {res.writeHead(404); res.end(); return true;}
+    return false;
   }
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
@@ -74,7 +67,7 @@ const server = http.createServer(async (req, res) => {
     }
     else if (route.startsWith("/public/csat/")) {status = 404; data = {detail: "Survey not found"};}
     else if (route === `/mail/signatures/item/${item.id}/restore`) {restores.push(route); item.email_signature = null; status = 204;}
-    else if (route === "/auth/me/preferences" || route === "/preferences") data = {};
+    else if (route === "/auth/me/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};
     else if (route === "/projects/project" || route === "/projects/by-key/DESK") data = project;
@@ -94,15 +87,10 @@ const server = http.createServer(async (req, res) => {
     else if (route.includes("/resolve")) data = {value: false};
     else if (route.endsWith("/timelogging")) data = {enabled: false};
     res.writeHead(status, {"content-type": "application/json", "X-Total-Count": String(Array.isArray(data) ? data.length : 0)});
-    res.end(status === 204 ? "" : JSON.stringify(data)); return;
+    res.end(status === 204 ? "" : JSON.stringify(data)); return true;
   }
-  let file = path.resolve(dist, "." + url.pathname);
-  if (!file.startsWith(dist) || !existsSync(file) || statSync(file).isDirectory()) file = path.join(dist, "index.html");
-  const mime = {".js": "text/javascript", ".css": "text/css", ".html": "text/html"}[path.extname(file)] ?? "application/octet-stream";
-  res.writeHead(200, {"content-type": mime}); res.end(readFileSync(file));
 });
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const base = `http://127.0.0.1:${server.address().port}`;
+const base = spa.origin;
 
 let browser;
 const checks = [];
@@ -110,16 +98,12 @@ try {
   browser = await openBrowser({port: 18873, profile: await mkdtemp("/tmp/radd-csat-mail-"), scale: 1});
   const s = browser.session;
   const text = (t) => s.eval(`document.body.innerText.includes(${JSON.stringify(t)})`);
-  const until = async (predicate, label) => {
-    for (let i = 0; i < 200; i++) {if (await predicate()) return; await new Promise((r) => setTimeout(r, 50));}
-    throw Error(`${label}: ${await s.eval("document.body.innerText")}`);
-  };
   const apiRoutes = () => requests.filter((r) => !r.route.startsWith("/plugins/")).map((r) => r.route);
 
   // 1. The anonymous visitor.
   requests = [];
   await s.navigate(`${base}/public/csat/${TOKEN}?rating=4`, 300);
-  await until(() => s.eval(`!!document.querySelector('[data-csat-survey="${TOKEN}"]')`), "survey page did not render");
+  await until(s, () => s.eval(`!!document.querySelector('[data-csat-survey="${TOKEN}"]')`), "survey page did not render");
   assert(requests.some((r) => r.route === "/plugins/csat/remoteEntry.js"), "the page came from the csat remote");
   assert.equal(await s.eval(`document.querySelector("h1")?.textContent`), "Radd", "the host draws the frame");
   assert.equal(await s.eval(`!!document.querySelector("aside, header nav")`), false, "no app shell around a public page");
@@ -128,7 +112,7 @@ try {
   await s.eval(`document.querySelector("textarea").focus()`);
   await s.send("Input.insertText", {text: "Fixed within the hour"});
   await s.click('button[type="submit"]');
-  await until(() => s.eval(`!!document.querySelector("[data-csat-recorded]")`), "the thanks state never showed");
+  await until(s, () => s.eval(`!!document.querySelector("[data-csat-recorded]")`), "the thanks state never showed");
   assert.deepEqual(submissions, [{rating: 4, comment: "Fixed within the hour"}], "the rating and comment were posted");
   assert.equal(await s.eval("location.pathname"), `/public/csat/${TOKEN}`, "the visitor was never sent to sign in");
   const asked = [...new Set(apiRoutes())].sort();
@@ -137,13 +121,13 @@ try {
 
   // 2. An unknown token.
   await s.navigate(`${base}/public/csat/nope`, 300);
-  await until(() => text("This survey link isn't available"), "unknown token not explained");
+  await until(s, () => text("This survey link isn't available"), "unknown token not explained");
   checks.push("unknown token is unavailable");
 
   // 3. csat off: the host's notice, and no survey request.
   csatOn = false; requests = [];
   await s.navigate(`${base}/public/csat/${TOKEN}`, 300);
-  await until(() => s.eval(`!!document.querySelector('[data-plugin-missing="page"]')`), "no unavailable notice with csat off");
+  await until(s, () => s.eval(`!!document.querySelector('[data-plugin-missing="page"]')`), "no unavailable notice with csat off");
   assert(!apiRoutes().some((r) => r.startsWith("/public/csat/")), "nothing asked the survey endpoint");
   assert(!(await s.eval(`!!document.querySelector("[data-csat-survey]")`)));
   checks.push("csat off → unavailable");
@@ -152,15 +136,15 @@ try {
   // 4. Signed in: mailed bodies read folded.
   signedIn = true; requests = [];
   await s.navigate(`${base}/issues/DESK-7`, 300);
-  await until(() => s.eval(`!!document.querySelector('[data-mail-signed="issue"]') && !!document.querySelector('[data-mail-signed="mailed"]')`), "mailed bodies were not claimed");
+  await until(s, () => s.eval(`!!document.querySelector('[data-mail-signed="issue"]') && !!document.querySelector('[data-mail-signed="mailed"]')`), "mailed bodies were not claimed");
   assert(requests.some((r) => r.route === "/plugins/mailintake/remoteEntry.js"), "the claim came from the mailintake remote");
   assert(await text("The printer jams on every job since Monday."), "the text above the signature reads");
   assert(!(await text("Best regards,")), "the description's signature is folded");
   assert(!(await text("Thanks,\nSam")) && await text("Still jamming this morning."), "the comment's signature is folded");
   await s.eval(`document.querySelector('[data-mail-signed="issue"] summary').click()`);
-  await until(() => text("Best regards,"), "Show signature did not unfold");
+  await until(s, () => text("Best regards,"), "Show signature did not unfold");
   await s.eval(`Array.from(document.querySelectorAll('[data-mail-signed="issue"] button')).find((b) => b.textContent.trim() === "Not a signature").click()`);
-  await until(() => s.eval(`!document.querySelector('[data-mail-signed="issue"]')`), "the restored description still reads folded");
+  await until(s, () => s.eval(`!document.querySelector('[data-mail-signed="issue"]')`), "the restored description still reads folded");
   assert.deepEqual(restores, [`/mail/signatures/item/${item.id}/restore`]);
   assert(await text("Best regards,"), "the whole description reads after the restore");
   checks.push("mailed description folded", "mailed comment folded", "Show signature", "Not a signature restores");
@@ -169,8 +153,8 @@ try {
   await s.eval("window.__stillHere = true");
   mailOn = false;
   await s.eval(`window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey: ["capabilities"]})`);
-  await until(() => s.eval(`!document.querySelector('[data-mail-signed]')`), "the claim outlived its plugin");
-  await until(() => s.eval(`document.body.innerText.includes("Thanks,") && document.body.innerText.includes("Sam")`), "the comment's signature text is missing without mailintake");
+  await until(s, () => s.eval(`!document.querySelector('[data-mail-signed]')`), "the claim outlived its plugin");
+  await until(s, () => s.eval(`document.body.innerText.includes("Thanks,") && document.body.innerText.includes("Sam")`), "the comment's signature text is missing without mailintake");
   assert.equal(await s.eval(`Array.from(document.querySelectorAll("summary")).some((e) => e.textContent === "Show signature")`), false);
   assert.equal(await s.eval("window.__stillHere"), true, "withdrawal did not reload the page");
   checks.push("mailintake off → plain body, live");
@@ -183,5 +167,5 @@ try {
   throw error;
 } finally {
   await browser?.close();
-  await new Promise((resolve) => server.close(resolve));
+  await spa.close();
 }

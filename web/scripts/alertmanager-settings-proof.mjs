@@ -12,41 +12,19 @@
  * Usage: node scripts/alertmanager-settings-proof.mjs <baseUrl> [email] [password]
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9483;
-const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-alertmanager-proof-profile");
 const tag = `am${Date.now().toString(36)}`;
 const key = `AP${Date.now().toString(36).slice(-4).toUpperCase()}`;
 
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 40) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
-
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9483, profile: resolve(process.env.TMPDIR || "/tmp", "radd-alertmanager-proof-profile"),
+});
 let world = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-
   // 1. the world.
-  world = await session.eval(`(async () => { ${API}
+  world = await session.eval(`(async () => { ${PAGE_API}
     const project = await api("POST", "/projects", { key: ${JSON.stringify(key)}, name: "Alertmanager proof" });
     const states = await api("GET", "/states?project_id=" + project.body.id);
     const token = crypto.randomUUID().replaceAll("-", "");
@@ -77,7 +55,7 @@ try {
   await waitFor(session, `!document.getElementById(${JSON.stringify(selectId)})?.disabled`);
   await session.click(`#${selectId}`);
   await session.click('[role="option"]', new Function("text", `return text.trim() === ${JSON.stringify(target.name)}`));
-  const saved = await waitFor(session, `(async () => { ${API}
+  const saved = await waitFor(session, `(async () => { ${PAGE_API}
     const rows = (await api("GET", "/alertmanager/receivers")).body;
     const mine = rows.find((r) => r.name === ${JSON.stringify(tag)});
     return mine && mine.label === "alert" && mine.comment_updates && mine.resolve_state_id === ${JSON.stringify(target.id)} ? mine : null;
@@ -88,7 +66,7 @@ try {
   const settled = await session.eval(`(() => { const b = document.querySelector('[data-comment-updates="${tag}"]');
     return { checked: b?.getAttribute("aria-checked"), knob: b?.querySelector("span span")?.className, html: b?.outerHTML?.slice(0, 300) }; })()`);
   check("the switch still reads on after the page settles", settled.checked === "true", JSON.stringify(settled));
-  await session.screenshot(resolve("scripts", "alertmanager-settings-proof.png"));
+  await session.screenshot(outputPath("alertmanager-settings-proof.png"));
 
   // 3. real deliveries.
   const delivered = await session.eval(`(async () => {
@@ -99,7 +77,7 @@ try {
   })()`);
   check("deliveries report the receiver's actions",
     delivered[1].commented === 1 && delivered[2].commented === 1 && delivered[2].moved === 1, JSON.stringify(delivered));
-  const issue = await session.eval(`(async () => { ${API}
+  const issue = await session.eval(`(async () => { ${PAGE_API}
     const found = (await api("GET", "/items?project_id=" + ${JSON.stringify(world.projectId)})).body;
     const item = (found.items ?? found)[0];
     const full = (await api("GET", "/items/by-key/" + item.key)).body;
@@ -112,7 +90,7 @@ try {
 } finally {
   // 4. clean up.
   if (world?.receiverId) {
-    const cleaned = await session.eval(`(async () => { ${API}
+    const cleaned = await session.eval(`(async () => { ${PAGE_API}
       const r = await api("DELETE", "/alertmanager/receivers/" + ${JSON.stringify(world.receiverId)});
       const p = await api("DELETE", "/projects/" + ${JSON.stringify(world.projectId)});
       return [r.status, p.status];
@@ -121,8 +99,4 @@ try {
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "alertmanager settings" },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "alertmanager settings" });

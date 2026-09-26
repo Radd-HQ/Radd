@@ -7,43 +7,25 @@
  * Sections are named by issue so a failure says which promise broke.
  */
 import { mkdir } from "node:fs/promises";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, report, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const baseUrl = process.argv[2] || process.env.RADD_PROOF_BASE_URL || "http://127.0.0.1:8000";
-const email = process.argv[3] || process.env.RADD_PROOF_EMAIL || "admin@example.com";
-const password = process.argv[4] || process.env.RADD_PROOF_PASSWORD || "change-me";
 const output = process.env.RADD_PROOF_OUTPUT_DIR || "/tmp/radd-usability-audit-proof";
-
-export async function waitFor(session, expression, tries = 40) {
-  for (let i = 0; i < tries; i++) {
-    if (await session.eval(expression)) return true;
-    await sleep(250);
-  }
-  return false;
-}
 
 const text = (session) => session.eval(`(document.querySelector("main") || document.body).innerText`);
 
 async function main() {
   await mkdir(output, { recursive: true });
-  const { session, close } = await openBrowser({ port: 9539, profile: output + "/chrome", width: 1440, height: 1000 });
-  const checks = {};
-  const api = (body) => session.eval(`(async () => {
-    const call = async (method, path, data) => {
-      const r = await fetch("/api/v1" + path, { method, credentials: "include",
-        headers: {"Content-Type": "application/json"}, body: data === undefined ? undefined : JSON.stringify(data) });
-      const raw = await r.text();
-      return { status: r.status, body: raw ? JSON.parse(raw) : null };
-    };
-    ${body}
-  })()`);
+  const { session, close, baseUrl, loginStatus } = await startProof({
+    port: 9539, profile: output + "/chrome", width: 1440, height: 1000,
+  });
+  const checks = { loggedIn: loginStatus === 204 };
+  const inPage = (body) => session.eval(`(async () => { ${PAGE_API} ${body} })()`);
   let world = null;
   try {
-    await session.navigate(baseUrl + "/login", 1200);
-    checks.loggedIn = (await session.login(baseUrl, email, password)) === 204;
-    world = await api(`
+    world = await inPage(`
       const key = "UA" + Math.random().toString(36).slice(2, 6).toUpperCase();
-      const project = (await call("POST", "/projects", { key, name: "Usability audit proof" })).body;
+      const project = (await api("POST", "/projects", { key, name: "Usability audit proof" })).body;
       return { key, projectId: project.id };`);
 
     // --- RADD-1286: states are picked, never typed ---------------------------
@@ -59,7 +41,7 @@ async function main() {
     checks["1286 workflow names what happens on done"] = workflow.includes("When work is done");
 
     // --- RADD-1287: one vocabulary ------------------------------------------
-    const item = await api(`return (await call("POST", "/items", { project_id: "${world.projectId}", title: "Vocabulary" })).body;`);
+    const item = await inPage(`return (await api("POST", "/items", { project_id: "${world.projectId}", title: "Vocabulary" })).body;`);
     await session.navigate(`${baseUrl}/issues/${item.key}`, 3000);
     const chrome = await session.eval(`document.body.innerText`);
     checks["1287 top bar says New issue"] = await session.eval(
@@ -105,7 +87,7 @@ async function main() {
     checks["1288 a day toggle saves itself"] = await waitFor(session,
       `(async () => (await (await fetch("/api/v1/scoped-settings?scope=project&scope_id=${world.projectId}", {credentials:"include"})).json()).find(r => r.key === "work_week_days")?.value === "mon,tue,wed,thu,fri,sat")()`);
     checks["1288 the row says Saved"] = await waitFor(session,
-      `document.querySelector('[data-setting="work_week_days"] [data-save-state]')?.textContent.includes("Saved")`, 20);
+      `document.querySelector('[data-setting="work_week_days"] [data-save-state]')?.textContent.includes("Saved")`, { attempts: 20 });
     await waitFor(session, `!!document.querySelector('[data-setting="work_week_days"] button[title^="Reset"]')`);
     await session.click('[data-setting="work_week_days"] button[title^="Reset"]');
     checks["1288 Reset returns to inherited"] = await waitFor(session,
@@ -118,10 +100,10 @@ async function main() {
     };
     await typeInto('input[data-duration="resolution"]', "2h 30m");
     checks["1288 SLA durations take units"] = await waitFor(session,
-      `document.body.innerText.includes("= 150m") || document.body.innerText.includes("= 2h 30m")`, 12);
+      `document.body.innerText.includes("= 150m") || document.body.innerText.includes("= 2h 30m")`, { attempts: 12 });
     await typeInto('input[data-duration="resolution"]', "soon");
     checks["1288 a nonsense duration is refused"] = await waitFor(session,
-      `document.body.innerText.includes("Use minutes or units")`, 12);
+      `document.body.innerText.includes("Use minutes or units")`, { attempts: 12 });
     await session.navigate(`${baseUrl}/settings/automations`, 2500);
     checks["1288 automations toggle is a switch"] = await session.eval(
       `!document.querySelector('main input[type="checkbox"]') && document.querySelectorAll('main [role="switch"]').length > 0`);
@@ -130,11 +112,11 @@ async function main() {
       `!!document.querySelector("[data-choose-wheel]") && document.querySelector('input[type="file"]')?.classList.contains("sr-only")`);
 
     // --- RADD-1290: releases and reports are project pages -------------------
-    await api(`await call("POST", "/releases", { project_id: "${world.projectId}", name: "One", version: "1.0.0" });
-      const issue = (await call("POST", "/items", { project_id: "${world.projectId}", title: "In the release" })).body;
-      const rel = (await call("GET", "/releases?project_id=${world.projectId}")).body[0];
-      await call("PATCH", "/items/" + issue.id, { release_id: rel.id }); return true;`);
-    const views = await api(`return (await call("GET", "/views?project_id=${world.projectId}")).body;`);
+    await inPage(`await api("POST", "/releases", { project_id: "${world.projectId}", name: "One", version: "1.0.0" });
+      const issue = (await api("POST", "/items", { project_id: "${world.projectId}", title: "In the release" })).body;
+      const rel = (await api("GET", "/releases?project_id=${world.projectId}")).body[0];
+      await api("PATCH", "/items/" + issue.id, { release_id: rel.id }); return true;`);
+    const views = await inPage(`return (await api("GET", "/views?project_id=${world.projectId}")).body;`);
     await session.navigate(`${baseUrl}/p/${world.key}/v/${views[0].id}`, 3000);
     checks["1290 a view links Reports"] = await waitFor(session, `!!document.querySelector('[data-view-link="reports"]')`);
     checks["1290 a view links Releases"] = await session.eval(`!!document.querySelector('[data-view-link="releases"]')`);
@@ -157,9 +139,9 @@ async function main() {
       header.menu && !header.archiveButton && !header.cloneButton && !header.deleteButton;
 
     // --- RADD-1291: cycles have a home project -------------------------------
-    const planningView = (await api(`return (await call("GET", "/views?project_id=${world.projectId}")).body;`))
+    const planningView = (await inPage(`return (await api("GET", "/views?project_id=${world.projectId}")).body;`))
       .find((v) => v.view_type === "planning");
-    const stranger = await api(`return (await call("POST", "/cycles", { name: "Elsewhere ${world.key}", project_id: "4e6612fa-5d1f-4d9e-8161-73d990051964" })).body;`);
+    const stranger = await inPage(`return (await api("POST", "/cycles", { name: "Elsewhere ${world.key}", project_id: "4e6612fa-5d1f-4d9e-8161-73d990051964" })).body;`);
     await session.navigate(`${baseUrl}/p/${world.key}/v/${planningView.id}`, 3500);
     checks["1291 planning offers New cycle"] = await waitFor(session, `!!document.querySelector("[data-new-cycle]")`);
     await session.click("[data-new-cycle]");
@@ -174,12 +156,12 @@ async function main() {
     checks["1291 another project's empty cycle stays out of Planning"] = !(await session.eval(
       `(document.querySelector("main") ?? document.body).innerText.includes("Elsewhere ${world.key}")`))
       && await session.eval(`!!document.querySelector("main")`);
-    await api(`await call("DELETE", "/cycles/${stranger.id}");
+    await inPage(`await api("DELETE", "/cycles/${stranger.id}");
       const mine = (await (await fetch("/api/v1/cycles?project_id=${world.projectId}", {credentials:"include"})).json());
-      for (const c of mine) await call("DELETE", "/cycles/" + c.id); return true;`);
+      for (const c of mine) await api("DELETE", "/cycles/" + c.id); return true;`);
 
     // --- RADD-1292: the create form follows Screens; CSAT stops 404ing --------
-    await api(`return (await call("PUT", "/screens", { project_id: "${world.projectId}", fields: [
+    await inPage(`return (await api("PUT", "/screens", { project_id: "${world.projectId}", fields: [
       { field: "release", placement: "hidden" }, { field: "cycle", placement: "secondary" } ] }));`);
     await session.navigate(`${baseUrl}/p/${world.key}/v/${views[0].id}`, 3000);
     await session.eval(`[...document.querySelectorAll("button")].find(b => b.textContent.trim() === "New issue")?.click() || true`);
@@ -195,13 +177,13 @@ async function main() {
     checks["1292 a secondary field sits under More fields"] = form.more && /more fields/i.test(form.text);
     checks["1292 kind is explained"] = form.text.includes("Where it sits");
     await session.send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
-    const csat = await api(`const r = await fetch("/api/v1/items/${item.id}/csat", {credentials:"include"}); return { status: r.status, body: await r.text() };`);
+    const csat = await inPage(`const r = await fetch("/api/v1/items/${item.id}/csat", {credentials:"include"}); return { status: r.status, body: await r.text() };`);
     checks["1292 no survey is an answer, not a 404"] = csat.status === 200 && csat.body === "null";
 
     // --- RADD-1293: counts say what they count --------------------------------
     const board = views.find((v) => v.view_type === "board") ?? views[0];
     await session.navigate(`${baseUrl}/p/${world.key}/v/${board.id}`, 3000);
-    await waitFor(session, `/\\d+ issues/.test((document.querySelector("main") ?? document.body).innerText)`, 20);
+    await waitFor(session, `/\\d+ issues/.test((document.querySelector("main") ?? document.body).innerText)`, { attempts: 20 });
     const boardText = await text(session);
     checks["1293 board header counts issues, not loaded pages"] = /\d+ issues/.test(boardText) && !/\bloaded\b/.test(boardText);
     await session.navigate(`${baseUrl}/`, 3000);
@@ -237,7 +219,7 @@ async function main() {
     })()`);
     checks["1294 inbox collapses a burst into one row"] = inbox.rows > 0 && inbox.largest > 1;
   } finally {
-    if (world?.projectId) await api(`return (await call("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
+    if (world?.projectId) await inPage(`return (await api("DELETE", "/projects/${world.projectId}")).status;`).catch(() => null);
     await close();
   }
   process.exit(report(checks) ? 1 : 0);

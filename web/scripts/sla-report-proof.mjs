@@ -19,33 +19,13 @@
 import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { PAGE_API, sleep, waitFor } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl = "http://127.0.0.1:8000", emailArg, passwordArg] = process.argv.slice(2);
-const email = emailArg ?? process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = passwordArg ?? process.env.RADD_PROOF_PASSWORD ?? "change-me";
-const PORT = 9508;
 const TMP = process.env.TMPDIR || "/tmp";
-const PROFILE = resolve(TMP, "radd-sla-report-proof-profile");
 const SHOT = process.env.RADD_PROOF_SHOT ?? resolve(TMP, "sla-report-proof.png");
 const SERVER = resolve(dirname(fileURLToPath(import.meta.url)), "../../server");
 const key = `SR${Date.now().toString(36).slice(-4).toUpperCase()}`;
-
-const checks = [];
-const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail });
-
-async function waitFor(session, expression, attempts = 60) {
-  for (let i = 0; i < attempts; i += 1) {
-    const value = await session.eval(expression);
-    if (value) return value;
-    await sleep(250);
-  }
-  return session.eval(expression);
-}
-
-const API = `const api = async (method, path, body) => { const r = await fetch("/api/v1" + path, { method,
-  headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
-  const text = await r.text(); return { status: r.status, body: text ? JSON.parse(text) : null }; };`;
 
 // Stands in for the SLA engine's sweep and the csat sender: the same rows, written by the app.
 const STAMP = `
@@ -60,7 +40,7 @@ from radd.modules.csat.schemas import PublicCsatSubmit
 from radd.modules.items import service as items
 from radd.modules.slas.models import SlaItemState
 
-async def main(policy_id, key, met_id, late_id):
+async def main(policy_id, met_id, late_id):
     async with SessionLocal() as session:
         found = await items.items_by_ids(session, [uuid.UUID(met_id), uuid.UUID(late_id)])
         met, late = found[uuid.UUID(met_id)], found[uuid.UUID(late_id)]
@@ -71,7 +51,7 @@ async def main(policy_id, key, met_id, late_id):
         session.add(SlaItemState(item_id=late.id, policy_id=policy,
             response_breached_at=late.created_at + timedelta(minutes=61)))
         for item, rating in ((met, 5), (late, 3)):
-            survey = await csat.create_survey(session, item_id=item.id, item_key=f"{key}-{item.number}")
+            survey = await csat.create_survey(session, item_id=item.id)
             await csat.record_response(session, survey.token, PublicCsatSubmit(rating=rating))
         await session.commit()
 
@@ -116,15 +96,13 @@ const chartsIn = (scope) => `(() => { const root = document.querySelector('${sco
     csat: Boolean(root?.querySelector('svg[aria-label="Average CSAT rating per week"]')),
     legend: [...(root?.querySelectorAll("ul li") ?? [])].map((li) => li.textContent.trim()) }; })()`;
 
-const { session, close } = await openBrowser({ port: PORT, profile: PROFILE });
+const { session, close, check, finish, baseUrl } = await startProof({
+  port: 9508, profile: resolve(TMP, "radd-sla-report-proof-profile"),
+});
 let world = null;
 try {
-  await session.navigate(`${baseUrl}/login`, 800);
-  const status = await session.login(baseUrl, email, password);
-  check("signed in", status === 200 || status === 204, `login → ${status}`);
-
   // 1. The world, over REST.
-  world = await session.eval(`(async () => { ${API}
+  world = await session.eval(`(async () => { ${PAGE_API}
     const project = await api("POST", "/projects", { key: ${JSON.stringify(key)}, name: "SLA report proof" });
     const id = project.body.id;
     const policy = await api("POST", "/sla-policies", { project_id: id, name: "Proof", response_minutes: 60,
@@ -142,11 +120,11 @@ try {
     world.status.join() === "201,201,201,201,201,201", JSON.stringify(world.status));
 
   // 2. The rows the workers would have written.
-  execFileSync("uv", ["run", "python", "-c", STAMP, world.policyId, key, world.metId, world.lateId],
+  execFileSync("uv", ["run", "python", "-c", STAMP, world.policyId, world.metId, world.lateId],
     { cwd: SERVER, stdio: ["ignore", "inherit", "inherit"] });
 
   // 3. The endpoint moved.
-  const direct = await session.eval(`(async () => { ${API}
+  const direct = await session.eval(`(async () => { ${PAGE_API}
     const project = await api("GET", "/sla-report?weeks=12&project_id=" + ${JSON.stringify(world.projectId)});
     const everywhere = await api("GET", "/sla-report?weeks=12");
     const old = await api("GET", "/reports/sla?weeks=12&project_id=" + ${JSON.stringify(world.projectId)});
@@ -203,7 +181,7 @@ try {
 } finally {
   // 5. Clean up: the fixture rows cascade with the project's issues and policy.
   if (world?.projectId) {
-    const cleaned = await session.eval(`(async () => { ${API}
+    const cleaned = await session.eval(`(async () => { ${PAGE_API}
       const d = ${JSON.stringify(world.dashboardId ?? null)} ? await api("DELETE", "/dashboards/" + ${JSON.stringify(world.dashboardId)}) : { status: 0 };
       const p = await api("DELETE", "/projects/" + ${JSON.stringify(world.projectId)});
       const gone = await api("GET", "/sla-report?project_id=" + ${JSON.stringify(world.projectId)});
@@ -213,8 +191,4 @@ try {
   }
   await close();
 }
-const failed = report(
-  Object.fromEntries(checks.map((c) => [c.ok ? c.name : `${c.name} — ${c.detail}`, c.ok])),
-  { proof: "SLA report (RADD-1386)" },
-);
-process.exit(failed ? 1 : 0);
+finish({ proof: "SLA report (RADD-1386)" });

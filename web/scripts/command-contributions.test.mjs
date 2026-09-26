@@ -1,11 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {stripTypeScriptTypes} from 'node:module';
-const source=readFileSync('web/packages/plugin-sdk/src/commands.ts','utf8')
+import {importTs} from './lib/load-ts.mjs';
+const api=await importTs('web/packages/plugin-sdk/src/commands.ts',source=>source
  .replace(/import[^;]+from "react";/,'const useId=()=>"test",useMemo=fn=>fn(),useSyncExternalStore=(_subscribe,snapshot)=>snapshot();')
- .replace(/import[^;]+from "@tanstack\/react-query";/,'const useQueryClient=()=>({invalidateQueries:async()=>{}});const useQueries=({queries})=>queries.map(()=>({data:[{id:"command",label:"Example"}],isError:false}));');
-const api=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+ .replace(/import[^;]+from "@tanstack\/react-query";/,'const useQueryClient=()=>({invalidateQueries:async()=>{}});const useQueries=({queries})=>queries.map(()=>({data:[{id:"command",label:"Example"}],isError:false}));'));
 const context={entityType:'record',entityId:'saved'};
 const provider=execute=>({id:'actions',entityType:'record',list:async()=>[],execute});
 test('a retained command refuses execution after withdrawal and after replacement',async()=>{

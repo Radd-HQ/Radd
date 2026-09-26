@@ -15,34 +15,20 @@
  * deleted at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: sharing-wording-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9489;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-sharing-wording-proof");
 const KEY = `SW${Date.now().toString(36).slice(-4).toUpperCase()}`;
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, { method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body) });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
   const context = { key: KEY };
   let projectId = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    await session.login(baseUrl, adminEmail, adminPassword);
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Sharing wording" });
       const view = await api("POST", "/views", { project_id: project.body.id, name: "Wording board", view_type: "board", group_by: "state" });
       return { project: project.body, view: view.body, statuses: [project.status, view.status] };
@@ -79,7 +65,7 @@ async function main() {
     checks.noteSaysSavedWithTheView = Boolean(dialog && dialog.note);
     await session.eval(`document.querySelector("[role=dialog] section[aria-label='Shared with']")?.scrollIntoView({ block: "center" })`);
     await sleep(200);
-    await session.screenshot(resolve("scripts", "sharing-wording-proof.png"));
+    await session.screenshot(outputPath("sharing-wording-proof.png"));
     await session.click("[role=dialog] button", (t) => t.trim() === "Share with someone…");
     await sleep(600);
     const sub = await session.eval(`(() => {
@@ -134,10 +120,10 @@ async function main() {
     checks.newShareListedFirst = inline.firstInList === true;
     checks.noUnsavedChangesTab = inline.tab === false;
     checks.countLineReadsOneUnsavedChange = inline.pending === "1" && /1 unsaved change/.test(inline.pendingText);
-    await session.screenshot(resolve("scripts", "sharing-wording-proof-inline.png"));
+    await session.screenshot(outputPath("sharing-wording-proof-inline.png"));
     await session.click("[role=dialog] button", (t) => t.trim() === "Save view");
     await sleep(2000);
-    const saved = await session.eval(`(async () => { ${API}
+    const saved = await session.eval(`(async () => { ${PAGE_API}
       const r = await api("GET", "/views/${setup.view.id}");
       return { status: r.status, shares: (r.body?.shares ?? []).map((s) => ({ level: s.level, name: s.user?.name ?? s.team?.name ?? s.group?.name ?? null })) };
     })()`);
@@ -145,7 +131,7 @@ async function main() {
     checks.saveViewPersistsTheShare = saved.status === 200 && saved.shares.length === 1;
   } finally {
     if (projectId) {
-      await session.eval(`(async () => { ${API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
+      await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/projects/${projectId}")).status; })()`).catch(() => null);
     }
     await close();
   }

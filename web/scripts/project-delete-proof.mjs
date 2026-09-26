@@ -19,27 +19,12 @@
  * Every check is a measurement (DOM state, API read-back).
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, PAGE_API, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: project-delete-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9483;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-project-delete-proof");
 const KEY = `PX${Date.now().toString(36).slice(-4).toUpperCase()}`;
-
-const API = `
-  const api = async (method, path, body) => {
-    const r = await fetch("/api/v1" + path, {
-      method, headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const text = await r.text();
-    return { status: r.status, body: text ? JSON.parse(text) : null };
-  };
-`;
 
 const DIALOG = `(() => {
   const dialog = document.querySelector("[role=dialog]");
@@ -66,17 +51,14 @@ async function typeKey(session, value) {
 }
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
+  const { session, close, baseUrl } = await startProof({ port: PORT, profile: PROFILE, width: 1500, height: 1000 });
   const checks = {};
   const context = { key: KEY };
   let sourceId = null;
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    await session.login(baseUrl, adminEmail, adminPassword);
-
     // --- setup over the API: a project with one issue + one comment, and a
     // mail source that lands in it (the blocker) ---
-    const setup = await session.eval(`(async () => { ${API}
+    const setup = await session.eval(`(async () => { ${PAGE_API}
       const project = await api("POST", "/projects", { key: ${JSON.stringify(KEY)}, name: "Delete proof" });
       const item = await api("POST", "/items", { project_id: project.body.id, title: "the only issue" });
       const comment = await api("POST", "/items/" + item.body.id + "/comments", { body: "the only comment" });
@@ -97,7 +79,7 @@ async function main() {
     })()`);
     context.zone = zone && zone.text.slice(0, 80);
     checks.dangerZoneRendered = Boolean(zone && zone.hasButton && zone.text.includes(KEY));
-    await session.screenshot(resolve("scripts", "project-delete-proof-zone.png"));
+    await session.screenshot(outputPath("project-delete-proof-zone.png"));
 
     // --- 2. blocked: the dialog names the source and the button stays off ---
     await session.click("[data-project-danger] button", (t) => t.includes("Delete project"));
@@ -109,14 +91,14 @@ async function main() {
     checks.blockerLinksToEmailSettings = Boolean(dialog && dialog.emailLink);
     checks.blockedInputDisabled = Boolean(dialog && dialog.inputDisabled === true);
     checks.blockedButtonDisabled = Boolean(dialog && dialog.dangerDisabled === true);
-    await session.screenshot(resolve("scripts", "project-delete-proof-blocked.png"));
+    await session.screenshot(outputPath("project-delete-proof-blocked.png"));
     // the server refuses too, whatever the browser shows
-    const refused = await session.eval(`(async () => { ${API} return (await api("DELETE", "/projects/${project.id}")).status; })()`);
+    const refused = await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/projects/${project.id}")).status; })()`);
     context.refusedStatus = refused;
     checks.serverRefusesWhileBlocked = refused === 409;
 
     // remove the source (the admin's fix), close + reopen the dialog
-    const removed = await session.eval(`(async () => { ${API}
+    const removed = await session.eval(`(async () => { ${PAGE_API}
       return (await api("DELETE", "/mail/sources/${source.id}")).status;
     })()`);
     checks.sourceRemoved = removed === 204;
@@ -136,10 +118,10 @@ async function main() {
     checks.wrongKeyKeepsButtonOff = (await session.eval(DIALOG)).dangerDisabled === true;
     await typeKey(session, KEY.toLowerCase());
     checks.keyTypedEnablesButton = (await session.eval(DIALOG)).dangerDisabled === false;
-    await session.screenshot(resolve("scripts", "project-delete-proof-armed.png"));
+    await session.screenshot(outputPath("project-delete-proof-armed.png"));
     await session.click("[role=dialog] button", (t) => t.trim() === "Delete permanently");
     await sleep(2500);
-    const after = await session.eval(`(async () => { ${API}
+    const after = await session.eval(`(async () => { ${PAGE_API}
       const r = await api("GET", "/projects/${project.id}");
       return { path: location.pathname, status: r.status, toast: document.body.innerText.includes("deleted") };
     })()`);
@@ -150,7 +132,7 @@ async function main() {
   } finally {
     // the throwaway mail source must not outlive the proof
     if (sourceId) {
-      await session.eval(`(async () => { ${API} return (await api("DELETE", "/mail/sources/${sourceId}")).status; })()`).catch(() => null);
+      await session.eval(`(async () => { ${PAGE_API} return (await api("DELETE", "/mail/sources/${sourceId}")).status; })()`).catch(() => null);
     }
     await close();
   }

@@ -6,26 +6,13 @@
  * raw markdown" assertion passed by describing nothing. The transform is pure;
  * test it purely, and let the CDP proof cover the wiring.
  */
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { importTs } from "./lib/load-ts.mjs";
 
-const dir = mkdtempSync(join(tmpdir(), "plaintext-"));
-const file = join(dir, "plain-text.ts");
-writeFileSync(file, readFileSync("web/src/lib/plain-text.ts", "utf8"));
-const { toPlainText, previewText, PREVIEW_MAX_CHARS } = await import(file);
+const { toPlainText, previewText, PREVIEW_MAX_CHARS } = await importTs("web/src/lib/plain-text.ts");
 
-let failures = 0;
-const check = (label, actual, expected) => {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) {
-    console.log(`FAIL ${label}\n  got      ${a}\n  expected ${e}`);
-    failures++;
-  } else {
-    console.log(`ok   ${label}`);
-  }
-};
+const check = (label, actual, expected) => test(label, () => assert.deepStrictEqual(actual, expected));
 
 check("headings lose their markers", toPlainText("## What happened"), "What happened");
 
@@ -73,6 +60,3 @@ check(
 check("a short one is left alone", previewText("short enough"), "short enough");
 
 check("empty in, empty out", toPlainText(""), "");
-
-console.log(failures === 0 ? "\nall passed" : `\n${failures} FAILED`);
-process.exit(failures === 0 ? 0 : 1);

@@ -18,7 +18,7 @@
  *   node scripts/page-linked-issues-proof.mjs <baseUrl> <spaceSlug> <linkedSlug> <emptySlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, outputPath, report, sleep } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, linkedSlug, emptySlug, email, password] = process.argv.slice(2);
 const PORT = 9451;
@@ -106,7 +106,7 @@ async function main() {
   checks["the page under test HAS a child"] = linked.treeChildOf === true;
   checks["…and grows no automatic In this section"] = !linked.inThisSection;
 
-  const linkedShot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("linked-issues-linked.png"));
 
   // --- the page whose text names none ---
   await session.navigate(`${baseUrl}/pages/${spaceSlug}/${emptySlug}`, 2500);
@@ -124,7 +124,7 @@ async function main() {
   checks["…and it costs under 50px"] = empty.sectionHeight > 0 && empty.sectionHeight < 50;
   checks["…hiding the add form until asked for"] = empty.hasAddForm === false;
 
-  const emptyShot = await session.send("Page.captureScreenshot", { format: "png" });
+  await session.screenshot(outputPath("linked-issues-empty.png"));
   checks["no console errors"] = session.consoleErrors.length === 0;
 
   const failed = report(checks, {
@@ -134,10 +134,7 @@ async function main() {
     consoleErrors: session.consoleErrors.slice(0, 5),
   });
 
-  const { writeFileSync } = await import("node:fs");
-  writeFileSync("/tmp/linked-issues-linked.png", Buffer.from(linkedShot.data, "base64"));
-  writeFileSync("/tmp/linked-issues-empty.png", Buffer.from(emptyShot.data, "base64"));
-  console.log("\nshots: /tmp/linked-issues-linked.png /tmp/linked-issues-empty.png");
+  console.log(`\nshots: ${outputPath("linked-issues-linked.png")} ${outputPath("linked-issues-empty.png")}`);
   process.exit(failed ? 1 : 0);
 }
 

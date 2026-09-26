@@ -1,11 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdtempSync,rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
-const dir=mkdtempSync(join(tmpdir(),'radd-schedule-'));
-writeFileSync(join(dir,'schedule.ts'),readFileSync('web/packages/plugin-sdk/src/schedule.ts','utf8'));
-const {defaultSchedule,isScheduleValid,ScheduleKind}=await import(join(dir,'schedule.ts'));
+import {importTs} from './lib/load-ts.mjs';
+const {defaultSchedule,isScheduleValid,ScheduleKind}=await importTs('web/packages/plugin-sdk/src/schedule.ts');
 test('default schedules are complete and independent drafts',()=>{
  for(const kind of Object.values(ScheduleKind))assert(isScheduleValid(defaultSchedule(kind)));
  const first=defaultSchedule('weekly');first.weekdays.push(5);
@@ -21,4 +17,3 @@ test('form completeness rejects empty and out-of-range schedules without pretend
  assert(isScheduleValid({kind:'cron',expression:'server validates this'}));
  assert(!isScheduleValid({kind:'future',time:'09:00'}));
 });
-process.on('exit',()=>rmSync(dir,{recursive:true,force:true}));

@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { stripTypeScriptTypes } from 'node:module';
 import { QueryClient, QueryObserver } from '../node_modules/@tanstack/react-query/build/modern/index.js';
-const code = stripTypeScriptTypes(readFileSync(new URL('../src/lib/useStableItemBatches.ts', import.meta.url), 'utf8')).replace(/^import.*;$/m,'').replace('export ', '');
+import { evaluateTs } from './lib/load-ts.mjs';
 const ref = {current:[]};
-const batches = Function('useRef', code+';return useStableItemBatches;')(()=>ref);
+const { useStableItemBatches: batches } = evaluateTs(readFileSync(new URL('../src/lib/useStableItemBatches.ts', import.meta.url), 'utf8'), { useRef: () => ref }, ['useStableItemBatches']);
 const first = batches(['c','b','a'],2);
 assert.deepEqual(first,[['a','b'],['c']]);
 const next = batches(['a','b','c','e','d'],2);

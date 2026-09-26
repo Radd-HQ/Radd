@@ -11,26 +11,15 @@
  *
  * Usage: node scripts/automations-coverage-proof.mjs [--base http://localhost:8000]
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { openEditor } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
+const { session, close, baseUrl, loginStatus, email } = await startProof({
+  port: 9358, profile: "/tmp/radd-coverage", base: "http://localhost:8000",
+});
 
-const { session, close } = await openBrowser({ port: 9358, profile: "/tmp/radd-coverage" });
-
-const api = (method, path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},credentials:"include",` +
-  `headers:{"Content-Type":"application/json"}${body === undefined ? "" : `,body:JSON.stringify(${JSON.stringify(body)})`}});` +
-  `return {status:r.status, body: await r.text()};})()`;
-const parsed = (r) => (r.status < 300 ? JSON.parse(r.body) : null);
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
-
-const catalog = parsed(await session.eval(api("GET", "/automations/catalog")));
+const catalog = parsed(await session.eval(pageFetch("GET", "/automations/catalog")));
 const triggerTypes = new Set((catalog?.triggers ?? []).map((t) => t.event_type));
 const contributed = new Set((catalog?.contributed_nodes ?? []).map((n) => n.key));
 
@@ -65,12 +54,12 @@ const edges = [
   ...NEW_ACTIONS.slice(1).map((_, index) => ({ source: `act${index + 1}`, port: "out", target: `act${index + 2}` })),
 ];
 const suffix = Math.random().toString(36).slice(2, 6);
-const created = await session.eval(api("POST", "/automations", { name: `coverage proof ${suffix}`, enabled: false, orientation: "vertical", nodes, edges }));
+const created = await session.eval(pageFetch("POST", "/automations", { name: `coverage proof ${suffix}`, enabled: false, orientation: "vertical", nodes, edges }));
 const rule = parsed(created);
-const dry = rule ? await session.eval(api("POST", `/automations/${rule.id}/test`, { item_id: null, trigger_node_id: null })) : { status: 0 };
+const dry = rule ? await session.eval(pageFetch("POST", `/automations/${rule.id}/test`, { item_id: null, trigger_node_id: null })) : { status: 0 };
 
 // The pages plugin's nodes save on a page trigger.
-const pageRule = parsed(await session.eval(api("POST", "/automations", {
+const pageRule = parsed(await session.eval(pageFetch("POST", "/automations", {
   name: `coverage pages ${suffix}`, enabled: false, orientation: "vertical",
   nodes: [
     { id: "trg1", kind: "trigger", type: "trigger.event", params: { event: "page.updated" } },
@@ -81,12 +70,7 @@ const pageRule = parsed(await session.eval(api("POST", "/automations", {
 })));
 
 // --- the palette and the forms ----------------------------------------------
-await session.navigate(`${baseUrl}/settings/automations`, 2500);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes(${JSON.stringify(`coverage proof ${suffix}`)}));if(el)el.click();return !!el;})()`,
-);
-await sleep(2500);
+await openEditor(session, baseUrl, `coverage proof ${suffix}`);
 const paletteRows = await session.eval(`(()=>{
   const i=document.querySelector('[data-node-panel] input[aria-label="Search nodes"]');
   const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;
@@ -109,16 +93,15 @@ const titles = await session.eval(
   `[...document.querySelectorAll("[data-node-id] .text-heading")].map(e=>e.textContent.trim())`,
 );
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-coverage.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-coverage.png"));
 
-if (rule) await session.eval(api("DELETE", `/automations/${rule.id}`));
-if (pageRule) await session.eval(api("DELETE", `/automations/${pageRule.id}`));
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
+if (pageRule) await session.eval(pageFetch("DELETE", `/automations/${pageRule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const wantedLabels = [
   "Project is", "Set parent", "Set issue type", "Set reporter", "Set dates", "Set estimate",
-  "Flag / unflag", "Set visibility", "Link to item", "Archive / restore", "Add watcher",
+  "Flag / unflag", "Set visibility", "Link to issue", "Archive / restore", "Add watcher",
   "Add participant", "Move to project", "Comment on the page", "Move the page",
 ];
 const missingLabels = wantedLabels.filter((label) => !paletteRows.includes(label));
@@ -141,7 +124,7 @@ const checks = {
   forms,
   formless,
   titles,
-  screenshot: "/tmp/radd-coverage.png",
+  screenshot: outputPath("radd-coverage.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));

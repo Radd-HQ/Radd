@@ -16,13 +16,9 @@
  * The token is revoked at the end.
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, report, sleep } from "./lib/cdp.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const [baseUrl, adminEmail, adminPassword] = process.argv.slice(2);
-if (!baseUrl || !adminEmail || !adminPassword) {
-  console.error("usage: secret-mask-proof.mjs <baseUrl> <adminEmail> <adminPassword>");
-  process.exit(2);
-}
 const PORT = 9489;
 const PROFILE = resolve(process.env.TMPDIR || "/tmp", "radd-secret-mask-proof");
 const NAME = `mask-proof-${Date.now().toString(36).slice(-5)}`;
@@ -46,14 +42,12 @@ const STATE = `(() => {
 })()`;
 
 async function main() {
-  const { session, close } = await openBrowser({ port: PORT, profile: PROFILE, width: 1400, height: 900 });
+  const { session, close, baseUrl, loginStatus } = await startProof({ port: PORT, profile: PROFILE, width: 1400, height: 900 });
   const checks = {};
-  const context = { name: NAME };
+  const context = { name: NAME, login: loginStatus };
   let tokenId = null;
   const state = () => session.eval(STATE);
   try {
-    await session.navigate(baseUrl + "/login", 800);
-    context.login = await session.login(baseUrl, adminEmail, adminPassword);
     await session.navigate(baseUrl + "/settings/tokens", 2500);
 
     // Create through the real form: type the name, submit.
@@ -83,7 +77,7 @@ async function main() {
     checks.secretNotInPageText = s.bodyHasPat === false;
     checks.maskShowsPrefix = Boolean(row?.prefix) && s.text?.startsWith(row.prefix) === true && /•{8,}/.test(s.text ?? "");
     checks.revealIsOptIn = s.revealLabel === "Reveal" && s.revealPressed === "false";
-    await session.screenshot(resolve("scripts", "secret-mask-proof-hidden.png"));
+    await session.screenshot(outputPath("secret-mask-proof-hidden.png"));
 
     // 2. copy the full token while hidden
     await session.send("Browser.grantPermissions", {
@@ -105,7 +99,7 @@ async function main() {
     s = await state();
     context.revealed = s;
     checks.revealShowsSecret = s.mode === "revealed" && s.revealPressed === "true" && s.text === clipboard;
-    await session.screenshot(resolve("scripts", "secret-mask-proof-revealed.png"));
+    await session.screenshot(outputPath("secret-mask-proof-revealed.png"));
     await session.click("[data-copy-value] button", (t) => /Hide/.test(t));
     await sleep(200);
     s = await state();

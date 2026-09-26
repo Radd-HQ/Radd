@@ -1,14 +1,9 @@
 /**
- * A stand-in OpenAI-compatible chat endpoint, for proving OUR AI orchestration.
- *
- * The thing under test in `ai-surface-proof` is the chain we own — stream in,
- * splice over the selection, hand the new document to the diff plugin, render a
- * review — not a model's opinion about grammar. Depending on a real provider
- * makes the proof fail whenever someone else's GPU is off, which is how a proof
- * stops being run.
- *
- * It streams a FIXED correction, so the diff is deterministic and the assertion
- * can name the words that changed.
+ * A stand-in OpenAI-compatible chat endpoint, for proving OUR AI orchestration: the chain we own
+ * (stream in, splice over the selection, diff, review), not a model's opinion. A real provider
+ * makes the proof fail whenever someone else's GPU is off, which is how a proof stops being run.
+ * It streams a FIXED correction, so the diff is deterministic and the assertion can name the words
+ * that changed.
  */
 import { createServer } from "node:http";
 

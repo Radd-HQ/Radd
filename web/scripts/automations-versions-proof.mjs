@@ -10,24 +10,13 @@
  *
  * Usage: node scripts/automations-versions-proof.mjs [--base http://localhost:8000]
  */
-import { writeFileSync } from "node:fs";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { outputPath, pageFetch, parsed, report, sleep } from "./lib/cdp.mjs";
+import { openEditor } from "./lib/automation-editor.mjs";
+import { startProof } from "./lib/proof.mjs";
 
-const args = process.argv.slice(2);
-const baseUrl = args.includes("--base") ? args[args.indexOf("--base") + 1] : "http://localhost:8000";
-const email = process.env.RADD_PROOF_EMAIL ?? "admin@example.com";
-const password = process.env.RADD_PROOF_PASSWORD ?? "change-me";
-
-const { session, close } = await openBrowser({ port: 9359, profile: "/tmp/radd-versions" });
-
-const api = (method, path, body) =>
-  `(async()=>{const r=await fetch("/api/v1${path}",{method:${JSON.stringify(method)},credentials:"include",` +
-  `headers:{"Content-Type":"application/json"}${body === undefined ? "" : `,body:JSON.stringify(${JSON.stringify(body)})`}});` +
-  `return {status:r.status, body: await r.text()};})()`;
-const parsed = (r) => (r.status < 300 ? JSON.parse(r.body) : null);
-
-await session.navigate(baseUrl, 1500);
-const loginStatus = await session.login(baseUrl, email, password);
+const { session, close, baseUrl, loginStatus } = await startProof({
+  port: 9359, profile: "/tmp/radd-versions", base: "http://localhost:8000",
+});
 
 const suffix = Math.random().toString(36).slice(2, 6);
 const graph = (label, extra = []) => ({
@@ -40,27 +29,22 @@ const graph = (label, extra = []) => ({
 });
 
 // --- three versions by API ----------------------------------------------------
-const rule = parsed(await session.eval(api("POST", "/automations", {
+const rule = parsed(await session.eval(pageFetch("POST", "/automations", {
   name: `versions proof ${suffix}`, enabled: false, orientation: "vertical", note: "v1: the start", ...graph("one"),
 })));
-const v2 = parsed(await session.eval(api("PATCH", `/automations/${rule?.id}`, { ...graph("two"), note: "v2: relabel" })));
-const v3 = parsed(await session.eval(api("PATCH", `/automations/${rule?.id}`, {
+const v2 = parsed(await session.eval(pageFetch("PATCH", `/automations/${rule?.id}`, { ...graph("two"), note: "v2: relabel" })));
+const v3 = parsed(await session.eval(pageFetch("PATCH", `/automations/${rule?.id}`, {
   ...graph("three", [{ id: "act2", kind: "action", type: "action.add_comment", params: { body: "third", visibility: "public" } }]),
   note: "v3: a comment too",
 })));
-const toggled = parsed(await session.eval(api("PATCH", `/automations/${rule?.id}`, { enabled: true })));
-const listed = parsed(await session.eval(api("GET", `/automations/${rule?.id}/versions`))) ?? [];
-const restored = parsed(await session.eval(api("POST", `/automations/${rule?.id}/versions/1/restore`, { note: "back to v1" })));
-const afterRestore = parsed(await session.eval(api("GET", `/automations/${rule?.id}/versions`))) ?? [];
-const v4 = parsed(await session.eval(api("GET", `/automations/${rule?.id}/versions/4`)));
+const toggled = parsed(await session.eval(pageFetch("PATCH", `/automations/${rule?.id}`, { enabled: true })));
+const listed = parsed(await session.eval(pageFetch("GET", `/automations/${rule?.id}/versions`))) ?? [];
+const restored = parsed(await session.eval(pageFetch("POST", `/automations/${rule?.id}/versions/1/restore`, { note: "back to v1" })));
+const afterRestore = parsed(await session.eval(pageFetch("GET", `/automations/${rule?.id}/versions`))) ?? [];
+const v4 = parsed(await session.eval(pageFetch("GET", `/automations/${rule?.id}/versions/4`)));
 
 // --- the editor --------------------------------------------------------------
-await session.navigate(`${baseUrl}/settings/automations`, 2500);
-await session.eval(
-  `(()=>{const el=[...document.querySelectorAll("button,a")].find(n=>` +
-    `n.closest("li")&&n.closest("li").innerText.includes(${JSON.stringify(`versions proof ${suffix}`)}));if(el)el.click();return !!el;})()`,
-);
-await sleep(2500);
+await openEditor(session, baseUrl, `versions proof ${suffix}`);
 const openedTab = await session.eval(
   `(()=>{const tab=[...document.querySelectorAll('[role="tab"]')].find(t=>/^Versions$/.test(t.textContent.trim()));
      if(!tab) return false; tab.click(); return true;})()`,
@@ -93,10 +77,9 @@ const editorNodes = await session.eval(
 );
 const versionLabel = await session.eval(`(document.body.innerText.match(/\\bv5\\b/)||[])[0] ?? null`);
 
-const shot = await session.send("Page.captureScreenshot", { format: "png" });
-writeFileSync("/tmp/radd-versions.png", Buffer.from(shot.data, "base64"));
+await session.screenshot(outputPath("radd-versions.png"));
 
-if (rule) await session.eval(api("DELETE", `/automations/${rule.id}`));
+if (rule) await session.eval(pageFetch("DELETE", `/automations/${rule.id}`));
 
 const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e));
 const checks = {
@@ -115,7 +98,7 @@ const checks = {
   rowsAfter,
   editorNodes,
   versionLabel,
-  screenshot: "/tmp/radd-versions.png",
+  screenshot: outputPath("radd-versions.png"),
   consoleErrors,
 };
 console.log(JSON.stringify(checks, null, 2));
