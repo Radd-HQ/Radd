@@ -5,8 +5,11 @@ human-readable failure strings against an ItemSnapshot the service builds. Kept
 pure so the invariant is tested without a DB (mirrors forms/validation.py).
 
 Spec 107: every data check is ONE shape — require_field {kind, key, op, values}
-over builtins + custom fields (the old five presence checks are migrated rows);
-require_approval carries per-entry approver rules.
+over builtins + custom fields (the old five presence checks are migrated rows).
+
+RADD-1383: any other check key is a plugin's, served through the kernel's
+TRANSITION_CHECK socket; `evaluate` takes the live providers as a parameter
+(staying pure) and a rule nobody serves FAILS CLOSED.
 """
 
 from collections.abc import Mapping, Sequence
@@ -17,7 +20,6 @@ from radd.exceptions import RaddError
 
 from radd.modules.fields.types import FieldType
 from .types import (
-    ApproverKind,
     BUILTIN_LABELS,
     DATE_BUILTINS,
     BuiltinField,
@@ -49,9 +51,9 @@ class ItemSnapshot:
     builtin: Mapping[str, Any] = field(default_factory=dict)
     custom_fields: Mapping[str, Any] = field(default_factory=dict)
     field_labels: Mapping[str, str] = field(default_factory=dict)  # cf key -> display name
-    # Spec 71: string state ids the item holds a CONSUMABLE approved request for
-    # (resolved via the approvals module's deferred seam; module absent = empty).
-    approved_to_state_ids: frozenset[str] = frozenset()
+    # RADD-1383: check key -> what that check's provider `prepare`d for this item
+    # (approvals: the target state ids it holds an approved request for).
+    contributed: Mapping[str, Any] = field(default_factory=dict)
     has_unresolved_threads: bool = False
 
 
@@ -172,61 +174,74 @@ def _evaluate_field(params: Mapping[str, Any], snapshot: ItemSnapshot) -> str | 
     return _field_failure(label, key, op, params, date_like)
 
 
-def _approval_failure(params: Mapping[str, Any]) -> str:
-    parts: list[str] = []
-    for entry in params.get("approvers") or []:
-        name = entry.get("name") or entry.get("id") or "?"
-        if entry.get("kind") == ApproverKind.TEAM.value:
-            parts.append(f"{int(entry.get('required') or 1)} of {name}")
-        else:
-            parts.append(str(name))
-    return f"approval required ({'; '.join(parts)})" if parts else "approval required"
+def own_check(key: object) -> TransitionCheck | None:
+    """Workflow's own check for a rule's `check` key, or None when the key is a
+    plugin's (RADD-1383)."""
+    try:
+        return TransitionCheck(key)
+    except ValueError:
+        return None
+
+
+def unprovided_failure(check: str) -> str:
+    """The FAIL-CLOSED sentence for a stored rule no loaded plugin serves: the
+    admin configured that gate, so a disabled plugin refuses the move rather
+    than silently opening it."""
+    return f'this move requires "{check}", but the plugin that provides it is disabled'
 
 
 def evaluate(
     rules: Sequence[Mapping[str, Any]],
     snapshot: ItemSnapshot,
     to_state_id: str | None = None,
+    providers: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """Failure strings for every unsatisfied rule (empty = the transition passes).
-    Unknown checks are skipped — rules are validated against TransitionCheck on write.
-    `to_state_id` is the target state (spec 71): require_approval passes iff the
-    snapshot holds an approved request for it; its failure sorts LAST so guard
-    strings compose (fix the data first, then request approval)."""
+
+    Workflow's own checks evaluate here; every other key goes to its provider
+    in `providers` (check key -> kernel TransitionCheckProvider) with what the
+    provider prepared into the snapshot and the target state. A key with no
+    provider FAILS CLOSED. Gate failures — a `sort_last` provider's, and the
+    unserved — follow the data failures so guard strings compose (fix the data
+    first, then ask for the approval)."""
     failures: list[str] = []
-    approval_failures: list[str] = []
+    gate_failures: list[str] = []
     for rule in rules:
-        try:
-            check = TransitionCheck(rule.get("check"))
-        except ValueError:
-            continue
+        key = str(rule.get("check") or "")
         params = rule.get("params") or {}
+        check = own_check(key)
         if check is TransitionCheck.REQUIRE_FIELD:
             failure = _evaluate_field(params, snapshot)
             if failure is not None:
                 failures.append(failure)
-        elif check is TransitionCheck.REQUIRE_APPROVAL:
-            if to_state_id is None or to_state_id not in snapshot.approved_to_state_ids:
-                approval_failures.append(_approval_failure(params))
         elif check is TransitionCheck.REQUIRE_RESOLVED_THREADS:
             if snapshot.has_unresolved_threads:
                 failures.append("all threads must be resolved (including internal threads)")
         elif check is TransitionCheck.REQUIRE_RELEASE:
             if is_empty(snapshot.builtin.get(BuiltinField.RELEASE.value)):
                 failures.append("a release is required")
-    return failures + approval_failures
+        else:
+            provider = (providers or {}).get(key)
+            if provider is None:
+                gate_failures.append(unprovided_failure(key))
+                continue
+            failure = provider.failure(params, snapshot.contributed.get(key), to_state_id)
+            if failure is not None:
+                (gate_failures if provider.sort_last else failures).append(failure)
+    return failures + gate_failures
 
 
 def checks_in(rules: Sequence[Mapping[str, Any]]) -> set[TransitionCheck]:
-    """The distinct checks a rule list uses — lets the service skip snapshot
+    """The distinct OWN checks a rule list uses — lets the service skip snapshot
     lookups no rule asks about."""
-    found: set[TransitionCheck] = set()
-    for rule in rules:
-        try:
-            found.add(TransitionCheck(rule.get("check")))
-        except ValueError:
-            continue
-    return found
+    return {check for rule in rules if (check := own_check(rule.get("check"))) is not None}
+
+
+def contributed_checks_in(rules: Sequence[Mapping[str, Any]]) -> set[str]:
+    """The distinct plugin check keys a rule list uses (RADD-1383)."""
+    return {
+        str(rule.get("check") or "") for rule in rules if own_check(rule.get("check")) is None
+    }
 
 
 def conditions_met(

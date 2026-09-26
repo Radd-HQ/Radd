@@ -1,4 +1,5 @@
 /** Workflow states + transition enforcement (spec 61). */
+import type { ContributedTransitionRule } from "@radd-plugin-ui/workflow/transition-rule-contract";
 // ---------------------------------------------------------------------------
 // Workflow (states)
 // ---------------------------------------------------------------------------
@@ -62,12 +63,11 @@ export type TransitionModeValue = (typeof TransitionMode)[keyof typeof Transitio
 /** The scoped-settings key the mode select reads/writes (spec 50 cascade). */
 export const WORKFLOW_TRANSITION_MODE_KEY = "workflow_transition_mode";
 
-/** Validation rules a transition row may carry (spec 61; reshaped by spec 107:
- * every data check is one require_field condition; require_approval carries
- * per-entry approver rules). */
+/** The checks workflow evaluates itself (spec 61; reshaped by spec 107: every data
+ * check is one require_field condition). Any other check is a plugin's (RADD-1383):
+ * its editor arrives through the transition-rule slot and the host only carries it. */
 export const TransitionCheck = {
   requireField: "require_field",
-  requireApproval: "require_approval",
   requireResolvedThreads: "require_resolved_threads",
   // RADD-1285: the item has a release (named form of require_field release set).
   requireRelease: "require_release",
@@ -99,21 +99,14 @@ export interface FieldConditionParams {
   display?: string[];
 }
 
-/** One approver entry on a require_approval rule (spec 107): a user must
- * approve personally; a team needs `required` approvals from current members. */
-export interface ApproverEntry {
-  kind: "user" | "team";
-  id: string;
-  /** Display snapshot — the server re-resolves it on write. */
-  name?: string;
-  required?: number;
-}
-
-export type TransitionRule =
+/** A rule over one of workflow's own checks. */
+export type OwnTransitionRule =
   | { check: typeof TransitionCheck.requireResolvedThreads; params: Record<string, never> }
   | { check: typeof TransitionCheck.requireRelease; params: Record<string, never> }
-  | { check: typeof TransitionCheck.requireField; params: FieldConditionParams }
-  | { check: typeof TransitionCheck.requireApproval; params: { approvers: ApproverEntry[] } };
+  | { check: typeof TransitionCheck.requireField; params: FieldConditionParams };
+
+/** A stored rule: one of workflow's own, or a plugin's (opaque params — its editor owns them). */
+export type TransitionRule = OwnTransitionRule | ContributedTransitionRule;
 
 /** GET /projects/{id}/transitions — one guarded edge of the transition graph.
  * `applies_when` (spec 107 follow-up) scopes WHICH items the row governs

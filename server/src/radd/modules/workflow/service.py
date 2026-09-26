@@ -223,6 +223,10 @@ async def _emit(
 # Re-export: the items-module enforcement seam (spec 61) — modules talk through
 # public service functions, and items already imports workflow.service.
 from .transitions import check_transition, release_transitions  # noqa: E402, F401
+# RADD-1383: items reports every successful state change here; workflow tells
+# the plugins serving transition checks (approvals spends an unlock) — so items
+# never imports an optional plugin.
+from .checks import state_moved  # noqa: E402, F401
 
 
 

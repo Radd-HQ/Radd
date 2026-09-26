@@ -5,8 +5,9 @@ cases are DB-backed (compose Postgres) — flushed, never committed; the session
 rolls back at teardown, so rows never persist.
 
 Spec 107: every data check is one require_field condition ({kind, key, op,
-values}) over builtins + custom fields; require_approval carries per-entry
-approver rules.
+values}) over builtins + custom fields. RADD-1383: every other check is a
+plugin's, served through the kernel TRANSITION_CHECK socket (approvals'
+require_approval is covered in test_approvals / test_transition_check_socket).
 """
 
 import uuid
@@ -25,7 +26,14 @@ from radd.modules.settings.types import SettingKey, SettingScope
 from radd.modules.timelogging import service as timelog
 from radd.modules.timelogging.schemas import EstimateSet
 from radd.modules.workflow import service as workflow, transitions
-from radd.modules.workflow.guards import ItemSnapshot, TransitionError, evaluate, is_empty
+from radd.modules.approvals.types import ApprovalCheck
+from radd.modules.workflow.guards import (
+    ItemSnapshot,
+    TransitionError,
+    evaluate,
+    is_empty,
+    unprovided_failure,
+)
 from radd.modules.workflow.schemas import TransitionCreate, TransitionRule
 from radd.modules.workflow.types import TransitionCheck, TransitionMode
 from radd.modules.projects import service as projects_service
@@ -152,40 +160,44 @@ def test_is_empty_accepts_falsey_present_values():
     assert not is_empty(0) and not is_empty(False)
 
 
-def test_unknown_checks_and_malformed_conditions_are_skipped():
-    assert evaluate([{"check": "require_blessing", "params": {}}], ItemSnapshot()) == []
+def test_unserved_checks_fail_closed_and_malformed_conditions_are_skipped():
+    # RADD-1383: a check no loaded plugin serves REFUSES the move (it used to be
+    # skipped — which is how a disabled plugin would silently open a gate).
+    assert evaluate([{"check": "require_blessing", "params": {}}], ItemSnapshot()) == [
+        unprovided_failure("require_blessing")
+    ]
     assert evaluate([{"check": "require_field", "params": {"op": "wat"}}], ItemSnapshot()) == []
 
 
-def test_approval_failure_names_the_entries():
-    rules = [
-        {
-            "check": TransitionCheck.REQUIRE_APPROVAL.value,
-            "params": {
-                "approvers": [
-                    {"kind": "user", "id": "u1", "name": "Hussein Jarrar"},
-                    {"kind": "team", "id": "t1", "name": "DevOps", "required": 2},
-                ]
-            },
-        }
+class _Signoff:
+    """A stub TRANSITION_CHECK provider: passes iff it prepared the target."""
+
+    check = "require_signoff"
+
+    def __init__(self, sort_last: bool):
+        self.sort_last = sort_last
+
+    def failure(self, params, prepared, to_state_id):
+        return None if to_state_id in (prepared or ()) else f"sign-off by {params['who']}"
+
+
+def test_contributed_checks_delegate_to_their_provider_and_order_by_sort_last():
+    rules = [{"check": "require_signoff", "params": {"who": "QA"}}, field_rule("assignee")]
+    last = {"require_signoff": _Signoff(sort_last=True)}
+    assert evaluate(rules, ItemSnapshot(), to_state_id="s1", providers=last) == [
+        "an assignee is required", "sign-off by QA"
     ]
+    inline = {"require_signoff": _Signoff(sort_last=False)}
+    assert evaluate(rules, ItemSnapshot(), to_state_id="s1", providers=inline) == [
+        "sign-off by QA", "an assignee is required"
+    ]
+    # What the provider prepared rides the snapshot, keyed by its check.
+    prepared = ItemSnapshot(builtin={"assignee": "u"}, contributed={"require_signoff": {"s1"}})
+    assert evaluate(rules, prepared, to_state_id="s1", providers=last) == []
+    # The same rule with its provider gone fails closed, still sorted last.
     assert evaluate(rules, ItemSnapshot(), to_state_id="s1") == [
-        "approval required (Hussein Jarrar; 2 of DevOps)"
+        "an assignee is required", unprovided_failure("require_signoff")
     ]
-    approved = ItemSnapshot(approved_to_state_ids=frozenset({"s1"}))
-    assert evaluate(rules, approved, to_state_id="s1") == []
-
-
-def test_approval_failure_sorts_last():
-    rules = [
-        {
-            "check": TransitionCheck.REQUIRE_APPROVAL.value,
-            "params": {"approvers": [{"kind": "user", "id": "u1", "name": "A"}]},
-        },
-        field_rule("assignee"),
-    ]
-    failures = evaluate(rules, ItemSnapshot(), to_state_id="s1")
-    assert failures == ["an assignee is required", "approval required (A)"]
 
 
 def test_transition_error_carries_the_edge():
@@ -404,7 +416,7 @@ async def test_approval_rule_validation_and_name_snapshot(db, actor):
                 to_state_id=states["Done"].id,
                 rules=[
                     TransitionRule(
-                        check=TransitionCheck.REQUIRE_APPROVAL,
+                        check=ApprovalCheck.REQUIRE_APPROVAL,
                         params={
                             "approvers": [
                                 {"kind": "team", "id": str(uuid.uuid4()), "required": 2}
@@ -422,7 +434,7 @@ async def test_approval_rule_validation_and_name_snapshot(db, actor):
             to_state_id=states["Done"].id,
             rules=[
                 TransitionRule(
-                    check=TransitionCheck.REQUIRE_APPROVAL,
+                    check=ApprovalCheck.REQUIRE_APPROVAL,
                     params={"approvers": [{"kind": "user", "id": str(actor.id), "name": "spoofed"}]},
                 )
             ],

@@ -98,7 +98,7 @@ async def rollup_items(
     } if state_ids else {}
 
     # Time sums ride the timelogging module when it's installed (deferred
-    # feature-detected import, the approvals-consume idiom) — zeros otherwise.
+    # feature-detected import) — zeros otherwise.
     estimate_by_item: dict[uuid.UUID, int] = {}
     logged_by_item: dict[uuid.UUID, int] = {}
     try:

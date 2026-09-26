@@ -343,6 +343,12 @@ These are named "sockets": a plugin declares it *provides* or *consumes* a socke
 - **Connector** — inbound webhook parsers (GitLab/Forgejo/Alertmanager already this shape).
 - **AIProvider**, **VcsProvider** — already interfaces; formalize as sockets.
 - **TaskBackend** — the Celery ask (§6): a plugin *provides* a queue backend the kernel *consumes*.
+- **NonWorkingDaysProvider** (built, RADD-1031) — calendar dates nobody works; `leave` provides, the
+  SLA clock consumes, every provider's answer UNIONs.
+- **TransitionCheckProvider** (built, RADD-1383) — one workflow transition-rule `check` a plugin
+  serves (`validate` on write, `prepare` + pure `failure` at evaluation, `moved` after a state
+  change). `approvals` provides `require_approval`. A stored rule whose provider is gone FAILS
+  CLOSED: disabling a plugin must never silently open a gate an admin configured.
 
 Sockets are just a small typed registry: `register_provider(socket, name, impl)` +
 `get_provider(socket, name)` + a settings key that picks the active provider. This is how "add S3 as
@@ -599,6 +605,18 @@ backend core-module requirements. Remaining host navigation and page queries,
 query/type re-exports and directory hooks are transitional migration debt, not
 approved final architecture. Tests distinguish picker queries from those existing
 host navigation consumers rather than claiming all feature requests have stopped.
+
+### Contributed transition-rule editors (RADD-1383)
+
+Workflow's bundled UI package exports `@radd-plugin-ui/workflow/transition-rule-contract`: the slot
+`workflow.transition.rule` and `TransitionRuleEditorProps` (the row's rules, `onChange(check,
+params | null)`, `canManage`, `saving` — not `pending`, which `<Slot>` keeps as its own prop). The
+host's transitions editor renders the slot on every row, keeps contributed rules after its own, and
+reads each contribution's `match` (its check key) to tell a served rule from one whose plugin is
+gone: the latter shows a fail-closed notice with a Remove control, because the server refuses every
+move it governs. Approvals contributes "Require approval" from its remote and declares the
+package dependency. Proofs: `browser-resolvable-threads.mjs` (mocked, live withdrawal) and
+`approval-rule-editor-proof.mjs` (real backend).
 
 ### Owner-provided team relationships (RADD-1359)
 

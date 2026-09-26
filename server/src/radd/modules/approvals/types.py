@@ -3,6 +3,22 @@
 from enum import StrEnum
 
 
+class ApprovalCheck(StrEnum):
+    """The transition-rule check this plugin serves on the kernel's
+    TRANSITION_CHECK socket (RADD-1383). Params: {"approvers": [{kind, id,
+    name, required?}]} — EVERY entry must be satisfied."""
+
+    REQUIRE_APPROVAL = "require_approval"
+
+
+class ApproverKind(StrEnum):
+    """One approver entry on a require_approval rule (spec 107): a USER must
+    approve personally; a TEAM needs `required` approvals from current members."""
+
+    USER = "user"
+    TEAM = "team"
+
+
 class ApprovalStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"  # enough approve votes — a banked unlock until consumed

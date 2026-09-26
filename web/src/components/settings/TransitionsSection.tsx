@@ -8,8 +8,6 @@ import {
   Plus,
   RotateCcw,
   Trash2,
-  User as UserIcon,
-  Users,
   X,
 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
@@ -17,18 +15,18 @@ import { fieldInScope } from "../../lib/field-scope";
 import { TRANSITION_MODE_LABELS } from "../../lib/meta";
 import { ApiPath, apiTransitionPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { useCurrentUser, usePermissions } from "../../lib/hooks";
+import { usePermissions } from "../../lib/hooks";
 import { issueTypesQuery, queryKeys, releasesQuery, scopedSettingsQuery, teamsQuery, transitionsQuery, usersQuery } from "../../lib/queries";
-import { ConditionOp, ItemKind, Permission, Priority, SettingScope, TransitionCheck, TransitionMode, WORKFLOW_TRANSITION_MODE_KEY, type ApproverEntry, type ConditionOpValue, type FieldConditionParams, type State, type Transition, type TransitionCreate, type TransitionRule, type TransitionUpdate } from "../../lib/types";
+import { ConditionOp, ItemKind, Permission, Priority, SettingScope, TransitionCheck, TransitionMode, WORKFLOW_TRANSITION_MODE_KEY, type ConditionOpValue, type FieldConditionParams, type State, type Transition, type TransitionCreate, type TransitionRule, type TransitionUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { SelectField } from "../SelectField";
-import { SubjectPicker, type Subject } from "./SubjectPicker";
-import { TokenMultiSelect, type TokenOption, IconButton, ErrorText } from "@radd/plugin-sdk";
+import { TokenMultiSelect, type TokenOption, IconButton, ErrorText, Slot, useSlot, useRemotesLoading } from "@radd/plugin-sdk";
 import { useKeyedRows } from "@radd/plugin-sdk";
 import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
 import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
 import type { FieldDef } from "@radd-plugin-ui/fields/types";
 import type { Project } from "@radd-plugin-ui/projects/types";
+import { TRANSITION_RULE_SLOT, type ContributedTransitionRule, type TransitionRuleEditorProps } from "@radd-plugin-ui/workflow/transition-rule-contract";
 
 /** Any-state wildcard sentinel for the from-state selects ("" = NULL). */
 const ANY_STATE = "";
@@ -150,44 +148,45 @@ const isCondition = (
 ): rule is Extract<TransitionRule, { check: typeof TransitionCheck.requireField }> =>
   rule.check === TransitionCheck.requireField;
 
-const approvalEntriesOf = (rules: TransitionRule[]): ApproverEntry[] | undefined => {
-  const rule = rules.find((entry) => entry.check === TransitionCheck.requireApproval);
-  return rule && rule.check === TransitionCheck.requireApproval
-    ? rule.params.approvers
-    : undefined;
-};
+const OWN_CHECKS: ReadonlySet<string> = new Set(Object.values(TransitionCheck));
+
+/** Every rule in the slot's shape (params opaque) — what a contributed editor reads. */
+const asContributed = (rules: TransitionRule[]): ContributedTransitionRule[] =>
+  rules.map(({ check, params }) => ({ check, params: params as Record<string, unknown> }));
+
+/** The rules plugins serve (RADD-1383): carried, in order, through every edit of the row's own. */
+const contributedOf = (rules: TransitionRule[]): ContributedTransitionRule[] =>
+  asContributed(rules.filter((rule) => !OWN_CHECKS.has(rule.check)));
 
 /** The require_field conditions as a bare list (the editor's working shape). */
 const conditionsOf = (rules: TransitionRule[]): FieldConditionParams[] =>
   rules.filter(isCondition).map((rule) => rule.params);
 
-/** Rebuild the rules array from the two edited halves (approval sorts last —
- * evaluation puts its failure last anyway). */
 /** The named on/off checks a row can carry (no params). */
 interface Flags {
   resolvedThreads: boolean;
   release: boolean;
 }
 
+/** Rebuild the rules array from its edited parts: workflow's own checks, then the contributed
+ * ones — a gate someone else clears (an approval) sorts last, as its failure does. */
 const rebuildRules = (
   conditions: FieldConditionParams[],
-  approval: ApproverEntry[] | null | undefined,
   flags: Flags,
+  contributed: ContributedTransitionRule[],
 ): TransitionRule[] => [
   ...conditions.map((params) => ({ check: TransitionCheck.requireField, params })),
   ...(flags.resolvedThreads ? [{ check: TransitionCheck.requireResolvedThreads, params: {} }] : []),
   ...(flags.release ? [{ check: TransitionCheck.requireRelease, params: {} }] : []),
-  ...(approval && approval.length > 0
-    ? [{ check: TransitionCheck.requireApproval, params: { approvers: approval } }]
-    : []),
+  ...contributed,
 ];
 
 /**
  * "Transitions" section of the project Workflow settings page (specs 61/107):
  * the enforcement-mode select (a scoped scalar, spec-50 cascade) plus the
  * transition-row editor — a CONDITION BUILDER (field → operator → value) over
- * builtins + custom fields, and per-entry approver rules. Row edits PATCH
- * immediately, like the states list.
+ * builtins + custom fields, and the rule editors plugins contribute (approvals'
+ * approver rules, RADD-1383). Row edits PATCH immediately, like the states list.
  */
 export function TransitionsSection({
   project,
@@ -333,8 +332,8 @@ function ModeSetting({ projectId }: { projectId: string }) {
   );
 }
 
-/** One transition row: from/to selects, the condition builder, approver rules,
- * reorder + delete. */
+/** One transition row: from/to selects, the condition builder, the contributed
+ * rule editors, reorder + delete. */
 function TransitionRow({
   transition,
   neighbours,
@@ -351,7 +350,6 @@ function TransitionRow({
   canManage: boolean;
 }) {
   const queryClient = useQueryClient();
-  const me = useCurrentUser();
   const patch = useMutation({
     mutationFn: (body: TransitionUpdate) =>
       api.patch<Transition>(apiTransitionPath(transition.id), body),
@@ -378,10 +376,25 @@ function TransitionRow({
   };
 
   const patchRules = (rules: TransitionRule[]) => patch.mutate({ rules });
-  const approval = approvalEntriesOf(transition.rules);
+  const contributed = contributedOf(transition.rules);
   const flags: Flags = {
     resolvedThreads: transition.rules.some(rule => rule.check === TransitionCheck.requireResolvedThreads),
     release: transition.rules.some(rule => rule.check === TransitionCheck.requireRelease),
+  };
+  // A contributed editor writes ITS check's rule; everything else on the row is kept.
+  const setContributed = (check: string, params: Record<string, unknown> | null) => {
+    const next = params === null
+      ? contributed.filter((rule) => rule.check !== check)
+      : contributed.some((rule) => rule.check === check)
+        ? contributed.map((rule) => (rule.check === check ? { check, params } : rule))
+        : [...contributed, { check, params }];
+    patchRules(rebuildRules(conditionsOf(transition.rules), flags, next));
+  };
+  const editorProps: TransitionRuleEditorProps = {
+    rules: asContributed(transition.rules),
+    onChange: setContributed,
+    canManage,
+    saving: patch.isPending,
   };
 
   return (
@@ -466,14 +479,14 @@ function TransitionRow({
         label="Conditions"
         emptyText="None — the move is not gated on issue data."
         addPrompt="+ Add a condition…"
-        onChange={(conditions) => patchRules(rebuildRules(conditions, approval, flags))}
+        onChange={(conditions) => patchRules(rebuildRules(conditions, flags, contributed))}
       />
 
       <label className="mt-2 flex items-center gap-1.5 text-xs text-fg">
         <input
           type="checkbox"
           checked={flags.resolvedThreads}
-          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), approval, { ...flags, resolvedThreads: event.target.checked }))}
+          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), { ...flags, resolvedThreads: event.target.checked }, contributed))}
           disabled={!canManage || patch.isPending}
           className="size-3.5 accent-accent"
         />
@@ -490,7 +503,7 @@ function TransitionRow({
         <input
           type="checkbox"
           checked={flags.release || transition.on_release}
-          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), approval, { ...flags, release: event.target.checked }))}
+          onChange={event => patchRules(rebuildRules(conditionsOf(transition.rules), { ...flags, release: event.target.checked }, contributed))}
           disabled={!canManage || patch.isPending || transition.on_release}
           className="size-3.5 accent-accent"
           data-transition-requires-release
@@ -515,37 +528,14 @@ function TransitionRow({
         requests move their issues into the From state. Needs a From state other than Any state.
       </p>
 
-      <label className="mt-2 flex items-center gap-1.5 text-xs text-fg">
-        <input
-          type="checkbox"
-          checked={approval !== undefined}
-          onChange={() =>
-            patchRules(
-              rebuildRules(
-                conditionsOf(transition.rules),
-                approval !== undefined || !me
-                  ? null
-                  : // Seed with the configuring user (server 409s on empty).
-                    [{ kind: "user", id: me.id, name: me.name }],
-                flags,
-              ),
-            )
-          }
-          disabled={!canManage || patch.isPending || (approval === undefined && !me)}
-          className="size-3.5 accent-accent"
-        />
-        Require approval
-      </label>
-      {approval !== undefined && (
-        <ApproversEditor
-          entries={approval}
-          canManage={canManage}
-          pending={patch.isPending}
-          onChange={(entries) =>
-            patchRules(rebuildRules(conditionsOf(transition.rules), entries, flags))
-          }
-        />
-      )}
+      {/* RADD-1383: the checks plugins serve bring their own editors (approvals: Require approval). */}
+      <Slot id={TRANSITION_RULE_SLOT} {...editorProps} />
+      <UnservedRules
+        rules={contributed}
+        canManage={canManage}
+        saving={patch.isPending}
+        onRemove={(check) => setContributed(check, null)}
+      />
       {(patch.isError || remove.isError) && (
         <ErrorText className="mt-1" error={patch.error ?? remove.error} />
       )}
@@ -920,106 +910,49 @@ function ConditionValues({
   );
 }
 
-/** Per-entry approver rules (spec 107): every listed person must approve;
- * a team entry needs N approvals from its current members. */
-function ApproversEditor({
-  entries,
+/** A contributed rule whose plugin is not loaded (RADD-1383). The server FAILS it closed — every
+ * move the row governs is refused — so the editor says so and offers to remove it, rather than
+ * leaving a gate nobody can see or satisfy. Quiet while plugin bundles are still loading. */
+function UnservedRules({
+  rules,
   canManage,
-  pending,
-  onChange,
+  saving,
+  onRemove,
 }: {
-  entries: ApproverEntry[];
+  rules: ContributedTransitionRule[];
   canManage: boolean;
-  pending: boolean;
-  onChange: (entries: ApproverEntry[]) => void;
+  saving: boolean;
+  onRemove: (check: string) => void;
 }) {
-  const users = useQuery(usersQuery);
-  const teams = useQuery(teamsQuery());
-  const subjects: Subject[] = [
-    ...(teams.data ?? []).map((team) => ({
-      type: "team" as const,
-      id: team.id,
-      name: team.name,
-    })),
-    ...(users.data ?? [])
-      .filter((user) => user.active)
-      .map((user) => ({ type: "user" as const, id: user.id, name: user.name })),
-  ].filter(
-    (subject) =>
-      !entries.some((entry) => entry.kind === subject.type && entry.id === subject.id),
-  );
-
-  const setRequired = (index: number, required: number) => {
-    if (!Number.isInteger(required) || required < 1) return;
-    onChange(entries.map((entry, i) => (i === index ? { ...entry, required } : entry)));
-  };
-
-  return (
-    <div className="mt-2 flex flex-col gap-1.5 rounded-md border border-subtle bg-surface/40 px-3 py-2">
-      <span className="text-[11px] uppercase tracking-wide text-fg-faint">
-        Approvers — every entry must be satisfied
-      </span>
-      {entries.map((entry, index) => (
-        <div
-          key={`${entry.kind}:${entry.id}`}
-          className="flex flex-wrap items-center gap-2 text-xs text-fg"
-        >
-          {entry.kind === "team" ? (
-            <Users size={13} className="text-fg-muted" aria-hidden />
-          ) : (
-            <UserIcon size={13} className="text-fg-muted" aria-hidden />
-          )}
-          <span>{entry.name ?? entry.id}</span>
-          {entry.kind === "team" && (
-            <label className="flex items-center gap-1.5 text-[11px] text-fg-secondary">
-              — requires
-              <input
-                type="number"
-                min={1}
-                value={entry.required ?? 1}
-                onChange={(event) => setRequired(index, Number(event.target.value))}
-                disabled={!canManage || pending}
-                className="h-6 w-14 rounded border border-strong bg-surface px-1.5 text-xs text-fg"
-              />
-              member approval(s)
-            </label>
-          )}
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => onChange(entries.filter((_, i) => i !== index))}
-              disabled={pending}
-              aria-label={`Remove approver ${entry.name ?? entry.id}`}
-              className="rounded p-0.5 text-fg-faint hover:bg-elevated hover:text-red-400 cursor-pointer"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      ))}
-      {canManage && (
-        <div className="max-w-72">
-          <SubjectPicker
-            subjects={subjects}
-            value={null}
-            onChange={(subject) => {
-              if (!subject) return;
-              onChange([
-                ...entries,
-                {
-                  kind: subject.type as "user" | "team",
-                  id: subject.id,
-                  name: subject.name,
-                  ...(subject.type === "team" ? { required: 1 } : {}),
-                },
-              ]);
-            }}
-            placeholder="Add a person or team…"
-          />
-        </div>
-      )}
-    </div>
-  );
+  const editors = useSlot(TRANSITION_RULE_SLOT);
+  const loading = useRemotesLoading();
+  if (loading) return null;
+  const served = new Set(editors.map((entry) => entry.contribution.match));
+  return rules
+    .filter((rule) => !served.has(rule.check))
+    .map((rule) => (
+      <div
+        key={rule.check}
+        className="mt-2 flex items-center gap-2 text-xs text-status-warning-ink"
+        data-unserved-rule={rule.check}
+      >
+        <span>
+          Requires <span className="font-mono">{rule.check}</span>, but the plugin that provides it
+          is disabled — every move this transition governs is refused until the plugin is enabled
+          again or the rule is removed.
+        </span>
+        {canManage && (
+          <IconButton
+            danger
+            onClick={() => onRemove(rule.check)}
+            disabled={saving}
+            aria-label={`Remove rule ${rule.check}`}
+          >
+            <X size={13} />
+          </IconButton>
+        )}
+      </div>
+    ));
 }
 
 /** Add a transition edge (POST /transitions); rules are edited on the row. */

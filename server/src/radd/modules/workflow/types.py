@@ -61,8 +61,11 @@ class TransitionMode(StrEnum):
 
 
 class TransitionCheck(StrEnum):
-    """Validation rules a transition row may carry (`rules` = [{check, params}]).
-    The extension point for later gates (require_permission…) — no schema change.
+    """The checks WORKFLOW evaluates itself (`rules` = [{check, params}]).
+
+    Every other `check` key belongs to a plugin serving the kernel's
+    TRANSITION_CHECK socket (RADD-1383) — `approvals` answers
+    `require_approval` — so a new gate is a provider, never an edit here.
 
     Spec 107 collapsed the five legacy checks (require_assignee / require_estimate
     / require_team / require_comment / require_fields) into ONE structured
@@ -73,12 +76,6 @@ class TransitionCheck(StrEnum):
     # (comparison + phrasing); `display` carries human names for id-valued
     # `values` (cosmetic, failure strings only).
     REQUIRE_FIELD = "require_field"
-    # Spec 71, reshaped by spec 107: params {"approvers": [{kind: "user"|"team",
-    # id, name, required?}]} — EVERY entry must be satisfied (a user approves
-    # personally; a team needs `required` approvals from current members).
-    # Passes iff the item holds a consumable APPROVED request for the target
-    # state (resolved via the approvals module's deferred seam).
-    REQUIRE_APPROVAL = "require_approval"
     REQUIRE_RESOLVED_THREADS = "require_resolved_threads"
     # RADD-1285: the item has a release. The named form of what spec 112 had
     # people hand-build as a require_field on the Release builtin.
@@ -90,14 +87,6 @@ class ConditionKind(StrEnum):
 
     BUILTIN = "builtin"  # a WorkItem builtin (or the estimate/comment specials)
     CUSTOM = "custom"  # a field-registry key
-
-
-class ApproverKind(StrEnum):
-    """One approver entry on a require_approval rule (spec 107): a USER must
-    approve personally; a TEAM needs `required` approvals from current members."""
-
-    USER = "user"
-    TEAM = "team"
 
 
 class ConditionOp(StrEnum):

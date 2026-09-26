@@ -249,14 +249,9 @@ async def _move_one(
     session.add(ItemKeyAlias(old_key=old_key.upper(), item_id=item.id))
     await session.flush()
 
-    # Approvals (spec 71): a move into an approved target consumes the request,
-    # mirroring the single-item path. Soft dep — module optional.
-    try:
-        from radd.modules.approvals import service as approvals_service
-    except ImportError:
-        pass
-    else:
-        await approvals_service.consume(session, item.id, item.state_id)
+    # RADD-1383: arriving is a state change like any other — the check plugins
+    # hear about it through workflow, mirroring the single-item path.
+    await workflow.state_moved(session, item.id, item.state_id)
 
     after = (
         await hydrate(

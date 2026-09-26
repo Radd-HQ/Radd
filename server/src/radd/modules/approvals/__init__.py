@@ -1,8 +1,10 @@
-from radd.kernel import EventTypeSpec, PluginUiManifest
+from radd.kernel import EventTypeSpec, IntegrationSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
+from radd.kernel.sockets import Socket
 
+from .gate import ApprovalGate
 from .router import router
-from .types import ApprovalEvent
+from .types import ApprovalCheck, ApprovalEvent
 
 plugin = RaddPlugin(
     name="approvals",
@@ -19,7 +21,16 @@ plugin = RaddPlugin(
         EventTypeSpec(ApprovalEvent.DECLINED, "Approval declined", "Service desk", item_scoped=True),
         EventTypeSpec(ApprovalEvent.CANCELED, "Approval canceled", "Service desk", item_scoped=True),
     ),
-    # Federated UI (spec 94): the Approvals card in the issue rail (web/remotes/approvals),
-    # rendered by the host via the issue.panel.section slot.
+    # RADD-1383: `require_approval` is this plugin's check, served on the kernel
+    # socket workflow evaluates through — so disabling approvals withdraws it,
+    # and workflow fails the rules it served closed instead of calling in here.
+    integrations=(
+        IntegrationSpec(
+            Socket.TRANSITION_CHECK, ApprovalCheck.REQUIRE_APPROVAL.value, impl=ApprovalGate()
+        ),
+    ),
+    # Federated UI (spec 94): the Approvals card in the issue rail (issue.panel.section)
+    # and the approver editor on the workflow transitions editor (RADD-1383, the slot
+    # workflow's UI package publishes in transition-rule-contract.ts).
     ui=PluginUiManifest(remote="/plugins/approvals/remoteEntry.js", ui_api_version="1.0.0"),
 )

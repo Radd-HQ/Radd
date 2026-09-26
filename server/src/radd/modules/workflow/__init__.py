@@ -77,7 +77,9 @@ plugin = RaddPlugin(
         "Workflow: each project's states and the rules for moving between them."
     ),
     depends_on=("projects", "events", "auth", "settings", "teams"),
-    weak_depends=("approvals", "comments", "fields", "items", "timelogging"),
+    # RADD-1383: approvals is no longer a reach — its require_approval check
+    # arrives through the kernel TRANSITION_CHECK socket.
+    weak_depends=("comments", "fields", "items", "timelogging"),
     routers=(router, category_router, transitions_router),
     exception_handlers=((TransitionError, _transition_handler),),
     event_types=(

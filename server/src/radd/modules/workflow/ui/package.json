@@ -8,7 +8,8 @@
     "@radd/plugin-sdk": "*"
   },
   "exports": {
-    ".": "./src/index.tsx"
+    ".": "./src/index.tsx",
+    "./transition-rule-contract": "./src/transition-rule-contract.ts"
   },
   "radd": {
     "bundled": true

@@ -1,10 +1,11 @@
 """Approval request/vote lifecycle on workflow transitions (spec 71).
 
-The workflow guard reaches this module through two deferred, feature-detected
-seams — `approved_target_state_ids` (does the item hold a consumable unlock for
-a target state?) and `consume` (spend the unlock after a successful move, called
-by items.update_item). Everything else is ordinary request-scoped service work:
-flush, never commit; cross-module via public service functions only.
+Workflow reaches this module ONLY through the kernel's TRANSITION_CHECK socket
+(RADD-1383): `gate.ApprovalGate` serves `require_approval`, answering from
+`approved_target_state_ids` (does the item hold a consumable unlock for a
+target state?) and `consume` (spend the unlock after a successful move, which
+workflow reports on items' behalf). Everything else is ordinary request-scoped
+service work: flush, never commit; cross-module via public service functions only.
 
 Rule params are SNAPSHOTTED onto the request; only team MEMBERSHIP resolves
 live at vote time (spec 71 known simplification — team edits change the
@@ -36,11 +37,8 @@ from radd.modules.teams import service as teams_service
 from radd.modules.workflow import service as workflow, transitions as workflow_transitions
 from radd.modules.workflow.guards import TransitionError
 from radd.modules.workflow.models import WorkflowTransition
-from radd.modules.workflow.types import TransitionCheck
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
-
-from radd.modules.workflow.types import ApproverKind
 
 from .models import ApprovalRequest, ApprovalVote
 from .schemas import (
@@ -57,16 +55,18 @@ from .schemas import (
 )
 from .types import (
     LIVE_STATUSES,
+    ApprovalCheck,
     ApprovalEntity,
     ApprovalEvent,
     ApprovalStatus,
     ApprovalVerdict,
+    ApproverKind,
 )
 
 _LIVE = [status.value for status in LIVE_STATUSES]
 
 
-# --- the workflow/items seams (deferred imports on their side) ---
+# --- what the TRANSITION_CHECK provider (gate.py) answers from ---
 
 
 async def approved_target_state_ids(session: AsyncSession, item_id: uuid.UUID) -> set[str]:
@@ -106,7 +106,7 @@ def _approval_params(row: WorkflowTransition | None) -> dict | None:
     if row is None:
         return None
     for rule in row.rules or []:
-        if rule.get("check") == TransitionCheck.REQUIRE_APPROVAL.value:
+        if rule.get("check") == ApprovalCheck.REQUIRE_APPROVAL.value:
             return rule.get("params") or {}
     return None
 

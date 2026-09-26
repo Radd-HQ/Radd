@@ -15,9 +15,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.approvals import service as approvals
+from radd.modules.approvals.gate import ApprovalGate
 from radd.modules.approvals.models import ApprovalRequest
 from radd.modules.approvals.schemas import ApprovalRequestCreate, ApprovalVoteCreate
-from radd.modules.approvals.types import ApprovalStatus, ApprovalVerdict
+from radd.modules.approvals.types import ApprovalCheck, ApprovalStatus, ApprovalVerdict
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
@@ -105,7 +106,7 @@ def team_entry(team, required: int = 1) -> dict:
 
 def approval_rule(*entries: dict) -> TransitionRule:
     return TransitionRule(
-        check=TransitionCheck.REQUIRE_APPROVAL, params={"approvers": list(entries)}
+        check=ApprovalCheck.REQUIRE_APPROVAL, params={"approvers": list(entries)}
     )
 
 
@@ -120,6 +121,22 @@ async def _expect_blocked(db, item_id, data, actor) -> TransitionError:
 
 
 # --- (a) guard seam + consume-on-use ---
+
+
+def test_failure_names_the_entries_and_passes_for_an_approved_target():
+    """The gate's sentence names the entry rules (spec 107), not a bare count."""
+    gate = ApprovalGate()
+    params = {
+        "approvers": [
+            {"kind": "user", "id": "u1", "name": "Hussein Jarrar"},
+            {"kind": "team", "id": "t1", "name": "DevOps", "required": 2},
+        ]
+    }
+    assert gate.failure(params, frozenset(), "s1") == (
+        "approval required (Hussein Jarrar; 2 of DevOps)"
+    )
+    assert gate.failure(params, frozenset({"s1"}), "s1") is None
+    assert gate.failure(params, frozenset({"s2"}), "s1") is not None
 
 
 async def test_guard_blocks_then_approved_request_unlocks_one_move(db, actor):
@@ -376,7 +393,7 @@ async def test_rule_write_validation_conflicts(db, actor):
                 to_state_id=states["Done"].id,
                 rules=[
                     TransitionRule(
-                        check=TransitionCheck.REQUIRE_APPROVAL,
+                        check=ApprovalCheck.REQUIRE_APPROVAL,
                         params={"approvers": entries},
                     )
                 ],

@@ -11,6 +11,7 @@ defined now; a concrete second provider arrives when the first consuming plugin 
 actually built. `StorageBackend` and `TaskBackend` already have real providers.
 """
 
+from collections.abc import Mapping
 from datetime import date
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
@@ -24,6 +25,7 @@ class Socket(StrEnum):
     STORAGE_ROUTING_RULE = "storage_routing_rule"  # user_choice | cidr | llm (spec 102)
     TASK_BACKEND = "task_backend"  # localloop (default) | celery
     NON_WORKING_DAYS = "non_working_days"  # calendar dates nobody works (RADD-1031)
+    TRANSITION_CHECK = "transition_check"  # a workflow transition-rule check (RADD-1383)
 
 
 # --- interface definitions (the seam contracts) ---
@@ -89,6 +91,47 @@ class NonWorkingDaysProvider(Protocol):
     """
 
     async def non_working_dates(self, session: Any, start: date, end: date) -> set[date]: ...
+
+
+@runtime_checkable
+class TransitionCheckProvider(Protocol):
+    """One CHECK a workflow transition rule may name (RADD-1383).
+
+    Mechanism only: the kernel knows a transition row carries rules
+    `[{check, params}]` and that some checks belong to plugins. `workflow`
+    evaluates its own (field conditions, resolved threads, a release) and asks
+    this socket for every other key; `approvals` answers `require_approval`.
+    The provider owns the check end to end, so workflow never learns it exists:
+
+    * `check` — the rule's `check` key, unique across providers (register the
+      IntegrationSpec under the same name);
+    * `sort_last` — its failure follows workflow's own: a gate someone else
+      clears reads after the data the mover can fix;
+    * `validate(session, params)` — the WRITE path: return the params to store
+      (normalized, display names snapshotted server-side) or raise the
+      `ConflictError` (409) the rule editor shows;
+    * `prepare(session, item)` — the per-item data `failure` needs, fetched once
+      per evaluation so a list of targets costs one query, not one per target;
+    * `failure(params, prepared, to_state_id)` — pure: None when the rule
+      passes, else the human sentence the mover sees;
+    * `moved(session, item_id, to_state_id)` — told after every successful
+      state change, whatever governed it (an approval is spent by the move it
+      unlocked).
+
+    A stored rule whose provider is gone — the plugin disabled or uninstalled —
+    FAILS CLOSED in workflow: an admin configured that gate, and switching a
+    plugin off must not quietly open it.
+    """
+
+    check: str
+    sort_last: bool
+
+    async def validate(self, session: Any, params: dict[str, Any]) -> dict[str, Any]: ...
+    async def prepare(self, session: Any, item: Any) -> Any: ...
+    def failure(
+        self, params: Mapping[str, Any], prepared: Any, to_state_id: str | None
+    ) -> str | None: ...
+    async def moved(self, session: Any, item_id: Any, to_state_id: Any) -> None: ...
 
 
 @runtime_checkable

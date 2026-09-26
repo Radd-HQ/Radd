@@ -95,7 +95,7 @@ plugin = RaddPlugin(
         ),
     ),
     depends_on=("projects", "workflow", "labels", "fields", "cycles", "releases", "auth", "teams", "events", "access", "itemtypes", "linktypes", "settings"),
-    weak_depends=("approvals", "comments", "timelogging"),
+    weak_depends=("comments", "timelogging"),
     routers=(router,),
     exception_handlers=(
         (FilterParseError, _filter_parse_handler),

@@ -22,7 +22,7 @@ from radd.modules.settings.types import SettingKey
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from . import guards
+from . import checks, guards
 from .guards import ItemSnapshot, TransitionError
 from .models import State, WorkflowTransition
 from .schemas import (
@@ -35,7 +35,6 @@ from .schemas import (
 from .types import (
     BUILTIN_OPS,
     DATE_BUILTINS,
-    ApproverKind,
     BuiltinField,
     ConditionKind,
     ConditionOp,
@@ -108,16 +107,21 @@ async def _validate_rules(
     project: Project,
     rules: Sequence[TransitionRule],
     applies_when: Sequence[dict] = (),
+    stored: Sequence[dict] = (),
 ) -> None:
     """Spec 107 write-validation, all 409: require_field conditions (and the
     applies_when scoping conditions — same shape, same validator) must name a
     real field with an operator its type allows and well-formed values (the
-    custom field's registry type is SNAPSHOTTED into params server-side);
-    require_approval entries must name real, active subjects (their display
-    names are snapshotted server-side too — never trusted from the client)."""
+    custom field's registry type is SNAPSHOTTED into params server-side).
+
+    RADD-1383: any other check belongs to its TRANSITION_CHECK provider, whose
+    `validate` returns the params to store. A key no loaded plugin serves is
+    refused — unless it is a rule the row ALREADY stores, unchanged (`stored`):
+    editing a row's other rules must not force deleting a gate whose plugin is
+    off. The kept rule stays fail-closed at evaluation."""
     definitions = None
     needs_registry = any(
-        rule.check is TransitionCheck.REQUIRE_FIELD
+        rule.check == TransitionCheck.REQUIRE_FIELD
         and rule.params.get("kind") == ConditionKind.CUSTOM.value
         for rule in rules
     ) or any(
@@ -129,13 +133,19 @@ async def _validate_rules(
         definitions = {
             d.key: d for d in await fields.definitions_for_project(session, project)
         }
+    providers = checks.providers()
     for rule in rules:
-        if rule.check is TransitionCheck.REQUIRE_FIELD:
+        check = guards.own_check(rule.check)
+        if check is TransitionCheck.REQUIRE_FIELD:
             _validate_field_rule(rule.params, definitions)
-        elif rule.check is TransitionCheck.REQUIRE_APPROVAL:
-            await _validate_approval_rule(session, rule.params)
-        elif rule.check is TransitionCheck.REQUIRE_RESOLVED_THREADS and rule.params:
+        elif check is TransitionCheck.REQUIRE_RESOLVED_THREADS and rule.params:
             raise _rule_error("all threads must be resolved takes no parameters")
+        elif check is None:
+            provider = providers.get(rule.check)
+            if provider is not None:
+                rule.params = await provider.validate(session, dict(rule.params))
+            elif rule.model_dump(mode="json") not in stored:
+                raise _rule_error(f'"{rule.check}" is not a check any enabled plugin provides')
     for condition in applies_when:
         _validate_field_rule(condition, definitions)
 
@@ -227,54 +237,6 @@ def _require_number(value: str) -> None:
         raise _rule_error(f"{value!r} is not a number") from None
 
 
-async def _validate_approval_rule(session: AsyncSession, params: dict) -> None:
-    """Spec 107: per-entry approver rules — every entry names a real subject
-    (users must be ACTIVE), team entries carry required >= 1, no duplicates.
-    Display names are snapshotted server-side for guard failure strings."""
-    from radd.modules.auth import service as auth
-    from radd.modules.teams import service as teams_service
-
-    entries = params.get("approvers")
-    if not isinstance(entries, list) or not entries:
-        raise _rule_error("an approval rule needs at least one approver")
-    seen: set[tuple[str, str]] = set()
-    user_ids: list[uuid.UUID] = []
-    team_ids: list[uuid.UUID] = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            raise _rule_error("malformed approver entry")
-        try:
-            kind = ApproverKind(entry.get("kind"))
-            entry_id = uuid.UUID(str(entry.get("id")))
-        except ValueError:
-            raise _rule_error("malformed approver entry") from None
-        if (kind.value, str(entry_id)) in seen:
-            raise _rule_error("duplicate approver entry")
-        seen.add((kind.value, str(entry_id)))
-        if kind is ApproverKind.TEAM:
-            required = entry.get("required", 1)
-            if not isinstance(required, int) or isinstance(required, bool) or required < 1:
-                raise _rule_error("a team's approvals required must be >= 1")
-            team_ids.append(entry_id)
-        else:
-            entry.pop("required", None)  # meaningless on a person
-            user_ids.append(entry_id)
-    users = await auth.users_by_ids(session, user_ids) if user_ids else {}
-    teams = await teams_service.teams_by_ids(session, team_ids) if team_ids else {}
-    for entry in entries:
-        entry_id = uuid.UUID(str(entry["id"]))
-        if entry["kind"] == ApproverKind.USER.value:
-            user = users.get(entry_id)
-            if user is None or not user.active:
-                raise _rule_error(f"unknown approver user {entry_id}")
-            entry["name"] = user.name
-        else:
-            team = teams.get(entry_id)
-            if team is None:
-                raise _rule_error(f"unknown approver team {entry_id}")
-            entry["name"] = team.name
-
-
 async def create_transition(
     session: AsyncSession, data: TransitionCreate, actor_id: uuid.UUID | None = None
 ) -> WorkflowTransition:
@@ -330,7 +292,7 @@ async def update_transition(
         session, project.id, from_state_id, to_state_id, exclude_id=transition.id
     )
     if data.rules is not None:
-        await _validate_rules(session, project, data.rules)
+        await _validate_rules(session, project, data.rules, stored=transition.rules or [])
         transition.rules = [rule.model_dump(mode="json") for rule in data.rules]
     if data.applies_when is not None:
         applies_when = [
@@ -561,18 +523,9 @@ async def _snapshot(
 
         definitions = await fields.definitions_for_project(session, project)
         field_labels = {d.key: d.name for d in definitions}
-    approved_to_state_ids: frozenset[str] = frozenset()
-    if TransitionCheck.REQUIRE_APPROVAL in guards.checks_in(rules):
-        # Spec 71: feature-detected — with the approvals module absent the rule
-        # simply always fails (the editor hides the option then).
-        try:
-            from radd.modules.approvals import service as approvals_service
-        except ImportError:
-            pass
-        else:
-            approved_to_state_ids = frozenset(
-                await approvals_service.approved_target_state_ids(session, item.id)
-            )
+    # RADD-1383: plugin checks prepare their own per-item data (approvals: the
+    # targets this item holds an approved request for) through the socket.
+    contributed = await checks.prepare(session, item, guards.contributed_checks_in(rules))
     unresolved_threads = False
     if TransitionCheck.REQUIRE_RESOLVED_THREADS in guards.checks_in(rules):
         from radd.modules.comments import service as comments
@@ -583,7 +536,7 @@ async def _snapshot(
         has_unresolved_threads=unresolved_threads,
         custom_fields=item.custom_fields or {},
         field_labels=field_labels,
-        approved_to_state_ids=approved_to_state_ids,
+        contributed=contributed,
     )
 
 
@@ -639,7 +592,9 @@ async def check_transition(
     rules = effective_rules(row)
     if not rules:
         return
-    failures = guards.evaluate(rules, snapshot, to_state_id=str(new_state_id))
+    failures = guards.evaluate(
+        rules, snapshot, to_state_id=str(new_state_id), providers=checks.providers()
+    )
     if failures:
         names = await _state_names(session, {old_state_id, new_state_id})
         raise TransitionError(
@@ -666,6 +621,7 @@ async def allowed_transitions(
         )
     rows = await list_transitions(session, project.id)
     snapshot = await snapshot_for(session, project, item, rows)
+    providers = checks.providers()
     for state in states:
         if state.id == item.state_id:
             # Staying put is not a transition — trivially allowed.
@@ -683,7 +639,9 @@ async def allowed_transitions(
             else:
                 failures = []
         else:
-            failures = guards.evaluate(effective_rules(row), snapshot, to_state_id=str(state.id))
+            failures = guards.evaluate(
+                effective_rules(row), snapshot, to_state_id=str(state.id), providers=providers
+            )
         targets.append(
             AllowedTarget(state_id=state.id, allowed=not failures, failures=failures)
         )

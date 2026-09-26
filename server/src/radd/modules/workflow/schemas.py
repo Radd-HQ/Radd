@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .types import StateCategory, TransitionCheck, TransitionMode
+from .types import StateCategory, TransitionMode
 from radd.apitypes import UtcDatetime
 
 
@@ -51,7 +51,11 @@ class StateRef(BaseModel):
 
 
 class TransitionRule(BaseModel):
-    check: TransitionCheck
+    #: A `TransitionCheck` workflow evaluates itself, or the key of a check a
+    #: plugin serves through the kernel TRANSITION_CHECK socket (RADD-1383) —
+    #: an open vocabulary, so `transitions._validate_rules` checks it on write
+    #: (409) and a stored rule whose plugin is gone still READS.
+    check: str = Field(min_length=1, max_length=100)
     params: dict[str, Any] = Field(default_factory=dict)
 
 

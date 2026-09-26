@@ -292,14 +292,9 @@ async def update_item(
 
     await session.flush()
     if item.state_id != old_state_id:
-        # Approvals (spec 71): a successful move into an approved target CONSUMES
-        # the request (one approval unlocks one move). Soft dep — module optional.
-        try:
-            from radd.modules.approvals import service as approvals_service
-        except ImportError:
-            pass
-        else:
-            await approvals_service.consume(session, item.id, item.state_id)
+        # RADD-1383: workflow tells whichever plugins serve transition checks
+        # (approvals spends the unlock this move used) — items imports none.
+        await workflow.state_moved(session, item.id, item.state_id)
     if data.title is not None or data.description is not None:
         await sync_mention_links(session, item)  # text changed → re-derive #[…] backlinks
     # The EVENT carries the historical time too, not just the row: item history,

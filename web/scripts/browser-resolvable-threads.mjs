@@ -1,4 +1,7 @@
-/** RADD-1282: browser contract for issue threads and workflow rule preservation. */
+/** RADD-1282: browser contract for issue threads and workflow rule preservation.
+ * RADD-1383: the approval rule's editor is the ACTUAL approvals remote (served from its
+ * ui/dist), contributed into the transitions editor's rule slot; withdrawn, the rule it
+ * served stays visible as a fail-closed notice the admin can remove. */
 import assert from "node:assert/strict";
 import http from "node:http";
 import {readFileSync, existsSync, statSync} from "node:fs";
@@ -9,6 +12,8 @@ import {openBrowser} from "./lib/cdp.mjs";
 import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
+const approvalsDist = fileURLToPath(new URL("../../server/src/radd/modules/approvals/ui/dist/", import.meta.url));
+let approvalsEnabled = true;
 const user = {id: "admin", name: "Review Owner", email: "fixture@example.test", global_role: "admin", permissions: ["*"], timezone: "UTC"};
 const project = {id: "project", key: "THR", name: "Thread review", permissions: ["*"], created_at: "2026-01-01"};
 const states = ["Open", "Done"].map((name, i) => ({id: `state-${i}`, name, category: i ? "done" : "todo", category_key: i ? "done" : "todo", position: i, project_id: project.id}));
@@ -34,6 +39,11 @@ const issueTypes = [{id: "type-bug", project_id: "project", name: "Bug", color: 
 let failResolve = false;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://fixture");
+  if (url.pathname.startsWith("/plugins/approvals/")) {
+    const file = path.join(approvalsDist, url.pathname.slice("/plugins/approvals/".length));
+    if (!existsSync(file)) {res.writeHead(404); res.end(); return;}
+    res.writeHead(200, {"content-type": file.endsWith(".js") ? "text/javascript" : "text/css"}); res.end(readFileSync(file)); return;
+  }
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
     let raw = ""; for await (const chunk of req) raw += chunk;
@@ -41,7 +51,10 @@ const server = http.createServer(async (req, res) => {
     requests.push({route, query: url.search, method: req.method, body});
     let data = [], status = 200;
     if (route === "/auth/me") data = user;
-    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS], ui: []};
+    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], ui: [],
+      plugins: [...CORE_PLUGINS, ...(approvalsEnabled ? ["approvals"] : [])],
+      remotes: approvalsEnabled ? [{name: "approvals", remote_entry: "/plugins/approvals/remoteEntry.js", ui_api_version: "1.0.0"}] : []};
+    else if (route === "/items/issue/approvals") data = {live: [], history: [], requestable_to_states: []};
     else if (route === "/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};
@@ -215,6 +228,20 @@ try {
   await until(() => !transition.rules.some(r => r.check === "require_approval"), "approval toggle did not save");
   assert(transition.rules.some(r => r.check === "require_resolved_threads"), "approval edit dropped thread guard");
   await shows("Require approval", false);
+  // Ticked again, the remote seeds the configuring user (the server refuses an empty rule).
+  await s.click('label', text => text.trim() === "Require approval");
+  await until(() => transition.rules.some(r => r.check === "require_approval" && r.params.approvers?.[0]?.id === user.id), "approval toggle did not re-seed");
+  assert.equal(transition.rules.at(-1).check, "require_approval", "the contributed rule no longer sorts last");
+  await shows("Require approval", true);
+  // Withdrawn: the editor leaves with the plugin, the rule stays and says it refuses every move.
+  approvalsEnabled = false;
+  await s.eval(`window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey: ['capabilities']})`);
+  await until(() => s.eval(`!!document.querySelector('[data-unserved-rule="require_approval"]')`), "withdrawn approval rule shows no fail-closed notice");
+  assert.equal(await s.eval(`!!document.querySelector('[data-approval-rule]')`), false, "approval editor outlived its plugin");
+  await s.click('[aria-label="Remove rule require_approval"]');
+  await until(() => !transition.rules.some(r => r.check === "require_approval"), "unserved rule did not remove");
+  assert(transition.rules.some(r => r.check === "require_resolved_threads"), "removing the unserved rule dropped the thread guard");
+  await until(() => s.eval(`!document.querySelector('[data-unserved-rule]')`), "notice outlived the removed rule");
   await until(() => s.eval(`!!document.querySelector('[aria-label="Remove condition"]:not([disabled])')`), "field condition not removable");
   await s.click('[aria-label="Remove condition"]');
   await until(() => !transition.rules.some(r => r.check === "require_field"), "field condition did not save");
@@ -226,7 +253,7 @@ try {
   await until(() => s.eval(`!!document.querySelector('[data-thread-rule="type-bug"]')`), "issue-type rule row missing");
   assert.equal(threadPolicy.default, "author");
   await s.screenshot("/tmp/radd-thread-workflow.png");
-  console.log(JSON.stringify({passed: true, checks: ["ordinary comments have no lifecycle", "a thread looks like a thread", "the rule hides resolve controls", "reply keeps a resolved thread resolved", "reply and unresolve reopens", "replies persist", "resolution error", "resolve/reopen", "transition refresh", "unresolved filter", "composer creates explicit thread", "composer resets", "workflow preserves independent rules"], screenshots: ["/tmp/radd-thread-resolved.png", "/tmp/radd-resolvable-threads.png", "/tmp/radd-thread-workflow.png"]}));
+  console.log(JSON.stringify({passed: true, checks: ["ordinary comments have no lifecycle", "a thread looks like a thread", "the rule hides resolve controls", "reply keeps a resolved thread resolved", "reply and unresolve reopens", "replies persist", "resolution error", "resolve/reopen", "transition refresh", "unresolved filter", "composer creates explicit thread", "composer resets", "workflow preserves independent rules", "approval editor is the approvals remote", "withdrawn plugin rule fails closed and can be removed"], screenshots: ["/tmp/radd-thread-resolved.png", "/tmp/radd-resolvable-threads.png", "/tmp/radd-thread-workflow.png"]}));
 } catch (error) {
   if (browser) {
     await browser.session.screenshot("/tmp/radd-threads-failure.png");
