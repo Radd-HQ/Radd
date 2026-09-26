@@ -8,7 +8,8 @@ import { hostEntities, hostPaths } from "./queries";
 import type { HostBackfillReport, HostConnection, HostRepo } from "./types";
 
 /** What a repository row may change in one PATCH. */
-type RepoPatch = Partial<Pick<HostRepo, "enabled" | "link_all_projects" | "mirror_time" | "project_id" | "time_category_id">>;
+type RepoPatch = Partial<Pick<HostRepo,
+  "enabled" | "link_all_projects" | "mirror_time" | "move_on_merge" | "publish_on_release" | "project_id" | "time_category_id">>;
 
 /** The work categories a mirrored worklog can carry — `undefined` while loading. */
 export type Categories = { rows: WorkCategoryChoice[] | undefined; unavailable: boolean };
@@ -18,8 +19,10 @@ export type Categories = { rows: WorkCategoryChoice[] | undefined; unavailable: 
  * publish, which category mirrored time carries, and its switches. Each row owns
  * its mutations, so saving one repository never disables the others.
  */
-export function RepoRow({ provider, connection, repo, categories }: {
+export function RepoRow({ provider, changeNoun, connection, repo, categories }: {
   provider: string;
+  /** What a merged change is called on this host ("merge request", "pull request"). */
+  changeNoun: string;
   connection: HostConnection;
   repo: HostRepo;
   categories: Categories;
@@ -82,6 +85,16 @@ export function RepoRow({ provider, connection, repo, categories }: {
           onChange={(next) => patch.mutate({ link_all_projects: next })} />
         <Switch label="Mirror time" checked={repo.mirror_time} disabled={patch.isPending}
           onChange={(next) => patch.mutate({ mirror_time: next })} data-mirror-time={repo.full_name} />
+      </div>
+      {/* RADD-1369: what a delivery DOES beyond linking — off until switched on here. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pl-5">
+        <Switch label={`Move linked issues to waiting for release when a ${changeNoun} merges`}
+          checked={repo.move_on_merge} disabled={patch.isPending}
+          onChange={(next) => patch.mutate({ move_on_merge: next })} data-move-on-merge={repo.full_name} />
+        <Switch label="Publish a version on release and ship what is waiting"
+          checked={repo.publish_on_release} disabled={patch.isPending || (!repo.project_id && !repo.publish_on_release)}
+          onChange={(next) => patch.mutate({ publish_on_release: next })} data-publish-on-release={repo.full_name} />
+        {!repo.project_id && <span className="text-[11px] text-fg-muted">Publishing needs a default project.</span>}
       </div>
       {error && <p role="alert" className="pl-5 text-xs text-danger-text">{errorMessage(error)}</p>}
       {report && (

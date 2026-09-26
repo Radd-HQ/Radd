@@ -884,6 +884,18 @@ as declared `event_types` — the catalog had KeyError'd (500) on
 saved space ID or slug: the picker stores IDs since RADD-1365, the ref carries
 both, older graphs hold slugs.
 
+RADD-1369 gives every GitLab/GitHub/Forgejo repository row two switches, OFF
+by default and for existing rows (migration `d1369vcspolicy`): `move_on_merge`
+(a merged MR/PR moves the issues it names to their project's waiting state —
+`releases.pipeline.waiting_state_id`, restored — skipping issues already in a
+done category) and `publish_on_release` (a published release/tag runs
+`pipeline.on_release_published` for the default project). Both live in
+`vcs/policies.py`, called by the three receivers after they fire their
+triggers; `vcs` now `depends_on` workflow + releases. The per-host automation
+templates that duplicated them are deleted; the triggers and the
+`release.publish` node stay. Settings → Version control shows them on each
+repository row.
+
 RADD-1366 moves version-control settings into VCS and connector remotes.
 `vcs/ui` owns the provider-neutral page (hosts, repository rows, identity map);
 GitHub, Forgejo and GitLab each contribute one tab carrying only their WORDING

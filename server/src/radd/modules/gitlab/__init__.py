@@ -34,7 +34,7 @@ plugin = RaddPlugin(
         _admin_event(GitlabEvent.REPO_CREATED, "GitLab project added", "gitlab_repo"),
         _admin_event(GitlabEvent.REPO_UPDATED, "GitLab project updated", "gitlab_repo"),
         _admin_event(GitlabEvent.REPO_DELETED, "GitLab project removed", "gitlab_repo"),
-        # RADD-1309: GitLab's own automation triggers — the connector acts on nothing itself.
+        # RADD-1309: GitLab's own automation triggers; beyond linking it acts only on a repository's switches (RADD-1369).
         *TRIGGERS.specs(),
         # RADD-1255: GitLab-only — neither GitHub nor Forgejo webhooks carry deployments.
         EventTypeSpec(
@@ -50,7 +50,6 @@ plugin = RaddPlugin(
         ),
     ),
     routers=(router, admin_router),
-    automation_templates=TRIGGERS.templates(),
     # RADD_GITLAB_WEBHOOK_SECRET seeds ONE connection row, once (the spec-101 rule).
     on_startup=(service.seed_from_env,),
     capabilities=(

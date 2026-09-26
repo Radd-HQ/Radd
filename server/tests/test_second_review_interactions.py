@@ -181,7 +181,10 @@ async def test_action_failure_stops_success_path_and_reports_failure(world, monk
     assert not (await items.require_item(db, item.id)).flagged
 
 
-async def test_configured_vcs_merge_template_uses_sample_event_payload(world):
+async def test_a_vcs_merge_automation_uses_sample_event_payload(world):
+    """A merge rule gated on the repository previews against a sample payload.
+    (It was the per-host template until RADD-1369 made that behaviour a
+    repository switch; the graph is spelled out here instead.)"""
     github_router = importlib.import_module("radd.modules.github.router")
     from radd.modules.automations.graph import Packet
     from radd.modules.automations.conditions import EventFacts
@@ -190,10 +193,16 @@ async def test_configured_vcs_merge_template_uses_sample_event_payload(world):
     item = await items.create_item(
         db, ItemCreate(project_id=project.id, title="Preview merge"), admin
     )
-    template = github_router.TRIGGERS.templates()[0]
-    nodes = [dict(n, params=dict(n["params"])) for n in template.nodes]
-    nodes[1]["params"]["value"] = "team/repo"
-    automation = await rule(db, admin, nodes, list(template.edges))
+    nodes = [
+        {"id": "merge", "kind": "trigger", "type": "trigger.event", "params": {"event": str(github_router.TRIGGERS.merged)}},
+        {"id": "repo", "kind": "gate", "type": "gate.payload", "params": {"path": "repo", "operator": "eq", "value": "team/repo"}},
+        {"id": "move", "kind": "action", "type": "action.set_state", "params": {"state": "Done"}},
+    ]
+    edges = [
+        {"source": "merge", "port": "out", "target": "repo"},
+        {"source": "repo", "port": "true", "target": "move"},
+    ]
+    automation = await rule(db, admin, nodes, edges)
     preview = await engine.preview(db, automation, item.id, event_payload={"repo": "team/repo"})
     assert any(plan.resolves for plan in preview.would_apply)
     actual = await engine.run_graph(

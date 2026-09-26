@@ -125,28 +125,6 @@ class ConnectorTriggers:
     #: None for a host whose CI the connector does not read yet (GitLab: RADD-1255).
     ci_completed: StrEnum | None = None
 
-    def templates(self):
-        from radd.kernel import AutomationTemplateSpec
-
-        repository = {"id": "repo", "kind": "gate", "type": "gate.payload",
-                      "params": {"path": "repo", "operator": "eq", "value": "owner/repository"}}
-        return (
-            AutomationTemplateSpec(
-                key=f"{self.host.lower()}.move_on_merge", name=f"{self.host}: move linked issues after merge",
-                description="Set the repository and target state, preview a linked issue, then enable. Only issues linked to that repository's merged requests move.", group=self.host,
-                nodes=({"id": "merge", "kind": "trigger", "type": "trigger.event", "params": {"event": str(self.merged)}},
-                       repository, {"id": "move", "kind": "action", "type": "action.set_state", "params": {"state": "Done"}}),
-                edges=({"source": "merge", "port": "out", "target": "repo"}, {"source": "repo", "port": "true", "target": "move"}),
-            ),
-            AutomationTemplateSpec(
-                key=f"{self.host.lower()}.publish_release", name=f"{self.host}: publish version and sweep",
-                description="Set the repository and its default project. Published tags record a version and sweep all project issues waiting on release transitions. Preview the candidate count before enabling.", group=self.host,
-                nodes=({"id": "release", "kind": "trigger", "type": "trigger.event", "params": {"event": str(self.release_published)}},
-                       repository, {"id": "publish", "kind": "action", "type": "release.publish", "params": {}}),
-                edges=({"source": "release", "port": "out", "target": "repo"}, {"source": "repo", "port": "true", "target": "publish"}),
-            ),
-        )
-
     def for_action(self, action: RefAction) -> StrEnum:
         return {
             RefAction.OPENED: self.opened,

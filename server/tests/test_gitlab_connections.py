@@ -430,3 +430,53 @@ async def test_pipelines_stamp_ci_and_fire_and_deployments_fire_with_the_environ
     assert deployed.payload["url"] == "https://app.example.com"
     assert deployed.payload["author"]["username"] == "deployer"
 
+
+async def test_switched_on_a_merge_moves_to_waiting_and_a_release_ships(db):
+    """RADD-1369, GitLab's twin of test_vcs_triggers: with the repository's two
+    switches on, a merged MR moves its issue to the waiting state and a created
+    release records the version and sweeps it."""
+    import httpx
+
+    from radd.modules.auth.models import User
+    from radd.modules.releases.models import Release
+    from radd.modules.workflow import service as workflow, transitions
+    from radd.modules.workflow.schemas import StateCreate, TransitionCreate
+    from radd.modules.workflow.types import StateCategory
+
+    connection = await _connection(db, f"sw-{uuid.uuid4().hex[:6]}", "hook-secret")
+    project = await projects_service.create_project(db, ProjectCreate(key=f"SW{uuid.uuid4().hex[:4].upper()}", name="Switches"))
+    repo = await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="acme/sw", project_id=project.id))
+    await service.update_repo(db, repo.id, RepoUpdate(move_on_merge=True, publish_on_release=True))
+    states = await workflow.list_states(db, project.id)
+    waiting = await workflow.create_state(
+        db, StateCreate(project_id=project.id, name="Waiting for release", category=StateCategory.DONE, position=len(states) + 1)
+    )
+    done = next(s for s in states if s.name == "Done")
+    await transitions.create_transition(
+        db, TransitionCreate(project_id=project.id, from_state_id=waiting.id, to_state_id=done.id, on_release=True)
+    )
+    owner = User(name="Owner", email=f"{uuid.uuid4()}@test.invalid", instance_role="admin")
+    db.add(owner)
+    await db.flush()
+    item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="merge me"), actor=owner)
+    headers = {"X-Gitlab-Token": "hook-secret", "Content-Type": "application/json"}
+    merged = json.dumps({
+        "object_kind": "merge_request", "project": {"path_with_namespace": "acme/sw"},
+        "object_attributes": {
+            "iid": 3, "title": f"{item.key} ship it", "source_branch": "feat", "target_branch": "main",
+            "state": "merged", "action": "merge", "url": "https://sw.example.com/acme/sw/-/merge_requests/3",
+        },
+    }).encode()
+    release = json.dumps({
+        "object_kind": "release", "action": "create", "tag": "v5.0.0", "name": "Five", "description": "notes",
+        "url": "https://sw.example.com/acme/sw/-/releases/v5.0.0", "project": {"path_with_namespace": "acme/sw"},
+    }).encode()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_app(db)), base_url="http://test") as client:
+        response = await client.post("/integrations/gitlab", content=merged, headers=headers)
+        assert response.json() == {"linked": 1, "triggered": 1, "moved": 1}
+        assert (await items_service.require_item(db, item.id)).state_id == waiting.id
+        assert (await client.post("/integrations/gitlab", content=release, headers=headers)).json()["triggered"] == 1
+    version = await db.scalar(select(Release).where(Release.project_id == project.id))
+    assert version is not None and version.version == "5.0.0"
+    shipped = await items_service.require_item(db, item.id)
+    assert shipped.state_id == done.id and shipped.release_id == version.id

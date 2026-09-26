@@ -33,6 +33,15 @@ from .types import ReleaseStatus
 logger = logging.getLogger(__name__)
 
 
+async def waiting_state_id(session: AsyncSession, project: Project) -> uuid.UUID | None:
+    """Where finished-but-unshipped work waits: the from-state of the project's
+    first on-release transition (spec 112 / RADD-1285). None = the project does
+    not ship through releases. A repository's "move merged issues" switch moves
+    work here (RADD-1369)."""
+    rows = await workflow_service.release_transitions(session, project.id)
+    return rows[0].from_state_id if rows else None
+
+
 async def create_release(
     session: AsyncSession,
     data: ReleaseCreate,
@@ -133,9 +142,9 @@ async def on_release_published(
     notes: str = "",
     actor_id: uuid.UUID | None = None,
 ) -> tuple[Release, int]:
-    """A published version: record it, then sweep. Called by an automation on a
-    connector's "release published" trigger — never by a receiver on its own
-    (RADD-1309).
+    """A published version: record it, then sweep. Called by the "Publish version
+    and sweep" automation node (RADD-1310) and by a repository whose "Publish
+    version on release" switch is on (RADD-1369).
 
     Webhook delivery is at-least-once, so a repeat of the same tag reuses the
     row and re-runs the (idempotent) sweep rather than creating a second version.

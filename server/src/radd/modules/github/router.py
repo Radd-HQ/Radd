@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.vcs import receiving, triggers
+from radd.modules.vcs import policies, receiving, triggers
 from radd.modules.vcs import service as vcs
 from radd.modules.vcs.types import VcsProvider
 
@@ -122,6 +122,9 @@ async def github_webhook(
             author=triggers.host_author(payload, connection.id),
             changes=parsing.pr_changes(payload),
         )
+        # RADD-1369: the repository's own "move merged issues" switch.
+        if action is triggers.RefAction.MERGED and getattr(repo, "move_on_merge", False):
+            result["moved"] = await policies.move_merged(session, repo, list(links), actor_id=SYSTEM_ACTOR_ID)
     logger.debug("github delivery %s: %s", x_github_delivery, result)
     return result
 
@@ -202,9 +205,9 @@ async def _handle_ci(session: AsyncSession, kind: str, payload: dict, connection
 
 async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[str, int]:
     """`release` webhook. Only `published` fires "GitHub: release published" — a
-    draft, an edit or a deletion must not. Whether a version is recorded and
-    waiting work swept is the automation's call (RADD-1309/1310); the receiver
-    used to do it unasked for any repository with a default project."""
+    draft, an edit or a deletion must not. The version is recorded and waiting
+    work swept only when the repository's "Publish version on release" switch is
+    on (RADD-1369), or by an automation on the trigger (RADD-1310)."""
     release_payload = payload.get("release") or {}
     tag = str(release_payload.get("tag_name") or "")
     version = triggers.version_from_tag(tag)
@@ -230,4 +233,9 @@ async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[st
         notes=str(release_payload.get("body") or ""),
         url=str(release_payload.get("html_url") or ""),
     )
-    return {"linked": 0, "triggered": 1}
+    # RADD-1369: the repository's own "publish version on release" switch.
+    shipped = await policies.publish_release(
+        session, repo, version=version, actor_id=SYSTEM_ACTOR_ID,
+        name=str(release_payload.get("name") or ""), notes=str(release_payload.get("body") or ""),
+    )
+    return {"linked": 0, "triggered": 1, **({"shipped": shipped} if getattr(repo, "publish_on_release", False) else {})}

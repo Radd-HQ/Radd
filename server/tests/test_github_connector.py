@@ -265,7 +265,7 @@ async def test_release_guard_fires_only_for_published_non_draft(monkeypatch):
 
     monkeypatch.setattr(github_router_module.triggers, "emit_release", fake_emit)
     project_id = uuid.uuid4()
-    repo = SimpleNamespace(id=uuid.uuid4(), project_id=project_id)
+    repo = SimpleNamespace(id=uuid.uuid4(), project_id=project_id, publish_on_release=False)
     base = {
         "release": {"tag_name": "v0.36.0", "name": "Radd 0.36.0", "body": "notes", "draft": False},
         "repository": {"full_name": "radd-hq/radd"},

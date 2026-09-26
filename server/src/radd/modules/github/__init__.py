@@ -34,11 +34,10 @@ plugin = RaddPlugin(
         _admin_event(GithubEvent.REPO_CREATED, "GitHub repository added", "github_repo"),
         _admin_event(GithubEvent.REPO_UPDATED, "GitHub repository updated", "github_repo"),
         _admin_event(GithubEvent.REPO_DELETED, "GitHub repository removed", "github_repo"),
-        # RADD-1309: GitHub's own automation triggers — the connector acts on nothing itself.
+        # RADD-1309: GitHub's own automation triggers; beyond linking it acts only on a repository's switches (RADD-1369).
         *TRIGGERS.specs(),
     ),
     routers=(router, admin_router),
-    automation_templates=TRIGGERS.templates(),
     # RADD_GITHUB_WEBHOOK_SECRET seeds ONE connection row, once (the spec-101 rule).
     on_startup=(service.seed_from_env,),
     capabilities=(

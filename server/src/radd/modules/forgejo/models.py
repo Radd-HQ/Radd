@@ -70,3 +70,10 @@ class ForgejoRepo(Base, TimestampMixin):
     # RADD-1321: copy time logged on this repository's merge/pull requests into
     # worklogs. OFF by default — nothing mirrors until someone switches it on.
     mirror_time: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # RADD-1369: what a delivery from this repository DOES, beyond linking and
+    # firing triggers. Both OFF until someone switches them on (Settings →
+    # Version control): move every issue a merged change names to its project's
+    # waiting-for-release state; record a published release as a version of the
+    # default project and sweep what is waiting into it.
+    move_on_merge: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    publish_on_release: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

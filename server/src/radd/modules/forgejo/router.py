@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.vcs import receiving, triggers
+from radd.modules.vcs import policies, receiving, triggers
 from radd.modules.vcs import service as vcs
 from radd.modules.vcs.ids import branch_external_id, commit_external_id
 from radd.modules.vcs.types import VcsProvider
@@ -71,7 +71,7 @@ async def forgejo_webhook(
         # No active connection signed this. Covers three cases with one answer:
         # nothing configured, the wrong secret, and an inactive host.
         raise ForbiddenError("bad forgejo webhook signature")
-    connection, _repo = resolved
+    connection, repo = resolved
 
     delivery = request.headers.get("x-forgejo-delivery") or request.headers.get("x-gitea-delivery") or request.headers.get("x-github-delivery", "")
     if not await receiving.claim_delivery(session, provider=VcsProvider.FORGEJO, connection_id=connection.id,
@@ -86,16 +86,16 @@ async def forgejo_webhook(
     elif kind in (ForgejoEventKind.WORKFLOW_RUN, ForgejoEventKind.WORKFLOW_JOB):
         # Spec 111: CI state for a ref. Forgejo Actions is not on every host, so
         # a payload we cannot read is a no-op rather than an error.
-        return await _handle_workflow_run(session, payload, connection, _repo)
+        return await _handle_workflow_run(session, payload, connection, repo)
     elif kind == ForgejoEventKind.RELEASE:
-        return await _handle_release(session, payload, _repo)
+        return await _handle_release(session, payload, repo)
     else:
         return dict(_NOTHING)
 
     repo_name = str((payload.get("repository") or {}).get("full_name") or "")
     links = await receiving.link_planned(
         session, planned, provider=VcsProvider.FORGEJO, actor_id=SYSTEM_ACTOR_ID,
-        connection_id=connection.id, repo=_repo
+        connection_id=connection.id, repo=repo
     )
     result: dict[str, Any] = {"linked": receiving.count(links), "triggered": 0}
     if kind == ForgejoEventKind.PUSH:
@@ -114,19 +114,22 @@ async def forgejo_webhook(
             author=triggers.host_author(payload, connection.id),
             changes=parsing.pr_changes(payload),
         )
+        # RADD-1369: the repository's own "move merged issues" switch.
+        if action is triggers.RefAction.MERGED and getattr(repo, "move_on_merge", False):
+            result["moved"] = await policies.move_merged(session, repo, list(links), actor_id=SYSTEM_ACTOR_ID)
 
     # RADD-1260: Forgejo has no tracked-time webhook, so EVERY pull_request
     # delivery reconciles that PR's time. Needs a token; best-effort — the link
     # half has already landed.
     # RADD-1321: only a repository someone switched mirroring on for.
-    if kind == ForgejoEventKind.PULL_REQUEST and connection.api_token and _repo is not None and _repo.mirror_time:
+    if kind == ForgejoEventKind.PULL_REQUEST and connection.api_token and repo is not None and repo.mirror_time:
         pull = payload.get("pull_request") or {}
         full_name = str((payload.get("repository") or {}).get("full_name") or "")
         try:
             report = await timelogs.reconcile_pull_request(
                 session,
                 connection,
-                _repo,
+                repo,
                 full_name=full_name,
                 index=pull.get("number", ""),
                 title=str(pull.get("title") or ""),
@@ -191,9 +194,9 @@ async def _handle_workflow_run(session: AsyncSession, payload: dict, connection=
 
 async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[str, int]:
     """`release` webhook. Only `published` fires "Forgejo: release published" — a
-    draft or a deletion must not. Whether a version is recorded and waiting work
-    swept is the automation's call (RADD-1309/1310); the receiver used to do it
-    unasked for any repository with a default project."""
+    draft or a deletion must not. The version is recorded and waiting work swept
+    only when the repository's "Publish version on release" switch is on
+    (RADD-1369), or by an automation on the trigger (RADD-1310)."""
     release_payload = payload.get("release") or {}
     tag = str(release_payload.get("tag_name") or "")
     version = triggers.version_from_tag(tag)
@@ -215,4 +218,9 @@ async def _handle_release(session: AsyncSession, payload: dict, repo) -> dict[st
         notes=str(release_payload.get("body") or ""),
         url=str(release_payload.get("html_url") or ""),
     )
-    return {"linked": 0, "triggered": 1}
+    # RADD-1369: the repository's own "publish version on release" switch.
+    shipped = await policies.publish_release(
+        session, repo, version=version, actor_id=SYSTEM_ACTOR_ID,
+        name=str(release_payload.get("name") or ""), notes=str(release_payload.get("body") or ""),
+    )
+    return {"linked": 0, "triggered": 1, **({"shipped": shipped} if getattr(repo, "publish_on_release", False) else {})}

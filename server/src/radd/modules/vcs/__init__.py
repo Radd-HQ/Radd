@@ -25,7 +25,9 @@ plugin = RaddPlugin(
     crud_resources=(
         CrudResourceSpec("vcsconn", "global", "version-control connections", "global.manage"),
     ),
-    depends_on=("projects", "auth", "events", "items", "timelogging"),
+    # RADD-1369: releases + workflow for a repository's own "move merged issues"
+    # and "publish version on release" switches (`policies.py`).
+    depends_on=("projects", "auth", "events", "items", "timelogging", "workflow", "releases"),
     routers=(router, admin_router),
     event_types=(
         EventTypeSpec(VcsEvent.LINKED, "VCS ref linked", "Links", item_scoped=True),

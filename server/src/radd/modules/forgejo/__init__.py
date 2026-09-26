@@ -37,11 +37,10 @@ plugin = RaddPlugin(
         _admin_event(ForgejoEvent.REPO_CREATED, "Forgejo repository added", "forgejo_repo"),
         _admin_event(ForgejoEvent.REPO_UPDATED, "Forgejo repository updated", "forgejo_repo"),
         _admin_event(ForgejoEvent.REPO_DELETED, "Forgejo repository removed", "forgejo_repo"),
-        # RADD-1309: Forgejo's own automation triggers — the connector acts on nothing itself.
+        # RADD-1309: Forgejo's own automation triggers; beyond linking it acts only on a repository's switches (RADD-1369).
         *TRIGGERS.specs(),
     ),
     routers=(router, admin_router),
-    automation_templates=TRIGGERS.templates(),
     # Spec 111: the env secret seeds ONE connection row, once (the spec-100/101 rule),
     # so an existing deployment keeps verifying webhooks across the upgrade.
     on_startup=(service.seed_from_env,),

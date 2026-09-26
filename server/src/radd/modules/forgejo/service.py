@@ -87,6 +87,8 @@ async def _repo_snapshot(session: AsyncSession, repo: ForgejoRepo) -> dict:
         "default_branch": repo.default_branch,
         "time_category_id": str(repo.time_category_id) if repo.time_category_id else None,
         "mirror_time": repo.mirror_time,
+        "move_on_merge": repo.move_on_merge,
+        "publish_on_release": repo.publish_on_release,
         "enabled": repo.enabled, "link_all_projects": repo.link_all_projects,
     }
 
@@ -257,6 +259,10 @@ async def update_repo(
         repo.time_category_id = data.time_category_id
     if data.mirror_time is not None:
         repo.mirror_time = data.mirror_time
+    if data.move_on_merge is not None:
+        repo.move_on_merge = data.move_on_merge
+    if data.publish_on_release is not None:
+        repo.publish_on_release = data.publish_on_release
     if data.enabled is not None:
         repo.enabled = data.enabled
     if data.link_all_projects is not None:

@@ -31,7 +31,8 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
         Only registered, enabled repositories accept webhooks. Pausing a host pauses all its repositories; removing a
         repository stops ingestion and keeps historical links. Use a different webhook secret for each host. The default
         project is where versions are published; turn off “Link across projects” to also restrict issue links and
-        mirrored time to it.
+        mirrored time to it. Beyond linking, a repository changes issues only through its own switches — every
+        merge, push, CI run and release is also an automation trigger, for anything they don't cover.
       </p>
       {categoryQuery.isError && <QueryError label="work categories" error={categoryQuery.error} />}
       {repos.isError && <QueryError label="repositories" error={repos.error} />}
@@ -144,7 +145,8 @@ function ConnectionCard({ config, connection, repos, categories, onEdit }: {
           <li className="px-4 py-3 text-xs text-fg-muted">No repositories match “{search.filter.trim()}”.</li>
         )}
         {search.filtered.map((repo) => (
-          <RepoRow key={repo.id} provider={config.provider} connection={connection} repo={repo} categories={categories} />
+          <RepoRow key={repo.id} provider={config.provider} changeNoun={config.changeNoun} connection={connection} repo={repo}
+            categories={categories} />
         ))}
         <li>
           <form className="flex items-center gap-2 px-4 py-2" onSubmit={(event: FormEvent) => {

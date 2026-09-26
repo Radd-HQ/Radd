@@ -25,6 +25,10 @@ export type HostRepo = {
   time_category_id: string | null;
   /** RADD-1321: copy MR/PR time into worklogs — off until switched on. */
   mirror_time: boolean;
+  /** RADD-1369: move issues a merged change names to their project's waiting state. */
+  move_on_merge: boolean;
+  /** RADD-1369: record a published release in the default project and sweep. */
+  publish_on_release: boolean;
   created_at: string;
 };
 

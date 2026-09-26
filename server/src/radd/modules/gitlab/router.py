@@ -7,9 +7,9 @@ actor. Mirrors the Forgejo (specs 47/111) and GitHub (RADD-1129) receivers with
 GitLab's event names and payload shapes.
 
 RADD-1309: the receiver links refs, mirrors MR time, and fires GitLab's own
-triggers (`GitlabTrigger`). It changes nothing else — a merged MR used to move
-every issue it named to waiting-for-release with no switch; that is now an
-automation someone builds on "GitLab: merge request merged".
+triggers (`GitlabTrigger`). Anything else is a switch on the repository row
+(RADD-1369, `vcs.policies`: move merged issues to waiting for release, publish
+a version on release) or an automation on those triggers.
 """
 
 import json
@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
-from radd.modules.vcs import receiving, service as vcs, triggers
+from radd.modules.vcs import policies, receiving, service as vcs, triggers
 from radd.modules.vcs.types import VcsProvider
 
 from . import parsing, service, timelogs
@@ -129,6 +129,9 @@ async def gitlab_webhook(
             author=triggers.host_author(payload, connection.id),
             changes=parsing.mr_changes(payload),
         )
+        # RADD-1369: the repository's own "move merged issues" switch.
+        if action is triggers.RefAction.MERGED and getattr(repo, "move_on_merge", False):
+            result["moved"] = await policies.move_merged(session, repo, list(links), actor_id=SYSTEM_ACTOR_ID)
 
     # RADD-1259: time added or removed on the MR → fetch the entries and mirror
     # them. Needs a token; a hook-only connection simply reports nothing.
@@ -213,9 +216,10 @@ async def _handle_deployment(session: AsyncSession, payload: dict, connection, r
 
 
 async def _handle_release(session: AsyncSession, payload: dict, repo) -> int:
-    """A release CREATED on GitLab fires "GitLab: release published" — whether a
-    version is recorded and waiting work swept is the automation's call
-    (RADD-1309/1310). An update or deletion fires nothing."""
+    """A release CREATED on GitLab fires "GitLab: release published"; the version
+    is recorded and waiting work swept when the repository's "Publish version on
+    release" switch is on (RADD-1369) or an automation does it (RADD-1310). An
+    update or deletion fires nothing."""
     if str(payload.get("action") or "") != ReleaseAction.CREATE:
         return 0
     tag = str(payload.get("tag") or "")
@@ -237,5 +241,10 @@ async def _handle_release(session: AsyncSession, payload: dict, repo) -> int:
         name=str(payload.get("name") or ""),
         notes=str(payload.get("description") or ""),
         url=str(payload.get("url") or ""),
+    )
+    # RADD-1369: the repository's own "publish version on release" switch.
+    await policies.publish_release(
+        session, repo, version=version, actor_id=SYSTEM_ACTOR_ID,
+        name=str(payload.get("name") or ""), notes=str(payload.get("description") or ""),
     )
     return 1

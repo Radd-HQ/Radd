@@ -206,3 +206,67 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
     updates = await _events(db, head, trigger.PR_UPDATED.value)
     assert [[c["field"] for c in u.payload["changes"]] for u in updates] == [["title"], ["commits"]]
     assert updates[0].payload["changes"][0] == {"field": "title", "from": "old", "to": "ship it"}
+
+
+@pytest.mark.parametrize("host", HOSTS, ids=lambda h: h.name)
+async def test_switched_on_a_merge_moves_to_waiting_and_a_release_ships(db, host: Host):
+    """RADD-1369: the same deliveries against a repository whose two switches
+    are ON — the merged PR moves its issue to the project's waiting state, a
+    second merge naming an issue already done leaves it alone, and the
+    published release records the version and sweeps the waiting issue."""
+    service, schemas = host.module("service"), host.module("schemas")
+    secret = f"s-{uuid.uuid4().hex[:8]}"
+    repo_name = f"acme/{host.name}-{uuid.uuid4().hex[:6]}"
+    connection = await service.create_connection(
+        db, schemas.ConnectionCreate(name=f"{host.name}-{uuid.uuid4().hex[:6]}", base_url="https://h.example.com", webhook_secret=secret)
+    )
+    project = await projects_service.create_project(db, ProjectCreate(key=f"VP{uuid.uuid4().hex[:4].upper()}", name="VCS switches"))
+    repo = await service.create_repo(db, schemas.RepoCreate(connection_id=connection.id, full_name=repo_name, project_id=project.id))
+    await service.update_repo(db, repo.id, schemas.RepoUpdate(move_on_merge=True, publish_on_release=True))
+    states = await workflow.list_states(db, project.id)
+    waiting = await workflow.create_state(
+        db, StateCreate(project_id=project.id, name="Waiting for release", category=StateCategory.DONE, position=len(states) + 1)
+    )
+    done = next(s for s in states if s.name == "Done")
+    await transitions.create_transition(
+        db, TransitionCreate(project_id=project.id, from_state_id=waiting.id, to_state_id=done.id, on_release=True)
+    )
+    owner = User(name="Owner", email=f"{uuid.uuid4()}@test.invalid", instance_role="admin")
+    db.add(owner)
+    await db.flush()
+    item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="ship"), actor=owner)
+    repository = {"full_name": repo_name, "html_url": f"https://h.example.com/{repo_name}"}
+
+    def merged(number: int, branch: str) -> dict:
+        return {
+            "action": "closed",
+            "pull_request": {
+                "number": number, "title": "ship it", "state": "closed", "merged": True,
+                "merged_at": "2026-09-25T10:00:00Z", "html_url": f"https://h.example.com/pr/{number}",
+                "head": {"ref": branch}, "base": {"ref": "main"}, "body": "",
+            },
+            "repository": repository,
+        }
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_app(db, host)), base_url="http://t") as client:
+        async def send(event: str, payload: dict) -> dict:
+            body = json.dumps(payload).encode()
+            response = await client.post(host.path, content=body, headers=host.headers(body, secret, event))
+            assert response.status_code == 200, response.text
+            return response.json()
+
+        first = await send("pull_request", merged(5, f"{item.key.lower()}-work"))
+        assert first["moved"] == 1
+        assert (await items_service.require_item(db, item.id)).state_id == waiting.id
+        again = await send("pull_request", merged(6, f"{item.key.lower()}-more"))
+        assert again["moved"] == 0, "already in a done category — a late merge never reopens it"
+        release = await send("release", {
+            "action": "published", "release": {"tag_name": "v4.0.0", "name": "Four", "body": "notes", "draft": False},
+            "repository": repository,
+        })
+        assert release["shipped"] == 1
+
+    shipped = await items_service.require_item(db, item.id)
+    version = await db.scalar(select(Release).where(Release.project_id == project.id))
+    assert version is not None and version.version == "4.0.0"
+    assert shipped.state_id == done.id and shipped.release_id == version.id
