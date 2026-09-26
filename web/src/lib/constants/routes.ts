@@ -38,12 +38,6 @@ export const SettingsSection = {
   // this global section keeps the shared work categories.
   timelogging: "timelogging",
   canned: "canned",
-  // RADD-1262: ONE Version control page with a tab per host kind; the per-kind
-  // segments stay as redirects so bookmarks and audit links keep working.
-  vcs: "vcs",
-  forgejo: "forgejo",
-  github: "github",
-  gitlab: "gitlab",
   serviceAccounts: "service-accounts",
   pages: "pages",
   // Plugin manager (spec 93 / A4) — install/enable/disable non-core plugins. Admin.
@@ -192,11 +186,6 @@ export const RoutePath = {
   settingsPlugins: `${SETTINGS_SEGMENT}/${SettingsSection.plugins}`,
   /** Canned responses admin (spec 30, global manage). */
   settingsCanned: `${SETTINGS_SEGMENT}/${SettingsSection.canned}`,
-  /** Version control hosts (RADD-1262): `?host=forgejo|github|gitlab` picks the tab. */
-  settingsVcs: `${SETTINGS_SEGMENT}/${SettingsSection.vcs}`,
-  settingsForgejo: `${SETTINGS_SEGMENT}/${SettingsSection.forgejo}`,
-  settingsGithub: `${SETTINGS_SEGMENT}/${SettingsSection.github}`,
-  settingsGitlab: `${SETTINGS_SEGMENT}/${SettingsSection.gitlab}`,
   settingsServiceAccounts: `${SETTINGS_SEGMENT}/${SettingsSection.serviceAccounts}`,
   /** Pages (spec 43; RADD-702; RADD-1233): spaces index (also the permalink
    *  resolver — `/pages?pageId=<number>`), a space's tree, and the canonical

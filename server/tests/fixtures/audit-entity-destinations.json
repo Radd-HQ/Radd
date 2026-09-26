@@ -112,32 +112,32 @@
   {
     "owner": "forgejo",
     "entity_type": "forgejo_connection",
-    "url": "/settings/forgejo"
+    "url": "/settings/vcs?host=forgejo"
   },
   {
     "owner": "forgejo",
     "entity_type": "forgejo_repo",
-    "url": "/settings/forgejo"
+    "url": "/settings/vcs?host=forgejo"
   },
   {
     "owner": "github",
     "entity_type": "github_connection",
-    "url": "/settings/github"
+    "url": "/settings/vcs?host=github"
   },
   {
     "owner": "github",
     "entity_type": "github_repo",
-    "url": "/settings/github"
+    "url": "/settings/vcs?host=github"
   },
   {
     "owner": "gitlab",
     "entity_type": "gitlab_connection",
-    "url": "/settings/gitlab"
+    "url": "/settings/vcs?host=gitlab"
   },
   {
     "owner": "gitlab",
     "entity_type": "gitlab_repo",
-    "url": "/settings/gitlab"
+    "url": "/settings/vcs?host=gitlab"
   },
   {
     "owner": "vcs",

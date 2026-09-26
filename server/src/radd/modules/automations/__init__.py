@@ -68,7 +68,7 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('automation_rule', ('/settings/automations',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/automations/remoteEntry.js", ui_api_version="1.12.0",
+    ui=PluginUiManifest(remote="/plugins/automations/remoteEntry.js", ui_api_version="1.13.0",
         nav=(NavItemSpec(key="automations", label="Automations", path="/settings/automations",
             section="settings", group="Server", icon="Zap", order=90, requires=("automation.manage",)),)),
     # RADD-1322: the built-in nodes are registered exactly as a plugin's are.

@@ -114,14 +114,6 @@ export const ApiPath = {
   searchSemantic: "/search/semantic",
   // Service desk (spec 30).
   cannedResponses: "/canned-responses",
-  // Spec 111 — Forgejo hosts/repos as rows.
-  forgejoConnections: "/forgejo/connections",
-  forgejoRepos: "/forgejo/repos",
-  githubConnections: "/github/connections",
-  githubRepos: "/github/repos",
-  // RADD-1253 — GitLab hosts/projects as rows.
-  gitlabConnections: "/gitlab/connections",
-  gitlabRepos: "/gitlab/repos",
   // Spec 113 — service accounts and their scoped keys.
   serviceAccounts: "/service-accounts",
   slaPolicies: "/sla-policies",
@@ -230,31 +222,6 @@ export const On401 = {
   throw: "throw",
 } as const;
 export type On401Value = (typeof On401)[keyof typeof On401];
-
-/** Spec 111: one Forgejo connection. */
-export const apiForgejoConnectionPath = (id: string) => `${ApiPath.forgejoConnections}/${id}`;
-export const apiForgejoConnectionTestPath = (id: string) =>
-  `${ApiPath.forgejoConnections}/${id}/test`;
-export const apiForgejoRepoPath = (id: string) => `${ApiPath.forgejoRepos}/${id}`;
-export const apiForgejoBackfillPath = (id: string) => `${ApiPath.forgejoRepos}/${id}/backfill`;
-export const apiGithubConnectionPath = (id: string) => `${ApiPath.githubConnections}/${id}`;
-export const apiGithubConnectionTestPath = (id: string) =>
-  `${ApiPath.githubConnections}/${id}/test`;
-export const apiGithubRepoPath = (id: string) => `${ApiPath.githubRepos}/${id}`;
-export const apiGithubBackfillPath = (id: string) => `${ApiPath.githubRepos}/${id}/backfill`;
-export const apiGitlabConnectionPath = (id: string) => `${ApiPath.gitlabConnections}/${id}`;
-export const apiGitlabConnectionTestPath = (id: string) =>
-  `${ApiPath.gitlabConnections}/${id}/test`;
-export const apiGitlabRepoPath = (id: string) => `${ApiPath.gitlabRepos}/${id}`;
-export const apiGitlabBackfillPath = (id: string) => `${ApiPath.gitlabRepos}/${id}/backfill`;
-/** RADD-1258: a connection's identity map and unmatched authors, per provider. */
-export const apiVcsIdentitiesPath = (provider: string, connectionId: string) =>
-  `/vcs/${provider}/connections/${connectionId}/identities`;
-export const apiVcsIdentityPath = (linkId: string) => `/vcs/identities/${linkId}`;
-export const apiVcsUnmatchedPath = (provider: string, connectionId: string) =>
-  `/vcs/${provider}/connections/${connectionId}/unmatched`;
-export const apiVcsUnmatchedReplayPath = (provider: string, connectionId: string) =>
-  `${apiVcsUnmatchedPath(provider, connectionId)}/replay`;
 
 /** Spec 113: a service account's keys. */
 export const apiServiceAccountKeysPath = (id: string) => `${ApiPath.serviceAccounts}/${id}/keys`;

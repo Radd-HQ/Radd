@@ -18,6 +18,7 @@ from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth import service as auth_service
 from radd.modules.auth.deps import CurrentUser
+from radd.modules.timelogging import service as timelog_service
 
 from . import timemirror
 from .schemas import ReplayResult, UnmatchedAuthorRead, UserLinkRead, UserLinkSet
@@ -97,17 +98,18 @@ async def list_unmatched(
     """Provider accounts whose time entries are parked because no Radd user
     matched them. Derived from the parked rows — nothing to keep in sync."""
     await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
+    rows = await timemirror.list_unmatched(session, provider=provider, connection_id=connection_id)
+    durations = await timelog_service.format_durations(session, [row.pending_seconds for row in rows])
     return [
         UnmatchedAuthorRead(
             external_username=row.external_username,
             external_email=row.external_email,
             pending_entries=row.pending_entries,
             pending_seconds=row.pending_seconds,
+            pending_duration=duration,
             last_seen_at=row.last_seen_at,
         )
-        for row in await timemirror.list_unmatched(
-            session, provider=provider, connection_id=connection_id
-        )
+        for row, duration in zip(rows, durations, strict=True)
     ]
 
 

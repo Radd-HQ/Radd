@@ -1,30 +1,14 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link2, Trash2, UserCheck } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
-import {
-  apiVcsIdentitiesPath,
-  apiVcsIdentityPath,
-  apiVcsUnmatchedReplayPath,
-} from "../../lib/constants";
-import { formatDuration } from "../../lib/duration";
-import { useDurationConfig } from "../../lib/hooks";
-import { vcsIdentitiesQuery, vcsUnmatchedQuery } from "../../lib/queries";
-import type { PeopleChoice } from "../../lib/queries/users";
-import {
-  VcsMatchedBy,
-  type VcsProviderValue,
-  type VcsReplayResult,
-  type VcsUserLink,
-  type VcsUserLinkSet,
-} from "../../lib/types";
-import { Button } from "../Button";
-import { CollapsibleCard } from "../CollapsibleCard";
-import { IconButton } from "../IconButton";
-import { PeopleDirectorySelect } from "../PeopleDirectorySelect";
-import { QueryError } from "../QueryError";
-
+import { api, errorMessage, invalidateEntities, type DirectoryChoice,
+ Button, CollapsibleCard, IconButton, DirectorySelect, QueryError, Spinner, TextField } from "@radd/plugin-sdk";
+import { useVcsList } from "./queries";
+import { VcsMatchedBy, type VcsReplayResult, type VcsUserLink, type VcsUserLinkSet, type VcsUnmatchedAuthor } from "./types";
+const apiVcsIdentitiesPath = (provider: string, id: string) => `/vcs/${encodeURIComponent(provider)}/connections/${encodeURIComponent(id)}/identities`;
+const apiVcsUnmatchedPath = (provider: string, id: string) => `/vcs/${encodeURIComponent(provider)}/connections/${encodeURIComponent(id)}/unmatched`;
+const apiVcsUnmatchedReplayPath = (provider: string, id: string) => apiVcsUnmatchedPath(provider, id)+"/replay";
+const apiVcsIdentityPath = (id: string) => `/vcs/identities/${encodeURIComponent(id)}`;
 /**
  * One connection's identity map (RADD-1258): which provider account is which
  * Radd user, and the accounts whose time entries are PARKED because nothing
@@ -35,18 +19,11 @@ import { QueryError } from "../QueryError";
  * The unmatched list is derived from the parked rows, so it empties itself as
  * mappings land; nothing is kept in sync by hand.
  */
-export function VcsIdentityMap({
-  provider,
-  connectionId,
-  canManage,
-}: {
-  provider: VcsProviderValue;
-  connectionId: string;
-  canManage: boolean;
-}) {
-  const identities = useQuery(vcsIdentitiesQuery(provider, connectionId));
-  const unmatched = useQuery(vcsUnmatchedQuery(provider, connectionId));
+export function VcsIdentityMap({ provider, connectionId }: { provider: string; connectionId: string }) {
+  const identities = useVcsList<VcsUserLink[]>(provider, [connectionId, "identities"], apiVcsIdentitiesPath(provider, connectionId), ["vcsUserLink"]);
+  const unmatched = useVcsList<VcsUnmatchedAuthor[]>(provider, [connectionId, "unmatched"], apiVcsUnmatchedPath(provider, connectionId), ["vcsUserLink", "worklog"]);
   const count = (identities.data?.length ?? 0) + (unmatched.data?.length ?? 0);
+  if (identities.isPending || unmatched.isPending) return <div role="status"><Spinner />Loading time-tracking identities…</div>;
   return (
     <CollapsibleCard title="Time-tracking identities" count={count} defaultOpen={(unmatched.data?.length ?? 0) > 0}>
       <p className="mb-3 text-[12px] text-fg-muted">
@@ -57,45 +34,33 @@ export function VcsIdentityMap({
       {identities.isError ? (
         <QueryError label="identity map" error={identities.error} />
       ) : (
-        <MappedList links={identities.data ?? []} canManage={canManage} provider={provider} connectionId={connectionId} />
+        <MappedList links={identities.data ?? []} provider={provider} connectionId={connectionId} />
       )}
       {unmatched.isError ? (
         <QueryError label="unmatched accounts" error={unmatched.error} />
       ) : (
-        <UnmatchedList provider={provider} connectionId={connectionId} canManage={canManage} />
+        <UnmatchedList rows={unmatched.data ?? []} provider={provider} connectionId={connectionId} />
       )}
     </CollapsibleCard>
   );
 }
 
-function useRefresh(provider: string, connectionId: string) {
+function useRefresh() {
   const queryClient = useQueryClient();
   return () => {
-    void queryClient.invalidateQueries({ queryKey: ["vcsIdentities", { provider, connectionId }] });
-    void queryClient.invalidateQueries({ queryKey: ["vcsUnmatched", { provider, connectionId }] });
-    void invalidateEntities(queryClient, Entity.vcsUserLink, Entity.worklog);
+    void invalidateEntities(queryClient, "vcsUserLink", "worklog");
   };
 }
 
-function MappedList({
-  links,
-  canManage,
-  provider,
-  connectionId,
-}: {
-  links: VcsUserLink[];
-  canManage: boolean;
-  provider: string;
-  connectionId: string;
-}) {
-  const refresh = useRefresh(provider, connectionId);
+function MappedList({ links, provider, connectionId }: { links: VcsUserLink[]; provider: string; connectionId: string }) {
+  const refresh = useRefresh();
   const remove = useMutation({
     mutationFn: (id: string) => api.delete<void>(apiVcsIdentityPath(id)),
     onSettled: refresh,
   });
   const [adding, setAdding] = useState(false);
   const [username, setUsername] = useState("");
-  const [person, setPerson] = useState<PeopleChoice | null>(null);
+  const [person, setPerson] = useState<DirectoryChoice | null>(null);
   const add = useMutation({
     mutationFn: () =>
       api.put<VcsUserLink>(apiVcsIdentitiesPath(provider, connectionId), {
@@ -126,23 +91,21 @@ function MappedList({
               <span className="rounded bg-elevated px-1.5 py-px text-[10px] text-fg-muted">
                 {link.matched_by === VcsMatchedBy.email ? "matched by email" : "mapped by hand"}
               </span>
-              {canManage && (
-                <IconButton
-                  danger
-                  className="ml-auto"
-                  aria-label={`Unmap ${link.external_username}`}
-                  onClick={() => remove.mutate(link.id)}
-                  disabled={remove.isPending}
-                >
-                  <Trash2 size={12} />
-                </IconButton>
-              )}
+              <IconButton
+                danger
+                className="ml-auto"
+                aria-label={`Unmap ${link.external_username}`}
+                onClick={() => remove.mutate(link.id)}
+                disabled={remove.isPending}
+              >
+                <Trash2 size={12} />
+              </IconButton>
             </li>
           ))}
         </ul>
       )}
-      {canManage &&
-        (adding ? (
+      {remove.isError && <QueryError label="unmapping account" error={remove.error} />}
+      {adding ? (
           <form
             className="mt-2 flex flex-wrap items-center gap-2"
             onSubmit={(event) => {
@@ -150,14 +113,15 @@ function MappedList({
               if (username.trim() && person) add.mutate();
             }}
           >
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="host username"
-              aria-label="Host username"
-              className="w-40 rounded-md border border-subtle bg-base px-2 py-1 font-mono text-[12px] outline-focus"
-            />
-            <PeopleDirectorySelect kind="person" value={person} onChange={setPerson} label="Radd user" emptyLabel="Choose a person…" />
+            <div className="w-44">
+              <TextField
+                aria-label="Host username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="host username"
+              />
+            </div>
+            <DirectorySelect source="auth.people" value={person} onChange={setPerson} label="Radd user" emptyLabel="Choose a person…" />
             <Button type="submit" size="sm" disabled={!username.trim() || !person || add.isPending}>
               Map
             </Button>
@@ -170,24 +134,14 @@ function MappedList({
           <Button size="sm" variant="ghost" className="mt-2" onClick={() => setAdding(true)}>
             Map an account…
           </Button>
-        ))}
+        )}
     </section>
   );
 }
 
-function UnmatchedList({
-  provider,
-  connectionId,
-  canManage,
-}: {
-  provider: VcsProviderValue;
-  connectionId: string;
-  canManage: boolean;
-}) {
-  const unmatched = useQuery(vcsUnmatchedQuery(provider, connectionId));
-  const durationConfig = useDurationConfig();
-  const refresh = useRefresh(provider, connectionId);
-  const [choice, setChoice] = useState<Record<string, PeopleChoice | null>>({});
+function UnmatchedList({ rows, provider, connectionId }: { rows: VcsUnmatchedAuthor[]; provider: string; connectionId: string }) {
+  const refresh = useRefresh();
+  const [choice, setChoice] = useState<Record<string, DirectoryChoice | null>>({});
   const [replayed, setReplayed] = useState<Record<string, number>>({});
   const replay = useMutation({
     mutationFn: (vars: { username: string; userId: string }) =>
@@ -200,7 +154,6 @@ function UnmatchedList({
       refresh();
     },
   });
-  const rows = unmatched.data ?? [];
   return (
     <section>
       <h4 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Unmatched accounts</h4>
@@ -219,12 +172,11 @@ function UnmatchedList({
               {row.external_email && <span className="text-fg-muted">{row.external_email}</span>}
               <span className="text-fg-faint">
                 {row.pending_entries} {row.pending_entries === 1 ? "entry" : "entries"} ·{" "}
-                {formatDuration(row.pending_seconds, durationConfig)} held
+                {row.pending_duration} held
               </span>
-              {canManage && (
-                <span className="ml-auto flex items-center gap-2">
-                  <PeopleDirectorySelect
-                    kind="person"
+              <span className="ml-auto flex items-center gap-2">
+                  <DirectorySelect
+                    source="auth.people"
                     value={choice[row.external_username] ?? null}
                     onChange={(value) => setChoice((prev) => ({ ...prev, [row.external_username]: value }))}
                     label={`Radd user for ${row.external_username}`}
@@ -240,7 +192,6 @@ function UnmatchedList({
                     Map and log
                   </Button>
                 </span>
-              )}
             </li>
           ))}
         </ul>

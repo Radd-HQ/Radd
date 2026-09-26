@@ -875,3 +875,12 @@ Registry owner IDs replace template display-group/prefix inference. Existing
 Automation backend services and action dependency ownership are still under the
 full audit; this change does not certify them or the remaining host VCS/Email UI.
 See `docs/plugin-platform.md` and the RADD-1365 inventory evidence.
+
+RADD-1366 moves version-control settings into VCS and connector remotes.
+`vcs/ui` owns the provider-neutral page (hosts, repository rows, identity map);
+GitHub, Forgejo and GitLab each contribute one tab carrying only their WORDING
+(`VcsHostConfig`) — REST paths, cache tags and audited entity types follow from
+the provider key by VCS's one convention (`hostPaths`/`hostEntities`/
+`historyEntities`). Their audit links point at `/settings/vcs?host=<provider>`
+(EntityLinkSpec), so no redirect routes exist. Projects/Auth supply pickers, and
+Time Logging supplies category queries and server-formatted held durations.

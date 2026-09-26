@@ -270,3 +270,13 @@ test('the host has no automation editor, transport or catalog lifecycle knowledg
     assert(!nodes(file).some(node=>node.type==='StringLiteral'&&/automations|\/items|\/pages/.test(node.value)),file);
   }
 });
+
+test('VCS settings and connector transport are owned by plugins',()=>{
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    if (node.type==='StringLiteral' && /^(?:\/(?:github|forgejo|gitlab)\/(?:connections|repos)|\/vcs\/(?:identities|[^/]+\/connections)|\/settings\/(?:vcs|github|forgejo|gitlab))/.test(node.value)) violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
+    if (node.type==='ImportDeclaration' && /(?:vcs-hosts|VcsHostSettings|VcsIdentityMap|settings\/vcs)/.test(node.source.value)) violations.push(file+': '+node.source.value);
+  }
+  assert.deepEqual(violations,[]);
+  for(const file of ['web/src/routes/settings/vcs.tsx','web/src/components/settings/vcs-hosts.ts','web/src/components/settings/VcsHostSettings.tsx','web/src/components/settings/VcsIdentityMap.tsx'])assert(!existsSync(file),file);
+});

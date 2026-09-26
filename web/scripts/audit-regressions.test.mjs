@@ -23,7 +23,8 @@ for (const [file, names] of [
     factories += "\n" + code.slice(start, code.indexOf("\n  });", start) + 7);
   }
 }
-const { Entity, entityMeta, invalidateEntities } = evaluate(source("cache.ts"), {}, ["Entity", "entityMeta", "invalidateEntities"]);
+const { Entity, entityMeta } = evaluate(source("cache.ts"), {}, ["Entity", "entityMeta"]);
+const { invalidateEntities } = evaluate(readFileSync(new URL("../packages/plugin-sdk/src/cache.ts", import.meta.url), "utf8"), {}, ["invalidateEntities"]);
 const names = ["commentsQuery", "linkSearchQuery", "searchQuery", "similarToTextQuery", "pageSearchQuery"];
 const queries = evaluate(factories, { ...ownerKeys, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined }, names);
 for (const [name, a, b] of [

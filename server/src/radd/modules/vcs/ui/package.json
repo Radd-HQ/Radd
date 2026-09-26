@@ -1,0 +1,19 @@
+{
+  "name": "@radd-plugin-ui/vcs",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@radd/plugin-sdk": "*",
+    "@radd-plugin-ui/projects": "*",
+    "@radd-plugin-ui/timelogging": "*"
+  },
+  "exports": {
+    "./host-contract": "./src/host-contract.ts",
+    "./types": "./src/types.ts"
+  }
+}

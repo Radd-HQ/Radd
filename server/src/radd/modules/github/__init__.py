@@ -1,3 +1,4 @@
+from radd.kernel import PluginUiManifest
 from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, RaddPlugin
 from radd.kernel import EventTypeSpec
@@ -18,9 +19,10 @@ def _admin_event(event_type: GithubEvent, label: str, entity: str) -> EventTypeS
 
 plugin = RaddPlugin(
     name="github",
+    ui=PluginUiManifest(remote="/plugins/github/remoteEntry.js", ui_api_version="1.13.0"),
     entity_links=(
-        EntityLinkSpec('github_connection', ('/settings/github',)),
-        EntityLinkSpec('github_repo', ('/settings/github',)),
+        EntityLinkSpec('github_connection', ('/settings/vcs?host=github',)),
+        EntityLinkSpec('github_repo', ('/settings/vcs?host=github',)),
     ),
     core=False,  # optional plugin — disableable via the plugin manager
     description="GitHub integration: links branches, commits and pull requests to issues, shows CI status, and offers merges, CI results and releases as automation triggers.",

@@ -8,9 +8,8 @@
  * is what the report described.
  */
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
-import { useAutomationMutation as useMutation } from "./mutation-lifetime";
 
 import { GitBranch, RotateCcw } from "lucide-react";
 import { api, errorMessage } from "@radd/plugin-sdk";
@@ -39,8 +38,8 @@ export function VersionsPanel({ ruleId, current, onRestored }: VersionsPanelProp
   const [confirmDialog, confirm] = useConfirm();
 
   const restore = useMutation({
-    mutationFn: (version: number, signal) =>
-      api.post<Rule>(apiAutomationRestorePath(ruleId, version), { note: `Restored version ${version}` }, {signal}),
+    mutationFn: (version: number) =>
+      api.post<Rule>(apiAutomationRestorePath(ruleId, version), { note: `Restored version ${version}` }),
     onSuccess: async (rule) => {
       void invalidateAutomations(queryClient);
       setSelected(null);

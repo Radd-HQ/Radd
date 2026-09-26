@@ -988,3 +988,33 @@ This migration leaves Automations' core status intact. Browser withdrawal tests
 simulate unavailable remotes; they do not add an administrative disable switch
 for a core module. Complete backend/action dependency review remains in the
 per-artifact inventory.
+
+### VCS settings and connector contributions (RADD-1366)
+
+VCS owns `/settings/vcs`, its navigation, the host/repository editor and the
+identity map. Connector remotes contribute one tab each to `vcs.provider-settings`
+and render it through the `vcs.host-settings` slot with a `VcsHostConfig` from the
+public `@radd-plugin-ui/vcs/host-contract`. That config is WORDING only (title,
+description, webhook and token guidance, what a change is called); the REST paths,
+cache tags and audited entity types follow from the provider key by one VCS
+convention, so a connector cannot restate them wrong. Neither the platform nor
+VCS enumerates the installed connectors. Audit links name
+`/settings/vcs?host=<provider>` directly; there are no legacy redirect routes.
+
+VCS remains a core module and keeps an empty settings page with a Manage plugins
+link when no connectors contribute. Reads are ordinary TanStack queries keyed
+`["vcs", provider, …]`, enabled while that connector is loaded; a failed refresh
+hides the rows it had (a revoked permission answers 403). Writes are plain
+`useMutation`s and are never aborted — a write the server accepted reports
+success even if the page changed underneath it. Losing `global.manage` unmounts
+the panel, including secret drafts.
+
+Projects contributes its picker; Auth contributes people selection; Time Logging
+contributes the `timelogging.categories` query and its public choice DTO. A saved
+category that is archived shows its name, one that no longer exists says so, and
+while categories are unavailable the saved id is kept, never replaced. The VCS
+unmatched-author API delegates duration presentation to Time Logging's public
+`format_durations` service, returning `pending_duration` alongside seconds.
+
+The SDK exports `invalidateEntities` (shared with the host, which wraps it with its
+typed `EntityTag` vocabulary).

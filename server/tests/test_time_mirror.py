@@ -344,3 +344,21 @@ async def test_same_source_ids_on_two_hosts_do_not_overwrite_or_delete_each_othe
     await _reconcile(db, other, scope, [])
     assert len(await _mirrored(db, world, scope)) == 1
     assert not await _mirrored(db, other, scope)
+
+
+async def test_unmatched_duration_uses_time_owner_instance_units(db, world):
+    from radd.modules.settings import service as settings_service
+    from radd.modules.settings.types import SettingKey, SettingScope
+    from radd.modules.vcs.admin_router import list_unmatched
+
+    await settings_service.set_value(
+        db, SettingKey.TIMELOG_HOURS_PER_DAY, SettingScope.INSTANCE, None, 7, actor_id=world["admin"].id
+    )
+    await _reconcile(
+        db, world, "pr:group/repo:duration",
+        [_entry("duration-1", 8 * 3600, user="unmapped-duration", email="unknown@example.invalid")],
+    )
+    rows = await list_unmatched(GITLAB, world["connection"], db, world["admin"])
+    assert len(rows) == 1
+    assert rows[0].pending_seconds == 8 * 3600
+    assert rows[0].pending_duration == "1d 1h"

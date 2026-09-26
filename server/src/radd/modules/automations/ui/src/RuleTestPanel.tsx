@@ -1,3 +1,4 @@
+import { useMutation } from "@tanstack/react-query";
 import { useContributedQuery, QueryError } from "@radd/plugin-sdk";
 import type { FirstProject } from "@radd-plugin-ui/projects/lookup-contract";
 import type { ItemChoice } from "@radd-plugin-ui/items/lookup-contract";
@@ -5,7 +6,6 @@ import type { PageChoices } from "@radd-plugin-ui/pages/lookup-contract";
 import { ProjectSelect } from "./controls";
 import { useEffect, useRef, useState } from "react";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
-import { useAutomationMutation as useMutation } from "./mutation-lifetime";
 
 import { CircleSlash, FlaskConical } from "lucide-react";
 import { api, errorMessage } from "@radd/plugin-sdk";
@@ -91,7 +91,7 @@ export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers =
   const currentInput = useRef(previewInput);
   currentInput.current = previewInput;
   const test = useMutation({
-    mutationFn: (_requestedInput: string, signal) => {
+    mutationFn: (_requestedInput: string) => {
       let eventPayload;
       if (usesEvent && !eventId) {
         eventPayload = JSON.parse(payload);
@@ -103,11 +103,11 @@ export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers =
           ...(subject === "page" ? { subject: "page", subject_id: pageId || null } : { item_id: itemId || null }),
           trigger_node_id: triggerId || null,
           ...(usesEvent ? eventId ? { event_id: Number(eventId) } : { event_payload: eventPayload } : {}),
-        }, {signal},
+        },
       );
     },
     onSuccess: (result, requestedInput) => { if (requestedInput === currentInput.current) onResult?.(result); },
-  }, previewInput);
+  });
   useEffect(() => { test.reset(); onResult?.(null); }, [previewInput]);
 
   const result = test.variables === previewInput ? test.data : undefined;

@@ -6,8 +6,8 @@
  *   node web/scripts/vcs-time-mirror-proof.mjs http://127.0.0.1:8000 admin@example.com change-me GLT-1
  *
  *   1. /settings/vcs shows ONE page with three host tabs; `?host=gitlab` selects
- *      the GitLab tab (aria-selected) and the old /settings/github path redirects
- *      to the GitHub tab;
+ *      the GitLab tab (aria-selected) and `?host=github` the GitHub tab (audit
+ *      links name that address directly, RADD-1366);
  *   2. the GitLab tab lists the connection, its repository with a project AND a
  *      work-category select, and a Time-tracking identities section whose
  *      mapped list shows the email-matched account;
@@ -73,11 +73,11 @@ async function main() {
     checks.gitlabTabSelectedFromUrl = tabs.selected === "GitLab";
     checks.oneNavEntry = tabs.navEntries.length === 1 && tabs.navEntries[0] === "Version control";
 
-    await session.navigate(`${baseUrl}/settings/github`, 2500);
+    await session.navigate(`${baseUrl}/settings/vcs?host=github`, 2500);
     await waitFor('[role="tablist"][aria-label="Version control hosts"]');
     const redirected = await session.eval(`({ path: location.pathname, search: location.search, selected: document.querySelector('[role="tab"][aria-selected="true"]')?.textContent.trim() })`);
     context.redirected = redirected;
-    checks.oldGithubPathRedirectsToTab = redirected.path.endsWith("/settings/vcs") && redirected.search.includes("host=github") && redirected.selected === "GitHub";
+    checks.githubTabSelectedFromUrl = redirected.path.endsWith("/settings/vcs") && redirected.search.includes("host=github") && redirected.selected === "GitHub";
 
     // --- 2. the GitLab tab's body ---
     await session.navigate(`${baseUrl}/settings/vcs?host=gitlab`, 2500);
@@ -88,7 +88,7 @@ async function main() {
     const gitlabTab = await session.eval(`(() => {
       const text = document.body.innerText;
       const categorySelects = document.querySelectorAll('[aria-label^="Work category for time mirrored from"]');
-      const projectSelects = document.querySelectorAll('[aria-label^="Project for "]');
+      const projectSelects = [...document.querySelectorAll('[data-repo]')].filter((row) => /Default project/.test(row.textContent));
       return {
         hasConnection: /Cinesite GitLab|GitLab/.test(text) && document.querySelectorAll('section header').length >= 1,
         repos: [...document.querySelectorAll('.font-mono')].map((n) => n.textContent.trim()).filter((t) => t.includes("/")),

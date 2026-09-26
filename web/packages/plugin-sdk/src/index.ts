@@ -135,3 +135,5 @@ export { useDebounced } from "./debounced";
 
 export { registerCommandSource, unregisterCommandSources, useContributedCommands, invalidatePluginCommands, type Command, type CommandContext, type CommandSource, type ContributedCommand } from "./commands";
 export { positionedErrorOf, type PositionedError } from "./positioned-error";
+
+export { invalidateEntities } from "./cache";

@@ -1,3 +1,4 @@
+from radd.kernel import PluginUiManifest, NavItemSpec
 from radd.kernel import EntityLinkSpec
 from radd.kernel import CrudResourceSpec, EventTypeSpec, RaddPlugin
 
@@ -10,6 +11,8 @@ from .types import VcsEntity  # noqa: E402 — RADD-1328
 
 plugin = RaddPlugin(
     name="vcs",
+    ui=PluginUiManifest(remote="/plugins/vcs/remoteEntry.js", ui_api_version="1.13.0",
+        nav=(NavItemSpec(key="vcs", label="Version control", path="/settings/vcs", icon="GitBranch", section="settings", group="Issues", requires=("global.manage",), order=60),)),
     entity_links=(
         EntityLinkSpec('vcs_user_link', ('/settings/vcs',)),
     ),

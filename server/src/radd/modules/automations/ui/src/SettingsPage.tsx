@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
-import { useAutomationMutation as useMutation } from "./mutation-lifetime";
 
 import { Pencil, Plus, Trash2, Workflow, X, Zap } from "lucide-react";
 import { api, errorMessage } from "@radd/plugin-sdk";
@@ -133,12 +132,12 @@ function RuleRow({ rule, onEdit }: { rule: Rule; onEdit: () => void }) {
     invalidateAutomations(queryClient);
 
   const toggle = useMutation({
-    mutationFn: (_: void, signal) =>
-      api.patch<Rule>(apiAutomationPath(rule.id), { enabled: !rule.enabled } satisfies RuleUpdate, {signal}),
+    mutationFn: () =>
+      api.patch<Rule>(apiAutomationPath(rule.id), { enabled: !rule.enabled } satisfies RuleUpdate),
     onSuccess: invalidate,
   });
   const remove = useMutation({
-    mutationFn: (_: void, signal) => api.delete<void>(apiAutomationPath(rule.id), {signal}),
+    mutationFn: () => api.delete<void>(apiAutomationPath(rule.id)),
     onSuccess: invalidate,
   });
   // Spec 116: actions are ACTION nodes of the graph, not a flat list.

@@ -66,6 +66,7 @@ class UnmatchedAuthorRead(BaseModel):
     external_email: str
     pending_entries: int
     pending_seconds: int
+    pending_duration: str
     last_seen_at: datetime | None
 
 

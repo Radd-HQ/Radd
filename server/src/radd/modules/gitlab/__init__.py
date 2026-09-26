@@ -1,3 +1,4 @@
+from radd.kernel import PluginUiManifest
 from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec, RaddPlugin
 
@@ -18,9 +19,10 @@ def _admin_event(event_type: GitlabEvent, label: str, entity: str) -> EventTypeS
 
 plugin = RaddPlugin(
     name="gitlab",
+    ui=PluginUiManifest(remote="/plugins/gitlab/remoteEntry.js", ui_api_version="1.13.0"),
     entity_links=(
-        EntityLinkSpec('gitlab_connection', ('/settings/gitlab',)),
-        EntityLinkSpec('gitlab_repo', ('/settings/gitlab',)),
+        EntityLinkSpec('gitlab_connection', ('/settings/vcs?host=gitlab',)),
+        EntityLinkSpec('gitlab_repo', ('/settings/vcs?host=gitlab',)),
     ),
     core=False,  # optional plugin — disableable via the plugin manager
     description="GitLab integration: links branches, commits and merge requests to issues, mirrors time spent on them, and offers merges and releases as automation triggers.",

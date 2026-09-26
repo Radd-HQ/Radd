@@ -65,6 +65,12 @@ async def _hours_per_day(session: AsyncSession) -> int:
     return await settings_service.resolve(session, SettingKey.TIMELOG_HOURS_PER_DAY)
 
 
+async def format_durations(session: AsyncSession, seconds: list[int]) -> list[str]:
+    """Public presentation contract: format work durations using this instance's units."""
+    hours_per_day = await _hours_per_day(session)
+    return [_fmt(value, hours_per_day) for value in seconds]
+
+
 async def nav_timesheet_visible(session: AsyncSession, user) -> bool:
     """THE definition of "is the Timesheet area useful to this actor"
     (RADD-843): timesheet.view held anywhere (they review others' time), OR

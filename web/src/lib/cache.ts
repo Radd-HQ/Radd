@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { invalidateEntities as invalidateTagged } from "@radd/plugin-sdk";
 
 /**
  * Cross-cache invalidation by ENTITY (not by query key).
@@ -48,13 +49,6 @@ export const Entity = {
   watcher: "watcher",
   attachment: "attachment",
   cannedResponse: "cannedResponse",
-  forgejoConnection: "forgejoConnection",
-  forgejoRepo: "forgejoRepo",
-  githubConnection: "githubConnection",
-  githubRepo: "githubRepo",
-  gitlabConnection: "gitlabConnection",
-  gitlabRepo: "gitlabRepo",
-  vcsUserLink: "vcsUserLink",
   serviceAccount: "serviceAccount",
   cardLayoutPreset: "cardLayoutPreset",
   slaPolicy: "slaPolicy",
@@ -93,11 +87,5 @@ export function projectEntityMeta(projectId: string | null | undefined, ...entit
  * comment AND the item (its `comment_count`): `invalidateEntities(qc, Entity.comment, Entity.item)`.
  */
 export function invalidateEntities(queryClient: QueryClient, ...entities: EntityTag[]) {
-  const wanted = new Set<EntityTag>(entities);
-  return queryClient.invalidateQueries({
-    predicate: (query) => {
-      const tags = (query.meta as EntityMeta | undefined)?.entities;
-      return Array.isArray(tags) && tags.some((tag) => wanted.has(tag));
-    },
-  });
+  return invalidateTagged(queryClient, ...entities);
 }

@@ -59,7 +59,6 @@ const TokensSettingsPage = lazyRouteComponent(() => import("./routes/settings/to
 const BackupsSettingsPage = lazyRouteComponent(() => import("./routes/settings/backups"), "BackupsSettingsPage");
 const PluginsSettingsPage = lazyRouteComponent(() => import("./routes/settings/plugins"), "PluginsSettingsPage");
 const CannedSettingsPage = lazyRouteComponent(() => import("./routes/settings/canned"), "CannedSettingsPage");
-const VcsSettingsPage = lazyRouteComponent(() => import("./routes/settings/vcs"), "VcsSettingsPage");
 const ServiceAccountsSettingsPage = lazyRouteComponent(() => import("./routes/settings/service-accounts"), "ServiceAccountsSettingsPage");
 const AiSettingsPage = lazyRouteComponent(() => import("./routes/settings/ai"), "AiSettingsPage");
 const StorageSettingsPage = lazyRouteComponent(() => import("./routes/settings/storage"), "StorageSettingsPage");
@@ -570,45 +569,6 @@ const settingsCannedRoute = createRoute({
   component: CannedSettingsPage,
 });
 
-/** Version control hosts (RADD-1262): one page, a tab per kind, `?host=` picks it. */
-const settingsVcsRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.vcs,
-  validateSearch: (search: Record<string, unknown>): { host?: string } => ({
-    host:
-      search.host === SettingsSection.forgejo ||
-      search.host === SettingsSection.github ||
-      search.host === SettingsSection.gitlab
-        ? search.host
-        : undefined,
-  }),
-  component: VcsSettingsPage,
-});
-
-/** The pre-RADD-1262 per-kind paths: bookmarks and audit "change history"
- * links keep working, landing on the right tab. */
-const settingsForgejoRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.forgejo,
-  beforeLoad: () => {
-    throw redirect({ to: RoutePath.settingsVcs, search: { host: SettingsSection.forgejo }, replace: true });
-  },
-});
-const settingsGithubRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.github,
-  beforeLoad: () => {
-    throw redirect({ to: RoutePath.settingsVcs, search: { host: SettingsSection.github }, replace: true });
-  },
-});
-const settingsGitlabRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: SettingsSection.gitlab,
-  beforeLoad: () => {
-    throw redirect({ to: RoutePath.settingsVcs, search: { host: SettingsSection.gitlab }, replace: true });
-  },
-});
-
 /** Service accounts + scoped keys (spec 113). */
 const settingsServiceAccountsRoute = createRoute({
   getParentRoute: () => settingsRoute,
@@ -813,10 +773,6 @@ const routeTree = rootRoute.addChildren([
       settingsBackupsRoute,
       settingsPluginsRoute,
       settingsCannedRoute,
-      settingsVcsRoute,
-      settingsForgejoRoute,
-      settingsGithubRoute,
-      settingsGitlabRoute,
       settingsServiceAccountsRoute,
       settingsDocsRoute,
       settingsAiRoute,

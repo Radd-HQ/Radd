@@ -7,6 +7,7 @@ import {
   Bell,
   BellRing,
   Blocks,
+  GitBranch,
   BookOpen,
   Bot,
   CalendarRange,
@@ -15,7 +16,6 @@ import {
   DatabaseBackup,
   DatabaseZap,
   FolderTree,
-  GitBranch,
   HardDrive,
   KeyRound,
   Link2,
@@ -139,16 +139,6 @@ const SETTINGS_NAV_GROUPS: readonly { label: string; items: readonly SettingsNav
         label: "Canned responses",
         icon: MessageSquareQuote,
         show: (g) => g.ws(Permission.cannedUpdate),
-      },
-      {
-        // RADD-1262 — ONE entry for every version-control host kind (Forgejo
-        // since spec 111, GitHub since RADD-1129, GitLab since RADD-1253); the
-        // page holds a tab per kind. Shown while ANY of the three is mounted.
-        to: RoutePath.settingsVcs,
-        label: "Version control",
-        icon: GitBranch,
-        plugin: ["forgejo", "github", "gitlab"],
-        show: (g) => g.ws(Permission.globalManage),
       },
     ],
   },
@@ -361,7 +351,7 @@ export function SettingsLayout() {
     .filter((n) => n.requires.every((r) => perms.global(r)))
     .filter((n) => (n.requires_any_project ?? []).every((r) => perms.anyProject(r)))
     .filter((n) => !disabledNav.has(n.path));
-  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText };
+  const iconByName: Record<string, LucideIcon> = { Activity, Terminal, Blocks, ScrollText, GitBranch };
   for (const nav of pluginSettingsNav) {
     const label = nav.group || "Extensions";
     let group = visibleGroups.find(g => g.label === label);

@@ -7,6 +7,7 @@ export const registerCommandSource = M["registerCommandSource"];
 export const unregisterCommandSources = M["unregisterCommandSources"];
 export const useContributedCommands = M["useContributedCommands"];
 export const invalidatePluginCommands = M["invalidatePluginCommands"];
+export const invalidateEntities = M["invalidateEntities"];
 export const IconButton = M["IconButton"];
 export const ConfirmDialog = M["ConfirmDialog"];
 export const useConfirm = M["useConfirm"];

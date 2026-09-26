@@ -13,9 +13,8 @@
  * trigger's inspector is the question the editor should open on: fires on…
  */
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAutomationQuery as useQuery } from "./query-lifetime";
-import { useAutomationMutation as useMutation } from "./mutation-lifetime";
 
 import { ArrowLeft, Check } from "lucide-react";
 import { api } from "@radd/plugin-sdk";
@@ -92,7 +91,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
     name.trim() !== "" && graph.nodes.length > 0 && incompleteActions.length === 0;
 
   const save = useMutation({
-    mutationFn: async (_: void, signal) => {
+    mutationFn: async () => {
       const payload = {
         name: name.trim(),
         enabled,
@@ -103,8 +102,8 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
         ...(adoptExecution ? { adopt_execution: true } : {}),
       };
       const saved = await (persistedId
-        ? api.patch<Rule>(apiAutomationPath(persistedId), payload satisfies RuleUpdate, {signal})
-        : api.post<Rule>(ApiPath.automations, payload satisfies RuleCreate, {signal}));
+        ? api.patch<Rule>(apiAutomationPath(persistedId), payload satisfies RuleUpdate)
+        : api.post<Rule>(ApiPath.automations, payload satisfies RuleCreate));
       return { saved, submitted: content };
     },
     onSuccess: async ({ saved, submitted }) => {
