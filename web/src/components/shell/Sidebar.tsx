@@ -35,7 +35,8 @@ import {
 } from "../../lib/topbar-prefs";
 import { ContextMenu } from "../ContextMenu";
 import { capabilitiesQuery, cycleSummaryQuery } from "../../lib/queries";
-import { Permission, ViewType } from "../../lib/types";
+import { Permission } from "../../lib/types";
+import { useViewTypes } from "../../lib/view-types";
 import { openCommandPalette } from "../CommandPalette";
 import { DashboardModal, useDashboardDirectory } from "@radd-plugin-ui/dashboards/sidebar";
 import { NewItemModal } from "../items/NewItemModal";
@@ -50,8 +51,8 @@ import { SidebarRail } from "./SidebarRail";
 import {
   CycleRow,
   InboxLink,
-  QueueLinks,
   SectionHeader,
+  ViewTypeSection,
   ViewRowContent,
   navLinkClasses,
 } from "./SidebarRows";
@@ -93,8 +94,10 @@ export function Sidebar() {
     .filter((n) => !disabledNav.has(n.path));
   const nav = useNavFacts();
   const { data: projectSummary } = useQuery(projectSummaryQuery());
-  const globalViews = useViewDirectory({ globalOnly: true, excludeType: ViewType.queue });
-  const queues = useViewDirectory({ viewType: ViewType.queue });
+  // A plugin view type with a sidebar section of its own (the slas queues, RADD-1396) is listed
+  // there, with live counts, and left out of the ordinary view lists.
+  const globalViews = useViewDirectory({ globalOnly: true, sectioned: false });
+  const sectionedTypes = useViewTypes().sectioned;
   const cycles = useCycleDirectory({ includeCompleted: false });
   const cycleSummary = useQuery(cycleSummaryQuery());
   // Spec 121: dashboards are an account's surface; a visitor's rail skips the fetch.
@@ -138,9 +141,6 @@ export function Sidebar() {
   const hiddenRelatedProjectCount = relatedProjectsPref.mode === "never" ? projectSummary?.related_count ?? 0 : 0;
   const showRelatedProjectsToggle = relatedProjectsPref.mode === "never" || (projectSummary?.related_count ?? 0) > 0;
 
-  // Queue views (spec 64) get their own badged section below — the generic
-  // view lists skip them so a queue never renders twice.
-  const queueViews = queues.rows;
   const allProjectsViews = globalViews.rows;
   // New-view affordances mirror the server (RADD-824): creating a PERSONAL
   // view needs only item.read in scope (views/service.PERSONAL_VIEW_PERMISSION)
@@ -366,20 +366,16 @@ export function Sidebar() {
         </div>
         )}
 
-        {/* Queues (spec 64): queue views with live count badges — one batched
-            counts call for the whole section; hidden when no queues exist. */}
-        {(queues.total > 0 || Boolean(queues.filter) || queues.isError) && (
-          <div className="mt-3">
-            <SectionHeader
-              label="Queues"
-              collapsed={sectionCollapsed("queues")}
-              onToggle={() => toggleSection("queues")}
-            />
-            {!sectionCollapsed("queues") && (
-              <SidebarDirectory directory={queues} label="queues"><QueueLinks views={queueViews} /></SidebarDirectory>
-            )}
-          </div>
-        )}
+        {/* A plugin view type's own section (RADD-1396; spec 64's queues are the slas plugin's):
+            its views with live count badges, hidden while it has none. */}
+        {sectionedTypes.map((option) => (
+          <ViewTypeSection
+            key={option.key}
+            option={option}
+            collapsed={sectionCollapsed(option.key)}
+            onToggle={() => toggleSection(option.key)}
+          />
+        ))}
 
         {/* The wiki's spaces: the pages plugin's section (RADD-1392); the fold stays ours. */}
         <Slot id={SlotId.sidebarSection} match="pages" collapsed={sectionCollapsed("pages")}

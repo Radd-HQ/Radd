@@ -12,11 +12,14 @@ export interface ViewDirectoryScope {
   includeGlobal?: boolean;
   globalOnly?: boolean;
   viewType?: string;
-  excludeType?: string;
+  /** RADD-1396: false = leave out the views of a type listed in a sidebar section of its own
+   *  (a plugin `sidebar_section`); true = only those. */
+  sectioned?: boolean;
 }
 const scopeQuery = (scope: ViewDirectoryScope) => ({
   project_id: scope.projectId || undefined, include_global: String(scope.includeGlobal ?? true),
-  global_only: String(scope.globalOnly ?? false), view_type: scope.viewType, exclude_type: scope.excludeType,
+  global_only: String(scope.globalOnly ?? false), view_type: scope.viewType,
+  sectioned: scope.sectioned === undefined ? undefined : String(scope.sectioned),
 });
 const viewsMeta = () => entityMeta(Entity.view, Entity.project, Entity.role, Entity.team, Entity.member, Entity.group, Entity.accessGrant);
 

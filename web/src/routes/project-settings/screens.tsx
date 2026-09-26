@@ -29,7 +29,6 @@ const BUILTIN_LABELS: Record<string, string> = {
   start_date: "Start date",
   target_date: "Target date",
   labels: "Labels",
-  sla: "SLA timers",
   time_tracking: "Time tracking",
   points: "Points",
 };

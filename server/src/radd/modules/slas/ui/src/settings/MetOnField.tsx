@@ -1,7 +1,6 @@
-import { SelectField } from "../SelectField";
-import { TokenMultiSelect } from "@radd/plugin-sdk";
-import { TeamAudience } from "../teams/TeamAudience";
-import { SlaMetOn, type SlaMetOnValue } from "../../lib/types";
+import { SelectField, Slot, TokenMultiSelect } from "@radd/plugin-sdk";
+import { TEAM_AUDIENCE_SLOT, type TeamAudienceProps } from "@radd-plugin-ui/teams/relationship-contract";
+import { SlaMetOn, type SlaMetOnValue, type StateChoice } from "./policies";
 
 /** RADD-1299: one target's "met when" choice plus the states/teams it names. */
 export interface MetRule {
@@ -38,7 +37,18 @@ export function metRuleSummary(metOn: SlaMetOnValue, stateNames: string[], teamC
   }
 }
 
-export function SlaMetOnField({
+/** The teams owner's audience picker (its relationship contract). The ids are ours; names,
+ *  counts and editing are the teams plugin's — without it the saved ids are kept, not lost. */
+export function TeamAudience(props: TeamAudienceProps) {
+  const fallback = (
+    <p className="text-sm text-fg-muted">
+      Team selection unavailable. {props.value.length} saved team{props.value.length === 1 ? "" : "s"} preserved.
+    </p>
+  );
+  return <Slot id={TEAM_AUDIENCE_SLOT} {...props} fallback={fallback} errorFallback={fallback} />;
+}
+
+export function MetOnField({
   target,
   rule,
   onChange,
@@ -47,7 +57,7 @@ export function SlaMetOnField({
   target: "response" | "resolution";
   rule: MetRule;
   onChange: (rule: MetRule) => void;
-  states: { id: string; name: string }[];
+  states: StateChoice[];
 }) {
   const needsStates = rule.metOn === SlaMetOn.entersStates || rule.metOn === SlaMetOn.leavesStates;
   return (

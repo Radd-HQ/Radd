@@ -13,7 +13,10 @@ from .models import View
 
 async def query(session: AsyncSession, actor: User, *, project_id: uuid.UUID | None = None,
                 include_global: bool = True, global_only: bool = False, q: str = "",
-                view_type: str | None = None, exclude_type: str | None = None):
+                view_type: str | None = None, sectioned: bool | None = None):
+    """`sectioned` (RADD-1396): False leaves out views whose TYPE is listed in a sidebar section of
+    its own (a plugin `ViewTypeSpec.sidebar_section` — the slas queues); True keeps only those. A
+    type whose plugin is disabled is ordinary again, so its views stay reachable."""
     stmt = select(View)
     if not await authz.readable_projects(session, actor):
         return stmt.where(false())
@@ -29,8 +32,14 @@ async def query(session: AsyncSession, actor: User, *, project_id: uuid.UUID | N
         stmt = stmt.where(View.name.ilike(ilike_term(q.strip())))
     if view_type is not None:
         stmt = stmt.where(View.view_type == view_type)
-    if exclude_type is not None:
-        stmt = stmt.where(View.view_type != exclude_type)
+    if sectioned is not None:
+        from radd.kernel import registries  # lazily, like schemas: kernel ← plugins ← views
+
+        own = [key for key, spec in registries.view_types.items() if spec.sidebar_section]
+        if sectioned:
+            stmt = stmt.where(View.view_type.in_(own)) if own else stmt.where(false())
+        elif own:
+            stmt = stmt.where(View.view_type.not_in(own))
     return stmt
 
 

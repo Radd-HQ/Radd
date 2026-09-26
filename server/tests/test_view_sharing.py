@@ -33,6 +33,7 @@ from radd.modules.views.schemas import (
     ViewUpdate,
 )
 from radd.modules.views.types import ShareLevel, ViewType
+from radd.modules.slas.types import SlaViewType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -233,9 +234,9 @@ async def test_co_ownership_and_transfer(db):
 
 
 async def test_queue_type_and_view_counts(db):
-    """Spec 64: QUEUE is a first-class ViewType, and POST /views/counts returns
-    compiled-SLQ counts for exactly the views the actor can see (invisible and
-    unknown ids omitted, never errored)."""
+    """Spec 64: a queue is a view type (the slas plugin's `slas.queue` since RADD-1396, accepted
+    because the plugin registers it), and POST /views/counts returns compiled-SLQ counts for
+    exactly the views the actor can see (invisible and unknown ids omitted, never errored)."""
     owner = await _member(db, "Queue Owner")
     grantee = await _member(db, "Count Grantee")
     outsider = await _member(db, "Count Outsider")
@@ -272,19 +273,19 @@ async def test_queue_type_and_view_counts(db):
         ViewCreate(
             project_id=project.id,
             name="Blockers queue",
-            view_type=ViewType.QUEUE,
+            view_type=SlaViewType.QUEUE,
             query="priority = blocker",
             group_by="state",
         ),
         actor=owner,
     )
-    assert queue.view_type == ViewType.QUEUE  # ViewRead.view_type is now a str
+    assert queue.view_type == SlaViewType.QUEUE  # ViewRead.view_type is now a str
     everything = await views_service.create_view(
         db,
         ViewCreate(
             project_id=project.id,
             name="All open",
-            view_type=ViewType.QUEUE,
+            view_type=SlaViewType.QUEUE,
             shares=[ViewShareEntry(user_id=grantee.id, level=ShareLevel.VIEWER)],
         ),
         actor=owner,

@@ -4,11 +4,9 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import {
   BarChart3,
   BookOpen,
-  CalendarClock,
   CalendarRange,
   Clock,
   ConciergeBell,
-  GanttChartSquare,
   House,
   Star,
   Inbox,
@@ -16,12 +14,10 @@ import {
   LayoutDashboard,
   Link2,
   List,
-  ListOrdered,
   Pencil,
   PinOff,
   Plus,
   Settings,
-  SquareKanban,
   type LucideIcon,
 } from "lucide-react";
 import { ContextMenu } from "../ContextMenu";
@@ -35,7 +31,8 @@ import { viewQuery } from "../../lib/queries";
 import { pageByPathQuery, pageSpaceByIdentityQuery } from "@radd-plugin-ui/pages/queries";
 import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
-import { Permission, type View } from "../../lib/types";
+import { Permission, type View, type ViewTypeOption } from "../../lib/types";
+import { useViewTypes, viewTypeIcon } from "../../lib/view-types";
 import type { Page, PageCreate } from "@radd-plugin-ui/pages/types";
 import { NewItemModal } from "../items/NewItemModal";
 import { ProjectPicker } from "../projects/ProjectPicker";
@@ -55,13 +52,6 @@ interface PinnedEntry {
   view?: View;
 }
 
-const VIEW_TYPE_ICONS: Record<string, LucideIcon> = {
-  board: SquareKanban,
-  planning: CalendarClock,
-  roadmap: GanttChartSquare,
-  queue: ListOrdered,
-};
-
 const LINK_ICONS: [prefix: string, icon: LucideIcon][] = [
   ["/inbox", Inbox],
   ["/starred", Star],
@@ -76,9 +66,10 @@ const LINK_ICONS: [prefix: string, icon: LucideIcon][] = [
   ["/settings", Settings],
 ];
 
-/** Every pinned tab carries an icon — labels alone read as text, not nav. */
-function tabIcon({ pin, view }: PinnedEntry): LucideIcon {
-  if (view) return VIEW_TYPE_ICONS[view.view_type] ?? List;
+/** Every pinned tab carries an icon — labels alone read as text, not nav. A view's is its type's,
+ *  a plugin type's included (RADD-1396). */
+function tabIcon({ pin, view }: PinnedEntry, viewTypes: ReadonlyMap<string, ViewTypeOption>): LucideIcon {
+  if (view) return viewTypeIcon(view.view_type, viewTypes.get(view.view_type));
   if (pin.kind !== "link") return List;
   return LINK_ICONS.find(([prefix]) => pin.path.startsWith(prefix))?.[1] ?? Link2;
 }
@@ -103,6 +94,7 @@ export function PinsBar() {
   // simply don't render — the preference self-heals next time pins change.
   // Link pins (any other nav destination) need no resolution.
   const navFacts = useNavFacts();
+  const viewTypes = useViewTypes();
   const pinned = pins
     .map((pin): PinnedEntry | null => {
       // RADD-843: a link pin to an area the actor cannot use is dropped from
@@ -167,7 +159,7 @@ export function PinsBar() {
             activeProps: { className: `${tabBase} ${tabActive} max-w-40` },
             inactiveProps: { className: `${tabBase} max-w-40` },
           };
-          const Icon = tabIcon(entry);
+          const Icon = tabIcon(entry, viewTypes.byKey);
           const text = (
             <>
               <Icon size={13} className="shrink-0" aria-hidden />

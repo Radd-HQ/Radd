@@ -1,17 +1,29 @@
 from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec
+from radd.kernel import NavItemSpec
+from radd.kernel import NavSection
 from radd.kernel import PluginUiManifest
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
+from radd.kernel import ViewListSpec
+from radd.kernel import ViewTypeSpec
+from radd.modules.auth.types import Permission
 
 from . import engine
 from .router import router
-from .types import SlaEvent
+from .types import (
+    QUEUE_COLUMNS,
+    QUEUE_REFRESH_SECONDS,
+    QUEUE_ROWS_PATH,
+    SETTINGS_PAGE_SEGMENT,
+    SlaEvent,
+    SlaViewType,
+)
 
 plugin = RaddPlugin(
     name="slas",
     entity_links=(
-        EntityLinkSpec('sla_policy', ('/p/{project.key}/settings/sla',)),
+        EntityLinkSpec('sla_policy', (f'/p/{{project.key}}/settings/{SETTINGS_PAGE_SEGMENT}',)),
     ),
     # RADD-816: no sla.read — policy reads ride the project's item.read (the list is
     # project-scoped), and a minted-but-unenforced atom is the dead class it deleted.
@@ -39,8 +51,32 @@ plugin = RaddPlugin(
     # RADD-1386: the SLA report's UI (a reports-page section and the
     # "Service desk SLA" dashboard widget) is this plugin's own remote; RADD-1394
     # added the timers — the issue rail section and the `slas.timer` list column
-    # / board-card cell (an SDK 1.15 item attribute over `slas.timers`).
-    ui=PluginUiManifest(remote="/plugins/slas/remoteEntry.js", ui_api_version="1.15.0"),
+    # / board-card cell (an SDK 1.15 item attribute over `slas.timers`); RADD-1396
+    # the project's SLA settings page (a `project.settings.page`, SDK 1.16).
+    ui=PluginUiManifest(
+        nav=(
+            NavItemSpec(
+                key="sla", label="SLAs", path=SETTINGS_PAGE_SEGMENT, icon="timer",
+                section=NavSection.PROJECT_SETTINGS, order=70,
+                # RADD-1303: a project's Manager manages its SLAs — checked in THAT project.
+                requires=(Permission.SLA_UPDATE,),
+            ),
+        ),
+        remote="/plugins/slas/remoteEntry.js",
+        ui_api_version="1.16.0",
+    ),
+    # RADD-1396: the spec-64 triage queue is this plugin's view type — the host's list over
+    # the urgency-ordered rows, listed in the sidebar's Queues section with live counts.
+    view_types=(
+        ViewTypeSpec(
+            key=SlaViewType.QUEUE, label="Queue (triage list)", icon="list-ordered",
+            sidebar_section="Queues",
+            list_surface=ViewListSpec(
+                rows_path=QUEUE_ROWS_PATH, columns=QUEUE_COLUMNS,
+                refresh_seconds=QUEUE_REFRESH_SECONDS,
+            ),
+        ),
+    ),
     on_startup=(engine.start,),
     on_shutdown=(engine.stop,),
     event_types=(

@@ -58,7 +58,6 @@ export const Permission = {
   labelDelete: "label.delete",
   cannedRead: "canned.read",
   cannedUpdate: "canned.update",
-  slaUpdate: "sla.update",
   /** Spec 20: manage automation rules (global). */
   automationManage: "automation.manage",
   stateManage: "state.manage",

@@ -42,7 +42,7 @@ const ProjectScreensSettings = lazyRouteComponent(() => import("./routes/project
 const ProjectReleasesSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectReleasesSettings");
 const ProjectFormsSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectFormsSettings");
 const ProjectTimeloggingSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectTimeloggingSettings");
-const ProjectSlaSettings = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectSlaSettings");
+const ProjectSettingsPluginPage = lazyRouteComponent(() => import("./routes/project-settings/layout"), "ProjectSettingsPluginPage");
 const GeneralSettingsPage = lazyRouteComponent(() => import("./routes/settings/general"), "GeneralSettingsPage");
 const CyclesSettingsPage = lazyRouteComponent(() => import("./routes/settings/cycles"), "CyclesSettingsPage");
 const FieldsSettingsPage = lazyRouteComponent(() => import("./routes/settings/fields"), "FieldsSettingsPage");
@@ -636,11 +636,14 @@ const projectSettingsTimeloggingRoute = createRoute({
   component: ProjectTimeloggingSettings,
 });
 
-/** SLA policies for the project (spec 67 — moved out of global settings). */
-const projectSettingsSlaRoute = createRoute({
+/** Catch-all under a project's settings (RADD-1396): a plugin's `project.settings.page`
+ *  contribution renders here, matched on the segment, inside the project-settings chrome.
+ *  Explicit sections win over this splat. */
+const projectSettingsPluginPageRoute = createRoute({
   getParentRoute: () => projectSettingsRoute,
-  path: ProjectSettingsSection.sla,
-  component: ProjectSlaSettings,
+  path: "$",
+  validateSearch: (search: Record<string, unknown>) => search,
+  component: ProjectSettingsPluginPage,
 });
 
 const routeTree = rootRoute.addChildren([
@@ -682,7 +685,8 @@ const routeTree = rootRoute.addChildren([
       projectSettingsReleasesRoute,
       projectSettingsFormsRoute,
       projectSettingsTimeloggingRoute,
-      projectSettingsSlaRoute,
+      // Splat LAST so the host's sections win; plugin project-settings pages render here.
+      projectSettingsPluginPageRoute,
     ]),
     settingsRoute.addChildren([
       settingsIndexRoute,

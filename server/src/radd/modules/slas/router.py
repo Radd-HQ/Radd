@@ -27,6 +27,7 @@ from .schemas import (
     SlaReport,
     TimerRead,
 )
+from .types import QUEUE_ROWS_PATH
 
 router = APIRouter(tags=["slas"])
 
@@ -114,9 +115,12 @@ async def item_sla(item_id: uuid.UUID, session: Session, user: CurrentUser) -> I
     return ItemSlaRead(entries=entries)
 
 
-@router.get("/sla-queue-items", response_model=list[ItemRead])
+@router.get(QUEUE_ROWS_PATH, response_model=list[ItemRead])
 async def queue_page(session: Session, user: CurrentUser, project_id: uuid.UUID | None = None,
                      q: str = "", limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    """A queue view's rows (spec 64; RADD-1396 declares it as `slas.queue`'s `rows_path`): the
+    `/items` paging contract over the whole match set, ordered by live SLA urgency — open breaches,
+    then the earliest open due time, then the oldest — unless the SLQ sorts explicitly."""
     return await queue_items(session, user, project_id=project_id, q=q, limit=limit, offset=offset)
 
 

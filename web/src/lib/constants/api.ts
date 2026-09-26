@@ -84,7 +84,6 @@ export const ApiPath = {
   cannedResponses: "/canned-responses",
   // Spec 113 — service accounts and their scoped keys.
   serviceAccounts: "/service-accounts",
-  slaPolicies: "/sla-policies",
   // Batched epic-progress rollup for board/list progress bars (spec 76).
   itemsRollup: "/items/rollup",
   // Batched estimate/logged seconds for roadmap auto-schedule durations (spec 78).
@@ -101,7 +100,7 @@ export const ApiPath = {
   // two would sit behind `GET /items/{item_id}`.
   itemsValidate: "/items/validate",
   itemsValidateContext: "/items/validate/context",
-  // Batched view membership counts for the sidebar queue badges (spec 64).
+  // Batched view membership counts for a view type's own sidebar section (spec 64, RADD-1396).
   viewCounts: "/views/counts",
   // Card-layout preset library (spec 109) — shared, copy-on-apply.
   cardLayoutPresets: "/views/card-presets",

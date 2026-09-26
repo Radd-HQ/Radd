@@ -21,7 +21,11 @@ from radd.modules.teams import service as teams
 from radd.modules.teams.schemas import TeamCreate
 from radd.modules.views import service as views
 from radd.modules.views.models import View
+from radd.modules.slas.types import SlaViewType
 from radd.modules.auth.types import LoginMethod
+
+# A view type with a sidebar section of its own (RADD-1396), registered by the slas plugin.
+QUEUE = SlaViewType.QUEUE.value
 
 
 @pytest.fixture
@@ -57,7 +61,7 @@ async def test_visibility_precedes_directory_window(db, resource, monkeypatch):
         mode = i % 10
         values = {"name": f"{prefix} {i:03}", "owner_id": reader.id if mode == 0 else owner.id,
                   "global_access": "viewer" if mode in (1, 7) else "editor" if mode == 9 else None}
-        row = (View(**values, view_type="queue" if i % 3 == 0 else "list", query="",
+        row = (View(**values, view_type=QUEUE if i % 3 == 0 else "list", query="",
                     project_id=None if i % 2 else project.id) if resource == "view" else Dashboard(**values))
         db.add(row)
         await db.flush()
@@ -127,8 +131,11 @@ async def test_visibility_precedes_directory_window(db, resource, monkeypatch):
             for filters, matching in [
                 ({"project_id": str(project.id)}, expected),
                 ({"project_id": str(project.id), "include_global": False}, [r for r in expected if r.project_id == project.id]),
-                ({"global_only": True, "exclude_type": "queue"}, [r for r in expected if r.project_id is None and r.view_type != "queue"]),
-                ({"view_type": "queue"}, [r for r in expected if r.view_type == "queue"]),
+                # RADD-1396: a type with a sidebar section of its own (the slas queue) leaves the
+                # ordinary lists, and `sectioned=true` is exactly those views.
+                ({"global_only": True, "sectioned": False}, [r for r in expected if r.project_id is None and r.view_type != QUEUE]),
+                ({"sectioned": True}, [r for r in expected if r.view_type == QUEUE]),
+                ({"view_type": QUEUE}, [r for r in expected if r.view_type == QUEUE]),
             ]:
                 response = await client.get(base, params={"q": prefix, "limit": 200, **filters})
                 assert response.headers["X-Total-Count"] == str(len(matching))

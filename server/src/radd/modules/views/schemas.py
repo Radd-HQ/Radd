@@ -91,7 +91,7 @@ class QuickFilter(BaseModel):
     query: str = Field(min_length=1, max_length=500)
 
 
-# One counts batch covers a sidebar of queue badges (spec 64) — no N+1 loops.
+# One counts batch covers a sidebar section of badges (spec 64) — no N+1 loops.
 VIEW_COUNTS_MAX_VIEWS = 50
 
 

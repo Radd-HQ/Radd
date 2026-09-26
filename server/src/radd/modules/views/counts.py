@@ -1,4 +1,6 @@
-"""Batched view membership counts (spec 64) — the sidebar queue badges.
+"""Batched view membership counts (spec 64) — the sidebar badges of a view type
+listed in a section of its own (`ViewTypeSpec.sidebar_section`, RADD-1396; the slas
+queues are the first).
 
 POST /views/counts resolves each requested view to a compiled-SLQ
 `SELECT count(*)` over work_items. Visibility mirrors the view read path
@@ -49,7 +51,7 @@ async def view_counts(
         return {}
     # The member floor, same bar as list_views (RADD-788). This used to read the
     # GLOBAL item.read atom and return {} when it was absent — which for a
-    # project-scoped member meant every queue badge silently vanished rather than
+    # project-scoped member meant every sidebar badge silently vanished rather than
     # erroring, the harder failure to notice.
     readable_map = await authz.readable_projects(session, actor)
     readable_ids = set(readable_map)

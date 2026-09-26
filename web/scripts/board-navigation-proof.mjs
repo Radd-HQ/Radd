@@ -16,6 +16,11 @@ const sprintRows=Array.from({length:201},(_,i)=>item(15000+i,cycles[i===200?1:0]
 const backlog=Array.from({length:401},(_,i)=>item(i+1));
 const states=Array.from({length:30},(_,i)=>({id:i===0?'todo':i===1?'progress':`state-${i}`,name:i===0?'To do':i===1?'In progress':`Stage ${i}`,category:'todo',position:i}));
 const moves=[];
+// RADD-1396: the queue is the slas plugin's view type, declared a list surface over its own rows.
+const QUEUE='slas.queue';
+let queueEnabled=true;
+const queueType={key:QUEUE,label:'Queue (triage list)',icon:'list-ordered',sidebar_section:'Queues',
+ list_surface:{rows_path:'/sla-queue-items',columns:['type','reporter','priority','slas.timer','state'],refresh_seconds:60}};
 const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://local');
  if(url.pathname.startsWith('/api/')){
@@ -39,7 +44,7 @@ const server=http.createServer(async(req,res)=>{
    const sprint=url.searchParams.getAll('cycle_id').length>0;
    const q=url.searchParams.get('q')??'';
    const pool=sprint?sprintRows:q.includes('cycle IS EMPTY')?backlog:Array.from({length:14704},(_,i)=>({...item(i+1,cycles[2]),state:{id:'done',name:'Done',category:'done'}}));
-   data=p.endsWith('/count')?{total:view.view_type==='queue'?201:pool.length}:pool.slice(Number(url.searchParams.get('offset')??0),Number(url.searchParams.get('offset')??0)+Number(url.searchParams.get('limit')??50));
+   data=p.endsWith('/count')?{total:view.view_type===QUEUE?201:pool.length}:pool.slice(Number(url.searchParams.get('offset')??0),Number(url.searchParams.get('offset')??0)+Number(url.searchParams.get('limit')??50));
   } else if(req.method==='PATCH' && p.startsWith('/api/v1/items/')){ let raw='';for await(const chunk of req)raw+=chunk; moves.push(JSON.parse(raw));data={...item(1),state:states.find(s=>s.id===moves.at(-1).state_id)??states[0]};
   } else if(p==='/api/v1/auth/me')data={id:'person',name:'Tester',email:'tester@example.com',global_role:'member',instance_role:'member',permissions:[],timezone:'UTC'};
   else if(p==='/api/v1/views/planning')data=view;
@@ -50,7 +55,7 @@ const server=http.createServer(async(req,res)=>{
   else if(p.startsWith('/api/v1/projects/'))data=project;
   else if(p==='/api/v1/cycles')data=cycles;
   else if(p==='/api/v1/states')data=states;
-  else if(p.includes('/capabilities'))data={capabilities:[],nav:[],plugins:[],ui:[],view_types:[]};
+  else if(p.includes('/capabilities'))data={capabilities:[],nav:[],plugins:queueEnabled?['slas']:[],ui:[],view_types:queueEnabled?[queueType]:[]};
   else if(p.includes('/notifications'))data={items:[],notifications:[],unread_count:0,total:0};
   else if(p.includes('/preferences'))data={};
   else if(p.includes('/config'))data={};
@@ -146,14 +151,22 @@ try{
  await s.screenshot('/tmp/radd-grouped-list-navigation-proof.png');
  assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('503')),[]);
  console.log('PASS: grouped list has complete searchable groups, independent scroll loading, full totals, collapse/reopen cache and no bottom batch pager.');
- view.view_type='queue';view.group_by=null;view.swimlane_by=null;requests.length=0;
+ view.view_type=QUEUE;view.group_by='state';view.swimlane_by=null;requests.length=0;
  await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,2000);
  await until(async()=> (await s.eval('document.body.innerText')).includes('Overdue queue item'));
  assert.ok(requests.some(r=>r.queue));assert.ok(!requests.some(r=>r.pathname?.endsWith('/items')));
+ assert.ok(!requests.some(r=>r.group),'A list-surface plugin type is flat: its stored axis is ignored');
  await s.click('button[aria-label="Next page"]');
  await until(async()=> (await s.eval('document.body.innerText')).includes('Later queue page'));
  assert.ok(requests.some(r=>r.queue?.searchParams.get('offset')==='200'));
  assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('503')),[]);
- console.log('PASS: queue uses the server urgency endpoint across pagination.');
+ console.log('PASS: a plugin list type (the slas queue) reads its declared rows endpoint across pagination.');
+ queueEnabled=false;requests.length=0;
+ await s.navigate(`http://127.0.0.1:${server.address().port}/p/DEV/v/planning`,2000);
+ await until(async()=> await s.eval(`!!document.querySelector('[data-plugin-missing="view"]')`));
+ assert.ok(!requests.some(r=>r.queue),'A view whose type is gone asks no rows endpoint');
+ assert.match(await s.eval(`document.querySelector('[data-plugin-missing="view"]').textContent`),/slas\.queue|no longer available|type/i);
+ assert.deepEqual(s.consoleErrors.filter(e=>!e.includes('503')),[]);
+ console.log('PASS: with slas disabled a saved queue view shows the missing-type notice instead of crashing.');
  console.log('PASS: board immediately shows rare state, loads further rows without losing other groups, displays full count and avoids global paging.');
 }finally{browser?.close();await new Promise(resolve=>server.close(resolve));}

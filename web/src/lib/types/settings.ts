@@ -48,12 +48,6 @@ export function inSection(rows: readonly ScopedSetting[], section: string): Scop
   });
 }
 
-export const PROJECT_HOMED_SECTIONS: readonly string[] = [
-  "timelogging",
-  "sla",
-  "workflow",
-];
-
 /** Registered scalar setting keys the SPA reads by name (mirror of the backend
  * `SettingKey` — only the ones with a client-side gate are listed). */
 export const SettingKey = {

@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { RoutePath } from "../lib/constants";
 import { useProjectByKey, useAnonymousBounce } from "../lib/hooks";
 import { viewsPageQuery } from "../lib/queries";
-import { ViewType } from "../lib/types";
 import { Spinner } from "../components/Spinner";
 import { QueryError } from "../components/QueryError";
 
@@ -16,7 +15,8 @@ import { QueryError } from "../components/QueryError";
 export function ProjectHomePage() {
   const { projectKey = "" } = useParams({ strict: false });
   const { project } = useProjectByKey(projectKey);
-  const views = useQuery({ ...viewsPageQuery({ projectId: project?.id, includeGlobal: false, excludeType: ViewType.queue }, "", 0, 1), enabled: Boolean(project) });
+  // A view type with a sidebar section of its own (the slas queues) is not a landing (RADD-1396).
+  const views = useQuery({ ...viewsPageQuery({ projectId: project?.id, includeGlobal: false, sectioned: false }, "", 0, 1), enabled: Boolean(project) });
 
   if (project === undefined || (Boolean(project) && views.isPending)) {
     return <Spinner label="Loading project…" />;

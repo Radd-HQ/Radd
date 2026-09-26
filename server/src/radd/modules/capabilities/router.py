@@ -12,7 +12,8 @@ from .schemas import (
     CapabilityRead,
     NavItemRead,
     PluginRemoteRead,
-    TypeOptionRead,
+    ViewListSurfaceRead,
+    ViewTypeOptionRead,
     WidgetTypeOptionRead,
 )
 
@@ -81,7 +82,14 @@ async def get_capabilities(user: Actor) -> CapabilitiesRead:
             key=lambda r: r.name,
         ),
         view_types=[
-            TypeOptionRead(key=v.key, label=v.label)
+            ViewTypeOptionRead(
+                key=v.key, label=v.label, icon=v.icon, sidebar_section=v.sidebar_section,
+                list_surface=None if v.list_surface is None else ViewListSurfaceRead(
+                    rows_path=v.list_surface.rows_path,
+                    columns=list(v.list_surface.columns),
+                    refresh_seconds=v.list_surface.refresh_seconds,
+                ),
+            )
             for v in sorted(registries.view_types.values(), key=lambda v: v.label)
         ],
         widget_types=[

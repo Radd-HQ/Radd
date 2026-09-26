@@ -34,6 +34,13 @@ export interface Project {
   permissions: PermissionValue[];
 }
 
+/** What a `project.settings.page` contribution renders with (RADD-1396): the project whose settings
+ *  these are — its `permissions` answer `usePermissions().project(...)` — and the page's segment. */
+export interface ProjectSettingsPageProps {
+  project: Project;
+  path: string;
+}
+
 export interface StateRef {
   id: string;
   name: string;

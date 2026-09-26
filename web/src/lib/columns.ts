@@ -148,21 +148,14 @@ const DEFAULT_LIST_COLUMNS: readonly string[] = [
   "state",
 ];
 const DEFAULT_PLANNING_COLUMNS: readonly string[] = ["priority", "assignee", "state"];
-/** Queue rows kept their fixed reporter/SLA feel (spec 64) as defaults. The
- * SLA column is the slas plugin's attribute: while slas is off it is skipped
- * like any withdrawn column (queue views move to slas in their own issue). */
-const DEFAULT_QUEUE_COLUMNS: readonly string[] = [
-  "type",
-  "labels",
-  "reporter",
-  "priority",
-  "assignee",
-  "slas.timer",
-  "state",
-];
 
-export function defaultColumnsFor(viewType: string | undefined): readonly string[] {
-  if (viewType === ViewType.queue) return DEFAULT_QUEUE_COLUMNS;
+/** A view's columns until it saves its own: a plugin list type's declared defaults (RADD-1396 —
+ *  an id whose owner is off is skipped like any withdrawn column), planning's, or the list's. */
+export function defaultColumnsFor(
+  viewType: string | undefined,
+  surfaceColumns?: readonly string[],
+): readonly string[] {
+  if (surfaceColumns?.length) return surfaceColumns;
   if (viewType === ViewType.planning) return DEFAULT_PLANNING_COLUMNS;
   return DEFAULT_LIST_COLUMNS;
 }

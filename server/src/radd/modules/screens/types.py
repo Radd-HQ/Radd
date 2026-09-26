@@ -31,7 +31,8 @@ class ScreenBuiltinField(StrEnum):
     START_DATE = "start_date"
     TARGET_DATE = "target_date"
     LABELS = "labels"
-    SLA = "sla"
+    # (`sla` placed the SLA timers until RADD-1394 made them the slas plugin's issue-rail
+    # section; RADD-1396 deleted the row that no longer placed anything, and its stored rows.)
     TIME_TRACKING = "time_tracking"
     POINTS = "points"  # story points (spec 70) — rendered only where the project opts in
 
@@ -47,7 +48,6 @@ DEFAULT_BUILTIN_ORDER: tuple[ScreenBuiltinField, ...] = (
     ScreenBuiltinField.START_DATE,
     ScreenBuiltinField.TARGET_DATE,
     ScreenBuiltinField.LABELS,
-    ScreenBuiltinField.SLA,
     ScreenBuiltinField.TIME_TRACKING,
     ScreenBuiltinField.POINTS,
 )

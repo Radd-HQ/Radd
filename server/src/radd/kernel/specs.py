@@ -17,13 +17,43 @@ from typing import Any
 
 
 @dataclass(frozen=True)
+class ViewListSpec:
+    """A view type drawn by the HOST's list rather than by its plugin (RADD-1396).
+
+    The plugin supplies ROWS and defaults, never UI: selection, bulk actions, columns, paging and
+    the SLQ bar are the list's own. A list-surface type is always flat (no axes). The slas
+    plugin's triage queue is the first: the same list, ordered by live SLA urgency."""
+
+    #: The endpoint serving this type's rows, relative to the API root. It takes the `/items`
+    #: paging contract (`q`, `project_id`, `limit`, `offset`) and answers an `ItemRead` list in the
+    #: plugin's own ORDER. Empty = `/items` itself. A type with its own rows owns their order, so
+    #: manual drag-to-rank is off on it.
+    rows_path: str = ""
+    #: The column ids a new view of this type starts with (a view's saved `columns` wins);
+    #: empty = the list's defaults. Contributed attributes are `<plugin>.<name>`.
+    columns: tuple[str, ...] = ()
+    #: Re-read the rows this often while the view is open (0 = only when something changes).
+    refresh_seconds: int = 0
+
+
+@dataclass(frozen=True)
 class ViewTypeSpec:
-    """A saved-view TYPE a plugin contributes (spec 94) — like board/list/roadmap, but rendered by
-    the plugin's own `view.type` UI slot (keyed by `key`). The view still stores its SLQ `query` +
-    config; the plugin just owns the presentation. Inverts the hardcoded `ViewType` enum."""
+    """A saved-view TYPE a plugin contributes (spec 94) — like board/list/roadmap. By default it is
+    rendered by the plugin's own `view.type` UI slot (keyed by `key`); with `list_surface` the
+    host's list draws it over the plugin's rows (RADD-1396). The view still stores its SLQ `query`
+    + config either way. Inverts the hardcoded `ViewType` enum."""
 
     key: str  # the stored view_type value, e.g. "acme.notes"
     label: str  # shown in the create-view Type dropdown
+    #: A kebab-case name from the host's icon registry (`web/src/lib/icons.ts`), drawn wherever a
+    #: view of this type is listed (header, pins, sidebar). Empty = the generic list icon.
+    icon: str = ""
+    #: Draw the type on the host's list instead of a `view.type` contribution.
+    list_surface: ViewListSpec | None = None
+    #: List this type's views in a sidebar section of their own, under this label, each with a
+    #: live count badge (`POST /views/counts`) — and out of the ordinary view lists. Empty = an
+    #: ordinary view.
+    sidebar_section: str = ""
 
 
 @dataclass(frozen=True)
@@ -1018,13 +1048,26 @@ class SettingSpec:
 
 
 # --- frontend (§8: UI manifest) ---
+class NavSection(StrEnum):
+    """Where a contributed nav entry is listed, and so which page slot draws it."""
+
+    #: The left sidebar; `path` is an absolute in-app path drawn by a `route.page` contribution.
+    MAIN = "main"
+    #: Settings; `path` is under `/settings` and drawn by a `settings.page` contribution.
+    SETTINGS = "settings"
+    #: A project's settings (RADD-1396). `path` is the page's SEGMENT under
+    #: `/p/<KEY>/settings/`, drawn by a `project.settings.page` contribution matched on it, and
+    #: `requires` atoms are checked IN that project.
+    PROJECT_SETTINGS = "project_settings"
+
+
 @dataclass(frozen=True)
 class NavItemSpec:
     key: str
     label: str
     path: str
     icon: str = ""
-    section: str = "main"  # main | settings
+    section: str = NavSection.MAIN  # a NavSection value
     requires: tuple[str, ...] = ()  # permission atoms gating visibility
     order: int = 100
     capability: str = ""  # hide unless this capability is enabled

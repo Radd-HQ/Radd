@@ -47,11 +47,11 @@ async def list_views(
     include_global: bool = True,
     global_only: bool = False,
     view_type: Annotated[str | None, Query(max_length=100)] = None,
-    exclude_type: Annotated[str | None, Query(max_length=100)] = None,
+    sectioned: bool | None = None,
 ) -> list[ViewRead]:
     rows, total = await service.page_views(session, actor=user, include_shares=include_shares, project_id=project_id,
         q=q, limit=limit, offset=offset, include_global=include_global, global_only=global_only,
-        view_type=view_type, exclude_type=exclude_type)
+        view_type=view_type, sectioned=sectioned)
     response.headers[TOTAL_COUNT_HEADER] = str(total)
     return rows
 
@@ -62,15 +62,16 @@ async def view_summary(
     q: Annotated[str, Query(max_length=200)] = "", include_global: bool = True,
     global_only: bool = False,
     view_type: Annotated[str | None, Query(max_length=100)] = None,
-    exclude_type: Annotated[str | None, Query(max_length=100)] = None,
+    sectioned: bool | None = None,
 ) -> dict[str, int]:
     return {"total": await directory.count(session, user, project_id=project_id, q=q,
         include_global=include_global, global_only=global_only, view_type=view_type,
-        exclude_type=exclude_type)}
+        sectioned=sectioned)}
 
 
 _COUNTS_DOC = (
-    "Batched membership counts for sidebar queue badges (spec 64): a compiled-SLQ "
+    "Batched membership counts for sidebar badges (spec 64; a view type with a sidebar "
+    "section of its own, RADD-1396): a compiled-SLQ "
     "SELECT count(*) per view, visibility-filtered exactly like the view read path — "
     "invisible/unknown ids are simply omitted. Quick filters are NOT applied (base "
     "membership count); archived items and projects without item.read don't count."

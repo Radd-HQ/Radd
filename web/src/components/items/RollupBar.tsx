@@ -55,7 +55,7 @@ export function RollupRowBar({
 /**
  * One rollup batch per loaded page (spec 76): keyed on the epic-kind item ids
  * on the surface. `enabled=false` (slot off / no epics visible) fetches
- * nothing and returns undefined — mirrors useSlaBatch. `staleTimeMs` lets big
+ * nothing and returns undefined — like the timelog batch. `staleTimeMs` lets big
  * surfaces (the roadmap's epic tints) refetch rarely; default is the
  * query-client default (fresh on mount/focus).
  */

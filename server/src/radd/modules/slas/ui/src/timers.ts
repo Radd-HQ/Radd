@@ -8,8 +8,9 @@ export const itemSlaPath = (itemId: string) => `/items/${itemId}/sla`;
 /** Timers tick server-side — re-read a visible countdown every minute (spec 63). */
 export const SLA_REFETCH_MS = 60_000;
 
-/** Timer reads go stale with an item change or a policy edit (the policy page tags `slaPolicy`). */
-const TIMER_META = { entities: ["item", "slaPolicy"] };
+/** Timer reads go stale with an item change or a policy edit: `sla_policy` is the server's own
+ *  entity type, declared verbatim so realtime policy events reach it (RADD-1396). */
+const TIMER_META = { entities: ["item", "sla_policy"] };
 
 /** Mirror of `slas.types.SlaKind`. */
 export const SlaKind = { response: "response", resolution: "resolution" } as const;

@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@radd/plugin-sdk": "*",
-    "@radd-plugin-ui/reporting": "*"
+    "@radd-plugin-ui/items": "*",
+    "@radd-plugin-ui/reporting": "*",
+    "@radd-plugin-ui/teams": "*"
   }
 }

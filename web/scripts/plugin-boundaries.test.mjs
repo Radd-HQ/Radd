@@ -282,31 +282,48 @@ test('the SLA report is the slas plugin\'s and the chart kit is reporting\'s (RA
   assert.deepEqual(violations,[]);
 });
 
-test('SLA timers are the slas plugin\'s: lists, cards, the designer and the rail name none of it (RADD-1394)',()=>{
-  assert(!existsSync('web/src/components/items/SlaChips.tsx'));
-  // Anywhere in the host: no timer component, batch threading, query, wire type or endpoint.
-  const vocabulary=/^(?:SlaRowChip|SlaTimerChip|SlaPanel|nearestToBreach|slaByItem|useSlaBatch|slaBatchQuery|itemSlaQuery|ItemSla|ItemSlaEntry|SlaTimer|SAMPLE_SLA)$/;
+test('the SLA feature is the slas plugin\'s: web/src names none of it (RADD-1394, RADD-1396)',()=>{
+  for (const file of ['web/src/components/items/SlaChips.tsx','web/src/lib/queue.ts','web/src/routes/project-settings/sla.tsx',
+    'web/src/components/settings/SlaPolicyForm.tsx','web/src/components/settings/SlaMetOnField.tsx']) assert(!existsSync(file),file);
+  // SLA-named code: `Sla…`/`…Sla…`/`sla…` identifiers (components, hooks, types, queries, paths, atoms, entity tags)
+  // and the timers' old helpers; the queue's host helpers are gone with it.
+  const named=/(?:^|[a-z0-9_])Sla(?=[A-Z_0-9]|$)|(?:^|_)SLA(?=_|$)|^sla(?=[A-Z_0-9]|$)/;
+  const helpers=/^(?:nearestToBreach|SAMPLE_SLA|QueueLinks|QueueLink|isQueue|urgencyKey|DEFAULT_QUEUE_[A-Z_]+|metRuleSummary|metRuleValid|parseClockMinutes)$/;
+  // SLA wire vocabulary: every slas endpoint, the policy entity and its tag, the atoms, the settings segment, the
+  // plugin's own ids (`slas.timer`, `slas.queue`) and the old builtin `queue` view type.
+  const wire=/^(?:\/(?:sla-|items\/sla\b|reports\/sla\b)|sla(?:_policy|Policy|Policies)?$|sla\.|slas?(?:[._-]|$)|queue$)|\/sla(?:[/?]|$)/;
+  // The one exception is NOTIFY's vocabulary, not this feature's: the core notify module owns the
+  // `sla_breach`/`sla_due_soon` notification kinds (`notify.types.NotificationType`), and the inbox row mirrors them.
+  const notify=new Set(['slaBreach','slaDueSoon','sla_breach','sla_due_soon']);
+  for (const sample of ['SlaPolicy','slaPoliciesQuery','apiSlaPolicyPath','useSlaBatch','ProjectSlaSettings','SLA_POLICY']) assert(named.test(sample),sample);
+  for (const sample of ['/sla-policies','/sla-queue-items','/items/sla/batch','sla_policy','slaPolicy','sla.update','sla','slas.queue','slas.timer','queue']) assert(wire.test(sample),sample);
+  for (const sample of ['slack','SLACK_SPACER_CLASS','SlackSpacer','Island','translate','slash','queued','repliesLabel','settingsLabels']) assert(!named.test(sample)&&!wire.test(sample),sample);
   const violations=[];
-  // Queue views (`lib/queue.ts`) move to slas in their own issue; everything else is done.
-  for (const file of files('web/src').filter(f=>f!=='web/src/lib/queue.ts')) for (const node of nodes(file)) {
-    if (node.type==='Identifier' && vocabulary.test(node.name)) violations.push(`${file}:${node.loc.start.line}: ${node.name}`);
-    if (node.type==='StringLiteral' && /^\/items\/sla\/batch$/.test(node.value)) violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
-    if (node.type==='TemplateElement' && /\/sla$/.test(node.value.raw)) violations.push(`${file}:${node.loc.start.line}: ${node.value.raw}`);
-  }
-  // On the column/cell surfaces, not even the old bare `sla` id: the column is `slas.timer` now.
-  const surfaces=['web/src/lib/columns.ts','web/src/lib/card-display.ts','web/src/lib/card-layout.ts','web/src/routes/view.tsx',
-    'web/src/components/board/card-cells.tsx','web/src/components/board/BoardCard.tsx','web/src/components/views/ColumnCells.tsx',
-    'web/src/components/views/ViewList.tsx','web/src/components/views/ViewBoard.tsx','web/src/components/views/ViewSwimlanes.tsx',
-    'web/src/components/items/IssueProperties.tsx',...files('web/src/components/views/carddesigner')];
-  for (const file of surfaces) for (const node of nodes(file)) {
-    if (node.type==='StringLiteral' && node.value==='sla') violations.push(`${file}:${node.loc.start.line}: "sla"`);
+  const scanned=files('web/src');
+  assert(scanned.length>300,'the scan must reach the whole host');
+  for (const file of scanned) for (const node of nodes(file)) {
+    const line=`${file}:${node.loc?.start.line}`;
+    if (node.type==='Identifier' && !notify.has(node.name) && (named.test(node.name) || helpers.test(node.name))) violations.push(`${line}: ${node.name}`);
+    if (node.type==='StringLiteral' && !notify.has(node.value) && wire.test(node.value)) violations.push(`${line}: "${node.value}"`);
+    if (node.type==='TemplateElement' && /\/sla(?:[/?-]|$)|\/sla-/.test(node.value.raw)) violations.push(`${line}: ${node.value.raw}`);
+    if (node.type==='MemberExpression' && node.object?.name==='ViewType' && node.property?.name==='queue') violations.push(`${line}: ViewType.queue`);
   }
   assert.deepEqual(violations,[]);
-  // …and the owner really does contribute them, so the absence above is not vacuous.
+  // …and the owner really does contribute every piece, so the absence above is not vacuous.
   const remote=readFileSync('server/src/radd/modules/slas/ui/src/index.tsx','utf8');
   assert.match(remote,/itemAttribute<[^>]*>\(\{\s*id: "slas\.timer"/);
   assert.match(remote,/slot: SlotId\.issuePanelSection/);
+  assert.match(remote,/slot: SlotId\.projectSettingsPage,\s*match: SETTINGS_SEGMENT/);
+  assert.match(remote,/const SETTINGS_SEGMENT = "sla";/);
   assert.match(readFileSync('server/src/radd/modules/slas/ui/src/timers.ts','utf8'),/key: "slas\.timers"/);
+  assert(existsSync('server/src/radd/modules/slas/ui/src/settings/SlaSettingsPage.tsx'));
+  const manifest=readFileSync('server/src/radd/modules/slas/__init__.py','utf8');
+  assert.match(manifest,/section=NavSection\.PROJECT_SETTINGS/);
+  assert.match(manifest,/ViewTypeSpec\([\s\S]*?key=SlaViewType\.QUEUE[\s\S]*?list_surface=ViewListSpec\([\s\S]*?rows_path=QUEUE_ROWS_PATH/);
+  assert.match(manifest,/sidebar_section="Queues"/);
+  // The host's side is generic: a project-settings page slot and a list surface read from the manifest.
+  assert.match(readFileSync('web/src/routes/project-settings/layout.tsx','utf8'),/SlotId\.projectSettingsPage/);
+  assert.match(readFileSync('web/src/routes/view.tsx','utf8'),/list_surface/);
 });
 
 test('Dashboards is its bundled package and "Awaiting my approval" is the approvals remote\'s (RADD-1393)',()=>{

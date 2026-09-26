@@ -13,7 +13,7 @@ export const ScreenPlacement = {
 export type ScreenPlacementValue = (typeof ScreenPlacement)[keyof typeof ScreenPlacement];
 
 /** One resolved field placement (`GET /screens/effective`), in render order.
- * `field` is a builtin token (assignee/cycle/labels/sla/…) or `cf:<key>`. */
+ * `field` is a builtin token (assignee/cycle/labels/…) or `cf:<key>`. */
 export interface EffectiveFieldRow {
   field: string;
   placement: ScreenPlacementValue;

@@ -51,7 +51,6 @@ export const Entity = {
   cannedResponse: "cannedResponse",
   serviceAccount: "serviceAccount",
   cardLayoutPreset: "cardLayoutPreset",
-  slaPolicy: "slaPolicy",
   docSpace: "docSpace",
   page: "page",
   dashboard: "dashboard",

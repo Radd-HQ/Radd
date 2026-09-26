@@ -120,8 +120,8 @@ export function lanesOf(layout: CardLayout): CardLane[] {
     .map(([row, cells]) => ({ row, cells: cells.sort((a, b) => a.col - b.col) }));
 }
 
-/** Every placed attribute — drives the conditional batch fetches (sla /
- * progress / logged_time) and the cf-user directory fetch. */
+/** Every placed attribute — drives the conditional batch fetches (a plugin
+ * attribute / progress / logged_time) and the cf-user directory fetch. */
 export function placedAttrSet(layout: CardLayout): Set<string> {
   return new Set(layout.cells.map((cell) => cell.attr));
 }

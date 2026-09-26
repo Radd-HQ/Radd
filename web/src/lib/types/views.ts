@@ -8,14 +8,14 @@ export const ViewType = {
   list: "list",
   /** Backlog & cycle planning: cycle-grouped sections with cross-bucket drag. */
   planning: "planning",
-  /** Triage queue (spec 64): fixed-column list — reporter, age, always-on SLA
-   *  chips, urgency-ordered; axes ignored like planning. */
-  queue: "queue",
   /** Roadmap/Gantt (spec 79): the timeline as a saved view — axes ignored;
    *  the page auto-fetches EVERY page of the view query (no Load-more). */
   roadmap: "roadmap",
 } as const;
 export type ViewTypeValue = (typeof ViewType)[keyof typeof ViewType];
+/** What `views.view_type` holds: a builtin above, or a key an enabled plugin contributes
+ *  (`/capabilities` `view_types`, spec 94 — the spec-64 queue is the slas plugin's, RADD-1396). */
+export type StoredViewType = ViewTypeValue | (string & {});
 
 /** Builtin grouping axes for a view (board columns / list sections / swimlanes). */
 export const ViewAxis = {
@@ -114,7 +114,7 @@ export interface View {
   id: string;
   project_id: string | null;
   name: string;
-  view_type: ViewTypeValue;
+  view_type: StoredViewType;
   /** SLQ query text (spec 10 grammar); empty = match everything in scope. */
   query: string;
   group_by: AxisToken | null;
@@ -161,7 +161,7 @@ export interface View {
 export interface ViewCreate {
   project_id?: string | null;
   name: string;
-  view_type: ViewTypeValue;
+  view_type: StoredViewType;
   query?: string;
   group_by?: AxisToken | null;
   swimlane_by?: AxisToken | null;
@@ -175,7 +175,7 @@ export interface ViewCreate {
 /** PATCH /views/{id} — explicit `null` clears an axis. */
 export interface ViewUpdate {
   name?: string;
-  view_type?: ViewTypeValue;
+  view_type?: StoredViewType;
   query?: string;
   group_by?: AxisToken | null;
   swimlane_by?: AxisToken | null;

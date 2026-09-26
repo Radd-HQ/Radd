@@ -107,16 +107,6 @@ export const DEFAULT_BOARD_SLOTS: readonly CardSlotValue[] = [
   CardSlot.loggedTime,
 ];
 
-/** Queues (spec 64) have a FIXED column set — no DisplayMenu. Reporter and
- *  the SLA timer are queue table columns (spec 108), not slots. */
-export const DEFAULT_QUEUE_SLOTS: readonly CardSlotValue[] = [
-  CardSlot.type,
-  CardSlot.labels,
-  CardSlot.priority,
-  CardSlot.assignee,
-  CardSlot.state,
-];
-
 export const DEFAULT_MAX_LABELS = 3;
 export const SCALE_MIN = 0.7;
 export const SCALE_MAX = 1.3;

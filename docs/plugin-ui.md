@@ -39,9 +39,10 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `issueRailBottom` | Issue right-rail, below the fields | `{item, project}` | your own section under Fields | `IssueProperties.tsx` |
 | `issueTab` | Activity tab bar, next to VCS | `{item, project}` | needs `title` (+ optional `icon`); `render` = tab body | `components/items/ActivityPanel.tsx` |
 | `viewHeader` | A view's header/toolbar | `{view, items}` | `items` = the view's loaded, permission-scoped issues | `routes/view.tsx` |
-| `viewType` | A whole saved-view TYPE | `{view, items}` | `match` = the view_type key; pair with a `view_types=` manifest entry | `routes/view.tsx` |
+| `viewType` | A whole saved-view TYPE | `{view, items}` | `match` = the view_type key; pair with a `view_types=` manifest entry. A type declared a LIST surface needs no contribution — see "View types on the host's list" below | `routes/view.tsx` |
 | `routePage` | A full page at a nav path | `{path}` | `match` = the pathname | `components/shell/PluginPage.tsx` (splat route) |
 | `settingsPage` | A full page under Settings → … | `{path}` | `match` = the pathname | `components/shell/SettingsPluginPage.tsx` |
+| `projectSettingsPage` | A whole page under a PROJECT's settings (RADD-1396) | `{project, path}` | `match` = the page's segment (`/p/<KEY>/settings/<segment>`); pair with `NavItemSpec(section="project_settings", path=<segment>)` — see "Project settings pages" below | `routes/project-settings/layout.tsx` (`ProjectSettingsPluginPage`, a splat under the project-settings route) |
 | `settingsSection` | Into an *existing* settings page | `{}` | `match` = the page's key, which is its route segment under `/settings` — Settings → Plugins links a plugin with no page of its own to the pages its sections match (RADD-1380) | `routes/settings/timelogging.tsx` (`match="timelogging"`, Leave), `routes/settings/sign-in.tsx` (`match="sign-in"`, sso's providers); add anchors to other pages as needed |
 | `profileSection` | The user's Profile page | `{}` | per-user prefs; drop `<UserContributionToggles>` here | `routes/settings/profile.tsx` |
 | `pluginManagerSection` | A plugin's row in Settings → Plugins (admin) | `{plugin, pluginId}` | `match` = the plugin's registry name; drop `<GlobalContributionToggles>` here | `routes/settings/plugins.tsx` |
@@ -207,8 +208,68 @@ The contract:
   stale note names it. Re-enabling reads afresh.
 
 The slas plugin is the first adopter (`modules/slas/ui`): the SLA column, the card cell and the
-issue rail's SLA section are its own; the host holds no SLA code. Remotes that use this declare
-`ui_api_version="1.15.0"`.
+issue rail's SLA section are its own — and, since RADD-1396, its settings page and queue view type;
+the host holds no SLA code. Remotes that use this declare `ui_api_version="1.15.0"` (1.16.0 for the
+project-settings page slot).
+
+## Project settings pages (SDK 1.16)
+
+A plugin owns a page under a project's settings the way it owns one under Settings: a manifest nav
+entry lists it, a slot contribution draws it. The slas plugin's SLAs page is the first
+(`modules/slas/ui/src/settings/`).
+
+```python
+from radd.sdk import NavItemSpec, NavSection
+NavItemSpec(key="sla", label="SLAs", path="sla", icon="timer", order=70,
+            section=NavSection.PROJECT_SETTINGS, requires=("sla.update",))
+```
+
+```tsx
+{ id: "settings", slot: SlotId.projectSettingsPage, match: "sla", label: "Project SLA settings page",
+  render: (props) => <SlaSettingsPage project={(props as ProjectSettingsPageProps).project} /> }
+```
+
+- **`path` is a SEGMENT**, not an absolute path: the page lives at `/p/<KEY>/settings/<path>` for
+  every project, and the contribution's `match` is the same segment. The host's sections win over it.
+- **`requires` atoms are checked IN the project** (`usePermissions().project(project, atom)`), so a
+  project's Manager sees the entry where they hold the atom. The endpoint still enforces its own
+  authorization; the nav gate is presentation.
+- One list — the host's sections plus the contributed ones, at their `order` (the host's are
+  0, 10, … 60) — feeds the sub-nav, the index redirect and the sidebar's Settings link
+  (`lib/project-settings-nav.ts`), so a person who can manage only a plugin's page still gets there.
+- The page gets `{ project, path }`; `project.permissions` answers the SDK's permission checks.
+  Disabling the plugin removes the entry and turns a direct visit into the generic unavailable
+  notice; a turned-off contribution drops the entry too.
+
+## View types on the host's list (RADD-1396)
+
+A view type whose rows are items in a particular ORDER needs no surface of its own. Declare it a
+list surface and the host's list draws it — selection, bulk actions, columns, paging, the SLQ bar
+and quick filters come with it — over the plugin's rows:
+
+```python
+ViewTypeSpec(key="slas.queue", label="Queue (triage list)", icon="list-ordered",
+             sidebar_section="Queues",
+             list_surface=ViewListSpec(rows_path="/sla-queue-items",
+                                       columns=("type", "reporter", "priority", "slas.timer", "state"),
+                                       refresh_seconds=60))
+```
+
+- `rows_path` answers the `/items` paging contract (`q`, `project_id`, `limit`, `offset` → an
+  `ItemRead` list) in the plugin's order. A type with its own rows owns that order, so it is never
+  drag-ranked; the list's count and "select all" still use `/items/count` and `/items/ids`.
+- `columns` seed a new view (a saved `columns` wins); `refresh_seconds` re-reads the rows while open.
+  A list-surface type is flat — whatever axes a view stored are ignored.
+- `sidebar_section` lists the type's views in a sidebar section of their own, each with a live count
+  (`POST /views/counts`), and leaves them out of the ordinary view lists (`GET /views?sectioned=false`).
+- `icon` names a `lib/icons.ts` entry; the header, pins and sidebar rows draw it.
+- With the plugin disabled the type is unknown: a saved view shows `MissingPluginType`, fetches no
+  rows, and is listed among the ordinary views again so it stays reachable.
+
+**Realtime for a plugin's own entities.** Tag a query with the SERVER's entity type verbatim —
+`meta: { entities: ["sla_policy"] }` — and invalidate with the SDK's `invalidateEntities(queryClient,
+"sla_policy")`. The host's realtime subscribes every tag it does not map itself as that exact server
+string, so a plugin needs no host table row for its entities to go live.
 
 ## Logic & data access — where computation goes and what a plugin can see
 

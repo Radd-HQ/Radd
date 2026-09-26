@@ -1,22 +1,14 @@
 import { Link, Navigate, Outlet, useParams } from "@tanstack/react-router";
-import {
-  ClipboardList,
-  Clock,
-  LayoutList,
-  Shapes,
-  SlidersHorizontal,
-  Timer,
-  UserRound,
-  Workflow,
-  type LucideIcon,
-} from "lucide-react";
+import { SlotId } from "@radd/plugin-sdk";
 import { RoutePath } from "../../lib/constants";
-import { useProjectByKey, usePermissions, type PermissionChecks } from "../../lib/hooks";
+import { useProjectByKey, usePermissions } from "../../lib/hooks";
 import { Permission, SettingScope } from "../../lib/types";
+import { useProjectSettingsNav } from "../../lib/project-settings-nav";
 import { ProjectIdentityCard } from "../../components/projects/ProjectIdentityCard";
 import { DeleteProjectCard } from "../../components/projects/DeleteProjectCard";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
+import { ContributedPage } from "../../components/shell/ContributedPage";
 import { Spinner } from "../../components/Spinner";
 import { IssueTypesSettingsPage } from "./issue-types";
 import { ScreensSettingsPage } from "./screens";
@@ -24,8 +16,6 @@ import { ProjectAccessSettingsPage } from "./projects";
 import { StatesSettingsPage } from "./states";
 import { FormsSettingsPage } from "./forms";
 import { ProjectTimeloggingSettingsPage } from "./timelogging";
-import { ProjectSlaSettingsPage } from "./sla";
-import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Resolve the URL's `$projectKey` to its project (shared by layout + wrappers). */
 function useUrlProject() {
@@ -39,74 +29,14 @@ const navLinkClasses =
   "[&.active]:bg-elevated [&.active]:text-heading";
 
 /**
- * Project-settings sub-nav (spec 50). Each tab's `show` predicate gets the
- * permission checks + the URL's project; a tab is hidden when the viewer can't
- * manage it. Every tab gates on a per-project permission — SLAs too, since
- * RADD-1303 (policies belong to the project). The
- * project key/name is shown in the header; an unresolved key renders empty.
+ * Project-settings shell (spec 50): the sub-nav lists the sections this person may manage in
+ * THIS project — the host's tabs and the pages enabled plugins contribute (RADD-1396, e.g. the
+ * slas plugin's SLAs) — and the section renders in the Outlet. The project key/name is shown in
+ * the header; an unresolved key renders empty.
  */
-const PROJECT_SETTINGS_NAV: readonly {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-  show: (perms: PermissionChecks, project: Project) => boolean;
-}[] = [
-  {
-    to: RoutePath.projectSettingsGeneral,
-    label: "General",
-    icon: SlidersHorizontal,
-    show: (perms, project) => perms.project(project, Permission.projectManage),
-  },
-  {
-    to: RoutePath.projectSettingsWorkflow,
-    label: "Workflow",
-    icon: Workflow,
-    show: (perms, project) => perms.project(project, Permission.stateManage),
-  },
-  {
-    to: RoutePath.projectSettingsTypes,
-    label: "Issue types",
-    icon: Shapes,
-    show: (perms, project) => perms.project(project, Permission.projectManage),
-  },
-  {
-    to: RoutePath.projectSettingsScreens,
-    label: "Screens",
-    icon: LayoutList,
-    show: (perms, project) => perms.project(project, Permission.projectManage),
-  },
-  {
-    to: RoutePath.projectSettingsAccess,
-    label: "Access",
-    icon: UserRound,
-    // RADD-826 (D3): delegated access management — member.create in THIS
-    // project opens the screen; revoke-only and global role managers also belong here.
-    show: (perms, project) => perms.global(Permission.roleUpdate) || perms.project(project, Permission.memberCreate) || perms.project(project, Permission.memberDelete),
-  },
-  {
-    to: RoutePath.projectSettingsForms,
-    label: "Forms",
-    icon: ClipboardList,
-    show: (perms, project) => perms.project(project, Permission.formManage),
-  },
-  {
-    to: RoutePath.projectSettingsTimelogging,
-    label: "Time logging",
-    icon: Clock,
-    show: (perms, project) => perms.project(project, Permission.projectManage),
-  },
-  {
-    to: RoutePath.projectSettingsSla,
-    label: "SLAs",
-    icon: Timer,
-    // RADD-1303: a project's Manager manages its SLAs.
-    show: (perms, project) => perms.project(project, Permission.slaUpdate),
-  },
-];
-
 export function ProjectSettingsLayout() {
   const { projectKey, project } = useUrlProject();
-  const perms = usePermissions();
+  const visible = useProjectSettingsNav(project);
 
   if (project === undefined) {
     return <Spinner label="Loading settings…" />;
@@ -122,8 +52,6 @@ export function ProjectSettingsLayout() {
       </div>
     );
   }
-
-  const visible = PROJECT_SETTINGS_NAV.filter((item) => item.show(perms, project));
 
   return (
     <div className="flex h-full flex-col">
@@ -145,9 +73,9 @@ export function ProjectSettingsLayout() {
           className="w-full shrink-0 overflow-x-auto border-b border-subtle p-2 lg:w-44 lg:border-b-0 lg:border-r"
         >
           <ul className="flex whitespace-nowrap gap-0.5 lg:flex-col">
-            {visible.map(({ to, label, icon: Icon }) => (
+            {visible.map(({ to, label, icon: Icon, plugin }) => (
               <li key={to}>
-                <Link to={to} params={{ projectKey }} className={navLinkClasses}>
+                <Link to={to} params={{ projectKey }} className={navLinkClasses} data-plugin-nav={plugin}>
                   <Icon size={14} aria-hidden />
                   {label}
                 </Link>
@@ -166,9 +94,8 @@ export function ProjectSettingsLayout() {
 /** Land on an available section, including access-only delegates. */
 export function ProjectSettingsIndex() {
   const { projectKey, project } = useUrlProject();
-  const perms = usePermissions();
+  const first = useProjectSettingsNav(project)[0];
   if (!project) return <Spinner label="Loading settings…" />;
-  const first = PROJECT_SETTINGS_NAV.find(item => item.show(perms, project));
   return first ? <Navigate to={first.to} params={{ projectKey }} replace />
     : <p className="p-4 text-sm text-fg-muted">You have no project settings to manage here.</p>;
 }
@@ -248,7 +175,11 @@ export function ProjectTimeloggingSettings() {
   return <ProjectTimeloggingSettingsPage projectId={project?.id} />;
 }
 
-export function ProjectSlaSettings() {
+/** A page a plugin contributes to project settings (RADD-1396): the `project.settings.page`
+ *  contribution matched on the URL's segment, handed the project. Its nav entry lists it. */
+export function ProjectSettingsPluginPage() {
   const { project } = useUrlProject();
-  return <ProjectSlaSettingsPage projectId={project?.id} />;
+  const { _splat: segment = "" } = useParams({ strict: false });
+  if (!project) return <Spinner label="Loading settings…" />;
+  return <ContributedPage slot={SlotId.projectSettingsPage} match={segment} props={{ project }} />;
 }

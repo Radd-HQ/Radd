@@ -5,21 +5,19 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
-  CalendarClock,
   CalendarRange,
   ChevronDown,
   ChevronRight,
   ClipboardList,
-  GanttChartSquare,
   Inbox,
-  List,
-  ListOrdered,
-  SquareKanban,
   UserRound,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { formsQuery, notificationsBadgeQuery, viewCountsQuery } from "../../lib/queries";
-import { ViewType, type View } from "../../lib/types";
+import type { View, ViewTypeOption } from "../../lib/types";
+import { useViewDirectory } from "../../lib/useSharedDirectory";
+import { useViewTypes, viewTypeIcon } from "../../lib/view-types";
+import { SidebarDirectory } from "./SidebarDirectory";
 import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 import { CycleStatus } from "@radd-plugin-ui/cycles/types";
 import type { Cycle } from "@radd-plugin-ui/cycles/types";
@@ -122,24 +120,45 @@ export function ProjectFormLinks({ project }: { project: Project }) {
   );
 }
 /**
- * Queue rows with live count badges (spec 64): ONE batched POST /views/counts
- * for the whole section (viewCountsQuery, 60s re-poll) — never per-view calls.
- * Project-scoped queues link with their project context when it's resolved.
+ * A plugin view type's OWN sidebar section (spec 64's queues; generic since RADD-1396): the
+ * type's views across every project, each with a live count from ONE batched POST /views/counts
+ * (viewCountsQuery, 60s re-poll) — never per-view calls. Hidden while the type has no views.
+ * The type's plugin names the label and icon; its views stay out of the ordinary view lists.
  */
-export function QueueLinks({ views }: { views: View[] }) {
-  const { data: counts } = useQuery(viewCountsQuery(views.map((view) => view.id)));
+export function ViewTypeSection({ option, collapsed, onToggle }: {
+  option: ViewTypeOption; collapsed: boolean; onToggle: () => void;
+}) {
+  const directory = useViewDirectory({ viewType: option.key });
+  const views = directory.rows;
+  const { data: counts } = useQuery({
+    ...viewCountsQuery(views.map((view) => view.id)),
+    enabled: !collapsed && views.length > 0,
+  });
+  if (!(directory.total > 0 || Boolean(directory.filter) || directory.isError)) return null;
+  const label = option.sidebar_section || option.label;
   return (
-    <ul>
-      {views.map(view => <QueueLink key={view.id} view={view} count={counts?.[view.id]} />)}
-    </ul>
+    <div className="mt-3" data-view-type-section={option.key}>
+      <SectionHeader label={label} collapsed={collapsed} onToggle={onToggle} />
+      {!collapsed && (
+        <SidebarDirectory directory={directory} label={label.toLowerCase()}>
+          <ul>
+            {views.map(view => (
+              <CountedViewLink key={view.id} view={view} option={option} count={counts?.[view.id]} />
+            ))}
+          </ul>
+        </SidebarDirectory>
+      )}
+    </div>
   );
 }
 
-function QueueLink({ view, count }: { view: View; count?: number }) {
+/** One counted row; project-scoped views link with their project context when it's resolved. */
+function CountedViewLink({ view, option, count }: { view: View; option: ViewTypeOption; count?: number }) {
   const project = useQuery(projectByIdQuery(view.project_id ?? ""));
   const projectKey = project.data?.key;
+  const Icon = viewTypeIcon(view.view_type, option);
   const body = <>
-    <ListOrdered size={14} aria-hidden />
+    <Icon size={14} aria-hidden />
     <span className="truncate">{view.name}</span>
     {count !== undefined && <span className="ml-auto shrink-0 rounded-full bg-elevated px-1.5 py-px text-[10px] font-medium text-fg-secondary">
       {count > 999 ? "999+" : count}
@@ -151,14 +170,7 @@ function QueueLink({ view, count }: { view: View; count?: number }) {
 }
 /** View row body: type icon, name, and a "personal" marker on unshared views. */
 export function ViewRowContent({ view, small = false }: { view: View; small?: boolean }) {
-  const Icon =
-    view.view_type === ViewType.board
-      ? SquareKanban
-      : view.view_type === ViewType.planning
-        ? CalendarClock
-        : view.view_type === ViewType.roadmap
-          ? GanttChartSquare
-          : List;
+  const Icon = viewTypeIcon(view.view_type, useViewTypes().byKey.get(view.view_type));
   return (
     <>
       <Icon size={small ? 12 : 14} aria-hidden />

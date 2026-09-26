@@ -65,8 +65,6 @@ export const ProjectSettingsSection = {
   releases: "releases",
   forms: "forms",
   timelogging: "timelogging",
-  // SLA policies are project-level since spec 67.
-  sla: "sla",
 } as const;
 
 /** Route paths — the single source of truth for navigation targets. */
@@ -127,8 +125,6 @@ export const RoutePath = {
   projectSettingsForms: `${PROJECT_SETTINGS_SEGMENT}/${ProjectSettingsSection.forms}`,
   /** Per-project time-logging enablement (`project.manage`). */
   projectSettingsTimelogging: `${PROJECT_SETTINGS_SEGMENT}/${ProjectSettingsSection.timelogging}`,
-  /** SLA policies for the project (spec 67; `sla.manage` to edit). */
-  projectSettingsSla: `${PROJECT_SETTINGS_SEGMENT}/${ProjectSettingsSection.sla}`,
   /** Personal profile: avatar, timezone, API tokens (spec 34). */
   settingsProfile: `${SETTINGS_SEGMENT}/${SettingsSection.profile}`,
   /** Server/deploy status, read-only (spec 50; status-only since spec 67, admin). */

@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Slot, useSlotMatch, useDisabledNavPaths, type SlotIdValue } from "@radd/plugin-sdk";
+import { Slot, useSlotMatch, useDisabledMatches, type SlotIdValue } from "@radd/plugin-sdk";
 import { capabilitiesQuery } from "../../lib/queries";
 import { isBundledPlugin, readRemoteStates, subscribeRemoteStates } from "../../lib/plugin-loader";
 import { Spinner } from "../Spinner";
@@ -9,19 +9,30 @@ import { QueryError } from "../QueryError";
 import { Callout } from "../Callout";
 import { MissingPluginType } from "./MissingPluginType";
 
-/** The shell renders contributed pages; no feature names or implementations live here. */
-export function ContributedPage({ slot }: { slot: SlotIdValue }) {
+/**
+ * The shell renders contributed pages; no feature names or implementations live here.
+ *
+ * `match` is the key the page's contribution and nav entry carry — the pathname for a
+ * `route.page`/`settings.page`, the segment under a project's settings for a
+ * `project.settings.page` (RADD-1396). `props` are handed to the page beside `path`.
+ */
+export function ContributedPage({ slot, match: matchKey, props }: {
+  slot: SlotIdValue;
+  match?: string;
+  props?: Record<string, unknown>;
+}) {
   const pathname = useLocation({ select: location => location.pathname });
+  const key = matchKey ?? pathname;
   const manifest = useQuery(capabilitiesQuery);
   const states = useSyncExternalStore(subscribeRemoteStates, readRemoteStates);
-  const match = useSlotMatch(slot, pathname);
-  const disabled = useDisabledNavPaths().has(pathname);
+  const match = useSlotMatch(slot, key);
+  const disabled = useDisabledMatches(slot).has(key);
   const failed = <Callout kind="danger" className="m-6" role="alert">This plugin page could not be loaded. Reload the page to retry, or ask an administrator to check the plugin.</Callout>;
-  if (disabled) return <MissingPluginType typeKey={pathname} kind="page" disabled />;
-  if (match) return <Slot id={slot} match={pathname} path={pathname} errorFallback={failed} />;
+  if (disabled) return <MissingPluginType typeKey={key} kind="page" disabled />;
+  if (match) return <Slot id={slot} match={key} {...props} path={key} errorFallback={failed} />;
   if (manifest.isPending) return <Spinner label="Loading plugin page…" />;
   if (manifest.isError) return <QueryError label="plugin availability" error={manifest.error} />;
-  const owner = manifest.data.nav.find(n => n.path === pathname)?.plugin;
+  const owner = manifest.data.nav.find(n => n.path === key)?.plugin;
   // A bundled core plugin is never a remote to wait for (RADD-1373), whatever the manifest lists.
   const remotes = (manifest.data.remotes ?? []).filter(r => !isBundledPlugin(r.name) && (!owner || r.name === owner));
   const relevant = states.filter(state => remotes.some(remote => remote.name === state.name));

@@ -1,7 +1,7 @@
-/** Service desk: canned responses, SLA policies/timers, builtin-field write rules, rollups (specs 30/36/63/76/78). */
-import type { PriorityValue } from "./items";
+/** Service desk: canned responses, builtin-field write rules, rollups (specs 30/36/76/78). SLA
+ * policies, timers and queues are the slas plugin's own (RADD-1394/1396). */
 // ---------------------------------------------------------------------------
-// Service desk (canned + slas modules — spec 30)
+// Service desk (the canned module — spec 30)
 // ---------------------------------------------------------------------------
 
 export interface CannedResponse {
@@ -18,58 +18,6 @@ export interface CannedResponse {
 export interface CannedRender {
   body: string;
 }
-
-export const SlaKind = {
-  response: "response",
-  resolution: "resolution",
-} as const;
-export type SlaKindValue = (typeof SlaKind)[keyof typeof SlaKind];
-
-/** Project-level since spec 67 (instance-wide policies are retired). */
-export interface SlaPolicy {
-  id: string;
-  project_id: string;
-  name: string;
-  enabled: boolean;
-  response_minutes: number | null;
-  resolution_minutes: number | null;
-  pause_state_names: string[];
-  /** Count only the instance work week — weekends pause the clock (spec 35). */
-  work_week_only: boolean;
-  /** Spec 63: priorities the policy applies to; [] = every priority. */
-  priorities: PriorityValue[];
-  /** RADD-1043: issue type ids the policy applies to; [] = every type. */
-  issue_type_ids: string[];
-  /** Spec 63: first-match resolution order (position, then created_at). */
-  position: number;
-  /** Spec 63: daily business-hours window, minutes from midnight (both or neither). */
-  business_start_minute: number | null;
-  business_end_minute: number | null;
-  /** Spec 69: emit sla.due_soon when remaining time drops to this (null = off). */
-  warning_minutes: number | null;
-  /** RADD-1299: applies only when the reporter is in one of these teams ([] = anyone). */
-  reporter_team_ids: string[];
-  /** RADD-1299: what satisfies each target, and the states/teams its mode names. */
-  response_met_on: SlaMetOnValue;
-  response_state_ids: string[];
-  response_team_ids: string[];
-  resolution_met_on: SlaMetOnValue;
-  resolution_state_ids: string[];
-  resolution_team_ids: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-/** RADD-1299 — what satisfies an SLA target (mirror of `slas.types.SlaMetOn`). */
-export const SlaMetOn = {
-  firstReply: "first_reply",
-  replyByTeams: "reply_by_teams",
-  replyByAssignedTeam: "reply_by_assigned_team",
-  done: "done",
-  entersStates: "enters_states",
-  leavesStates: "leaves_states",
-} as const;
-export type SlaMetOnValue = (typeof SlaMetOn)[keyof typeof SlaMetOn];
 
 /** GET /instance (+ /instance/login-options) — safe instance-level config
  * (specs 35/67): the work week plus the timelog day/week lengths that back
@@ -114,21 +62,6 @@ export const WRITE_ONLY_BUILTIN_FIELDS: ReadonlySet<BuiltinRuleField> = new Set(
   "state",
   "priority",
 ]);
-
-/** One timer of an item's MATCHED policy (spec 63 batch endpoint) — only the queue
- * helpers (`lib/queue.ts`) still read it; the timers' UI is the slas plugin's (RADD-1394). */
-export interface SlaBatchTimer {
-  policy_name: string;
-  kind: SlaKindValue;
-  due_at: string | null;
-  met_at: string | null;
-  breached: boolean;
-  paused: boolean;
-  remaining_seconds: number | null;
-}
-
-/** POST /items/sla/batch — readable items with a matched policy only. */
-export type SlaBatchResponse = Record<string, SlaBatchTimer[]>;
 
 /** Epic-progress aggregates over ALL of one item's descendants (spec 76):
  * done = done/canceled-category states; time is zeros without timelogging. */

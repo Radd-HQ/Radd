@@ -117,6 +117,33 @@ async def test_queue_live_deadline_beats_global_rank_and_explicit_order_wins(set
     assert [i.id for i in explicit] == [normal.id]
 
 
+async def test_queue_orders_ticking_timers_by_due_time_before_untimed_items(setup):
+    """Spec 64's order past the breached: the soonest open deadline first, then the items no
+    policy times. A ticking (naive) deadline and an untimed item used to meet in the sort key
+    beside an AWARE sentinel and raise, so every such queue answered 500 (RADD-1396)."""
+    db, actor, project = setup
+    untimed = await items.create_item(
+        db, ItemCreate(project_id=project.id, title="No policy", priority="low"), actor=actor
+    )
+    later = await items.create_item(
+        db, ItemCreate(project_id=project.id, title="Due in an hour", priority="high"), actor=actor
+    )
+    sooner = await items.create_item(
+        db, ItemCreate(project_id=project.id, title="Due in half an hour", priority="high"), actor=actor
+    )
+    (await db.get(WorkItem, sooner.id)).created_at -= timedelta(minutes=30)
+    await slas.create_policy(
+        db,
+        PolicyCreate(
+            project_id=project.id, name="High response", response_minutes=60, priorities=["high"]
+        ),
+        actor.id,
+    )
+    await db.flush()
+    result = await queue_items(db, actor, project_id=project.id, q="", limit=10, offset=0)
+    assert [i.id for i in result] == [sooner.id, later.id, untimed.id]
+
+
 @pytest.mark.parametrize("axis", ["state", "priority", "assignee", "epic"])
 async def test_group_slices_preserve_order_and_totals_with_lanes(setup, axis):
     db, actor, project = setup

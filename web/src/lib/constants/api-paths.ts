@@ -147,7 +147,6 @@ export const apiCannedResponsePath = (responseId: string) =>
 /** The body with `{{token}}` variables resolved against an item (spec 66). */
 export const apiCannedRenderPath = (responseId: string) =>
   `${apiCannedResponsePath(responseId)}/render`;
-export const apiSlaPolicyPath = (policyId: string) => `${ApiPath.slaPolicies}/${policyId}`;
 
 /** Collaborative editing (spec 122): join a page's room as editor or observer;
  *  the socket itself is `COLLAB_WS_PATH/{pageId}?session=` (ui.ts). The wiki's own

@@ -21,6 +21,24 @@ class SlaEntity(StrEnum):
     POLICY = "sla_policy"
 
 
+class SlaViewType(StrEnum):
+    """The saved-view types this plugin contributes (RADD-1396)."""
+
+    #: The spec-64 triage queue: the host's list over `QUEUE_ROWS_PATH`, listed in the
+    #: sidebar's Queues section with live counts. Stored as `views.view_type`.
+    QUEUE = "slas.queue"
+
+
+#: The queue's rows: the `/items` paging contract, ordered by live SLA urgency (`queue.py`).
+QUEUE_ROWS_PATH = "/sla-queue-items"
+#: A queue starts with the reporter and the SLA timer beside the triage basics (spec 64).
+QUEUE_COLUMNS = ("type", "labels", "reporter", "priority", "assignee", "slas.timer", "state")
+#: Timers tick and breaches reorder the queue: re-read it every minute (spec 64).
+QUEUE_REFRESH_SECONDS = 60
+#: The project-settings page this plugin contributes: `/p/<KEY>/settings/sla` (spec 67).
+SETTINGS_PAGE_SEGMENT = "sla"
+
+
 class SlaKind(StrEnum):
     """The two timers a policy can set targets for."""
 

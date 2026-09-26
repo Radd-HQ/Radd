@@ -18,11 +18,13 @@ import type {
   Item,
   ItemIds,
   View,
+  ViewListSurface,
 } from "../types";
 
 /**
- * Batched view membership counts (spec 64) — the sidebar queue badges: ONE
- * POST /views/counts per sidebar, re-polled every minute. Invisible/unknown
+ * Batched view membership counts (spec 64) — the badges of a view type listed in a sidebar
+ * section of its own (RADD-1396): ONE POST /views/counts per section, re-polled every minute.
+ * Invisible/unknown
  * ids are omitted by the server (never errored); ids are sorted for a stable
  * key and sliced to the backend's 50-view cap.
  */
@@ -95,19 +97,23 @@ export const itemIdsQuery = (queryString: string) =>
  * below (they auto-stream their whole match set).
  */
 export const pagedViewItemsQuery = (
-  view: (Pick<View, "id" | "query_string"> & Partial<Pick<View, "view_type">>) | undefined,
+  view: Pick<View, "id" | "query_string"> | undefined,
   page: number,
   // RADD-1154: the page size follows the viewport (`useItemsPageLimit`); it is
   // part of the key, so a rotation refetches the right page.
   limit: number = ITEMS_PAGE_LIMIT,
-) =>
-  queryOptions({
-    queryKey: [...queryKeys.viewItemsPage(view?.id ?? "", view?.query_string ?? "", page, limit), view?.view_type],
-    refetchInterval: view?.view_type === "queue" ? 60_000 : false,
+  // RADD-1396: a plugin view type on the host's list names its own rows (the `/items` paging
+  // contract, in the plugin's order) and how often they go stale; absent = `/items`.
+  surface?: Pick<ViewListSurface, "rows_path" | "refresh_seconds"> | null,
+) => {
+  const rowsPath = surface?.rows_path || ApiPath.items;
+  return queryOptions({
+    queryKey: [...queryKeys.viewItemsPage(view?.id ?? "", view?.query_string ?? "", page, limit), rowsPath],
+    refetchInterval: surface?.refresh_seconds ? surface.refresh_seconds * 1000 : false,
     meta: projectEntityMeta(new URLSearchParams(view?.query_string).get("project_id"), Entity.item),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
-      api.get<Item[]>(`${view?.view_type === "queue" ? "/sla-queue-items" : ApiPath.items}?${view?.query_string ?? ""}`, {
+      api.get<Item[]>(`${rowsPath}?${view?.query_string ?? ""}`, {
         signal,
         query: {
           limit: String(limit),
@@ -115,6 +121,7 @@ export const pagedViewItemsQuery = (
         },
       }),
   });
+};
 
 export const infiniteViewItemsQuery = (view: Pick<View, "id" | "query_string"> | undefined) => ({
   queryKey: queryKeys.viewItems(view?.id ?? "", view?.query_string ?? ""),

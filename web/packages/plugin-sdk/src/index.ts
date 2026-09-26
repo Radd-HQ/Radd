@@ -95,6 +95,7 @@ export type {
   Me,
   UserRef,
   Project,
+  ProjectSettingsPageProps,
   StateRef,
   Item,
   Permissions,

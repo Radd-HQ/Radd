@@ -7,12 +7,10 @@ class ViewType(StrEnum):
     # Backlog & cycle planning: rendered as cycle-grouped sections with
     # cross-bucket drag — the group_by/swimlane_by axes are ignored (cycle implied).
     PLANNING = "planning"
-    # Triage queue (spec 64): a fixed-column list skin (reporter/age/always-on SLA,
-    # urgency-ordered client-side) — the axes are ignored like planning. Sidebar
-    # badges come from POST /views/counts.
-    QUEUE = "queue"
+    # (The spec-64 triage queue is the slas plugin's `slas.queue` since RADD-1396: a
+    # plugin view type drawn by the host's list over the plugin's urgency-ordered rows.)
     # Roadmap/Gantt (spec 79): the spec-77/78 timeline rendered as an ordinary
-    # saved view — axes stored-but-ignored like planning/queue; the client
+    # saved view — axes stored-but-ignored like planning; the client
     # fetches EVERY page of the view query (no Load-more) so bars + the
     # Unscheduled tray always show the full match set.
     ROADMAP = "roadmap"

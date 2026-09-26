@@ -50,6 +50,24 @@ class TypeOptionRead(BaseModel):
     label: str
 
 
+class ViewListSurfaceRead(BaseModel):
+    """A view type the host's LIST draws over the plugin's rows (RADD-1396, `ViewListSpec`)."""
+
+    rows_path: str = ""
+    columns: list[str] = []
+    refresh_seconds: int = 0
+
+
+class ViewTypeOptionRead(TypeOptionRead):
+    """A plugin-contributed view type: drawn by its `view.type` slot, or — with `list_surface` —
+    by the host's list over the plugin's rows; `sidebar_section` lists its views in a section of
+    their own with live counts (RADD-1396)."""
+
+    icon: str = ""
+    list_surface: ViewListSurfaceRead | None = None
+    sidebar_section: str = ""
+
+
 class WidgetTypeOptionRead(TypeOptionRead):
     """A plugin-contributed dashboard widget type. A `personal` one belongs on My Work only —
     it shows the viewer's own work (RADD-1393)."""
@@ -70,5 +88,5 @@ class CapabilitiesRead(BaseModel):
     # Federated UI remotes to load at runtime (spec 94) — one per enabled plugin with a UI bundle.
     remotes: list[PluginRemoteRead] = []
     # Plugin-contributed pluggable types (spec 94): the create-view / add-widget dropdowns list these.
-    view_types: list[TypeOptionRead] = []
+    view_types: list[ViewTypeOptionRead] = []
     widget_types: list[WidgetTypeOptionRead] = []

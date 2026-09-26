@@ -6,7 +6,7 @@ the match set; item/timeline evaluation and final hydration are bounded batches.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 
@@ -15,6 +15,11 @@ from radd.modules.items.filters import ItemListFilters
 from radd.modules.items.models import WorkItem
 
 from . import evaluation, service
+
+#: "No open deadline" — sorts after every real one. NAIVE, like every SLA stamp (the schema's
+#: `radd.clock` convention): an aware sentinel beside a naive `due_at` raised a TypeError, so a
+#: queue holding a ticking timer and an untimed item answered 500 (found by RADD-1396's proof).
+NO_DUE = datetime.max
 
 
 async def queue_items(
@@ -59,11 +64,11 @@ async def queue_items(
                     any(s.breached for s in open_timers),
                     min(
                         (s.due_at for s in open_timers if s.due_at),
-                        default=datetime.max.replace(tzinfo=UTC),
+                        default=NO_DUE,
                     ),
                 )
         for row in batch:
-            breached, due = facts.get(row.id, (False, datetime.max.replace(tzinfo=UTC)))
+            breached, due = facts.get(row.id, (False, NO_DUE))
             keys.append((not breached, due, row.created_at, row.id))
         last_id = batch[-1].id
     keys.sort()

@@ -2,7 +2,9 @@ import { Link, useParams } from "@tanstack/react-router";
 import { BarChart3, ChevronDown, ChevronRight, Plus, Rocket, Settings } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import type { PermissionChecks } from "../../lib/hooks";
-import { Permission, ViewType } from "../../lib/types";
+import { Permission } from "../../lib/types";
+import { useProjectSettingsNav } from "../../lib/project-settings-nav";
+import { useViewTypes } from "../../lib/view-types";
 import { useQuery } from "@tanstack/react-query";
 import { viewQuery } from "../../lib/queries/shared-directories";
 import { useViewDirectory } from "../../lib/useSharedDirectory";
@@ -82,25 +84,7 @@ export function SidebarProjectRow({ project, expanded, permissions, onToggle, on
                         Releases
                       </Link>
                     </li>
-                    {(permissions.project(project, Permission.stateManage) ||
-                      permissions.project(project, Permission.projectManage) ||
-                      permissions.project(project, Permission.formManage) ||
-                      permissions.project(project, Permission.releaseUpdate) ||
-                      permissions.project(project, Permission.memberCreate) ||
-                      permissions.project(project, Permission.memberDelete) ||
-                      permissions.global(Permission.roleUpdate) ||
-                      permissions.project(project, Permission.slaUpdate)) && (
-                      <li>
-                        <Link
-                          to={RoutePath.projectSettings}
-                          params={{ projectKey: project.key }}
-                          className={subLinkClasses}
-                        >
-                          <Settings size={12} aria-hidden />
-                          Settings
-                        </Link>
-                      </li>
-                    )}
+                    <ProjectSettingsLink project={project} />
                     {permissions.project(project, Permission.itemRead) && (
                       <li>
                         <button
@@ -123,12 +107,28 @@ export function SidebarProjectRow({ project, expanded, permissions, onToggle, on
 }
 
 
+/** Settings, when the person has any section to manage here — the host's or a plugin's
+ *  (RADD-1396): the same list the settings sub-nav draws, so the link never leads nowhere. */
+function ProjectSettingsLink({ project }: { project: Project }) {
+  if (useProjectSettingsNav(project).length === 0) return null;
+  return (
+    <li>
+      <Link to={RoutePath.projectSettings} params={{ projectKey: project.key }} className={subLinkClasses}>
+        <Settings size={12} aria-hidden />
+        Settings
+      </Link>
+    </li>
+  );
+}
+
 function ProjectViewLinks({ project }: { project: Project }) {
-  const directory = useViewDirectory({ projectId: project.id, includeGlobal: false, excludeType: ViewType.queue });
+  // A type with a sidebar section of its own (the slas queues) is listed there instead (RADD-1396).
+  const directory = useViewDirectory({ projectId: project.id, includeGlobal: false, sectioned: false });
+  const sectioned = useViewTypes().sectioned;
   const { viewId = "" } = useParams({ strict: false });
   const current = useQuery(viewQuery(viewId));
   const contextView = !directory.filter && current.data?.project_id === project.id
-    && current.data.view_type !== ViewType.queue && !directory.rows.some(row => row.id === viewId)
+    && !sectioned.some(option => option.key === current.data?.view_type) && !directory.rows.some(row => row.id === viewId)
     ? current.data : null;
   return <SidebarDirectory directory={directory} label={`${project.key} views`}>
     {contextView && <div className="border-b border-subtle pb-1">

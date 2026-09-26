@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { Entity, invalidateEntities, type EntityTag } from "./cache";
+import { invalidateEntities } from "@radd/plugin-sdk";
+import { Entity, type EntityTag } from "./cache";
 import { itemInterests } from "./item-interests";
 import type { Item } from "./types";
 import {
@@ -13,8 +14,11 @@ import {
 /**
  * Server entity strings (each module's *Entity enum) → the frontend cache tags
  * they invalidate. Some map to two: a comment/worklog/link change also touches
- * the item that embeds its count/list. Unknown strings are ignored — a future
- * module's events are inert until this map learns them.
+ * the item that embeds its count/list.
+ *
+ * A plugin needs no row here (RADD-1396): it tags its queries with its server
+ * entity type VERBATIM (`meta: { entities: ["sla_policy"] }`) — any tag this map
+ * does not produce is subscribed to, and invalidated by, that exact server string.
  */
 const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   item: [Entity.item],
@@ -47,7 +51,6 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   item_watcher: [Entity.watcher],
   attachment: [Entity.attachment, Entity.item],
   canned_response: [Entity.cannedResponse],
-  sla_policy: [Entity.slaPolicy],
   // These keys are the SERVER's entity types — the broadcaster pushes
   // `event.entity_type` verbatim. RADD-701 renamed them to page_space/page and
   // these two were left behind, so nothing on a page ever refreshed (RADD-761).
@@ -57,7 +60,17 @@ const SERVER_ENTITY_TAGS: Record<string, EntityTag[]> = {
   dashboard: [Entity.dashboard],
 };
 
-const ALL_TAGS = Object.values(Entity);
+const HOST_TAGS = new Set<string>(Object.values(Entity));
+
+/** Every tag a cached query declares — the host's and a plugin's verbatim server entity types. */
+function cachedTags(queryClient: QueryClient): string[] {
+  const tags = new Set<string>(HOST_TAGS);
+  for (const query of queryClient.getQueryCache().getAll()) {
+    const declared = (query.meta as { entities?: string[] } | undefined)?.entities;
+    for (const tag of declared ?? []) tags.add(tag);
+  }
+  return [...tags];
+}
 const activeStops = new Set<() => void>();
 
 export function stopAllRealtime() {
@@ -89,16 +102,20 @@ export function startRealtime(queryClient: QueryClient): () => void {
   let flushTimer: ReturnType<typeof setTimeout> | undefined;
   let subscriptionTimer: ReturnType<typeof setTimeout> | undefined;
   let lastSubscriptions = "";
-  const pending = new Set<EntityTag>();
+  const pending = new Set<string>();
   const pendingQueries = new Set<string>();
 
   const subscribe = () => {
     subscriptionTimer = undefined;
     if (closed || socket?.readyState !== WebSocket.OPEN) return;
     const queries = queryClient.getQueryCache().getAll().filter(query => query.isActive()).flatMap(query => {
-      const meta = query.meta as {entities?: EntityTag[]; projectId?: string; itemId?: string; itemDetail?: boolean} | undefined;
+      const meta = query.meta as {entities?: string[]; projectId?: string; itemId?: string; itemDetail?: boolean} | undefined;
       if (!meta?.entities?.length || query.queryHash.length > 4096) return [];
-      const entities = Object.entries(SERVER_ENTITY_TAGS).filter(([, tags]) => tags.some(tag => meta.entities!.includes(tag))).map(([entity]) => entity);
+      const entities = [
+        ...Object.entries(SERVER_ENTITY_TAGS).filter(([, tags]) => tags.some(tag => meta.entities!.includes(tag))).map(([entity]) => entity),
+        // A plugin's own server entity type, declared verbatim.
+        ...meta.entities.filter(tag => !HOST_TAGS.has(tag)),
+      ];
       const itemIds = meta.itemDetail ? itemInterests(query.state.data as Item | undefined)
         : meta.itemId ? [meta.itemId] : undefined;
       return entities.length ? [{id: query.queryHash, entities, project_id: meta.projectId ?? null,
@@ -127,7 +144,7 @@ export function startRealtime(queryClient: QueryClient): () => void {
     if (hashes.size) void queryClient.invalidateQueries({predicate: query => hashes.has(query.queryHash)});
   };
 
-  const queue = (tags: EntityTag[]) => {
+  const queue = (tags: readonly string[]) => {
     for (const tag of tags) pending.add(tag);
     flushTimer ??= setTimeout(flush, REALTIME_COALESCE_MS);
   };
@@ -144,7 +161,7 @@ export function startRealtime(queryClient: QueryClient): () => void {
       attempts = 0;
       // Refetch the world we may have drifted from (skip the very first
       // connect — mount fetches are already in flight).
-      if (!firstConnect) queue(ALL_TAGS);
+      if (!firstConnect) queue(cachedTags(queryClient));
     };
 
     socket.onmessage = (event: MessageEvent<string>) => {
@@ -156,8 +173,7 @@ export function startRealtime(queryClient: QueryClient): () => void {
           flushTimer ??= setTimeout(flush, REALTIME_COALESCE_MS);
           return;
         }
-        const tags = message.entity ? SERVER_ENTITY_TAGS[message.entity] : undefined;
-        if (tags) queue(tags);
+        if (message.entity) queue(SERVER_ENTITY_TAGS[message.entity] ?? [message.entity]);
       } catch {
         // Malformed frame — ignore.
       }

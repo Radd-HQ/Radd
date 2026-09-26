@@ -33,7 +33,7 @@ export const ROLLUP_MAX_ITEMS = 200;
 /** Backend cap on one POST /items/timelog/batch (spec 78). */
 export const TIMELOG_BATCH_MAX_ITEMS = 200;
 
-/** Sidebar queue-badge counts re-poll cadence (spec 64). */
+/** Sidebar section badge counts re-poll cadence (spec 64, RADD-1396). */
 export const VIEW_COUNTS_REFETCH_MS = 60_000;
 /** Backend cap on one POST /views/counts batch (spec 64). */
 export const VIEW_COUNTS_MAX_VIEWS = 50;

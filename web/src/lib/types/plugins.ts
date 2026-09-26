@@ -36,7 +36,7 @@ export interface CapabilitiesManifest {
   /** Each enabled plugin's UI remote to load at runtime (spec 94, module federation). */
   remotes: PluginRemoteRef[];
   /** Plugin-contributed pluggable types (spec 94) — the create-view / add-widget dropdowns list these. */
-  view_types: PluginTypeOption[];
+  view_types: ViewTypeOption[];
   widget_types: PluginTypeOption[];
 }
 
@@ -44,6 +44,23 @@ export interface CapabilitiesManifest {
 export interface PluginTypeOption {
   key: string;
   label: string;
+}
+
+/** A view type the host's LIST draws over the owning plugin's rows (RADD-1396): `rows_path`
+ *  answers the `/items` paging contract in the plugin's order; `columns` seed a new view. */
+export interface ViewListSurface {
+  rows_path: string;
+  columns: string[];
+  refresh_seconds: number;
+}
+
+/** A plugin-contributed view type (spec 94). Without `list_surface` its plugin draws it through
+ *  the `view.type` slot; `sidebar_section` lists its views in a section of their own, with live
+ *  counts, instead of among the ordinary views (RADD-1396). `icon` names a `lib/icons.ts` entry. */
+export interface ViewTypeOption extends PluginTypeOption {
+  icon?: string;
+  list_surface?: ViewListSurface | null;
+  sidebar_section?: string;
 }
 
 /** A plugin UI remote the host runtime loader imports (spec 94). */

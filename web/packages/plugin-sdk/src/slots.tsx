@@ -48,6 +48,11 @@ export const SlotId = {
   // --- settings ---
   /** A whole page under Settings → …. Matched by pathname (`match`). Props: { path }. */
   settingsPage: "settings.page",
+  /** A whole page under a PROJECT's settings (RADD-1396), matched by `match` = the page's segment
+   *  (`/p/<KEY>/settings/<segment>`). Pair it with a manifest `NavItemSpec(section=
+   *  "project_settings", path=<segment>)`, whose `requires` atoms are checked in that project.
+   *  Props: { project, path } — the project whose settings these are, and the segment. */
+  projectSettingsPage: "project.settings.page",
   /** A section injected INTO an existing settings page (keyed by `match` = the page's slot key).
    *  Props: {}. */
   settingsSection: "settings.section",

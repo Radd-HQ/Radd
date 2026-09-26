@@ -6,8 +6,9 @@ import { api } from "../../lib/api";
 import { ApiPath, RoutePath, apiViewPath } from "../../lib/constants";
 import { SlqProbeStatus, usePermissions, useSlqValidation } from "../../lib/hooks";
 import { capabilitiesQuery, queryKeys } from "../../lib/queries";
-import { Permission, ViewAxis, ViewType, type AxisToken, type QuickFilter, type ShareLevelValue, type View, type ViewCreate, type ViewTypeValue, type ViewUpdate } from "../../lib/types";
+import { Permission, ViewAxis, ViewType, type AxisToken, type QuickFilter, type ShareLevelValue, type View, type ViewCreate, type ViewUpdate } from "../../lib/types";
 import { axisOptions } from "../../lib/view-utils";
+import { viewTypeHasAxes } from "../../lib/view-types";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
@@ -33,13 +34,13 @@ interface ViewModalProps {
 const AXIS_NONE = "";
 
 /**
- * New/Edit view dialog (spec 11): name, board/list/planning/queue/roadmap
- * type, shared toggle (unchanged gating), an SLQ query editor with debounced
+ * New/Edit view dialog (spec 11): name, board/list/planning/roadmap (or a
+ * plugin's) type, shared toggle (unchanged gating), an SLQ query editor with debounced
  * live validation + match count and a collapsible syntax cheat sheet, and the
  * axis pickers — Columns (`group_by`) and Swimlanes (`swimlane_by`, boards
  * only, must differ) over the builtin axes + select-type registry fields
- * (`cf.<key>`). Planning, queue, and roadmap views ignore the axes (the
- * cycle-filter and WIP controls don't apply to roadmaps either).
+ * (`cf.<key>`). Only boards and lists take axes — planning, roadmap and plugin
+ * types ignore them (the cycle-filter and WIP controls don't apply to roadmaps either).
  */
 export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const queryClient = useQueryClient();
@@ -92,19 +93,15 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   const probe = useSlqValidation(project?.id ?? null, query);
 
   const axes = axisOptions(fields.data ?? [], project?.id ?? null);
-  // Planning views are always cycle-grouped, queues are always a flat triage
-  // list (spec 64), and roadmaps are a timeline (spec 79) — the axis pickers
-  // apply to none of them.
-  const axesApply =
-    viewType !== ViewType.planning &&
-    viewType !== ViewType.queue &&
-    viewType !== ViewType.roadmap;
+  // Planning views are always cycle-grouped, roadmaps are a timeline (spec 79),
+  // and a plugin's type is flat or draws its own (the slas queue, RADD-1396) —
+  // the axis pickers apply to boards and lists only.
+  const axesApply = viewTypeHasAxes(viewType);
   // Swimlanes: boards only, and never the same axis as the columns.
   const swimlanesApply = viewType === ViewType.board && groupBy !== AXIS_NONE;
   const laneAxes = axes.filter((axis) => axis.value !== groupBy);
   // The cycle-name filter only bites when a cycle axis is actually in play —
-  // planning views are ALWAYS cycle-grouped, so they always get the field;
-  // queues are never cycle-grouped (axes ignored, spec 64).
+  // planning views are ALWAYS cycle-grouped, so they always get the field.
   const cycleAxisPicked =
     viewType === ViewType.planning ||
     (axesApply &&
@@ -137,7 +134,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
     mutationFn: async () => {
       const payload = {
         name: name.trim(),
-        view_type: viewType as ViewTypeValue,
+        view_type: viewType,
         query,
         group_by: groupBy === AXIS_NONE ? null : (groupBy as AxisToken),
         swimlane_by:
@@ -217,7 +214,6 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
             <option value={ViewType.board}>Board</option>
             <option value={ViewType.list}>List</option>
             <option value={ViewType.planning}>Planning (backlog & cycles)</option>
-            <option value={ViewType.queue}>Queue (triage list)</option>
             <option value={ViewType.roadmap}>Roadmap (timeline)</option>
             {pluginViewTypes.map((t) => (
               <option key={t.key} value={t.key}>

@@ -1,51 +1,20 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Save } from "lucide-react";
-import { api, errorMessage } from "../../lib/api";
-import { ApiPath, apiSlaPolicyPath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
-import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
-import { issueTypesQuery, statesQuery } from "../../lib/queries";
-import { parseClockMinutes } from "../../lib/duration";
-import { SlaMetOn, type PriorityValue, type SlaPolicy } from "../../lib/types";
-import { SlaMetOnField, metRuleValid, type MetRule } from "./SlaMetOnField";
-import { TeamAudience } from "../teams/TeamAudience";
-import { Button } from "../Button";
-import { TextField } from "../TextField";
-import { TokenMultiSelect } from "@radd/plugin-sdk";
-
-export function minutesLabel(minutes: number | null): string {
-  if (minutes === null) return "—";
-  if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)}d`;
-  if (minutes % 60 === 0) return `${minutes / 60}h`;
-  return `${minutes}m`;
-}
-
-/** "09:00–17:30" for a policy's business window; null when it has none. */
-export function windowLabel(startMinute: number | null, endMinute: number | null): string | null {
-  if (startMinute === null || endMinute === null) return null;
-  const hhmm = (minutes: number) =>
-    `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-  return `${hhmm(startMinute)}–${hhmm(endMinute)}`;
-}
-
-/** Minutes → the text the duration fields take ("1h", "90m", "2d"); null → "". */
-function durationText(minutes: number | null): string {
-  return minutes === null ? "" : minutesLabel(minutes);
-}
-
-/** Minutes from midnight → "HH:MM" for an <input type="time">; null → "". */
-function minutesToTime(minutes: number | null): string {
-  if (minutes === null) return "";
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-}
-
-/** "HH:MM" (from an <input type="time">) → minutes from midnight; "" → null. */
-function timeToMinutes(value: string): number | null {
-  if (!value) return null;
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-}
+import { api, Button, errorMessage, invalidateEntities, TextField, TokenMultiSelect } from "@radd/plugin-sdk";
+import { PRIORITY_LABELS, PRIORITY_ORDER } from "@radd-plugin-ui/items/metadata";
+import {
+  SLA_POLICIES_PATH,
+  SLA_POLICY_ENTITY,
+  SlaMetOn,
+  issueTypesQuery,
+  slaPolicyPath,
+  statesQuery,
+  type PriorityValue,
+  type SlaPolicy,
+} from "./policies";
+import { MetOnField, TeamAudience, metRuleValid, type MetRule } from "./MetOnField";
+import { durationText, minutesLabel, minutesToTime, parseClockMinutes, timeToMinutes } from "./durations";
 
 const timeInputClasses =
   "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
@@ -55,10 +24,10 @@ const timeInputClasses =
  * "met when" rules + pause states + priority / issue-type / reporter-team
  * filters + daily business-hours window. ONE form for both, seeded from
  * `policy` when editing — two forms over one resource is how they drift.
- * The policy's project comes from the page URL (spec 67: policies are
- * project-level — no scope picker), which is also what scopes the issue types
- * and states offered. */
-export function SlaPolicyForm({
+ * The policy's project comes from the page (spec 67: policies are
+ * project-level — no scope picker), which also scopes the issue types and
+ * states offered. */
+export function PolicyForm({
   projectId,
   nextPosition,
   policy,
@@ -101,14 +70,9 @@ export function SlaPolicyForm({
 
   const togglePriority = (priority: PriorityValue) =>
     setPriorities((current) =>
-      current.includes(priority)
-        ? current.filter((entry) => entry !== priority)
-        : [...current, priority],
+      current.includes(priority) ? current.filter((entry) => entry !== priority) : [...current, priority],
     );
 
-  // The same issue-type query every other project surface uses (one cache
-  // entry, one staleTime) — a filter over types must not disagree with the
-  // pickers that assign them.
   const issueTypes = useQuery(issueTypesQuery(projectId));
   const states = useQuery(statesQuery(projectId));
   const typeOptions = useMemo(
@@ -137,11 +101,11 @@ export function SlaPolicyForm({
     resolution_state_ids: resolutionRule.stateIds,
     resolution_team_ids: resolutionRule.teamIds,
   });
-  const create = useMutation({
+  const save = useMutation({
     mutationFn: () =>
       policy
-        ? api.patch<SlaPolicy>(apiSlaPolicyPath(policy.id), body())
-        : api.post<SlaPolicy>(ApiPath.slaPolicies, { project_id: projectId, position: nextPosition, ...body() }),
+        ? api.patch<SlaPolicy>(slaPolicyPath(policy.id), body())
+        : api.post<SlaPolicy>(SLA_POLICIES_PATH, { project_id: projectId, position: nextPosition, ...body() }),
     onSuccess: () => {
       if (policy) {
         onDone?.();
@@ -158,7 +122,7 @@ export function SlaPolicyForm({
       setResolutionRule({ metOn: SlaMetOn.done, stateIds: [], teamIds: [] });
       setReporterTeamIds([]);
     },
-    onSettled: () => invalidateEntities(queryClient, Entity.slaPolicy),
+    onSettled: () => invalidateEntities(queryClient, SLA_POLICY_ENTITY),
   });
 
   // Business hours: both-or-neither, start strictly before end (409 server-side).
@@ -166,8 +130,9 @@ export function SlaPolicyForm({
     Boolean(windowStart) !== Boolean(windowEnd) ||
     (Boolean(windowStart) && Boolean(windowEnd) && windowStart >= windowEnd);
   // RADD-1288: durations take units ("1h 30m"); a bare number is minutes.
-  const parsed = [responseMinutes, resolutionMinutes, warningMinutes].map(parseClockMinutes);
-  const badDuration = parsed.some((minutes) => Number.isNaN(minutes));
+  const badDuration = [responseMinutes, resolutionMinutes, warningMinutes]
+    .map(parseClockMinutes)
+    .some((minutes) => Number.isNaN(minutes));
   const durationHint = (text: string, fallback?: string) => {
     const minutes = parseClockMinutes(text);
     if (minutes === null) return fallback;
@@ -177,66 +142,43 @@ export function SlaPolicyForm({
   const rulesValid =
     (!responseMinutes || metRuleValid(responseRule)) && (!resolutionMinutes || metRuleValid(resolutionRule));
   const valid = name.trim() && (responseMinutes || resolutionMinutes) && !windowInvalid && !badDuration && rulesValid;
-  const stateOptions = (states.data ?? []).map((state) => ({ id: state.id, name: state.name }));
+  const stateOptions = states.data ?? [];
 
   return (
     <form
       onSubmit={(event: FormEvent) => {
         event.preventDefault();
-        if (valid) create.mutate();
+        if (valid) save.mutate();
       }}
       className={"grid grid-cols-2 gap-3 rounded-lg border border-subtle p-4 " + (editing ? "bg-surface" : "mt-4")}
       data-sla-policy-form={editing ? "edit" : "create"}
     >
       <div className="col-span-2">
-        <TextField
-          label="Policy name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="TD standard"
-          maxLength={200}
-        />
+        <TextField label="Policy name" value={name} onChange={(event) => setName(event.target.value)}
+          placeholder="TD standard" maxLength={200} />
       </div>
-      <TextField
-        label="Response target"
-        value={responseMinutes}
-        onChange={(event) => setResponseMinutes(event.target.value)}
-        placeholder="1h"
-        hint={durationHint(responseMinutes)}
-        data-duration="response"
-      />
-      <TextField
-        label="Resolution target"
-        value={resolutionMinutes}
-        onChange={(event) => setResolutionMinutes(event.target.value)}
-        placeholder="8h"
-        hint={durationHint(resolutionMinutes)}
-        data-duration="resolution"
-      />
+      <TextField label="Response target" value={responseMinutes} onChange={(event) => setResponseMinutes(event.target.value)}
+        placeholder="1h" hint={durationHint(responseMinutes)} data-duration="response" />
+      <TextField label="Resolution target" value={resolutionMinutes} onChange={(event) => setResolutionMinutes(event.target.value)}
+        placeholder="8h" hint={durationHint(resolutionMinutes)} data-duration="resolution" />
       {/* RADD-1299: what satisfies each target — shown for the targets that are set. */}
       <div>
         {responseMinutes && (
-          <SlaMetOnField target="response" rule={responseRule} onChange={setResponseRule} states={stateOptions} />
+          <MetOnField target="response" rule={responseRule} onChange={setResponseRule} states={stateOptions} />
         )}
       </div>
       <div>
         {resolutionMinutes && (
-          <SlaMetOnField target="resolution" rule={resolutionRule} onChange={setResolutionRule} states={stateOptions} />
+          <MetOnField target="resolution" rule={resolutionRule} onChange={setResolutionRule} states={stateOptions} />
         )}
       </div>
       <div className="col-span-2">
-        <TextField
-          label="Warn before breach"
-          value={warningMinutes}
-          onChange={(event) => setWarningMinutes(event.target.value)}
+        <TextField label="Warn before breach" value={warningMinutes} onChange={(event) => setWarningMinutes(event.target.value)}
           placeholder="30m"
-          hint={durationHint(warningMinutes, "Optional: sends one due-soon alert (and fires the SLA due soon automation trigger) when this much time is left.")}
-        />
+          hint={durationHint(warningMinutes, "Optional: sends one due-soon alert (and fires the SLA due soon automation trigger) when this much time is left.")} />
       </div>
       <div className="col-span-2 flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-fg-secondary">
-          Applies to priorities (none selected = all)
-        </span>
+        <span className="text-xs font-medium text-fg-secondary">Applies to priorities (none selected = all)</span>
         <div className="flex flex-wrap gap-1.5">
           {PRIORITY_ORDER.map((priority) => {
             const selected = priorities.includes(priority);
@@ -253,16 +195,14 @@ export function SlaPolicyForm({
                     : "border-strong text-fg-secondary hover:border-emphasis hover:text-fg")
                 }
               >
-                {PRIORITY_META[priority].label}
+                {PRIORITY_LABELS[priority]}
               </button>
             );
           })}
         </div>
       </div>
       <div className="col-span-2 flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-fg-secondary">
-          Applies to issue types (none selected = all)
-        </span>
+        <span className="text-xs font-medium text-fg-secondary">Applies to issue types (none selected = all)</span>
         <TokenMultiSelect
           value={issueTypeIds}
           onChange={setIssueTypeIds}
@@ -285,25 +225,15 @@ export function SlaPolicyForm({
       <div className="col-span-2 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1.5 text-xs font-medium text-fg-secondary">
           Business hours from
-          <input
-            type="time"
-            value={windowStart}
-            onChange={(event) => setWindowStart(event.target.value)}
-            className={timeInputClasses}
-            aria-label="Business hours start"
-          />
+          <input type="time" value={windowStart} onChange={(event) => setWindowStart(event.target.value)}
+            className={timeInputClasses} aria-label="Business hours start" />
         </label>
         <label className="flex flex-col gap-1.5 text-xs font-medium text-fg-secondary">
           to
-          <input
-            type="time"
-            value={windowEnd}
-            onChange={(event) => setWindowEnd(event.target.value)}
-            className={timeInputClasses}
-            aria-label="Business hours end"
-          />
+          <input type="time" value={windowEnd} onChange={(event) => setWindowEnd(event.target.value)}
+            className={timeInputClasses} aria-label="Business hours end" />
         </label>
-        <span className={"pb-2 text-[11px] " + (windowInvalid ? "text-red-400" : "text-fg-faint")}>
+        <span className={"pb-2 text-[11px] " + (windowInvalid ? "text-status-danger-ink" : "text-fg-faint")}>
           {windowInvalid
             ? "Set both times, start before end."
             : "Optional: the clock only runs inside this daily window (leave empty for 24h)."}
@@ -314,40 +244,34 @@ export function SlaPolicyForm({
         <TokenMultiSelect
           value={pauseStates}
           onChange={setPauseStates}
-          options={(states.data ?? []).map((state) => ({ value: state.name, label: state.name }))}
+          options={stateOptions.map((state) => ({ value: state.name, label: state.name }))}
           placeholder="Add a state…"
           ariaLabel="Pause the clock in these states"
         />
       </div>
       <label className="col-span-2 flex items-center gap-2 text-xs text-fg-secondary">
-        <input
-          type="checkbox"
-          checked={workWeekOnly}
-          onChange={(event) => setWorkWeekOnly(event.target.checked)}
-          className="accent-accent"
-        />
+        <input type="checkbox" checked={workWeekOnly} onChange={(event) => setWorkWeekOnly(event.target.checked)}
+          className="accent-accent" />
         Count working days only (weekends pause the clock — instance work week)
       </label>
       <div className="col-span-2 flex items-center gap-2">
         {editing ? (
           <>
-            <Button type="submit" disabled={create.isPending || !valid}>
+            <Button type="submit" disabled={save.isPending || !valid}>
               <Save size={14} aria-hidden />
-              {create.isPending ? "Saving…" : "Save changes"}
+              {save.isPending ? "Saving…" : "Save changes"}
             </Button>
-            <Button variant="ghost" onClick={() => onDone?.()} disabled={create.isPending}>
+            <Button variant="ghost" onClick={() => onDone?.()} disabled={save.isPending}>
               Cancel
             </Button>
           </>
         ) : (
-          <Button type="submit" disabled={create.isPending || !valid}>
+          <Button type="submit" disabled={save.isPending || !valid}>
             <Plus size={14} aria-hidden />
-            {create.isPending ? "Creating…" : "Create policy"}
+            {save.isPending ? "Creating…" : "Create policy"}
           </Button>
         )}
-        {create.isError && (
-          <span className="text-xs text-red-400">{errorMessage(create.error)}</span>
-        )}
+        {save.isError && <span className="text-xs text-status-danger-ink">{errorMessage(save.error)}</span>}
       </div>
     </form>
   );

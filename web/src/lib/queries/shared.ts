@@ -107,7 +107,6 @@ export const queryKeys = {
   childItems: (parentId: string) => ["items", "children", parentId] as const,
   serviceAccounts: ["serviceAccounts"] as const,
   serviceAccountKeys: (id: string) => ["serviceAccounts", id, "keys"] as const,
-  slaPolicies: (projectId: string) => ["slaPolicies", { projectId }] as const,
   rollupBatch: (itemIds: readonly string[]) => ["rollupBatch", { itemIds }] as const,
   timelogBatch: (itemIds: readonly string[]) => ["timelogBatch", { itemIds }] as const,
   notificationsBadge: ["notificationsBadge"] as const,

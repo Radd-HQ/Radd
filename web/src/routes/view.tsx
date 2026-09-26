@@ -18,7 +18,7 @@ import {
 } from "react";
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, BookmarkPlus, CalendarClock, Download, GanttChartSquare, Globe, List, ListOrdered, Pencil, Pin, Plus, Rocket, RotateCcw, SearchCode, SquareKanban, Trash2, UserRound, X } from "lucide-react";
+import { BarChart3, BookmarkPlus, Download, Globe, Pencil, Pin, Plus, Rocket, RotateCcw, SearchCode, Trash2, UserRound, X } from "lucide-react";
 import { Slot, SlotId, useDisabledMatches, Pager, useDebounced, useItemAttributes } from "@radd/plugin-sdk";
 import { ItemAttributeContext, useItemAttributeValues } from "../lib/item-attribute-data";
 import { MissingPluginType } from "../components/shell/MissingPluginType";
@@ -38,7 +38,7 @@ import {
   roadmapShowClosedStorageKey, ITEMS_PAGE_SIZES } from "../lib/constants";
 import { downloadCsv, itemsToCsv } from "../lib/csv";
 import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
-import { capabilitiesQuery, cyclesQuery, infiniteViewItemsQuery, itemIdsQuery, itemsCountQuery, pagedViewItemsQuery, queryKeys, roadmapMembersQuery, statesQuery, useTimelogBatches, usersQuery, viewQuery as viewDefinitionQuery, allStatesQuery, stateCategoriesQuery } from "../lib/queries";
+import { cyclesQuery, infiniteViewItemsQuery, itemIdsQuery, itemsCountQuery, pagedViewItemsQuery, queryKeys, roadmapMembersQuery, statesQuery, useTimelogBatches, usersQuery, viewQuery as viewDefinitionQuery, allStatesQuery, stateCategoriesQuery } from "../lib/queries";
 import { pushToast } from "../lib/toast";
 import { useReorderItem, useToggleStar, useUpdateItemInView } from "../lib/item-mutations";
 import {
@@ -63,10 +63,9 @@ import { axisLabel, applyBucketOrder,
 import {
   DEFAULT_BOARD_SLOTS,
   DEFAULT_LIST_SLOTS,
-  DEFAULT_QUEUE_SLOTS,
-  defaultCardDisplay,
   useCardDisplay,
 } from "../lib/card-display";
+import { isBuiltinViewType, useViewTypes, viewTypeHasAxes, viewTypeIcon } from "../lib/view-types";
 import {
   activeCardLayout,
   placedAttrSet,
@@ -126,13 +125,17 @@ export function ViewPage() {
   const authenticated = useIsAuthenticated();
   const view = views.data;
   // A plugin-contributed view type (spec 94): rendered by the plugin's `view.type` slot instead of
-  // the builtin board/list surface. The header/query bar still apply — only the surface changes.
-  const { data: capsManifest } = useQuery(capabilitiesQuery);
-  const isPluginView = (capsManifest?.view_types ?? []).some((t) => t.key === view?.view_type);
-  const isBuiltinView =
-    view != null && (Object.values(ViewType) as string[]).includes(view.view_type);
+  // the builtin board/list surface — or, when it declares a LIST surface (RADD-1396), by the host's
+  // list over the plugin's own rows. The header/query bar apply either way.
+  const viewTypes = useViewTypes();
+  const typeOption = view ? viewTypes.byKey.get(view.view_type) : undefined;
+  const listSurface = typeOption?.list_surface ?? null;
+  const isPluginView = Boolean(typeOption) && !listSurface;
+  const isBuiltinView = view != null && isBuiltinViewType(view.view_type);
   // Neither builtin nor a currently-available plugin type → its plugin was disabled/uninstalled.
-  const isMissingType = view != null && !isBuiltinView && !isPluginView && capsManifest != null;
+  const isMissingType = view != null && !isBuiltinView && !typeOption && viewTypes.loaded;
+  // A plugin type's surface (its rows endpoint, its slot) is unknown until capabilities answer.
+  const typeResolved = isBuiltinView || viewTypes.loaded;
   // The plugin is enabled but this view TYPE has been turned off (per-user/instance-wide) — its
   // `view.type` surface won't render, so show the "turned off" notice rather than a blank page.
   const disabledViewTypes = useDisabledMatches(SlotId.viewType);
@@ -335,14 +338,17 @@ export function ViewPage() {
     return { ...effectiveView, query: combined, query_string: params.toString() };
   }, [effectiveView, isRoadmap, showClosed, epicsOnly, memberFiltering, membersClause]);
 
+  // Axes are a board's and a list's; planning is always cycle-grouped, and every other type
+  // (roadmap, a plugin's) ignores whatever axes it stored.
+  const axesApply = viewTypeHasAxes(view?.view_type);
   const columnAxis =
     view?.view_type === ViewType.planning
       ? ViewAxis.cycle
-      : view?.view_type === ViewType.queue
-        ? null
-        : (view?.group_by ?? (view?.view_type === ViewType.board ? ViewAxis.state : null));
+      : axesApply
+        ? (view?.group_by ?? (view?.view_type === ViewType.board ? ViewAxis.state : null))
+        : null;
   const laneAxis = view?.view_type === ViewType.board ? view.swimlane_by : null;
-  const isGrouped = Boolean(view && !isPlanning && !isRoadmap && view.view_type !== ViewType.queue && columnAxis);
+  const isGrouped = Boolean(view && axesApply && columnAxis);
   // RADD-1291: a project view plans with ITS cycles (homed there or holding its issues).
   const cycles = useQuery({ ...cyclesQuery(undefined, view?.project_id ?? undefined), enabled: Boolean(view) && (
     view?.view_type === ViewType.planning || view?.group_by === ViewAxis.cycle || view?.swimlane_by === ViewAxis.cycle
@@ -390,8 +396,8 @@ export function ViewPage() {
   // RADD-1154: 50 per page on a phone, 200 otherwise.
   const [pageLimit, setPageLimit] = useItemsPageLimit();
   const pagedItems = useQuery({
-    ...pagedViewItemsQuery(pagedFetchView, page, pageLimit),
-    enabled: Boolean(view) && !isRoadmap && !isGrouped,
+    ...pagedViewItemsQuery(pagedFetchView, page, pageLimit, listSurface),
+    enabled: Boolean(view) && typeResolved && !isMissingType && !isRoadmap && !isGrouped,
   });
   const ordinaryItemsTotal = useQuery({
     // The spec-75 count endpoint: same filter surface + visibility as the list.
@@ -454,24 +460,19 @@ export function ViewPage() {
   // effectiveView above) — the loaded page already IS the filtered page.
   const pageItems = useMemo(() => [...new Map((items.data ?? []).map(item => [item.id, item])).values()], [items.data]);
 
-  // Queue views (spec 64): a fixed-column triage list — axes ignored, SLA
-  // chips always on, and (without an explicit ORDER BY in the SLQ) the loaded
-  // server orders the complete match set by live SLA urgency before paging.
-  const isQueue = view?.view_type === ViewType.queue;
   // Per-view card display (slots/labels/scale) — persisted under the view's id.
-  // Queues use the FIXED queue column set instead (no DisplayMenu, spec 64).
   const cardDisplay = useCardDisplay(
     `view:${viewId}`,
     isBoard ? DEFAULT_BOARD_SLOTS : DEFAULT_LIST_SLOTS,
   );
-  const display = isQueue ? defaultCardDisplay(DEFAULT_QUEUE_SLOTS) : cardDisplay.display;
+  const display = cardDisplay.display;
   // Table columns (spec 108), list-type surfaces only (boards keep chip slots):
   // the SET comes from the saved view (shared), widths from localStorage
   // (personal). `fields` also feeds the axis pickers further down.
   const fields = useQuery(fieldsQuery());
   const listColumnIds = useMemo(
-    () => view?.columns ?? [...defaultColumnsFor(view?.view_type)],
-    [view?.columns, view?.view_type],
+    () => view?.columns ?? [...defaultColumnsFor(view?.view_type, listSurface?.columns)],
+    [view?.columns, view?.view_type, listSurface?.columns],
   );
   // Plugin-contributed columns/cells (RADD-1394), withdrawn live with their plugin.
   const attributes = useItemAttributes();
@@ -536,8 +537,7 @@ export function ViewPage() {
   const timelogByItem = useTimelogBatches(pageItemIds,
     authenticated && !isRoadmap && (hasCardAttr("logged_time") || hasListColumn("logged_time")));
 
-  // The server's order stands when the view's SLQ sorts explicitly; otherwise
-  // queues default to breached-first → ascending due_at → oldest created.
+  // The server's order stands: the view's SLQ ORDER BY, or a plugin list type's own rows endpoint.
   const orderedItems = pageItems;
   const states = useQuery({
     ...statesQuery(view?.project_id ?? ""),
@@ -637,10 +637,8 @@ export function ViewPage() {
   });
 
   // A board without columns is still a board — fall back to state columns.
-  // A PLANNING view is always cycle-grouped, a QUEUE is always a flat triage
-  // list (both ignore their stored axes).
-
-
+  // A PLANNING view is always cycle-grouped; other non-board/list types are flat
+  // (both ignore their stored axes — `axesApply` above).
   const stateCategories = useQuery({
     ...stateCategoriesQuery(),
     // RADD-854: only fetched when an axis groups by the category tier.
@@ -824,24 +822,14 @@ export function ViewPage() {
   // atoms) — the client never re-derives team membership.
   const canEditView = view.can_edit;
   const canManageView = view.can_manage;
-  const TypeIcon =
-    view.view_type === ViewType.board
-      ? SquareKanban
-      : view.view_type === ViewType.planning
-        ? CalendarClock
-        : isRoadmap
-          ? GanttChartSquare
-          : isQueue
-            ? ListOrdered
-            : List;
+  const TypeIcon = viewTypeIcon(view.view_type, typeOption);
   // Multi-select + bulk (spec 68): every surface incl. boards, gated on
   // item.update in scope.
   const selectable = canUpdate;
 
   const axisSummary = [
-    // Queues (spec 64) and roadmaps (spec 79) ignore their stored axes — don't
-    // announce them.
-    view.group_by && !isQueue && !isRoadmap
+    // Only a board's and a list's axes apply — don't announce the ones another type ignores.
+    view.group_by && axesApply
       ? `Group: ${axisLabel(view.group_by, fields.data)}`
       : null,
     laneAxis ? `Swimlanes: ${axisLabel(laneAxis, fields.data)}` : null,
@@ -1021,8 +1009,6 @@ export function ViewPage() {
           {newCycle && project && (
             <CycleModal cycle={null} defaultProjectId={project.id} onClose={() => setNewCycle(false)} />
           )}
-          {/* Queues have a fixed column set (spec 64) and roadmaps their own
-              knobs (spec 79) — no display config for either. */}
           {(hasUrlState() || activeFilters.size > 0 || slqFilter.draft !== "") && (
             <Button
               variant="ghost"
@@ -1034,7 +1020,7 @@ export function ViewPage() {
               Reset view
             </Button>
           )}
-          {!isPlanning && !isQueue && !isRoadmap && Boolean(view?.can_edit) && columnAxis && (
+          {axesApply && Boolean(view?.can_edit) && columnAxis && (
             <BucketOrderMenu
               columns={columns}
               lanes={laneAxis ? lanes : []}
@@ -1051,7 +1037,8 @@ export function ViewPage() {
               onSetCollapseEmpty={(value) => updateBucketOrder.mutate({ collapse_empty_columns: value })}
             />
           )}
-          {!isQueue && !isRoadmap && (
+          {/* Roadmaps carry their own knobs (spec 79) — no display config. */}
+          {!isRoadmap && (
             <DisplayMenu
               state={cardDisplay}
               viewOptions={isPlanning ? <PlanningControls options={planningOptions} onChange={changePlanning} plan={planning}
@@ -1190,19 +1177,19 @@ export function ViewPage() {
       {isPlanning && cycles.isError && <p role="alert" className="px-4 py-2 text-xs text-fg-muted">Could not load sprint sections. <button className="underline" onClick={()=>void cycles.refetch()}>Retry sprints</button></p>}
       {isPlanning && (itemsTotal.isError || openSprintCount.isError || recoveryItems.countError) && <p role="status" className="px-4 py-2 text-xs text-fg-muted">Some Planning counts are unavailable. Displayed rows may still be used.</p>}
       {isPlanning && updateBucketOrder.isError && <p role="alert" className="px-4 py-2 text-sm text-fg-muted">Could not save sprint visibility. {errorMessage(updateBucketOrder.error)}</p>}
-      {items.isPending ? (
+      {isMissingType && view ? (
+        // The view's plugin type is gone (plugin disabled/uninstalled) — explain, don't silently
+        // fall back to a builtin surface. Checked before loading: nothing fetches its rows.
+        <MissingPluginType typeKey={view.view_type} kind="view" />
+      ) : isDisabledPluginView && view ? (
+        // The type exists but is turned off — same clear notice, not a blank surface.
+        <MissingPluginType typeKey={view.view_type} kind="view" disabled />
+      ) : items.isPending ? (
         <Spinner label="Loading issues…" />
       ) : items.isError ? (
         <div className="p-10">
           <QueryError label="items" error={items.error} />
         </div>
-      ) : isMissingType && view ? (
-        // The view's plugin type is gone (plugin disabled/uninstalled) — explain, don't silently
-        // fall back to a builtin surface.
-        <MissingPluginType typeKey={view.view_type} kind="view" />
-      ) : isDisabledPluginView && view ? (
-        // The type exists but is turned off — same clear notice, not a blank surface.
-        <MissingPluginType typeKey={view.view_type} kind="view" disabled />
       ) : isPluginView && view ? (
         // A plugin-contributed view type (spec 94): its own `view.type` surface, handed the view +
         // its loaded (permission-scoped) items.
@@ -1321,8 +1308,8 @@ export function ViewPage() {
               selectedIds={selectable ? selected : undefined}
               onSelectToggle={selectable ? onSelectToggle : undefined}
               onStar={onStar}
-              // Queues order by SLA urgency — manual drag-rank would fight it.
-              onReorder={(isPlanning || rankOrdered) && canUpdate && !isQueue ? onReorder : undefined}
+              // A plugin list type with its own rows owns their order — drag-rank would fight it.
+              onReorder={(isPlanning || rankOrdered) && canUpdate && !listSurface?.rows_path ? onReorder : undefined}
             />
           )}
           </ItemAttributeContext.Provider>
