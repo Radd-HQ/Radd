@@ -45,9 +45,9 @@ A four-way review of RADD-1340–1366 changed the plan (Hussein's decisions):
 
 | Issue | Scope | Status |
 |---|---|---|
-| RADD-1344 | Complete inventory, ownership and boundary safeguards | In progress |
+| RADD-1344 | Complete inventory, ownership and boundary safeguards | Safeguards delivered (module contracts + plugin boundaries); per-file ledger retired from CI by decision (RADD-1374); Waiting for release |
 | RADD-1345 | Person status and timesheet data contributions | Verified; Waiting for release |
-| RADD-1346 | Settings, imports and VCS provider UI | In progress |
+| RADD-1346 | Settings, imports and VCS provider UI | Delivered via 1366/1377–1382/1389/1390; Waiting for release (Page spaces moves with 1348) |
 | RADD-1351 | Shared settings contracts and truthful page lifecycle | Verified; Waiting for release |
 | RADD-1352 | Scripts/Monitoring settings and AI/mail health contributions | Verified; Waiting for release |
 | RADD-1353 | Owner-contributed directory controls | Verified; Waiting for release |
@@ -66,87 +66,121 @@ A four-way review of RADD-1340–1366 changed the plan (Hussein's decisions):
 | RADD-1366 | VCS settings and connector-owned declarations | Revised after review; Waiting for release |
 | RADD-1371 | Automations review fixes (catalog 500, page-space gate, aborted writes) | Waiting for release |
 | RADD-1372 | Live plugin toggling: per-plugin drain, no process-wide 503, no backlog replay | Waiting for release |
-| RADD-1373 | Core modules as static plugins; pending state for optional remotes | In progress |
-| RADD-1375 | Compatibility re-exports deleted; a boundary test refuses new ones | In progress |
-| RADD-1376 | UI details the moves lost (change lines, focus ring, spinner labels, tokens, Leave) | In progress |
+| RADD-1373 | Core modules as static plugins; pending state for optional remotes | Waiting for release |
+| RADD-1375 | Compatibility re-exports deleted; a boundary test refuses new ones | Waiting for release (in the 1373 commit) |
+| RADD-1376 | UI details the moves lost (change lines, focus ring, spinner labels, tokens, Leave) | Waiting for release (in the 1373 commit) |
 | RADD-1374 | Ledger out of git and CI; module table is the record | Waiting for release |
-| RADD-1347 | Issue, automation and editor integrations | In progress |
-| RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
-| RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
-| RADD-1350 | Full requirement-by-requirement verification and documentation | Pending |
+| RADD-1377 | SDK bridges for plugin settings pages (ScopedSettings, RoleGrants, toast); SDK shim exports derived from source | Waiting for release |
+| RADD-1378 | Settings → Email is mailintake's remote | Waiting for release |
+| RADD-1379 | Settings → AI is ai's remote | Waiting for release |
+| RADD-1380 | Sign-in providers are sso's remote section of the core Sign-in page | Waiting for release |
+| RADD-1381 | Settings → Directory is ldap's remote | Waiting for release |
+| RADD-1382 | Jira/Confluence importers are remotes; "Import" nav group replaces the host hub | Waiting for release |
+| RADD-1383 | Approval gates are a `TRANSITION_CHECK` socket approvals provides (fail closed) | Waiting for release |
+| RADD-1384 | Search sources contributed (pages, ai) | Waiting for release |
+| RADD-1385 | Notify subjects, audiences and mail transport contributed (pages, participants, mailintake) | Waiting for release |
+| RADD-1386 | The SLA report is slas's; reporting's chart kit is a bundled core package | Waiting for release |
+| RADD-1387 | Automations/storage routing stop reaching leave, mailintake, participants, ai | Waiting for release |
+| RADD-1391 | Team-restricted internal comments no longer reach every internal reader's inbox (found by 1385) | Waiting for release |
+| RADD-1388 | Guessed status-token classes (uncoloured errors) fixed and refused | Waiting for release |
+| RADD-1389 | Server status renders capabilities generically; outbound mail is mailintake's | Waiting for release |
+| RADD-1390 | Settings rows declare their page (`page_scopes`); nav icons from one registry | Waiting for release |
+| RADD-1392 | Pages is core; the wiki UI is the bundled pages package | Waiting for release |
+| RADD-1393 | Dashboards is core; My Work widgets contributed via WidgetTypeSpec | Waiting for release |
+| RADD-1394 | Plugins contribute list columns and card cells; SLA timers first | Waiting for release |
+| RADD-1395 | Editor extension points; editor AI is the ai plugin's (palette Ask + query-bar NL remain) | Waiting for release |
+| RADD-1396 | SLA settings page and queue views are the slas plugin's | Waiting for release |
+| RADD-1397 | Co-editing's UI is the collab plugin's (ProseMirror shared on demand; yjs private to the remote) | Waiting for release |
+| RADD-1399 | Proof harness removes its Chrome profiles (/tmp filled) | Waiting for release |
+| RADD-1400 | Palette and query-bar contributed modes; Ask and NL→SLQ are ai's | Waiting for release |
+| RADD-1401 | Public CSAT survey page is csat's (`public.page`); mailed bodies are mailintake's (`content.body`) | Waiting for release |
+| RADD-1347 | Issue, automation and editor integrations | Delivered; Waiting for release |
+| RADD-1348 | Pages, dashboards, widgets and navigation | Delivered: Pages and Dashboards are core bundled packages (1392/1393); Waiting for release |
+| RADD-1349 | Backend public seams, dependencies and background lifecycle | Delivered via 1383–1387; guard test refuses core→optional edges; Waiting for release |
+| RADD-1350 | Full requirement-by-requirement verification and documentation | This record; Waiting for release |
 
 ## Module review ledger
 
-Declared core status is recorded, not accepted as an exemption. Every module must be reviewed. The 57 builtin declarations and the external example are all included.
+Two review levels, stated honestly. **Reviewed** means the module was moved or inverted in this epic, and its surfaces verified against a real backend and the mocked suite. **Guarded** means it is covered by the mechanical checks, but nobody re-read it file by file. Those checks are `test_module_contracts.py` (declared imports, spine-only model imports, no core → optional reach) and `plugin-boundaries.test.mjs` (plugin UI imports, no host re-exports, no AI/SLA/collab/csat/mail vocabulary in `web/src` apart from named exceptions, a derived SDK surface, registry-shipped nav icons, status tokens). The core modules' host-owned UI is not a violation: core modules are static plugins by decision (RADD-1373), and moving their UI into packages is optional.
 
-| Module | Core declaration | Remote sources | Dependencies | Review |
+| Module | Declared | UI | Dependencies (depends_on) | Review |
 |---|---|---|---|---|
-| acme-notes (external example) | False | 11 | projects, auth, events, items | Pending |
-| access | default | 0 | projects, events, auth, teams, groups | Pending |
-| ai | False | 3 | auth, projects, items, fields, workflow, comments, search, settings, events, pages, timelogging, attachments | Pending |
-| alertmanager | False | 0 | projects, auth, items, events, automations | Pending |
-| approvals | False | 2 | events, projects, auth, teams, workflow, items | Pending |
-| attachments | default | 0 | events, projects, auth, items, access, groups, teams | Pending |
-| audit | default | 7 | events, auth, projects, items | UI contributions verified (RADD-1364); backend dependency review remains open |
-| auth | default | 3 | events, projects | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
-| automations | default | 13 | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Pending |
-| avatars | default | 0 | auth, attachments | Pending |
-| backup | default | 3 | auth, events | Schedule contribution verified (RADD-1362); full settings/backend review pending |
-| canned | default | 0 | events, projects, auth, items | Pending |
-| capabilities | default | 0 | auth | Pending |
-| collab | False | 0 | auth, pages | Pending |
-| comments | default | 0 | items, auth, projects, events, teams, itemtypes | Pending |
-| confluenceimport | False | 0 | auth, events, pages, attachments, comments, labels, access, groups, teams, items, projects | Pending |
-| csat | False | 2 | projects, auth, items, settings, events, mailintake, workflow | Pending |
-| cycles | default | 7 | projects, auth, events, settings, teams | Picker contributions verified (RADD-1358); remaining review pending |
-| dashboards | False | 0 | events, projects, auth, teams, items, cycles, views, reporting, access, groups | Pending |
-| events | default | 0 |  | Pending |
-| fields | default | 5 | projects, events, auth, teams, access | Catalog contributions verified (RADD-1361); remaining review pending |
-| forgejo | False | 0 | events, projects, auth, items, vcs, automations | Pending |
-| forms | default | 2 | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
-| github | False | 0 | events, projects, auth, items, vcs, automations | Pending |
-| gitlab | False | 0 | events, projects, auth, items, vcs, automations | Pending |
-| groups | default | 2 | events, auth | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
-| items | default | 2 | projects, workflow, labels, fields, cycles, releases, auth, teams, events, access, itemtypes, linktypes, settings | Change presentation contributed (RADD-1364); remaining UI/backend review pending |
-| itemtypes | default | 2 | projects, events, auth | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
-| jiraimport | False | 0 | auth, projects, fields, items, workflow, comments, cycles, attachments, events, itemtypes, linktypes, notify, releases, timelogging, weblinks, teams | Pending |
-| labels | default | 3 | projects, events, auth | Catalog contributions verified (RADD-1361); remaining review pending |
-| ldap | False | 0 | events, projects, auth, settings, groups, teams | Pending |
-| leave | False | 3 | auth, teams, events | Pending |
-| linktypes | default | 0 | projects, events, auth | Pending |
-| mailintake | False | 3 | projects, auth, items, comments, automations, events, attachments, settings, workflow | Pending |
-| mcp | False | 0 | auth, projects, fields, linktypes | Pending |
-| milestones | False | 2 | projects, auth, events | Pending |
-| monitoring | False | 4 | auth, events | Settings UI verified; backend review pending |
-| notify | default | 0 | events, projects, auth, items, comments, teams | Pending |
-| pages | False | 2 | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
-| participants | False | 3 | events, projects, auth, teams, items, notify | Pending |
-| pluginmgr | default | 0 | auth, events | Pending |
-| projects | default | 7 | events | Picker contributions verified (RADD-1358); remaining review pending |
-| realtime | default | 0 | events, auth | Pending |
-| releases | default | 2 | projects, auth, events, workflow | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
-| reporting | default | 0 | events, projects, auth, workflow, cycles, items | Pending |
-| screens | default | 0 | projects, events, auth, fields, itemtypes | Pending |
-| scripts | False | 6 | auth, events, projects, items | Settings UI verified; backend review pending |
-| search | default | 0 | events, projects, auth, workflow, items, comments, access, fields, teams | Pending |
-| settings | default | 0 | events, projects, auth | Pending |
-| slas | False | 0 | events, projects, auth, settings, workflow, items, comments, automations, reporting, teams | Pending |
-| sso | False | 0 | events, projects, auth, teams | Pending |
-| teams | default | 6 | events, projects, auth, groups | Option and relationship contributions verified (RADD-1357/1359); remaining review pending |
-| timelogging | default | 0 | events, projects, auth, teams, items, settings | Pending |
-| vcs | default | 0 | projects, auth, events, items, timelogging | Pending |
-| views | default | 0 | projects, workflow, items, fields, auth, events, access, groups, teams | Pending |
-| webhooks | default | 0 | projects, events, auth, fields, items | Pending |
-| weblinks | default | 0 | projects, auth, events, items | Pending |
-| workflow | default | 2 | projects, events, auth, settings, teams | Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
+| acme-notes (external example) | optional | remote | projects, auth, events, items | Loads headless as an external remote (spec 94 acceptance); not re-audited |
+| access | core | host | projects, events, auth, teams, groups | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| ai | optional | remote | auth, projects, items, fields, workflow, comments, search, settings, events, pages, timelogging, attachments | Reviewed — RADD-1379/1384/1387/1395/1400: settings, editor, read-mode, issue, draft, palette and query-bar surfaces are its remote; search candidates and the llm routing rule are its socket providers; `web/src` holds no AI vocabulary (boundary test) |
+| alertmanager | optional | remote | projects, auth, items, events, automations, comments, workflow | Reviewed — RADD-1370: settings page is its remote; receiver behaviours are its own settings |
+| approvals | optional | remote | events, projects, auth, teams, workflow, items | Reviewed — RADD-1383/1393: approval gates are its `TRANSITION_CHECK` provider (fail closed); the approver editor and the My Work widget are its remote |
+| attachments | core | host | events, projects, auth, items, access, groups, teams | Reviewed — RADD-1387: storage rule types come from the socket; no reach into ai |
+| audit | core | bundled | events, auth, projects, items | Reviewed — RADD-1363/1364: bundled package; owners declare entity destinations |
+| auth | core | bundled | events, projects | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
+| automations | core | bundled | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | Reviewed — RADD-1365/1371/1387: its UI is the bundled package; no reach into optional plugins |
+| avatars | core | host | auth, attachments | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| backup | core | bundled | auth, events | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Schedule contribution verified (RADD-1362); full settings/backend review pending |
+| canned | core | host | events, projects, auth, items | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| capabilities | core | host | auth | Reviewed — RADD-1389: rows name their owning plugin; owns only `workers` |
+| collab | optional | remote | auth, pages | Reviewed — RADD-1397: the live session, editor binding and presence are its remote; ProseMirror is shared on demand, yjs stays private |
+| comments | core | contract only | items, auth, projects, events, teams, itemtypes | Guarded — core; UI contract only; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| confluenceimport | optional | remote | auth, events, pages, attachments, comments, labels, access, groups, teams, items, projects | Reviewed — RADD-1382: its page is its remote under the "Import" nav group |
+| csat | optional | remote | projects, auth, items, settings, events, mailintake, workflow | Reviewed — RADD-1386/1401: CSAT folds into the SLA report through a slas→csat weak edge; the tokened public survey page is its remote through the new `public.page` slot (`/public/csat/$token`), loaded for anonymous visitors exactly as the visitor shell already loads remotes |
+| cycles | core | bundled | projects, auth, events, settings, teams | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Picker contributions verified (RADD-1358); remaining review pending |
+| dashboards | core | bundled | events, projects, auth, teams, items, cycles, views, reporting, access, groups | Reviewed — Core since RADD-1393: UI is the bundled package; My Work widgets are `WidgetTypeSpec` contributions (`personal` + `suggest`) |
+| events | core | host |  | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| fields | core | bundled | projects, events, auth, teams, access | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Catalog contributions verified (RADD-1361); remaining review pending |
+| forgejo | optional | remote | events, projects, auth, items, vcs, automations | Reviewed — RADD-1366/1369: contributes wording to the VCS settings; per-repository switches |
+| forms | core | bundled | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
+| github | optional | remote | events, projects, auth, items, vcs, automations | Reviewed — RADD-1366/1369: contributes wording to the VCS settings; per-repository switches |
+| gitlab | optional | remote | events, projects, auth, items, vcs, automations | Reviewed — RADD-1366/1369: contributes wording to the VCS settings; per-repository switches |
+| groups | core | bundled | events, auth | Reviewed — Its audit link points at `/settings/directory` (ldap's page); only an entity's owner may declare its link (RADD-1390) |
+| items | core | bundled | projects, workflow, labels, fields, cycles, releases, auth, teams, events, access, itemtypes, linktypes, settings | Reviewed — RADD-1383: calls `workflow.state_moved` instead of approvals |
+| itemtypes | core | bundled | projects, events, auth | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
+| jiraimport | optional | remote | auth, projects, fields, items, workflow, comments, cycles, attachments, events, itemtypes, linktypes, notify, releases, timelogging, weblinks, teams | Reviewed — RADD-1382: its page is its remote under the "Import" nav group |
+| labels | core | bundled | projects, events, auth | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Catalog contributions verified (RADD-1361); remaining review pending |
+| ldap | optional | remote | events, projects, auth, settings, groups, teams | Reviewed — RADD-1381/1389: Directory page is its remote; its capability feeds Server status. Justified exception: the login page's LDAP form stays host (pre-auth) |
+| leave | optional | remote | auth, teams, events | Reviewed — RADD-1345/1387: person status and timesheet data contributions; provides `PERSON_AVAILABILITY` |
+| linktypes | core | host | projects, events, auth | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| mailintake | optional | remote | projects, auth, items, comments, automations, events, attachments, settings, workflow, notify | Reviewed — RADD-1368/1378/1385/1387/1389/1401: settings page is its remote; provides `MAIL_TRANSPORT`, the send_email node and the outbound_mail capability; draws mailed bodies (signature fold + restore) by claiming them through the `content.body` slot |
+| mcp | optional | none | auth, projects, fields, linktypes | Reviewed — No UI; tool catalog through the kernel registry (spec 114); no core module reaches it (guard) |
+| milestones | optional | remote | projects, auth, events | Reviewed — Contributed entity, nav and SLQ field (north star); RADD-1371 fixed its catalog ownership |
+| monitoring | optional | remote | auth, events | Reviewed — RADD-1352: settings page and health cards are its remote |
+| notify | core | host | events, projects, auth, items, comments, teams | Reviewed — RADD-1385/1391: subjects, audiences and mail transport through sockets; team-restricted comment leak fixed. Named exception: its `sla_breach`/`sla_due_soon` kinds |
+| pages | core | bundled | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | Reviewed — Core since RADD-1392: the wiki UI is the bundled package; provides `SEARCH_DOCUMENTS` and `NOTIFICATION_SUBJECT` (RADD-1384/1385) |
+| participants | optional | remote | events, projects, auth, teams, items, notify | Reviewed — RADD-1385/1387: provides `NOTIFICATION_AUDIENCE` and the add_participant node; its issue card is its remote |
+| pluginmgr | core | host | auth, events | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| projects | core | bundled | events | Reviewed — RADD-1378/1389: blocker urls from owners' entity links; `/instance/status` deleted |
+| realtime | core | host | events, auth | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| releases | core | bundled | projects, auth, events, workflow | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Option contributions and role history presentation verified (RADD-1357/1364); remaining review pending |
+| reporting | core | bundled | events, projects, auth, workflow, cycles, items | Reviewed — RADD-1386: SLA report moved out; its chart kit is a bundled package |
+| screens | core | host | projects, events, auth, fields, itemtypes | Reviewed — RADD-1396: the dead `sla` row is removed |
+| scripts | optional | remote | auth, events, projects, items | Reviewed — RADD-1352/1269: settings page and node inspectors are its remote |
+| search | core | host | events, projects, auth, workflow, items, comments, access, fields, teams | Reviewed — RADD-1384: reads `SEARCH_DOCUMENTS`/`SEMANTIC_CANDIDATES`; imports neither pages nor ai |
+| settings | core | host | events, projects, auth | Reviewed — RADD-1390: rows carry `homed` from `SettingSpec.page_scopes` |
+| slas | optional | remote | events, projects, auth, settings, workflow, items, comments, automations, reporting | Reviewed — RADD-1386/1394/1396: report, list columns and card cells (`slas.timer`), issue panel, settings page and queue views (`slas.queue`) are its remote |
+| sso | optional | remote | events, projects, auth, teams | Reviewed — RADD-1380/1389: provider registry is its remote section of the core Sign-in page. Justified exception: login-page provider buttons stay host (pre-auth) |
+| teams | core | bundled | events, projects, auth, groups | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file; earlier: Option and relationship contributions verified (RADD-1357/1359); remaining review pending |
+| timelogging | core | bundled | events, projects, auth, teams, items, settings | Guarded — core; UI bundled package; edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| vcs | core | bundled | projects, auth, events, items, timelogging, workflow, releases | Reviewed — RADD-1366/1369: VCS settings belong to it; connectors contribute wording |
+| views | core | host | projects, workflow, items, fields, auth, events, access, groups, teams | Reviewed — RADD-1394/1396: contributed item attributes and list-surface view types |
+| webhooks | core | host | projects, events, auth, fields, items | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| weblinks | core | host | projects, auth, events, items | Guarded — core; UI host-owned by decision (core = static, RADD-1373); edges enforced by test_module_contracts (declared imports, spine models, no optional reach); not re-audited file by file |
+| workflow | core | bundled | projects, events, auth, settings, teams | Reviewed — RADD-1383: evaluates contributed transition checks; publishes the rule-editor slot contract |
 
-## Confirmed findings still requiring remediation
+## Remaining work and justified exceptions (2026-09-26)
 
-- RADD-1355 closes the source-root/file-extension discovery gap exposed by RADD-1354. Newly discovered migrations, SDK/package/build files, tools, deployment configuration, tests and reference artifacts are explicitly unreviewed. RADD-1344 remains open for their ownership/evidence audit.
-- Host router directly imports optional settings pages and optional Pages/Dashboards/CSAT routes (`web/src/router.tsx`). Generic slot routes coexist with plugin-specific route components.
-- RADD-1351 unifies the SDK capability cache and makes discovery conservative. Other identity/query cache ownership remains under review.
-- RADD-1351 fixes generic plugin-page loading/failure/withdrawal and render boundaries. Other direct contribution render sites still need review.
-- Leave's residual status/timesheet coupling has been removed in RADD-1345. Source review is recorded only for the portions actually examined; this does not mark the entire backend Leave module reviewed.
+**Justified exceptions** (named in the boundary tests where applicable):
+- **Login page:** its SSO buttons and LDAP form stay in the host. Nothing remote can load before sign-in (RADD-1380/1381).
+- **notify's SLA kinds:** `sla_breach`/`sla_due_soon` are core notify's vocabulary (RADD-1396).
+- **Groups' audit link:** it points at ldap's Directory page, because only an entity's owner may declare its link and no core page lists groups (RADD-1390).
+- **History tab sentences for plugin events:** the issue History tab still writes the sentences for `csat.*`, `mail.*` (and approvals, participants, vcs) events itself. It is the history of every plugin's events, and those events outlive the plugin that emitted them. Letting plugins supply them is a cross-plugin change of its own. The boundary test names the rows and fails once they are gone (RADD-1401).
+
+**Remaining:**
+- **RADD-1398:** a plain home load fetches ~210 script chunks. Measure it before changing anything.
+- **RADD-1395 live-provider proof:** it is unverified because mark015 refused connections from the build machine. Rerun `editor-ai-proof.mjs` when it is reachable.
+- **SDK peer dependencies:** it does not declare `prosemirror-*` as peer dependencies, so an external plugin that binds the editor must install them itself (RADD-1397).
+- **Per-file ledger** (`scripts/plugin_inventory.py`): it stays an on-demand tool writing to an ignored path (RADD-1374). File-by-file ownership of migrations, build and deploy config (RADD-1344) was not re-audited.
+
+**Resolved since the first audit:**
+- The host router no longer imports optional settings pages, the Pages/Dashboards routes or the public CSAT page (RADD-1378–1382, 1392, 1393, 1401). Route contributions match patterns (`$name` segments), and a `public.page` slot serves pre-auth plugin pages.
+- Core modules no longer reach optional plugins, and a test refuses the class (RADD-1349).
 
 ## RADD-1345 verification
 

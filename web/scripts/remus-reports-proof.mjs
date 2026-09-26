@@ -14,7 +14,7 @@
  *   #13 the palette's Go to lists Pages;
  *   #14 the collapsed rail carries Pages;
  *   #15 in the wiki the top button is "New page" and creates one under the
- *       open page; elsewhere it is still "New item";
+ *       open page; elsewhere it is "New issue" (renamed in RADD-1287);
  *   #16 History lists every version below the current one (v3 → v2, v1);
  *   #17 a manager can delete a LIVE page from the page, landing on the space.
  * Every check is a measurement. Fixtures are deleted at the end.
@@ -132,11 +132,11 @@ async function main() {
 
     // --- #15: the top button follows the route --------------------------------
     await session.navigate(`${baseUrl}/`, 1500);
-    const onHome = await session.eval(`[...document.querySelectorAll("button")].map((b) => b.textContent.trim()).filter((t) => /^New (item|page)$/.test(t))`);
+    const onHome = await session.eval(`[...document.querySelectorAll("button")].map((b) => b.textContent.trim()).filter((t) => /^New (item|issue|page)$/.test(t))`);
     await session.navigate(`${baseUrl}/pages/${SLUG}/${setup.parent.path}`, 2500);
     const onPage = await session.eval(`(() => { const b = document.querySelector("[data-new-page]"); return b ? { text: b.textContent.trim(), title: b.title, disabled: b.disabled } : null; })()`);
     context.newButton = { onHome, onPage };
-    checks.newItemElsewhere = onHome.join() === "New item";
+    checks.newItemElsewhere = onHome.join() === "New issue";
     checks.newPageOnTheWikiNamesTheParent = onPage?.text === "New page" && onPage.title === "New page under Parent" && onPage.disabled === false;
     await session.click("[data-new-page]", () => true);
     await sleep(2000);
