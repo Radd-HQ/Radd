@@ -36,12 +36,14 @@ plugin = RaddPlugin(
     # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
     # wipes import-time registration, and the manifest is what survives it.
     access_resources=(_DASHBOARD_SPEC,),
-    core=False,  # optional plugin — disableable via the plugin manager
+    # RADD-1393: core, like the My Work page its canvas draws. Its UI is the bundled
+    # `dashboards/ui` package; a plugin reaches My Work by CONTRIBUTING a personal widget
+    # type (`WidgetTypeSpec(personal=True, suggest=…)`), never by being named here.
     description=(
         "Dashboards: widgets that chart and list your issues."
     ),
     depends_on=("events", "projects", "auth", "teams", "items", "cycles", "views", "reporting", "access", "groups"),
-    weak_depends=("comments", "forms", "approvals"),
+    weak_depends=("comments", "forms"),
     routers=(router,),
     exception_handlers=((WidgetConfigError, _config_handler),),
 )

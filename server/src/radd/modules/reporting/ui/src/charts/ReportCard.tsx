@@ -1,5 +1,5 @@
 import { useContext, type ReactNode } from "react";
-import { ChartHeightContext } from "./ChartHeightContext";
+import { ChartHeightContext } from "@radd/plugin-sdk";
 
 interface ReportCardProps {
   title: string;

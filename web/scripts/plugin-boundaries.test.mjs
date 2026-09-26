@@ -309,6 +309,20 @@ test('SLA timers are the slas plugin\'s: lists, cards, the designer and the rail
   assert.match(readFileSync('server/src/radd/modules/slas/ui/src/timers.ts','utf8'),/key: "slas\.timers"/);
 });
 
+test('Dashboards is its bundled package and "Awaiting my approval" is the approvals remote\'s (RADD-1393)',()=>{
+  for(const file of ['web/src/components/dashboards','web/src/routes/dashboard.tsx','web/src/lib/types/dashboards.ts',
+    'web/src/lib/types/approvals.ts','web/src/lib/queries/approvals.ts']) assert(!existsSync(file),file);
+  // `/dashboards` alone is also the route prefix the shell's nav and pins know; the transport is not.
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    const text=node.type==='StringLiteral'?node.value:node.type==='TemplateElement'?node.value.raw:null;
+    if (text!==null && /^\/(?:dashboards\/(?:my-work|summary)|approvals)(?:\/|$)/.test(text)) violations.push(`${file}:${node.loc.start.line}: ${text}`);
+  }
+  assert.deepEqual(violations,[]);
+  const remote=nodes('server/src/radd/modules/approvals/ui/src/AwaitingApproval.tsx');
+  assert(remote.some(n=>n.type==='StringLiteral'&&n.value==='/approvals/pending'),'the remote reads its own queue');
+});
+
 test('VCS settings and connector transport are owned by plugins',()=>{
   const violations=[];
   for (const file of files('web/src')) for (const node of nodes(file)) {

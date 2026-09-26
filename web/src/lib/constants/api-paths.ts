@@ -77,16 +77,6 @@ export const apiViewTransferPath = (viewId: string) => `${ApiPath.views}/${viewI
 /** PATCH/DELETE one card-layout preset (spec 109). */
 export const apiCardLayoutPresetPath = (presetId: string) =>
   `${ApiPath.cardLayoutPresets}/${presetId}`;
-/** Composable dashboards (spec 75) — sharing/transfer mirror the view paths. */
-export const apiDashboardPath = (dashboardId: string) => `${ApiPath.dashboards}/${dashboardId}`;
-export const apiDashboardSharingPath = (dashboardId: string) =>
-  `${apiDashboardPath(dashboardId)}/sharing`;
-export const apiDashboardTransferPath = (dashboardId: string) =>
-  `${apiDashboardPath(dashboardId)}/transfer`;
-export const apiDashboardWidgetsPath = (dashboardId: string) =>
-  `${apiDashboardPath(dashboardId)}/widgets`;
-export const apiDashboardWidgetPath = (dashboardId: string, widgetId: string) =>
-  `${apiDashboardWidgetsPath(dashboardId)}/${widgetId}`;
 export const apiRolePath = (roleId: string) => `${ApiPath.roles}/${roleId}`;
 /** GET/PUT — who holds this role instance-wide (spec 87). */
 export const apiRoleGlobalGrantsPath = (roleId: string) =>

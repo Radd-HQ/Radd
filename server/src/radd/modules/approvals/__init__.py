@@ -1,10 +1,11 @@
-from radd.kernel import EventTypeSpec, IntegrationSpec, PluginUiManifest
+from radd.kernel import EventTypeSpec, IntegrationSpec, PluginUiManifest, WidgetTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel.sockets import Socket
 
 from .gate import ApprovalGate
 from .router import router
-from .types import ApprovalCheck, ApprovalEvent
+from .service import has_pending
+from .types import ApprovalCheck, ApprovalEvent, ApprovalWidget
 
 plugin = RaddPlugin(
     name="approvals",
@@ -29,8 +30,20 @@ plugin = RaddPlugin(
             Socket.TRANSITION_CHECK, ApprovalCheck.REQUIRE_APPROVAL.value, impl=ApprovalGate()
         ),
     ),
-    # Federated UI (spec 94): the Approvals card in the issue rail (issue.panel.section)
-    # and the approver editor on the workflow transitions editor (RADD-1383, the slot
-    # workflow's UI package publishes in transition-rule-contract.ts).
-    ui=PluginUiManifest(remote="/plugins/approvals/remoteEntry.js", ui_api_version="1.0.0"),
+    # RADD-1393: "Awaiting my approval" on My Work is this plugin's contribution — a
+    # personal widget type, suggested to whoever has something to decide — drawn by the
+    # remote's dashboard.widget slot. Disabling approvals withdraws the type and the slot.
+    widget_types=(
+        WidgetTypeSpec(
+            key=ApprovalWidget.AWAITING.value,
+            label="Awaiting my approval",
+            personal=True,
+            suggest=has_pending,
+        ),
+    ),
+    # Federated UI (spec 94): the Approvals card in the issue rail (issue.panel.section),
+    # the approver editor on the workflow transitions editor (RADD-1383, the slot
+    # workflow's UI package publishes in transition-rule-contract.ts), and the My Work
+    # widget. 1.15.0: it links and peeks items through the SDK's host bridge.
+    ui=PluginUiManifest(remote="/plugins/approvals/remoteEntry.js", ui_api_version="1.15.0"),
 )

@@ -67,7 +67,7 @@ const ViewPage = lazyRouteComponent(() => import("./routes/view"), "ViewPage");
 const PagesIndexPage = lazyRouteComponent(() => import("./routes/pages-index"), "PagesIndexPage");
 const PageSpacePage = lazyRouteComponent(() => import("./routes/page-space"), "PageSpacePage");
 const PagePrintPage = lazyRouteComponent(() => import("./routes/page-print"), "PagePrintPage");
-const DashboardPage = lazyRouteComponent(() => import("./routes/dashboard"), "DashboardPage");
+const DashboardPage = lazyRouteComponent(() => import("@radd-plugin-ui/dashboards/page"), "DashboardPage");
 
 /**
  * Code-based route tree. In-app routes are children of `appLayoutRoute` so

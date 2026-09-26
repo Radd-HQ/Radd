@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { ChartHeightContext } from "./ChartHeightContext";
+import { ChartHeightContext } from "@radd/plugin-sdk";
 import type { StackedBarChartProps } from "../report-contract";
 import { CHART_GRID, CHART_MUTED_TEXT, niceScale, sampledIndices } from "./chart-utils";
 

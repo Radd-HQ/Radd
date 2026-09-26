@@ -73,7 +73,8 @@ export const SlotId = {
   routePage: "route.page",
   /** A dashboard widget type. Props: { config, widget, filterQuery } — the widget's stored
    *  config, the full widget row, and the dashboard-wide SLQ filter (plugin widgets decide
-   *  how to honor it). See WidgetCard.tsx. */
+   *  how to honor it). A manifest `WidgetTypeSpec(personal=True)` puts the type on My Work instead
+   *  of shared dashboards. See the dashboards package's WidgetBody.tsx. */
   dashboardWidget: "dashboard.widget",
   /** An entry in an item's action menu. Props: { item }. */
   itemAction: "item.action",

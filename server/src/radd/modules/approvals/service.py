@@ -587,6 +587,12 @@ async def cancel_request(
     )
 
 
+async def has_pending(session: AsyncSession, actor: User) -> bool:
+    """My Work's suggestion for the "Awaiting my approval" widget (RADD-1393): something waits
+    for this person's verdict."""
+    return bool(await pending_for_user(session, actor))
+
+
 async def pending_for_user(
     session: AsyncSession, actor: User
 ) -> list[PendingApprovalRead]:

@@ -13,6 +13,7 @@ from .schemas import (
     NavItemRead,
     PluginRemoteRead,
     TypeOptionRead,
+    WidgetTypeOptionRead,
 )
 
 
@@ -84,7 +85,7 @@ async def get_capabilities(user: Actor) -> CapabilitiesRead:
             for v in sorted(registries.view_types.values(), key=lambda v: v.label)
         ],
         widget_types=[
-            TypeOptionRead(key=w.key, label=w.label)
+            WidgetTypeOptionRead(key=w.key, label=w.label, personal=w.personal)
             for w in sorted(registries.widget_types.values(), key=lambda w: w.label)
         ],
     )

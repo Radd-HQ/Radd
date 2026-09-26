@@ -102,4 +102,14 @@ export interface CapabilitiesManifest {
   }>;
   plugins: string[];
   remotes?: PluginRemote[];
+  /** Plugin-contributed dashboard widget types (the add-widget dropdown lists them). */
+  widget_types?: WidgetTypeOption[];
+}
+
+/** A plugin-contributed dashboard widget type. A `personal` one shows the viewer's own work, so it
+ *  is offered on My Work only (RADD-1393); its plugin draws it through the `dashboard.widget` slot. */
+export interface WidgetTypeOption {
+  key: string;
+  label: string;
+  personal?: boolean;
 }

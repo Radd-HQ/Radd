@@ -1,4 +1,4 @@
-/** Saved views, dashboards, view counts, and SLQ item queries. */
+/** Saved views, view counts, and SLQ item queries. */
 
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { allRelationRows } from "../pagination";
@@ -11,12 +11,10 @@ import {
   ROADMAP_TRAY_PAGE_LIMIT,
   VIEW_COUNTS_MAX_VIEWS,
   VIEW_COUNTS_REFETCH_MS,
-  apiDashboardPath,
 } from "../constants";
 import { queryKeys } from "./shared";
 import type {
   CardLayoutPreset,
-  Dashboard,
   Item,
   ItemIds,
   View,
@@ -52,17 +50,7 @@ export const cardLayoutPresetsQuery = () =>
     meta: entityMeta(Entity.cardLayoutPreset),
   });
 
-/** One dashboard's full definition incl. widgets + per-actor can_edit/can_manage.
- * `retry: false` — an invisible dashboard 404s and should say so immediately. */
-export const dashboardQuery = (dashboardId: string) =>
-  queryOptions({
-    queryKey: [...queryKeys.dashboard(dashboardId), "definition"],
-    meta: entityMeta(Entity.dashboard, Entity.project, Entity.role, Entity.member, Entity.team, Entity.group, Entity.accessGrant),
-    queryFn: ({ signal }) => api.get<Dashboard>(apiDashboardPath(dashboardId), { signal, query: { include_shares: "false" } }),
-    retry: false,
-  });
-
-/** slq_count widgets (spec 75): the visible-match total alone. Tagged `item`
+/** A query's visible-match total alone (My Work's section counts). Tagged `item`
  * so realtime item churn keeps the number live; SLQ 422s don't retry. */
 export const itemsCountQuery = (scope: Record<string, string>, q: string) =>
   queryOptions({
@@ -72,21 +60,6 @@ export const itemsCountQuery = (scope: Record<string, string>, q: string) =>
       api.get<{ total: number }>(ApiPath.itemsCount, {
         signal,
         query: { ...scope, q: q || undefined },
-      }),
-    retry: false,
-    staleTime: 15_000,
-  });
-
-/** slq_list widgets (spec 75): a few compact rows at the widget's own limit
- * (distinct from `slqItemsQuery`, which always fetches a full page). */
-export const slqListItemsQuery = (scope: Record<string, string>, q: string, limit: number) =>
-  queryOptions({
-    queryKey: queryKeys.slqListItems(scope, q, limit),
-    meta: projectEntityMeta(scope.project_id, Entity.item),
-    queryFn: ({ signal }) =>
-      api.get<Item[]>(ApiPath.items, {
-        signal,
-        query: { ...scope, q: q || undefined, limit: String(limit) },
       }),
     retry: false,
     staleTime: 15_000,

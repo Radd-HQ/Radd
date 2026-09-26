@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { ChartHeightContext } from "./ChartHeightContext";
+import { ChartHeightContext } from "@radd/plugin-sdk";
 import {
   CHART_AXIS_TEXT,
   CHART_GRID,

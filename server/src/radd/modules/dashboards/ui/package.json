@@ -1,0 +1,24 @@
+{
+  "name": "@radd-plugin-ui/dashboards",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@radd/plugin-sdk": "*",
+    "lucide-react": "^1.25.0",
+    "@radd-plugin-ui/projects": "*",
+    "@radd-plugin-ui/cycles": "*"
+  },
+  "exports": {
+    ".": "./src/index.tsx",
+    "./page": "./src/DashboardPage.tsx",
+    "./my-work": "./src/my-work.ts",
+    "./sidebar": "./src/sidebar.ts",
+    "./queries": "./src/queries.ts",
+    "./types": "./src/types.ts"
+  },
+  "radd": {
+    "bundled": true
+  }
+}

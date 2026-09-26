@@ -1,12 +1,17 @@
 import { useState, type ReactNode } from "react";
 import { useBlocker } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
-import type { Dashboard, DashboardWidget } from "../../lib/types";
-import { Button } from "../Button";
-import { ErrorText } from "@radd/plugin-sdk";
+import { Button, ErrorText, useConfirm } from "@radd/plugin-sdk";
+import type { Dashboard, DashboardWidget } from "./types";
 import { WidgetGrid } from "./WidgetGrid";
 import { WidgetModal } from "./WidgetModal";
 
+/**
+ * The widget canvas every dashboard draws on — a shared dashboard and My Work alike. Customize
+ * opens a local draft (drag, resize, add, configure); Save commits it against the layout it
+ * started from, so a concurrent edit is a conflict rather than a silent overwrite. `defaults`
+ * (My Work only) offers Reset to default and makes a collapse save straight away.
+ */
 export function DashboardCanvas({ dashboard, save, defaults, render }: {
   dashboard: Dashboard; save: (widgets: DashboardWidget[], expected: DashboardWidget[]) => Promise<unknown>;
   defaults?: () => Promise<DashboardWidget[]>; render: (widget: DashboardWidget) => ReactNode;
@@ -15,9 +20,13 @@ export function DashboardCanvas({ dashboard, save, defaults, render }: {
   const [expected, setExpected] = useState<DashboardWidget[]>([]);
   const [modal, setModal] = useState<{ widget?: DashboardWidget } | null>(null);
   const [localCollapsed, setLocalCollapsed] = useState<Record<string, boolean>>({});
+  const [confirmDialog, confirm] = useConfirm();
   const editing = draft !== null;
   const dirty = editing && JSON.stringify(draft) !== JSON.stringify(expected);
-  useBlocker({ shouldBlockFn: () => dirty && !window.confirm("Discard unsaved dashboard changes?"), enableBeforeUnload: dirty });
+  useBlocker({
+    shouldBlockFn: async () => dirty && !(await confirm({ title: "Discard changes", message: "Discard unsaved dashboard changes?", confirmLabel: "Discard", danger: true })),
+    enableBeforeUnload: dirty,
+  });
   const mutation = useMutation({ mutationFn: ({ rows, original, finish }: { rows: DashboardWidget[]; original: DashboardWidget[]; finish: boolean }) => save(rows.map((w, position) => ({ ...w, position })), original).then(() => { if (finish) setDraft(null); }) });
   const reset = useMutation({ mutationFn: async () => { if (defaults) setDraft(await defaults()); } });
   const rows = (draft ?? dashboard.widgets).map(w => ({ ...w, collapsed: editing ? w.collapsed : localCollapsed[w.id] ?? w.collapsed }));
@@ -44,5 +53,6 @@ export function DashboardCanvas({ dashboard, save, defaults, render }: {
     </div>
     {modal && editing && <WidgetModal dashboard={{ ...dashboard, widgets: draft }} personal={!!defaults} widget={modal.widget} onClose={() => setModal(null)}
       onDraft={widget => setDraft(rows.some(w => w.id === widget.id) ? rows.map(w => w.id === widget.id ? widget : w) : [...rows, widget])} />}
+    {confirmDialog}
   </div>;
 }

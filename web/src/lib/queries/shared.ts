@@ -42,14 +42,8 @@ export const queryKeys = {
   viewCounts: (viewIds: readonly string[], extraQ?: string) =>
     ["viewCounts", { viewIds, extraQ: extraQ ?? "" }] as const,
   cardLayoutPresets: ["cardLayoutPresets"] as const,
-  dashboards: ["dashboards"] as const,
-  dashboardsPage: (q: string, page: number) => ["dashboards", "page", { q, page }] as const,
-  dashboardSummary: ["dashboards", "summary"] as const,
-  dashboard: (dashboardId: string) => ["dashboard", { dashboardId }] as const,
   itemsCount: (scope: Record<string, string>, q: string) =>
     ["itemsCount", { scope, q }] as const,
-  slqListItems: (scope: Record<string, string>, q: string, limit: number) =>
-    ["slqListItems", { scope, q, limit }] as const,
   viewItems: (viewId: string, queryString: string) =>
     ["viewItems", { viewId, queryString }] as const,
   itemIds: (queryString: string) => ["itemIds", { queryString }] as const,
@@ -89,7 +83,6 @@ export const queryKeys = {
   portalRequests: ["portalRequests"] as const,
   portalRequest: (key: string) => ["portalRequests", key] as const,
   portalForm: (formId: string) => ["portalForm", { formId }] as const,
-  pendingApprovals: ["pendingApprovals"] as const,
   publicCsat: (token: string) => ["publicCsat", { token }] as const,
   itemTimelog: (itemId: string) => ["itemTimelog", { itemId }] as const,
   workCategories: (includeArchived: boolean) =>

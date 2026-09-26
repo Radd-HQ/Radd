@@ -1,34 +1,48 @@
-"""My Work uses the same validated widget definitions, privately stored per user."""
+"""My Work uses the same validated widget definitions, privately stored per user.
+
+Two kinds of personal widget (RADD-1393). My Work's OWN kinds below — the shell's basics and the
+request widgets of forms, a core module. And every `WidgetTypeSpec(personal=True)` a plugin
+contributes (approvals' "Awaiting my approval"): offered, accepted and suggested only while that
+plugin is registered, so dashboards never names an optional plugin."""
 
 import uuid
 
-from radd.exceptions import ConflictError
-from radd.modules.auth.models import User
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy import select
-from .schemas import WidgetLayoutSave, WidgetRead
 
-PERSONAL_TYPES = {
-    "assigned",
-    "due",
-    "activity",
-    "inbox",
-    "starred",
-    "approvals",
-    "requests",
-    "forms",
-    "recent",
-}
+from radd.exceptions import ConflictError
+from radd.kernel import WidgetTypeSpec, registries
+from radd.modules.auth.models import User
+
+from .schemas import PluginWidget, WidgetLayoutSave, WidgetRead
+from .types import WidgetType
+
+_BUILTIN = frozenset(t.value for t in WidgetType)
+
 TITLES = {
     "assigned": "Assigned to me",
     "due": "Due soon",
     "activity": "My activity",
     "inbox": "Inbox",
     "starred": "Starred",
-    "approvals": "Awaiting my approval",
     "requests": "My requests",
     "forms": "Request forms",
     "recent": "Recently viewed",
 }
+
+
+def contributed() -> dict[str, WidgetTypeSpec]:
+    """The personal widget types the registered plugins contribute, by key."""
+    return {key: spec for key, spec in registries.widget_types.items() if spec.personal}
+
+
+def is_personal(widget_type: object) -> bool:
+    return isinstance(widget_type, str) and (widget_type in TITLES or widget_type in contributed())
+
+
+def _title(kind: str) -> str:
+    return TITLES.get(kind) or registries.widget_types[kind].label
 
 
 def defaults(extras=()):
@@ -36,7 +50,7 @@ def defaults(extras=()):
         dict(
             id=str(uuid.uuid5(uuid.NAMESPACE_URL, "radd:my-work:" + kind)),
             widget_type=kind,
-            title=TITLES[kind],
+            title=_title(kind),
             width=width,
             height=height,
             collapsed=False,
@@ -60,6 +74,13 @@ def read(user):
     return (user.preferences or {}).get("my_work_widgets", defaults())
 
 
+def _personal_widget(raw) -> PluginWidget:
+    try:
+        return PluginWidget.model_validate(raw)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
+
+
 async def save(session, user, data: WidgetLayoutSave):
     from .router import _parse_widget_body
     from .widgets import _check_references
@@ -70,24 +91,22 @@ async def save(session, user, data: WidgetLayoutSave):
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+    stored = read(user)
     if "my_work_widgets" in (user.preferences or {}) and [
-        WidgetRead.model_validate(w).model_dump(mode="json") for w in read(user)
+        WidgetRead.model_validate(w).model_dump(mode="json") for w in stored
     ] != [w.model_dump(mode="json") for w in data.expected]:
         raise ConflictError("dashboard", reason="My Work changed elsewhere. Reload before editing.")
+    # A widget whose plugin is off right now keeps its place: the person sees the "no longer
+    # available" notice, and the rest of My Work stays editable. Only a NEW one is refused.
+    kept = {(str(w["id"]), w["widget_type"]) for w in stored}
     result = []
     ids = set()
     for index, raw in enumerate(data.widgets):
+        widget_type = raw.get("widget_type")
         # Personal surface types have no privileged data config; every renderer uses its ordinary read API.
-        if raw.get("widget_type") in PERSONAL_TYPES:
-            from .schemas import PluginWidget
-
-            from fastapi.exceptions import RequestValidationError
-            from pydantic import ValidationError
-
-            try:
-                parsed = PluginWidget.model_validate(raw)
-            except ValidationError as exc:
-                raise RequestValidationError(exc.errors()) from exc
+        orphan = widget_type not in _BUILTIN and widget_type not in registries.widget_types
+        if is_personal(widget_type) or (orphan and (str(raw.get("id")), widget_type) in kept):
+            parsed = _personal_widget(raw)
         else:
             parsed = _parse_widget_body(raw)
             if hasattr(parsed.config, "model_dump"):
@@ -103,14 +122,11 @@ async def save(session, user, data: WidgetLayoutSave):
 
 
 async def suggested_defaults(session, user):
-    from radd.kernel import registries
-
-    extras = []
-    if "approvals" in registries.plugins:
-        from radd.modules.approvals.service import pending_for_user
-
-        if await pending_for_user(session, user):
-            extras.append("approvals")
+    extras = [
+        key
+        for key, spec in sorted(contributed().items())
+        if spec.suggest is not None and await spec.suggest(session, user)
+    ]
     if "forms" in registries.plugins:
         from radd.modules.forms.portal import list_portal_forms
         from radd.modules.forms.requests import list_my_requests

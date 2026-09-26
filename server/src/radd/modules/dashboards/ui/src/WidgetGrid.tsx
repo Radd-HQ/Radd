@@ -1,12 +1,8 @@
-import { ChartHeightContext } from "@radd-plugin-ui/reporting/charts";
 import { useEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil, Trash2 } from "lucide-react";
-import type { DashboardWidget } from "../../lib/types";
-
-const LABELS: Record<string, string> = {
-  assigned: "Assigned to me", due: "Due soon", activity: "My activity", inbox: "Inbox", starred: "Starred", approvals: "Approvals", requests: "My requests", forms: "Request forms", recent: "Recently viewed",
-  slq_count: "Issue count", slq_list: "Issue list", view_count: "Saved-view count", report_throughput: "Throughput", report_cfd: "Cumulative flow", report_time_in_state: "Time in state", report_velocity: "Velocity", report_burnup: "Burnup", report_sla: "Service desk SLA",
-};
+import { ChartHeightContext, useCapabilities } from "@radd/plugin-sdk";
+import type { DashboardWidget } from "./types";
+import { CARD_LABELS } from "./widget-meta";
 
 export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse, render }: {
   widgets: DashboardWidget[]; editing: boolean;
@@ -18,6 +14,10 @@ export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse
   const root = useRef<HTMLDivElement>(null);
   const cleanup = useRef<(() => void) | null>(null);
   useEffect(() => () => cleanup.current?.(), []);
+  // A contributed type is named by its plugin's label.
+  const contributed = useCapabilities()?.widget_types ?? [];
+  const nameOf = (widget: DashboardWidget) => widget.title || CARD_LABELS[widget.widget_type]
+    || contributed.find((t) => t.key === widget.widget_type)?.label || widget.widget_type.replaceAll("_", " ");
   const patch = (id: string, change: Partial<DashboardWidget>) => onChange(widgets.map(w => w.id === id ? { ...w, ...change } : w));
   const move = (from: number, to: number) => {
     if (to < 0 || to >= widgets.length || from === to) return;
@@ -49,14 +49,14 @@ export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse
     window.addEventListener("pointermove", motion); window.addEventListener("pointerup", finish); window.addEventListener("pointercancel", cancel);
   };
   return <div ref={root} className="widget-grid">
-    {widgets.map((widget, index) => <section key={widget.id} data-widget-id={widget.id} data-collapsed={widget.collapsed || undefined}
+    {widgets.map((widget, index) => <section key={widget.id} data-widget-id={widget.id} data-widget-type={widget.widget_type} data-collapsed={widget.collapsed || undefined}
       style={{ "--widget-width": widget.width, "--widget-height": `${widget.height}px` } as CSSProperties}
       className="dashboard-widget relative flex min-w-0 flex-col rounded-lg border border-subtle bg-surface">
       <header className="flex min-h-10 items-center gap-1 border-b border-subtle px-2">
         {editing && <button type="button" title="Drag to move; use arrow buttons to reorder" aria-label={`Move ${widget.title ?? widget.widget_type}`}
           className="touch-none cursor-grab p-1 text-fg-muted" onPointerDown={e => gesture(e, widget, "move")}><GripVertical size={16} /></button>}
         <button type="button" className="flex min-h-9 min-w-0 flex-1 items-center gap-1 text-left text-sm font-medium" aria-expanded={!widget.collapsed} onClick={() => onCollapse(widget)}>
-          {widget.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}<span className="truncate">{widget.title || LABELS[widget.widget_type] || widget.widget_type.replaceAll("_", " ")}</span>
+          {widget.collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}<span className="truncate">{nameOf(widget)}</span>
         </button>
         {editing && <>
           <button type="button" aria-label="Move widget up" disabled={!index} onClick={() => move(index, index - 1)}><ArrowUp size={14} /></button>

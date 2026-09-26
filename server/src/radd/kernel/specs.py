@@ -34,6 +34,13 @@ class WidgetTypeSpec:
 
     key: str  # the stored widget_type value, e.g. "acme.recent-notes"
     label: str  # shown in the add-widget Type dropdown
+    #: A PERSONAL widget (RADD-1393): it shows the viewer's own work, so it is offered on My Work
+    #: and refused on a shared dashboard, like My Work's own Assigned/Inbox widgets.
+    personal: bool = False
+    #: My Work's suggested layout: ``await suggest(session, user)`` — True puts this widget on the
+    #: person's suggested defaults (approvals: when something awaits their verdict). A personal
+    #: widget without it is offered, never suggested. Withdrawn with the plugin like the type.
+    suggest: Callable[[Any, Any], Awaitable[bool]] | None = None
 
 
 @dataclass(frozen=True)

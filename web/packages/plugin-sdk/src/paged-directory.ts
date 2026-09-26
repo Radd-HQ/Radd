@@ -9,7 +9,7 @@ export interface PagedDirectoryQuery<T> {
 }
 /** Search + bounded paging over a provider's directory; the provider owns data and scope. Pages
  * are shared across consumers and the previous page stays up while the next loads (RADD-1373). */
-export function usePagedDirectory<T>(scope: string, query: (q: string, page: number, pageSize: number) => PagedDirectoryQuery<T>, { pageSize = 50, initialFilter = "" } = {}) {
+export function usePagedDirectory<T>(scope: string, query: (q: string, page: number, pageSize: number) => PagedDirectoryQuery<T>, { pageSize = 50, initialFilter = "", enabled = true } = {}) {
   const [filter, setFilter] = useState(initialFilter);
   const [q, setQ] = useState(initialFilter.trim());
   useEffect(() => { const timer = setTimeout(() => setQ(filter.trim()), 150); return () => clearTimeout(timer); }, [filter]);
@@ -18,7 +18,8 @@ export function usePagedDirectory<T>(scope: string, query: (q: string, page: num
   if (position.identity !== identity) setPosition({ identity, page: 0 });
   const page = position.identity === identity ? position.page : 0;
   const definition = query(q, page, pageSize);
-  const result = useQuery({ ...definition, staleTime: 30_000, placeholderData: keepPreviousData });
+  // `enabled`: a caller may hold the directory back (a visitor has no dashboards).
+  const result = useQuery({ ...definition, enabled, staleTime: 30_000, placeholderData: keepPreviousData });
   return { ...result, filter, setFilter, q, page, pageSize, rows: result.data?.rows ?? [], total: result.data?.total ?? 0,
     busy: result.isFetching || q !== filter.trim(), setPage: (next: number) => setPosition({ identity, page: Math.max(0, next) }) };
 }

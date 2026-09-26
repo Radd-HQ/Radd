@@ -50,6 +50,13 @@ class TypeOptionRead(BaseModel):
     label: str
 
 
+class WidgetTypeOptionRead(TypeOptionRead):
+    """A plugin-contributed dashboard widget type. A `personal` one belongs on My Work only —
+    it shows the viewer's own work (RADD-1393)."""
+
+    personal: bool = False
+
+
 class CapabilitiesRead(BaseModel):
     """The backend-assembled UI manifest the SPA renders nav/status from (§8a) —
     the inversion of the hardcoded SETTINGS_NAV / sidebar arrays (chokepoint 3)."""
@@ -64,4 +71,4 @@ class CapabilitiesRead(BaseModel):
     remotes: list[PluginRemoteRead] = []
     # Plugin-contributed pluggable types (spec 94): the create-view / add-widget dropdowns list these.
     view_types: list[TypeOptionRead] = []
-    widget_types: list[TypeOptionRead] = []
+    widget_types: list[WidgetTypeOptionRead] = []

@@ -7,6 +7,7 @@ import auth from "@radd-plugin-ui/auth";
 import automations from "@radd-plugin-ui/automations";
 import backup from "@radd-plugin-ui/backup";
 import cycles from "@radd-plugin-ui/cycles";
+import dashboards from "@radd-plugin-ui/dashboards";
 import fields from "@radd-plugin-ui/fields";
 import forms from "@radd-plugin-ui/forms";
 import groups from "@radd-plugin-ui/groups";
@@ -27,6 +28,7 @@ export const STATIC_PLUGINS: Record<string, PluginModule> = {
   "automations": automations,
   "backup": backup,
   "cycles": cycles,
+  "dashboards": dashboards,
   "fields": fields,
   "forms": forms,
   "groups": groups,

@@ -94,15 +94,13 @@ export const ApiPath = {
   itemsBulkUpdate: "/items/bulk-update",
   itemsBulkMove: "/items/bulk-move",
   itemsIds: "/items/ids",
-  // The visible-match count alone (spec 75) — powers dashboard slq_count widgets.
+  // The visible-match count alone (spec 75) — My Work's section counts.
   itemsCount: "/items/count",
   // Intake validation (spec 119). Contributed by `automations` under an
   // `/items` prefix; the context read is three segments deliberately, because
   // two would sit behind `GET /items/{item_id}`.
   itemsValidate: "/items/validate",
   itemsValidateContext: "/items/validate/context",
-  // Composable dashboards (spec 75).
-  dashboards: "/dashboards",
   // Batched view membership counts for the sidebar queue badges (spec 64).
   viewCounts: "/views/counts",
   // Card-layout preset library (spec 109) — shared, copy-on-apply.
@@ -119,8 +117,6 @@ export const ApiPath = {
   // One key's cascade-RESOLVED value (spec 70) — readable by any member.
   scopedSettingsResolve: "/scoped-settings/resolve",
   // Builtin-field write rules (spec 36).
-  // Approvals on workflow transitions (spec 71): my pending-approvals queue.
-  approvalsPending: "/approvals/pending",
   // Pages (spec 43).
   pageSpaces: "/page-spaces",
   pageExtensions: "/pages/extensions",

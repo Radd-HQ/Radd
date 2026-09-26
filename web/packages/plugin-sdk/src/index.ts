@@ -101,6 +101,7 @@ export type {
   Capability,
   PluginRemote,
   CapabilitiesManifest,
+  WidgetTypeOption,
 } from "./types";
 
 export { registerDataSource, unregisterDataSources, usePluginData, invalidatePluginData, type DataSource, type DataContracts, type PersonIndicator, type TimesheetAnnotation, type StatusIndicator } from "./data";
@@ -148,3 +149,7 @@ export { registerCommandSource, unregisterCommandSources, useContributedCommands
 export { positionedErrorOf, type PositionedError } from "./positioned-error";
 
 export { invalidateEntities } from "./cache";
+
+export { SlqField, PageQueryFilter, ViewSelect, SharingDialog, ReportWidget, ItemKeyLink, ItemPeek, MissingPluginType } from "./host-surfaces";
+export type { SlqFieldProps, PageQueryFilterProps, ViewSelectProps, SharingDialogProps, SharedResourceSave, ReportWidgetProps, ItemKeyLinkProps, ItemPeekProps, MissingPluginTypeProps } from "./host-registry";
+export { ChartHeightContext } from "./chart-height";

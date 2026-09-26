@@ -643,6 +643,41 @@ move it governs. Approvals contributes "Require approval" from its remote and de
 package dependency. Proofs: `browser-resolvable-threads.mjs` (mocked, live withdrawal) and
 `approval-rule-editor-proof.mjs` (real backend).
 
+### My Work widgets and the dashboards package (RADD-1393)
+
+Dashboards is core; its UI is the bundled package `dashboards/ui`, and the host imports its page,
+My Work canvas, sidebar pieces and summary query through the package's exports. A plugin reaches
+My Work the way it reaches a shared dashboard — by contributing a widget TYPE — with two extra
+fields on the spec:
+
+```python
+WidgetTypeSpec(
+    key="approvals",               # the stored widget_type; the remote's dashboard.widget `match`
+    label="Awaiting my approval",  # the picker entry and the suggested widget's title
+    personal=True,                 # My Work only: it shows the viewer's own work
+    suggest=has_pending,           # async (session, user) -> bool: put it on the suggested layout
+)
+```
+
+A personal type is offered in My Work's add-widget picker (the `/capabilities` `widget_types`
+entry carries `personal`), accepted by `PUT /dashboards/my-work/widgets`, and refused on a shared
+dashboard. `suggest` runs when My Work builds a person's suggested defaults. The plugin draws the
+widget through `dashboard.widget` like any other type. Disabling the plugin withdraws the type and
+the slot together: it is not offered or suggested, a new one is refused, and one already on a
+layout keeps its place and reads "no longer available" until the plugin returns. My Work's own
+kinds (the shell's Assigned/Due/Starred/Inbox/Recent, "My activity", and forms' request widgets)
+are not contributions. The host draws them. Approvals is the worked example
+(`modules/approvals/__init__.py`, `ui/src/AwaitingApproval.tsx`); the invariant is pinned by
+`tests/test_my_work_contributed_widgets.py`.
+
+The package reaches what only the shell owns through the SDK host bridge (UI API 1.15.0):
+`SlqField` (the SLQ editor with live validation), `PageQueryFilter` (the top-bar filter; its child
+receives the committed query), `ViewSelect`, `SharingDialog` (the spec-57 sharing editor; the
+plugin posts the draft to its own endpoint), `ReportWidget` (the host's report cards), `ItemKeyLink`,
+`ItemPeek` and `MissingPluginType`. `ChartHeightContext` moved from reporting's package into the SDK:
+the dashboards grid provides each widget's plot height, and reporting's charts read it, so neither
+package imports the other.
+
 ### Owner-provided team relationships (RADD-1359)
 
 Teams contributes `teams.relationship.select`, `teams.relationship.choices` and

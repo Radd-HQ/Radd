@@ -1,18 +1,17 @@
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { Entity, entityMeta } from "../../lib/cache";
-import { ProjectSelect } from "../projects/ProjectSelect";
-import { Button } from "../Button";
-import { ErrorText, shiftIsoDay } from "@radd/plugin-sdk";
+import { api, Button, ErrorText, shiftIsoDay } from "@radd/plugin-sdk";
+import { ProjectSelect } from "./controls";
+import { MY_WORK_PATH, dashboardKeys } from "./queries";
+import type { ActivityPage } from "./types";
 
-interface ActivityPage { entries: { id: number; at: string; action: string; item_key: string; comment_id: string | null }[]; next: number | null }
+/** My Work's "My activity": what the reader did, newest first, a day heading per date. */
 export function ActivityWidget({ config = {} }: { config?: { project_id?: string | null; start?: string; end?: string } }) {
   const [project, setProject] = useState(config.project_id ?? "");
   const [start, setStart] = useState(config.start ?? "");
   const [end, setEnd] = useState(config.end ?? "");
-  const query = useInfiniteQuery({ queryKey: ["my-activity", project, start, end], meta: entityMeta(Entity.item, Entity.comment, Entity.worklog), initialPageParam: null as number | null,
-    queryFn: ({ signal, pageParam }) => api.get<ActivityPage>("/dashboards/my-work/activity", { signal, query: { project_id: project || undefined, start: start ? `${start}T00:00:00Z` : undefined, end: end ? `${shiftIsoDay(end, 1)}T00:00:00Z` : undefined, before: pageParam ? String(pageParam) : undefined } }),
+  const query = useInfiniteQuery({ queryKey: dashboardKeys.activity(project, start, end), meta: { entities: ["item", "comment", "worklog"] }, initialPageParam: null as number | null,
+    queryFn: ({ signal, pageParam }) => api.get<ActivityPage>(`${MY_WORK_PATH}/activity`, { signal, query: { project_id: project || undefined, start: start ? `${start}T00:00:00Z` : undefined, end: end ? `${shiftIsoDay(end, 1)}T00:00:00Z` : undefined, before: pageParam ? String(pageParam) : undefined } }),
     getNextPageParam: page => page.next ?? undefined });
   let day = "";
   return <div className="space-y-2">

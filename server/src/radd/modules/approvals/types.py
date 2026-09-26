@@ -11,6 +11,14 @@ class ApprovalCheck(StrEnum):
     REQUIRE_APPROVAL = "require_approval"
 
 
+class ApprovalWidget(StrEnum):
+    """The My Work widget this plugin contributes (RADD-1393) — the stored widget_type, and the
+    `match` of the remote's `dashboard.widget` contribution that draws it. The value predates the
+    contribution: layouts saved when dashboards hardcoded it keep working unchanged."""
+
+    AWAITING = "approvals"
+
+
 class ApproverKind(StrEnum):
     """One approver entry on a require_approval rule (spec 107): a USER must
     approve personally; a TEAM needs `required` approvals from current members."""

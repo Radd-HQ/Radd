@@ -28,8 +28,6 @@ export type TimesheetGroupByValue = (typeof TimesheetGroupBy)[keyof typeof Times
 export const VELOCITY_LAST_OPTIONS: readonly number[] = [3, 5, 8, 12];
 export const VELOCITY_DEFAULT_LAST = 5;
 
-/** The "Service desk SLA" dashboard widget's window choices, in weeks (spec 63; GET /sla-report caps at 26). */
-export const SLA_REPORT_WEEKS_OPTIONS: readonly number[] = [4, 8, 12, 26];
 /** Backend cap on one POST /items/rollup batch (spec 76). */
 export const ROLLUP_MAX_ITEMS = 200;
 /** Backend cap on one POST /items/timelog/batch (spec 78). */

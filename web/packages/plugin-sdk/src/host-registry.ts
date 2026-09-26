@@ -63,6 +63,65 @@ export interface ScopedSettingsProps {
 /** Whose role grants to list and edit. */
 export type RoleGrantSubject = { userId: string } | { teamId: string } | { groupId: string };
 export interface RoleGrantsProps { subject: RoleGrantSubject; canManage: boolean }
+/** An SLQ query field with the host's autocomplete and live validation (RADD-1393). */
+export interface SlqFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** Narrows autocomplete and validation to one project's fields and states. */
+  projectId?: string;
+  placeholder?: string;
+  /** Whether the draft parses — a form holds Save until it does. */
+  onValidity?: (valid: boolean) => void;
+}
+/** The page's SLQ filter, in the shell's top bar. `children` receives the COMMITTED query. */
+export interface PageQueryFilterProps {
+  placeholder?: string;
+  children: (committed: string) => ReactNode;
+}
+/** Pick one saved view the reader can see. */
+export interface ViewSelectProps {
+  value: string;
+  onChange: (viewId: string) => void;
+  label?: string;
+}
+/** The body a shared resource's save endpoint takes (the spec-57 model views and dashboards share).
+ *  `grants` is the host's draft of grant changes; the plugin posts it as it comes. */
+export interface SharedResourceSave {
+  sharing: { global_access: string | null };
+  grants: unknown;
+  transfer_to?: string;
+  expected_owner_id: string | null;
+  expected_global_access: string | null;
+}
+/** Share a resource: server-wide access, per-person/team grants, ownership transfer. The host owns
+ *  the editor and the grant diff; the plugin owns its endpoint (`onSave`). */
+export interface SharingDialogProps {
+  title: string;
+  /** The access-grant resource type. */
+  resourceType: "view" | "dashboard";
+  resourceId: string;
+  ownerId: string | null;
+  globalAccess: string | null;
+  /** May grant server-wide access. */
+  canBroadcast: boolean;
+  onSave: (body: SharedResourceSave) => Promise<unknown>;
+  onClose: () => void;
+}
+/** One of the host's report cards, drawn as a dashboard widget of that report's type. */
+export interface ReportWidgetProps {
+  widgetType: string;
+  config: Record<string, unknown>;
+  title?: string | null;
+  /** The dashboard-wide SLQ filter the report intersects with. */
+  filterQuery?: string;
+}
+/** An issue key that links to the issue. */
+export interface ItemKeyLinkProps { itemKey: string; className?: string }
+/** Opens an issue in the shell's peek panel: `children` receives the opener. */
+export interface ItemPeekProps { itemKey: string; children: (open: () => void) => ReactNode }
+/** Where a contributed type or page cannot render: its plugin is gone, or it was turned off. */
+export interface MissingPluginTypeProps { typeKey: string; kind: "view" | "widget" | "page"; disabled?: boolean }
 export const ToastKind = { success: "success", error: "error" } as const;
 export type ToastKindValue = (typeof ToastKind)[keyof typeof ToastKind];
 
@@ -88,6 +147,18 @@ export interface HostComponents {
   CodeEditor?: ComponentType<CodeEditorProps>;
   TokenList?: ComponentType<TokenListProps>;
   SchemaForm?: ComponentType<SchemaFormProps>;
+
+  // RADD-1393: what the bundled dashboards package (and the approvals widget) draw with that only
+  // the shell owns — its query editor and top bar, view picker, sharing editor, report cards, and
+  // issue links and peek panel.
+  SlqField?: ComponentType<SlqFieldProps>;
+  PageQueryFilter?: ComponentType<PageQueryFilterProps>;
+  ViewSelect?: ComponentType<ViewSelectProps>;
+  SharingDialog?: ComponentType<SharingDialogProps>;
+  ReportWidget?: ComponentType<ReportWidgetProps>;
+  ItemKeyLink?: ComponentType<ItemKeyLinkProps>;
+  ItemPeek?: ComponentType<ItemPeekProps>;
+  MissingPluginType?: ComponentType<MissingPluginTypeProps>;
 }
 
 let provided: HostComponents = {};

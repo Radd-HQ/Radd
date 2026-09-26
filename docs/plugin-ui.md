@@ -46,7 +46,7 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `profileSection` | The user's Profile page | `{}` | per-user prefs; drop `<UserContributionToggles>` here | `routes/settings/profile.tsx` |
 | `pluginManagerSection` | A plugin's row in Settings → Plugins (admin) | `{plugin, pluginId}` | `match` = the plugin's registry name; drop `<GlobalContributionToggles>` here | `routes/settings/plugins.tsx` |
 | `sidebarNav` | Left sidebar nav | `{}` | today driven by the backend nav manifest | `components/shell/Sidebar.tsx` |
-| `dashboardWidget` | A dashboard widget type | `{config, widget, filterQuery}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry; `filterQuery` = the dashboard-wide SLQ filter (plugin widgets decide how to honor it) | `components/dashboards/WidgetCard.tsx` |
+| `dashboardWidget` | A dashboard widget type | `{config, widget, filterQuery}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry; `filterQuery` = the dashboard-wide SLQ filter (plugin widgets decide how to honor it); a `personal=True` type lands on My Work instead (RADD-1393) | `modules/dashboards/ui/src/WidgetBody.tsx` |
 | `itemAction` | An item's action menu | `{item}` | | *menu host* |
 | `itemAttribute` | A list COLUMN and a board-card CELL (RADD-1394) | `{item, value, surface}` | `match` = the attribute id; build it with `itemAttribute(spec)` — see "Item attributes" below | `components/views/ColumnCells.tsx`, `components/board/card-cells.tsx` |
 | `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `{node, params, schema, onChange}` | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `components/automations/GraphInspector.tsx` |
@@ -66,6 +66,15 @@ SDK code. The names a remote can import are DERIVED from `packages/plugin-sdk/sr
 (`web/scripts/sdk-exports.mjs`); after adding an SDK export, run `node web/scripts/gen-shared-shims.mjs`.
 The boundary test fails until the checked-in shim matches. These arrived in UI API 1.14.0; a remote
 that uses them declares `ui_api_version="1.14.0"`.
+
+UI API 1.15.0 (RADD-1393) added the shell surfaces the bundled dashboards package draws with:
+`SlqField` (the SLQ editor with live validation; `onValidity` reports whether the draft parses),
+`PageQueryFilter` (the top bar's SLQ filter, whose child receives the committed query), `ViewSelect`,
+`SharingDialog` (the spec-57 sharing editor over a local draft; the plugin posts it to its own
+endpoint), `ReportWidget` (the host's report cards as widgets), `ItemKeyLink`, `ItemPeek` (children
+receive an opener for the peek panel) and `MissingPluginType`. It also added `ChartHeightContext`
+(the plot height a dashboard widget grants its charts) and the `enabled` option on
+`usePagedDirectory`. The host implements them in `web/src/host-surfaces.tsx`.
 
 The Leave plugin (`modules/leave/ui`) contributes its personal Leave form through `profile.section` and team Holidays through `settings.section` matched to `timelogging`. Neither settings page imports Leave components; disabling the remote withdraws both sections. Its avatar/name indicators and timesheet annotations are also plugin-owned data contributions; the host knows only the generic contracts described below.
 
@@ -233,7 +242,11 @@ todo`). Supported operators: `=`, `!=`, `~` (contains). The example registers `n
 Likewise a plugin adds a whole **saved-view type** (`view_types=(ViewTypeSpec(key, label),)`) or a
 **dashboard widget type** (`widget_types=(WidgetTypeSpec(key, label),)`). The backend accepts the new
 type on view/widget create + lists it in `/capabilities`; the frontend Type dropdowns show it, and the
-plugin renders it via the `view.type` / `dashboard.widget` slot (matched by the key). The example ships
+plugin renders it via the `view.type` / `dashboard.widget` slot (matched by the key). A widget that
+shows the viewer's OWN work is a **My Work widget**: `WidgetTypeSpec(key, label, personal=True,
+suggest=…)` — offered only in My Work's picker, refused on shared dashboards, and put on a person's
+suggested layout whenever the async `suggest(session, user)` answers True (approvals' "Awaiting my
+approval" is the worked example, RADD-1393). The example ships
 a "Notes review" view type (`NotesReviewView.tsx`: issue list + notes editor) and a "Most Recent Notes"
 widget (`RecentNotesWidget.tsx`, fed by its own `GET /notes/recent`). All of it — SLQ field, view type,
 widget type, endpoints, UI — is torn down together when the plugin is disabled. The example plugin demonstrates all of this: `{{token}}`

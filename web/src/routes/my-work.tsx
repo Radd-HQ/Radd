@@ -1,25 +1,24 @@
-import { DashboardCanvas } from "../components/dashboards/DashboardCanvas";
-import { WidgetBody } from "../components/dashboards/WidgetCard";
-import { ActivityWidget } from "../components/dashboards/ActivityWidget";
+import { MyWorkCanvas, WidgetBody, type DashboardWidget } from "@radd-plugin-ui/dashboards/my-work";
+import { PersonalWidgetType as Kind } from "@radd-plugin-ui/dashboards/types";
 import { ErrorText, shiftIsoDay, shortDate, todayIso } from "@radd/plugin-sdk";
 import { QuickStar } from "../components/items/QuickStar";
 import type { LucideIcon } from "lucide-react";
-import { api, ApiError, type CursorPage } from "../lib/api";
+import { api, type CursorPage } from "../lib/api";
 import { Entity, entityMeta } from "../lib/cache";
 import { Link } from "@tanstack/react-router";
 import { MyForms } from "../components/forms/MyForms";
 import { ListSection } from "../components/requests/ListSection";
 import { MyRequests } from "../components/requests/RequestSection";
-import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, History, Inbox, ShieldCheck, Star, UserRound } from "lucide-react";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { CalendarClock, History, Inbox, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
 import { RoutePath } from "../lib/constants";
 import { usePeek } from "../lib/hooks";
-import { notificationsQuery, pendingApprovalsQuery, itemsCountQuery } from "../lib/queries";
+import { notificationsQuery, itemsCountQuery } from "../lib/queries";
 import { PRIORITY_META } from "../lib/meta";
 import { combineQueryWithFilters, splitQueryOrder } from "../lib/slq";
 import { useSlqQueryState } from "../lib/slq-filter";
-import type { Item, Dashboard, DashboardWidget } from "../lib/types";
+import type { Item } from "../lib/types";
 import { Avatar } from "../components/Avatar";
 import { ItemKeyLink } from "../components/items/ItemBadges";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
@@ -38,31 +37,15 @@ const STARRED_Q = `starred = true AND ${OPEN}`;
 /**
  * "My Work" — the personal landing page (spec 32): what's on your plate, what's
  * due, what you starred, and your unread inbox. Rows open the peek panel so you
- * never leave the dashboard.
+ * never leave the dashboard. The canvas and its layout are the dashboards
+ * plugin's (RADD-1393); this page draws the shell's own kinds of widget.
  */
 export function MyWorkPage() {
-  const client = useQueryClient();
-  const query = useQuery({ queryKey: ["my-work-widgets"], retry: false, queryFn: () => api.get<DashboardWidget[]>("/dashboards/my-work/widgets") });
   const slqFilter = useSlqQueryState();
-  if (query.isPending) return <p className="p-6">Loading My Work…</p>;
-  if (query.isError && query.error instanceof ApiError && query.error.status === 404) return <div className="space-y-6 p-6">
-    <h1 className="text-lg font-semibold text-heading">My Work</h1>
-    <MyForms /><MyRequests compact /><AwaitingApprovalSection />
-    <WorkPreview icon={UserRound} title="Assigned to me" q={`${ASSIGNED_Q} ORDER BY category DESC, priority DESC`} limit={10} empty="Nothing on your plate." />
-    <WorkPreview icon={Star} title="Starred" q={STARRED_Q} limit={5} empty="Star issues to pin them here." />
-    <InboxWidget />
-  </div>;
-  if (query.isError) return <ErrorText error={query.error} />;
-  const dashboard: Dashboard = { id: "my-work", name: "My Work", description: "", owner_id: null, owner: null, global_access: null,
-    shared: false, shares: [], can_edit: true, can_manage: false, position: 0, widgets: query.data, created_at: "", updated_at: "" };
   return <div className="w-full p-6">
     <TopBarQuery><QueryBar filter={slqFilter} placeholder="Filter issue widgets with SLQ: project = TD" /></TopBarQuery>
     <h1 className="mb-3 text-lg font-semibold text-heading">My Work</h1>
-    <DashboardCanvas dashboard={dashboard} defaults={() => api.get<DashboardWidget[]>("/dashboards/my-work/defaults")}
-      save={async (widgets, expected) => {
-        const saved = await api.put<DashboardWidget[]>("/dashboards/my-work/widgets", { widgets, expected });
-        client.setQueryData(["my-work-widgets"], saved);
-      }} render={widget => <PersonalWidget widget={widget} filter={slqFilter.committed} />} />
+    <MyWorkCanvas render={widget => <PersonalWidget widget={widget} filter={slqFilter.committed} />} />
   </div>;
 }
 
@@ -72,15 +55,14 @@ function PersonalWidget({ widget, filter }: { widget: DashboardWidget; filter: s
     return `${parts.where} ${parts.order || `ORDER BY ${order}`}`;
   };
   switch (widget.widget_type) {
-    case "assigned": return <WorkPreview icon={UserRound} title="Assigned to me" q={q(ASSIGNED_Q, "category DESC, priority DESC, rank")} limit={10} empty="Nothing on your plate." />;
-    case "due": return <WorkPreview icon={CalendarClock} title="Due soon" q={q(`assignee = me AND target <= ${shiftIsoDay(todayIso(), DUE_SOON_DAYS)} AND ${OPEN}`, "target ASC, priority DESC")} limit={10} showDue empty="Nothing due in the next week." />;
-    case "starred": return <WorkPreview icon={Star} title="Starred" q={q(STARRED_Q, "rank")} limit={5} empty="Star issues to pin them here." />;
-    case "activity": return <ActivityWidget key={JSON.stringify(widget.config)} config={widget.config} />;
-    case "inbox": return <InboxWidget />;
-    case "approvals": return <AwaitingApprovalSection />;
-    case "requests": return <MyRequests compact />;
-    case "forms": return <MyForms />;
-    case "recent": return <RecentlyViewedSection />;
+    case Kind.assigned: return <WorkPreview icon={UserRound} title="Assigned to me" q={q(ASSIGNED_Q, "category DESC, priority DESC, rank")} limit={10} empty="Nothing on your plate." />;
+    case Kind.due: return <WorkPreview icon={CalendarClock} title="Due soon" q={q(`assignee = me AND target <= ${shiftIsoDay(todayIso(), DUE_SOON_DAYS)} AND ${OPEN}`, "target ASC, priority DESC")} limit={10} showDue empty="Nothing due in the next week." />;
+    case Kind.starred: return <WorkPreview icon={Star} title="Starred" q={q(STARRED_Q, "rank")} limit={5} empty="Star issues to pin them here." />;
+    case Kind.inbox: return <InboxWidget />;
+    case Kind.requests: return <MyRequests compact />;
+    case Kind.forms: return <MyForms />;
+    case Kind.recent: return <RecentlyViewedSection />;
+    // "My activity", the builtin widgets, and a plugin's (approvals') through the dashboard.widget slot.
     default: return <WidgetBody widget={widget} filterQuery={filter} />;
   }
 }
@@ -130,58 +112,6 @@ function InboxWidget() {
             </ul>
           )}
         </section>);
-}
-
-/**
- * Approval requests awaiting MY verdict (spec 71) — rendered only when the
- * queue is non-empty; rows open the peek panel like the other sections.
- */
-function AwaitingApprovalSection() {
-  const peek = usePeek();
-  const pending = useQuery(pendingApprovalsQuery);
-  const rows = pending.data ?? [];
-  if (pending.isError) return <ErrorText error={pending.error} />;
-  if (pending.isPending) return <p className="text-sm text-fg-muted">Loading approvals…</p>;
-  if (rows.length === 0) return <p className="text-sm text-fg-muted">No approvals waiting for you.</p>;
-  return (
-    <section>
-      <header className="mb-2 flex items-center gap-2">
-        <ShieldCheck size={14} className="text-fg-muted" aria-hidden />
-        <h2 className="text-sm font-semibold text-fg">Awaiting my approval</h2>
-        <span className="text-xs text-fg-faint">{rows.length}</span>
-      </header>
-      <ul className="overflow-hidden rounded-lg border border-subtle">
-        {rows.map((row) => (
-          <li key={row.id}>
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => peek.open(row.item_key)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") peek.open(row.item_key);
-              }}
-              title={row.note || undefined}
-              className="flex w-full items-center gap-2.5 border-b border-subtle/60 px-4 py-2 text-left last:border-b-0 hover:bg-elevated/50 cursor-pointer"
-            >
-              <ItemKeyLink
-                itemKey={row.item_key}
-                className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary hover:text-accent-text hover:underline"
-              />
-              <span className="min-w-0 flex-1 truncate text-[13px] text-fg">
-                {row.item_title}
-              </span>
-              <span className="shrink-0 rounded bg-elevated/80 px-1.5 py-px text-[10px] text-fg-secondary">
-                → {row.to_state_name}
-              </span>
-              <span className="shrink-0 text-[11px] text-fg-muted">
-                {row.requested_by?.name ?? "Unknown"} · {shortDate(row.created_at)}
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
 }
 
 /** Per-browser recently-viewed trail (spec 37 — recorded by the item detail). */
