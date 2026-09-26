@@ -1,5 +1,5 @@
 import type { PageSummary } from "../types";
-import { comparePagesNaturally } from "./PageTree";
+import { comparePagesNaturally, subtreeIds } from "./page-tree";
 
 /** One archived page as the browser lists it: where it lived, when it went,
  * and what went with it. */
@@ -18,22 +18,6 @@ export interface ArchivedRow {
  * ancestor is not a row — it rides along with the ancestor's restore. */
 export function archivedRows(rows: PageSummary[]): ArchivedRow[] {
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const childrenOf = new Map<string | null, PageSummary[]>();
-  for (const row of rows) {
-    const siblings = childrenOf.get(row.parent_id) ?? [];
-    siblings.push(row);
-    childrenOf.set(row.parent_id, siblings);
-  }
-  const countBelow = (id: string): number => {
-    let total = 0;
-    const queue = [...(childrenOf.get(id) ?? [])];
-    for (let guard = 0; queue.length && guard < rows.length; guard++) {
-      const next = queue.shift()!;
-      total += 1;
-      queue.push(...(childrenOf.get(next.id) ?? []));
-    }
-    return total;
-  };
   const out: ArchivedRow[] = [];
   for (const page of rows) {
     if (!page.archived_at) continue;
@@ -45,7 +29,7 @@ export function archivedRows(rows: PageSummary[]): ArchivedRow[] {
       if (cursor.archived_at) archivedAncestors.unshift(cursor);
       cursor = cursor.parent_id ? byId.get(cursor.parent_id) : undefined;
     }
-    out.push({ page, path, archivedAncestors, hiddenBelow: countBelow(page.id) });
+    out.push({ page, path, archivedAncestors, hiddenBelow: subtreeIds(rows, page.id).size - 1 });
   }
   // Most recently archived first — "what did I just lose" is the usual question.
   return out.sort(

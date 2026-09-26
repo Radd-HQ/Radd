@@ -6,8 +6,7 @@ import { ExtensionCard, MarkdownSourceContext, headingsOf, usePageExtensionConte
 import { provideExtensionRenderers, type ExtensionRenderers } from "../extension-registry";
 import { pageLink } from "../links";
 import { pagesQuery } from "../queries";
-import type { PageSummary } from "../types";
-import { comparePagesNaturally } from "./PageTree";
+import { descendants } from "./page-tree";
 import { IncludedPage } from "./IncludedPage";
 import { NewFromTemplate } from "./NewFromTemplate";
 import { IMPORT_RENDERERS } from "./ImportExtensions";
@@ -92,32 +91,6 @@ function TableOfContents({ params }: { params: Record<string, unknown> }) {
 function clampDepth(raw: unknown): number {
   const value = typeof raw === "number" ? raw : Number.parseInt(String(raw ?? ""), 10);
   return Number.isFinite(value) ? Math.min(Math.max(value, 1), 6) : 3;
-}
-
-/** The page's descendants, flattened with their relative level. */
-function descendants(
-  rows: PageSummary[],
-  rootId: string | null,
-  maxDepth: number,
-): { page: PageSummary; level: number }[] {
-  if (!rootId) return [];
-  const byParent = new Map<string, PageSummary[]>();
-  for (const row of rows) {
-    const key = row.parent_id ?? "";
-    byParent.set(key, [...(byParent.get(key) ?? []), row]);
-  }
-  // RADD-859: siblings render in natural order everywhere they list.
-  for (const siblings of byParent.values()) siblings.sort(comparePagesNaturally);
-  const out: { page: PageSummary; level: number }[] = [];
-  const walk = (parentId: string, level: number) => {
-    if (level >= maxDepth) return;
-    for (const page of byParent.get(parentId) ?? []) {
-      out.push({ page, level });
-      walk(page.id, level + 1);
-    }
-  };
-  walk(rootId, 0);
-  return out;
 }
 
 // --- radd:children ---------------------------------------------------------

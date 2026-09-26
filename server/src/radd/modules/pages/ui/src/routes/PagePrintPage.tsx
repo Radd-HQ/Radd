@@ -7,7 +7,7 @@ import { pageByPathQuery, pageQuery, pagesQuery } from "../queries";
 import { pageHref } from "../links";
 import { PageBody } from "../view/PageBody";
 import { usePeople } from "../view/people";
-import type { PageSummary } from "../types";
+import { descendants } from "../view/page-tree";
 
 /**
  * The print view (RADD-733/734): one page, or a page and its subtree, with no
@@ -163,24 +163,6 @@ function SubPage({
       </PageExtensionCtx.Provider>
     </article>
   );
-}
-
-/** Depth-first descendants in tree order — the same order the rail shows. */
-function descendants(rows: PageSummary[], rootId: string): { page: PageSummary; level: number }[] {
-  const byParent = new Map<string, PageSummary[]>();
-  for (const row of rows) {
-    const key = row.parent_id ?? "";
-    byParent.set(key, [...(byParent.get(key) ?? []), row]);
-  }
-  const out: { page: PageSummary; level: number }[] = [];
-  const walk = (parentId: string, level: number) => {
-    for (const page of byParent.get(parentId) ?? []) {
-      out.push({ page, level });
-      walk(page.id, level + 1);
-    }
-  };
-  walk(rootId, 0);
-  return out;
 }
 
 export { headingsOf };

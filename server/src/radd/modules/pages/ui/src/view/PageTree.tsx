@@ -6,6 +6,7 @@ import { treeExpandStorageKey } from "../endpoints";
 import { pageLink } from "../links";
 import { MovePageModal } from "./MovePageModal";
 import { NewPageButton } from "./NewPageButton";
+import { ancestorIds, buildTree, type TreeNode } from "./page-tree";
 
 /** Below this many pages the tree needs no filter chrome (RADD-882). */
 const FILTER_THRESHOLD = 8;
@@ -20,39 +21,6 @@ interface PageTreeRow {
   /** RADD-1233: the row's space-relative address — what its link carries. */
   path: string;
   position: number;
-}
-
-interface TreeNode {
-  row: PageTreeRow;
-  children: TreeNode[];
-}
-
-/** RADD-859: siblings order NATURALLY (numeric-aware), not by creation —
- * "0.18.1" belongs between "0.18.0" and "0.19.0" regardless of when the page
- * was written, and plain alphabetical would put 0.10.0 before 0.2.0. Shared
- * by the tree, radd:children and the child index so the three cannot drift. */
-export function comparePagesNaturally(
-  a: { title: string },
-  b: { title: string },
-): number {
-  return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: "base" });
-}
-
-/** Flat rows → nested tree; siblings natural-sorted; orphans go to root. */
-export function buildTree(rows: PageTreeRow[]): TreeNode[] {
-  const byId = new Map(rows.map((row) => [row.id, { row, children: [] } as TreeNode]));
-  const roots: TreeNode[] = [];
-  for (const node of byId.values()) {
-    const parent = node.row.parent_id ? byId.get(node.row.parent_id) : undefined;
-    if (parent) parent.children.push(node);
-    else roots.push(node);
-  }
-  const sortRec = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => comparePagesNaturally(a.row, b.row));
-    for (const node of nodes) sortRec(node.children);
-  };
-  sortRec(roots);
-  return roots;
 }
 
 function loadExpanded(spaceId: string): Set<string> {
@@ -84,6 +52,10 @@ export function PageTree({
   canWrite: boolean;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => loadExpanded(spaceId));
+  const parentOf = useMemo(
+    () => new Map(rows.map((row) => [row.id, row.parent_id])),
+    [rows],
+  );
 
   // Title filter (RADD-882): a match renders with its ANCESTOR CHAIN — a hit
   // must stay reachable in tree shape, never float as an orphan row.
@@ -92,60 +64,34 @@ export function PageTree({
   const filtering = needle.length > 0;
   const visibleRows = useMemo(() => {
     if (!needle) return rows;
-    const byId = new Map(rows.map((row) => [row.id, row]));
     const keep = new Set<string>();
     for (const row of rows) {
       if (!row.title.toLowerCase().includes(needle)) continue;
-      let cursor: PageTreeRow | undefined = row;
-      for (let guard = 0; cursor && guard < rows.length; guard++) {
-        if (keep.has(cursor.id)) break;
-        keep.add(cursor.id);
-        cursor = cursor.parent_id ? byId.get(cursor.parent_id) : undefined;
-      }
+      keep.add(row.id);
+      for (const id of ancestorIds(parentOf, row.id, rows.length)) keep.add(id);
     }
     return rows.filter((row) => keep.has(row.id));
-  }, [rows, needle]);
+  }, [rows, needle, parentOf]);
   const tree = useMemo(() => buildTree(visibleRows), [visibleRows]);
-
-  // RADD-714: open to the selected page on load. Landing on a deep page from
-  // search or a link previously showed a collapsed tree that gave no clue where
-  // you were — the one cue the rail exists to provide.
-  const parentOf = useMemo(
-    () => new Map(rows.map((row) => [row.id, row.parent_id])),
-    [rows],
-  );
-  useEffect(() => {
-    if (!selectedId) return;
-    setExpanded((current) => {
-      const next = new Set(current);
-      let cursor = parentOf.get(selectedId) ?? null;
-      let added = false;
-      // Bounded by the tree's depth — a cycle is impossible (the move guard
-      // rejects one) but a bad row must not hang the rail.
-      for (let guard = 0; cursor && guard < rows.length; guard++) {
-        if (!next.has(cursor)) {
-          next.add(cursor);
-          added = true;
-        }
-        cursor = parentOf.get(cursor) ?? null;
-      }
-      if (!added) return current;
-      localStorage.setItem(treeExpandStorageKey(spaceId), JSON.stringify([...next]));
-      return next;
-    });
-  }, [selectedId, parentOf, rows.length, spaceId]);
 
   // The trail from the root to the selected page, so the rail shows WHERE you
   // are and not merely what is open.
-  const ancestorsOfSelected = useMemo(() => {
-    const trail = new Set<string>();
-    let cursor = selectedId ? (parentOf.get(selectedId) ?? null) : null;
-    for (let guard = 0; cursor && guard < rows.length; guard++) {
-      trail.add(cursor);
-      cursor = parentOf.get(cursor) ?? null;
-    }
-    return trail;
-  }, [selectedId, parentOf, rows.length]);
+  const ancestorsOfSelected = useMemo(
+    () => new Set(selectedId ? ancestorIds(parentOf, selectedId, rows.length) : []),
+    [selectedId, parentOf, rows.length],
+  );
+  // RADD-714: open to the selected page on load. Landing on a deep page from
+  // search or a link previously showed a collapsed tree that gave no clue where
+  // you were — the one cue the rail exists to provide.
+  useEffect(() => {
+    if (!ancestorsOfSelected.size) return;
+    setExpanded((current) => {
+      if ([...ancestorsOfSelected].every((id) => current.has(id))) return current;
+      const next = new Set([...current, ...ancestorsOfSelected]);
+      localStorage.setItem(treeExpandStorageKey(spaceId), JSON.stringify([...next]));
+      return next;
+    });
+  }, [ancestorsOfSelected, spaceId]);
 
   const toggle = (pageId: string) => {
     setExpanded((current) => {
@@ -219,7 +165,7 @@ function TreeRow({
   spaceId: string;
   /** The whole space's rows (unfiltered) — what "Move to…" picks a parent from. */
   rows: PageTreeRow[];
-  node: TreeNode;
+  node: TreeNode<PageTreeRow>;
   depth: number;
   expanded: Set<string>;
   ancestors: Set<string>;

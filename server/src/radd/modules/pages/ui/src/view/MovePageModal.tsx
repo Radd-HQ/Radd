@@ -5,7 +5,7 @@ import { api, invalidateEntities, Button, ErrorText, ListSearchInput, Modal } fr
 import { pagePath } from "../endpoints";
 import { Tag } from "../queries";
 import type { Page, PageUpdate } from "../types";
-import { comparePagesNaturally } from "./PageTree";
+import { comparePagesNaturally, subtreeIds } from "./page-tree";
 
 /** The rows the tree already holds — enough to pick a parent from. */
 interface MoveRow {
@@ -16,30 +16,6 @@ interface MoveRow {
 
 /** The dropdown render cap, the TokenMultiSelect convention (RADD-881). */
 const MAX_VISIBLE = 50;
-
-/** Every page under `rootId`, itself included — the set that cannot become its parent. */
-export function subtreeIds(rows: MoveRow[], rootId: string): Set<string> {
-  const childrenOf = new Map<string | null, string[]>();
-  for (const row of rows) {
-    const list = childrenOf.get(row.parent_id) ?? [];
-    list.push(row.id);
-    childrenOf.set(row.parent_id, list);
-  }
-  const out = new Set<string>([rootId]);
-  const queue = [rootId];
-  // Bounded by the row count: a cycle is impossible (the server refuses one)
-  // but a bad row must not hang the picker.
-  for (let guard = 0; queue.length && guard < rows.length; guard++) {
-    const next = queue.shift()!;
-    for (const child of childrenOf.get(next) ?? []) {
-      if (!out.has(child)) {
-        out.add(child);
-        queue.push(child);
-      }
-    }
-  }
-  return out;
-}
 
 /**
  * "Move to…" for a wiki page (RADD-1009): pick a new parent from the SAME
