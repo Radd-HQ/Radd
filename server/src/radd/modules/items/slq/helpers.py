@@ -135,6 +135,17 @@ def enum_values[E](node: Comparison | Membership, enum_cls: type[E]) -> list[E]:
     return values
 
 
+BOOLEAN_WORDS = {"true": True, "false": False}
+
+
+def bool_value(value: Value, field: str) -> bool:
+    if value.text not in BOOLEAN_WORDS:
+        raise SlqError(
+            f"field '{field}' expects true or false, got '{value.text}'", value.position
+        )
+    return BOOLEAN_WORDS[value.text]
+
+
 def int_value(value: Value, field: str) -> int:
     try:
         return int(value.text)

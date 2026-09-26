@@ -116,7 +116,7 @@ async def test_group_held_roles_reach_the_inspector_subject_set(db):
         db, RoleCreate(key=f"gg{uuid.uuid4().hex[:6]}", name="G", permissions=[])
     )
     await role_grants.create_grant(db, role.id, group_id=parent.id)
-    assert role.id in await authz.all_held_role_ids(db, member)
+    assert role.id in await role_grants.held_role_ids_anywhere(db, member.id)
 
 
 async def test_role_grant_subject_is_exactly_one_of_three(db):
@@ -198,14 +198,14 @@ async def test_view_shared_with_parent_group_is_visible_to_nested_member(db):
         actor=owner,
     )
 
-    member_views = {v.id for v in await views_service.list_views(db, actor=member, project_id=None)}
+    member_views = {v.id for v in (await views_service.page_views(db, actor=member, project_id=None))[0]}
     outsider_views = {
-        v.id for v in await views_service.list_views(db, actor=outsider, project_id=None)
+        v.id for v in (await views_service.page_views(db, actor=outsider, project_id=None))[0]
     }
     assert view.id in member_views
     assert view.id not in outsider_views
     # The share row names the group, so the sharing editor can render it.
-    hydrated = next(v for v in await views_service.list_views(db, actor=owner, project_id=None) if v.id == view.id)
+    hydrated = next(v for v in (await views_service.page_views(db, actor=owner, project_id=None))[0] if v.id == view.id)
     assert any(s.group is not None and s.group.id == parent.id for s in hydrated.shares)
 
 

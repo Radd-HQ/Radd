@@ -19,13 +19,10 @@ def _validate_view_type(value: str) -> str:
         return value
     raise ValueError(f"unknown view type '{value}'")
 
-# SOFT WIP limits (spec 76): {state_id: int>=1} — non-positive values 422 here;
-# unknown state ids on PROJECT-scoped views 409 in the service (an all-projects
-# board's buckets are name-keyed, so any UUID key is accepted there).
+# {state_id: int>=1}; unknown state ids on project-scoped views 409 in the service.
 WipLimits = dict[uuid.UUID, Annotated[int, Field(ge=1)]]
 
-# Axis token: state|assignee|priority|kind|team or cf.<key> (select-type registry
-# field — semantic checks incl. swimlane_by != group_by live in the service -> 409).
+# A ViewAxis value or cf.<key>; semantic checks (select type, differ) 409 in the service.
 _axis_field = Field(default=None, pattern=AXIS_TOKEN_PATTERN)
 
 
@@ -38,10 +35,8 @@ CARD_LAYOUT_MAX_CELLS = 24
 
 
 class CardLayoutCell(BaseModel):
-    """One placed attribute: `title`, a builtin id, or `cf.<key>`. Ids are
-    validated loosely (length only) — a departed custom field must degrade to
-    an empty cell, not brick the view. Semantic checks (one title, no same-row
-    overlap, col+span bounds) live in the service -> 409."""
+    """One placed attribute: `title`, a builtin id, or `cf.<key>` — loosely validated
+    (length only) so a departed custom field degrades to an empty cell."""
 
     attr: str = Field(min_length=1, max_length=80)
     row: int = Field(ge=0, lt=CARD_LAYOUT_MAX_ROWS)
@@ -107,8 +102,7 @@ class ViewCountsRequest(BaseModel):
 
 
 class ViewShareEntry(BaseModel):
-    """One sharing grant to write (spec 57): exactly one of
-    user_id/team_id/group_id (groups are grant subjects since RADD-832)."""
+    """One share to write: exactly one of user_id/team_id/group_id."""
 
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
@@ -124,8 +118,7 @@ class ViewShareEntry(BaseModel):
 
 
 class ViewSharingUpdate(BaseModel):
-    """PUT /views/{id}/sharing — the view's PUBLIC access level (spec 92; owner-gated).
-    Per-subject shares are managed through the generic /grants API now."""
+    """PUT /views/{id}/sharing — the public access level; per-subject grants go through /grants."""
 
     global_access: ShareLevel | None = None
 
@@ -150,49 +143,38 @@ def _validate_bucket_order(value: list[str] | None) -> list[str] | None:
 
 
 class ViewCreate(BaseModel):
-    project_id: uuid.UUID | None = None  # None = global (spanning every project)
+    project_id: uuid.UUID | None = None  # None = all projects
     name: str = Field(min_length=1, max_length=100)
-    # Builtin `ViewType` value OR a plugin-registered key (kernel registries.view_types).
-    view_type: str
+    view_type: str  # a builtin ViewType value or a plugin key
 
     @field_validator("view_type")
     @classmethod
     def _check_view_type(cls, value: str) -> str:
         return _validate_view_type(value)
 
-    # SLQ (spec 10); '' = every item in scope. Compile-validated on write -> 422
-    # {detail, position} on error.
-    query: str = ""
+    query: str = ""  # SLQ ('' = every item in scope); compile errors 422 {detail, position}
     group_by: str | None = _axis_field
     swimlane_by: str | None = _axis_field
-    # Cycle-name regex for the `cycle` axis header set (specs 23/56); None/'' = all.
-    cycle_filter: str | None = Field(default=None, max_length=200)
+    cycle_filter: str | None = Field(default=None, max_length=200)  # cycle-name regex; None/'' = all
     quick_filters: list[QuickFilter] = Field(default_factory=list, max_length=10)
-    # Soft WIP limits for state-axis board columns (spec 76); None = no limits.
     wip_limits: WipLimits | None = None
-    # Spec 108: ordered list-surface columns (builtin ids or `cf.<key>`);
-    # None = the view type's default set.
-    columns: list[str] | None = Field(default=None, max_length=16)
-    # Spec 109: the board-card layout; None = the type's default card.
-    card_layout: CardLayout | None = None
-    # RADD-855: per-view bucket order (column axis / swimlane axis).
+    columns: list[str] | None = Field(default=None, max_length=16)  # None = the type's defaults
+    card_layout: CardLayout | None = None  # None = the type's default card
     column_order: list[str] | None = _bucket_order_field
     swimlane_order: list[str] | None = _bucket_order_field
-    # RADD-1175: board column presence — collapse the empty ones to a rail,
-    # and never show these keys (loosely validated, like column_order).
     collapse_empty_columns: bool = False
     hidden_columns: list[str] | None = _bucket_order_field
-    # Sharing at birth (spec 57): the level every active user gets (None = private).
-    global_access: ShareLevel | None = None
+    global_access: ShareLevel | None = None  # what every active user gets; non-None needs view.create
     shares: list[ViewShareEntry] = Field(default_factory=list, max_length=50)
     position: int = Field(default=0, ge=0)
 
 
-
-
 class ViewUpdate(BaseModel):
+    """PATCH: an omitted field is unchanged. An explicit null clears a nullable
+    setting (axes, cycle_filter, wip_limits, columns, card_layout, bucket orders,
+    hidden_columns) back to its default; `model_fields_set` tells the two apart."""
+
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    # Builtin `ViewType` value OR a plugin-registered key; None/omitted = unchanged.
     view_type: str | None = None
     query: str | None = None
 
@@ -200,22 +182,15 @@ class ViewUpdate(BaseModel):
     @classmethod
     def _check_view_type(cls, value: str | None) -> str | None:
         return value if value is None else _validate_view_type(value)
-    # Omitted = unchanged, explicit null = clear the axis.
     group_by: str | None = _axis_field
     swimlane_by: str | None = _axis_field
-    # Omitted = unchanged, explicit null/'' = all cycles (spec 23).
     cycle_filter: str | None = Field(default=None, max_length=200)
     quick_filters: list[QuickFilter] | None = Field(default=None, max_length=10)
-    # Omitted = unchanged, explicit null = clear every limit (model_fields_set).
     wip_limits: WipLimits | None = None
-    # Omitted = unchanged, explicit null = back to the type's defaults (spec 108).
     columns: list[str] | None = Field(default=None, max_length=16)
-    # Omitted = unchanged, explicit null = back to the type's default card (spec 109).
     card_layout: CardLayout | None = None
-    # RADD-855: per-view bucket order (column axis / swimlane axis).
     column_order: list[str] | None = _bucket_order_field
     swimlane_order: list[str] | None = _bucket_order_field
-    # RADD-1175: omitted = unchanged; hidden_columns explicit null/[] = none hidden.
     collapse_empty_columns: bool | None = None
     hidden_columns: list[str] | None = _bucket_order_field
     position: int | None = Field(default=None, ge=0)
@@ -250,39 +225,30 @@ class ViewRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID | None
     name: str
-    # The stored view_type string (a builtin `ViewType` value or a plugin key).
-    view_type: str
+    view_type: str  # stored as-is: a plugin key is not a ViewType member
     query: str
     group_by: str | None
     swimlane_by: str | None
     cycle_filter: str | None
     quick_filters: list[QuickFilter]
-    # Soft WIP limits (spec 76): {state_id: limit}; None = no limits set.
     wip_limits: dict[uuid.UUID, int] | None = None
-    # Spec 108: ordered list-surface columns; None = the type's default set.
     columns: list[str] | None = None
-    # Spec 109: the board-card layout; None = the type's default card.
     card_layout: CardLayout | None = None
-    # RADD-855: per-view bucket order (column axis / swimlane axis).
     column_order: list[str] | None = _bucket_order_field
     swimlane_order: list[str] | None = _bucket_order_field
-    # RADD-1175: board column presence (see the model).
     collapse_empty_columns: bool = False
     hidden_columns: list[str] | None = None
     owner_id: uuid.UUID | None
-    # Sharing (spec 57): who owns it, what every active user gets, and the
-    # explicit grants; `shared` = visible beyond the owner (any of the above).
     owner: ShareUserRef | None = None
     global_access: ShareLevel | None = None
     shares: list[ViewShareRead] = Field(default_factory=list)
+    # Visible beyond the owner (public level, grants, or a seeded owner-less view).
     shared: bool
-    # Per-ACTOR capabilities, computed server-side (the client never re-derives
-    # team membership): edit = change the definition; manage = sharing + delete.
+    # Per-actor, computed server-side: edit = the definition; manage = sharing + delete.
     can_edit: bool = False
     can_manage: bool = False
     position: int
-    # Ready-to-append `GET /items?<query_string>` composition: `q=<urlencoded SLQ>`
-    # (omitted when the query is empty) + `project_id=<id>` when project-scoped.
+    # Append to `GET /items?`: q=<SLQ> (when set) + project_id (when scoped).
     query_string: str
     created_at: UtcDatetime
     updated_at: UtcDatetime

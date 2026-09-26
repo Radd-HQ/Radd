@@ -1,16 +1,13 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from radd.kernel import EntityLinkSpec
-from radd.kernel import EventTypeSpec
-from radd.kernel import RaddPlugin
-from radd.kernel import CrudResourceSpec, PermissionSpec
+from radd.kernel import CrudResourceSpec, EntityLinkSpec, EventTypeSpec, PermissionSpec, RaddPlugin
 
 from .openapi import augment_openapi
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .settings_router import router as settings_router
-from .service import warm_schema_cache
+from .service import _BUILTIN_SPEC, _FIELD_SPEC, warm_schema_cache
 from .types import FieldEvent
 from .validation import FieldValidationError
 
@@ -21,8 +18,6 @@ async def _validation_handler(request: Request, exc: FieldValidationError) -> JS
         content={"detail": "custom field validation failed", "errors": exc.errors},
     )
 
-
-from .service import _BUILTIN_SPEC, _FIELD_SPEC  # noqa: E402 - bindings require initialized registries
 
 plugin = RaddPlugin(
     name="fields",
@@ -43,10 +38,8 @@ plugin = RaddPlugin(
     access_resources=(_FIELD_SPEC, _BUILTIN_SPEC),
     description="Custom fields: typed, searchable data on issues, scoped to projects.",
     depends_on=("projects", "events", "auth", "teams", "access"),  # access: grant resource
-    # RADD-949: removing a select option rewrites the values items already store,
-    # and `work_items.custom_fields` is items'. A DEFERRED reverse reach — items
-    # depends on fields, so a hard edge would be a cycle — through the public
-    # `items.service` seam, never the table.
+    # RADD-949: removing an option rewrites items' stored values through `items.service`;
+    # items depends on fields, so this reverse reach is deferred.
     weak_depends=("items",),
     routers=(settings_router, router),
     exception_handlers=((FieldValidationError, _validation_handler),),

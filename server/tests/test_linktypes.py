@@ -41,8 +41,7 @@ async def test_builtins_present_and_symmetry(db):
     assert {"blocks", "relates", "duplicates", "mentions"} <= set(catalog)
     assert lt.is_symmetric(catalog, "relates") is True
     assert lt.is_symmetric(catalog, "blocks") is False
-    assert lt.is_auto_managed(catalog, "mentions") is True
-    assert lt.is_auto_managed(catalog, "blocks") is False
+    assert catalog["mentions"].auto_managed and not catalog["blocks"].auto_managed
     # Directional labels resolve per edge.
     assert lt.label_for(catalog["blocks"], incoming=False) == "blocks"
     assert lt.label_for(catalog["blocks"], incoming=True) == "is blocked by"
@@ -103,16 +102,3 @@ async def test_update_widens_scope_and_locks_builtin_direction(db):
     builtin = await lt.by_key(db, "blocks")
     with pytest.raises(ConflictError):
         await lt.update_type(db, builtin.id, LinkTypeUpdate(direction=LinkDirection.SYMMETRIC))
-
-
-async def test_resolve_by_name_for_importer(db):
-    key = f"dep_{uuid.uuid4().hex[:6]}"
-    await lt.create_type(
-        db, LinkTypeCreate(key=key, name="Depends", outward_name="depends on",
-                           inward_name="is required for", direction=LinkDirection.DIRECTED)
-    )
-    # A Jira link-type name matches by any of name/outward/inward.
-    assert await lt.resolve_by_name(db, "depends on") == key
-    assert await lt.resolve_by_name(db, "Depends") == key
-    assert await lt.resolve_by_name(db, "is required for") == key
-    assert await lt.resolve_by_name(db, "no such name") is None

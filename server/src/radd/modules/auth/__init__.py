@@ -37,9 +37,7 @@ plugin = RaddPlugin(
             AuthEvent.PROJECT_PUBLIC_ACCESS_CHANGED, "Project public access changed", "Admin",
             has_changes=True, trigger=False, entity_type="project", subjects=("project",),
         ),
-        # RADD-1168: emitted since spec 84/86 and never registered — no label
-        # in the audit catalog, and outside the has_changes contract. Not
-        # triggers (the automation catalog is a parity oracle).
+        # RADD-1168: not triggers (the automation catalog is a parity oracle).
         EventTypeSpec(AuthEvent.USER_CREATED, "User created", "People", entity_type="user", subjects=("user",)),
         EventTypeSpec(
             AuthEvent.USER_UPDATED, "User updated", "People",
@@ -90,15 +88,10 @@ plugin = RaddPlugin(
             guard=mfa_policy.guard_require_mfa,
         ),
     ),
-    # RADD-892: forms/pages/timelogging are gone — auth no longer reaches into
-    # the features it outranks for nav facts or wiki-space names; they register
-    # NavFactSpec/GrantScopeSpec and auth iterates. What is left is the generic
-    # access framework and the two SUBJECT modules, which stay direct calls
-    # because `global_role_grants` has a `team_id` and a `group_id` COLUMN: the
-    # subject set is closed by auth's own schema, so a registry would advertise
-    # an extensibility no column list can honour.
-    # `settings` (RADD-1279): mfa_policy reads `require_mfa` through a deferred
-    # import — settings itself depends_on auth.
+    # RADD-892: features register NavFactSpec/GrantScopeSpec and auth iterates.
+    # teams/groups stay direct calls: `global_role_grants` has team_id/group_id
+    # COLUMNS, so the subject set is closed by auth's own schema. `settings`:
+    # mfa_policy's deferred read of `require_mfa` (settings depends_on auth).
     weak_depends=("access", "groups", "teams", "settings"),
     routers=(
         auth_router,
@@ -111,11 +104,7 @@ plugin = RaddPlugin(
         mfa_enrollment_router,
         mfa_admin_router,
         ),
-    # RADD-889: the directory/service-account tools of the spec-114 MCP catalog
-    # live with their owner.
     mcp_tools=mcptools.MCP_TOOLS,
-    # RADD-890: auth's OWN atoms — the two umbrellas plus users/roles/members/
-    # service accounts. Every other module's atoms are declared by that module.
     permissions=AUTH_PERMISSIONS,
     crud_resources=AUTH_CRUD_RESOURCES,
     on_startup=(subscribers.ensure_seeded,),

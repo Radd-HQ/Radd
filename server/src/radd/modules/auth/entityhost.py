@@ -1,16 +1,6 @@
-"""auth's implementation of the kernel's `EntityHost` (RADD-892).
-
-The kernel generates a CRUD router from an `EntitySpec` but must not decide who
-the caller is, whether they may act, or which rows they may see. auth is the one
-module that already owns every one of those policies — session/PAT resolution,
-`authz.require`, and the relation-aware row filter items uses — so the host lives
-here rather than in a composition module invented for it. Events and project
-lookup ride auth's own declared dependencies.
-
-Installed at import (see `auth/__init__.py`): the slot is module state, not a
-kernel registry, precisely so `registries.clear()` cannot wipe it — an import
-does not run twice, and there would be nothing to replay it.
-"""
+"""auth's implementation of the kernel's `EntityHost` (RADD-892): caller
+resolution, `authz.require` and the relation-aware row filter for generated
+CRUD. Installed at import — module state, so `registries.clear()` cannot wipe it."""
 
 import logging
 from typing import Any
@@ -32,20 +22,9 @@ _query_gated_warned: set[tuple[str, str]] = set()
 
 
 def _warn_query_gated(entity_key: str, relations: frozenset[str]) -> None:
-    """Say out loud what the sync row gate drops (RADD-1040).
-
-    `relation_holds_row` treats a query-gated relation (`holds=None` — membership
-    living in another table, like `@participant`) as NOT held. That is the right
-    default: failing closed is never a leak. But generated plugin CRUD uses the
-    sync form, so a plugin registering an expensive relation on its own entity
-    gets rows that quietly vanish for exactly the actors the relation was written
-    to admit — indistinguishable, from the outside, from "the feature does not
-    work". The rows still stay hidden; the operator just finds out why.
-
-    Scoped to relations this actor's permissions would actually have needed, so
-    an instance whose plugins register expensive relations nobody holds stays
-    silent.
-    """
+    """Log once per (entity, relation) what the SYNC row gate drops (RADD-1040):
+    generated CRUD cannot await a query-gated relation (`holds=None`), so rows only
+    it would admit stay hidden — correctly, but silently without this."""
     from .types import relation_contains
 
     for key, spec in registries.relations_for(entity_key).items():
@@ -97,12 +76,7 @@ class AuthEntityHost:
         self, session: AsyncSession, user: Any, entity_key: str, rows: list[Any]
     ) -> list[Any]:
         """item.read on each row's project, then the RADD-817 relation narrowing
-        for entities whose plugin registered RelationSpecs. `relation_actor` is
-        resolved lazily and once — it is a query, and most callers never need it.
-
-        The narrowing is the SYNC row gate, which supports pure relations only;
-        `_warn_query_gated` reports the ones it therefore drops (RADD-1040).
-        """
+        through the SYNC row gate. `relation_actor` is resolved lazily, once."""
         from radd.modules.projects import service as projects_service
 
         entity_relations = registries.relations_for(entity_key)
@@ -118,11 +92,9 @@ class AuthEntityHost:
                 continue
             relations = authz.relations_held(perms, authz.Permission.ITEM_READ)
             if authz.RELATION_ANY not in relations and not entity_relations:
-                # RADD-1327: a NARROWED read (`item.read@own` — the Baseline every
-                # signed-in account holds) grants a row only through a relation
-                # the entity defines. An entity that defines none can satisfy no
-                # narrowed read: `holds_base` alone let every member list every
-                # project's milestones, and search would have inherited that.
+                # RADD-1327: a NARROWED read grants a row only through a relation the
+                # entity defines; `holds_base` alone let every member list every
+                # project's milestones.
                 continue
             if entity_relations:
                 if authz.RELATION_ANY not in relations:

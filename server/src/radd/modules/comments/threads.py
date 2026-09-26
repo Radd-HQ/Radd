@@ -17,26 +17,22 @@ from fastapi import HTTPException
 from sqlalchemy import select, tuple_
 
 from radd.exceptions import ConflictError, NotFoundError
+from radd.modules.items.models import WorkItem
 from .models import Comment
 from .parents import binding_for
-from .reading import _boundary, _cursor, _hydrate, _read_query, audience
-from .schemas import CommentCreate, CommentPage
-from .types import CommentEntity, CommentSlice, CommentVisibility
+from .reading import _boundary, _read_query, _window, audience
+from .schemas import CommentCreate
+from .types import CommentEntity, CommentParentType, CommentSlice, CommentVisibility
 
 
 async def lock_thread_parent(session, entity_type, entity_id):
     """Serialize thread lifecycle writes with issue state updates (parent first)."""
-    from radd.modules.items.models import WorkItem
-    from .types import CommentParentType
-
     if entity_type == CommentParentType.ITEM.value:
         await session.scalar(select(WorkItem.id).where(WorkItem.id == entity_id).with_for_update())
 
 
 async def has_unresolved_threads(session, item_id):
     """Workflow invariant across ALL audiences, never an actor-filtered count."""
-    from .types import CommentParentType
-
     query = select(Comment.id).where(
         Comment.entity_type == CommentParentType.ITEM.value,
         Comment.entity_id == item_id,
@@ -95,11 +91,7 @@ async def reply_page(session, comment_id, actor, *, limit=50, before=None):
         query = query.where(allowed)
     if before:
         query = query.where(tuple_(Comment.created_at, Comment.id) < tuple_(*_boundary(before)))
-    rows = list((await session.scalars(query.order_by(Comment.created_at.desc(), Comment.id.desc()).limit(limit + 1))).all())
-    more = len(rows) > limit
-    rows = rows[:limit]
-    return CommentPage(comments=await _hydrate(session, list(reversed(rows)), allowed),
-                       older_cursor=_cursor(rows[-1]) if more else None)
+    return await _window(session, query, limit, allowed)
 
 
 async def create_reply(session, comment_id, data, actor):

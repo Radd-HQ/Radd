@@ -1,16 +1,6 @@
-"""The Baseline pre-flight report (RADD-825).
-
-"Narrowing the Baseline would remove access for N users across M projects —
-here is who, and where." Computed by resolving every active human account's
-effective access twice — once under the Baseline as stored, once under the
-PROPOSED set — through the real resolvers (`effective_permissions` +
-`project_permission_map`), never a re-derivation that could drift from
-enforcement. The floor is swapped by seeding the same `session.info` memo the
-resolvers read, so both worlds run the exact code a request would.
-
-An admin runs this from the Baseline editor, grants the roles that restore
-intended access, and re-runs it until the diff is what they meant.
-"""
+"""The Baseline pre-flight (RADD-825): who loses what if the Baseline became
+`proposed`, computed by resolving every active person twice through the REAL
+resolvers — the floor is swapped by seeding the same `session.info` memo."""
 
 import uuid
 

@@ -3,7 +3,7 @@ from enum import StrEnum
 
 class TeamEvent(StrEnum):
     CREATED = "team.created"
-    UPDATED = "team.updated"  # also emitted for membership and project-attachment changes
+    UPDATED = "team.updated"  # also emitted for membership changes
     DELETED = "team.deleted"  # spec 87
 
 
@@ -11,12 +11,6 @@ class TeamEntity(StrEnum):
     TEAM = "team"
     MEMBER = "team_member"
     MANAGER = "team_manager"  # spec 87 — delegated per-team management
-
-
-# RADD-829: `TeamSource` and `MemberSource` retired with the Groups split — a
-# team is never directory-mirrored, so the flags had nothing left to say. The
-# six directory `TeamChange` values retired with them, WITHOUT reader-side
-# aliases (no-backcompat rule: old audit rows render their raw action string).
 
 
 class TeamChange(StrEnum):

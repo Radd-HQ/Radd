@@ -58,8 +58,7 @@ async def _resolve_type(
 async def _resolve_parent(
     session: AsyncSession, kind: ItemKind, parent_id: uuid.UUID | None
 ) -> None:
-    """Enforce the hierarchy: epic ← issue ← subtask, max depth 3. Since spec 80
-    the parent may live in ANOTHER PROJECT (spec 86: no boundary above that)."""
+    """Enforce epic ← issue ← subtask (max depth 3); the parent may live in another project."""
     required = REQUIRED_PARENT_KIND.get(kind)
     if parent_id is None:
         if kind == ItemKind.SUBTASK:
@@ -77,16 +76,10 @@ async def _resolve_parent(
 async def _resolve_assignee(
     session: AsyncSession, user_id: uuid.UUID, *, allow_inactive: bool = False
 ) -> User:
-    """Resolve an assignee/reporter, refusing a deactivated account.
-
-    `allow_inactive` is the IMPORT escape hatch (project.manage-gated at the call
-    site, like the `created_at` override). An import restates history: an issue
-    really was assigned to, or reported by, someone who has since left, and
-    refusing that would either lose the attribution or force their account to stay
-    active — which is worse, because a departed person then shows up in every
-    assignee picker. Deactivating a user never breaks EXISTING rows; it only stops
-    new assignment, and a historical import is not new assignment.
-    """
+    """Resolve an assignee/reporter, refusing a deactivated account unless
+    `allow_inactive` (the project.manage-gated IMPORT hatch: history really was
+    assigned to people who have since left, and deactivation only stops NEW
+    assignment)."""
     user = await auth.get_user(session, user_id)
     if not user.active and not allow_inactive:
         raise ConflictError(AuthEntity.USER, reason=f"{user_id} is inactive")

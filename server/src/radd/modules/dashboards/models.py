@@ -9,14 +9,10 @@ from radd.db import Base, TimestampMixin
 
 
 class Dashboard(Base, TimestampMixin):
-    """A composable dashboard (spec 75): a named, shareable arrangement of
-    widgets over data surfaces that ALREADY exist (reports, SLQ counts/lists,
-    view counts). Ownership + sharing copy the spec-57 view idiom verbatim:
-    `owner_id` = the creator (full control — edit, share, delete, transfer),
-    `access_grants` grantees at a ShareLevel, `global_access` = what
-    every active user gets (NULL = not globally visible; never 'owner'
-    → 409). Widgets fetch through the ordinary read APIs at render time, so
-    RBAC/visibility filtering is inherited, never reimplemented here."""
+    """A composable dashboard (spec 75): a shareable arrangement of widgets over
+    existing read surfaces, fetched through the ordinary APIs at render time so
+    RBAC is inherited. `owner_id` = the creator; grants at a ShareLevel;
+    `global_access` = what every active user gets (never 'owner' -> 409)."""
 
     __tablename__ = "dashboards"
 
@@ -28,12 +24,6 @@ class Dashboard(Base, TimestampMixin):
     # (enabling it is gated on dashboard.create — it's a server-wide broadcast).
     global_access: Mapped[str | None] = mapped_column(String(10))
     position: Mapped[int] = mapped_column(Integer, default=0)
-
-
-# `DashboardShare` is gone (spec 92, adopted): per-subject dashboard
-# sharing lives in the generic `access_grants` table under resource_type
-# "dashboard", exactly as view sharing does. The table was a verbatim copy of
-# `view_shares`, which spec 92 had already deleted — see dashboards/service.py.
 
 
 class DashboardWidget(Base, TimestampMixin):

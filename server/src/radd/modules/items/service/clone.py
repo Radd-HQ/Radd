@@ -23,6 +23,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.fields import service as fields
+from radd.modules.linktypes.types import ItemLinkType
 from radd.modules.projects import service as projects_service
 
 from ..enums import ItemKind
@@ -33,7 +34,6 @@ from .queries import require_item
 from .read import get_item
 from .visibility import _field_ctx
 
-CLONE_LINK_TYPE = "relates"
 CLONE_TITLE_PREFIX = "Copy of "
 _TITLE_MAX = 500
 #: Builtins a clone writes that CAN carry a write rule (spec 36) — checked so a
@@ -56,11 +56,15 @@ async def clone_item(
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
 
     by_key = {d.key: d for d in definitions}
-    custom_fields = {
-        key: value
-        for key, value in source.custom_fields.items()
-        if key in by_key and fields.field_writable(by_key[key], ctx)
-    }
+
+    def writable(custom_fields: dict) -> dict:
+        """Only the custom fields the actor may write here."""
+        return {
+            key: value
+            for key, value in custom_fields.items()
+            if key in by_key and fields.field_writable(by_key[key], ctx)
+        }
+
     denied = set(
         fields.builtin_write_denied(
             _CLONE_BUILTINS, ctx.builtin_grants, ctx.as_subject(), ctx.project_id
@@ -79,7 +83,7 @@ async def clone_item(
         start_date=None if "start_date" in denied else source.start_date,
         target_date=None if "target_date" in denied else source.target_date,
         estimate_points=None if "estimate_points" in denied else source.estimate_points,
-        custom_fields=custom_fields,
+        custom_fields=writable(source.custom_fields),
     )
     created = await create_item(session, payload, actor)
 
@@ -90,7 +94,9 @@ async def clone_item(
     # clone behind a 403.
     session.add(
         ItemLink(
-            source_item_id=created.id, target_item_id=source.id, link_type=CLONE_LINK_TYPE
+            source_item_id=created.id,
+            target_item_id=source.id,
+            link_type=ItemLinkType.RELATES.value,
         )
     )
     await session.flush()
@@ -121,11 +127,7 @@ async def clone_item(
                     priority=child_read.priority,
                     labels=list(child_read.labels),
                     estimate_points=child_read.estimate_points,
-                    custom_fields={
-                        key: value
-                        for key, value in child_read.custom_fields.items()
-                        if key in by_key and fields.field_writable(by_key[key], ctx)
-                    },
+                    custom_fields=writable(child_read.custom_fields),
                 ),
                 actor,
             )

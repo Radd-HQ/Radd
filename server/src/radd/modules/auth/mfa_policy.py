@@ -1,21 +1,11 @@
 """RADD-1279 — an instance can REQUIRE a second factor.
 
-Spec 48 shipped TOTP as self-service opt-in: `totp_required` answers whether
-a person ENROLLED, and no policy existed to ask. This module is the policy:
-
-- `require_mfa` (instance setting, owned here) — read by `create_session`,
-  the seam every login path passes, which refuses a `LoginMethod.PASSWORD`
-  session while it is on. LDAP and SSO are untouched: the IdP owns MFA there.
-- the ENROLMENT TICKET a refused login receives instead of a cookie. The
-  refused person holds no session, and every self-service TOTP endpoint takes
-  `CurrentUser`, so without a ticket "enrol before you get in" is
-  inexpressible. It opens only `/auth/mfa-enrollment/{setup,confirm}`, is
-  short-lived, and the confirm that mints the session burns it.
-- the admin's half: who is enrolled, and a reset for the person who lost
-  both their authenticator and their recovery codes — without it,
-  enforcement turns a rare annoyance into a lockout.
-- the switch's guard: it cannot be turned on by an admin who would be
-  locked out by it.
+`require_mfa` is read by `create_session`, which refuses a
+`LoginMethod.PASSWORD` session while it is on (LDAP/SSO: the IdP owns MFA).
+A refused login gets a short-lived ENROLMENT TICKET instead of a cookie — the
+only credential that opens `/auth/mfa-enrollment/{setup,confirm}` — and the
+confirm that mints the session burns it. Admins can reset an enrolment; the
+switch cannot be turned on by an admin it would lock out.
 """
 
 import uuid

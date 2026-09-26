@@ -15,7 +15,6 @@ from radd.modules.auth.models import User
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
-from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from ..changes import diff_item_reads, field_name_map
@@ -24,10 +23,9 @@ from .origin import current_origin
 from ..hydration import hydrate
 from ..models import WorkItem
 from ..schemas import ItemRead
-from .queries import _alias_item, _parse_key, require_item
+from .queries import _alias_item, _parse_key, require_readable_item
 from .visibility import (
     attach_capabilities,
-    ensure_item_relation,
     relation_read_clause,
     _builtin_read_denied,
     _field_ctx,
@@ -64,6 +62,15 @@ async def _hydrate_one(
     )[0]
 
 
+def event_item(read: ItemRead, project: Project) -> dict[str, Any]:
+    """`payload["item"]` of an item event (RADD-922): the WHOLE read, with
+    `project` promoted to the `{id, key, name}` ref the compact ref uses."""
+    return {
+        **read.model_dump(mode="json"),
+        "project": {"id": str(project.id), "key": project.key, "name": project.name},
+    }
+
+
 async def _finish(
     session: AsyncSession,
     item: WorkItem,
@@ -79,30 +86,12 @@ async def _finish(
     event_actor_id: uuid.UUID | None = None,
 ) -> ItemRead:
     read = await _hydrate_one(session, item, project, actor, permissions)
-    # Event payloads keep the FULL custom_fields — in-process consumers are
-    # trusted and enforce their own authz; API responses filter per-actor, and
-    # the WEBHOOK egress redacts what a grant restricts (items/redaction.py,
-    # RADD-1085) — an endpoint can hold no grant, so it gets the blanked form.
-    #
-    # Nested under `item` (RADD-922), like every other item-scoped event, so one
-    # rule — `payload.item.<field>` — addresses the item whatever produced the
-    # event. This one carries the WHOLE read rather than the compact ref: an item
-    # event is about the item, so it should say everything about it. `project` is
-    # promoted from the read's bare `project_id` to the same `{id, key, name}`
-    # object the ref uses, because a receiver that has to look up a project by
-    # uuid to name it has been handed half an answer.
-    payload: dict[str, Any] = {
-        "item": {
-            **read.model_dump(mode="json"),
-            "project": {"id": str(project.id), "key": project.key, "name": project.name},
-        }
-    }
-    # Field-level diff for the History tab / audit (and richer webhook/automation
-    # signals). Computed from the pre-mutation snapshot; omitted on create.
-    # Stays TOP-LEVEL: it describes the event, not the item.
-    # Spec 123: an update ALWAYS carries the list — a caller with no `before`
-    # snapshot (the rank-only reorder) is the explicit `[]`, which history
-    # skips; `None` on an item.updated is refused by emit. Create carries none.
+    # Event payloads carry the FULL read (in-process consumers are trusted; the
+    # webhook egress redacts, items/redaction.py).
+    payload: dict[str, Any] = {"item": event_item(read, project)}
+    # `changes` stays top-level (it describes the event). An update always
+    # carries a list — `[]` for a rank-only reorder, which history skips;
+    # emit refuses None on item.updated.
     if event_type == ItemEvent.CREATED:
         # RADD-1320: where it came from — email, a form, the portal, an alert,
         # an automation; absent = a person.
@@ -133,26 +122,10 @@ async def _finish(
 
 
 async def get_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemRead:
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
-    await ensure_item_relation(
-        session, actor, item, permissions, Permission.ITEM_READ, as_missing=True
-    )
+    item, project, permissions = await require_readable_item(session, item_id, actor)
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
-    internal_visible = _internal_visible({project.id: permissions})
-    readable_map = await authz.readable_projects(session, actor)
-    read = (
-        await hydrate(
-            session,
-            [item],
-            internal_visible=internal_visible,
-            actor_id=actor.id,
-            readable_project_ids=frozenset(readable_map),
-            relation_clause=await relation_read_clause(session, actor, readable_map),
-        )
-    )[0]
+    read = await _hydrate_one(session, item, project, actor, permissions)
     builtin_denied = await _builtin_read_denied(session, project, ctx)
     filtered = _filter_read(read, definitions, ctx, builtin_denied)
     # RADD-842: the per-row verdict on the detail read.

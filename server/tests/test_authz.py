@@ -14,7 +14,7 @@ import pytest
 
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth import authz_core, roles
-from radd.modules.auth.types import all_permission_keys
+from radd.modules.auth.types import all_permission_keys, permission_description_of
 from radd.modules.auth.authz import (
     Permission,
     combine_permissions,
@@ -25,13 +25,11 @@ from radd.modules.auth.authz import (
 )
 from radd.modules.auth.types import (
     BUILTIN_ROLES,
-    PERMISSION_DESCRIPTIONS,
     PERMISSION_SCOPES,
     PROJECT_PERMISSIONS,
     BuiltinRoleKey,
     InstanceRole,
     PermissionScope,
-    BUILTIN_ROLES,
 )
 
 
@@ -221,9 +219,8 @@ def test_every_builtin_key_is_defined_once():
 def test_permission_catalog_is_total():
     # Every permission has a scope and a description (GET /permissions renders these).
     assert set(PERMISSION_SCOPES) == set(Permission)
-    assert set(PERMISSION_DESCRIPTIONS) == set(Permission)
     assert all(isinstance(scope, PermissionScope) for scope in PERMISSION_SCOPES.values())
-    assert all(PERMISSION_DESCRIPTIONS[p] for p in Permission)
+    assert all(permission_description_of(p) for p in Permission)
 
 
 #: The seeded Baseline set (RADD-773) — item.read + page.read. The tests below

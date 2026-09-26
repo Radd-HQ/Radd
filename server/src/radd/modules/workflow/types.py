@@ -41,8 +41,7 @@ class StateEvent(StrEnum):
     CREATED = "state.created"
     UPDATED = "state.updated"
     DELETED = "state.deleted"  # spec 87 — refused while items or the default flag point at it
-    # Spec 123: a category row edited (name/behaviour/colour) — it re-derives
-    # every state classified under it, and used to leave no event.
+    # A category row edited; every state classified under it re-derives.
     CATEGORY_UPDATED = "state_category.updated"
 
 
@@ -61,15 +60,9 @@ class TransitionMode(StrEnum):
 
 
 class TransitionCheck(StrEnum):
-    """The checks WORKFLOW evaluates itself (`rules` = [{check, params}]).
-
-    Every other `check` key belongs to a plugin serving the kernel's
-    TRANSITION_CHECK socket (RADD-1383) — `approvals` answers
-    `require_approval` — so a new gate is a provider, never an edit here.
-
-    Spec 107 collapsed the five legacy checks (require_assignee / require_estimate
-    / require_team / require_comment / require_fields) into ONE structured
-    condition check; the migration rewrote every stored rule."""
+    """The checks WORKFLOW evaluates itself (`rules` = [{check, params}]). Any other
+    `check` key is served by a plugin through the kernel TRANSITION_CHECK socket
+    (approvals answers `require_approval`), so a new gate is a provider, never an edit here."""
 
     # params {"kind": "builtin"|"custom", "key", "op", "type"?, "values"?, "display"?}
     # — one field condition (spec 107). `type` is snapshotted for custom fields
@@ -77,8 +70,7 @@ class TransitionCheck(StrEnum):
     # `values` (cosmetic, failure strings only).
     REQUIRE_FIELD = "require_field"
     REQUIRE_RESOLVED_THREADS = "require_resolved_threads"
-    # RADD-1285: the item has a release. The named form of what spec 112 had
-    # people hand-build as a require_field on the Release builtin.
+    # the item has a release (on-release rows always add this rule).
     REQUIRE_RELEASE = "require_release"
 
 
@@ -166,8 +158,7 @@ DATE_BUILTINS = frozenset({BuiltinField.START_DATE, BuiltinField.TARGET_DATE})
 
 
 def ops_for_field_type(field_type: str) -> frozenset[ConditionOp]:
-    """Allowed operators for a CUSTOM field's registry type (fields.FieldType
-    wire values — workflow stays ignorant of the fields module's enum)."""
+    """Allowed operators for a CUSTOM field's registry type."""
     if field_type in (FieldType.NUMBER.value, FieldType.DURATION.value):
         return _MEMBERSHIP_OPS | _RANGE_OPS
     if field_type == FieldType.DATE.value:

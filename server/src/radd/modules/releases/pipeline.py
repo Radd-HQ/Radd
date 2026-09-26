@@ -1,16 +1,9 @@
-"""The release pipeline (spec 112, restated as workflow by RADD-1285).
+"""The release pipeline (spec 112, RADD-1285): work waits in a done-category
+state (it IS finished; the filer's question is whether it is running yet) and a
+published version moves everything waiting on, with the release recorded.
 
-`Done` answers the developer's question. The person who filed the issue is asking
-a different one — is it running yet. So work lands in a WAITING state (category
-`done`, because it IS finished) and a published version moves everything waiting
-on, with the release recorded.
-
-What moves where is a WORKFLOW fact: a transition row marked `on_release`
-("Moves automatically when a release is published"). The pipeline reads those
-rows; a project with none does not ship through releases, and every function
-here is a no-op for it. (Until RADD-1285 this was two settings holding typed-in
-state NAMES, at instance and project scope — a rename or a typo switched the
-pipeline off with nothing but a log line to say so.)
+What moves where is a WORKFLOW fact — transitions marked `on_release`. A project
+with none does not ship through releases; every function here is a no-op for it.
 """
 
 import logging
@@ -87,17 +80,11 @@ async def update_release(
 async def sweep(
     session: AsyncSession, project: Project, release: Release, *, actor_id: uuid.UUID | None = None
 ) -> int:
-    """Perform every on-release transition: each item in a row's from-state moves
-    to its to-state with the release recorded. Idempotent — shipped items are no
-    longer in a from-state, so a second run finds nothing.
-
-    Deliberately "everything waiting" rather than "the items whose commits are in
-    the tag range" (spec 112's simplification): the latter needs a tag-to-tag
-    commit walk and is only right if every merge went through a linked PR.
-
-    The moves are made as the system unless `actor_id` names someone — the
-    "Publish version and sweep" node passes its automation's actor (RADD-1315).
-    """
+    """Perform every on-release transition, recording the release. Idempotent:
+    shipped items are no longer in a from-state. Deliberately "everything waiting",
+    not "commits in the tag range" (that needs a commit walk and is only right if
+    every merge went through a linked PR). Made as the system unless `actor_id`
+    names someone (the sweep node passes its automation's actor, RADD-1315)."""
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
     rows = await workflow_service.release_transitions(session, project.id)
@@ -142,15 +129,10 @@ async def on_release_published(
     notes: str = "",
     actor_id: uuid.UUID | None = None,
 ) -> tuple[Release, int]:
-    """A published version: record it, then sweep. Called by the "Publish version
-    and sweep" automation node (RADD-1310) and by a repository whose "Publish
-    version on release" switch is on (RADD-1369).
-
-    Webhook delivery is at-least-once, so a repeat of the same tag reuses the
-    row and re-runs the (idempotent) sweep rather than creating a second version.
-    The notes are stored whole — the column is unbounded text, and a changelog
-    cut mid-word at 2000 characters was a data-loss bug (RADD-907).
-    """
+    """A published version: record it, then sweep (the sweep node, RADD-1310, and a
+    repository's "Publish version on release" switch, RADD-1369). Delivery is
+    at-least-once, so a repeated tag reuses the row and re-runs the idempotent
+    sweep. Notes are stored whole (RADD-907: a 2000-char cut lost changelogs)."""
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
     actor_id = actor_id or SYSTEM_ACTOR_ID

@@ -95,7 +95,7 @@ async def test_dashboard_sharing_matrix(db):
     await teams_service.add_team_member(db, team.id, teammate.id)
 
     async def visible_names(actor) -> set[str]:
-        reads = await dashboards.list_dashboards(db, actor=actor)
+        reads, _total = await dashboards.page_dashboards(db, actor=actor)
         return {r.name for r in reads}
 
     created = await dashboards.create_dashboard(

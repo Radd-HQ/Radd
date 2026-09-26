@@ -1,13 +1,6 @@
-"""Jira-style duration parsing/formatting — the module's one core invariant.
-
-`2w 1d 4h 30m` <-> seconds. A bare number (no unit) is minutes (Jira's log-work
-default). Week/day lengths are configurable (a working week, not a calendar week),
-so the *seconds* are canonical and the text is just how humans enter/read them.
-
-Pure functions: units come in as arguments (from Settings) so this stays DB- and
-config-import-independent and unit-testable. Invalid input raises ValueError, which
-the router surfaces as a 422.
-"""
+"""Jira-style durations: `2w 1d 4h 30m` <-> seconds; a bare number is minutes.
+Seconds are canonical; week/day lengths (a WORKING week) come in as arguments, so
+this stays pure. Invalid input raises ValueError (a 422 at the router)."""
 
 import re
 

@@ -1,8 +1,7 @@
-"""Internal-comment visibility gate (spec 50).
-
-Teams NARROW the existing `comment.read_internal` audience — they never replace
-it. The pure decision is reused by every surface that exposes a comment body
-(the REST list, notifications, history, MCP) so the rule stays in one place.
+"""Internal-comment visibility as a pure predicate (spec 50). Teams NARROW the
+`comment.read_internal` audience, never replace it. `reading.audience` is the SQL
+form of the same rule; this one serves callers already holding rows (notify
+fan-out, history). Keep the two in step.
 """
 
 import uuid
@@ -22,7 +21,7 @@ def internal_comment_visible(
     - the author and project managers always can (own note / oversight);
     - otherwise `comment.read_internal` is required (the staff gate), AND
     - if the comment names teams, the actor must belong to one of them.
-    Empty `comment_teams` = every internal-reader, exactly as before spec 50.
+    Empty `comment_teams` = every internal-reader.
     """
     if has_manage or is_author:
         return True

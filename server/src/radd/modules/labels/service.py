@@ -60,7 +60,7 @@ async def get_label(session: AsyncSession, label_id: uuid.UUID) -> Label:
 async def update_label(
     session: AsyncSession, label_id: uuid.UUID, data: LabelUpdate, actor_id: uuid.UUID | None = None
 ) -> Label:
-    """Rename/recolor (spec 87 — the label.update atom had no endpoint until now)."""
+    """Rename/recolor; a name clash is a 409."""
     label = await get_label(session, label_id)
     before = changes.snapshot(label, ("name", "color"))
     if data.name is not None and data.name != label.name:

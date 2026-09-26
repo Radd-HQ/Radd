@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.app import create_app
 from radd.config import settings
 from radd.exceptions import NotFoundError
-from radd.modules.auth import authz, service as auth
+from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
 from radd.modules.auth.scopes import parse_scope
 from radd.modules.auth.types import Permission, SESSION_COOKIE_NAME

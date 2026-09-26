@@ -83,9 +83,9 @@ async def _validate_edge(
     project_id: uuid.UUID,
     from_state_id: uuid.UUID | None,
     to_state_id: uuid.UUID,
-    *,
-    exclude_id: uuid.UUID | None = None,
 ) -> None:
+    """Several rows per (from, to) are legitimate: each is scoped by applies_when
+    and resolved first-match, so no duplicate-edge check here."""
     if from_state_id == to_state_id:
         raise ConflictError(
             TransitionEntity.TRANSITION, reason="from and to state must differ"
@@ -93,9 +93,6 @@ async def _validate_edge(
     if from_state_id is not None:
         await _project_state(session, project_id, from_state_id)
     await _project_state(session, project_id, to_state_id)
-    # Spec 107 follow-up: multiple rows per (from, to) are LEGITIMATE — each
-    # scoped by applies_when, resolved first-match — so the old dupe 409 is
-    # gone (a fully-shadowed duplicate is harmless, just never reached).
 
 
 def _rule_error(reason: str) -> ConflictError:
@@ -109,16 +106,12 @@ async def _validate_rules(
     applies_when: Sequence[dict] = (),
     stored: Sequence[dict] = (),
 ) -> None:
-    """Spec 107 write-validation, all 409: require_field conditions (and the
-    applies_when scoping conditions — same shape, same validator) must name a
-    real field with an operator its type allows and well-formed values (the
-    custom field's registry type is SNAPSHOTTED into params server-side).
-
-    RADD-1383: any other check belongs to its TRANSITION_CHECK provider, whose
-    `validate` returns the params to store. A key no loaded plugin serves is
-    refused — unless it is a rule the row ALREADY stores, unchanged (`stored`):
-    editing a row's other rules must not force deleting a gate whose plugin is
-    off. The kept rule stays fail-closed at evaluation."""
+    """Write-validation, all 409. require_field rules and applies_when conditions must
+    name a real field with an operator its type allows (a custom field's registry type
+    is snapshotted into params). Other checks go to their TRANSITION_CHECK provider's
+    `validate`; a key no loaded plugin serves is refused unless the row already stores
+    that exact rule (`stored`) — editing other rules must not force deleting a gate
+    whose plugin is off. The kept rule stays fail-closed at evaluation."""
     definitions = None
     needs_registry = any(
         rule.check == TransitionCheck.REQUIRE_FIELD
@@ -288,9 +281,7 @@ async def update_transition(
         else transition.from_state_id
     )
     to_state_id = data.to_state_id if data.to_state_id is not None else transition.to_state_id
-    await _validate_edge(
-        session, project.id, from_state_id, to_state_id, exclude_id=transition.id
-    )
+    await _validate_edge(session, project.id, from_state_id, to_state_id)
     if data.rules is not None:
         await _validate_rules(session, project, data.rules, stored=transition.rules or [])
         transition.rules = [rule.model_dump(mode="json") for rule in data.rules]
@@ -483,7 +474,8 @@ async def _snapshot(
     (each lookup is a deferred import of the owning module's public seam —
     those modules load after workflow). The WorkItem columns are free;
     labels/estimate/comment cost a query each."""
-    keys = guards.builtin_keys_in(rules) | guards.condition_builtin_keys(conditions)
+    all_conditions = [*guards.rule_conditions(rules), *conditions]
+    keys = guards.condition_builtin_keys(all_conditions)
     builtin: dict[str, object] = {
         BuiltinField.ASSIGNEE.value: _maybe_str(item.assignee_id),
         BuiltinField.REPORTER.value: _maybe_str(item.reporter_id),
@@ -518,7 +510,7 @@ async def _snapshot(
         count = (await comments.comment_counts(session, [item.id])).get(item.id, 0)
         builtin[BuiltinField.COMMENT.value] = count or None
     field_labels: dict[str, str] = {}
-    if guards.has_custom_conditions(rules) or guards.has_custom_condition(conditions):
+    if guards.has_custom_condition(all_conditions):
         from radd.modules.fields import service as fields
 
         definitions = await fields.definitions_for_project(session, project)
@@ -547,6 +539,15 @@ async def _state_names(
     return dict(result.all())
 
 
+async def _no_transition(
+    session: AsyncSession, old_state_id: uuid.UUID, new_state_id: uuid.UUID, why: str
+) -> TransitionError:
+    """STRICT mode's refusal of a move no row permits."""
+    names = await _state_names(session, {old_state_id, new_state_id})
+    from_name, to_name = names.get(old_state_id, "?"), names.get(new_state_id, "?")
+    return TransitionError([f'no transition from "{from_name}" to "{to_name}" {why}'], from_name, to_name)
+
+
 async def check_transition(
     session: AsyncSession,
     project: Project,
@@ -565,14 +566,7 @@ async def check_transition(
     candidates = edge_candidates(rows, old_state_id, new_state_id)
     if not candidates:
         if mode is TransitionMode.STRICT and rows:
-            names = await _state_names(session, {old_state_id, new_state_id})
-            from_name = names.get(old_state_id, "?")
-            to_name = names.get(new_state_id, "?")
-            raise TransitionError(
-                [f'no transition from "{from_name}" to "{to_name}" is defined'],
-                from_name,
-                to_name,
-            )
+            raise await _no_transition(session, old_state_id, new_state_id, "is defined")
         return
     snapshot = await snapshot_for(session, project, item, candidates)
     row = governing_row(candidates, snapshot)
@@ -580,14 +574,7 @@ async def check_transition(
         # Rows exist for the edge but none applies to THIS item (spec 107
         # follow-up): guards frees the move, strict blocks it.
         if mode is TransitionMode.STRICT:
-            names = await _state_names(session, {old_state_id, new_state_id})
-            from_name = names.get(old_state_id, "?")
-            to_name = names.get(new_state_id, "?")
-            raise TransitionError(
-                [f'no transition from "{from_name}" to "{to_name}" applies to this item'],
-                from_name,
-                to_name,
-            )
+            raise await _no_transition(session, old_state_id, new_state_id, "applies to this item")
         return
     rules = effective_rules(row)
     if not rules:
@@ -674,10 +661,7 @@ async def _emit(
     actor_id: uuid.UUID | None,
     diff: list[dict] | None = None,
 ) -> None:
-    names = await _state_names(
-        session,
-        {sid for sid in (transition.from_state_id, transition.to_state_id) if sid},
-    )
+    state = await _transition_audit_state(session, transition)
     await events.emit(
         session,
         event_type=event_type,
@@ -686,10 +670,7 @@ async def _emit(
         actor_id=actor_id,
         payload={
             "project_id": str(transition.project_id),
-            "from_state": names.get(transition.from_state_id),
-            "to_state": names.get(transition.to_state_id),
-            "rules": transition.rules,
-            "applies_when": transition.applies_when,
+            **{key: state[key] for key in ("from_state", "to_state", "rules", "applies_when")},
         },
         subjects={"project": transition.project_id},
         changes=diff,

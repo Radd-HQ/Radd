@@ -120,7 +120,6 @@ async def _emit(
     actor_id: uuid.UUID | None,
     diff: list[dict] | None = None,
 ) -> None:
-    await projects_service.get_project(session, release.project_id)
     await events.emit(
         session,
         event_type=event_type,

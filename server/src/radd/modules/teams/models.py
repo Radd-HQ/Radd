@@ -7,43 +7,26 @@ from radd.db import Base, TimestampMixin
 
 
 class Team(Base, TimestampMixin):
-    """A Radd grouping with an owner and a purpose — LOCAL, always (RADD-829).
-
-    The directory columns (`directory_group_dn`/`_name`, `source`,
-    `directory_missing_since`) retired with `TeamSource`: a team is never
-    directory-mirrored any more. The directory's truth lives in the `groups`
-    module, and a team reaches it by holding a GROUP as a member.
-    """
+    """A local grouping with an owner (RADD-829); it reaches the directory by holding a GROUP as a member."""
 
     __tablename__ = "teams"
     __table_args__ = (UniqueConstraint("name"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(200))
-    # Spec 87: the person accountable for the team (the spec-57 ownership idiom).
-    # Every team gets an owner at creation (RADD-895 backfilled the pre-87 rows);
-    # NULL only after the owner's account is hard-deleted (RADD-784 — ownership
-    # is delegation, not content, so it awaits a deliberately chosen new owner;
-    # managers and team.update holders administer the team meanwhile).
+    # Spec 87: the accountable person. NULL only after the owner's account is
+    # hard-deleted (RADD-784: ownership awaits a deliberately chosen new owner).
     owner_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
 
 
 class TeamManager(Base):
-    """Delegated per-team management (spec 87): a "team leader" who administers
-    THIS team and no other.
-
-    A manager need not be a member — a department lead may own a team they are
-    not in — and the row is independent of `team_members`, so it survives a
-    directory sync that drops the person from an underlying AD group.
-
-    Managers rename the team and manage its membership. They do NOT appoint other
-    managers, transfer ownership, delete the team, or attach it to projects: what
-    a team may DO on a project is `member.create` there, held by project admins.
-    That split is the safety property — a team leader decides who is on their
-    team, never what their team is entitled to.
-    """
+    """Delegated per-team management (spec 87): renames the team and manages its
+    membership, nothing more — no appointing managers, transferring or deleting.
+    A manager need not be a member, and the row survives a directory sync. The
+    safety property: a team leader decides who is on their team, never what the
+    team is entitled to (project grants stay with project admins)."""
 
     __tablename__ = "team_managers"
 
@@ -56,11 +39,7 @@ class TeamManager(Base):
 
 
 class TeamMember(Base):
-    """One member of a team: a USER or a GROUP (RADD-829 — polymorphic, exactly
-    one side set, surrogate PK). `MemberSource` retired with the rebuild: a
-    user row is by definition manual (the sync never writes here any more) and
-    a group row IS the directory's presence — the flag had nothing left to say.
-    """
+    """One member of a team: a USER or a GROUP (RADD-829; exactly one side set)."""
 
     __tablename__ = "team_members"
     __table_args__ = (

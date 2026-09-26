@@ -1,10 +1,6 @@
-"""The milestone EntitySpec — the north-star (docs/plugin-platform.md §1).
-
-Declaring THIS spec is the entire feature: the kernel auto-wires the table, a
-permission-guarded CRUD router, `milestone.created/updated/deleted` events (→
-automations + webhooks + audit), and the `milestone.create/update/delete` RBAC
-atoms — with zero edits to any other plugin or the kernel.
-"""
+"""The milestone EntitySpec. Declaring it is the entire feature: the kernel
+auto-wires the table, a permission-guarded CRUD router, the `milestone.*` events
+(automations, webhooks, audit) and the `milestone.create/update/delete` atoms."""
 
 from radd.sdk import EntityFieldSpec, EntitySpec
 

@@ -1,13 +1,6 @@
-"""Scopeable role grants (spec 87 → spec 91 → RADD-832) — how a role reaches a
-user, team, or directory GROUP outside project membership, at global OR
-project scope.
-
-Spec 87 introduced instance-wide grants (`global_role_grants`). Spec 91 adds a
-nullable `project_id`: NULL = global (unchanged), set = the role held only on that
-project. One table, one resolution path, one Grant Role dialog — "grant any role
-at global or project scope". Resolution shape still mirrors
-`teams.team_granted_role_ids`: collect role ids, load their permission sets, union.
-"""
+"""Scopeable role grants (specs 87/91, RADD-791/832): one table, one resolution
+path — a role held by a user, team or directory group, instance-wide or bound to
+one project or wiki space."""
 
 import uuid
 from collections import defaultdict
@@ -63,6 +56,13 @@ def _unscoped():
     return GlobalRoleGrant.project_id.is_(None) & GlobalRoleGrant.space_id.is_(None)
 
 
+#: The column a grant of each scope kind is bound through.
+_SCOPE_COLUMN = {
+    GrantScopeKind.PROJECT: GlobalRoleGrant.project_id,
+    GrantScopeKind.SPACE: GlobalRoleGrant.space_id,
+}
+
+
 async def granted_role_ids(
     session: AsyncSession,
     user_id: uuid.UUID,
@@ -70,17 +70,9 @@ async def granted_role_ids(
     *,
     space_id: uuid.UUID | None = None,
 ) -> set[uuid.UUID]:
-    """Role ids the user holds by grant, in one scope.
-
-    Neither id = GLOBAL scope: only the unscoped grants. A project id, or a space
-    id (RADD-791), = the unscoped grants (they apply everywhere) PLUS the ones
-    bound to that thing. Consumed by authz at every scope.
-
-    A space resolves through exactly this function and no other, which is the
-    point: `page.read` on the Render space is the same kind of fact as
-    `item.read` on a project, resolved by the same code, and a second path would
-    be a second set of rules to keep in step.
-    """
+    """Role ids the user holds by grant in one scope: neither id = only the
+    unscoped grants; a project or a space id (RADD-791) = the unscoped grants plus
+    the ones bound to it. Spaces resolve through this same function."""
     subject = await _subject_condition(session, user_id)
     scope = _unscoped()
     if project_id is not None:
@@ -93,48 +85,26 @@ async def granted_role_ids(
     return set(result.scalars())
 
 
-async def project_granted_role_ids(
-    session: AsyncSession, user_id: uuid.UUID, project_ids: Iterable[uuid.UUID]
+async def scoped_role_ids(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    kind: GrantScopeKind,
+    scope_ids: Iterable[uuid.UUID],
 ) -> dict[uuid.UUID, set[uuid.UUID]]:
-    """Batch: {project_id: role_ids} for grants SCOPED to those projects (the global
-    ones are added separately by the caller — they apply to every project)."""
-    ids = set(project_ids)
+    """Batch: {scope id: role_ids} for grants BOUND to those projects or spaces.
+    The unscoped grants apply everywhere, so the caller adds them once rather
+    than joining them per row (a nav listing would otherwise be a query per row)."""
+    ids = set(scope_ids)
     if not ids:
         return {}
+    column = _SCOPE_COLUMN[kind]
     subject = await _subject_condition(session, user_id)
     rows = await session.execute(
-        select(GlobalRoleGrant.project_id, GlobalRoleGrant.role_id).where(
-            subject & GlobalRoleGrant.project_id.in_(ids) & _live()
-        )
+        select(column, GlobalRoleGrant.role_id).where(subject & column.in_(ids) & _live())
     )
     out: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
-    for project_id, role_id in rows.all():
-        out[project_id].add(role_id)
-    return out
-
-
-async def space_granted_role_ids(
-    session: AsyncSession, user_id: uuid.UUID, space_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, set[uuid.UUID]]:
-    """Batch: {space_id: role_ids} for grants SCOPED to those spaces (RADD-791).
-
-    The `project_granted_role_ids` shape, for the other scope — the unscoped
-    grants apply everywhere and are added once by the caller rather than joined
-    per row. Listing spaces resolves every space at once, so the per-space
-    lookup would otherwise be a query per row of the wiki nav.
-    """
-    ids = set(space_ids)
-    if not ids:
-        return {}
-    subject = await _subject_condition(session, user_id)
-    rows = await session.execute(
-        select(GlobalRoleGrant.space_id, GlobalRoleGrant.role_id).where(
-            subject & GlobalRoleGrant.space_id.in_(ids) & _live()
-        )
-    )
-    out: dict[uuid.UUID, set[uuid.UUID]] = defaultdict(set)
-    for space_id, role_id in rows.all():
-        out[space_id].add(role_id)
+    for scope_id, role_id in rows.all():
+        out[scope_id].add(role_id)
     return out
 
 
@@ -173,22 +143,11 @@ async def attributed_rows_for_user(
 
 
 async def held_role_ids_anywhere(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
-    """Role ids reaching the user through ANY grant channel (direct, team,
-    group) at ANY scope — the RADD-809 inspector's subject set. Before RADD-832
-    this was direct grants only, so a role a TEAM held by grant never matched a
-    role-subject resource grant in the inspector."""
+    """Role ids reaching the user through ANY channel (direct, team, group) at
+    ANY scope — the RADD-809 inspector's subject set."""
     subject = await _subject_condition(session, user_id)
     result = await session.execute(
         select(GlobalRoleGrant.role_id).where(subject & _live()).distinct()
-    )
-    return set(result.scalars())
-
-
-async def unscoped_role_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
-    """The instance-wide role ids — the ones that apply in every scope."""
-    subject = await _subject_condition(session, user_id)
-    result = await session.execute(
-        select(GlobalRoleGrant.role_id).where(subject & _unscoped() & _live()).distinct()
     )
     return set(result.scalars())
 
@@ -225,42 +184,15 @@ async def grants_for_subject(
     return list(result.scalars())
 
 
-async def grants_for_project(
-    session: AsyncSession, project_id: uuid.UUID
+async def grants_for_scope(
+    session: AsyncSession, kind: GrantScopeKind, scope_id: uuid.UUID
 ) -> list[GlobalRoleGrant]:
-    """Every grant bound to one project (RADD-929) — the project's Access screen.
-
-    The `grants_for_space` shape for the other scope, and the read that replaces
-    `project_members` + `project_teams`: those two tables expressed exactly this
-    row (subject × role × project) and were unioned into the same
-    `_granted_role_ids` result, so "who has access to this project" now has one
-    answer instead of three lists that had to be read together.
-
-    Instance-wide grants are deliberately excluded, same reasoning as spaces: the
-    panel answers "who was given access to THIS project", and folding in
-    everyone with a global role would make revoking look possible where it is
-    not.
-    """
+    """Grants bound to one project/space — its Access panel. Instance-wide grants
+    are excluded on purpose: listing them would make revoking look possible where
+    it is not."""
     result = await session.execute(
         select(GlobalRoleGrant)
-        .where(GlobalRoleGrant.project_id == project_id)
-        .order_by(GlobalRoleGrant.created_at)
-    )
-    return list(result.scalars())
-
-
-async def grants_for_space(
-    session: AsyncSession, space_id: uuid.UUID
-) -> list[GlobalRoleGrant]:
-    """Every grant bound to one wiki space (RADD-793) — the space's Access panel.
-
-    Deliberately NOT including the instance-wide grants that also apply here: the
-    panel answers "who was given access to THIS space", and folding in everyone
-    with a global wiki role would make revoking look possible where it is not.
-    """
-    result = await session.execute(
-        select(GlobalRoleGrant)
-        .where(GlobalRoleGrant.space_id == space_id)
+        .where(_SCOPE_COLUMN[kind] == scope_id)
         .order_by(GlobalRoleGrant.created_at)
     )
     return list(result.scalars())
@@ -280,14 +212,9 @@ async def role_referenced(session: AsyncSession, role_id: uuid.UUID) -> bool:
 async def _check_scope(
     session: AsyncSession, *, project_id: uuid.UUID | None, space_id: uuid.UUID | None
 ) -> None:
-    """Refuse a grant bound to a scope that does not exist (RADD-892).
-
-    The columns are auth's, so the pairs are listed here; whether an id is REAL
-    is the scope owner's answer, read from the registry. A kind whose module is
-    not loaded cannot be checked — the foreign key is then the only guard, which
-    turns a bad id into a 500 rather than a 404, and that is the honest cost of
-    the module being absent.
-    """
+    """Refuse a grant bound to a scope that does not exist (RADD-892); whether an
+    id is real is the scope owner's answer, from the registry. An unloaded kind
+    cannot be checked, so the FK is the only guard (a 500, not a 404)."""
     for kind, scope_id in (
         (GrantScopeKind.PROJECT, project_id),
         (GrantScopeKind.SPACE, space_id),
@@ -299,6 +226,34 @@ async def _check_scope(
             continue
         if not await spec.exists(session, scope_id):
             raise NotFoundError(kind, scope_id)
+
+
+async def _check_subjects(
+    session: AsyncSession,
+    *,
+    user_ids: list[uuid.UUID],
+    team_ids: list[uuid.UUID],
+    group_ids: list[uuid.UUID],
+) -> None:
+    """Refuse (409) a grant naming a user, team or group that does not exist."""
+    from radd.modules.groups import service as groups_service  # deferred
+    from radd.modules.teams import service as teams  # deferred: teams loads after auth
+
+    from . import service as users_service
+
+    for label, ids, load in (
+        ("user", user_ids, users_service.users_by_ids),
+        ("team", team_ids, teams.teams_by_ids),
+        ("group", group_ids, groups_service.groups_by_ids),
+    ):
+        if not ids:
+            continue
+        found = await load(session, ids)
+        for subject_id in ids:
+            if found.get(subject_id) is None:
+                raise ConflictError(
+                    AuthEntity.GLOBAL_GRANT, reason=f"no such {label} {subject_id}"
+                )
 
 
 async def create_grant(
@@ -316,10 +271,7 @@ async def create_grant(
     """Grant a role to a user, team, or directory group (RADD-832) at a scope.
     No scope id = instance-wide; a project id or a space id (RADD-791) binds it
     to that one thing."""
-    from radd.modules.groups import service as groups_service
-    from radd.modules.teams import service as teams
-
-    from . import roles as roles_service, service as users_service
+    from . import roles as roles_service
 
     if len([x for x in (user_id, team_id, group_id) if x is not None]) != 1:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one subject required")
@@ -329,14 +281,12 @@ async def create_grant(
         )
     await session.execute(select(Role.id).where(Role.id == role_id).with_for_update())
     role = await roles_service.get_role(session, role_id)
-    if user_id is not None and user_id not in await users_service.users_by_ids(session, [user_id]):
-        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such user {user_id}")
-    if team_id is not None and (await teams.teams_by_ids(session, [team_id])).get(team_id) is None:
-        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
-    if group_id is not None and (
-        await groups_service.groups_by_ids(session, [group_id])
-    ).get(group_id) is None:
-        raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such group {group_id}")
+    await _check_subjects(
+        session,
+        user_ids=[user_id] if user_id is not None else [],
+        team_ids=[team_id] if team_id is not None else [],
+        group_ids=[group_id] if group_id is not None else [],
+    )
     await _check_scope(session, project_id=project_id, space_id=space_id)
     # Guard duplicates (NULL scope columns aren't caught by the unique constraint).
     existing = await session.scalar(
@@ -408,7 +358,6 @@ async def _grant_description(
 ) -> dict[str, str]:
     """What an auditor reads for a grant: the subject's NAME, the scope's KEY —
     resolved at write time so the record survives the subject's deletion."""
-    from radd.kernel import registries
     from radd.modules.groups import service as groups_service
     from radd.modules.projects import service as projects_service
     from radd.modules.teams import service as teams
@@ -485,6 +434,21 @@ async def _emit(
     )
 
 
+async def change_expiry(
+    session: AsyncSession,
+    grant: GlobalRoleGrant,
+    role_key: str,
+    expires_at,
+    *,
+    actor_id: uuid.UUID | None,
+) -> None:
+    """Set a grant's expiry (RADD-820; None = permanent) and audit old → new."""
+    previous = grant.expires_at
+    grant.expires_at = expires_at.replace(tzinfo=None) if expires_at else None
+    await session.flush()
+    await _emit(session, role_key, grant, "expiry changed", actor_id, previous_expiry=previous)
+
+
 async def replace_grants(
     session: AsyncSession,
     role_id: uuid.UUID,
@@ -495,12 +459,7 @@ async def replace_grants(
     """Full-state replace of who holds this role GLOBALLY (the Roles page editor).
     Only global grants (project_id NULL) are touched — project-scoped grants are
     managed grant-by-grant through the Grant Role dialog."""
-    from radd.modules.groups import service as groups_service  # deferred
-    from radd.modules.teams import service as teams  # deferred: teams loads after auth
-
-    from . import roles as roles_service, service as users_service
-
-    from .models import Role
+    from . import roles as roles_service
 
     await session.execute(select(Role.id).where(Role.id == role_id).with_for_update())
     role = await roles_service.get_role(session, role_id)
@@ -516,20 +475,9 @@ async def replace_grants(
             raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"duplicate subject {key[1]}")
         seen.add(key)  # type: ignore[arg-type]
     user_ids = [e.user_id for e in entries if e.user_id is not None]
-    found_users = await users_service.users_by_ids(session, user_ids)
-    for user_id in user_ids:
-        if user_id not in found_users:
-            raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such user {user_id}")
     team_ids = [e.team_id for e in entries if e.team_id is not None]
-    found_teams = await teams.teams_by_ids(session, team_ids)
-    for team_id in team_ids:
-        if found_teams.get(team_id) is None:
-            raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such team {team_id}")
     group_ids = [e.group_id for e in entries if e.group_id is not None]
-    found_groups = await groups_service.groups_by_ids(session, group_ids)
-    for gid in group_ids:
-        if found_groups.get(gid) is None:
-            raise ConflictError(AuthEntity.GLOBAL_GRANT, reason=f"no such group {gid}")
+    await _check_subjects(session, user_ids=user_ids, team_ids=team_ids, group_ids=group_ids)
 
     # Spec 123: full-state replace diffs as who gained and who lost the role.
     previous_rows = list(
@@ -579,26 +527,11 @@ async def replace_grants(
 async def users_entitled_to_project(
     session: AsyncSession, project_id: uuid.UUID
 ) -> set[uuid.UUID]:
-    """Every account entitled to a project through a GRANT (RADD-938).
-
-    The reverse of the usual question. `effective_permissions` answers
-    "what may this person do here", which is the wrong shape for a picker —
-    asking it per row would be one resolution per account in the directory.
-    This resolves the SET once: the grants that apply here (project-scoped plus
-    instance-wide, which reach every project), flattened through their subjects.
-
-    Entitlement means a grant, deliberately. It does NOT include the
-    relationship-derived visibility of RADD-937 — someone who can see a project
-    because they filed a ticket in it is not therefore a sensible assignee, and
-    a picker that offered them would be recommending the thing this exists to
-    warn about.
-
-    Admins are not enumerated: they bypass every check and adding ~all of them
-    to every picker's "has access" set would say less, not more.
-    """
-    from radd.modules.groups import service as groups_service  # deferred
-    from radd.modules.teams import service as teams  # deferred
-
+    """Every account entitled to a project through a GRANT (RADD-938): project-
+    scoped plus instance-wide grants flattened through teams and groups, as one
+    set (per-account `effective_permissions` would be a resolution per row).
+    Relationship-derived visibility (RADD-937) does not count; admins are not
+    enumerated."""
     rows = (
         await session.execute(
             select(GlobalRoleGrant).where(
@@ -607,6 +540,16 @@ async def users_entitled_to_project(
             )
         )
     ).scalars()
+    return await holder_user_ids(session, rows)
+
+
+async def holder_user_ids(
+    session: AsyncSession, rows: Iterable[GlobalRoleGrant]
+) -> set[uuid.UUID]:
+    """The accounts these grant rows reach, flattened through teams and (nested)
+    directory groups."""
+    from radd.modules.groups import service as groups_service  # deferred
+    from radd.modules.teams import service as teams  # deferred
 
     users: set[uuid.UUID] = set()
     team_ids: set[uuid.UUID] = set()

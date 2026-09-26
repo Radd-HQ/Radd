@@ -35,7 +35,7 @@ class User(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True)  # stored lowercase
     name: Mapped[str] = mapped_column(String(200))
-    password_hash: Mapped[str | None] = mapped_column(String(255))  # None = SSO-only (future)
+    password_hash: Mapped[str | None] = mapped_column(String(255))  # None/"" = no password login
     instance_role: Mapped[str] = mapped_column(String(20), default=InstanceRole.MEMBER)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Spec 84: which auth system created the account (UserSource). Creation
@@ -50,11 +50,9 @@ class User(Base, TimestampMixin):
     # emoji override; timezone is an IANA name ("" = use the browser's).
     avatar_color: Mapped[str | None] = mapped_column(String(7))
     avatar_emoji: Mapped[str | None] = mapped_column(String(16))
-    # RADD-1295: a real picture. `avatar_blob` names an uploaded image, already
-    # normalised (square, 256px, WebP) and stored through the attachments blob
-    # API by the `avatars` module on `avatar_blob_host_id` (a plain id, no FK:
-    # auth sits below attachments). `avatar_idp_url` is the identity provider's
-    # picture, recorded at SSO login. `avatar_url` below picks between them.
+    # RADD-1295: an uploaded picture, stored by the `avatars` module on
+    # `avatar_blob_host_id` (a plain id, no FK: auth sits below attachments), or
+    # the identity provider's; `avatar_url` picks between them.
     avatar_blob: Mapped[str | None] = mapped_column(String(64))
     avatar_blob_host_id: Mapped[uuid.UUID | None] = mapped_column()
     avatar_idp_url: Mapped[str | None] = mapped_column(String(1024))
@@ -105,14 +103,10 @@ class TotpRecoveryCode(Base, TimestampMixin):
 
 
 class MfaEnrollmentTicket(Base, TimestampMixin):
-    """RADD-1279: the credential a password login receives INSTEAD of a session
-    when `require_mfa` is on and the account has no confirmed TOTP row.
-
-    Not a session on purpose — a second kind of session is something every
-    guard would have to learn to refuse. A ticket opens exactly two endpoints
-    (TOTP setup + confirm, `/auth/mfa-enrollment/*`), expires in minutes, and is
-    burned by the confirm that finally mints the session. Only its SHA-256 is
-    stored, like every other bearer secret here."""
+    """RADD-1279: what a password login gets INSTEAD of a session under
+    `require_mfa` with no confirmed TOTP. Not a session (every guard would have to
+    learn to refuse it): it opens only `/auth/mfa-enrollment/*`, expires in minutes
+    and is burned by the confirm; only its SHA-256 is stored."""
 
     __tablename__ = "mfa_enrollment_tickets"
 
@@ -172,8 +166,8 @@ class ApiToken(Base):
 
 
 class Role(Base, TimestampMixin):
-    """A named permission set (spec 06). Builtins (admin/member/viewer) are seeded
-    globally and immutable; custom roles carry any subset of Permission values."""
+    """A named permission set (spec 06). Builtins (`BuiltinRoleKey`) are seeded and
+    immutable, except the Baseline; custom roles carry any atoms."""
 
     __tablename__ = "roles"
     __table_args__ = (UniqueConstraint("key"),)
@@ -188,21 +182,10 @@ class Role(Base, TimestampMixin):
 
 
 class GlobalRoleGrant(Base, TimestampMixin):
-    """A SCOPEABLE role grant (spec 87 → spec 91 → RADD-832): a role held by a
-    user, a team, or a directory GROUP, either instance-wide (`project_id` NULL =
-    global, the spec-87 behavior) or on one project (`project_id` set). Exactly
-    one of user_id/team_id/group_id.
-
-    This is the DELIVERY MECHANISM for permission atoms outside project membership.
-    Global grants apply at BOTH scopes (global checks union them in; every project
-    treats them as one more granted role). A project-scoped grant applies only on
-    that project — the "grant any role at global or project scope" the unified Grant
-    Role dialog writes, so a team can be given a role on specific projects without
-    project membership.
-
-    Rows die with the user/team/project (FK CASCADE); the role is RESTRICTed while
-    any grant references it — the one table that now holds every grant.
-    """
+    """A role held by exactly one subject (user, team or directory group), either
+    instance-wide or scoped to one project or one wiki space (never both) — THE
+    grant table (RADD-929). Rows die with their subject/scope (CASCADE); a
+    referenced role is RESTRICTed."""
 
     __tablename__ = "global_role_grants"
     __table_args__ = (
@@ -237,26 +220,17 @@ class GlobalRoleGrant(Base, TimestampMixin):
     group_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("groups.id", ondelete="CASCADE"), index=True
     )
-    # NULL = global (every project); set = scoped to that project only.
+    # Set = scoped to that project only.
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
-    # RADD-820: NULL = permanent; expiry applies at RESOLUTION time (every
-    # GlobalRoleGrant query carries the liveness clause), the sweep only
-    # deletes corpses. granted_by NULL = pre-existing/system rows.
+    # RADD-820: NULL = permanent; the resolvers apply expiry (`grants._live()`),
+    # the sweep only deletes corpses. granted_by NULL = pre-existing/system rows.
     expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
     granted_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    # RADD-791 — the second scope: a wiki space, which behaves like a project.
-    #
-    # A typed column with its own FK rather than a polymorphic
-    # `(scope_type, scope_id)` pair. Polymorphic would absorb a third scope with
-    # no migration, and it cannot carry a foreign key — so a deleted space would
-    # leave grants behind, and the permission table would keep rows that
-    # reference nothing. Trading referential integrity on THIS table for a scope
-    # nobody has asked for is the speculative kind of framework dev rule 5 rules
-    # out; adding one later is this column again plus ten lines in grants.py.
+    # RADD-791: the second scope, a wiki space (typed FK — see GrantScopeKind).
     space_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("page_spaces.id", ondelete="CASCADE"), index=True
     )

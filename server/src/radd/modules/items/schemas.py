@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from radd.config import settings
 from radd.modules.cycles.types import CycleStatus
@@ -101,7 +101,10 @@ class ItemLinkCreate(BaseModel):
 
 
 class UserRef(BaseModel):
-    """Compact embed of a user (assignee, comment author)."""
+    """Compact embed of a user (assignee, comment author); `model_validate(user)`
+    reads it straight off the User row."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     name: str

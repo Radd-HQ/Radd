@@ -1,10 +1,6 @@
-"""Roles as data + direct project membership (spec 06). The auth module owns `roles`.
-
-Builtin roles (admin/member/viewer) are global rows, ensured idempotently on
-startup (subscribers.ensure_seeded) and by the seed script. Builtin permission
-sets are immutable; deletion requires a role to be custom AND unreferenced
-(any role grant) — 409 otherwise.
-"""
+"""Roles as data (spec 06). Builtins are ensured at startup; their permission
+sets are immutable (except the Baseline's), and only an unreferenced custom
+role may be deleted (409 otherwise)."""
 
 import uuid
 
@@ -24,15 +20,9 @@ from .types import BUILTIN_ROLES, AuthEntity, AuthEvent, BuiltinRoleKey
 
 
 def ensure_permissions_mutable(role: Role) -> None:
-    """Builtin permission sets are fixed — except Baseline's, which exists to be
-    edited (RADD-773).
-
-    Baseline is what every active user holds without being granted anything. It
-    was two frozensets in `authz.py` before, which is precisely why nobody could
-    see or change it. Making the row editable IS the feature; it stays builtin so
-    it cannot be deleted (see `ensure_deletable`) — a missing baseline would
-    silently drop every non-admin to no access at all.
-    """
+    """Builtin permission sets are fixed — except the Baseline's, which exists to
+    be edited (RADD-773). It stays builtin so it cannot be deleted: a missing
+    baseline would silently drop every non-admin to no access at all."""
     if role.is_builtin and role.key != BuiltinRoleKey.BASELINE.value:
         raise ConflictError(
             AuthEntity.ROLE, reason=f"builtin role '{role.key}' has an immutable permission set"
@@ -53,20 +43,9 @@ def ensure_deletable(role: Role, *, referenced: bool) -> None:
 
 
 async def ensure_builtin_roles(session: AsyncSession) -> None:
-    """Seed the builtin roles, and CONVERGE the immutable ones on the code
-    (startup ensure + seed both call this).
-
-    RADD-1305: this used to insert missing roles and never touch an existing
-    one, so a builtin row drifted from its definition the first time the
-    definition changed — live Admin was found missing two atoms. The immutable
-    builtins are now re-synced (permissions, name, description, position) and
-    each correction is audited as `role.updated` with its diff, so drift is
-    visible rather than silent.
-
-    Baseline is the exception: it exists to be edited (RADD-773), so an
-    existing row is never overwritten — a change to its DEFAULT reaches
-    existing instances only through a migration that states it.
-    """
+    """Seed the builtin roles and CONVERGE the immutable ones on BUILTIN_ROLES at
+    every startup, auditing each correction as `role.updated` (RADD-1305). The
+    Baseline is insert-only: admins edit it, so its default changes by migration."""
     existing = {
         role.key: role
         for role in (await session.execute(select(Role).where(Role.is_builtin))).scalars()
@@ -190,9 +169,6 @@ async def delete_role(
     role = await get_role(session, role_id)
     from . import grants
 
-    # RADD-929: one table to ask. `project_members` and `project_teams` used to
-    # need their own reference checks here; both are grants now, so a role in use
-    # anywhere is a role some grant names.
     referenced = await grants.role_referenced(session, role_id)
     ensure_deletable(role, referenced=referenced)
     await _emit_role(session, AuthEvent.ROLE_DELETED, role, actor_id=actor_id)

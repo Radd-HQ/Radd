@@ -79,7 +79,6 @@ async def update_type(
     actor_id: uuid.UUID | None = None,
 ) -> IssueType:
     issue_type = await get_type(session, type_id)
-    project = await projects_service.get_project(session, issue_type.project_id)
     before = changes.snapshot(issue_type, TYPE_FIELDS)
     if data.name is not None:
         issue_type.name = data.name
@@ -90,7 +89,7 @@ async def update_type(
     if data.position is not None:
         issue_type.position = data.position
     if data.is_default:
-        await _clear_default(session, project.id)
+        await _clear_default(session, issue_type.project_id)
         issue_type.is_default = True
     # Template (spec 76): omitted = unchanged; explicit null/'' clears.
     if "description_template" in data.model_fields_set:
@@ -114,7 +113,6 @@ async def delete_type(
         raise ConflictError(
             TypeEntity.ISSUE_TYPE, reason="cannot delete the default type; set another default first"
         )
-    await projects_service.get_project(session, issue_type.project_id)
     await _emit(session, TypeEvent.DELETED, issue_type, actor_id)
     await session.delete(issue_type)  # items' type_id nulls via FK ondelete SET NULL
     await session.flush()

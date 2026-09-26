@@ -76,7 +76,7 @@ async def test_a_project_manager_runs_their_projects_cycles_and_nothing_else(db)
 async def test_a_projects_cycles_are_its_own_plus_those_holding_its_issues(db):
     mine, theirs = await _project(db, "MN"), await _project(db, "TH")
     admin = await _user(db)
-    own = await cycles_router.create_cycle(CycleCreate(name="Own", project_id=mine.id), db, admin)
+    await cycles_router.create_cycle(CycleCreate(name="Own", project_id=mine.id), db, admin)
     shared = await cycles_router.create_cycle(CycleCreate(name="Shared", project_id=theirs.id), db, admin)
     unrelated = await cycles_router.create_cycle(CycleCreate(name="Unrelated", project_id=theirs.id), db, admin)
     await items.create_item(db, ItemCreate(project_id=mine.id, title="in their sprint", cycle_id=shared.id), admin)

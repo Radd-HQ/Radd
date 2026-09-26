@@ -1,14 +1,10 @@
-"""Bulk operations (spec 68): batch edit, cross-project move, id listing.
+"""Bulk operations: batch edit, cross-project move, id listing.
 
-Bulk edits route through the single-item service (`update_item`/`set_archived`)
-per item, so RBAC, builtin-field rules, transition guards, events, automations,
-notify, search and realtime keep their exact semantics — this layer only adds
-iteration, a SAVEPOINT per item, and skip-and-report (one bad item never fails
-the batch). Moves re-key items into the target project with name-based
-state/type mapping and write `item_key_aliases` rows so old URLs keep resolving.
-A move moves EXACTLY the selected items (spec 80): the hierarchy is
-global now, so parent/child links survive a cross-project move and
-children stay where they are unless also selected.
+Every per-item change goes through the single-item service inside its own
+SAVEPOINT, so RBAC, field rules, guards, events and realtime keep their exact
+semantics and one bad item is skipped and reported, never failing the batch.
+A move takes EXACTLY the selection (the hierarchy spans projects), re-keys it,
+maps state/type by name and writes `item_key_aliases` so old URLs resolve.
 """
 
 import logging
@@ -34,7 +30,7 @@ from radd.modules.projects.models import Project
 from .changes import diff_item_reads, field_name_map
 from .enums import BulkSkipReason, ItemEntity, ItemEvent
 from .filters import ItemListFilters
-from .hydration import hydrate, label_names
+from .hydration import label_names
 from .models import ItemKeyAlias, WorkItem
 from .schemas import (
     BulkMovedItem,
@@ -52,12 +48,8 @@ from .service.scope import visible_ids_query
 
 # Package-private helpers — reached through their concern module, not the service
 # barrel, which exports only the items module's public surface.
-from .service.visibility import (
-    relation_read_clause,
-    _check_builtin_field_rules,
-    _field_ctx,
-    _internal_visible,
-)
+from .service.read import _hydrate_one, event_item
+from .service.visibility import _check_builtin_field_rules, _field_ctx
 from radd.modules.events import service as events
 
 logger = logging.getLogger(__name__)
@@ -80,6 +72,27 @@ def _skip(
     item_id: uuid.UUID, key: str | None, reason: BulkSkipReason, detail: str | None = None
 ) -> BulkSkipped:
     return BulkSkipped(item_id=item_id, key=key, reason=reason, detail=detail)
+
+
+def _skip_for(
+    exc: Exception,
+    item_id: uuid.UUID,
+    key: str | None,
+    *,
+    invalid_target: tuple[type[Exception], ...],
+    operation: str,
+) -> BulkSkipped:
+    """Map one item's failure to its skip reason. `invalid_target` errors are a
+    project-scoped value that doesn't apply to this item's project — expected when
+    a selection spans projects. Call from inside the `except` (logs the traceback)."""
+    if isinstance(exc, ForbiddenError):
+        return _skip(item_id, key, BulkSkipReason.FORBIDDEN)
+    if isinstance(exc, TransitionError):
+        return _skip(item_id, key, BulkSkipReason.TRANSITION_BLOCKED, "; ".join(exc.errors))
+    if isinstance(exc, invalid_target):
+        return _skip(item_id, key, BulkSkipReason.INVALID_TARGET, str(exc))
+    logger.exception("bulk-%s failed for item %s", operation, item_id)
+    return _skip(item_id, key, BulkSkipReason.ERROR)
 
 
 async def _item_key(session: AsyncSession, item: WorkItem) -> str:
@@ -123,21 +136,10 @@ async def bulk_update_items(
         try:
             async with session.begin_nested():
                 await _apply_one(session, item, data.patch, actor)
-        except ForbiddenError:
-            result.skipped.append(_skip(item_id, key, BulkSkipReason.FORBIDDEN))
-        except TransitionError as exc:
-            result.skipped.append(
-                _skip(item_id, key, BulkSkipReason.TRANSITION_BLOCKED, "; ".join(exc.errors))
-            )
-        except (ConflictError, NotFoundError) as exc:
-            # A project-scoped value (state/type/release…) that doesn't apply to
-            # this item's project — expected when a selection spans projects.
-            result.skipped.append(
-                _skip(item_id, key, BulkSkipReason.INVALID_TARGET, str(exc))
-            )
-        except Exception:
-            logger.exception("bulk-update failed for item %s", item_id)
-            result.skipped.append(_skip(item_id, key, BulkSkipReason.ERROR))
+        except Exception as exc:  # classified, unknown ones logged: _skip_for
+            result.skipped.append(_skip_for(
+                exc, item_id, key, invalid_target=(ConflictError, NotFoundError), operation="update"
+            ))
         else:
             result.updated.append(item_id)
     return result
@@ -149,10 +151,7 @@ async def bulk_update_items(
 async def _selected_items(
     session: AsyncSession, ids: Sequence[uuid.UUID]
 ) -> list[WorkItem]:
-    """The selected items, deduped, in selection order (unknown ids dropped).
-    Spec 80 removed the descendant auto-include: the hierarchy is
-    global, so a move takes EXACTLY the selection — parent links
-    survive the project change and children stay unless also selected."""
+    """The selected items, deduped, in selection order (unknown ids dropped)."""
     unique = list(dict.fromkeys(ids))
     rows = {
         row.id: row
@@ -178,24 +177,8 @@ async def _move_one(
     target_permissions,
 ) -> BulkMovedItem:
     old_key = await _item_key(session, item)
-    readable_map = await authz.readable_projects(session, actor)
-    readable = frozenset(readable_map)
-    relation_clause = await relation_read_clause(session, actor, readable_map)
-    before = (
-        await hydrate(
-            session,
-            [item],
-            internal_visible=_internal_visible({source.id: permissions}),
-            actor_id=actor.id,
-            readable_project_ids=readable,
-            relation_clause=relation_clause,
-        )
-    )[0]
+    before = await _hydrate_one(session, item, source, actor, permissions)
     old_state_id = item.state_id
-
-    # `parent_id` is untouched: the hierarchy spans projects (spec 80), so
-    # the link stays valid across the project change — validity is already
-    # enforced by the caller's target check.
 
     # State by NAME, else a default of the same category, else the project default.
     old_state = await workflow.get_state(session, item.state_id)
@@ -253,37 +236,20 @@ async def _move_one(
     # hear about it through workflow, mirroring the single-item path.
     await workflow.state_moved(session, item.id, item.state_id)
 
-    after = (
-        await hydrate(
-            session,
-            [item],
-            internal_visible=_internal_visible({target.id: permissions}),
-            actor_id=actor.id,
-            readable_project_ids=readable,
-            relation_clause=relation_clause,
-        )
-    )[0]
+    # The SOURCE permissions decide internal visibility on both sides of the diff.
+    after = await _hydrate_one(session, item, target, actor, permissions)
     definitions = await fields.definitions_for_project(session, target)
     changes = diff_item_reads(before, after, field_names=field_name_map(definitions))
     changes.insert(0, {"field": "project", "from": source.key, "to": target.key})
     changes.insert(1, {"field": "key", "from": old_key, "to": after.key})
-    # Same shape as `read._finish` (RADD-922): the whole read under `item`, with
-    # `project` promoted to a ref, and `changes` at the root because it describes
-    # the EVENT. A cross-project move is still an item.updated, and a consumer
-    # must not have to know which code path produced it.
-    payload = {
-        "item": {
-            **after.model_dump(mode="json"),
-            "project": {"id": str(target.id), "key": target.key, "name": target.name},
-        },
-    }
+    # A cross-project move is still an item.updated, in `read._finish`'s shape.
     await events.emit(
         session,
         event_type=ItemEvent.UPDATED,
         entity_type=ItemEntity.ITEM,
         entity_id=item.id,
         actor_id=actor.id,
-        payload=payload,
+        payload={"item": event_item(after, target)},
         changes=changes,
     )
     return BulkMovedItem(
@@ -353,19 +319,10 @@ async def bulk_move_items(
                     perms[source.id],
                     target_permissions,
                 )
-        except ForbiddenError:
-            result.skipped.append(_skip(item_id, key, BulkSkipReason.FORBIDDEN))
-        except TransitionError as exc:
-            result.skipped.append(
-                _skip(item_id, key, BulkSkipReason.TRANSITION_BLOCKED, "; ".join(exc.errors))
-            )
-        except ConflictError as exc:
-            result.skipped.append(
-                _skip(item_id, key, BulkSkipReason.INVALID_TARGET, str(exc))
-            )
-        except Exception:
-            logger.exception("bulk-move failed for item %s", item_id)
-            result.skipped.append(_skip(item_id, key, BulkSkipReason.ERROR))
+        except Exception as exc:  # classified, unknown ones logged: _skip_for
+            result.skipped.append(_skip_for(
+                exc, item_id, key, invalid_target=(ConflictError,), operation="move"
+            ))
         else:
             result.moved.append(moved)
     return result

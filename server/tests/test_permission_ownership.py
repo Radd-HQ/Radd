@@ -133,9 +133,8 @@ def test_umbrellas_expand_through_the_registry():
     """The implication edges moved out of auth with the atoms: a CRUD resource's
     `manage`, a `PermissionSpec.implied_by`, and `.implies` for the qualified
     form `implied_by` cannot express (RADD-790's `attachment.delete@own`)."""
-    from radd.modules.auth.types import IMPLIED_PERMISSIONS, expand_permissions, implied_map
+    from radd.modules.auth.types import expand_permissions, implied_map
 
-    assert not IMPLIED_PERMISSIONS, "auth owns no implications; they are module declarations now"
     assert {"state.manage", "field.manage", "release.create", "member.delete"} <= implied_map()[
         "project.manage"
     ]

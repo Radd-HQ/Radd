@@ -70,11 +70,8 @@ async def view_summary(
 
 
 _COUNTS_DOC = (
-    "Batched membership counts for sidebar badges (spec 64; a view type with a sidebar "
-    "section of its own, RADD-1396): a compiled-SLQ "
-    "SELECT count(*) per view, visibility-filtered exactly like the view read path — "
-    "invisible/unknown ids are simply omitted. Quick filters are NOT applied (base "
-    "membership count); archived items and projects without item.read don't count."
+    "Batched membership counts for sidebar badges: one compiled-SLQ count per visible view. "
+    "Invisible/unknown ids and stale queries are omitted; quick filters are not applied."
 )
 
 
@@ -88,16 +85,12 @@ async def view_counts(
     )
 
 
-# --- card-layout preset library (spec 109) -----------------------------------
-# Literal segments, registered before the parameterized /{view_id} routes so
-# they win over uuid parsing (the /counts precedent). Applying a preset is
-# client-side (PATCH the view's card_layout with a COPY) — no apply endpoint.
+# Literal segments before /{view_id}. Applying a preset is a client-side PATCH (a copy).
 
 
 @router.get("/card-presets", response_model=list[CardPresetRead])
 async def list_card_presets(session: Session, user: CurrentUser) -> list[CardPresetRead]:
-    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
-    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    # CARD_PRESET_READ is Baseline-seeded but revocable.
     if not await authz.holds(session, user, authz.Permission.CARD_PRESET_READ):
         return []
     return [
@@ -144,10 +137,9 @@ async def update_view(
 
 
 _SHARING_DOC = (
-    "Set the view's PUBLIC access level (spec 57): global_access is what every active user "
-    "gets; null = not globally visible. Per-subject viewer/editor grants moved to the "
-    "generic /grants API in spec 92 — this endpoint no longer carries them (RADD-869). "
-    "Owner-only (seeded owner-less views: view.update); enabling global_access needs view.create."
+    "Set the view's public access level: global_access is what every active user gets; "
+    "null = not public. Per-subject grants go through /grants. Owner-only (seeded "
+    "owner-less views: view.update); enabling global_access needs view.create."
 )
 
 

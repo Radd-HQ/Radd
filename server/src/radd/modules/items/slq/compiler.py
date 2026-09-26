@@ -58,7 +58,7 @@ async def compile_query(
     `epic`/`parent` item keys (spec 83, alias-aware). `denied_fields` (RADD-840)
     carries the actor's read-restricted field names — conditions and sorts on
     them refuse at compile time, closing the bisection oracle."""
-    labels = await _resolve_label_ids(session, project_id, _label_names(query.where))
+    labels = await label_ids_by_name(session, project_id, _label_names(query.where))
     ancestors = await resolve_ancestor_keys(session, ancestor_key_texts(query.where))
     ctx = Context(definitions_by_key, current_user_id, labels, ancestors, denied_fields)
     where = _expr(ctx, query.where) if query.where is not None else None
@@ -136,11 +136,13 @@ def _label_names(expr: Expr | None) -> set[str]:
     return set()
 
 
-async def _resolve_label_ids(
+async def label_ids_by_name(
     session: AsyncSession, project_id: uuid.UUID | None, names: set[str]
 ) -> dict[str, tuple[uuid.UUID, ...]]:
-    """name -> ids over the labels in use (same idiom as items/listing.py); a name
-    used nowhere resolves to () and compiles to an empty match."""
+    """name -> ids over the labels IN USE (in `project_id`'s items when given) —
+    also the `label=` list filter's resolver. A name used nowhere resolves to ()
+    and compiles to an empty match. item_labels is items-owned; the labels table
+    stays private to its module, hence the service call."""
     if not names:
         return {}
     in_use = select(ItemLabel.label_id).distinct()

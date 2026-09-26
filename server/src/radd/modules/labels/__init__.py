@@ -11,8 +11,6 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('label', ('/settings/labels',)),
     ),
-    # RADD-816 (F6): label.read is a deliverable atom — Baseline-seeded, so day-one
-    # behaviour is the old member floor, but REVOCABLE for the first time.
     crud_resources=(
         CrudResourceSpec(
             "label", "global", "labels", "global.manage",

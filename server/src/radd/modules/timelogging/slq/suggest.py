@@ -1,13 +1,6 @@
-"""Autocomplete for the worklog dialect — including the delegated `issue.` half.
-
-The delegation is the same trick the compiler uses, applied to completion: when
-the token under the cursor starts with `issue.`, we hand the whole query to the
-ITEM suggester with that prefix spliced out, and shift the returned offset back.
-So `issue.assi|` completes to `issue.assignee` using the item dialect's own
-field list, value resolvers and ranking — this module never restates them, and
-anything the item dialect learns later (a new custom field, a plugin field) is
-completable here the day it exists.
-"""
+"""Autocomplete for the worklog dialect. `issue.` completions are delegated to
+the item suggester with the prefix spliced out and the offset shifted back, so
+anything the item dialect learns is completable here the day it exists."""
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

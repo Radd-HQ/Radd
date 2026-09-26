@@ -1,20 +1,7 @@
-"""`logged_by` — the item SLQ field this module contributes.
-
-"Which issues has Alice logged time on?" is a question about WORKLOGS, but the
-answer is a set of ITEMS, so it belongs in the item dialect. The plugin SLQ-field
-registry (spec 94) is exactly that seam: this module hands back a Select of
-matching work-item ids and the items engine wraps it as `work_item.id IN (…)`.
-Items never learns that worklogs exist, and this module never touches the items
-tables — the only shared model is the `auth.User` spine.
-
-    logged_by = me
-    logged_by = "alice@corp.example"
-    logged_by ~ alice            -- substring over name/email
-    logged_by != me              -- negation is applied by the engine
-
-Itemless worklogs (spec 59) simply never match: their `item_id` is NULL, so they
-cannot name an item, which is the correct answer rather than an omission.
-"""
+"""`logged_by` — the item SLQ field this module contributes through the plugin
+SLQ-field registry: a Select of work-item ids with a worklog by the matched
+author (`me`, email or name; `~` = substring; the engine applies negation).
+Itemless worklogs never match."""
 
 from sqlalchemy import or_, select
 from sqlalchemy.sql import Select

@@ -1,12 +1,7 @@
 """RADD-1279 routes: the enrolment hand-off a refused login walks, and the
-admin's reset. Split from `router.py` (already past the size rule); the
-policy itself lives in `mfa_policy`.
-
-The two `/auth/mfa-enrollment/*` routes take a TICKET, never `CurrentUser`:
-the person reaching them was refused a session precisely because they have no
-second factor, so they hold no cookie. Confirm is the only way the ticket
-turns into a session, and it burns the ticket in the same transaction.
-"""
+admin's reset. The `/auth/mfa-enrollment/*` routes take a TICKET, never
+`CurrentUser` (the person has no session — that is why they are here); confirm
+burns the ticket and mints the session in the same transaction."""
 
 import uuid
 from typing import Annotated
@@ -14,11 +9,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
 from radd.db import get_session
 
 from . import authz, mfa_policy, service, totp
 from .deps import CurrentUser
+from .router import _set_session_cookie
 from .schemas import (
     MfaEnrollmentConfirm,
     MfaEnrollmentTicketRequest,
@@ -26,7 +21,7 @@ from .schemas import (
     TotpSetupRead,
 )
 from .throttle import check_login_attempt
-from .types import SESSION_COOKIE_NAME, LoginMethod
+from .types import LoginMethod
 
 mfa_enrollment_router = APIRouter(prefix="/auth/mfa-enrollment", tags=["auth"])
 mfa_admin_router = APIRouter(prefix="/users", tags=["users"])
@@ -59,14 +54,7 @@ async def enrollment_confirm(
     codes = await service.totp_confirm(session, user, data.code)
     await mfa_policy.burn_ticket(session, data.ticket)
     token = await service.create_session(session, user, method=LoginMethod.PASSWORD_TOTP)
-    response.set_cookie(
-        SESSION_COOKIE_NAME,
-        token,
-        max_age=settings.session_ttl_hours * 3600,
-        httponly=True,
-        samesite="lax",
-        secure=settings.session_cookie_secure,
-    )
+    _set_session_cookie(response, token)
     return TotpRecoveryCodesRead(recovery_codes=codes)
 
 

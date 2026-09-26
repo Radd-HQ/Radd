@@ -1,20 +1,9 @@
-"""The "Publish version and sweep" automation node (RADD-1310).
-
-Until RADD-1309 the GitHub and Forgejo receivers did this themselves on every
-published release of a repository with a default project — find-or-create the
-version as released and move everything waiting into it — with no switch. Now a
-connector only fires "<host>: release published", and this node is what an
-automation puts after it. It calls `pipeline.on_release_published`, the same
-seam the receivers used, so what ships is identical; only who decided changed.
-
-Contributed the way `pages/automation.py` is: `subject="project"` makes the
-executor hand the node the project the event names (a release trigger's subject
-is its repository's default project), and the executor supplies the savepoint,
-the budget and the loop guard. Nothing here imports `automations`.
-
-Where the version comes from: the event's own `version` (the tag with a leading
-`v` stripped), unless the node names one — a literal, or a template rendered
-through `ctx.render` (RADD-1324).
+"""The "Publish version and sweep" automation node (RADD-1310): what an
+automation puts after a "<host>: release published" trigger. Calls
+`pipeline.on_release_published`; `subject="project"` hands it the project the
+event names (the repository's default project). The version is the event's
+(tag minus a leading `v`) unless the node sets one — a literal or a template
+(RADD-1324). Nothing here imports `automations`.
 """
 
 from __future__ import annotations

@@ -1,17 +1,12 @@
-"""SLQ suggest (spec 12): live value sources per field.
-
-Scope = the project when given, else the actor's readable projects (RADD-839)
-for row-level data — item keys+titles and project keys. State/label/release/
-type NAMES stay instance-wide vocabulary (the open-visibility default,
-docs/modules.md). Everything flows through the owning modules' public service
-functions; item keys are the one direct query (WorkItem is ours, Project
-follows the service-layer precedent set by items/service.py).
-"""
+"""SLQ suggest: live value sources per field. Row-level data (item keys+titles,
+project keys) is scoped to the project, else the actor's readable projects;
+state/label/release/type NAMES are instance-wide vocabulary."""
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import String, cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,8 +27,7 @@ from ..enums import ItemKind, ItemVisibility, Priority
 from ..filters import NONE_LITERAL
 from ..models import WorkItem
 from .catalog import ME_LITERAL, SlqField
-from .custom import BOOLEAN_WORDS
-from .helpers import LIKE_ESCAPE, TODAY_LITERAL, escape_like
+from .helpers import BOOLEAN_WORDS, LIKE_ESCAPE, TODAY_LITERAL, escape_like
 
 MAX_SUGGESTIONS = 20  # frozen response cap (spec 12)
 
@@ -162,7 +156,8 @@ async def value_candidates(
         # Ancestor sub-fields (spec 83) reuse the item-level sources; the
         # candidate detail carries the matched field name (epic.state, …).
         case SlqField.STATE | SlqField.EPIC_STATE | SlqField.PARENT_STATE:
-            return _entities(await _state_names(session, scope), builtin)
+            names = await _per_project_names(session, scope, workflow.list_states, "name")
+            return _entities(names, builtin)
         case SlqField.CATEGORY | SlqField.EPIC_CATEGORY | SlqField.PARENT_CATEGORY:
             return _enum_candidates(StateCategory, builtin)
         case SlqField.KIND:
@@ -201,9 +196,12 @@ async def value_candidates(
             from radd.modules.cycles.types import CycleStatus
             return _enum_candidates(CycleStatus, builtin)
         case SlqField.CYCLE | SlqField.PAST_CYCLE:
-            return [_none()] + _entities(await _cycle_names(session, scope), builtin)
+            return [_none()] + _entities(await _cycle_names(session), builtin)
         case SlqField.RELEASE:
-            return [_none()] + _entities(await _release_versions(session, scope), builtin)
+            versions = await _per_project_names(
+                session, scope, releases_service.list_releases, "version"
+            )
+            return [_none()] + _entities(versions, builtin)
         case SlqField.CREATED | SlqField.UPDATED | SlqField.START | SlqField.TARGET:
             return [_today(), _date_hint()]
         case SlqField.FLAGGED | SlqField.STARRED:
@@ -224,8 +222,14 @@ def _cf_candidates(definition: FieldDefinition) -> list[Candidate]:
     return []  # text/url/number/duration/user: free-form (context still reported)
 
 
-async def _state_names(session: AsyncSession, scope: SuggestScope) -> list[str]:
-    """Distinct state names in scope — the project's own, else across all projects."""
+async def _per_project_names(
+    session: AsyncSession,
+    scope: SuggestScope,
+    rows_of: Callable[[AsyncSession, uuid.UUID], Awaitable[Iterable[Any]]],
+    attr: str,
+) -> list[str]:
+    """Distinct `attr` values of `rows_of(project)`: the scope project's own, else
+    deduped across every project (state names, release versions)."""
     projects = (
         [scope.project]
         if scope.project is not None
@@ -233,29 +237,15 @@ async def _state_names(session: AsyncSession, scope: SuggestScope) -> list[str]:
     )
     names: dict[str, None] = {}
     for project in projects:
-        for state in await workflow.list_states(session, project.id):
-            names.setdefault(state.name, None)
+        for row in await rows_of(session, project.id):
+            names.setdefault(getattr(row, attr), None)
     return list(names)
 
 
-async def _cycle_names(session: AsyncSession, scope: SuggestScope) -> list[str]:
+async def _cycle_names(session: AsyncSession) -> list[str]:
     """Cycle names (cycles span projects; project scope doesn't narrow them)."""
     cycles = await cycles_service.list_cycles(session)
     return [cycle.name for cycle in cycles]
-
-
-async def _release_versions(session: AsyncSession, scope: SuggestScope) -> list[str]:
-    """Release versions in scope: the project's own, else deduped across projects."""
-    projects = (
-        [scope.project]
-        if scope.project is not None
-        else await projects_service.list_projects(session)
-    )
-    versions: dict[str, None] = {}
-    for project in projects:
-        for release in await releases_service.list_releases(session, project.id):
-            versions.setdefault(release.version, None)
-    return list(versions)
 
 
 async def _user_candidates(session: AsyncSession) -> list[Candidate]:

@@ -46,16 +46,6 @@ COMMENTS_MODULE_PATH = "radd.modules.comments"
 _EPIC_LOOKUP_RUNGS = len(ItemKind)
 
 
-def _user_ref(user) -> UserRef:
-    return UserRef(
-        id=user.id,
-        name=user.name,
-        avatar_color=user.avatar_color,
-        avatar_emoji=user.avatar_emoji,
-        avatar_url=user.avatar_url,
-    )
-
-
 async def label_names(
     session: AsyncSession, item_ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, list[str]]:
@@ -227,27 +217,17 @@ async def hydrate(
     readable_project_ids: frozenset[uuid.UUID] | None = None,
     relation_clause=None,
 ) -> list[ItemRead]:
-    """`readable_project_ids` (RADD-839): the projects the ACTOR may read — parent
-    breadcrumbs, epic refs, link targets and child counts outside it are dropped
-    from the payload (the row survives; the cross-project reference does not).
-    None = trusted context (system consumers), nothing dropped.
-
-    `relation_clause` (RADD-835): the RADD-823 row filter for the same actor —
-    `items.service.visibility.relation_read_clause` — applied to every
-    cross-item reference this assembles (parents, link far-ends, child
-    counts). The project filter answers "which projects may they read"; this
-    one answers "which ROWS", and since the floor narrowed to item.read@own
-    the second question is the one that bites."""
+    """`readable_project_ids`: projects the actor may read — parent/epic refs,
+    link targets and child counts outside them are dropped (None = trusted,
+    nothing dropped). `relation_clause`: the actor's row filter
+    (`visibility.relation_read_clause`), applied to the same cross-item refs."""
     pivot = today or date.today()  # derives cycle status; injectable for determinism
     item_ids = [i.id for i in items]
     starred = await _starred_ids(session, actor_id, item_ids)
     parents = await _parents_by_id(
         session, {i.parent_id for i in items if i.parent_id}, relation_clause
     )
-    # RADD-697: the epic axis needs the epic an item BELONGS TO, which is at most
-    # two hops up (hierarchy: epic <- issue <- subtask). One extra batched
-    # lookup for the grandparents, merged into the same map — a subtask's epic
-    # is its parent-issue's parent, and no client can derive that from `parent`.
+    # One more batched hop for grandparents: a subtask's epic is its parent-issue's parent.
     parents |= await _parents_by_id(
         session,
         {p.parent_id for p in parents.values() if p.parent_id} - set(parents),
@@ -354,13 +334,9 @@ async def hydrate(
             visibility=ItemVisibility(i.visibility),
             parent=parent_ref(i.parent_id),
             epic=epic_ref(i),
-            assignee=(
-                _user_ref(users[i.assignee_id])
-                if i.assignee_id
-                else None
-            ),
+            assignee=UserRef.model_validate(users[i.assignee_id]) if i.assignee_id else None,
             reporter=(
-                _user_ref(users[i.reporter_id])
+                UserRef.model_validate(users[i.reporter_id])
                 if i.reporter_id and i.reporter_id in users
                 else None
             ),

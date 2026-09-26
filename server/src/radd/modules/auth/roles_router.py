@@ -1,14 +1,10 @@
-"""Roles CRUD, the permission catalog, and role grants.
-
-RADD-929 removed the `/projects/{id}/members` endpoints: direct membership is a
-role grant scoped to the project, so `/role-grants` reads it (`?project_id=`) and
-writes it, under the scope-derived authorization RADD-826 already built.
-"""
+"""Roles CRUD, the permission catalog, and role grants."""
 
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import func, select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.apitypes import TOTAL_COUNT_HEADER
@@ -19,8 +15,9 @@ from radd.modules.projects import service as projects_service
 from . import authz, preflight, grants, roles, role_options, grant_directory, scoped_grants
 from radd.choices import ChoiceRead
 from .deps import CurrentUser
-from radd.exceptions import ConflictError, ForbiddenError
+from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 
+from .models import GlobalRoleGrant, User as UserModel
 from .schemas import (
     BaselinePreflightRead,
     BaselinePreflightRequest,
@@ -41,6 +38,7 @@ from pydantic import BaseModel
 from radd.modules.access.schemas import AccessGrantExpiry
 from .types import (
     AuthEntity,
+    BuiltinRoleKey,
     GrantScopeKind,
     InstanceRole,
     Permission,
@@ -49,6 +47,9 @@ from .types import (
     permission_description_of,
     permission_parts,
     permission_scope_of,
+    relation_contains,
+    relations_held,
+    split_permission,
 )
 
 async def ensure_delegated_role_coverage(
@@ -60,8 +61,6 @@ async def ensure_delegated_role_coverage(
     project-scoped holdings; lacking an atom globally is not a refusal (without
     this, delegation mostly refuses). Relation-qualified atoms compare by the
     lattice: holding item.update (@any) covers granting item.update@own."""
-    from .types import expand_permissions, relation_contains, relations_held, split_permission
-
     actor_permissions = await authz.effective_permissions(session, actor, project=project)
     missing: list[str] = []
     for atom in sorted(expand_permissions(set(role.permissions))):
@@ -76,6 +75,27 @@ async def ensure_delegated_role_coverage(
         )
 
 
+async def _require_grant_delegate(
+    session: AsyncSession,
+    user,
+    grant: GlobalRoleGrant | None,
+    atom: Permission,
+    refusal: str,
+    *,
+    role_id: uuid.UUID | None = None,
+) -> None:
+    """RADD-826: without role.update, a caller may touch only a PROJECT-scoped
+    grant, holding `atom` there — and, when a role is being handed out, covering
+    it (D14)."""
+    if grant is None or grant.project_id is None:
+        raise ForbiddenError(refusal)
+    project = await projects_service.get_project(session, grant.project_id)
+    await authz.require(session, user, atom, project=project)
+    if role_id is not None:
+        role = await roles.get_role(session, role_id)
+        await ensure_delegated_role_coverage(session, user, role, project)
+
+
 role_router = APIRouter(prefix="/roles", tags=["roles"])
 role_grant_router = APIRouter(prefix="/role-grants", tags=["roles"])
 permission_router = APIRouter(prefix="/permissions", tags=["roles"])
@@ -85,8 +105,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @role_router.get("", response_model=list[RoleRead])
 async def list_roles(session: Session, user: CurrentUser) -> list[RoleRead]:
-    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
-    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    # RADD-816: role.read is Baseline-seeded but revocable.
     if not await authz.holds(session, user, Permission.ROLE_READ):
         return []
     return [RoleRead.model_validate(r) for r in await roles.list_roles(session)]
@@ -197,11 +216,10 @@ async def delete_role(role_id: uuid.UUID, session: Session, user: CurrentUser) -
 
 
 _GRANTS_DOC = (
-    "Who holds this role INSTANCE-WIDE (spec 87) — the delivery mechanism for global-scope "
-    "atoms, which no project attachment can carry. Granted permissions apply at global scope "
-    "and on every project. PUT replaces the full set atomically; each entry is exactly one of "
-    "user_id/team_id/group_id. Gated on role.update: like editing a role's permission set, handing out "
-    "instance-wide grants is escalation-equivalent to instance admin."
+    "Who holds this role INSTANCE-WIDE (spec 87): granted atoms apply at global scope and on "
+    "every project. PUT replaces the full set atomically; each entry is exactly one of "
+    "user_id/team_id/group_id. Gated on role.update — handing out instance-wide grants is "
+    "escalation-equivalent to instance admin."
 )
 
 
@@ -216,56 +234,19 @@ class RoleImpactRead(BaseModel):
 
 @role_router.get("/{role_id}/impact", response_model=RoleImpactRead)
 async def role_impact(role_id: uuid.UUID, session: Session, user: CurrentUser) -> RoleImpactRead:
-    """Who an edit to this role AFFECTS (RADD-836 U4) — resolved through every
-    channel: direct membership rows, team attachments (group-carried members
-    included), and role grants (user/team/group subjects, nesting resolved).
-    A permission system that cannot answer this gets changed by trial and
-    error on production."""
+    """Who an edit to this role AFFECTS (RADD-836 U4): every holder through a
+    user, team or (nested) group grant."""
     await authz.require(session, user, Permission.ROLE_READ)
     role = await roles.get_role(session, role_id)
-    from radd.modules.auth.types import BuiltinRoleKey
-
     if role.key == BuiltinRoleKey.BASELINE.value:
-        from sqlalchemy import func, select as sa_select
-
-        from .models import User as UserModel
-
         count = await session.scalar(
             sa_select(func.count()).select_from(UserModel).where(UserModel.active.is_(True))
         )
         return RoleImpactRead(role_id=role.id, total_users=count or 0, everyone=True)
-
-    from sqlalchemy import select as sa_select
-
-    from radd.modules.groups import service as groups_service
-    from radd.modules.teams import service as teams_service
-
-    from .models import GlobalRoleGrant
-
-    # RADD-929: two more subject sources used to be read here (`project_members`
-    # for users, `project_teams` for teams). Both are grants, so the loop below
-    # collects every holder from one table.
-    holders: set[uuid.UUID] = set()
-    team_ids: set[uuid.UUID] = set()
-    grant_rows = list(
-        (
-            await session.execute(
-                sa_select(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id)
-            )
-        ).scalars()
-    )
-    group_ids: set[uuid.UUID] = set()
-    for grant in grant_rows:
-        if grant.user_id is not None:
-            holders.add(grant.user_id)
-        elif grant.team_id is not None:
-            team_ids.add(grant.team_id)
-        elif grant.group_id is not None:
-            group_ids.add(grant.group_id)
-    for team_id in team_ids:
-        holders |= {u.id for u, _via in await teams_service.member_users_with_via(session, team_id)}
-    if group_ids:
-        holders |= await groups_service.users_for_groups(session, group_ids)
+    grant_rows = (
+        await session.execute(sa_select(GlobalRoleGrant).where(GlobalRoleGrant.role_id == role_id))
+    ).scalars()
+    holders = await grants.holder_user_ids(session, grant_rows)
     return RoleImpactRead(role_id=role.id, total_users=len(holders))
 
 
@@ -290,12 +271,9 @@ async def replace_global_grants(
 
 
 _GRANT_DIALOG_DOC = (
-    "The unified Grant Role dialog (spec 91 → RADD-791 → RADD-832): grant a role to a "
-    "user, team, or directory group "
-    "at global scope (no ids), on specific projects, or in specific wiki spaces. One "
-    "dialog for every scope — a second one for spaces is how two scopes become two sets "
-    "of rules. Like editing a role, handing out grants is escalation-equivalent — gated "
-    "on role.update."
+    "Grant a role to a user, team or directory group at global scope (no ids), on specific "
+    "projects, or in specific wiki spaces (spec 91, RADD-791/832). Gated on role.update; a "
+    "project delegate may grant existing roles on its own project (member.create there)."
 )
 
 
@@ -309,16 +287,8 @@ async def list_role_grants(
     space_id: uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
 ) -> list[GlobalGrantRead]:
-    """Role grants, by SUBJECT (the team/user/group Roles tab), by SPACE
-    (RADD-793), or by PROJECT (RADD-929).
-
-    Exactly one of team_id/user_id/group_id/space_id/project_id. The scope
-    directions are the ones an admin actually asks — "who has access to this
-    space / this project?" — and asking that by walking every user was not an
-    answer. The project direction replaces the `project_members` +
-    `project_teams` reads: three lists that had to be read together to answer
-    one question.
-    """
+    """Role grants by SUBJECT (the Roles tab), by SPACE (RADD-793) or by PROJECT
+    (RADD-929); exactly one of team_id/user_id/group_id/space_id/project_id."""
     named = [x for x in (team_id, user_id, group_id, space_id, project_id) if x is not None]
     if len(named) != 1:
         raise ConflictError(
@@ -329,12 +299,12 @@ async def list_role_grants(
         # Wiki-only readers need no unrelated issue-project membership. Check
         # the requested space itself; unreadable grants must not be exposed.
         await authz.require(session, user, Permission.PAGE_READ, space_id=space_id)
-        rows = await grants.grants_for_space(session, space_id)
+        rows = await grants.grants_for_scope(session, GrantScopeKind.SPACE, space_id)
     else:
         await authz.require_member(session, user)
         if project_id is not None:
             await scoped_grants.require_project_scope(session, user, project_id)
-            rows = await grants.grants_for_project(session, project_id)
+            rows = await grants.grants_for_scope(session, GrantScopeKind.PROJECT, project_id)
         else:
             rows = await grants.grants_for_subject(
                 session, user_id=user_id, team_id=team_id, group_id=group_id
@@ -348,10 +318,8 @@ async def list_role_grants(
 async def create_role_grant(
     data: RoleGrantCreate, session: Session, user: CurrentUser
 ) -> list[GlobalGrantRead]:
-    # RADD-826 (D3): a PROJECT admin grants existing roles on their own project
-    # without global role.update — gated on member.create THERE, containment
-    # enforced by the row shape (a delegate can only write project-scoped
-    # grants) and D14's scope-aware intersection below.
+    # RADD-826: a PROJECT admin grants existing roles on their own project with
+    # member.create THERE — project-scoped rows only, plus D14's coverage check.
     if not await authz.holds(session, user, Permission.ROLE_UPDATE):
         if not data.project_ids or data.space_ids:
             raise ForbiddenError(
@@ -395,31 +363,28 @@ async def update_role_grant(
     hand out roles their own coverage allows (the RADD-826 containment rule,
     same as create)."""
     if not await authz.holds(session, user, Permission.ROLE_UPDATE):
-        from .models import GlobalRoleGrant
-
-        grant = await session.get(GlobalRoleGrant, grant_id)
-        if grant is None or grant.project_id is None:
-            raise ForbiddenError("changing a grant beyond a project's scope requires role.update")
-        project = await projects_service.get_project(session, grant.project_id)
-        await authz.require(session, user, Permission.MEMBER_UPDATE, project=project)
-        role = await roles.get_role(session, data.role_id)
-        await ensure_delegated_role_coverage(session, user, role, project)
+        await _require_grant_delegate(
+            session,
+            user,
+            await session.get(GlobalRoleGrant, grant_id),
+            Permission.MEMBER_UPDATE,
+            "changing a grant beyond a project's scope requires role.update",
+            role_id=data.role_id,
+        )
     updated = await grants.update_grant_role(session, grant_id, data.role_id, actor_id=user.id)
     return GlobalGrantRead.model_validate(updated)
 
 
 @role_grant_router.delete("/{grant_id}", status_code=204)
 async def delete_role_grant(grant_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    # RADD-826: a project admin may revoke a grant SCOPED to their project
-    # (member.delete there); anything wider still needs role.update.
     if not await authz.holds(session, user, Permission.ROLE_UPDATE):
-        from .models import GlobalRoleGrant
-
-        grant = await session.get(GlobalRoleGrant, grant_id)
-        if grant is None or grant.project_id is None:
-            raise ForbiddenError("revoking beyond a project's scope requires role.update")
-        project = await projects_service.get_project(session, grant.project_id)
-        await authz.require(session, user, Permission.MEMBER_DELETE, project=project)
+        await _require_grant_delegate(
+            session,
+            user,
+            await session.get(GlobalRoleGrant, grant_id),
+            Permission.MEMBER_DELETE,
+            "revoking beyond a project's scope requires role.update",
+        )
     await grants.delete_grant(session, grant_id, actor_id=user.id)
 
 
@@ -439,16 +404,9 @@ async def grant_help(
     user: CurrentUser,
     project_id: uuid.UUID | None = None,
 ) -> GrantHelpRead:
-    """Who can grant `permission` (RADD-836 U3): instance admins always; plus,
-    for a project scope, the people holding member.create there (RADD-826's
-    delegates). Names only — this is a door-knocker, not a directory."""
+    """Who can grant `permission` (RADD-836 U3): instance admins, plus the
+    member.create holders on the project (RADD-826). Names only."""
     await authz.require_member(session, user)
-    from sqlalchemy import select as sa_select
-
-    from radd.modules.auth.types import permission_scope_of
-
-    from .models import User as UserModel
-
     admins = list(
         (
             await session.execute(
@@ -461,14 +419,10 @@ async def grant_help(
     )
     granters = admins
     if project_id is not None:
-        from radd.modules.projects import service as projects_service
-
         project = await projects_service.get_project(session, project_id)
-        # RADD-929: the project's grants, not its membership rows. This read a
-        # user-only table, so a delegate entitled through a team or a directory
-        # group was never named — the 403 said "ask an admin" to people whose
-        # own team lead could have fixed it.
-        project_grants = await grants.grants_for_project(session, project.id)
+        project_grants = await grants.grants_for_scope(
+            session, GrantScopeKind.PROJECT, project.id
+        )
         role_map = await roles.roles_by_ids(session, {g.role_id for g in project_grants})
         delegate_ids = [
             g.user_id
@@ -506,25 +460,15 @@ async def permission_catalog(session: Session, user: CurrentUser) -> list[Permis
     ])
     if not can_configure:
         await authz.require_member(session, user)
-    # Composed from the kernel permissions registry (RADD-890): every atom's
-    # scope and description is its owning module's declaration, whether that
-    # module is `items` or a third-party plugin — there is no core/plugin branch
-    # here, and there is nothing to edit in auth when a module adds one.
-    #
-    # The enum supplies DISPLAY ORDER only. It is a hand-curated grouping the
-    # matrix reads top-to-bottom (item.* beside each other, the CRUD triples
-    # after their umbrella), which sorting alphabetically would scatter; atoms
-    # it does not name follow, sorted.
+    # Composed from the registry (RADD-890). The enum supplies DISPLAY ORDER only
+    # (the matrix's hand-curated grouping); atoms it does not name follow, sorted.
     ordered = [p.value for p in Permission]
     named = set(ordered)
     extra = sorted(k for k in all_permission_keys() if k not in named)
     catalog = []
     for key in [*ordered, *extra]:
         resource, action = permission_parts(key)
-        # RADD-939: the qualifiers this atom may carry. `relation_domain` is the
-        # atom's own resource unless its module declared a parent (RADD-844 —
-        # `comment.write` qualifies against the ITEM the comment lands on), and
-        # it is the same resolution the write validator uses.
+        # RADD-939: the same relation-domain resolution the write validator uses.
         relations = registries.relations_for(registries.relation_domain(key))
         catalog.append(
             PermissionRead(
@@ -542,24 +486,20 @@ async def permission_catalog(session: Session, user: CurrentUser) -> list[Permis
     return catalog
 
 
-
 @role_grant_router.patch("/{grant_id}/expiry", response_model=GlobalGrantRead)
 async def change_role_grant_expiry(grant_id: uuid.UUID, data: AccessGrantExpiry, session: Session, user: CurrentUser):
-    from .models import GlobalRoleGrant
-    from radd.exceptions import NotFoundError
-
     grant = await session.get(GlobalRoleGrant, grant_id)
     if grant is None:
         raise NotFoundError("role grant", grant_id)
     role = await roles.get_role(session, grant.role_id)
     if not await authz.holds(session, user, Permission.ROLE_UPDATE):
-        if grant.project_id is None:
-            raise ForbiddenError("changing this grant requires role.update")
-        project = await projects_service.get_project(session, grant.project_id)
-        await authz.require(session, user, Permission.MEMBER_UPDATE, project=project)
-        await ensure_delegated_role_coverage(session, user, role, project)
-    previous_expiry = grant.expires_at
-    grant.expires_at = data.expires_at.replace(tzinfo=None) if data.expires_at else None
-    await session.flush()
-    await grants._emit(session, role.key, grant, "expiry changed", user.id, previous_expiry=previous_expiry)
+        await _require_grant_delegate(
+            session,
+            user,
+            grant,
+            Permission.MEMBER_UPDATE,
+            "changing this grant requires role.update",
+            role_id=role.id,
+        )
+    await grants.change_expiry(session, grant, role.key, data.expires_at, actor_id=user.id)
     return GlobalGrantRead.model_validate(grant)

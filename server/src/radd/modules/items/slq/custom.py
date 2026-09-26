@@ -16,9 +16,11 @@ from radd.modules.fields.types import FieldType
 from ..models import WorkItem
 from .catalog import CF_OPS
 from .errors import SlqError, unknown_field
-from .helpers import (
+from .helpers import (  # BOOLEAN_WORDS re-exported: ai.nlrepair reads it here
+    BOOLEAN_WORDS as BOOLEAN_WORDS,
     LIKE_ESCAPE,
     Context,
+    bool_value,
     check_ops,
     compare,
     date_value,
@@ -31,9 +33,6 @@ from .lexer import CompareOp
 from .parser import Comparison, Condition, EmptyCheck, Membership, Value
 
 EMPTY_JSON_ARRAY = "[]"
-
-BOOLEAN_WORDS = {"true": True, "false": False}
-
 
 def cf_scalar(definition: FieldDefinition, value: Value, field: str) -> Any:
     """Coerce a query value to the JSON shape the field stores."""
@@ -49,11 +48,7 @@ def cf_scalar(definition: FieldDefinition, value: Value, field: str) -> Any:
                     f"field '{field}' expects a number, got '{value.text}'", value.position
                 ) from None
     if field_type is FieldType.BOOLEAN:
-        if value.text not in BOOLEAN_WORDS:
-            raise SlqError(
-                f"field '{field}' expects true or false, got '{value.text}'", value.position
-            )
-        return BOOLEAN_WORDS[value.text]
+        return bool_value(value, field)
     if field_type is FieldType.DATE:
         return date_value(value, field).isoformat()
     return plain(value, field)

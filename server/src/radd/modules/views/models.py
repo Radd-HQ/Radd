@@ -9,18 +9,13 @@ from radd.db import Base, TimestampMixin
 
 
 class View(Base, TimestampMixin):
-    """A saved view: a named board/list over an SLQ query (spec 10).
+    """A saved view: a named board/list/planning/roadmap over an SLQ query.
 
-    Ownership + sharing (spec 57): `owner_id` = the creator (full control —
-    edit, share, delete). Visibility = owner ∪ `view_shares` grantees (users /
-    team members, each at a `ShareLevel`) ∪ every active user when
-    `global_access` is set (its value = the level everyone gets). No shares +
-    no global_access = private. LEGACY: pre-spec-57 globally-shared views
-    have `owner_id` NULL — they're managed via the view.* RBAC atoms instead
-    of an owner. `project_id` NULL = all-projects. `query` is SLQ text
-    (compile-validated on write against the field registry; '' =
-    everything). `group_by`/`swimlane_by` are axis tokens
-    (state|assignee|priority|kind|team|cf.<select-key>); they must differ.
+    `owner_id` is the accountable owner (NULL on seeded project views, which the
+    view.* atoms manage). Per-subject shares are access grants (resource "view");
+    `global_access` is the ShareLevel every active user gets (NULL = not public).
+    `project_id` NULL = all projects. `group_by`/`swimlane_by` are axis tokens
+    (a ViewAxis value or cf.<select-key>) and must differ.
     """
 
     __tablename__ = "views"
@@ -37,12 +32,8 @@ class View(Base, TimestampMixin):
     # natural order), so a renamed state or new category degrades gracefully.
     column_order: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     swimlane_order: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    # RADD-1175: board column PRESENCE, saved on the view like column_order —
-    # shared shape, never a personal preference. `collapse_empty_columns`: an
-    # empty bucket renders as a narrow rail that stays a drop target (expands
-    # on hover and for the duration of a drag). `hidden_columns`: bucket keys
-    # never shown on this view; loosely validated like column_order so a
-    # departed state degrades to an ignored key. NULL = nothing hidden.
+    # Board column presence — part of the shared view, never a personal preference.
+    # hidden_columns: bucket keys, loosely validated like column_order; NULL = none hidden.
     collapse_empty_columns: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
@@ -75,19 +66,10 @@ class View(Base, TimestampMixin):
     global_access: Mapped[str | None] = mapped_column(String(10))
     position: Mapped[int] = mapped_column(Integer, default=0)
 
-# View shares (spec 57) moved to the generic `access_grants` table (spec 92,
-# resource_type="view", access = a ShareLevel). `owner_id` + `global_access` above
-# stay on the view — they're not per-subject grants.
-
 
 class ViewMember(Base, TimestampMixin):
-    """Curated view membership (roadmap wave): a hand-picked item pinned to a
-    view. Mechanism only — the roadmap surface's Members/All toggle is the
-    policy on top, and the `roadmap` SLQ field this module registers is the
-    read seam (`/items?q=roadmap = "<view>"`), so membership is queryable on
-    ANY item surface, not just the roadmap. Writes ride the spec-57 view edit
-    gate (owner/editor); reads are the item dialect, so item RBAC applies.
-    """
+    """An item hand-pinned to a view. Writes ride the view edit gate; reads go
+    through the item dialect (`roadmap = <view>`), so item RBAC applies."""
 
     __tablename__ = "view_members"
 

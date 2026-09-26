@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.auth.models import User
-from radd.modules.automations import engine, gates, service as automations, templating
+from radd.modules.automations import engine, service as automations, templating
 from radd.modules.automations.conditions import EventFacts
 from radd.modules.automations.schemas import RuleCreate
 from radd.modules.comments import service as comments, threads

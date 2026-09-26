@@ -1,8 +1,4 @@
-"""Work categories: globally-configurable tags for a worklog.
-
-Default categories seed via an idempotent on-startup ensure (spec 86 stage 3 —
-replaces the retired `workspace.created` hook; the seed script calls
-`ensure_default_categories` directly)."""
+"""Work categories: global tags for a worklog; the defaults seed idempotently on startup."""
 
 import uuid
 from collections.abc import Iterable
@@ -135,8 +131,7 @@ async def ensure_default_categories(session: AsyncSession) -> None:
 
 
 async def ensure_seeded() -> None:
-    """On-startup ensure: the default global work categories exist (spec 86 stage 3
-    — replaces the retired `workspace.created` seed hook)."""
+    """On-startup ensure: the default global work categories exist."""
     async with SessionLocal() as session:
         await ensure_default_categories(session)
         await session.commit()

@@ -1,15 +1,9 @@
-"""Pure transition-guard evaluation (specs 61/107) — no DB, unit-tested.
+"""Pure transition-guard evaluation — no DB, unit-tested.
 
 A transition row carries `rules` = [{check, params}]; `evaluate` turns them into
-human-readable failure strings against an ItemSnapshot the service builds. Kept
-pure so the invariant is tested without a DB (mirrors forms/validation.py).
-
-Spec 107: every data check is ONE shape — require_field {kind, key, op, values}
-over builtins + custom fields (the old five presence checks are migrated rows).
-
-RADD-1383: any other check key is a plugin's, served through the kernel's
-TRANSITION_CHECK socket; `evaluate` takes the live providers as a parameter
-(staying pure) and a rule nobody serves FAILS CLOSED.
+failure strings against an ItemSnapshot the service builds. Data checks share one
+shape (require_field {kind, key, op, values}); any other key is a plugin's, passed
+in as `providers`, and a rule nobody serves FAILS CLOSED.
 """
 
 from collections.abc import Mapping, Sequence
@@ -253,7 +247,8 @@ def conditions_met(
     return all(_evaluate_field(condition, snapshot) is None for condition in conditions)
 
 
-def _rule_conditions(rules: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+def rule_conditions(rules: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The condition dicts carried by require_field rules."""
     return [
         rule.get("params") or {}
         for rule in rules
@@ -276,12 +271,3 @@ def has_custom_condition(conditions: Sequence[Mapping[str, Any]]) -> bool:
     return any(
         condition.get("kind") == ConditionKind.CUSTOM.value for condition in conditions
     )
-
-
-def builtin_keys_in(rules: Sequence[Mapping[str, Any]]) -> set[str]:
-    """BuiltinField keys referenced by require_field rows."""
-    return condition_builtin_keys(_rule_conditions(rules))
-
-
-def has_custom_conditions(rules: Sequence[Mapping[str, Any]]) -> bool:
-    return has_custom_condition(_rule_conditions(rules))

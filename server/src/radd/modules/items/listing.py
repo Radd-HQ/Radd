@@ -13,12 +13,12 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from radd.modules.fields import service as fields
 from radd.modules.fields.models import FieldDefinition
-from radd.modules.labels import service as labels_service
 from radd.modules.workflow import service as workflow
 from radd.modules.projects.models import Project
 
 from .filters import IdOrNoneFilter, ItemFilterParam, ItemListFilters, parse_cf, parse_id_or_none
 from .models import ItemLabel, WorkItem
+from .slq.compiler import label_ids_by_name
 
 
 def _id_or_none_clause(
@@ -35,20 +35,9 @@ def _id_or_none_clause(
 async def _label_clause(
     session: AsyncSession, project_id: uuid.UUID | None, names: tuple[str, ...]
 ) -> ColumnElement[bool]:
-    """Items carrying ANY of the given label names.
-
-    Names resolve via the labels service over the distinct label ids in use
-    (item_labels is items-owned; the labels table stays private to its module).
-    """
-    in_use = select(ItemLabel.label_id).distinct()
-    if project_id:
-        in_use = in_use.join(WorkItem, WorkItem.id == ItemLabel.item_id).where(
-            WorkItem.project_id == project_id
-        )
-    used_ids = set((await session.execute(in_use)).scalars())
-    by_id = await labels_service.labels_by_ids(session, used_ids)
-    wanted_names = set(names)
-    wanted = {label_id for label_id, label in by_id.items() if label.name in wanted_names}
+    """Items carrying ANY of the given label names (resolved as SLQ `label` is)."""
+    resolved = await label_ids_by_name(session, project_id, set(names))
+    wanted = {label_id for ids in resolved.values() for label_id in ids}
     if not wanted:
         return false()  # none of the names is in use anywhere -> empty result
     return WorkItem.id.in_(select(ItemLabel.item_id).where(ItemLabel.label_id.in_(wanted)))

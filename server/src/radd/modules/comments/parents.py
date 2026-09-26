@@ -1,25 +1,13 @@
 """What a comment can hang off (RADD-717).
 
-Comments were not merely item-KEYED, they were item-SHAPED: the owning project
-came from `items.require_item`, visibility was decided against that project, and
-every permission check was project-scoped. A page has no project, so making a
-page own a comment is this seam, not a column rename.
-
-Same shape as `attachments/parents.py` (spec 102), deliberately — that binding
-registry already solved "several kinds of thing own the same child", and a
-second registry with different vocabulary would be one more thing to learn. A
-module registers its own binding at plugin init, so `comments` never learns that
-`pages` exists (dev rule 1).
-
-A binding answers three questions:
-
-  - **Where does this live?** `project_of` returns the owning project, or None
-    for a globally-scoped parent like a wiki page. None is not an error state:
-    it means the permission checks run at global scope, which is exactly how
+A module registers a `CommentParent` at plugin init (same shape as
+`attachments/parents.py`), so `comments` never learns that `pages` exists.
+A binding answers:
+  - `project_of`: the owning project, or None for a global parent such as a
+    wiki page. The permission checks then run at global scope, which is how
     page atoms are granted.
-  - **May this actor read it?** `require_read` — a comment is never more visible
-    than the thing it is attached to.
-  - **May this actor comment on it?** `require_write`.
+  - `require_read`: a comment is never more visible than its parent.
+  - `require_write`: may this actor comment on it.
 """
 
 from __future__ import annotations
@@ -55,14 +43,9 @@ class CommentParent:
     require_write: Guard
     #: Editing or deleting SOMEONE ELSE'S comment on this parent.
     manage_permission: Permission
-    #: The event type emitted when a parent of this kind is destroyed.
-    #:
-    #: This is what replaces the foreign key's ON DELETE CASCADE. A polymorphic
-    #: column cannot carry an FK, so cleanup has to be driven by something —
-    #: and putting it on the BINDING rather than in a table inside the GC means
-    #: a plugin that registers a parent gets cleanup automatically instead of
-    #: needing an edit to a module it does not own. (attachments/gc.py keeps
-    #: that map hardcoded, which is exactly the seam a plugin cannot reach.)
+    #: Event emitted when a parent of this kind is destroyed. It replaces the FK's
+    #: ON DELETE CASCADE: `gc.cascades` derives one sweep per binding from it, so
+    #: a plugin that registers a parent gets cleanup with no edit here.
     deleted_event: str
 
 
@@ -70,10 +53,7 @@ _BINDINGS: dict[str, CommentParent] = {}
 
 
 def register_parent(binding: CommentParent) -> None:
-    """Register a parent. Its cleanup follows automatically: the plugin's
-    `cascades` factory is derived from THIS registry (RADD-745), so a binding
-    cannot exist without one — and `deleted_event` being required is what makes
-    that derivation total."""
+    """Register a parent; its cleanup follows (gc.cascades derives from this registry)."""
     _BINDINGS[binding.entity_type] = binding
 
 
@@ -107,11 +87,8 @@ async def _item_read(session, user: User, entity_id: uuid.UUID, project):
 
 async def _item_write(session, user: User, entity_id: uuid.UUID, project):
     permissions = await authz.require(session, user, Permission.COMMENT_WRITE, project=project)
-    # RADD-844: comment.write on an ITEM may be relation-qualified, and the
-    # qualifier names a relation to the PARENT — `comment.write@participant` /
-    # `@own` read "may write comments on items shared with them / they
-    # reported" (the Baseline's second-reporter floor). Every pre-relation
-    # grant is unqualified (@any) and short-circuits here for free.
+    # RADD-844: a qualified comment.write names a relation to the PARENT item
+    # (`@participant`/`@own`: items shared with them / they reported); @any skips this.
     if authz.RELATION_ANY not in authz.relations_held(permissions, Permission.COMMENT_WRITE):
         item = await items_service.require_item(session, entity_id)
         await items_service.ensure_item_relation(

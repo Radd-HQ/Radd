@@ -1,4 +1,3 @@
-from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -40,32 +39,14 @@ class DuplicateKind(StrEnum):
 
 
 class Permission(StrEnum):
-    """One member per action class an endpoint can demand (enforced via authz.require).
+    """Typed aliases for permission atoms, for call sites (RADD-890).
 
-    RADD-890: this enum is no longer the CATALOG — it is the typed alias surface
-    for call sites. Every atom below is DECLARED by the module that enforces it
-    (`permissions=(PermissionSpec…)` / `crud_resources=(CrudResourceSpec…)` on
-    its `RaddPlugin`), and the kernel permissions registry is what
-    `all_permission_keys`, `permission_scope_of`, `permission_description_of`,
-    `implied_map`, role validation and `GET /permissions` compose from. A new
-    module atom needs no edit here at all — the milestones plugin has always
-    worked that way, and now `item.read` works the same way.
+    The CATALOG is the kernel registry: each atom is declared by the module that
+    enforces it. This enum survives because `PROJECT_PERMISSIONS` (and so the
+    seeded Manager role) is computed at auth import time, before any manifest
+    exists. `tests/test_permission_ownership.py` asserts enum == registry."""
 
-    Two things keep the alias honest. `tests/test_permission_ownership.py`
-    asserts registry ⊆ enum AND enum ⊆ registry, with matching scopes, so an
-    atom added here alone (or moved there alone) fails the suite. And auth
-    itself declares only the governance atoms it enforces
-    (`_AUTH_OWNED_RESOURCES` / `AUTH_PERMISSIONS` in `permissions.py`).
-
-    Why the alias survives at all: `PROJECT_PERMISSIONS` — and through it the
-    seeded Admin builtin role — is computed when THIS module is imported, which
-    is long before any feature plugin's manifest exists (auth is the third
-    module loaded). A `Permission` built from the registry would make the admin
-    role a function of import order; the members here, plus `_PROJECT_SCOPED`
-    below, are the minimum auth must know at import time, and the ratchet is
-    what stops that minimum from drifting."""
-
-    GLOBAL_MANAGE = "global.manage"  # global settings + administration (was workspace.manage)
+    GLOBAL_MANAGE = "global.manage"  # global settings + administration
     PROJECT_CREATE = "project.create"
     PROJECT_MANAGE = "project.manage"  # states/fields/labels/webhooks/teams/members
     PROJECT_DELETE = "project.delete"  # RADD-1174: global on purpose — see permissions.py
@@ -77,53 +58,28 @@ class Permission(StrEnum):
     COMMENT_WRITE = "comment.write"
     COMMENT_READ_INTERNAL = "comment.read_internal"
     FORM_MANAGE = "form.manage"  # project-scoped; create/edit/delete intake forms (spec 17)
-    # RADD-1304: add/remove an issue's participants — implied by item.update,
-    # held @own on the Baseline (a reporter shares their own ticket). Declared
-    # by the participants plugin; named here so Python can say it.
+    # RADD-1304: add/remove an issue's participants (declared by participants).
     PARTICIPANT_MANAGE = "participant.manage"
     USER_MANAGE = "user.manage"
     AUTOMATION_MANAGE = "automation.manage"  # manage automation rules — global scope (spec 15)
-    # Build automations whose actions run as SOMEONE ELSE (spec 116). Without it
-    # an author's automations always act as the author; the field is not offered
-    # in the editor at all, and the API refuses it, so the two agree.
+    # Build automations whose actions run as SOMEONE ELSE (spec 116); without it
+    # an automation acts as its author.
     AUTOMATION_ACT_AS = "automation.act_as"
     SCRIPT_MANAGE = "script.manage"  # RADD-1269: the scripts plugin — global scope
-    # Per-entity manage actions (spec 36) — previously folded into project.manage /
-    # global.manage; the umbrellas still imply them (IMPLIED_PERMISSIONS).
+    # Per-entity manage actions (spec 36).
     STATE_MANAGE = "state.manage"  # project workflow states
-    # RADD-816: nine manage umbrellas with ZERO direct enforcement sites
-    # (view/cycle/label/release/canned/cardpreset/sla/team/role) are DELETED
-    # — granting one was exactly ticking its triple, a third checkbox whose
-    # only meaning was the other three. The migration rewrites stored roles
-    # to the triples; no alias survives (the no-backcompat rule).
-    # `service_account.delete` had no route and is gone the same way.
     FIELD_MANAGE = "field.manage"  # custom-field definitions + field access rules
     WEBHOOK_MANAGE = "webhook.manage"  # webhook endpoints (global)
-    # Wiki (spec 43) — SPACE-scoped since RADD-791 (they were global; a page had
-    # no scope, which is why per-space access was inexpressible).
+    # Wiki (spec 43) — SPACE-scoped (RADD-791).
     PAGE_READ = "page.read"  # read page spaces/pages + doc search
     PAGE_WRITE = "page.write"  # create/edit/move/archive pages, link items
     PAGE_MANAGE = "page.manage"  # manage spaces, hard-delete + restore pages
-    # --- Full CRUD atoms (spec 50) -----------------------------------------
-    # Every resource exposes create/update/delete as independently grantable
-    # atoms; the coarse verbs above are retained as umbrellas that expand to
-    # them (IMPLIED_PERMISSIONS, applied transitively). READS stay open to
-    # members (the open-visibility default) — value-level read
-    # restriction lives in the field-grant (spec 07/50) and comment-visibility
-    # (spec 50) systems, not here. Content create/update keep their existing
-    # atoms/verbs (a comment has no create-vs-edit capability split); only the
-    # missing DELETEs are added. Config resources gain the full C/U/D triple.
+    # Spec 50: every resource has independent C/U/D atoms; umbrellas imply them.
     ITEM_DELETE = "item.delete"  # hard-delete work items (was project.manage)
     COMMENT_DELETE = "comment.delete"  # delete others' comments (author deletes own)
     WORKLOG_DELETE = "worklog.delete"  # delete others' worklogs (author deletes own)
     PAGE_DELETE = "page.delete"  # hard-delete pages (rides page.manage)
-    # Attaching a file is its OWN authority (RADD-790). It used to be
-    # `item.update`, which conflated "may edit this issue's fields" with "may add
-    # a file to it": a role built to let someone discuss an issue without editing
-    # it (item.read + comment.write) posted a comment fine and 403'd the moment
-    # the editor uploaded a pasted screenshot — so it read as "commenting is
-    # broken". A reviewer who must not retitle an issue should still be able to
-    # attach the crash log they are describing.
+    # RADD-790: attaching is its own authority — discussing an issue must not need item.update.
     ATTACHMENT_CREATE = "attachment.create"  # upload a file to something
     ATTACHMENT_DELETE = "attachment.delete"  # delete your OWN attachments
     # Project-scoped config C/U/D (state/field/release/form/view/project-access):
@@ -145,9 +101,7 @@ class Permission(StrEnum):
     MEMBER_CREATE = "member.create"  # grant project access (member/team attach)
     MEMBER_UPDATE = "member.update"  # change a grant's role
     MEMBER_DELETE = "member.delete"  # revoke project access
-    # RADD-816 (F6): READ becomes deliverable for the config catalogs that
-    # used to ride the member floor — seeded into the Baseline so day-one
-    # behaviour is identical, and REVOCABLE for the first time.
+    # RADD-816: catalog reads — Baseline-seeded, and revocable.
     LABEL_READ = "label.read"
     CYCLE_READ = "cycle.read"
     CANNED_READ = "canned.read"
@@ -199,16 +153,10 @@ class Permission(StrEnum):
     ROLE_DELETE = "role.delete"
     USER_CREATE = "user.create"
     USER_UPDATE = "user.update"
-    # Spec 87 dropped `user.delete` on the reasoning that accounts are only ever
-    # deactivated or merged. Spec 89 reinstates it: hard deletion IS possible,
-    # provided the account's authored work is reassigned to a named successor
-    # first (`DELETE /users/{id}?reassign_to=…`).
+    # Spec 89: hard delete, gated on reassigning the account's work.
     USER_DELETE = "user.delete"
-    # Dashboards (spec 75) — global-scoped; dashboard.create is ALSO the
-    # broadcast gate on `dashboards.global_access` (the view.create idiom).
-    # Spec 87 dropped dashboard.update/delete: dashboards shipped with the
-    # spec-57 ownership model from birth, so editing and deleting are decided by
-    # owner/editor grants and no atom was ever consulted.
+    # Spec 75: dashboard.create also gates global_access; update/delete only
+    # narrow API keys (ownership decides the rest).
     DASHBOARD_CREATE = "dashboard.create"
     DASHBOARD_UPDATE = "dashboard.update"
     DASHBOARD_DELETE = "dashboard.delete"
@@ -224,53 +172,26 @@ class CrudAction(StrEnum):
 
 
 class PermissionScope(StrEnum):
-    """Where a permission is checked — drives the GET /permissions catalog.
-
-    2026-07-22 named the middle scope GLOBAL; spec 86 stage 3 finished the
-    job — the workspace entity is gone and the umbrella atom is
-    `global.manage` (stored role JSONB migrated).
-
-    RADD-814 retired the `instance` tier: it carried zero atoms and had no
-    resolution branch — dead vocabulary that made the ladder look four rungs
-    tall when it has three. The containment ladder is
-    `global ⊃ {project | space}` (see `checkable_at`)."""
+    """Where an atom is checked; containment is global ⊃ {project | space}."""
 
     PROJECT = "project"
     GLOBAL = "global"
-    #: RADD-791 — checked against a WIKI SPACE. The page atoms moved here from
-    #: GLOBAL: a space is a scope the way a project is, so "read-only space" and
-    #: "who may comment here" are ordinary role grants rather than new vocabulary.
+    #: RADD-791 — checked against a WIKI SPACE, a scope the way a project is.
     SPACE = "space"
 
 
 class GrantScopeKind(StrEnum):
-    """What a role grant can be scoped TO (RADD-791).
-
-    A grant is either instance-wide (no scope) or bound to one scoped thing. Two
-    kinds exist: a project, and a wiki space.
-
-    Spelled as an enum rather than left implicit in column names because a scope
-    names a behaviour, and dev rule 2 puts those in a StrEnum. The columns stay
-    typed and foreign-keyed (`project_id`, `space_id`) rather than collapsing to
-    a polymorphic `(scope_type, scope_id)` pair: a polymorphic column cannot
-    carry an FK, and trading referential integrity on the permission table for a
-    third scope nobody has asked for is a speculative framework (dev rule 5).
-    Adding one later is a column and ten lines here.
-    """
+    """What a role grant can be scoped TO (RADD-791); no scope = instance-wide.
+    Typed FK columns (`project_id`, `space_id`) rather than a polymorphic pair, so
+    the permission table keeps referential integrity."""
 
     PROJECT = "project"
     SPACE = "space"
 
 
 # --- scope: the ONE fact auth must know at import time (RADD-890) -------------
-#
-# Everything else about an atom — its prose, its label, its umbrella, its CRUD
-# family — is declared by the module that enforces it and read live from the
-# kernel registry. Scope cannot be, because `PROJECT_PERMISSIONS` (and through
-# it the seeded Admin builtin role) is computed while THIS module is imported,
-# which happens before any feature plugin's manifest exists. So auth keeps one
-# token per atom here, and `tests/test_permission_ownership.py` asserts it
-# equals the owning module's declared scope — the copy cannot drift.
+# `PROJECT_PERMISSIONS` (and so the Manager role) is computed before any manifest
+# exists; `tests/test_permission_ownership.py` checks this copy against the owners.
 
 #: Atoms checked against a PROJECT.
 _PROJECT_SCOPED: frozenset[str] = frozenset({
@@ -288,11 +209,7 @@ _PROJECT_SCOPED: frozenset[str] = frozenset({
     "participant.manage",  # RADD-1304
 })
 
-#: Atoms checked against a WIKI SPACE (RADD-791). They were global because a
-#: page had no scope to be checked against, which made per-space access
-#: inexpressible and dropped page commenting on the floor — the comments
-#: binding resolved `comment.write` with project=None, so a project-scoped
-#: grant never reached it. A grant with no scope still applies everywhere.
+#: Atoms checked against a WIKI SPACE (RADD-791); an unscoped grant still applies everywhere.
 _SPACE_SCOPED: frozenset[str] = frozenset({
     "page.read", "page.write", "page.manage", "page.delete",
 })
@@ -311,63 +228,7 @@ PERMISSION_SCOPES: dict[Permission, PermissionScope] = {
 }
 
 
-class _DescriptionCatalog(Mapping[str, str]):
-    """`{atom: prose}` over the LIVE registry (RADD-890).
-
-    A dict, until this change: auth carried one sentence per atom for every
-    module in the system. The prose belongs with the endpoint that refuses —
-    `pages` should be the thing that says what `page.write` means — so it moved
-    to the owning module's `PermissionSpec`/`CrudResourceSpec`, and this reads
-    it back. Presented as a Mapping rather than a function because the roles
-    matrix and the catalog test both treat it as one, and because a missing
-    entry should raise where it is asked for, not resolve to a lie.
-    """
-
-    def __getitem__(self, key: "Permission | str") -> str:
-        entry = _all_registered().get(base_permission(key))
-        if entry is None:
-            raise KeyError(key)
-        return entry[1]
-
-    def __iter__(self):
-        return iter(_all_registered())
-
-    def __len__(self) -> int:
-        return len(_all_registered())
-
-
-PERMISSION_DESCRIPTIONS: Mapping[str, str] = _DescriptionCatalog()
-
-# Umbrella permissions imply their per-entity actions (spec 36) — so pre-existing
-# roles holding project.manage keep full project control with zero backfill logic
-# at check time, while custom roles can now grant the granular actions alone.
-# Spec 50 extends this: each *.manage also implies its resource's CRUD atoms, and
-# expansion is applied transitively so project.manage -> state.manage ->
-# state.create/update/delete all resolve in one pass.
-#
-# RADD-890 emptied this map. Every entry it held was a statement about another
-# module's atoms — "project.manage covers workflow states", "editing an issue
-# lets you attach to it" — and each is now declared where it is enforced, via
-# `PermissionSpec.implied_by` / `.implies` and the `manage` umbrella on a
-# `CrudResourceSpec`. `implied_map()` reads them back. It stays as the seam for
-# an implication auth itself owns; there are none today.
-IMPLIED_PERMISSIONS: dict[Permission, frozenset[Permission]] = {}
-
-
-# --- resource × CRUD vocabulary (spec 50) ------------------------------------
-#
-# RADD-890 moved the RESOURCES out. `CRUD_RESOURCES` used to list every config
-# resource in the system — states, fields, releases, forms, views, labels,
-# webhooks, canned responses, card presets, automations, cycles, SLA policies,
-# teams, roles, users, dashboards, VCS connections, service accounts — from
-# inside auth, and the spec-93 `CrudResourceSpec` registry that exists for
-# exactly this had one client (`milestones`). Each resource is now declared on
-# the manifest of the plugin that serves its endpoints; auth declares its own
-# four (user/role/member/service_account) the same way, through the same
-# registry, with no special case.
-#
-# What stays here is the VOCABULARY the registry is expressed in: the four
-# verbs, and how a verb reads in a sentence.
+# Resources are declared by their plugins (RADD-890); this is the verb vocabulary.
 
 _ACTION_VERB: dict[CrudAction, str] = {
     CrudAction.CREATE: "Create",
@@ -378,26 +239,12 @@ _ACTION_VERB: dict[CrudAction, str] = {
 
 
 def implied_map() -> dict[str, frozenset[str]]:
-    """The umbrella→implied closure, composed from the kernel registry.
-
-    Three contributions, all read live so a hot-disabled plugin's umbrella stops
-    expanding in the same breath its routes unmount:
-
-      - a `CrudResourceSpec`'s `manage` umbrella implies its `key.action` atoms
-        (spec 93/A2 — this half already worked, for plugins only);
-      - a `PermissionSpec.implied_by` names the umbrellas that expand TO it
-        (declared in spec 93, read by nothing until RADD-890 — which is why a
-        plugin atom could not ride an umbrella at all);
-      - a `PermissionSpec.implies` names what holding it confers, for the case
-        `implied_by` cannot express: a RELATION-QUALIFIED form that is not
-        itself a catalog atom (`item.update` -> `attachment.delete@own`).
-
-    `IMPLIED_PERMISSIONS` is merged first and is empty today — every implication
-    the system has is a statement about some module's own atoms.
-    """
-    merged: dict[str, frozenset[str]] = {
-        str(k): frozenset(str(x) for x in v) for k, v in IMPLIED_PERMISSIONS.items()
-    }
+    """The umbrella→implied map, read LIVE from the kernel registry (a disabled
+    plugin's umbrella stops expanding with it): a CrudResourceSpec's `manage`
+    implies its `key.action` atoms; `PermissionSpec.implied_by` names umbrellas
+    that expand to an atom; `.implies` covers relation-qualified forms
+    (`item.update` -> `attachment.delete@own`)."""
+    merged: dict[str, frozenset[str]] = {}
 
     def _add(umbrella: str, atoms: frozenset[str]) -> None:
         merged[umbrella] = merged.get(umbrella, frozenset()) | atoms
@@ -429,7 +276,7 @@ def expand_permissions(granted: "frozenset[Permission] | set[Permission] | set[s
     return frozenset(result)
 
 
-# Every project-scoped permission, in enum order (the builtin admin role's grant set).
+# Every project-scoped permission, in enum order (the Manager builtin's grant set).
 PROJECT_PERMISSIONS: tuple[Permission, ...] = tuple(
     p for p in Permission if PERMISSION_SCOPES[p] is PermissionScope.PROJECT
 )
@@ -444,18 +291,9 @@ def permission_parts(permission: "Permission | str") -> tuple[str, str]:
     return resource, action
 
 
-# --- RADD-823: relations — an atom qualified by who you are to the record -----
-#
-# `resource.action@relation` is the normative syntax (D-review note: never the
-# dotted form). An UNQUALIFIED atom means `@any` — `item.update` and
-# `item.update@any` are the same fact, which is what makes migration free:
-# every existing role keeps exactly what it had, with zero backfill.
-#
-# The relation lattice is a CHAIN, widest first: any ⊃ team ⊃ own. Holding a
-# wider relation satisfies a narrower need; the MEET of two relations is the
-# narrower one. What a relation MEANS for a resource's rows is the owning
-# module's `RelationSpec` in the kernel registry — this vocabulary is pure
-# string algebra and never touches a table.
+# --- relations (RADD-823): `resource.action@relation`; unqualified = `@any` ---
+# A chain, widest first: any ⊃ team ⊃ own. What a relation MEANS for rows is the
+# owning module's RelationSpec; this is pure string algebra.
 
 RELATION_SEP = "@"
 
@@ -518,19 +356,8 @@ def relations_held(
     )
 
 
-# --- the catalog: composed from the kernel registry (spec 93 / A2, RADD-890) --
-# A module declares `permissions=(PermissionSpec…)` / `crud_resources=(CrudResource
-# Spec…)` on its manifest, the loader puts them in the kernel registry, and these
-# accessors are what every consumer reads — the roles matrix, GET /permissions,
-# the admin's effective set, role validation, the scope validator.
-#
-# Spec 93 built this for PLUGINS while core atoms stayed hardcoded in auth, so
-# the platform had two ways to define an atom and only one of them was used by
-# anything shipped. RADD-890 deleted the second: `items` declares `item.read`
-# through exactly the seam `milestones` uses, and these functions no longer
-# distinguish "builtin" from "contributed" because there is no difference left.
-# The union with the enum below is what keeps a *disabled* module's atoms
-# addressable in stored roles (RADD-818 sweeps them on uninstall, not disable).
+# --- the catalog, composed LIVE from the kernel registry (RADD-890). The union
+# with the enum keeps a DISABLED module's atoms addressable in stored roles. ---
 
 
 def _registered_crud_atoms() -> dict[str, tuple["PermissionScope", str]]:
@@ -569,38 +396,13 @@ def all_permission_keys() -> frozenset[str]:
 
 
 def permission_scope_of(key: "Permission | str") -> "PermissionScope":
-    # PERMISSION_SCOPES is keyed by Permission (a StrEnum), so a plain-string
-    # lookup resolves a builtin atom; else fall to the plugin registry. A
-    # relation qualifier never changes WHERE an atom is checked (RADD-823):
-    # scope is the grant's axis, relation is the atom's — resolve the base.
+    # A builtin atom answers from PERMISSION_SCOPES, else the registry. A relation
+    # qualifier never changes WHERE an atom is checked (RADD-823): resolve the base.
     scope = PERMISSION_SCOPES.get(base_permission(key))  # type: ignore[arg-type]
     if scope is not None:
         return scope
     reg = _all_registered().get(base_permission(key))
     return reg[0] if reg else PermissionScope.GLOBAL
-
-
-# --- RADD-814: scope is a property of the GRANT, not the atom -----------------
-#
-# The containment ladder:   global  ⊃  {project | space}
-#
-# A grant at an outer scope satisfies a check at any scope it contains — which
-# has always been the resolver's de-facto behaviour (`_granted_role_ids` unions
-# global grants into every project), declared nowhere. `CHECKABLE_AT` names the
-# scopes an atom can be CHECKED at. Day one it is behaviour-identical: every
-# atom carries its old single scope, and `PERMISSION_SCOPES` survives as the
-# catalog's PRIMARY grouping. Widening an atom to a second scope is one
-# reviewable line in `_CHECKABLE_WIDENINGS`, never a rewrite.
-
-_CHECKABLE_WIDENINGS: dict[str, frozenset[PermissionScope]] = {}
-
-
-def checkable_at(key: "Permission | str") -> frozenset[PermissionScope]:
-    """The scope kinds this atom can be checked at (RADD-814). Single-member for
-    every atom today; the matrix (RADD-815) and the RADD-810 contract read it."""
-    return frozenset({permission_scope_of(key)}) | _CHECKABLE_WIDENINGS.get(
-        base_permission(key), frozenset()
-    )
 
 
 def permission_description_of(key: "Permission | str") -> str:
@@ -612,28 +414,18 @@ def permission_description_of(key: "Permission | str") -> str:
 
 
 class BuiltinRoleKey(StrEnum):
-    """Keys of the seeded builtin roles (rows are immutable: is_builtin —
-    except BASELINE, whose whole purpose is being edited; see below)."""
+    """Keys of the seeded builtin roles (immutable rows, except the Baseline's
+    permission set)."""
 
-    #: What every active user holds, everywhere, without being granted anything
-    #: (RADD-773). Undeletable like the others, but its permission set is the
-    #: one an admin may change.
-    BASELINE = "baseline"
-    #: RADD-1302: was "admin" — renamed so the project/space role no longer
-    #: reads as the instance "Administrator" flag beside it.
+    BASELINE = "baseline"  # RADD-773: what every active user holds; admin-editable
     MANAGER = "manager"
     MEMBER = "member"
     VIEWER = "viewer"
-    #: RADD-828 (Q1): the INTERNET-facing floor — what an email-provisioned
-    #: requester holds INSTEAD of the Baseline, so enabling mail ingest can
-    #: never hand strangers the operator's staff policy row.
+    #: RADD-828: an email-provisioned requester's floor INSTEAD of the Baseline, so
+    #: mail ingest never hands strangers the staff policy row.
     REQUESTER = "requester"
-    #: Spec 121 — what the WORLD holds on a public project: granted to the
-    #: Anyone principal, project-scoped, by the "Public project" switch.
-    PUBLIC = "public"
-    #: Spec 121 — what anyone with an account may do on a public project:
-    #: granted to the Signed-in users principal by the "contributions" switch.
-    CONTRIBUTOR = "contributor"
+    PUBLIC = "public"  # spec 121: granted to Anyone by the "Public project" switch
+    CONTRIBUTOR = "contributor"  # spec 121: granted to Signed-in users by "contributions"
 
 
 @dataclass(frozen=True)
@@ -647,13 +439,9 @@ class BuiltinRole:
     position: int
 
 
-#: RADD-1304 — what anyone may do on a ticket THEY reported: the ONE set the
-#: three floors (Baseline, Requester, Contributor) share, so a staff member, a
-#: stranger who emailed the desk and a public contributor have the same rights
-#: over their own tickets. The floors differ only in what they can READ.
-#: `@own` names the ITEM's relation for comment.write / attachment.create /
-#: participant.manage (their declared relation domain), and the row's AUTHOR
-#: for the two deletes.
+#: RADD-1304 — what anyone may do on a ticket THEY reported, shared by the three
+#: floors (Baseline, Requester, Contributor), which differ only in what they READ.
+#: `@own` is the ITEM's relation for the writes, the row's AUTHOR for the deletes.
 OWN_TICKET: tuple[str, ...] = (
     "comment.write@own",
     "attachment.create@own",
@@ -677,34 +465,16 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             "What everyone with an account gets, on every project, without being "
             "granted anything. Edit this to widen or narrow the floor."
         ),
-        # Read-only on purpose (RADD-773). This used to be MEMBER_FLOOR plus a
-        # wider global set carrying page.write, cycle.manage and timesheet.view
-        # — so every member could edit any wiki page and delete any cycle, and
-        # no screen anywhere said so. Those three are no longer free; grant them
-        # through a role, or add them back here deliberately.
-        #
-        # RADD-825 (Q2): the floor is item.read@OWN — a signed-in user sees the
-        # issues they reported until a role grants more. page.read left with it
-        # (N5: a floor page.read defeated every restricted space). Existing
-        # deployments keep today's effective access through the Staff role the
-        # d825flip migration seeds and grants to the accounts that predate it.
+        # Read-only on purpose (RADD-773/825): item.read@own, not item.read —
+        # grant wider reads through a role. @participant is the second-reporter
+        # floor (RADD-844); OWN_TICKET/SHARED_TICKET are the shared own-ticket set
+        # (RADD-1304); the *.read catalog atoms are revocable grants (RADD-816).
         permissions=(
             "item.read@own",
-            # RADD-844: the second-reporter floor. A share means something —
-            # a participant opens THAT item and comments on it, exactly the
-            # reach a reporter has, and nothing wider. comment.write's
-            # qualifier names a relation to the parent ITEM (see the comments
-            # item binding), so @own here is "on issues they reported" — the
-            # first reporter gets the same discussion right the second one does.
             "item.read@participant",
-            # RADD-1304: the shared own-ticket set (comment, attach, share,
-            # delete your own) + the second-reporter set. RADD-816 (Q4) made
-            # the author-own rights grants — explainable and REVOCABLE.
             *OWN_TICKET,
             *SHARED_TICKET,
             "worklog.delete@own",
-            # RADD-816 (F6): the catalog reads everyone had via the member
-            # floor, now deliverable atoms — same day-one behaviour, revocable.
             Permission.LABEL_READ,
             Permission.CYCLE_READ,
             Permission.CANNED_READ,
@@ -714,12 +484,8 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
         ),
         position=-1,
     ),
-    # --- RADD-1302: ONE ladder, Viewer ⊂ Member ⊂ Manager, at BOTH scopes. -----
-    # A role granted on a PROJECT applies its item atoms; granted on a wiki
-    # SPACE it applies its page atoms (page.* resolve at space scope only);
-    # granted instance-wide, both. The Public role already worked this way.
-    # Before, Member lacked Viewer's page.read and Admin lacked Member's
-    # page.write, so neither step of the ladder was a superset.
+    # --- RADD-1302: ONE ladder, Viewer ⊂ Member ⊂ Manager, at BOTH scopes: on a
+    # project the item atoms apply, on a wiki space the page atoms, instance-wide both.
     BuiltinRole(
         key=BuiltinRoleKey.MANAGER,
         name="Manager",
@@ -728,12 +494,8 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             "plus its settings — workflow, fields, issue types, members, releases, "
             "SLAs and intake forms. On a space: edit, delete and restore its pages."
         ),
-        # Every project-scoped atom (which since RADD-1303/1304 includes the
-        # SLA atoms and participant.manage) + page.manage (⇒ page.write ⇒
-        # page.read). dashboard.create stays as the one global rider: it does
-        # nothing on a project grant, but an INSTANCE-WIDE grant of this role
-        # has always let the holder create dashboards, and removing it would
-        # take that away silently.
+        # Every project-scoped atom + page.manage (⇒ page.write ⇒ page.read).
+        # dashboard.create is the one global rider an instance-wide grant has always carried.
         permissions=PROJECT_PERMISSIONS + (Permission.PAGE_MANAGE, Permission.DASHBOARD_CREATE),
         position=0,
     ),
@@ -779,12 +541,7 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             "and nothing else — not other items, not the wiki."
         ),
         # item.read@own is the whole visibility story: every child surface
-        # (comments, attachments, history) inherits it through the item seam,
-        # and comment.write/attachment.create only reach items they can read.
-        # @participant (RADD-844): a requester shared into a colleague's ticket
-        # follows it like a second reporter — same floor shape as the Baseline.
-        # RADD-1304: the same own-ticket set as the Baseline (it could attach
-        # but not delete its own comments; staff could delete but not attach).
+        # inherits it through the item seam. Same floor shape as the Baseline.
         permissions=(
             "item.read@own",
             "item.read@participant",
@@ -801,15 +558,9 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             "public comments and attachments, and the labels, cycles and teams "
             "needed to render them. Granted to Anyone by the Public project switch."
         ),
-        # item.read@public is the whole story: the relation is a property of
-        # the ROW (spec 121 §3), so internal and restricted issues never
-        # reach the world however the project is shared. Comments ride the
-        # item seam and internal ones need comment.read_internal, which is
-        # not here; attachments are default-open behind the parent read.
-        # page.read rides here too (RADD-1147): granted on a SPACE, the same
-        # role makes the space public — one "what the world holds" role, scoped
-        # by where it is granted. On a project the page atom is inert (page
-        # reads resolve at space scope).
+        # @public is a property of the ROW (spec 121), so internal/restricted
+        # issues never reach the world. page.read makes a SPACE public when the
+        # role is granted there (RADD-1147); on a project it is inert.
         permissions=(
             "item.read@public",
             Permission.PAGE_READ,
@@ -827,8 +578,7 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
             "comment, attach, and edit what they filed. Reading comes from Public. "
             "Granted to Signed-in users by the contributions switch."
         ),
-        # Discussion is open on a public project (comment/attach on any public
-        # issue); RADD-1304 adds the rest of the own-ticket set on top.
+        # Discussion is open on a public project; the rest of OWN_TICKET on top.
         permissions=(
             Permission.ITEM_CREATE,
             "item.update@own",
@@ -840,38 +590,26 @@ BUILTIN_ROLES: tuple[BuiltinRole, ...] = (
     ),
 )
 
-
-
 class AuthEvent(StrEnum):
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
-    # Spec 89 — hard delete. The payload keeps the email/name and what was
-    # reassigned: once the row is gone, this event IS the record that they existed.
+    # Spec 89: once the row is gone, this payload IS the record they existed.
     USER_DELETED = "user.deleted"
     ROLE_CREATED = "role.created"
     ROLE_UPDATED = "role.updated"
     ROLE_DELETED = "role.deleted"
-    # RADD-836 U1 — impersonation is audited on entry AND exit; the payload
-    # names both parties, so the trail survives either account's deletion.
+    # RADD-836: audited on entry AND exit, naming both parties.
     VIEW_AS_STARTED = "auth.view_as_started"
     VIEW_AS_ENDED = "auth.view_as_ended"
-    # RADD-1279: an admin removed someone's TOTP enrolment (lost authenticator
-    # AND recovery codes). The payload names both parties.
-    MFA_RESET = "auth.mfa_reset"
-    # Spec 123: the spec-121 switches as the event an auditor looks for. The
-    # grant rows underneath emit role.updated too; this one says "made the
-    # project public" in the project's own history, with old → new.
+    MFA_RESET = "auth.mfa_reset"  # RADD-1279: an admin removed someone's TOTP enrolment
+    # Spec 123: the spec-121 switches in the project's own history (the grant
+    # rows underneath emit role.updated too).
     PROJECT_PUBLIC_ACCESS_CHANGED = "project.public_access_changed"
 
 
 class LoginMethod(StrEnum):
-    """RADD-1279: HOW a session is being minted — a required argument of
-    `create_session`, so every login path states it and the MFA policy is
-    enforced at the one seam they all pass through.
-
-    `PASSWORD` is a password with no second factor; `PASSWORD_TOTP` a password
-    plus a TOTP/recovery code (or an enrolment just confirmed); `LDAP`/`SSO`
-    are the directory and identity-provider logins, whose IdP owns MFA."""
+    """RADD-1279: HOW a session is minted — required by `create_session`, the one
+    seam the MFA policy is enforced at. LDAP/SSO: the IdP owns MFA."""
 
     PASSWORD = "password"
     PASSWORD_TOTP = "password_totp"

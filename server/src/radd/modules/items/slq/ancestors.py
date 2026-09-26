@@ -1,28 +1,18 @@
 """Ancestor fields (spec 83): bare `epic`/`parent` + `epic.*`/`parent.*`.
 
-`parent` targets the DIRECT parent (WorkItem.parent_id) and is strictly
-relative — an item is never its own parent. `epic` names a CONTAINER instead,
-the epic an item belongs to, and an epic belongs to ITSELF (spec 83 amendment,
-2026-07-27): one aliased self-join chain I (item) / P (parent) / G
-(grandparent) per condition, correlated on the outer row, deriving
-`hierarchy.nearest_epic_case` as a scalar subquery. So `epic = TD-3` and
-`epic.state != Done` return the epic alongside the work it governs, and
-`epic IS EMPTY` means work no epic governs (a parentless issue and its
-subtasks) — epics no longer land in that bucket.
+`parent` is the DIRECT parent (never the item itself). `epic` is the epic an
+item belongs to — itself when it is one (`hierarchy.nearest_epic_case`), so
+`epic = TD-3` returns the epic with its work and `epic IS EMPTY` means work no
+epic governs.
 
-Sub-field conditions (`.state` / `.category` / `.assignee` / `.priority`)
-mirror the item-level value semantics (state matching adds case-insensitivity
-per the spec) and compile to `<ancestor id> IN (SELECT id FROM work_items
-WHERE <predicate>)` — correlated comparisons, never joins, so they stay
-correct under OR/NOT. Negative forms read plainly (RADD-1139): `!=`/`NOT IN`
-are the COMPLEMENT of the positive form, so `epic.category != done` includes
-work under no epic, while a positive predicate (`epic.assignee IS EMPTY`
-included) never matches an item without the ancestor — the two sides of a
-comparison partition the rows. Bare keys resolve at COMPILE time through the
-spec-68 alias-aware resolver (`compile_query` pre-pass -> Context); an
-unknown key is a positioned SlqError (-> 422). Filter-only: none of these
-fields are sortable (catalog), so ORDER BY rejects them like other
-unsupported sorts.
+Sub-fields mirror the item-level value semantics (state matching is
+case-insensitive) and compile to `<ancestor id> IN (SELECT id … WHERE
+<predicate>)` — correlated, never joins, so they stay correct under OR/NOT.
+`!=`/`NOT IN` are the COMPLEMENT of the positive form (RADD-1139): `epic.category
+!= done` includes work under no epic, while a positive predicate never matches an
+item without the ancestor. Bare keys resolve at compile time through the
+alias-aware resolver; an unknown key is a positioned SlqError. Filter-only: none
+of these fields are sortable.
 """
 
 import uuid

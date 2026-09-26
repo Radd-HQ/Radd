@@ -1,13 +1,10 @@
 """Who may resolve a thread (RADD-1283): the rule, and one reader's reach under it.
 
-A project states the rule — a default plus per-issue-type overrides — as rows in
-`thread_resolution_rules`. Everything that asks "may this person resolve this
-thread?" goes through `resolve_reach`: `set_resolved` enforces it, and every
-comment read carries its answer as `can_resolve`, so the browser never restates
-the rule (it used to, three times, before the rule could vary).
-
-Pages have no project and no issue type, so a page thread always takes
-`DEFAULT_THREAD_RESOLVERS` — with the page binding's own manage permission.
+A project states a default plus per-issue-type overrides in
+`thread_resolution_rules`. `resolve_reach` is the one answer: `set_resolved`
+enforces it and every read carries it as `can_resolve`, so the browser never
+restates the rule. Pages have no project or issue type, so a page thread takes
+`DEFAULT_THREAD_RESOLVERS` with the page binding's own manage permission.
 """
 
 from __future__ import annotations

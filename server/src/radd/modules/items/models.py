@@ -100,10 +100,8 @@ class ItemKeyAlias(Base, TimestampMixin):
 
 
 class ItemLink(Base):
-    """Directional dependency between two items in the same project (spec 14).
-
-    `relates` is semantically symmetric — the service rejects the mirror row.
-    """
+    """Directional dependency between two items (cross-project allowed).
+    `link_type` is a linktypes KEY; symmetric types reject the mirror row."""
 
     __tablename__ = "item_links"
     __table_args__ = (UniqueConstraint("source_item_id", "target_item_id", "link_type"),)

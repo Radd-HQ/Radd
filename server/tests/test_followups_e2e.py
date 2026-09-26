@@ -19,7 +19,7 @@ from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate, FieldDefinitionUpdate
 from radd.modules.fields.types import FieldType
 from radd.modules.items import service as items_service
-from radd.modules.items.enums import ItemLinkType
+from radd.modules.linktypes.types import ItemLinkType
 from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope

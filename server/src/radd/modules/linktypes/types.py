@@ -1,12 +1,18 @@
-"""Vocabulary for user-definable issue link types (spec 91).
-
-Link types were a hardcoded enum (blocks/relates/duplicates + the auto-managed
-mentions). They are now first-class, scopeable data: an admin can add new ones
-with their own directional names, and scope any type global or to projects. The
-four built-ins keep their stable KEYS so existing links and SLQ keep working.
-"""
+"""Vocabulary for user-definable issue link types. The four built-ins keep
+stable KEYS that existing links and SLQ reference."""
 
 from enum import StrEnum
+
+
+class ItemLinkType(StrEnum):
+    """The built-in link-type KEYS, referenced by code. Symmetry, directional
+    names and whether a type is manual come from the catalog; MENTIONS is
+    auto-derived from item text (spec 52)."""
+
+    BLOCKS = "blocks"
+    RELATES = "relates"
+    DUPLICATES = "duplicates"
+    MENTIONS = "mentions"
 
 
 class LinkDirection(StrEnum):
@@ -31,22 +37,22 @@ class LinkTypeEvent(StrEnum):
 # derived from item text and never added/removed through the link API.
 BUILTIN_LINK_TYPES: tuple[dict, ...] = (
     {
-        "key": "blocks", "name": "Blocks",
+        "key": ItemLinkType.BLOCKS.value, "name": "Blocks",
         "outward_name": "blocks", "inward_name": "is blocked by",
         "direction": LinkDirection.DIRECTED, "system": True, "auto_managed": False,
     },
     {
-        "key": "relates", "name": "Relates",
+        "key": ItemLinkType.RELATES.value, "name": "Relates",
         "outward_name": "relates to", "inward_name": "relates to",
         "direction": LinkDirection.SYMMETRIC, "system": True, "auto_managed": False,
     },
     {
-        "key": "duplicates", "name": "Duplicates",
+        "key": ItemLinkType.DUPLICATES.value, "name": "Duplicates",
         "outward_name": "duplicates", "inward_name": "is duplicated by",
         "direction": LinkDirection.DIRECTED, "system": True, "auto_managed": False,
     },
     {
-        "key": "mentions", "name": "Mentions",
+        "key": ItemLinkType.MENTIONS.value, "name": "Mentions",
         "outward_name": "mentions", "inward_name": "mentioned by",
         "direction": LinkDirection.DIRECTED, "system": True, "auto_managed": True,
     },

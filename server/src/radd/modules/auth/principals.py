@@ -1,28 +1,12 @@
-"""Credential-aware principal checks shared by all administrative surfaces —
-and, since spec 121, the two PRINCIPAL rows that stand for "the world".
+"""Credential-aware principal checks, and the two PRINCIPAL rows (spec 121).
 
-## Anyone and Signed-in users (RADD-1142)
-
-Two seeded `users` rows with fixed ids and `UserSource.PRINCIPAL`. They are
-grant SUBJECTS, not people: a role granted to *Anyone* on a project is what
-makes that project public, a role granted to *Signed-in users* is what lets
-anyone with an account contribute there. Every actor holds Anyone's grants;
-every real account additionally holds Signed-in users' grants. That union is
-made in exactly two places — `grants._subject_condition` for role grants and
-`SubjectContext.subject_user_ids` for access grants — so nothing downstream
-(`effective_permissions`, `readable_projects`, the relation filter, the MCP
-catalog) learns that the world exists. It is one more subject.
-
-An unauthenticated request resolves to the Anyone row at the auth seam
-(`deps.actor`), which is why it must be a real `User` row rather than a
-sentinel object: every resolver takes a User, and a public project's reads
-must go through the same code as a member's. The row can never log in
-(`create_session` refuses PRINCIPAL like SERVICE and EMAIL), never receives
-mail, never appears in a picker, and is refused as an assignee or reporter.
-
-The ids are fixed so a migration can seed them and a fresh `seed` can
-converge on the same rows; the SYSTEM actor (`automations.types`) set the
-precedent.
+Anyone and Signed-in users are seeded `users` rows (fixed ids,
+`UserSource.PRINCIPAL`) that act as grant SUBJECTS: a role granted to Anyone
+makes a project public; one granted to Signed-in users lets any account
+contribute. The union with an actor's own subjects happens in exactly two
+places — `grants._subject_condition` and `SubjectContext.subject_user_ids`.
+They are real rows because every resolver takes a User; they can never sign
+in, receive mail, be picked, assigned or report.
 """
 
 import uuid
@@ -126,8 +110,7 @@ async def ensure_principals(session) -> None:
 
 def require_key_permission(user: User, permission: Permission, project_id: uuid.UUID | None = None) -> None:
     """Intrinsic account rights remain bounded by an explicitly scoped credential."""
-    scope = getattr(user, "token_scope", None)
-    if scope is not None and not scope.narrow(frozenset({permission}), project_id):
+    if not key_allows(user, permission, project_id):
         raise ForbiddenError(f"API key scope requires {permission}")
 
 

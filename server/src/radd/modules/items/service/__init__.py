@@ -1,20 +1,7 @@
-"""Item service — the items module's use-case layer.
+"""The items module's public service surface (rule 1: other modules call these).
 
-Split into per-concern modules that stack bottom-up with no cycles:
-
-    visibility, queries          (leaves)
-    relations → queries
-    read      → queries, visibility
-    listing   → visibility
-    links     → queries, read, visibility
-    core      → links, queries, read, relations, visibility
-
-This barrel is the module's PUBLIC surface — the same 25 names the former
-`service.py` exposed, so every `from radd.modules.items.service import …` site
-keeps working unchanged. The ~30 `_`-prefixed helpers stay private to the
-package (rule 1: other modules talk to items through these functions only).
-An items-internal caller that genuinely needs one imports it from the concern
-module directly, e.g. `from .service.visibility import _internal_visible`.
+`_`-prefixed helpers stay private to the package; items-internal callers import
+them from their concern module (e.g. `.service.visibility`).
 """
 
 from .origin import creating_from
@@ -50,11 +37,11 @@ from .queries import (
     cycle_state_category_counts,
     estimate_points_by_ids,
     find_item_by_key,
-    item_ids_for_projects,
     items_by_ids,
     iter_project_items,
     readable_item_ids,
     require_item,
+    require_item_permission,
     require_readable_item,
 )
 from .clone import clone_item
@@ -106,7 +93,6 @@ __all__ = [
     "find_item_by_key",
     "get_item",
     "get_item_by_key",
-    "item_ids_for_projects",
     "items_by_ids",
     "link_search",
     "list_items",
@@ -114,6 +100,7 @@ __all__ = [
     "remove_item_link",
     "reorder_item",
     "require_item",
+    "require_item_permission",
     "require_readable_item",
     "set_archived",
     "star_item",

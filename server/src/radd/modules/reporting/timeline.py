@@ -1,20 +1,8 @@
-"""Reconstruct each work item's state history from the events outbox.
-
-`item.created`/`item.updated` payloads carry the FULL item (docs/modules.md), so a
-work item's state transitions are recoverable by walking its events in order and
-diffing `state.id`/`state.category` between consecutive payloads. The event row's
-`created_at` is the authoritative moment of each transition.
-
-Everything the reports need is derived here in one pass per item:
-
-- `segments`      — the ordered (entered_at, exited_at, state_id, category) the item
-                    passed through (an open final segment has `exited_at is None`);
-- `done_entries`  — each moment the item ENTERED a done-category state, tagged with the
-                    cycle it belonged to at that moment (velocity/throughput source);
-- `cycle_history` — the (at, cycle_id) assignment trail (burnup scope-over-time source).
-
-No new tables: recomputing from events is acceptable at prototype scale (materialize
-into a projection later — see docs/modules.md).
+"""Reconstruct each item's state history from its `item.created/updated` events
+(the payload carries the full item; the event's `created_at` is the moment): per
+item the state `segments` (an open final one has `exited_at is None`), the
+`done_entries` (tagged with the cycle at that moment) and the `cycle_history`.
+Recomputed per request — no projection table.
 """
 
 import uuid
@@ -149,16 +137,6 @@ async def build_item_timelines(
         grouped = await _item_events(session, batch)
         out.update((item_id, _build(item_id, events)) for item_id, events in grouped.items())
     return out
-
-
-async def item_state_timeline(
-    session: AsyncSession, item_ids: Iterable[uuid.UUID]
-) -> dict[uuid.UUID, list[StateSegment]]:
-    """Per item, the ordered (entered_at, state_id, category) segments from its event
-    history — the primitive the throughput / cumulative-flow / time-in-state reports
-    compute over (spec 16)."""
-    timelines = await build_item_timelines(session, item_ids)
-    return {item_id: timeline.segments for item_id, timeline in timelines.items()}
 
 
 # --- scope resolution (which items a report ranges over) — also read from the outbox ---

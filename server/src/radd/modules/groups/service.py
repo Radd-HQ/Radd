@@ -1,13 +1,9 @@
 """Directory-group reads, sync writes, and the transitive closures (RADD-829).
 
-The two closures are the load-bearing pieces: membership of a nested group
-means membership of every ANCESTOR (a parent group contains its child's
-members), and a grant on a parent reaches every descendant's people. Both
-walks are iterative id-frontiers — one query per depth level, the rollup
-idiom — with a cycle guard (AD is a graph; a cycle is rare but legal) and a
-depth limit, on day one. A truncated walk resolves FEWER memberships, i.e. it
-fails CLOSED — the same rule `authz.baseline_permissions` states for an
-absent baseline.
+Membership of a nested group means membership of every ANCESTOR, and a grant on
+a parent reaches every descendant's people. Both walks are id-frontiers with a
+cycle guard (AD is a graph; cycles are legal) and a depth limit; a truncated walk
+resolves FEWER memberships, so it fails CLOSED.
 """
 
 import logging
@@ -22,10 +18,7 @@ from radd.config import settings
 from radd.exceptions import NotFoundError
 from radd.modules.events import service as events
 
-# `Group` is re-exported here as the PUBLIC group type (the events `Event`
-# pattern, RADD-886/887): consumers that hold or annotate group rows — teams'
-# member seam, ldap's sync — import it from the service; the ratchet test bans
-# `groups.models` outside this module.
+# `Group` is the PUBLIC group type, re-exported (the ratchet test bans `groups.models` outside).
 from .models import Group, GroupMember, GroupParent
 from .types import GroupEntity, GroupEvent
 from .reading import member_projection as member_projection
@@ -46,19 +39,21 @@ async def list_groups(
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Group]:
-    stmt = select(Group).order_by(Group.name, Group.id)
-    if q and q.strip():
-        stmt = stmt.where(Group.name.ilike(ilike_term(q.strip())) | Group.dn.ilike(ilike_term(q.strip())))
+    stmt = _named_like(select(Group).order_by(Group.name, Group.id), q)
     if limit is not None:
         stmt = stmt.offset(offset).limit(limit)
     return list((await session.execute(stmt)).scalars())
 
 
 async def count_groups(session: AsyncSession, *, q: str | None = None) -> int:
-    stmt = select(func.count()).select_from(Group)
-    if q and q.strip():
-        stmt = stmt.where(Group.name.ilike(ilike_term(q.strip())) | Group.dn.ilike(ilike_term(q.strip())))
-    return (await session.execute(stmt)).scalar_one()
+    return (await session.execute(_named_like(select(func.count()).select_from(Group), q))).scalar_one()
+
+
+def _named_like(stmt, q: str | None):
+    if not (q and q.strip()):
+        return stmt
+    term = ilike_term(q.strip())
+    return stmt.where(Group.name.ilike(term) | Group.dn.ilike(term))
 
 
 async def get_group(session: AsyncSession, group_id: uuid.UUID) -> Group:
@@ -102,8 +97,6 @@ async def member_ids(session: AsyncSession, group_id: uuid.UUID) -> set[uuid.UUI
 async def direct_member_counts(
     session: AsyncSession, group_ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, int]:
-    from sqlalchemy import func
-
     rows = await session.execute(
         select(GroupMember.group_id, func.count())
         .where(GroupMember.group_id.in_(set(group_ids)))
@@ -139,12 +132,9 @@ def forget_user_groups(session: AsyncSession) -> None:
 
 
 async def user_group_ids(session: AsyncSession, user_id: uuid.UUID) -> set[uuid.UUID]:
-    """Every group the user belongs to, TRANSITIVELY: direct memberships plus
-    all ancestors (a parent group contains its child groups' members). The
-    upward closure behind `teams.user_team_ids` and the subject graph.
-
-    Memoised per request beside `baseline_permissions`/`readable_projects`
-    (RADD-830) — done per check this is a graph walk per permission test."""
+    """Every group the user belongs to, TRANSITIVELY (direct plus all ancestors) —
+    the upward closure behind `teams.user_team_ids` and the subject graph.
+    Memoised per request (RADD-830): per check it would be a walk per permission test."""
     key = f"{_USER_GROUPS_CACHE_KEY}:{user_id}"
     cached: set[uuid.UUID] | None = session.info.get(key)
     if cached is not None:

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from radd.apitypes import UtcDatetime
 from radd.modules.items.enums import ItemKind
-from radd.modules.reporting.types import ReportInterval, ReportMeasure
+from radd.modules.reporting.types import VELOCITY_MAX_LAST, ReportInterval, ReportMeasure
 from radd.modules.views.schemas import ShareGroupRef, ShareTeamRef, ShareUserRef
 
 from .types import ShareLevel, WidgetType
@@ -17,8 +17,6 @@ WIDGET_MIN_WIDTH = 2
 WIDGET_MAX_WIDTH = 12
 # slq_list renders a compact card — hard row cap (spec 75).
 SLQ_LIST_MAX_LIMIT = 20
-# Mirrors the /reports/velocity `last` bound.
-VELOCITY_MAX_LAST = 50
 # Mirrors GET /sla-report's `weeks` bound. The report is the slas plugin's
 # (RADD-1386), an optional plugin dashboards cannot import.
 SLA_MAX_WEEKS = 26

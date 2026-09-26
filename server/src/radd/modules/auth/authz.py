@@ -1,45 +1,12 @@
-"""Action RBAC — the single enforcement seam (spec 03, reworked by specs 06/86).
+"""Action RBAC — the single enforcement seam (specs 03/06/86).
 
-Roles are data (`roles` table: builtin admin/member/viewer + custom rows).
-A user's effective permissions on a project are the UNION of:
-
-- the roles granted to them directly, to a team they are on, or to a directory
-  group that contains them (RADD-929 folded direct membership and team
-  attachments into those grants — one table, one resolution path),
-- the roles granted to them instance-wide (`global_role_grants`, spec 87),
-- the **Baseline role**, held by EVERY ACTIVE user without being granted
-  (spec 86: being an active user of the server IS membership).
-
-That last term used to be two hardcoded frozensets, and RADD-773 made it a
-role. The difference that matters: an admin can now SEE it and change it. The
-old constants meant three sources fed every check while Settings showed one, so
-a member granted nothing anywhere could still edit any wiki page and delete any
-cycle — and unchecking a permission in a role did nothing, because the floor was
-unioned in afterwards.
-
-Admins hold every permission. "Admin" means `users.instance_role == admin` —
-THE one admin predicate (spec 86 stage 3 dropped the membership compat tier).
-GLOBAL-scope checks (no project): admin -> all, active user -> the baseline
-PLUS whatever their instance-wide role grants add, inactive -> nothing. Spec 87
-added that last term: before it, a global-scope check read `instance_role`
-alone, so every global atom the roles matrix offered (label.create,
-team.update, sla.*, …) was ungrantable to a non-admin.
-
-The decision core is pure (`combine_permissions`, `global_scope_permissions`); the
-DB lookups are thin and monkeypatched in `tests/test_authz.py`.
-
-RADD-902: this module is now a FACADE. The pure decision core + the seam
-(`effective_permissions`/`require`/`holds_base`) live in `authz_core.py`; the
-batched/cross-project resolvers live in `authz_batch.py`; the `PermissionSource`
-explain machinery lives in `authz_explain.py`. Everything those three modules
-define is re-exported here under its own name, so every existing caller
-(`from radd.modules.auth import authz` then `authz.require(...)`, or
-`from radd.modules.auth.authz import Permission`) is unaffected. What's left
-here in real code is the RELATIONS layer (RADD-823) — `relation_filter`/
-`relation_holds_row`/`relation_row_ids_holding` and the `Subjects` resolver —
-which sits on top of the core/batch/explain trio but nothing in that trio
-depends on it, so it stays put rather than forming a fourth file for its own
-sake.
+A user's permissions in a scope are the union of the roles granted to them
+(directly, via a team, or via a transitive directory group), the instance-wide
+grants, and the Baseline role every active user holds. Instance admins hold
+everything. This module is a facade over `authz_core` (the pure core + seam),
+`authz_batch` (batched/cross-project resolvers) and `authz_explain` (the
+provenance pass); what is defined here is the relations layer (RADD-823) and
+row guards (spec 121).
 """
 
 import uuid
@@ -65,14 +32,6 @@ from .authz_batch import (
 )
 from .authz_core import (
     _BASELINE_CACHE_KEY as _BASELINE_CACHE_KEY,
-    _REQUESTER_CACHE_KEY as _REQUESTER_CACHE_KEY,
-    EMPTY_BASELINE as EMPTY_BASELINE,
-    _active_role as _active_role,
-    _global_permission_sets as _global_permission_sets,
-    _granted_role_ids as _granted_role_ids,
-    _narrow_to_key_scope as _narrow_to_key_scope,
-    _permission_sets_for_roles as _permission_sets_for_roles,
-    _project_permission_sets as _project_permission_sets,
     baseline_permissions as baseline_permissions,
     combine_permissions as combine_permissions,
     effective_permissions as effective_permissions,
@@ -86,10 +45,10 @@ from .authz_core import (
 from .authz_explain import (
     PermissionSource as PermissionSource,
     scope_labels as scope_labels,
-    all_held_role_ids as all_held_role_ids,
     permission_sources as permission_sources,
     team_permission_sources as team_permission_sources,
 )
+from . import grants
 from .models import User
 from .principals import is_instance_admin as is_instance_admin
 from .types import (
@@ -105,12 +64,9 @@ if TYPE_CHECKING:
 
 
 # --- relations (RADD-823) -----------------------------------------------------
-#
-# The two resolver forms every adopter composes. `relations_held` (auth.types)
-# answers WHICH qualifiers a permission set carries for a base atom; these turn
-# that answer into a WHERE clause (lists/counts/search) or a row verdict
-# (gates). The registry supplies what each qualifier MEANS — only the owning
-# module knows its columns.
+# `relations_held` says WHICH qualifiers a set carries; these turn that into a
+# WHERE clause (lists/counts/search) or a row verdict (gates). The registry says
+# what each qualifier MEANS — only the owning module knows its columns.
 
 
 async def relation_actor(session: AsyncSession, user: User) -> "RelationActor":
@@ -129,11 +85,9 @@ async def relation_actor(session: AsyncSession, user: User) -> "RelationActor":
 
 
 # --- row guards (spec 121) ------------------------------------------------------
-#
-# A guard is a per-row admission every reader passes whatever relation they
-# hold: a restricted issue admits only the people on it. Composed INSIDE the
-# primitives below, so every resolver built on them — the item row filter, the
-# gate, capabilities, notifications — agrees without each one remembering.
+# A per-row admission every reader passes whatever relation they hold (a
+# restricted issue admits only the people on it). Composed INSIDE the primitives
+# below, so every resolver built on them agrees without each one remembering.
 
 
 def _guard(resource: str):
@@ -188,9 +142,17 @@ async def row_guard_holds_async(
         return True
     specs = registries.relations_for(resource)
     admitting = [specs[key] for key in guard.admits if key in specs]
-    if any(spec.holds(actor, row) for spec in admitting if spec.holds is not None):
+    return await _row_admits(session, admitting, actor, row)
+
+
+async def _row_admits(
+    session: AsyncSession, specs: list, actor: "RelationActor", row: object
+) -> bool:
+    """Does any of `specs` hold for this row? Pure predicates answer free; the
+    query-gated ones (`holds=None`, RADD-844) share ONE EXISTS against the row."""
+    if any(spec.holds(actor, row) for spec in specs if spec.holds is not None):
         return True
-    pending = [spec for spec in admitting if spec.holds is None]
+    pending = [spec for spec in specs if spec.holds is None]
     if not pending:
         return False
     from sqlalchemy import exists, or_, select
@@ -209,19 +171,10 @@ def relation_filter(resource: str, relations: frozenset[str], actor: "RelationAc
     Spec 121: the resource's row guard is ANDed under every answer."""
     from sqlalchemy import and_, false, or_
 
-    from radd.kernel import registries
-
     guard = row_guard_filter(resource, actor)
     if RELATION_ANY in relations:
         return guard
-    specs = registries.relations_for(resource)
-    # Downward closure (the lattice is normative: any ⊃ team ⊃ own) — holding
-    # @team covers the @own rows too, so the filter ORs every CONTAINED spec.
-    clauses = [
-        spec.where(actor)
-        for key, spec in specs.items()
-        if any(relation_contains(held, key) for held in relations)
-    ]
+    clauses = [spec.where(actor) for spec in _held_specs(resource, relations)]
     if not clauses:
         return false()
     held_clause = clauses[0] if len(clauses) == 1 else or_(*clauses)
@@ -229,6 +182,8 @@ def relation_filter(resource: str, relations: frozenset[str], actor: "RelationAc
 
 
 def _held_specs(resource: str, relations: frozenset[str]) -> list:
+    """Every spec a held relation CONTAINS (downward closure: any ⊃ team ⊃ own),
+    so holding @team covers the @own rows too."""
     from radd.kernel import registries
 
     return [
@@ -241,12 +196,9 @@ def _held_specs(resource: str, relations: frozenset[str]) -> list:
 def relation_holds_row(
     resource: str, relations: frozenset[str], actor: "RelationActor", row: object
 ) -> bool:
-    """The GATING form: does ANY held relation hold for this loaded row?
-
-    SYNC — only pure predicates answer here. A query-gated relation
-    (`holds=None`, RADD-844) is treated as NOT held: failing closed, never
-    wide. A gate that must honour those uses `relation_holds_row_async`.
-    Spec 121: the row guard is checked first, under every relation set."""
+    """The SYNC gating form: does ANY held relation hold for this loaded row? A
+    query-gated relation (`holds=None`) counts as NOT held — fail closed; use
+    `relation_holds_row_async` to honour those. The row guard is checked first."""
     if not row_guard_holds(resource, actor, row):
         return False
     if RELATION_ANY in relations:
@@ -264,28 +216,14 @@ async def relation_holds_row_async(
     actor: "RelationActor",
     row: object,
 ) -> bool:
-    """The GATING form for gates that can ask the database (RADD-844): pure
-    predicates answer free; a query-gated relation (`holds=None` — membership
-    in another table, like `@participant`) is answered by running its
-    where-form against THIS row's id. One EXISTS covers them all.
-    Spec 121: the row guard is checked first, under every relation set."""
+    """The gating form for gates that can ask the database (RADD-844): a
+    query-gated relation (membership in another table, like `@participant`) is
+    answered against THIS row. The row guard is checked first."""
     if not await row_guard_holds_async(session, resource, actor, row):
         return False
     if RELATION_ANY in relations:
         return True
-    held = _held_specs(resource, relations)
-    if any(spec.holds(actor, row) for spec in held if spec.holds is not None):
-        return True
-    pending = [spec for spec in held if spec.holds is None]
-    if not pending:
-        return False
-    from sqlalchemy import exists, or_, select
-
-    model = type(row)
-    clause = or_(*[spec.where(actor) for spec in pending])
-    return bool(
-        await session.scalar(select(exists().where(model.id == row.id, clause)))
-    )
+    return await _row_admits(session, _held_specs(resource, relations), actor, row)
 
 
 async def relation_row_ids_holding(
@@ -295,11 +233,9 @@ async def relation_row_ids_holding(
     actor: "RelationActor",
     rows: "Sequence[object]",
 ) -> set[uuid.UUID]:
-    """Batched gating (RADD-844): the ids among `rows` the relation set holds
-    for. Pure predicates run in Python; every query-gated relation is folded
-    into ONE membership query over the page of ids — list surfaces stamping
-    per-row capabilities stay one query, not one per row. Spec 121: the row
-    guard is applied as one more batched predicate."""
+    """Batched gating (RADD-844): the ids among `rows` the relation set holds for.
+    Query-gated relations fold into ONE query over the page of ids, and the row
+    guard into one more — never a query per row."""
     if not rows:
         return set()
     guard = row_guard_filter(resource, actor)
@@ -347,7 +283,7 @@ async def subjects_for(session: AsyncSession, user: User, project: Project) -> S
     from radd.modules.groups import service as groups  # deferred: loads after auth
     from radd.modules.teams import service as teams  # deferred: teams loads after auth
 
-    role_ids = await _granted_role_ids(session, user.id, project)
+    role_ids = await grants.granted_role_ids(session, user.id, project.id)
     team_ids = await teams.user_team_ids(session, user.id)
     group_ids = await groups.user_group_ids(session, user.id)
     return Subjects(

@@ -75,19 +75,6 @@ async def usage_counts(session: AsyncSession) -> dict[str, int]:
     return {key: count for key, count in rows.all()}
 
 
-async def resolve_by_name(session: AsyncSession, name: str | None) -> str | None:
-    """A Jira link-type NAME → a Radd type key, matched case-insensitively against a
-    type's name/outward/inward names (spec 91 importer integration). None if no
-    match — the caller falls back to a default."""
-    if not name:
-        return None
-    needle = name.strip().casefold()
-    for t in await list_types(session):
-        if needle in {t.name.casefold(), t.outward_name.casefold(), t.inward_name.casefold()}:
-            return t.key
-    return None
-
-
 # --- pure predicates over a catalog (used by items) ---------------------------
 
 
@@ -96,14 +83,9 @@ def is_symmetric(catalog_by_key: dict[str, LinkTypeDef], key: str) -> bool:
     return definition is not None and definition.direction == LinkDirection.SYMMETRIC
 
 
-def is_auto_managed(catalog_by_key: dict[str, LinkTypeDef], key: str) -> bool:
-    definition = catalog_by_key.get(key)
-    return definition is not None and definition.auto_managed
-
-
 def label_for(definition: LinkTypeDef | None, *, incoming: bool) -> str:
     """The directional display name for one edge: inward when THIS item is the
-    target, outward when it is the source. Falls back to the raw key."""
+    target, outward when it is the source; "relates to" for an unknown type."""
     if definition is None:
         return "relates to"
     return definition.inward_name if incoming else definition.outward_name

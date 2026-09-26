@@ -1,10 +1,5 @@
-"""The "Comment is…" gate (RADD-1248), owned by `comments` since RADD-1322.
-
-It lived in `automations/gates.py`, which meant the automation engine knew the
-shape of a comment event's payload. The module that emits the event now
-contributes the question about it, through the same `AutomationNodeSpec` path
-any plugin's gate takes. Nothing here imports `automations`.
-"""
+"""The "Comment is…" gate and `{{comment.*}}` tokens (RADD-1248), contributed by
+the module that emits the event. Nothing here imports `automations`."""
 
 from __future__ import annotations
 
@@ -64,7 +59,7 @@ COMMENT_GATE = AutomationNodeSpec(
 )
 
 
-# --- {{comment.*}} tokens (RADD-1248), owned by comments since RADD-1324 -----
+# --- {{comment.*}} tokens --------------------------------------------------------
 
 
 def resolve_comment_token(field_name: str, payload: dict[str, Any]) -> str | None:

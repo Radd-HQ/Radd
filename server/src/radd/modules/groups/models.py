@@ -1,12 +1,5 @@
-"""Directory groups (RADD-829): AD objects mirrored WITH their nesting.
-
-The spec-115 D5 split: a Team is a Radd grouping (owner, purpose, project
-attachments); a Group is the directory's truth. The old model linked an AD
-group TO a team (`teams.directory_group_dn` + `TeamSource`), flattening the
-directory's nesting into a link — one concept doing two jobs, decided by a
-flag. These tables carry what the link carried (dn, display name, the spec-87
-health signal) plus the structure the link threw away.
-"""
+"""Directory groups (RADD-829): AD objects mirrored WITH their nesting. A Team is
+a Radd grouping; a Group is the directory's truth (spec-115 D5)."""
 
 import uuid
 from datetime import datetime

@@ -1,5 +1,8 @@
 from enum import StrEnum
 
+# The /reports/velocity `last` bound (a velocity dashboard widget shares it).
+VELOCITY_MAX_LAST = 50
+
 
 class ReportInterval(StrEnum):
     """Bucket width for the time-series reports (throughput, cumulative flow)."""

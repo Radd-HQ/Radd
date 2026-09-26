@@ -15,7 +15,7 @@ from radd.modules.workflow.types import StateCategory
 from . import bulk, rollup, service
 from .grouped import GroupPageRequest, GroupPage, grouped_items
 from .enums import ItemEntity, ItemKind, Priority
-from .filters import NONE_LITERAL, ItemListFilters
+from .filters import NONE_LITERAL, ItemFilterParam, ItemListFilters
 from .history import item_history
 from .schemas import (
     BulkMoveResult,
@@ -45,14 +45,56 @@ router = APIRouter(prefix="/items", tags=["items"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
-# Repeatable filter params (spec 08): repeats within a param OR, params AND.
-# Names match ItemFilterParam — the contract saved views compose against.
 _ID_OR_NONE_DOC = f"UUID or the literal '{NONE_LITERAL}' (unset); repeatable"
 _CF_DOC = "custom-field filter 'key:value' (multi_select: containment); repeatable"
 _Q_DOC = (
     "SLQ query (spec 10), e.g. `label = urgent AND state != Done ORDER BY priority DESC`; "
     "ANDed with the structured params. Invalid -> 422 {detail, position}."
 )
+_P = ItemFilterParam
+
+
+async def _item_filters(
+    project_id: Annotated[uuid.UUID | None, Query(alias=_P.PROJECT_ID.value)] = None,
+    state_id: Annotated[list[uuid.UUID] | None, Query(alias=_P.STATE_ID.value)] = None,
+    category: Annotated[list[StateCategory] | None, Query(alias=_P.CATEGORY.value)] = None,
+    kind: Annotated[list[ItemKind] | None, Query(alias=_P.KIND.value)] = None,
+    priority: Annotated[list[Priority] | None, Query(alias=_P.PRIORITY.value)] = None,
+    parent_id: uuid.UUID | None = None,
+    assignee_id: Annotated[
+        list[str] | None, Query(alias=_P.ASSIGNEE_ID.value, description=_ID_OR_NONE_DOC)
+    ] = None,
+    team_id: Annotated[
+        list[str] | None, Query(alias=_P.TEAM_ID.value, description=_ID_OR_NONE_DOC)
+    ] = None,
+    cycle_id: Annotated[
+        list[str] | None, Query(alias=_P.CYCLE_ID.value, description=_ID_OR_NONE_DOC)
+    ] = None,
+    label: Annotated[
+        list[str] | None, Query(alias=_P.LABEL.value, description="label name; repeatable")
+    ] = None,
+    cf: Annotated[list[str] | None, Query(alias=_P.CF.value, description=_CF_DOC)] = None,
+    archived: Annotated[bool, Query(description="true = archived items ONLY (spec 38)")] = False,
+) -> ItemListFilters:
+    """The repeatable filter params (spec 08), named by `ItemFilterParam` — the
+    contract saved views compose against. Repeats within a param OR; params AND."""
+    return ItemListFilters(
+        project_id=project_id,
+        state_ids=tuple(state_id or ()),
+        categories=tuple(category or ()),
+        kinds=tuple(kind or ()),
+        priorities=tuple(priority or ()),
+        parent_id=parent_id,
+        assignee_ids=tuple(assignee_id or ()),
+        team_ids=tuple(team_id or ()),
+        cycle_ids=tuple(cycle_id or ()),
+        labels=tuple(label or ()),
+        cf=tuple(cf or ()),
+        archived=archived,
+    )
+
+
+ItemFilters = Annotated[ItemListFilters, Depends(_item_filters)]
 
 
 @router.post("", response_model=ItemRead, status_code=201)
@@ -71,38 +113,13 @@ async def list_items(
     response: Response,
     session: Session,
     user: Actor,
+    filters: ItemFilters,
     q: Annotated[str | None, Query(description=_Q_DOC)] = None,
-    project_id: uuid.UUID | None = None,
-    state_id: Annotated[list[uuid.UUID] | None, Query()] = None,
-    category: Annotated[list[StateCategory] | None, Query()] = None,
-    kind: Annotated[list[ItemKind] | None, Query()] = None,
-    priority: Annotated[list[Priority] | None, Query()] = None,
-    parent_id: uuid.UUID | None = None,
-    assignee_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    team_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    cycle_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    label: Annotated[list[str] | None, Query(description="label name; repeatable")] = None,
-    cf: Annotated[list[str] | None, Query(description=_CF_DOC)] = None,
-    archived: Annotated[bool, Query(description="true = archived items ONLY (spec 38)")] = False,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     cursor_mode: bool = False,
     after: str | None = Query(None, max_length=16384),
 ) -> list[ItemRead]:
-    filters = ItemListFilters(
-        project_id=project_id,
-        state_ids=tuple(state_id or ()),
-        categories=tuple(category or ()),
-        kinds=tuple(kind or ()),
-        priorities=tuple(priority or ()),
-        parent_id=parent_id,
-        assignee_ids=tuple(assignee_id or ()),
-        team_ids=tuple(team_id or ()),
-        cycle_ids=tuple(cycle_id or ()),
-        labels=tuple(label or ()),
-        cf=tuple(cf or ()),
-        archived=archived,
-    )
     from .filters import FilterParseError
     if after and not cursor_mode:
         raise FilterParseError("after requires cursor_mode")
@@ -160,36 +177,11 @@ async def suggest_slq(
 async def list_item_ids(
     session: Session,
     user: Actor,
+    filters: ItemFilters,
     q: Annotated[str | None, Query(description=_Q_DOC)] = None,
-    project_id: uuid.UUID | None = None,
-    state_id: Annotated[list[uuid.UUID] | None, Query()] = None,
-    category: Annotated[list[StateCategory] | None, Query()] = None,
-    kind: Annotated[list[ItemKind] | None, Query()] = None,
-    priority: Annotated[list[Priority] | None, Query()] = None,
-    parent_id: uuid.UUID | None = None,
-    assignee_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    team_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    cycle_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    label: Annotated[list[str] | None, Query(description="label name; repeatable")] = None,
-    cf: Annotated[list[str] | None, Query(description=_CF_DOC)] = None,
-    archived: Annotated[bool, Query(description="true = archived items ONLY")] = False,
 ) -> ItemIds:
     """Ids of every visible item matching the filter (spec 68) — the 'select all
     N matching' seam. ids capped at bulk_max_items, total is the true count."""
-    filters = ItemListFilters(
-        project_id=project_id,
-        state_ids=tuple(state_id or ()),
-        categories=tuple(category or ()),
-        kinds=tuple(kind or ()),
-        priorities=tuple(priority or ()),
-        parent_id=parent_id,
-        assignee_ids=tuple(assignee_id or ()),
-        team_ids=tuple(team_id or ()),
-        cycle_ids=tuple(cycle_id or ()),
-        labels=tuple(label or ()),
-        cf=tuple(cf or ()),
-        archived=archived,
-    )
     return await bulk.list_item_ids(session, actor=user, filters=filters, q=q)
 
 
@@ -197,36 +189,11 @@ async def list_item_ids(
 async def count_items(
     session: Session,
     user: Actor,
+    filters: ItemFilters,
     q: Annotated[str | None, Query(description=_Q_DOC)] = None,
-    project_id: uuid.UUID | None = None,
-    state_id: Annotated[list[uuid.UUID] | None, Query()] = None,
-    category: Annotated[list[StateCategory] | None, Query()] = None,
-    kind: Annotated[list[ItemKind] | None, Query()] = None,
-    priority: Annotated[list[Priority] | None, Query()] = None,
-    parent_id: uuid.UUID | None = None,
-    assignee_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    team_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    cycle_id: Annotated[list[str] | None, Query(description=_ID_OR_NONE_DOC)] = None,
-    label: Annotated[list[str] | None, Query(description="label name; repeatable")] = None,
-    cf: Annotated[list[str] | None, Query(description=_CF_DOC)] = None,
-    archived: Annotated[bool, Query(description="true = archived items ONLY")] = False,
 ) -> ItemCount:
     """The visible-match count alone (spec 75): same filter surface + visibility
     as GET /items/ids, `{total}` only — powers the dashboard slq_count widgets."""
-    filters = ItemListFilters(
-        project_id=project_id,
-        state_ids=tuple(state_id or ()),
-        categories=tuple(category or ()),
-        kinds=tuple(kind or ()),
-        priorities=tuple(priority or ()),
-        parent_id=parent_id,
-        assignee_ids=tuple(assignee_id or ()),
-        team_ids=tuple(team_id or ()),
-        cycle_ids=tuple(cycle_id or ()),
-        labels=tuple(label or ()),
-        cf=tuple(cf or ()),
-        archived=archived,
-    )
     return ItemCount(total=await bulk.count_items(session, actor=user, filters=filters, q=q))
 
 

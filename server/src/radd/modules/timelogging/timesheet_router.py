@@ -10,13 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
-from radd.modules.items import service as items_service
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 from radd.modules.teams import service as teams_service
 
 from . import service, timesheet
-from .slq import compile_worklog_query, parse
 from .slq.suggest import suggest_worklog
 from .schemas import Timesheet
 
@@ -38,41 +36,14 @@ async def get_timesheet(
 ) -> Timesheet:
     if start > end:
         raise HTTPException(status_code=422, detail="start must be on or before end")
-    # Member floor (RADD-788). Seeing OTHER people's time stays a global
-    # authority — holding timesheet.view on one project must not expose the
-    # whole instance's hours — so that check is unchanged.
-    await authz.require_member(session, user)
-    can_view_all = (
-        authz.Permission.TIMESHEET_VIEW in await authz.effective_permissions(session, user)
-    )
-
+    await authz.require_member(session, user)  # the member floor (RADD-788)
     requested: set[uuid.UUID] | None = set(user_id) if user_id else None
     if team_id is not None:
         members = await teams_service.list_team_members(session, team_id)
         member_ids = {m.id for m in members}
         requested = (requested & member_ids) if requested is not None else member_ids
-    if not can_view_all:
-        # Without timesheet.view you only ever see your own logged time.
-        requested = {user.id} if requested is None else (requested & {user.id})
-
-    # `q` is the worklog SLQ (spec 98). Compiled here and ANDed onto the scope
-    # filters inside build(), so it can only narrow what this actor may already
-    # see — the visibility rules above are not something a query can reach past.
-    where = None
-    if q and q.strip():
-        # Reuse the module's own resolver so `1d` means on the query what it
-        # means on every worklog row.
-        hours_per_day = await service._hours_per_day(session)
-        where = (
-            await compile_worklog_query(
-                session,
-                parse(q),
-                current_user_id=user.id,
-                hours_per_day=hours_per_day,
-                denied_item_fields=await items_service.denied_slq_fields(session, user, None),
-            )
-        ).where
-
+    requested = await timesheet.visible_user_ids(session, user, requested)
+    where = await service.compile_worklog_filter(session, user, q) if q and q.strip() else None
     sheet = await timesheet.build(
         session, start, end, actor=user, project_id=project_id, user_ids=requested, where=where
     )
@@ -101,14 +72,7 @@ _WORKLOG_SLQ_DOC = (
 async def validate_worklog_slq(session: Session, user: CurrentUser, q: str = "") -> dict[str, bool]:
     """Parse + compile only, zero worklog I/O — the editor's per-keystroke check."""
     if q.strip():
-        hours_per_day = await service._hours_per_day(session)
-        await compile_worklog_query(
-            session,
-            parse(q),
-            current_user_id=user.id,
-            hours_per_day=hours_per_day,
-            denied_item_fields=await items_service.denied_slq_fields(session, user, None),
-        )
+        await service.compile_worklog_filter(session, user, q)
     return {"ok": True}
 
 

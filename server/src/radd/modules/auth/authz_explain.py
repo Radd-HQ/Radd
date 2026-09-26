@@ -1,15 +1,8 @@
-"""The `PermissionSource` explain machinery, split out of `authz.py`
-(RADD-902) along its own marker (formerly lines 633+).
-
-Enforcement (`authz_core.effective_permissions`) collapses every contributor
-into a set; this is the deliberately SEPARATE second pass that answers "why
-can this person do that?" — one atom, one provenance row — for the admin
-inspector screens (RADD-779/809/833). Only `baseline_permissions` is shared
-with the core; everything else here is self-contained.
-"""
+"""The provenance pass behind the admin inspector (RADD-779/809/833): one row
+per held atom, with where it came from."""
 
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -20,20 +13,13 @@ from radd.modules.projects.models import Project
 
 from . import grants
 from .authz_core import baseline_permissions
-from .models import Role, User
+from .models import GlobalRoleGrant, Role, User
 from .types import GrantScopeKind, InstanceRole, expand_permissions
 
 
 @dataclass(frozen=True)
 class PermissionSource:
-    """Where one atom came from (RADD-779).
-
-    `effective_permissions` collapses every contributor into a set, which is the
-    right answer for enforcement and the wrong one for "why can this person do
-    that?" — the question that took reading `authz.py`, querying the live
-    database and doing the union by hand, including the spec-50 umbrella
-    expansions that turn one granted atom into four held ones.
-    """
+    """Where one atom came from (RADD-779)."""
 
     #: The atom, e.g. "cycle.create".
     permission: str
@@ -50,18 +36,13 @@ class PermissionSource:
     role_id: uuid.UUID | None = None
     #: Where the supplying grant applies: "global" | "project" | "space".
     scope: str = "global"
-    #: HOW the role reached this scope: "membership" (a project-member row),
-    #: "team" (a team attached to the project), "grant" (a role grant),
-    #: "attached" (team view: the team is attached to a project). None for
-    #: baseline/instance-admin. RADD-833 extends this vocabulary with the
-    #: group path.
+    #: HOW the role reached the scope: "grant" (held directly) | "team" | "group";
+    #: None for baseline/instance-admin.
     via: str | None = None
     #: The team that carried it, when via == "team".
     via_team: str | None = None
-    #: RADD-833 — the GROUP that carried it (via == "group"), and the nesting
-    #: chain from the granted group down to the user's direct membership
-    #: (["Render Wranglers", "VFX All", "Studio"] = a member 3 levels down).
-    #: None chain = direct member of the granted group.
+    #: RADD-833 — the GROUP that carried it (via == "group"), and the nesting chain
+    #: from the granted group down to the user's direct membership (None = direct).
     via_group: str | None = None
     group_path: list[str] | None = None
     #: Display name of the scoped project/space (team view rows span many).
@@ -75,21 +56,11 @@ async def permission_sources(
     project: Project | None = None,
     space_id: uuid.UUID | None = None,
 ) -> list[PermissionSource]:
-    """Every atom the user holds in the scope, each with its provenance.
-
-    Deliberately a SECOND pass over the same inputs rather than a richer
-    `effective_permissions`: enforcement runs on every request and must stay a
-    set union, while this runs when an admin opens one person's row. Keeping
-    them apart means the explanation can never slow the check down — and the
-    explanation is derived from the same helpers, so it cannot describe a rule
-    the resolver does not follow.
-
-    RADD-809: takes a SPACE scope too (no `page.*` atom was explainable
-    before), and each row carries the channel — membership, team attachment,
-    grant — its scope, and the source role's id as a backlink. Narrower
-    channels are recorded first, so an atom held both ways reads as the
-    scoped fact.
-    """
+    """Every atom the user holds in the scope, with its provenance (RADD-779/809).
+    A deliberately separate pass from `effective_permissions`, built on the same
+    helpers: enforcement stays a set union, this runs when an admin opens a row.
+    Narrower channels are recorded first, so an atom held both ways reads as the
+    scoped fact."""
     if project is not None and space_id is not None:
         raise ValueError("inspect a project or a space, not both")
     if not user.active:
@@ -137,11 +108,8 @@ async def permission_sources(
     baseline_role = await role_by_key(session, BuiltinRoleKey.BASELINE)
     record(await baseline_permissions(session), kind="baseline", role_id=baseline_role.id)
 
-    # (role_id, scope, via, via_team, via_group, group_path) per channel —
-    # narrower scopes first. Grant channels are ATTRIBUTED to their carrying
-    # subject (RADD-833): a group-held grant names the group AND the nesting
-    # chain down to the user's direct membership, so "you have this because of
-    # a group you have never heard of" reads as a path instead of a mystery.
+    # (role_id, scope, via, via_team, via_group, group_path) per channel, narrower
+    # scopes first; each grant is attributed to its carrying subject (RADD-833).
     channels: list[
         tuple[uuid.UUID, str, str, str | None, str | None, list[str] | None]
     ] = []
@@ -155,48 +123,25 @@ async def permission_sources(
         path = await groups_service.membership_path(session, user.id, group_id)
         return [g.name for g in path] if path else None
 
+    scopes: list[tuple[str, Callable[[GlobalRoleGrant], bool]]] = []
     if project is not None:
-        # RADD-929: `project_members` and `project_teams` used to contribute two
-        # more channels here. Both are grants now, so the `attributed` loop below
-        # — which already knew how to name a direct / team / group carrier —
-        # covers every route a role takes to this project.
-        for row, via, carrier, carrier_group in attributed:
-            if row.project_id == project.id:
-                channels.append(
-                    (
-                        row.role_id,
-                        "project",
-                        via,
-                        carrier if via == "team" else None,
-                        carrier if via == "group" else None,
-                        await _chain(carrier_group),
-                    )
-                )
+        scopes.append(("project", lambda row: row.project_id == project.id))
     if space_id is not None:
+        scopes.append(("space", lambda row: row.space_id == space_id))
+    scopes.append(("global", lambda row: row.project_id is None and row.space_id is None))
+    for scope, applies in scopes:
         for row, via, carrier, carrier_group in attributed:
-            if row.space_id == space_id:
+            if applies(row):
                 channels.append(
                     (
                         row.role_id,
-                        "space",
+                        scope,
                         via,
                         carrier if via == "team" else None,
                         carrier if via == "group" else None,
                         await _chain(carrier_group),
                     )
                 )
-    for row, via, carrier, carrier_group in attributed:
-        if row.project_id is None and row.space_id is None:
-            channels.append(
-                (
-                    row.role_id,
-                    "global",
-                    via,
-                    carrier if via == "team" else None,
-                    carrier if via == "group" else None,
-                    await _chain(carrier_group),
-                )
-            )
 
     role_ids = {rid for rid, _, _, _, _, _ in channels}
     roles: dict[uuid.UUID, Role] = {}
@@ -223,17 +168,8 @@ async def permission_sources(
 
 
 async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> list[PermissionSource]:
-    """What membership of this team confers (RADD-809) — the question a team
-    owner actually has, and nothing answered before.
-
-    Rows are NOT deduped across scopes the way the user view is: a role granted
-    on project X and the same role granted on project Y are different facts, so
-    uniqueness is (atom, role, scope label).
-    """
-    # RADD-929: `project_teams` used to contribute a second channel here, labelled
-    # "attached", beside the grants. That is precisely the duplication this panel
-    # made visible — one team's entitlement on one project listed twice under two
-    # names — and both rows are grants now.
+    """What membership of this team confers (RADD-809). Not deduped across
+    scopes: the same role on two projects is two facts."""
     project_ids: set[uuid.UUID] = set()
     grant_rows = await grants.grants_for_subject(session, team_id=team_id)
     for grant in grant_rows:
@@ -294,27 +230,12 @@ async def team_permission_sources(session: AsyncSession, team_id: uuid.UUID) -> 
 async def scope_labels(
     session: AsyncSession, kind: GrantScopeKind, scope_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
-    """Display names for the things grants of `kind` are bound to (RADD-892).
-
-    Read from the registered `GrantScopeSpec` rather than queried here: auth owns
-    the `space_id` column but not what a space is CALLED, and reaching into
-    `pages.models` for the name was the last non-spine model import in the
-    codebase. An unregistered kind (its module disabled) yields no labels, which
-    renders the scope unlabelled — the same degradation the old feature-detected
-    import produced."""
+    """Display names for grant scopes of `kind`, from the registered
+    GrantScopeSpec (auth does not know what a space is called); an unregistered
+    kind yields none."""
     if not scope_ids:
         return {}
     spec = registries.grant_scopes.get(kind)
     if spec is None:
         return {}
     return await spec.labels(session, scope_ids)
-
-
-async def all_held_role_ids(session: AsyncSession, user: User) -> set[uuid.UUID]:
-    """Every role the user holds through ANY channel at ANY scope — the subject
-    set the resource-access inspector matches role-subject grants against
-    (RADD-809). Off the request path."""
-    # RADD-832: every grant CHANNEL (direct, team, group), not just direct rows —
-    # and since RADD-929 that is every channel there is, membership and team
-    # attachment having become grants.
-    return await grants.held_role_ids_anywhere(session, user.id)

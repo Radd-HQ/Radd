@@ -1,18 +1,6 @@
-"""Per-key permission scopes (spec 113) — pure, so the intersection is testable.
-
-An API key may carry LESS authority than the account behind it. The scope is
-expressed in the same vocabulary as the roles matrix (raw permission atoms), and
-enforcement is an intersection applied where permissions resolve, not a second
-policy engine:
-
-    effective = resolved(actor, project) ∩ scope(key, project)
-
-A key can therefore never exceed its account: demote the account and every key it
-holds narrows on the next request, with no key edit and no re-issuance.
-
-`None` means UNSCOPED — the key carries the account's full authority, which is
-what every personal access token did before this spec and still does.
-"""
+"""Per-key permission scopes (spec 113) — pure. A key may carry LESS than its
+account; enforcement is `resolved ∩ scope`, applied where permissions resolve,
+so a key can never exceed its account. `None` = unscoped (full authority)."""
 
 import uuid
 from collections.abc import Mapping
@@ -48,19 +36,9 @@ class TokenScope:
     def narrow(
         self, permissions: frozenset[Permission], project_id: uuid.UUID | None
     ) -> frozenset[Permission]:
-        """The intersection — LATTICE-AWARE since RADD-823. Two atoms with the
-        same base meet at the NARROWER relation: an `item.read` key against an
-        `item.read@team` account yields `@team` (the key cannot exceed the
-        account), and an `item.read@team` key against an `item.read` account
-        yields `@team` too (the account cannot exceed the key). With no
-        relation qualifiers anywhere this is exactly the old set intersection.
-
-        Global atoms also apply inside a project, because a global-scoped atom
-        (page.read, timesheet.view) is checked with project=None in some paths
-        and inside a project in others; a scope that granted it globally but
-        not per project would behave differently depending on which code path
-        asked, which is exactly the sort of subtlety a permission system must
-        not have."""
+        """The intersection, lattice-aware (RADD-823): the same base meets at the
+        NARROWER relation. Global atoms apply inside a project too — some paths
+        check a global atom with project=None and others inside a project."""
         if project_id is None:
             allowed = self.global_atoms
         else:
@@ -110,22 +88,15 @@ def _lattice_intersect(
 def _atoms(values: object, where: str) -> frozenset[Permission]:
     if not isinstance(values, list):
         raise ValueError(f"scope {where} must be a list of permission atoms")
-    # RADD-890: validated against the LIVE catalog (the kernel permissions
-    # registry ∪ the typed alias enum) — the same set the role editor validates
-    # against. It was the enum alone, which meant a plugin's atom could be
-    # granted through a role and then refused in a key scope: the spec-113
-    # intersection would have silently narrowed every scoped key that named one.
+    # RADD-890: the LIVE catalog, the same set the role editor validates against.
     known = all_permission_keys()
     out: set = set()
     for value in values:
         base, _relation = split_permission(str(value))
         if base not in known:
-            # Refuse at WRITE time. An unknown atom that silently never matches is
-            # a scope that looks granted and is not — the worst failure mode here.
-            # (The relation qualifier is validated shallowly here — base only —
-            # because a scope is written before the owning plugin's relations
-            # may be loaded; an unregistered qualifier resolves to nothing,
-            # which for a KEY is the fail-closed direction.)
+            # Refuse at WRITE time: an unknown atom never matches, so it would look
+            # granted and not be. The qualifier is checked shallowly (base only) —
+            # an unregistered one resolves to nothing, which for a KEY fails closed.
             raise ValueError(f"unknown permission atom '{value}' in scope {where}")
         out.add(_atom(str(value), base))
     return frozenset(out)

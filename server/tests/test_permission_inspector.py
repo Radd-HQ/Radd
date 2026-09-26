@@ -16,14 +16,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.access import inspect as access_inspect, service as access_service
-from radd.modules.access.types import GrantSubject
+from radd.modules.access.types import Access, GrantSubject
 from radd.modules.auth import authz, grants as auth_grants, roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate
-from radd.modules.fields.types import FieldAccess, FieldType
+from radd.modules.fields.types import FieldType
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.schemas import TeamCreate
 from radd.modules.projects import service as projects_service
@@ -134,14 +134,14 @@ async def test_resource_access_names_subject_label_and_default(db, member):
         str(definition.id),
         subject_type=GrantSubject.ROLE,
         subject_id=role.id,
-        access=FieldAccess.WRITE.value,
+        access=Access.WRITE.value,
         project_id=project.id,
     )
     # The member holds the role via a project membership.
     db.add(GlobalRoleGrant(project_id=project.id, user_id=member.id, role_id=role.id))
     await db.flush()
 
-    role_ids = await authz.all_held_role_ids(db, member)
+    role_ids = await auth_grants.held_role_ids_anywhere(db, member.id)
     assert role.id in role_ids
     sections = await access_inspect.subject_access(
         db,
@@ -190,7 +190,7 @@ async def test_team_access_reports_project_and_global_grants(db, member):
         str(definition.id),
         subject_type=GrantSubject.TEAM,
         subject_id=team.id,
-        access=FieldAccess.READ.value,
+        access=Access.READ.value,
     )
     sections = await access_inspect.subject_access(
         db, team_ids={team.id}, team_names={team.id: team.name}

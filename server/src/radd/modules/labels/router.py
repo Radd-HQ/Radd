@@ -33,8 +33,7 @@ async def list_labels(
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[LabelRead]:
-    # RADD-816 (F6): the catalog read is a deliverable atom now — Baseline-
-    # seeded, so day-one behaviour is the old member floor, but REVOCABLE.
+    # label.read is a Baseline-seeded but revocable atom (RADD-816).
     if not await authz.holds(session, user, authz.Permission.LABEL_READ):
         return []
     labels = await service.list_labels(session, q=q, limit=limit, offset=offset)
@@ -47,7 +46,7 @@ async def list_labels(
 async def update_label(
     label_id: uuid.UUID, data: LabelUpdate, session: Session, user: CurrentUser
 ) -> LabelRead:
-    """Rename/recolor a label (spec 87 — label.update had no endpoint before)."""
+    """Rename/recolor a label."""
     await authz.require(session, user, authz.Permission.LABEL_UPDATE)
     label = await service.update_label(session, label_id, data, actor_id=user.id)
     return LabelRead.model_validate(label)
@@ -55,6 +54,6 @@ async def update_label(
 
 @router.delete("/{label_id}", status_code=204)
 async def delete_label(label_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    """Hard-delete a label; it detaches from every item that carried it (spec 87)."""
+    """Hard-delete a label; it detaches from every item that carried it."""
     await authz.require(session, user, authz.Permission.LABEL_DELETE)
     await service.delete_label(session, label_id, actor_id=user.id)

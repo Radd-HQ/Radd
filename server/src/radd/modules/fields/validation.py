@@ -69,10 +69,6 @@ def check_field_value(
     return None if check(value) else message
 
 
-def _check_value(definition: FieldDefinition, value: Any) -> str | None:
-    return check_field_value(FieldType(definition.type), definition.options, value)
-
-
 def apply_defaults(
     definitions: Sequence[FieldDefinition], values: Mapping[str, Any]
 ) -> dict[str, Any]:
@@ -108,7 +104,7 @@ def validate_custom_fields(
             if definition.required:
                 errors.append(f"{key}: required")
             continue
-        problem = _check_value(definition, value)
+        problem = check_field_value(FieldType(definition.type), definition.options, value)
         if problem:
             errors.append(f"{key}: {problem}")
         else:

@@ -7,11 +7,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import ilike_term
-from radd.exceptions import ForbiddenError, NotFoundError
+from radd.exceptions import ConflictError, ForbiddenError, NotFoundError
 from radd.modules.access import resolution as access_res, service as access_service
 from radd.modules.access.service import AccessGrant  # public re-export (RADD-887)
 from radd.modules.access.registry import ResourceSpec, register_resource
 from radd.modules.access.types import Access
+from radd.modules.auth import authz
 from radd.kernel import changes
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
@@ -67,22 +68,25 @@ _FIELD_SPEC = ResourceSpec(
 )
 
 
+async def _holds_field_manage(session: AsyncSession, actor, project_id: uuid.UUID | None) -> bool:
+    """field.manage held (unqualified) in one project, or globally when `project_id` is None."""
+    project = None if project_id is None else await projects_service.get_project(session, project_id)
+    permissions = await authz.effective_permissions(session, actor, project=project)
+    return authz.Permission.FIELD_MANAGE in permissions
+
+
 async def _can_manage_field(session: AsyncSession, actor, resource_id: str) -> bool:
     """A field's grants are managed by whoever holds field.manage on the field's own
     scope (every project it's scoped to, or globally when global)."""
-    from radd.modules.auth import authz  # deferred: authz loads before fields
-
     try:
         definition = await get_field(session, uuid.UUID(resource_id))
     except (ValueError, NotFoundError):
         return False
     scopes = definition.project_ids
     if not scopes:
-        return authz.Permission.FIELD_MANAGE in await authz.effective_permissions(session, actor)
+        return await _holds_field_manage(session, actor, None)
     for project_id in scopes:
-        project = await projects_service.get_project(session, project_id)
-        perms = await authz.effective_permissions(session, actor, project=project)
-        if authz.Permission.FIELD_MANAGE not in perms:
+        if not await _holds_field_manage(session, actor, project_id):
             return False
     return True
 
@@ -97,14 +101,7 @@ _READ_RESTRICTABLE_NAMES = frozenset(f.value for f in READ_RESTRICTABLE_BUILTINS
 async def _can_manage_builtin(
     session: AsyncSession, actor, resource_id: str, project_id: uuid.UUID | None
 ) -> bool:
-    from radd.modules.auth import authz
-
-    if project_id is None:
-        return authz.Permission.FIELD_MANAGE in await authz.effective_permissions(session, actor)
-    project = await projects_service.get_project(session, project_id)
-    return authz.Permission.FIELD_MANAGE in await authz.effective_permissions(
-        session, actor, project=project
-    )
+    return await _holds_field_manage(session, actor, project_id)
 
 
 _BUILTIN_SPEC = ResourceSpec(
@@ -128,8 +125,6 @@ async def create_field(
         select(FieldDefinition.id).where(FieldDefinition.key == data.key)
     )
     if existing:
-        from radd.exceptions import ConflictError
-
         raise ConflictError(FieldEntity.FIELD, data.key)
 
     definition = FieldDefinition(
@@ -218,15 +213,9 @@ async def extend_options(
     values: list[str],
     actor_id: uuid.UUID | None = None,
 ) -> list[str]:
-    """ADD options to a select field, keeping every existing one. Returns what was
-    actually added.
-
-    Deliberately not part of `update_field`, which holds options immutable: the
-    dangerous edits are REMOVING or RENAMING an option, because existing items
-    already store that value and would silently become invalid. Adding one cannot
-    invalidate anything, so it is safe to expose on its own — and an importer
-    mapping into a curated select needs exactly this, or real values get dropped.
-    """
+    """ADD options to a select field; returns what was actually added. Separate
+    from `update_field` (options stay immutable there) because adding cannot
+    invalidate stored values, and an importer mapping into a curated select needs it."""
     definition = await get_field(session, field_id)
     if FieldType(definition.type) not in SELECT_TYPES:
         raise FieldValidationError([f"{definition.key} is not a select field"])
@@ -268,29 +257,16 @@ async def remove_option(
     actor_id: uuid.UUID | None = None,
 ) -> int:
     """REMOVE an option from a select field, migrating the items that hold it.
-
-    `extend_options` above is additive because "removing is dangerous" — items
-    already store the value and would silently become invalid. That is an
-    argument for making the caller SAY what happens to those items, not for
-    refusing forever: a field otherwise accumulates every value anyone ever
-    typed, and an importer's strays are permanent.
-
-    The decision is forced by the field, never defaulted:
-
-      * **multi_select** — no replacement exists to ask for. The value is dropped
-        from each item's list, and a shorter list is still valid.
-      * **single select, required** — `replace_with` must name a SURVIVING
-        option. Clearing would leave items violating their own field, which is
-        the invalid state this whole function exists to avoid.
-      * **single select, optional** — `replace_with` may be None, which clears
-        the value.
-
-    The field's own `default_value` is migrated in the same transaction. A
-    default pointing at a removed option is the same invalidity one level up,
-    and it is the one nobody would think to check — it would seed the dead value
-    onto every item created afterwards.
-
     Returns the number of items touched.
+
+    The field forces the decision, never a default:
+      * multi_select: the value is dropped from each item's list.
+      * required single select: `replace_with` must name a SURVIVING option;
+        clearing would leave items violating their own field.
+      * optional single select: `replace_with` may be None, which clears.
+
+    The field's own `default_value` migrates in the same transaction. A default
+    naming a removed option would seed the dead value onto every new item.
     """
     from radd.modules.items import service as items_service
 
@@ -380,6 +356,13 @@ async def get_field(session: AsyncSession, field_id: uuid.UUID) -> FieldDefiniti
     return definition
 
 
+def _matching(query, q: str | None):
+    """Name-or-key substring search, shared by the list and its count."""
+    if not q:
+        return query
+    return query.where(FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q)))
+
+
 async def list_fields(
     session: AsyncSession,
     *,
@@ -387,23 +370,14 @@ async def list_fields(
     limit: int | None = None,
     offset: int = 0,
 ) -> list[FieldDefinition]:
-    query = select(FieldDefinition).order_by(FieldDefinition.created_at)
-    if q:
-        query = query.where(
-            FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q))
-        )
+    query = _matching(select(FieldDefinition).order_by(FieldDefinition.created_at), q)
     if limit is not None:
         query = query.offset(offset).limit(limit)
     return list((await session.execute(query)).scalars())
 
 
 async def count_fields(session: AsyncSession, *, q: str | None = None) -> int:
-    query = select(func.count()).select_from(FieldDefinition)
-    if q:
-        query = query.where(
-            FieldDefinition.name.ilike(ilike_term(q)) | FieldDefinition.key.ilike(ilike_term(q))
-        )
-    return (await session.execute(query)).scalar_one()
+    return (await session.execute(_matching(select(func.count()).select_from(FieldDefinition), q))).scalar_one()
 
 
 async def definitions_for_project(session: AsyncSession, project: Project) -> list[FieldDefinition]:
@@ -507,12 +481,9 @@ def _grants_for(definition: Any, ctx: FieldAccessContext) -> Sequence[AccessGran
     return ctx.grants_by_field.get(str(definition.id), ())
 
 
-# RADD-816 (F5.2): `has_manage` on the field contexts now means INSTANCE ADMIN
-# — the operator who administers the grant system sees through it, a named
-# resource-layer rule the inspector already explains with the `*` row. The old
-# meaning (project.manage held) is GONE: a project manager is denied like
-# anyone else unless a grant names them. The framework (`has_access`) never
-# consults the flag; these short-circuits are the fields module's own.
+# `has_manage` on these contexts means INSTANCE ADMIN (RADD-816), not project.manage:
+# the grant system's operator sees through it. `has_access` never consults the flag;
+# these short-circuits are this module's own.
 
 
 def field_readable(definition: Any, ctx: FieldAccessContext) -> bool:
@@ -642,12 +613,9 @@ async def readonly_field_keys(
     group_ids: frozenset[uuid.UUID],
     has_manage: bool,
 ) -> list[str]:
-    """The builtin field NAMES + custom field KEYS the actor may NOT WRITE in this project,
-    resolved through the generic access framework (spec 92). This is per-(actor, project) and
-    item-INDEPENDENT (field grants are project/global-scoped, never per-item), so the SPA can
-    disable exactly those editors up front instead of erroring on save. RADD-816 removed the
-    manager bypass: a project manager is denied like anyone else unless a grant names them. Workflow-state transitions are
-    handled separately (per-item) via /items/{id}/allowed-transitions."""
+    """Builtin field NAMES + custom field KEYS the actor may NOT write in this project.
+    Per-(actor, project) and item-independent (field grants are never per-item), so the
+    SPA disables those editors up front. Transitions are per-item: /items/{id}/allowed-transitions."""
     subject = access_res.SubjectContext(
         user_id=user_id,
         role_ids=role_ids,

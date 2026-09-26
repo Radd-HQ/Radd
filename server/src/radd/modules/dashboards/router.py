@@ -26,7 +26,7 @@ from .schemas import (
     WidgetLayoutSave,
     WidgetRead,
 )
-from .types import WidgetType
+from .types import BUILTIN_WIDGET_TYPES
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 
@@ -164,9 +164,6 @@ _WIDGET_DOC = (
     "free-form config dict. Unknown types → 422. Returns the full updated dashboard."
 )
 
-_BUILTIN_WIDGET_TYPES = frozenset(t.value for t in WidgetType)
-
-
 def _parse_widget_body(body: dict[str, Any]) -> WidgetCreate | PluginWidget:
     """Dispatch a raw widget-create body to its schema: a builtin widget_type
     validates against the discriminated union (typed per-type config); a type
@@ -177,7 +174,7 @@ def _parse_widget_body(body: dict[str, Any]) -> WidgetCreate | PluginWidget:
     widget_type = body.get("widget_type")
     spec = registries.widget_types.get(widget_type) if isinstance(widget_type, str) else None
     try:
-        if widget_type in _BUILTIN_WIDGET_TYPES:
+        if widget_type in BUILTIN_WIDGET_TYPES:
             return pydantic.TypeAdapter(WidgetCreate).validate_python(body)
         if spec is not None and not spec.personal:
             return PluginWidget.model_validate(body)
@@ -242,58 +239,4 @@ async def save_dashboard(
 async def replace_widgets(
     dashboard_id: uuid.UUID, data: WidgetLayoutSave, session: Session, user: CurrentUser
 ):
-    from sqlalchemy import select
-    from .models import DashboardWidget
-    from radd.exceptions import ConflictError
-
-    await service.require_edit(session, dashboard_id, user)
-    await service._lock_dashboard(session, str(dashboard_id))
-    current = await service.get_dashboard_read(session, dashboard_id, actor=user)
-    if [w.model_dump(mode="json") for w in current.widgets] != [
-        w.model_dump(mode="json") for w in data.expected
-    ]:
-        raise ConflictError(
-            "dashboard", reason="Dashboard changed elsewhere. Reload before editing."
-        )
-    parsed = [_parse_widget_body(raw) for raw in data.widgets]
-    stored = {
-        str(row.id): row
-        for row in await session.scalars(
-            select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard_id)
-        )
-    }
-    kept = set()
-    dashboard = await service.require_edit(session, dashboard_id, user)
-    for index, (raw, row) in enumerate(zip(data.widgets, parsed)):
-        widget_id = raw.get("id")
-        if widget_id in kept:
-            raise ConflictError("dashboard", reason="Duplicate widget id")
-        kept.add(widget_id)
-        if not isinstance(row, PluginWidget):
-            await widgets._check_references(session, user, dashboard, row.config)
-        model = stored.get(widget_id)
-        if model is None:
-            model = DashboardWidget(dashboard_id=dashboard_id)
-            session.add(model)
-        for name in ("widget_type", "title", "width", "height", "collapsed"):
-            setattr(model, name, getattr(row, name))
-        model.position = index
-        model.config = (
-            dict(row.config)
-            if isinstance(row, PluginWidget)
-            else row.config.model_dump(mode="json")
-        )
-    for widget_id, model in stored.items():
-        if widget_id not in kept:
-            await session.delete(model)
-    await session.flush()
-    from .types import DashboardEvent
-
-    await service.emit(
-        session,
-        DashboardEvent.UPDATED,
-        dashboard,
-        user,
-        diff=[{"field": "widgets", "from": "Previous layout", "to": "Updated layout"}],
-    )
-    return await service.get_dashboard_read(session, dashboard_id, actor=user)
+    return await widgets.replace_widgets(session, dashboard_id, data, _parse_widget_body, actor=user)

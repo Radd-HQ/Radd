@@ -13,7 +13,8 @@ Pure over two `ItemRead`s — no I/O — so it's trivially testable.
 
 from collections.abc import Sequence
 
-from .enums import ItemLinkType
+from radd.modules.linktypes.types import ItemLinkType
+
 from .schemas import ItemRead
 
 

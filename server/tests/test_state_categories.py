@@ -206,8 +206,7 @@ async def test_view_bucket_order_round_trips_and_degrades(db):
     )
     assert updated.column_order == ["done", "gone_key", "triage"]  # loose: kept, ignored at render
     # isolation: the sibling stays natural
-    fresh_b = await views_service.get_view_read(db, b.id, actor=admin) if hasattr(views_service, "get_view_read") else None
-    listed = await views_service.list_views(db, actor=admin, project_id=project.id)
+    listed = (await views_service.page_views(db, actor=admin, project_id=project.id))[0]
     assert next(v for v in listed if v.id == b.id).column_order is None
     # explicit null returns to natural order
     cleared = await views_service.update_view(db, a.id, ViewUpdate(column_order=None), admin)

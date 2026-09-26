@@ -1,16 +1,7 @@
-"""What `leave` contributes to the kernel's PERSON_AVAILABILITY socket (RADD-1387).
-
-The per-person sibling of `holidays.py`: that one tells an SLA clock which dates
-nobody works; this one tells whoever hands out work which PEOPLE are away. An
-adapter over `service.calendar`, which already expands a team holiday to the
-team's current members — so "away" here means exactly what the app-wide away
-indicator shows.
-
-The consumer today is round-robin assignment in `automations`, which used to
-import this module's service behind a `settings.modules` check. That check read
-BOOT config, so a leave plugin disabled at runtime kept deciding who got
-tickets; through the socket, disabling it withdraws the answer with it.
-"""
+"""The kernel PERSON_AVAILABILITY socket provider (RADD-1387): which PEOPLE are
+away, for whoever hands out work (today round-robin assignment). An adapter over
+`service.calendar`, so "away" means exactly what the app-wide away indicator
+shows; through the socket, a runtime disable withdraws the answer."""
 
 import uuid
 from collections.abc import Collection

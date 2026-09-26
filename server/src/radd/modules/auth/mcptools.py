@@ -1,10 +1,6 @@
-"""The directory + service-account MCP tools (spec 114), declared by their
-owner (RADD-889).
-
-Moved verbatim from mcp/tools.py. Each handler carries its own global
-`authz.require` — exactly the pre-move enforcement — so `kernel_enforced=False`
-and the spec's `permission` drives the spec-114 caller filter only.
-"""
+"""The directory + service-account MCP tools (spec 114). Each handler carries
+its own `authz.require`, so `kernel_enforced=False` and `permission` drives the
+caller filter only."""
 
 from collections.abc import Mapping
 from typing import Any

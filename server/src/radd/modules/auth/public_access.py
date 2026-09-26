@@ -1,13 +1,6 @@
-"""A project's PUBLIC ACCESS, read and written as the two grants it is (spec 121 §1).
-
-"Public project" = the seeded Public role granted to the Anyone principal on
-the project. "Anyone signed in may contribute" = the seeded Contributor role
-granted to the Signed-in users principal. This module is a PRESENTATION of
-those two rows for the project's Access screen and the project payload —
-never a second mechanism: `GET /role-grants?project_id=` lists the same rows,
-the inspector explains them, and deleting either row there is the same act as
-flipping the switch here.
-"""
+"""A project's PUBLIC ACCESS as the two grants it is (spec 121): Public → Anyone,
+Contributor → Signed-in users. A presentation of those rows, never a second
+mechanism — deleting either grant is the same act as flipping the switch."""
 
 import uuid
 from collections.abc import Iterable

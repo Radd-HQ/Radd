@@ -1,6 +1,4 @@
-"""Group reads (RADD-829). Writes come only from the directory sync — a group
-is never local, so there is no create/update/delete surface here. RADD-833
-builds the admin screen over this list."""
+"""Group reads (RADD-829). Writes come only from the directory sync; a group is never local."""
 
 import uuid
 from typing import Annotated
@@ -51,11 +49,9 @@ async def list_groups(
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[GroupRead]:
-    """Every mirrored directory group. Member-floor visibility, like teams —
-    the team panel names group members to anyone who can see the team.
-    RADD-833: rows carry the TRANSITIVE member count (the number a grant
-    resolves to — direct counts under-sell nested groups) and the nesting
-    edges by name, so the admin screen reads without N+1 calls."""
+    """Every mirrored directory group, at member-floor visibility like teams. Rows
+    carry the TRANSITIVE member count (what a grant resolves to) and the nesting
+    edges by name, so the admin screen reads without N+1 calls (RADD-833)."""
     await authz.require_member(session, user)
     rows = await service.list_groups(session, q=q, limit=limit, offset=offset)
     if limit is not None:

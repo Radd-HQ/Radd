@@ -21,15 +21,11 @@ class CommentVisibility(StrEnum):
 
 
 class CommentOrigin(StrEnum):
-    """WHERE a comment came from when no person typed it (RADD-1318). NULL is a
-    person — the app, the API, MCP. Set by the SERVER only, never by a request
-    body: a client that could claim `inbound_mail` could stop its own comment
-    reaching the customer.
-
-    It replaced "the author is the SYSTEM user" as the test for "not a real
-    reply", which was wrong both ways: an automation's comment is SYSTEM-authored
-    yet meant for the customer (the relay dropped it), and the same comment with
-    `act_as` is a person's yet is still not a human answer (the SLA counted it).
+    """WHERE a comment came from when no person typed it (RADD-1318); NULL is a person
+    (app, API, MCP). Server-set only: a client that could claim `inbound_mail` could
+    stop its own comment reaching the customer. Not derivable from the author: an
+    automation's comment is SYSTEM-authored yet meant for the customer, and one with
+    `act_as` is a person's yet not a human answer.
     """
 
     #: Mail NO account stands behind — the requester's own words, filed by

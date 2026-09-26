@@ -24,8 +24,6 @@ async def create_project(
     session: AsyncSession, data: ProjectCreate, actor_id: uuid.UUID | None = None
 ) -> Project:
     key = data.key.upper()
-    # Project keys are globally unique (Jira model) so an issue key `TD-1234` is an
-    # unambiguous instance-wide address (see spec 21). Trade-off documented in the plan.
     existing = await session.scalar(select(Project.id).where(Project.key == key))
     if existing:
         raise ConflictError(ProjectEntity.PROJECT, key)
@@ -88,10 +86,7 @@ async def list_project_ids(session: AsyncSession) -> list[uuid.UUID]:
 
 
 async def project_ref(session: AsyncSession, project_id) -> dict | None:
-    """The canonical `{id, key, name}` for a project inside an event payload
-    (RADD-923). Registered as this plugin's `EntityRefSpec`, so every module that
-    names a project as an event subject — and every auto-wired plugin entity that
-    is project-scoped — gets the same three fields without writing them."""
+    """The canonical `{id, key, name}` event-payload ref (RADD-923; this plugin's `EntityRefSpec`)."""
     project = await session.get(Project, project_id)
     if project is None:
         return None
@@ -106,10 +101,7 @@ async def get_project(session: AsyncSession, project_id: uuid.UUID) -> Project:
 
 
 async def get_by_key(session: AsyncSession, key: str) -> Project:
-    """Project by KEY (`TD`), case-insensitive. Keys are globally unique (the
-    spec-21 Jira model), so this is an unambiguous instance-wide address — the
-    one resolution every by-key surface shares (RADD-889 dedup of the MCP
-    tools' per-handler copies)."""
+    """Project by KEY, case-insensitive — the one by-key resolution (keys are instance-unique)."""
     project = await session.scalar(select(Project).where(Project.key == key.upper()))
     if project is None:
         raise NotFoundError(ProjectEntity.PROJECT, key)
@@ -155,14 +147,9 @@ async def reserve_item_number(session: AsyncSession, project_id: uuid.UUID, numb
 
 
 async def inspect_project(session: AsyncSession, project: Project) -> ProjectInspection:
-    """What deleting this project would destroy, and what forbids it.
-
-    Composed by the owners: `projects` knows nothing about comments, worklogs or
-    mail routing, so it dispatches `ProjectHook.INSPECTING` and each module
-    writes its own line. The same object drives the confirmation dialog and the
-    refusal inside `delete_project`, so what the person was shown is what the
-    server enforces.
-    """
+    """What deleting this project would destroy, and what forbids it; each owner
+    writes its own line via `ProjectHook.INSPECTING`. The same object drives the
+    confirmation dialog and `delete_project`'s refusal."""
     inspection = ProjectInspection(project=project)
     await hooks.dispatch(session, ProjectHook.INSPECTING, inspection)
     return inspection
@@ -171,28 +158,16 @@ async def inspect_project(session: AsyncSession, project: Project) -> ProjectIns
 async def delete_project(
     session: AsyncSession, project: Project, *, actor_id: uuid.UUID | None = None
 ) -> ProjectInspection:
-    """HARD-delete a project and everything that lives in it (RADD-1174).
-
-    Three layers, in this order, all inside the caller's transaction so a
-    refusal anywhere leaves nothing half-deleted:
-
-    1. `inspect_project` — a blocker (a mail source still routing here) is a
-       409 naming it. Refusing beats degrading: `mail_sources.default_project_id`
-       is `SET NULL`, and a source with no default makes `intake.accept` raise
-       on every message, which the webhook turns into a 5xx that bounces valid
-       mail. Better to say so while the admin can still repoint it.
-    2. `ProjectHook.DELETING` — the owners remove what the database cannot
-       cascade: comments and attachments (polymorphic parent), grants on the
-       project's resources, scoped settings, subscriptions, and the fields and
-       link types scoped ONLY to this project — which would otherwise become
-       global, since "no scope rows" means "every project".
-    3. the `ProjectPurgeSpec` registry (RADD-892), in its FK-safe order, then
-       the row itself; whatever declared `ON DELETE CASCADE` goes with it.
-
-    The event is emitted BEFORE the delete so the kernel resolves the subject
-    ref normally — a delete is exactly when a consumer cannot look it up after.
-    Returns the inspection, so the caller can say what went.
-    """
+    """HARD-delete a project and everything in it (RADD-1174), inside the caller's
+    transaction so a refusal leaves nothing half-deleted:
+    1. `inspect_project` — a blocker (mail still routed here) is a 409: a mail
+       source with no default project would bounce every message;
+    2. `ProjectHook.DELETING` — owners remove what the DB cannot cascade
+       (polymorphic children, grants, scoped settings, and fields/link types
+       scoped ONLY here, which would otherwise turn global);
+    3. the `ProjectPurgeSpec` tables in FK order, then the row.
+    The event is emitted first so its subject ref still resolves. Returns the
+    inspection."""
     inspection = await inspect_project(session, project)
     if inspection.blockers:
         named = "; ".join(
@@ -218,11 +193,8 @@ async def delete_project(
 
 
 async def purge_project_rows(session: AsyncSession, project_id: uuid.UUID) -> None:
-    """The registry half of the teardown: every table some plugin claimed as
-    "dies with a project", deleted in the order the foreign keys survive. A
-    plain DELETE is the right verb here — these are administrative rows whose
-    per-row services would re-run permission checks and emit deletion events
-    for work that never really happened (the RADD-892 argument)."""
+    """Delete every `ProjectPurgeSpec` table's rows in FK-safe order. Plain DELETEs:
+    per-row services would re-check permissions and emit events for work that never happened."""
     for table in registries.project_purge_tables():
         await session.execute(
             text(f"DELETE FROM {table} WHERE project_id = :id"), {"id": project_id}

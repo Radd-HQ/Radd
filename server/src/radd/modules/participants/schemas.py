@@ -30,12 +30,9 @@ class ParticipantRow(BaseModel):
 
 
 class ItemParticipantsRead(BaseModel):
-    """`GET /items/{id}/participants` — the rail section's source.
-
-    `users`/`teams` are the flat display lists; `rows` carry the grant ids for
-    removal. `can_manage` is computed server-side PER ACTOR (item.update OR the
-    item's reporter — the identity path) so the client stays dumb; a direct
-    user participant may additionally always remove THEMSELF (leave)."""
+    """`GET /items/{id}/participants`: flat `users`/`teams` for display, `rows`
+    with grant ids for removal, and `can_manage` computed per actor
+    (participant.manage on this row); anyone may remove themself."""
 
     users: list[UserRef]
     teams: list[TeamRef]

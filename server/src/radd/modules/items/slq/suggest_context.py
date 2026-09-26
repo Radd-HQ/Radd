@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from enum import Enum, StrEnum, auto
 
 from .errors import SlqError
-from .lexer import _ESCAPE, _QUOTES, Token, TokenKind, tokenize
+from .lexer import _QUOTES, Token, TokenKind, decode_escapes, tokenize
 from .parser import RESERVED_WORDS, Keyword
 
 
@@ -120,26 +120,13 @@ def _trailing_word(tokens: list[Token], cursor: int) -> Token | None:
 def _string_detection(prefix: str, start: int) -> Detection:
     """Cursor inside an open quote: always a value position, insert re-quotes."""
     quote = prefix[start]
-    partial = _decode_string_body(prefix[start + 1 :])
+    partial = decode_escapes(prefix[start + 1 :])
     detection = _classify(tokenize(prefix[:start])[:-1], replace_from=start, partial=partial)
     if detection.offer is Offer.VALUES:  # a quote where a value belongs
         return replace(detection, quote=quote)
     return Detection(
         SuggestContext.VALUE, Offer.NOTHING, start, partial, field=detection.field, quote=quote
     )
-
-
-def _decode_string_body(body: str) -> str:
-    chars: list[str] = []
-    i = 0
-    while i < len(body):
-        if body[i] == _ESCAPE and i + 1 < len(body):
-            chars.append(body[i + 1])
-            i += 2
-        else:
-            chars.append(body[i])
-            i += 1
-    return "".join(chars)
 
 
 def _keyword_of(token: Token) -> Keyword | None:

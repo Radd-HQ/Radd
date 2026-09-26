@@ -1,14 +1,7 @@
-"""The `list_projects` MCP tool (spec 45), declared by its owner (RADD-889).
-
-Moved verbatim from mcp/tools.py. The spec IS the spec-114 annotation
-(`permission` drives the caller filter); enforcement stays the handler's own
-`require_anywhere` gate, so `kernel_enforced=False` — a blanket global
-`require` would re-refuse the scoped keys RADD-672 admitted.
-
-auth is imported inside the handler: projects loads before auth (auth
-depends_on projects), so a top-level reach would run during a partially
-initialised boot.
-"""
+"""The `list_projects` MCP tool (spec 45). `kernel_enforced=False`: the handler's
+own `require_anywhere` gate admits the project-scoped keys a blanket global
+`require` would refuse (RADD-672). `authz` is imported in the handler because
+auth depends_on projects."""
 
 from collections.abc import Mapping
 from typing import Any

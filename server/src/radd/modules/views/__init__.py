@@ -9,7 +9,7 @@ from . import subscribers  # noqa: F401  — registers the project-created seedi
 from .service import _VIEW_SPEC
 
 def _view_event(event_type: ViewEvent, label: str, entity: str, *, diff: bool = False):
-    """RADD-1168: emitted since spec 15 and never registered. Not triggers."""
+    """Audit-only view events; never automation triggers."""
     return EventTypeSpec(
         event_type, label, "Views", has_changes=diff, trigger=False, entity_type=entity,
         subjects=("project",) if entity == ViewEntity.VIEW else (),

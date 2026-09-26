@@ -1,12 +1,5 @@
-"""Session lifecycle + admin view-as, split out of `service.py` (RADD-902)
-along its own "sessions" marker (formerly lines 237-357).
-
-`start_view_as`/`end_view_as` need `get_user` — users CRUD, which stays in
-`service.py` — but import it deferred, inside the function, rather than at
-module level: `service.py` imports THIS module to re-export the session API
-under its own name, so a top-level cross-import here would circle straight
-back into `service.py` mid-initialization.
-"""
+"""Session lifecycle + admin view-as. `get_user` is imported inside functions:
+`service` imports this module to re-export it."""
 
 import uuid
 from datetime import timedelta
@@ -24,20 +17,11 @@ from .types import AuthEntity, AuthEvent, LoginMethod, UserSource
 
 
 async def create_session(session: AsyncSession, user: User, *, method: LoginMethod) -> str:
-    """Returns the raw session token (goes into the cookie; only its hash is stored).
-
-    Also stamps `last_login_at` (spec 84): sessions are minted exclusively by
-    the login endpoints (local + TOTP, LDAP, OIDC), so this one seam covers
-    every successful sign-in path.
-
-    `method` is REQUIRED (RADD-1279) so every path states how the person
-    proved who they are; the MFA policy is enforced here, not in `/login`,
-    for the same reason the service-account refusal is."""
-    # Spec 113: a service account authenticates by API key and nothing else.
-    # Refusing here covers local, TOTP, LDAP and OIDC at once, because every one
-    # of those paths mints its session through this function. RADD-828: an
-    # email-provisioned requester account has no credential either — mail is
-    # its interface until an SSO login by the same verified email CLAIMS it.
+    """Mint a session: returns the raw token (only its hash is stored) and stamps
+    `last_login_at`. Every sign-in path passes here, which is why the refusals
+    below and the MFA policy (`method` is required, RADD-1279) live here."""
+    # Spec 113 / RADD-828: service accounts and email-provisioned requesters have
+    # no login (an SSO login by the same verified email CLAIMS the latter).
     if user.source == UserSource.SERVICE:
         raise UnauthorizedError("service accounts authenticate with an API key")
     if user.source == UserSource.EMAIL:
@@ -71,18 +55,6 @@ async def create_session(session: AsyncSession, user: User, *, method: LoginMeth
 async def delete_session_by_token(session: AsyncSession, token: str) -> None:
     await session.execute(
         delete(UserSession).where(UserSession.token_hash == security.hash_token(token))
-    )
-
-
-async def user_for_session_token(session: AsyncSession, token: str) -> User | None:
-    return await session.scalar(
-        select(User)
-        .join(UserSession, UserSession.user_id == User.id)
-        .where(
-            UserSession.token_hash == security.hash_token(token),
-            UserSession.expires_at > security.utcnow(),
-            User.active,
-        )
     )
 
 

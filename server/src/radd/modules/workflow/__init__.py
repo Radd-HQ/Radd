@@ -1,11 +1,9 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from radd.kernel import EntityLinkSpec
-from radd.kernel import EventTypeSpec
-from radd.kernel import RaddPlugin
-from radd.kernel import CrudResourceSpec, PermissionSpec, ProjectPurgeSpec
-from radd.kernel import SettingSpec
+from radd.kernel import (
+    CrudResourceSpec, EntityLinkSpec, EventTypeSpec, PermissionSpec, ProjectPurgeSpec, RaddPlugin, SettingSpec,
+)
 
 from . import subscribers  # noqa: F401  — registers the project-created hook
 from .guards import TransitionError
@@ -42,17 +40,13 @@ plugin = RaddPlugin(
         ),
     ),
     crud_resources=(CrudResourceSpec("state", "project", "workflow states", "state.manage"),),
-    # RADD-892: order 70 — every item points at a state, so items go first. The
-    # transitions must go before the states they join, which the hardcoded list
-    # this replaces never did: it named `states` alone, and a project with any
-    # transition row could not be purged at all.
+    # order 70: items (which point at states) purge first; transitions before the states they join.
     project_purges=(
         ProjectPurgeSpec(
             name="workflow", tables=("workflow_transitions", "states"), order=70
         ),
     ),
-    # RADD-891: the enforcement mode workflow.check_transition resolves per
-    # item project — moved off `settings.types`'s old hardcoded dict.
+    # Resolved per item project by transitions.check_transition.
     settings_keys=(
         SettingSpec(
             key="workflow_transition_mode",
@@ -78,8 +72,7 @@ plugin = RaddPlugin(
         "Workflow: each project's states and the rules for moving between them."
     ),
     depends_on=("projects", "events", "auth", "settings", "teams"),
-    # RADD-1383: approvals is no longer a reach — its require_approval check
-    # arrives through the kernel TRANSITION_CHECK socket.
+    # approvals is not a dependency: it serves TRANSITION_CHECK.
     weak_depends=("comments", "fields", "items", "timelogging"),
     routers=(router, category_router, transitions_router),
     exception_handlers=((TransitionError, _transition_handler),),

@@ -19,14 +19,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.exceptions import ForbiddenError
 from radd.modules.access import service as access_service
-from radd.modules.access.types import GrantSubject
+from radd.modules.access.types import Access, GrantSubject
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate
-from radd.modules.fields.types import BuiltinItemField, FieldAccess, FieldType
+from radd.modules.fields.types import BuiltinItemField, FieldType
 from radd.modules.items import bulk, service as items
 from radd.modules.items.enums import BulkSkipReason
 from radd.modules.items.history import item_history
@@ -92,7 +92,7 @@ async def _restricting_role(db) -> uuid.UUID:
     return role.id
 
 
-async def _restrict_builtin(db, field: str, role_id: uuid.UUID, access=FieldAccess.WRITE):
+async def _restrict_builtin(db, field: str, role_id: uuid.UUID, access=Access.WRITE):
     await access_service.add_grant(
         db,
         fields_service.BUILTIN_RESOURCE,
@@ -148,7 +148,7 @@ async def test_bulk_move_checks_dropped_custom_field_writability(db, admin):
         str(definition.id),
         subject_type=GrantSubject.ROLE,
         subject_id=await _restricting_role(db),
-        access=FieldAccess.WRITE.value,
+        access=Access.WRITE.value,
     )
     result = await bulk.bulk_move_items(
         db, ItemBulkMove(item_ids=[item.id], target_project_id=dst.id), member
@@ -225,7 +225,7 @@ async def test_estimate_points_read_rule_blanks(db, admin):
     project = await _project(db, "BMH")
     member = await _member(db, project)
     await _restrict_builtin(
-        db, "estimate_points", await _restricting_role(db), access=FieldAccess.READ
+        db, "estimate_points", await _restricting_role(db), access=Access.READ
     )
     item = await items.create_item(
         db, ItemCreate(project_id=project.id, title="pts", estimate_points=8), admin
@@ -251,7 +251,7 @@ async def test_history_redacts_restricted_custom_field(db, admin):
         str(definition.id),
         subject_type=GrantSubject.ROLE,
         subject_id=await _restricting_role(db),
-        access=FieldAccess.READ.value,
+        access=Access.READ.value,
     )
     item = await items.create_item(db, ItemCreate(project_id=project.id, title="i"), admin)
     await items.update_item(db, item.id, ItemUpdate(custom_fields={"salary": "9000"}), admin)
@@ -281,7 +281,7 @@ async def test_history_redacts_restricted_builtin(db, admin):
     project = await _project(db, "BMJ")
     member = await _member(db, project)
     await _restrict_builtin(
-        db, BuiltinItemField.ASSIGNEE.value, await _restricting_role(db), access=FieldAccess.READ
+        db, BuiltinItemField.ASSIGNEE.value, await _restricting_role(db), access=Access.READ
     )
     item = await items.create_item(db, ItemCreate(project_id=project.id, title="i"), admin)
     await items.update_item(db, item.id, ItemUpdate(assignee_id=admin.id), admin)

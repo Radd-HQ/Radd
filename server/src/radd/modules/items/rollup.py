@@ -22,13 +22,10 @@ from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
 
 from . import service
+from .enums import FINISHED_CATEGORIES
 from .models import WorkItem
 from .service.visibility import relation_read_clause
 from .schemas import ItemRollup
-
-# Rollup "done" = finished either way (Linear model): completed or canceled.
-DONE_CATEGORIES = frozenset({StateCategory.DONE, StateCategory.CANCELED})
-
 
 async def rollup_items(
     session: AsyncSession, actor: User, item_ids: Sequence[uuid.UUID]
@@ -118,7 +115,7 @@ async def rollup_items(
         for item_id, state_id, points in rows:
             category = categories.get(state_id)
             rollup.total += 1
-            if category in DONE_CATEGORIES:
+            if category in FINISHED_CATEGORIES:
                 rollup.done += 1
                 if points is not None:
                     rollup.points_done += points

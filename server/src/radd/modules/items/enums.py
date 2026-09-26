@@ -1,5 +1,10 @@
 from enum import StrEnum
 
+from radd.modules.workflow.types import StateCategory
+
+#: Finished either way (completed or canceled): rollup "done", the open-item filters.
+FINISHED_CATEGORIES = (StateCategory.DONE, StateCategory.CANCELED)
+
 
 class Priority(StrEnum):
     LOW = "low"
@@ -39,18 +44,6 @@ class ItemVisibility(StrEnum):
     PUBLIC = "public"
     INTERNAL = "internal"
     RESTRICTED = "restricted"
-
-
-class ItemLinkType(StrEnum):
-    """The built-in link-type KEYS (spec 91: types are now data in the `linktypes`
-    module, but these keys stay stable — code references them directly). Symmetry,
-    directional names, and whether a type is manual now come from the catalog, not
-    a frozenset here. MENTIONS is auto-derived from item text (spec 52)."""
-
-    BLOCKS = "blocks"
-    RELATES = "relates"
-    DUPLICATES = "duplicates"
-    MENTIONS = "mentions"
 
 
 class BulkSkipReason(StrEnum):

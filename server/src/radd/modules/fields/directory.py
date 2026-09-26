@@ -200,12 +200,16 @@ async def project_choices(
     offset: int = 0,
 ):
     permissions = await policy(session, actor)
-    projection = select(
+    projection = _project_choice().where(Project.id.in_(permissions.projects_holding(permission)))
+    return await choices.page(session, projection, q=q, limit=limit, offset=offset)
+
+
+def _project_choice():
+    return select(
         cast(Project.id, String).label("value"),
         Project.key.label("label"),
         Project.name.label("hint"),
-    ).where(Project.id.in_(permissions.projects_holding(permission)))
-    return await choices.page(session, projection, q=q, limit=limit, offset=offset)
+    )
 
 
 async def project_references(session: AsyncSession, actor: User, ids: list[uuid.UUID]):
@@ -216,12 +220,6 @@ async def project_references(session: AsyncSession, actor: User, ids: list[uuid.
     for permission in FIELD_SETTINGS_PERMISSIONS:
         allowed.update(permissions.projects_holding(permission))
     rows = await session.execute(
-        select(
-            cast(Project.id, String).label("value"),
-            Project.key.label("label"),
-            Project.name.label("hint"),
-        )
-        .where(Project.id.in_(ids), Project.id.in_(allowed))
-        .order_by(Project.key, Project.id)
+        _project_choice().where(Project.id.in_(ids), Project.id.in_(allowed)).order_by(Project.key, Project.id)
     )
     return [choices.ChoiceRead.model_validate(row) for row in rows.mappings()]

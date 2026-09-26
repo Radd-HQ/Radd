@@ -52,13 +52,9 @@ plugin = RaddPlugin(
             "item.update",
             "project",
             "Edit the project's work items.",
-            # RADD-790: anyone who may edit an issue may attach to it. That is what
-            # makes splitting attachments off `item.update` a WIDENING and never a
-            # downgrade — every existing role keeps exactly what it had, with no
-            # data migration, and a role created tomorrow inherits the same rule.
-            # RADD-816: `attachment.delete` means ANYONE's now, so what item.update
-            # carries is the @own form — a qualified atom, which is why this is
-            # `implies` and not the attachment side's `implied_by`.
+            # Editing an issue implies attaching to it (RADD-790), and deleting
+            # one's OWN attachments (RADD-816) — a qualified atom, hence
+            # `implies` rather than the attachment side's `implied_by`.
             implies=("attachment.create", "attachment.delete@own"),
         ),
         PermissionSpec(
@@ -68,11 +64,6 @@ plugin = RaddPlugin(
     description=(
         "Issues: projects' work items, with keys, hierarchy, assignees, dates and links."
     ),
-    # RADD-891: the story-points opt-in (spec 70) — moved off `settings.types`'s
-    # old hardcoded dict. Resolved directly by the SPA via
-    # `GET /scoped-settings/resolve` (`usePointsEnabled`), not by server code —
-    # items is still the true owner: `models.py`'s estimate_points column is
-    # what it gates.
     settings_keys=(
         SettingSpec(
             key="item_default_visibility",
@@ -84,6 +75,7 @@ plugin = RaddPlugin(
             ),
             choices=tuple(v.value for v in ItemVisibility),
         ),
+        # Read only by the SPA (usePointsEnabled); items owns it because it gates estimate_points.
         SettingSpec(
             key="estimation_points",
             type="bool",

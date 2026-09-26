@@ -1,20 +1,13 @@
-"""Widget CRUD + per-type config validation (spec 75).
-
-Shape validation is pydantic: create bodies are a discriminated union on
-`widget_type` (schemas.WidgetCreate — unknown type / wrong config shape 422 at
-the boundary); a PATCH's `config` is revalidated here against the widget's
-STORED type (WidgetConfigError → 422 via the module handler). SEMANTIC checks
-then run per type: SLQ compiles against the scope registry (SlqError → 422
-{detail, position} via the items module's app-wide handler), and referenced
-projects/cycles/views must exist and be visible/readable to the WRITER → 409
-(everything is global now — spec 86). Render-time visibility stays with each
-widget's own endpoint — a viewer who can't read a widget's scope gets that
-endpoint's 403/404 and the card renders "Unavailable".
+"""Widget CRUD + per-type config validation (spec 75). Shape is pydantic (422; a
+PATCH's config revalidates against the STORED type); then SLQ must compile (422)
+and referenced projects/cycles/views must be readable by the WRITER (409).
+Render-time visibility stays with each widget's own endpoint ("Unavailable").
 """
 
 import uuid
 
 from pydantic import BaseModel, ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.kernel import changes
@@ -41,6 +34,7 @@ from .schemas import (
     SlqListConfig,
     ViewCountConfig,
     WidgetCreate,
+    WidgetLayoutSave,
     WidgetUpdate,
 )
 from .types import DashboardEntity, DashboardEvent, WidgetType
@@ -101,40 +95,30 @@ async def _check_references(
                 ) from None
 
 
+def _write_widget(widget: DashboardWidget, data: WidgetCreate | PluginWidget, position: int) -> None:
+    """Write a validated create body onto a row. A plugin-contributed type's config
+    is free-form and stored verbatim (the column is a String, so the key persists)."""
+    plugin = isinstance(data, PluginWidget)
+    widget.widget_type = data.widget_type if plugin else WidgetType(data.widget_type).value
+    widget.title = data.title
+    widget.width = data.width
+    widget.height = data.height
+    widget.collapsed = data.collapsed
+    widget.position = position
+    widget.config = dict(data.config) if plugin else data.config.model_dump(mode="json")
+
+
 async def create_widget(
     session: AsyncSession,
     dashboard_id: uuid.UUID,
     data: WidgetCreate | PluginWidget,
     actor: User,
 ) -> DashboardRead:
-    await service._lock_dashboard(session, str(dashboard_id))
     dashboard = await service.require_edit(session, dashboard_id, actor)
-    if isinstance(data, PluginWidget):
-        # Plugin-contributed type (registries.widget_types): the config is
-        # free-form and owned by the plugin — stored verbatim, no builtin
-        # reference checks apply. The column is a String, so the key persists.
-        widget = DashboardWidget(
-            dashboard_id=dashboard.id,
-            widget_type=data.widget_type,
-            title=data.title,
-            width=data.width,
-            height=data.height,
-            collapsed=data.collapsed,
-            position=data.position,
-            config=dict(data.config),
-        )
-    else:
+    if not isinstance(data, PluginWidget):
         await _check_references(session, actor, dashboard, data.config)
-        widget = DashboardWidget(
-            dashboard_id=dashboard.id,
-            widget_type=WidgetType(data.widget_type).value,
-            title=data.title,
-            width=data.width,
-            height=data.height,
-            collapsed=data.collapsed,
-            position=data.position,
-            config=data.config.model_dump(mode="json"),
-        )
+    widget = DashboardWidget(dashboard_id=dashboard.id)
+    _write_widget(widget, data, data.position)
     session.add(widget)
     await session.flush()
     await service.emit(
@@ -165,7 +149,6 @@ async def update_widget(
     data: WidgetUpdate,
     actor: User,
 ) -> DashboardRead:
-    await service._lock_dashboard(session, str(dashboard_id))
     dashboard = await service.require_edit(session, dashboard_id, actor)
     widget = await _get_widget(session, dashboard, widget_id)
     before = changes.snapshot(widget, ("title", "width", "position", "config"))
@@ -206,7 +189,6 @@ async def update_widget(
 async def delete_widget(
     session: AsyncSession, dashboard_id: uuid.UUID, widget_id: uuid.UUID, actor: User
 ) -> None:
-    await service._lock_dashboard(session, str(dashboard_id))
     dashboard = await service.require_edit(session, dashboard_id, actor)
     widget = await _get_widget(session, dashboard, widget_id)
     label = _label(widget)
@@ -216,3 +198,50 @@ async def delete_widget(
         session, DashboardEvent.UPDATED, dashboard, actor,
         diff=[{"field": "widgets", "added": [], "removed": [label]}],
     )
+
+
+async def replace_widgets(
+    session: AsyncSession, dashboard_id: uuid.UUID, data: WidgetLayoutSave, parse, actor: User
+) -> DashboardRead:
+    """Replace the whole layout, refusing a stale `expected` (409). `parse` is the
+    router's body dispatcher, run only once the edit gate and the staleness check pass."""
+    dashboard = await service.require_edit(session, dashboard_id, actor)
+    current = await service.get_dashboard_read(session, dashboard_id, actor=actor)
+    if [w.model_dump(mode="json") for w in current.widgets] != [
+        w.model_dump(mode="json") for w in data.expected
+    ]:
+        raise ConflictError(
+            "dashboard", reason="Dashboard changed elsewhere. Reload before editing."
+        )
+    parsed = [parse(raw) for raw in data.widgets]
+    stored = {
+        str(row.id): row
+        for row in await session.scalars(
+            select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard_id)
+        )
+    }
+    kept = set()
+    for index, (raw, row) in enumerate(zip(data.widgets, parsed)):
+        widget_id = raw.get("id")
+        if widget_id in kept:
+            raise ConflictError("dashboard", reason="Duplicate widget id")
+        kept.add(widget_id)
+        if not isinstance(row, PluginWidget):
+            await _check_references(session, actor, dashboard, row.config)
+        model = stored.get(widget_id)
+        if model is None:
+            model = DashboardWidget(dashboard_id=dashboard_id)
+            session.add(model)
+        _write_widget(model, row, index)
+    for widget_id, model in stored.items():
+        if widget_id not in kept:
+            await session.delete(model)
+    await session.flush()
+    await service.emit(
+        session,
+        DashboardEvent.UPDATED,
+        dashboard,
+        actor,
+        diff=[{"field": "widgets", "from": "Previous layout", "to": "Updated layout"}],
+    )
+    return await service.get_dashboard_read(session, dashboard_id, actor=actor)

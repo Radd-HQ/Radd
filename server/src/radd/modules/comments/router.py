@@ -57,12 +57,8 @@ async def list_comments(
 async def create_parent_comment(
     entity_type: str, entity_id: uuid.UUID, data: CommentCreate, session: Session, user: CurrentUser
 ) -> CommentRead:
-    """Comment on anything that registered a parent binding (RADD-717).
-
-    The item routes above stay as they are — they are in the SDK, the MCP tools
-    and every existing client — and this is the general form the rest use, e.g.
-    `POST /page/{id}/comments`.
-    """
+    """Comment on any registered parent (RADD-717), e.g. `POST /page/{id}/comments`.
+    The `/items/...` routes above remain for the SDK, MCP tools and existing clients."""
     check_write(user, WriteBucket.COMMENT_CREATE)
     return await service.create_comment(session, entity_id, data, actor=user, entity_type=entity_type)
 
@@ -116,32 +112,31 @@ async def delete_comment(comment_id: uuid.UUID, session: Session, user: CurrentU
     await service.delete_comment(session, comment_id, actor=user)
 
 
-@router.get("/items/{entity_id}/comments/feed", response_model=CommentPage)
-async def item_comment_page(
-    entity_id: uuid.UUID, session: Session, user: Actor,
+def _feed_window(
     limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
     unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
     through: uuid.UUID | None = Query(None, description="Widen the newest window to include this comment (RADD-1297)."),
+) -> dict:
+    """The window params both feed routes take."""
+    return {"limit": limit, "before": before, "section": section, "unresolved": unresolved, "through": through}
+
+
+FeedWindow = Annotated[dict, Depends(_feed_window)]
+
+
+@router.get("/items/{entity_id}/comments/feed", response_model=CommentPage)
+async def item_comment_page(
+    entity_id: uuid.UUID, session: Session, user: Actor, window: FeedWindow
 ) -> CommentPage:
-    return await service.comment_page(
-        session, entity_id, user, limit=limit, before=before, section=section, unresolved=unresolved,
-        through=through,
-    )
+    return await service.comment_page(session, entity_id, user, **window)
 
 
 @router.get("/{entity_type}/{entity_id}/comments/feed", response_model=CommentPage)
 async def parent_comment_page(
-    entity_type: str, entity_id: uuid.UUID, session: Session, user: Actor,
-    limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
-    section: CommentSlice = CommentSlice.ALL,
-    unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
-    through: uuid.UUID | None = Query(None, description="Widen the newest window to include this comment (RADD-1297)."),
+    entity_type: str, entity_id: uuid.UUID, session: Session, user: Actor, window: FeedWindow
 ) -> CommentPage:
-    return await service.comment_page(
-        session, entity_id, user, entity_type, limit=limit, before=before, section=section,
-        unresolved=unresolved, through=through,
-    )
+    return await service.comment_page(session, entity_id, user, entity_type, **window)
 
 
 # --- RADD-1283: who may resolve a thread, per project and issue type ------------

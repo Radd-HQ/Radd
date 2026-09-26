@@ -1,11 +1,6 @@
-"""The plugin-contributed MCP tool (RADD-640) — proof the registry seam works.
-
-One declaration and the kernel does the rest: `visible_catalog` hides the tool
-from keys without item.read (and enum-rewrites `project_key`, spec 114), the
-dispatcher requires the atom on the named project BEFORE `_list` runs, and
-disabling the plugin unregisters the tool from catalog + dispatch together.
-This handler contains no authz call on purpose — that absence is the feature.
-"""
+"""The plugin-contributed MCP tool (RADD-640). The kernel filters the catalog,
+requires the atom on the named project BEFORE `_list` runs, and unregisters the
+tool with the plugin — so this handler has no authz call, on purpose."""
 
 from collections.abc import Mapping
 from typing import Any
@@ -13,7 +8,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.exceptions import NotFoundError
 from radd.sdk import McpToolSpec
 
 from .models import Milestone
@@ -22,12 +16,7 @@ from .models import Milestone
 async def _list(session: AsyncSession, actor: Any, args: Mapping[str, Any]) -> Any:
     from radd.modules.projects import service as projects_service
 
-    key = str(args["project_key"]).upper()
-    project = next(
-        (p for p in await projects_service.list_projects(session) if p.key == key), None
-    )
-    if project is None:
-        raise NotFoundError("project", key)
+    project = await projects_service.get_by_key(session, str(args["project_key"]).upper())
     rows = (
         (
             await session.execute(

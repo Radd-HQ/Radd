@@ -28,38 +28,34 @@ async def require_item(session: AsyncSession, item_id: uuid.UUID) -> WorkItem:
     return item
 
 
-async def require_readable_item(
-    session: AsyncSession, item_id: uuid.UUID, actor
-) -> "tuple[WorkItem, object, frozenset]":
-    """THE item-resolution seam (RADD-823): item + its project + the actor's
-    effective permissions there, with `item.read` REQUIRED.
-
-    Every child surface (history, worklogs, watchers, participants, weblinks,
-    vcs, sla, csat, approvals, transitions, canned, mail, page-links, stars)
-    used to carry its own require_item + get_project + require copy — ~15
-    sites, each one a place a per-item rule could be forgotten. This is the
-    single door: when relation gating lands on items (RADD-817), a child
-    surface inherits `item.read@own/@team` by construction, because the
-    relation check happens HERE and nowhere else has to remember it.
-
-    Returns (item, project, permissions) so callers can layer their own atom
-    checks (worklog.write, comment.write) on the same resolution."""
+async def require_item_permission(
+    session: AsyncSession, item_id: uuid.UUID, actor, permission, *, as_missing: bool = False
+) -> "tuple[WorkItem, Project, frozenset]":
+    """Item + project + the actor's permissions there, with `permission` required
+    on the project AND for this row (relations + the restricted-row guard) — the
+    one preamble item writes share, so none can forget the row gate."""
     from radd.modules.auth import authz
-    from radd.modules.auth.authz import Permission
-    from radd.modules.projects import service as projects_service
+
+    from .visibility import ensure_item_relation
 
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_READ, project=project)
-    # RADD-817: the relation gate lives IN the seam — comments, worklogs,
-    # history, watchers and every other child surface inherit item.read@own/
-    # @team by construction. A hidden item 404s (existence stays private).
-    from .visibility import ensure_item_relation
-
-    await ensure_item_relation(
-        session, actor, item, permissions, Permission.ITEM_READ, as_missing=True
-    )
+    permissions = await authz.require(session, actor, permission, project=project)
+    await ensure_item_relation(session, actor, item, permissions, permission, as_missing=as_missing)
     return item, project, permissions
+
+
+async def require_readable_item(
+    session: AsyncSession, item_id: uuid.UUID, actor
+) -> "tuple[WorkItem, Project, frozenset]":
+    """THE item-resolution seam (RADD-823): `item.read` required and the row's
+    relation gate applied (a hidden item 404s). Child surfaces go through here so a
+    per-item rule cannot be forgotten; callers layer their own atom on the result."""
+    from radd.modules.auth.authz import Permission
+
+    return await require_item_permission(
+        session, item_id, actor, Permission.ITEM_READ, as_missing=True
+    )
 
 
 async def items_by_ids(
@@ -121,16 +117,8 @@ class EpicRef:
 async def epics_for_items(
     session: AsyncSession, ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, EpicRef]:
-    """Nearest epic ancestor per item, batched (no N+1).
-
-    The hierarchy is epic <- issue <- subtask (max depth 3), so the walk is at
-    most two hops and resolves in ONE query via an aliased parent/grandparent
-    chain — the same shape `slq/ancestors.py` uses for `epic.*`, as a batch seam
-    rather than a correlated subquery. Both share `hierarchy.nearest_epic_case`,
-    so an item that IS an epic maps to itself in both (time logged directly on
-    an epic belongs under that epic, not under "no epic"). Items with no epic
-    are simply absent from the result, which callers render as their own bucket.
-    """
+    """Nearest epic per item (an epic maps to itself), batched in ONE query via
+    `hierarchy.nearest_epic_case`. Items with no epic are absent."""
     id_list = list(ids)
     if not id_list:
         return {}
@@ -155,22 +143,6 @@ async def epics_for_items(
             for child_id, epic_id, project_key, number, title in rows
         )
     return out
-
-
-async def item_ids_for_projects(
-    session: AsyncSession, project_ids: Iterable[uuid.UUID]
-) -> list[uuid.UUID]:
-    """Every ACTIVE (non-archived) item id in the given projects — the SLA
-    engine's candidate scope."""
-    id_list = list(project_ids)
-    if not id_list:
-        return []
-    result = await session.execute(
-        select(WorkItem.id).where(
-            WorkItem.project_id.in_(id_list), WorkItem.archived_at.is_(None)
-        )
-    )
-    return list(result.scalars())
 
 
 # --- key resolution ---
@@ -340,14 +312,10 @@ async def _next_rank(session: AsyncSession) -> float:
 
 
 async def _rebalance_ranks(session: AsyncSession) -> None:
-    """Respace every item's rank by `item_rank_step` in current rank order — the
-    backstop for float midpoints collapsing after many insertions between a pair.
-
-    ONE set-based statement (RADD-878): the old per-row loop issued an UPDATE per
-    item — 503k statements inside the interactive drag request that tripped the
-    collapse. Deliberately GLOBAL: rank is a single instance-wide order (a
-    cross-project view ranks items against each other, and `_next_rank` is the
-    global min), so a per-project respace would corrupt the interleaving."""
+    """Respace every rank by `item_rank_step` in current order (the backstop for
+    collapsed float midpoints), in ONE set-based statement — a per-row loop was
+    503k UPDATEs inside a drag request. GLOBAL on purpose: rank is one
+    instance-wide order that cross-project views interleave."""
     ranked = select(
         WorkItem.id.label("item_id"),
         func.row_number().over(order_by=(WorkItem.rank, WorkItem.created_at)).label("rn"),

@@ -1,13 +1,8 @@
-"""Dashboard CRUD + ownership/sharing (spec 75).
-
-The sharing semantics are the spec-57 view idiom VERBATIM (views/service.py):
-visibility = owner ∪ user/team grantees ∪ every active user when global_access
-is set; non-visible → 404 (admins included — privacy over acknowledgment);
-editor grantees change the definition + widgets; the owner and OWNER-level
-grantees (co-owners) manage sharing, delete, and transfer. The only spec-57
-branch that does NOT exist here is the seeded owner-less fallback — every
-dashboard has an owner from birth. Widget CRUD + config validation live in
-widgets.py.
+"""Dashboard CRUD + ownership/sharing (spec 75), the spec-57 view idiom: visible =
+owner ∪ grantees ∪ everyone when `global_access` is set, else 404 (admins
+included); editors change the definition and widgets; the owner and OWNER-level
+grantees manage sharing, delete and transfer. Every dashboard has an owner.
+Widget CRUD + config validation live in widgets.py.
 """
 
 from radd.modules.auth.principals import require_key_permission, key_allows
@@ -43,15 +38,6 @@ from .schemas import (
 )
 from .types import DashboardEntity, DashboardEvent, ShareLevel, WidgetType
 
-# Personal use (create private, edit own/granted) needs only the member floor —
-# `authz.require_member`; the dashboard.* atoms gate the server-wide broadcast.
-#
-# That floor used to be spelled as a constant naming `item.read` at GLOBAL scope,
-# which RADD-788 showed is not the same question: a person whose access is
-# project-scoped is a member and holds nothing globally. The constant is gone
-# rather than repointed, because its whole job was to name a scope that was wrong.
-
-
 def _read_widget_type(value: str) -> WidgetType | str:
     """Builtin values read back as the WidgetType enum (byte-identical); a
     plugin-contributed widget_type (registries.widget_types) has no enum member,
@@ -62,14 +48,9 @@ def _read_widget_type(value: str) -> WidgetType | str:
         return value
 
 
-# Dashboard shares are grants in the generic access framework (spec 92, adopted
-#): resource_type "dashboard", resource_id = the dashboard id, subject
-# user/team, access = a ShareLevel (hierarchical viewer<editor<owner),
-# owner-CLOSED by default, NOT project-scoped (dashboards are global). Until now
-# this module carried its own `dashboard_shares` table — a verbatim copy of the
-# `view_shares` semantics that spec 92 deleted on the views side.
-# `global_access` + `owner_id` stay on the Dashboard row (a public level + the
-# accountable owner — not per-subject grants).
+# Dashboard shares are access grants (spec 92): resource_type "dashboard", a
+# hierarchical ShareLevel, owner-closed, not project-scoped. `global_access` and
+# `owner_id` stay on the row.
 DASHBOARD_RESOURCE = "dashboard"
 
 
@@ -415,13 +396,6 @@ async def create_dashboard(
     await session.flush()
     await emit(session, DashboardEvent.CREATED, dashboard, actor)
     return await hydrate_one(session, actor, dashboard)
-
-
-async def list_dashboards(
-    session: AsyncSession, *, actor: User
-) -> list[DashboardRead]:
-    rows, _total = await page_dashboards(session, actor=actor)
-    return rows
 
 
 async def page_dashboards(session: AsyncSession, *, actor: User, include_shares: bool = True, **filters) -> tuple[list[DashboardRead], int]:

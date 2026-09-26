@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.cycles import service as cycles
+from radd.modules.cycles import directory, service as cycles
 from radd.modules.cycles.schemas import CycleCreate, CycleUpdate
 from radd.modules.teams import service as teams
 from radd.modules.teams.schemas import TeamCreate
@@ -65,12 +65,12 @@ async def test_team_restricted_cycles_hide_from_non_members(db):
     assert mine.team_ids == [team_a.id]
 
     # Cycles are global now, so assert on THIS test's cycles as a subset.
-    visible, _ = await cycles.visible_cycles(db, member, today=TODAY)
+    visible, _, _ = await directory.page(db, member, today=TODAY)
     names = {c.name for c in visible}
     assert f"Public {run}" in names and f"Mine {run}" in names
     assert f"Theirs {run}" not in names  # restricted to team_b, member isn't in it
     # cycle managers (instance admin here) see everything
-    visible, _ = await cycles.visible_cycles(db, manager, today=TODAY)
+    visible, _, _ = await directory.page(db, manager, today=TODAY)
     names = {c.name for c in visible}
     assert {f"Public {run}", f"Mine {run}", f"Theirs {run}"} <= names
 

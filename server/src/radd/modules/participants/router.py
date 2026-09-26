@@ -19,8 +19,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def list_participants(
     item_id: uuid.UUID, session: Session, user: Actor
 ) -> ItemParticipantsRead:
-    """Hydrated participant users/teams + grant rows (item.read); `can_manage`
-    is computed per actor server-side (item.update OR the item's reporter)."""
+    """Participant users/teams + grant rows (item.read); `can_manage` is per actor."""
     return await service.list_participants(session, item_id, user)
 
 
@@ -30,8 +29,8 @@ async def list_participants(
 async def add_participant(
     item_id: uuid.UUID, data: ParticipantAdd, session: Session, user: CurrentUser
 ) -> ParticipantRow:
-    """Add one user OR team (item.update or reporter — 403). Subject outside the
-    unknown/inactive user or team / duplicate → 409. Direct users are auto-watched."""
+    """Add one user OR team (participant.manage; 409 for an unknown/inactive
+    subject or a duplicate). Direct users are auto-watched."""
     return await service.add_participant(session, item_id, data, user)
 
 

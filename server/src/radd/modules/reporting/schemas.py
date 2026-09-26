@@ -35,17 +35,9 @@ class CycleBrief(BaseModel):
 
 
 class ReportScope(BaseModel):
-    """Which projects a CROSS-PROJECT figure was actually computed over (RADD-789).
-
-    A filtered LIST is visibly shorter. A filtered AVERAGE is just a different
-    number, with nothing on the page saying so — two people looking at the same
-    dashboard would read different velocities and have no way to tell why. So the
-    figure carries its own scope and the header states it.
-
-    `covered` is what the actor may read; `total` is how many projects the report
-    nominally spans. Equal means the reader is seeing everything, and the UI says
-    nothing at all — a label on every report would be noise that stops being read.
-    """
+    """Which projects a CROSS-PROJECT figure was computed over (RADD-789): a filtered
+    average is silently a different number, so the figure carries its scope. The
+    UI states it only when `covered` < `total` (a label everywhere stops being read)."""
 
     covered: list[str]  # project KEYS, sorted — what the number was computed from
     total: int  # projects on the instance

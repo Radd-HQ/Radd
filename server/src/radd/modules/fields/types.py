@@ -8,7 +8,7 @@ class FieldType(StrEnum):
     DATE = "date"  # ISO date string, YYYY-MM-DD
     SELECT = "select"
     MULTI_SELECT = "multi_select"
-    USER = "user"  # user identifier; validated against users when the auth module lands
+    USER = "user"  # a user identifier string (not checked against users)
     URL = "url"
     DURATION = "duration"  # whole minutes, >= 0
 
@@ -30,21 +30,9 @@ class FieldSource(StrEnum):
     CONNECTOR = "connector"  # written by extensions; read-only in the UI
 
 
-class FieldSubject(StrEnum):
-    """What a field-permission grant points at (spec 07)."""
-
-    ROLE = "role"  # a row in auth `roles` (builtin or custom)
-    TEAM = "team"  # a row in teams `teams`
-
-
-class FieldAccess(StrEnum):
-    READ = "read"
-    WRITE = "write"
-
-
 class FieldEvent(StrEnum):
     CREATED = "field.created"
-    UPDATED = "field.updated"  # emitted on permission-grant replacement
+    UPDATED = "field.updated"
     DELETED = "field.deleted"  # spec 87 — definition + its grants; item values are orphaned
 
 

@@ -42,7 +42,7 @@ def verify_code(secret: str, code: str, timestamp: int) -> bool:
 
 
 def provisioning_uri(secret: str, account: str, issuer: str = "Radd") -> str:
-    """otpauth:// URI authenticator apps import (shown as text — no QR dep)."""
+    """otpauth:// URI authenticator apps import (the SPA renders it as a QR code)."""
     label = urllib.parse.quote(f"{issuer}:{account}")
     query = urllib.parse.urlencode(
         {"secret": secret, "issuer": issuer, "algorithm": "SHA1",

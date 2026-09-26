@@ -1,18 +1,10 @@
-"""What dies with a comment's parent (RADD-717 / RADD-745).
+"""What dies with a comment's parent (RADD-717).
 
-The polymorphic parent column cannot carry a foreign key, so `ON DELETE CASCADE`
-is gone. The delete paths call `service.delete_for_parent` directly, which
-handles the common case immediately — but that is a promise every FUTURE delete
-path has to remember, and a comment whose parent is gone is invisible in the UI
-and unreachable by any API. Nobody would ever notice.
-
-So the guarantee is structural: these cascades are registered on the plugin
-manifest and the kernel's single cascade consumer runs them whenever a parent's
-`*.deleted` event goes by.
-
-This used to be its own head-seeded consumer with its own poll loop. It is now a
-registration, because a `DELETE … WHERE parent = ?` that usually matches nothing
-does not deserve a background task of its own (RADD-745).
+The polymorphic parent column has no foreign key, so no ON DELETE CASCADE.
+Delete paths call `service.delete_for_parent`, but a future path that forgets
+would leave comments no UI or API can reach. These cascades, derived from the
+parent bindings and run by the kernel's cascade consumer on each parent's
+`*.deleted` event, make the cleanup structural.
 """
 
 from __future__ import annotations
@@ -20,29 +12,21 @@ from __future__ import annotations
 import logging
 import uuid
 
-from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.kernel import CascadeSpec
 
-from .models import Comment
+from .service import delete_for_parent
 
 logger = logging.getLogger(__name__)
 
 
 async def _sweep(session: AsyncSession, entity_type: str, parent_id: uuid.UUID) -> None:
-    result = await session.execute(
-        delete(Comment).where(
-            Comment.entity_type == entity_type, Comment.entity_id == parent_id
-        )
-    )
+    swept = await delete_for_parent(session, entity_type, parent_id)
     # Usually zero: the delete path swept them a moment earlier. A non-zero count
-    # means something bypassed that path — which is exactly what this exists to
-    # catch, so it is worth a line in the log.
-    if result.rowcount:
-        logger.info(
-            "cascade: %s %s took %d orphaned comment(s)", entity_type, parent_id, result.rowcount
-        )
+    # means something bypassed that path — exactly what this exists to catch.
+    if swept:
+        logger.info("cascade: %s %s took %d orphaned comment(s)", entity_type, parent_id, swept)
 
 
 def cascades() -> tuple[CascadeSpec, ...]:

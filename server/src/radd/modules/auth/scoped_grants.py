@@ -3,11 +3,12 @@
 import uuid
 from typing import Literal
 from radd.exceptions import NotFoundError
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from radd.clock import utcnow
 from radd.db import ilike_term
 from . import authz
+from .grant_directory import grant_window, role_names as grant_role_names
 from .models import GlobalRoleGrant, Role, User
 from .schemas import SpaceGrantDirectoryRead
 from .types import NON_PERSON_SOURCES, Permission, GrantScopeKind
@@ -54,29 +55,8 @@ async def page(
                 GlobalRoleGrant.group_id.in_(select(Group.id).where(Group.name.ilike(term)))
             )
         condition &= or_(*terms)
-    total = await session.scalar(select(func.count()).select_from(GlobalRoleGrant).where(condition))
-    rows = list(
-        (
-            await session.scalars(
-                select(GlobalRoleGrant)
-                .where(condition)
-                .order_by(GlobalRoleGrant.created_at, GlobalRoleGrant.id)
-                .limit(limit)
-                .offset(offset)
-            )
-        ).all()
-    )
-    role_names = (
-        dict(
-            (
-                await session.execute(
-                    select(Role.id, Role.name).where(Role.id.in_({row.role_id for row in rows}))
-                )
-            ).all()
-        )
-        if role_read and rows
-        else {}
-    )
+    rows, total = await grant_window(session, condition, limit=limit, offset=offset)
+    role_names = await grant_role_names(session, rows) if role_read and rows else {}
     people = {
         row.id: row
         for row in (
@@ -130,7 +110,7 @@ async def page(
             expired=row.expires_at is not None and row.expires_at <= now,
         )
         for row in rows
-    ], total or 0
+    ], total
 
 
 async def require_project_scope(session: AsyncSession, actor: User, project_id: uuid.UUID) -> None:

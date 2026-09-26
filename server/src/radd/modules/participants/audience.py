@@ -1,13 +1,7 @@
-"""What participants adds to an issue's notification audience (RADD-1385).
-
-The kernel `NOTIFICATION_AUDIENCE` socket's provider. `notify` used to import
-`service.team_recipient_ids` behind a `try: import` that could never fail —
-plugin code is always importable — so a participants plugin disabled at runtime
-went on widening every item's audience. Registered on the manifest instead,
-disabling the plugin withdraws it with the rest of the plugin.
-
-Only the TEAM half: a direct user participant was auto-watched when added, so
-they already arrive through the watcher list.
+"""The `NOTIFICATION_AUDIENCE` socket provider: members of an item's participant
+TEAMS. Registered on the manifest so a runtime disable withdraws it (a
+`try: import` in notify could not). Direct user participants are auto-watched,
+so they already arrive through the watcher list.
 """
 
 import uuid

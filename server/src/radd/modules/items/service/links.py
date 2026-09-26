@@ -11,17 +11,18 @@ from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.fields import service as fields
 from radd.modules.linktypes import service as linktypes_service
+from radd.modules.linktypes.types import ItemLinkType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
-from ..enums import ItemEntity, ItemEvent, ItemKind, ItemLinkType
+from ..enums import ItemEntity, ItemEvent, ItemKind
 from .visibility import relation_read_clause
 from ..mentions import parse_issue_keys
 from ..models import ItemLink, WorkItem
 from ..schemas import ItemLinkCreate, ItemLinkSearchResult, ItemRead
-from .queries import find_item_by_key, require_item
+from .queries import find_item_by_key, require_item, require_item_permission
 from .read import _finish, _hydrate_one
-from .visibility import _field_ctx, ensure_item_relation
+from .visibility import _field_ctx
 
 
 # --- link typeahead (dependency add-row autocomplete) ---
@@ -111,7 +112,6 @@ async def _check_link_rules(
 ) -> None:
     if target.id == source.id:
         raise ConflictError(ItemEntity.LINK, reason="an item cannot link to itself")
-    # Cross-project links are legal since spec 80 (spec 86: no boundary above).
     duplicate = await session.scalar(
         select(ItemLink.id).where(
             ItemLink.source_item_id == source.id,
@@ -186,10 +186,9 @@ async def sync_mention_links(session: AsyncSession, item: WorkItem) -> None:
 async def add_item_link(
     session: AsyncSession, item_id: uuid.UUID, data: ItemLinkCreate, actor: User
 ) -> ItemRead:
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    item, project, permissions = await require_item_permission(
+        session, item_id, actor, Permission.ITEM_UPDATE
+    )
     # Validate the link type against the catalog (spec 91): must exist, be manual
     # (not auto-managed like `mentions`), and be in scope for the source project.
     catalog = await linktypes_service.catalog(session)
@@ -218,10 +217,9 @@ async def add_item_link(
 async def remove_item_link(
     session: AsyncSession, item_id: uuid.UUID, link_id: uuid.UUID, actor: User
 ) -> None:
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    item, project, permissions = await require_item_permission(
+        session, item_id, actor, Permission.ITEM_UPDATE
+    )
     link = await session.get(ItemLink, link_id)
     if link is None or item.id not in (link.source_item_id, link.target_item_id):
         raise NotFoundError(ItemEntity.LINK, link_id)

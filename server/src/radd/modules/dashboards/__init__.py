@@ -25,9 +25,7 @@ plugin = RaddPlugin(
         ),
         EventTypeSpec(DashboardEvent.DELETED, "Dashboard deleted", "Views", trigger=False),
     ),
-    # Spec 75/87: create ONLY. dashboard.create is the broadcast gate on
-    # `global_access`; editing and deleting are owner/editor decisions (the spec-57
-    # ownership model dashboards shipped with), so no atom was ever consulted.
+    # dashboard.create gates `global_access` (a broadcast); update/delete only narrow API keys.
     crud_resources=(
         CrudResourceSpec(
             "dashboard", "global", "dashboards", "global.manage", actions=("create", "update", "delete")

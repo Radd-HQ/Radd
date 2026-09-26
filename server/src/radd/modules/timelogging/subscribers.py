@@ -1,11 +1,5 @@
-"""Project teardown, this module's share (RADD-1174).
-
-`projects` dispatches two in-transaction hooks and owns nothing here: INSPECTING
-asks what of ours dies with the project (the confirmation dialog's numbers, and
-the count the `project.deleted` event records), DELETING removes what the
-database cannot cascade on its own. Registered at import, like the
-`project.created` seeding hooks.
-"""
+"""Project teardown (RADD-1174): what of ours a project delete counts. The
+contract is on `projects.types.ProjectHook`."""
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession

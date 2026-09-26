@@ -1,9 +1,4 @@
-"""Project directory reads page after the shared authorization decision.
-
-Legacy callers may omit a limit. Interactive readers use bounded pages and the
-separate summary, so neither their permissions nor direct links depend on which
-page happens to be loaded. Authority resolution loads project IDs, not content.
-"""
+"""Project directory reads, paged after the shared authorization decision."""
 import uuid
 from typing import TYPE_CHECKING
 from collections.abc import Iterable

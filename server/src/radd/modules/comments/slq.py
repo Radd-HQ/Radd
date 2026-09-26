@@ -1,20 +1,14 @@
-"""`commented_by` — the item SLQ field this module contributes.
-
-Same shape as timelogging's `logged_by` (see the note there): a question about
-COMMENTS whose answer is a set of ITEMS, expressed through the plugin SLQ-field
-registry so items never learns about comments.
+"""`commented_by`: the item SLQ field this module contributes through the plugin
+SLQ-field registry, so items never learns about comments.
 
     commented_by = me
     commented_by = "alice@corp.example"
     commented_by ~ alice
 
-VISIBILITY CAVEAT, deliberately not solved here: this matches on authorship
-alone, so an internal comment (spec 50 per-team visibility) can make its item
-match for someone who could not read that comment. The item itself is still
-filtered by the normal project/item RBAC, so this leaks the EXISTENCE of a
-comment by a person, never its content. Narrowing it to visible comments needs
-the actor's team set threaded into the resolver, which the SlqFieldContext can
-carry when we decide that trade is worth the join.
+VISIBILITY CAVEAT, deliberately unsolved: this matches on authorship alone, so an
+internal comment can make its item match for someone who cannot read that
+comment. Item RBAC still applies, so it leaks a comment's EXISTENCE, never its
+content. Narrowing needs the actor's team set in SlqFieldContext.
 """
 
 from sqlalchemy import or_, select

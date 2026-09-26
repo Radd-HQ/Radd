@@ -11,8 +11,6 @@ from radd.exceptions import NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.deps import Actor, CurrentUser
 
-from radd.config import settings as config
-
 from . import service, directory
 from .schemas import (
     CycleComplete,
@@ -138,9 +136,7 @@ async def cycle_stats(
     TD time."""
     # Deferred: items/timelogging both (transitively) import cycles — see complete_cycle.
     from radd.modules.items import service as items_service
-    from radd.modules.settings import service as settings_service
-    from radd.modules.settings.types import SettingKey
-    from radd.modules.timelogging.duration import format_duration
+    from radd.modules.timelogging import service as timelog_service
     from radd.modules.timelogging.timesheet import cycle_time_totals
 
     cycle = await service.get_cycle(session, cycle_id)
@@ -155,25 +151,18 @@ async def cycle_stats(
     estimate, logged, remaining = await cycle_time_totals(
         session, cycle_id, actor=user, q=q, assignee_id=assignee_id, team_id=team_id, project_id=project_id
     )
-    # Hours-per-day is a GLOBAL scalar (spec 67 follow-up: instance-only).
-    hours_per_day = int(
-        await settings_service.resolve(session, SettingKey.TIMELOG_HOURS_PER_DAY)
+    estimate_text, logged_text, remaining_text = await timelog_service.format_durations(
+        session, [estimate, logged, remaining]
     )
-
-    def fmt(seconds: int) -> str:
-        return format_duration(
-            seconds, hours_per_day=hours_per_day, days_per_week=config.timelog_days_per_week
-        )
-
     return CycleStats(
         total=sum(counts.values()),
         by_category=counts,
         estimate_seconds=estimate,
         logged_seconds=logged,
         remaining_seconds=remaining,
-        estimate=fmt(estimate),
-        logged=fmt(logged),
-        remaining=fmt(remaining),
+        estimate=estimate_text,
+        logged=logged_text,
+        remaining=remaining_text,
         points_total=points_total,
         points_done=points_done,
     )
@@ -185,7 +174,7 @@ async def complete_cycle(
 ) -> CycleCompleteResult:
     """Jira-style sprint close: open items move to `move_open_to` (null = backlog),
     the cycle is stamped completed, the target optionally starts today, and drafts
-    are topped up per the `cycle_drafts_ahead` setting. Item moves run as the
+    are topped up per the series' `drafts_ahead`. Item moves run as the
     caller, so item.update is enforced per project by the items service."""
     cycle = await service.get_cycle(session, cycle_id)
     await _require_cycle_write(session, user, authz.Permission.CYCLE_UPDATE, cycle.project_id)

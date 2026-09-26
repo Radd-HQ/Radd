@@ -1,19 +1,12 @@
-"""The transition checks plugins contribute (RADD-1383).
+"""Transition checks served by plugins through the kernel TRANSITION_CHECK socket.
 
-Workflow evaluates its own checks (`TransitionCheck`) and reaches every other
-`check` key through the kernel's TRANSITION_CHECK socket — never by importing
-the plugin that answers it. `approvals` is the provider today; disabling it at
-runtime withdraws its registration, and the rules it served then FAIL CLOSED
-(`guards.unprovided_failure`), because a gate an admin configured must not
-open because a plugin was switched off.
-
-Three seams, one per moment in a rule's life:
-
-* `providers()` — the live providers, keyed by check; write-validation and
-  evaluation both read it, so they cannot disagree about what exists;
-* `prepare(...)` — each rule-named provider's per-item data, for the snapshot;
-* `state_moved(...)` — every provider is told after a successful state change
-  (items calls it through `workflow.service`), which is how an approval is spent.
+Workflow never imports the plugin that answers a check. A disabled provider
+withdraws its registration and the rules it served FAIL CLOSED
+(`guards.unprovided_failure`): a gate an admin configured must not open because
+a plugin was switched off. `providers()` feeds both write-validation and
+evaluation, so they cannot disagree about what exists; `prepare` builds each
+provider's per-item snapshot data; `state_moved` tells every provider after a
+successful state change (how an approval is spent).
 """
 
 import uuid

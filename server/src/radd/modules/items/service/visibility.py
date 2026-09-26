@@ -189,8 +189,7 @@ async def attach_capabilities(
             return None
         if relation_actor is None:
             relation_actor = await authz.relation_actor(session, actor)
-        # The union of per-project relation sets is safe here only as an upper
-        # bound would NOT be — so resolve per row against ITS project's set.
+        # Resolve per row against ITS project's relation set; a union across projects would over-grant.
         verdicts: dict[uuid.UUID, bool] = {}
         by_relations: dict[frozenset, list[WorkItem]] = {}
         for row in constrained_rows:
@@ -245,16 +244,12 @@ async def ensure_item_relation(
     *,
     as_missing: bool = False,
 ) -> None:
-    """The GATING form (RADD-817): the caller's atom is held (require passed) —
-    does it hold for THIS row? `@any` short-circuits free. A failed READ raises
-    NotFound (`as_missing=True` — a hidden item's existence stays private, the
-    spec-57 rule); a failed write raises Forbidden naming the qualifier."""
+    """The gating form (RADD-817): `permission` is held on the project — does it
+    hold for THIS row (relations + the restricted-row guard)? A failed read raises
+    NotFound when `as_missing` (existence stays private); a failed write raises
+    Forbidden naming the qualifier."""
     relations = authz.relations_held(permissions, permission)
     relation_actor = await authz.relation_actor(session, actor)
-    # async form (RADD-844): honours query-gated relations (@participant) with
-    # one EXISTS; pure predicates still answer free. Spec 121: `@any` no
-    # longer short-circuits HERE — the primitive applies the row guard first
-    # and answers True for @any only past it.
     if await authz.relation_holds_row_async(session, "item", relations, relation_actor, item):
         return
     if as_missing:
@@ -479,20 +474,10 @@ async def denied_slq_fields(
 
 
 async def projects_with_user_items(session: AsyncSession, user) -> set[uuid.UUID]:
-    """Projects the actor personally has an item in — reported OR assigned.
-
-    Half of the answer to "why can this person see this project without a grant
-    on it". A qualified read (`item.read@own`) says they may read their own rows
-    ANYWHERE, which the project list used to read as "every project"; requiring
-    the relationship to be real is what turns that into the projects they
-    actually work in.
-
-    Kept as ONE query over the two columns rather than two: `work_items` indexes
-    both, so the planner ORs the bitmaps and the whole thing is a 2.2 ms index
-    scan over 503k rows — cheap enough to run per request, which is why this is
-    resolved live instead of being materialised into a membership table that
-    would then need keeping in step.
-    """
+    """Projects the actor reported or is assigned an item in — why they can see
+    a project with no grant on it (`item.read@own` alone would otherwise read as
+    "every project"). One OR over two indexed columns (2.2 ms at 503k rows), so
+    it is resolved live rather than materialised."""
     rows = await session.execute(
         select(WorkItem.project_id)
         .where((WorkItem.reporter_id == user.id) | (WorkItem.assignee_id == user.id))

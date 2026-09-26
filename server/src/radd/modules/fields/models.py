@@ -13,10 +13,7 @@ class FieldDefinition(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("key"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    # Scope lives in the `field_definition_projects` association (spec 90 follow-up):
-    # NO rows = global (every project); one or more rows = scoped to those projects.
-    # A field's scope can be widened later (add a project, or promote to global by
-    # clearing every row). selectin so `project_ids` is always populated on read.
+    # No scope rows = global; rows scope the field to those projects. selectin: `project_ids` is always loaded.
     project_links: Mapped[list["FieldProject"]] = relationship(
         lazy="selectin",
         cascade="all, delete-orphan",
@@ -37,9 +34,6 @@ class FieldDefinition(Base, TimestampMixin):
     indexed: Mapped[bool] = mapped_column(Boolean, default=False)
     ai_visible: Mapped[bool] = mapped_column(Boolean, default=True)
     source: Mapped[str] = mapped_column(String(20))
-    # Field-level read/write grants now live in the generic `access_grants` table
-    # (spec 92, resource_type="field") — scopeable and shared with every other
-    # RBAC resource — not a per-field relationship.
 
     @property
     def project_ids(self) -> list[uuid.UUID]:
@@ -48,9 +42,7 @@ class FieldDefinition(Base, TimestampMixin):
 
 
 class FieldProject(Base):
-    """One project a field is scoped to (spec 90 follow-up). A field with NO rows
-    is global (every project); rows narrow it to the listed projects. Widening a
-    field's scope = adding rows; promoting to global = deleting every row."""
+    """One project a field is scoped to (see FieldDefinition.project_links)."""
 
     __tablename__ = "field_definition_projects"
 
@@ -60,6 +52,3 @@ class FieldProject(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True
     )
-
-# Builtin-field rules (spec 36/50) moved to the generic `access_grants` table
-# (spec 92, resource_type="builtin_field", resource_id = the builtin field name).

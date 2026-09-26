@@ -14,6 +14,36 @@ from .schemas import GrantDirectoryRead
 from .types import AuthEntity, GrantScopeKind, Permission
 
 
+async def grant_window(
+    session: AsyncSession, condition, *, limit: int, offset: int
+) -> tuple[list[GlobalRoleGrant], int]:
+    """One page of matching grants plus the total. Expired rows stay manageable;
+    `id` breaks ties, since an import or one request creates many rows at once."""
+    total = await session.scalar(select(func.count()).select_from(GlobalRoleGrant).where(condition))
+    rows = list(
+        (
+            await session.scalars(
+                select(GlobalRoleGrant)
+                .where(condition)
+                .order_by(GlobalRoleGrant.created_at, GlobalRoleGrant.id)
+                .limit(limit)
+                .offset(offset)
+            )
+        ).all()
+    )
+    return rows, total or 0
+
+
+async def role_names(session: AsyncSession, rows: list[GlobalRoleGrant]) -> dict[uuid.UUID, str]:
+    return dict(
+        (
+            await session.execute(
+                select(Role.id, Role.name).where(Role.id.in_({row.role_id for row in rows}))
+            )
+        ).all()
+    )
+
+
 async def subject_page(
     session: AsyncSession,
     actor: User,
@@ -37,30 +67,10 @@ async def subject_page(
     if len(named) != 1:
         raise ConflictError(AuthEntity.GLOBAL_GRANT, reason="exactly one subject required")
     column, value = named[0]
-    condition = column == value
-    total = await session.scalar(select(func.count()).select_from(GlobalRoleGrant).where(condition))
-    # Expired rows remain manageable. Stable tie-breaking matters when an import
-    # or one grant request creates many rows at the same instant.
-    rows = list(
-        (
-            await session.scalars(
-                select(GlobalRoleGrant)
-                .where(condition)
-                .order_by(GlobalRoleGrant.created_at, GlobalRoleGrant.id)
-                .limit(limit)
-                .offset(offset)
-            )
-        ).all()
-    )
-    role_names = {}
+    rows, total = await grant_window(session, column == value, limit=limit, offset=offset)
+    names = {}
     if rows and await authz.holds(session, actor, Permission.ROLE_READ):
-        role_names = dict(
-            (
-                await session.execute(
-                    select(Role.id, Role.name).where(Role.id.in_({row.role_id for row in rows}))
-                )
-            ).all()
-        )
+        names = await role_names(session, rows)
     visible_projects = await authz.visible_projects(session, actor)
     projects = list(
         (
@@ -86,7 +96,7 @@ async def subject_page(
             **GrantDirectoryRead.model_validate(row).model_dump(
                 exclude={"role_name", "scope_label"}
             ),
-            role_name=role_names.get(row.role_id),
+            role_name=names.get(row.role_id),
             scope_label=project_names.get(row.project_id)
             if row.project_id is not None
             else space_names.get(row.space_id)
@@ -94,4 +104,4 @@ async def subject_page(
             else None,
         )
         for row in rows
-    ], total or 0
+    ], total

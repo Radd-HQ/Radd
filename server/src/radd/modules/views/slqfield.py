@@ -1,24 +1,16 @@
-"""`roadmap` — the item SLQ field this module contributes (roadmap wave).
+"""`roadmap` — item SLQ field: items hand-pinned to a view.
 
-"Which items are pinned to this roadmap?" is a question about VIEW MEMBERSHIP,
-but the answer is a set of ITEMS, so it belongs in the item dialect — the same
-spec-97 inversion as `logged_by`/`commented_by`. This module hands back a
-Select over its OWN tables (view_members joined to views for name matching)
-and the items engine wraps it as `work_item.id IN (…)`; item RBAC then applies
-to the results like any other query, so membership never widens what an actor
-can see.
+The answer is a set of ITEMS, so it lives in the item dialect (like `logged_by`):
+this returns a Select over view_members and the items engine wraps it as
+`work_item.id IN (…)`, so item RBAC still applies.
 
-    roadmap = "Q3 Prague"        -- exact view name (case-insensitive)
-    roadmap = "0548235e-9a66-…"     -- a view id (what the roadmap surface emits)
-    roadmap ~ Q3                    -- members of ANY view whose name contains Q3
-    roadmap != "Q3 Prague"       -- negation applied by the engine
+    roadmap = "Q3 Prague"   -- exact view name (case-insensitive)
+    roadmap = "<view id>"   -- what the roadmap surface emits
+    roadmap ~ Q3            -- members of any view whose name contains Q3
 
-Semantics are EXACT membership — hand-picked items only. "An epic's children
-ride along" is roadmap-surface policy, composed client-side with the existing
-`epic IN (…)` field, so other surfaces filtering by `roadmap` get the least
-surprising answer. View VISIBILITY is deliberately not consulted (the resolver
-is a pure Select, no session): knowing a private roadmap's name only ever
-surfaces items the actor could already read.
+EXACT membership (an epic's children are the roadmap surface's policy). View
+visibility is not consulted: a private roadmap's name only surfaces items the
+actor could already read.
 """
 
 import uuid

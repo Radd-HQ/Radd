@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from .types import DuplicateKind, InstanceRole, PermissionScope, UserSource
 from radd.apitypes import UtcDatetime
@@ -92,32 +92,10 @@ class UserRead(BaseModel):
 
 
 class UserDirectoryEntry(BaseModel):
-    """One person, as everyone with an account may see them (RADD-769).
-
-    The narrow half of a directory split by AUDIENCE. `UserRead` carries `email`,
-    `source`, `instance_role` and `last_login_at` — administrative facts, and the
-    reason `GET /users` is gated on `user.manage`. But naming a colleague is not
-    an administrative act: assigning work, `@`-mentioning someone and rendering
-    "edited by" all need a list of who exists, and gating those behind
-    `user.manage` meant an ordinary member met a 403 on nearly every issue and
-    page they opened.
-
-    What is left is what a picker draws: who they are, what to render, and
-    whether they are still around. Email is deliberately absent — it was the
-    pickers' disambiguator, and keeping it would have published every address in
-    the instance to every account in it, which is a larger change than the bug
-    it fixes.
-
-    Service accounts (spec 113) are NOT filtered out. They cannot log in, but
-    they can author a page version or a comment, and a directory that omits them
-    would leave those bylines unresolvable — a hole in the read path in exchange
-    for tidier pickers, which already filter on `active`.
-
-    `source` IS here (RADD-869): without it a picker rendered a service account
-    exactly like a colleague, which contradicted the "never mistaken for a
-    person" intent. Which auth backend a person uses is not an administrative
-    secret the way their address is; the SPA badges `service` rows.
-    """
+    """One person as every signed-in user may see them (RADD-769): what a picker
+    draws, never administrative facts. No email — it would publish every address
+    to every account. Service accounts stay in (they author bylines); `source` is
+    here so pickers can badge them (RADD-869)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,32 +106,16 @@ class UserDirectoryEntry(BaseModel):
     avatar_color: str | None = None
     avatar_emoji: str | None = None
     avatar_url: str | None = None  # RADD-1295: see User.avatar_url
-    #: RADD-938 — only when the caller passed `project_id`: does this person hold
-    #: item.read on THAT project through a grant? `None` means the question was
-    #: not asked, which is different from "no" and must not render as a warning.
+    #: RADD-938: only when the caller passed `project_id` — does this person hold
+    #: item.read there through a grant? None = not asked, not "no".
     has_access: bool | None = None
-    #: RADD-1034 — true when this row is an email-provisioned account
-    #: (`UserSource.EMAIL`), returned only when the caller asked for them via
-    #: `include_requesters=true`. This is narrower than exposing `source`
-    #: itself (already present, RADD-869, so pickers can badge `service` rows):
-    #: `source` names WHICH backend authenticated someone, a fact this class's
-    #: own docstring argues is not a picker's business beyond "service or not".
-    #: `external` answers a DIFFERENT, narrower question — "is this a stranger
-    #: who emailed the desk, not a colleague" — without handing the SPA the
-    #: `email` sentinel to hardcode; today that question happens to reduce to
-    #: `source == "email"`, but the field keeps that mapping server-side so a
-    #: second requester-like source wouldn't need an SPA change.
+    #: RADD-1034: an email-provisioned requester (returned only on request).
     external: bool = False
 
 
 class PermissionSourceRead(BaseModel):
-    """One atom the user holds, and where it came from (RADD-779).
-
-    `kind` is `baseline` | `role` | `instance-admin`. The admin case answers a
-    single row with `permission="*"`: an instance admin holds everything BECAUSE
-    they are an admin, and enumerating ninety atoms as though each were granted
-    would hide the one fact that matters.
-    """
+    """One atom the user holds and where it came from (RADD-779); `kind` is
+    baseline | role | instance-admin, and an admin answers ONE `"*"` row."""
 
     permission: str
     kind: str
@@ -162,7 +124,7 @@ class PermissionSourceRead(BaseModel):
     #: "baseline"), the channel it arrived through, and its scope.
     role_id: uuid.UUID | None = None
     scope: str = "global"  # global | project | space
-    via: str | None = None  # membership | team | grant | attached | group
+    via: str | None = None  # grant | team | group
     via_team: str | None = None
     #: RADD-833: the carrying group + the nesting chain (granted → direct).
     via_group: str | None = None
@@ -204,23 +166,10 @@ class ResourceTypeAccessRead(BaseModel):
 
 
 class AccessSummaryRead(BaseModel):
-    """Effective answers, as COUNTS (RADD-809 — guard-level conclusions are
-    workflow-data-dependent and out of scope).
-
-    RADD-933 split the read count in two. `readable_projects` counted with
-    `holds_base`, which is right for a GATE — `item.read@own` genuinely holds
-    `item.read` in qualified form (RADD-823) — and wrong for a SUMMARY: an
-    account holding nothing but the Baseline's `item.read@own` was reported as
-    reading items in all 97 projects, which an admin reads as "sees
-    everything". What was true is "can read their OWN items there", and for an
-    account that has never logged in that is no items at all.
-
-    So: `readable_projects` is now the UNQUALIFIED count, and
-    `own_readable_projects` is the remainder reachable only through a qualifier.
-    Dropping the qualified projects entirely was rejected — `item.read@own` is
-    real access to real rows, and an admin auditing a leaver needs to see it.
-    The fault was conflation, not inclusion.
-    """
+    """Effective reach as COUNTS (RADD-809). `readable_projects` counts
+    UNQUALIFIED item.read; `own_readable_projects` the projects reachable only
+    through a qualifier (@own/@participant) — `holds_base` is right for a gate and
+    wrong for a summary (RADD-933)."""
 
     readable_projects: int
     #: Projects where the atom is held ONLY in qualified form (own/participant/…).
@@ -241,15 +190,7 @@ class CarrierGrantRead(BaseModel):
 
 
 class MembershipRead(BaseModel):
-    """A team or directory group the person belongs to, and what it confers
-    (RADD-933).
-
-    The Users page could list a person's DIRECT grants and their resulting
-    atoms, but not the carriers in between — so "why can they see this?" had no
-    answer on the page, and a team that confers nothing today (the common case)
-    was invisible even though it is exactly the row that explains tomorrow's
-    change when someone grants a role to it.
-    """
+    """A team or directory group the person belongs to, and what it confers (RADD-933)."""
 
     kind: str  # "team" | "group"
     id: uuid.UUID
@@ -346,29 +287,16 @@ class MeRead(BaseModel):
     email: str
     name: str
     instance_role: InstanceRole
-    #: Spec 121: the request carried no credential and is acting as the Anyone
-    #: principal. The SPA keys everything personal (inbox, pins, realtime,
-    #: preferences) on this being False; `id` is the principal's fixed id.
+    #: Spec 121: no credential — acting as the Anyone principal (`id` is its fixed id).
     anonymous: bool = False
-    #: Set while this session previews another account (RADD-836 U1) — the rest
-    #: of the payload describes the TARGET, which is the point.
+    #: Set while previewing another account (RADD-836); the payload describes the TARGET.
     view_as: ViewAsRead | None = None
-    # Spec 86 stage 3: the global role + global-scope permission union, flat —
-    # the synthetic `workspaces` wrapper is gone.
     global_role: InstanceRole
-    # spec 93/A2: atoms are strings (builtin ∪ plugin-registered) — admin's union
-    # includes plugin atoms, which aren't enum members.
-    permissions: list[str] = Field(default_factory=list)
-    # Spec 87: does this person own or manage at least one team? A team leader
-    # holds no global team atom, so the permission union above cannot answer it —
-    # and without it the SPA would hide the Teams page from the very people the
-    # delegation exists for.
+    permissions: list[str] = Field(default_factory=list)  # the global-scope union
+    # Spec 87: owns/manages a team — a leader holds no global team atom, so the
+    # permission union cannot answer it.
     manages_teams: bool = False
-    #: RADD-843 — area-visibility facts the client cannot derive from lists it
-    #: already loads, keyed by the contributing plugin's `NavFactSpec.key`
-    #: (RADD-892). An open map rather than named booleans because auth does not
-    #: know which features exist; a MISSING key means visible, which is how the
-    #: SPA already reads an unknown fact.
+    #: RADD-843/892: area-visibility facts by NavFactSpec.key; a MISSING key means visible.
     nav: dict[str, bool] = Field(default_factory=dict)
     avatar_color: str | None = None
     avatar_emoji: str | None = None
@@ -461,16 +389,10 @@ RoleKey = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9-]{0,99}$")
 
 
 def _validate_atoms(values: list[str] | None) -> list[str] | None:
-    """Atoms are strings now (spec 93/A2) — builtin OR plugin-registered. Validate
-    membership in the live catalog so a garbage atom is still rejected (the
-    guarantee the `list[Permission]` enum used to give), while plugin atoms pass.
-
-    RADD-823: an atom may carry a relation qualifier (`item.update@team`). The
-    BASE must be in the catalog and the relation must be REGISTERED for the
-    atom's relation DOMAIN — its own resource, unless the owning module
-    declared a parent domain (RADD-844: `comment.write` qualifies against the
-    ITEM the comment lands on). An unregistered qualifier would be stored,
-    resolve to nothing, and read as a mysterious denial."""
+    """Validate atoms (builtin or plugin-registered) against the live catalog. A
+    relation qualifier (RADD-823) must be REGISTERED for the atom's relation
+    DOMAIN (RADD-844: `comment.write` qualifies against the ITEM) — an
+    unregistered one would be stored and read as a mysterious denial."""
     if values is None:
         return None
     from radd.kernel import registries
@@ -495,29 +417,23 @@ def _validate_atoms(values: list[str] | None) -> list[str] | None:
     return values
 
 
+#: A list of permission atoms, validated against the live catalog.
+Atoms = Annotated[list[str], AfterValidator(_validate_atoms)]
+
+
 class RoleCreate(BaseModel):
     key: RoleKey
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=500)
-    permissions: list[str] = Field(default_factory=list)
+    permissions: Atoms = Field(default_factory=list)
     position: int | None = None  # default: appended after the last role
-
-    @field_validator("permissions")
-    @classmethod
-    def _known_atoms(cls, v: list[str]) -> list[str]:
-        return _validate_atoms(v) or []
 
 
 class RoleUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=500)
-    permissions: list[str] | None = None  # builtin roles reject this (409)
+    permissions: Atoms | None = None  # builtin roles reject this (409)
     position: int | None = None
-
-    @field_validator("permissions")
-    @classmethod
-    def _known_atoms(cls, v: list[str] | None) -> list[str] | None:
-        return _validate_atoms(v)
 
 
 class RoleRead(BaseModel):
@@ -535,7 +451,7 @@ class RoleRead(BaseModel):
 
 class GlobalGrantEntry(BaseModel):
     """One instance-wide role grant to write (spec 87): exactly one of
-    user_id/team_id."""
+    user_id/team_id/group_id."""
 
     user_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
@@ -550,8 +466,8 @@ class GlobalGrantEntry(BaseModel):
 
 
 class GlobalGrantsUpdate(BaseModel):
-    """PUT /roles/{id}/global-grants — the FULL set of people and teams that
-    hold this role instance-wide, replaced atomically."""
+    """PUT /roles/{id}/global-grants — the FULL set of users, teams and groups
+    that hold this role instance-wide, replaced atomically."""
 
     grants: list[GlobalGrantEntry] = Field(default_factory=list, max_length=100)
     expected_grant_ids: list[uuid.UUID] = Field(max_length=100)
@@ -596,13 +512,8 @@ class RoleGrantRoleUpdate(BaseModel):
 
 
 class RoleGrantCreate(BaseModel):
-    """POST /role-grants — the unified Grant Role dialog (spec 91 → RADD-791).
-
-    Grant a role to a user OR team: instance-wide (both id lists empty), or on
-    any number of projects, or any number of wiki spaces. ONE dialog covers every
-    scope; growing a second one for spaces is how two scopes drift into two sets
-    of rules.
-    """
+    """POST /role-grants — one Grant Role dialog for every scope (spec 91,
+    RADD-791): a user, team or group; instance-wide, or one grant per id."""
 
     role_id: uuid.UUID
     user_id: uuid.UUID | None = None
@@ -625,12 +536,8 @@ class RoleGrantCreate(BaseModel):
 
 
 class RelationOptionRead(BaseModel):
-    """One qualifier an atom may carry (RADD-939): `own`, `team`, `participant`…
-
-    `label` is the relation's own prose ("they reported", "shared with them"),
-    written to complete the sentence the matrix draws — the role grants this
-    verb for items *they reported*.
-    """
+    """One qualifier an atom may carry (RADD-939); `label` completes the matrix's
+    sentence (items *they reported*)."""
 
     key: str
     label: str
@@ -644,29 +551,20 @@ class PermissionRead(BaseModel):
     scope: PermissionScope
     resource: str  # spec 50: the resource half of the key (item, state, …) — matrix grouping
     action: str  # spec 50: the verb half (create/read/update/delete/manage/…) — matrix column
-    #: RADD-939: the relation qualifiers this atom may carry, so the matrix can
-    #: draw `item.read@own` instead of rendering it as nothing. Resolved through
-    #: the atom's relation DOMAIN — the same lookup `_validate_atoms` uses to
-    #: accept a write, deliberately: a catalog that offered a combination the
-    #: validator rejects (or hid one it accepts) would be a second opinion about
-    #: one rule, and the two would drift.
+    #: RADD-939: the qualifiers this atom may carry, resolved through the SAME
+    #: relation domain `_validate_atoms` accepts writes against.
     relations: list[RelationOptionRead] = []
 
 
 class BaselinePreflightRequest(BaseModel):
     """The Baseline as the admin is ABOUT to store it."""
 
-    permissions: list[str] = Field(default_factory=list)
-
-    @field_validator("permissions")
-    @classmethod
-    def _known_atoms(cls, v: list[str]) -> list[str]:
-        return _validate_atoms(v) or []
+    permissions: Atoms = Field(default_factory=list)
 
 
 class BaselinePreflightRow(BaseModel):
     """One affected person: what they lose globally, and where item read
-    survives via a project-scoped source (membership, team, scoped grant)."""
+    survives through a project-scoped grant."""
 
     user_id: uuid.UUID
     name: str

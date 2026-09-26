@@ -1,16 +1,10 @@
-"""The item MCP tools (specs 45/114), declared by their owner (RADD-889).
+"""The item MCP tools, declared by their owner.
 
-Handlers moved verbatim from mcp/tools.py: every one resolves the PAT-authed
-actor's request through the ordinary service/authz seams — an agent can do
-exactly what its principal may do, nothing more. The specs below ARE the
-spec-114 annotations (`permission` drives the caller filter), while enforcement
-stays exactly where it was — inside the handlers' service seams — so
-`kernel_enforced=False`: a blanket dispatcher `require` would re-refuse the
-scoped keys RADD-672 admitted.
-
-comments is a weak dependency (it loads after items), so its imports stay
-inside the handlers, as do the itemtypes/cycles resolvers' (matching the
-pre-move code).
+Each handler goes through the ordinary service/authz seams, so an agent can do
+exactly what its principal may. `permission` drives the catalog filter only
+(`kernel_enforced=False`): a blanket dispatcher `require` would refuse the
+project-scoped keys RADD-672 admits. comments is a weak dependency, so its
+imports stay inside the handlers.
 """
 
 import uuid
@@ -37,11 +31,14 @@ from .filters import ItemListFilters
 from .mcpschemas import (
     DATE_FIELDS,
     GET_ITEM_COMMENTS_TAIL,
+    clone_item_schema,
     comment_item_schema,
+    convert_item_schema,
     create_item_schema,
-    get_allowed_transitions_schema,
-    get_item_schema,
+    key_only_schema,
     link_items_schema,
+    merge_item_schema,
+    move_item_schema,
     search_items_schema,
     transition_item_schema,
     unlink_items_schema,
@@ -213,6 +210,13 @@ async def _get_item(session: AsyncSession, actor: User, args: Mapping[str, Any])
     }
 
 
+async def _item_id_or_none(session: AsyncSession, actor: User, key: Any) -> uuid.UUID | None:
+    """An item KEY argument as its id; a present-but-empty value clears (None)."""
+    if not key:
+        return None
+    return (await items_service.get_item_by_key(session, str(key), actor=actor)).id
+
+
 async def _resolve_relational_writes(
     session: AsyncSession,
     actor: User,
@@ -226,12 +230,7 @@ async def _resolve_relational_writes(
     if args.get("type") is not None:
         values["type_id"] = await _type_id(session, project_id, str(args["type"]))
     if "parent" in args:
-        parent_key = args["parent"]
-        values["parent_id"] = (
-            (await items_service.get_item_by_key(session, str(parent_key), actor=actor)).id
-            if parent_key
-            else None
-        )
+        values["parent_id"] = await _item_id_or_none(session, actor, args["parent"])
     if "cycle" in args:
         cycle_name = args["cycle"]
         values["cycle_id"] = await _cycle_id(session, str(cycle_name)) if cycle_name else None
@@ -318,7 +317,7 @@ async def _get_allowed_transitions(
     item = await items_service.require_item(session, read.id)
     project = await projects_service.get_project(session, read.project_id)
     allowed = await workflow_transitions.allowed_transitions(session, project, item)
-    return allowed.model_dump(mode="json") if hasattr(allowed, "model_dump") else allowed
+    return allowed.model_dump(mode="json")
 
 
 async def _transition_item(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
@@ -375,7 +374,7 @@ GET_ITEM = McpToolSpec(
     name="get_item",
     description="Fetch one work item by key: full detail including custom "
     f"fields inline, plus the {GET_ITEM_COMMENTS_TAIL} most recent comments.",
-    input_schema=get_item_schema(),
+    input_schema=key_only_schema(),
     handler=_get_item,
     permission=Permission.ITEM_READ,
     project_scoped=True,
@@ -420,7 +419,7 @@ GET_ALLOWED_TRANSITIONS = McpToolSpec(
     name="get_allowed_transitions",
     description="Which workflow states this item may move to right now, and for "
     "the ones it may not, WHY (spec-107 transition guards).",
-    input_schema=get_allowed_transitions_schema(),
+    input_schema=key_only_schema(),
     handler=_get_allowed_transitions,
     permission=Permission.ITEM_READ,
     project_scoped=True,
@@ -483,16 +482,7 @@ CLONE_ITEM = McpToolSpec(
     "priority/labels/dates/estimate/custom fields — never comments, worklogs, history "
     "or assignee. The clone lands in the initial state, linked 'relates' to the "
     "original; include_subtasks copies the subtask checklist.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "key": {"type": "string", "description": "Item key, e.g. TD-42."},
-            "title": {"type": "string", "description": "Clone's title; omitted = 'Copy of <source>'."},
-            "include_subtasks": {"type": "boolean", "default": False},
-        },
-        "required": ["key"],
-        "additionalProperties": False,
-    },
+    input_schema=clone_item_schema(),
     handler=_clone_item,
     permission=Permission.ITEM_CREATE,
     project_scoped=True,
@@ -506,15 +496,7 @@ MOVE_ITEM = McpToolSpec(
     "next number, and its old key keeps resolving via an alias. State maps by "
     "name then category, type by name, the release clears (project-scoped), and "
     "custom fields the target lacks are dropped (reported back).",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "key": {"type": "string", "description": "Item key, e.g. TD-42."},
-            "target_project_key": {"type": "string", "description": "Destination project key."},
-        },
-        "required": ["key", "target_project_key"],
-        "additionalProperties": False,
-    },
+    input_schema=move_item_schema(),
     handler=_move_item,
     permission=Permission.ITEM_UPDATE,
     project_scoped=True,
@@ -525,12 +507,7 @@ async def _convert_item(session: AsyncSession, actor: User, args: Mapping[str, A
     source = await items_service.get_item_by_key(session, str(args["key"]), actor=actor)
     kwargs: dict[str, Any] = {}
     if "parent" in args:
-        parent = args["parent"]
-        kwargs["parent_id"] = (
-            (await items_service.get_item_by_key(session, str(parent), actor=actor)).id
-            if parent
-            else None
-        )
+        kwargs["parent_id"] = await _item_id_or_none(session, actor, args["parent"])
     read = await items_service.convert_item_kind(
         session, source.id, actor, kind=ItemKind(str(args["kind"])), **kwargs
     )
@@ -544,16 +521,7 @@ CONVERT_ITEM = McpToolSpec(
     "missing parent issue). parent: item KEY for the new parent; null detaches; "
     "omitted keeps a compatible parent and detaches an incompatible one (recorded "
     "in history).",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "key": {"type": "string", "description": "Item key, e.g. TD-42."},
-            "kind": {"type": "string", "enum": ["epic", "issue", "subtask"]},
-            "parent": {"type": ["string", "null"], "description": "New parent's key; null = detach."},
-        },
-        "required": ["key", "kind"],
-        "additionalProperties": False,
-    },
+    input_schema=convert_item_schema(),
     handler=_convert_item,
     permission=Permission.ITEM_UPDATE,
     project_scoped=True,
@@ -573,15 +541,7 @@ MERGE_ITEM = McpToolSpec(
     "Comments, attachments, links, watchers, worklogs (authors preserved), labels "
     "(union) and the mail thread repoint to the target; the source closes into its "
     "project's canceled state with a 'duplicates' link. Kinds must match.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "source_key": {"type": "string", "description": "The duplicate being closed."},
-            "target_key": {"type": "string", "description": "The survivor."},
-        },
-        "required": ["source_key", "target_key"],
-        "additionalProperties": False,
-    },
+    input_schema=merge_item_schema(),
     handler=_merge_item,
     permission=Permission.ITEM_UPDATE,
     project_scoped=True,

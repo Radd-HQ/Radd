@@ -56,20 +56,14 @@ async def list_states(
     user: Actor,
     project_id: uuid.UUID | None = None,
 ) -> list[StateRead]:
-    """One project's states — or, unscoped, the states of every project the
-    actor can read (the cross-project state-drag resolver on global board
-    views needs the full set). Spec 86: the workspace_id scope is gone."""
+    """One project's states, or unscoped the states of every readable project (the
+    cross-project state-drag resolver on global boards needs them)."""
     if project_id is not None:
         project = await projects_service.get_project(session, project_id)
         await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
         return [StateRead.model_validate(s) for s in await service.list_states(session, project_id)]
-    projects = await projects_service.list_projects(session)
-    permissions = await authz.permissions_for_projects(session, user, projects)
-    readable = [p.id for p in projects if authz.holds_base(permissions[p.id], authz.Permission.ITEM_READ)]
-    return [
-        StateRead.model_validate(s)
-        for s in await service.states_for_projects(session, readable)
-    ]
+    readable = await authz.readable_projects(session, user)
+    return [StateRead.model_validate(s) for s in await service.states_for_projects(session, readable)]
 
 
 @router.patch("/{state_id}", response_model=StateRead)

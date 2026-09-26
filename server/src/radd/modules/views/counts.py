@@ -1,16 +1,7 @@
-"""Batched view membership counts (spec 64) — the sidebar badges of a view type
-listed in a section of its own (`ViewTypeSpec.sidebar_section`, RADD-1396; the slas
-queues are the first).
-
-POST /views/counts resolves each requested view to a compiled-SLQ
-`SELECT count(*)` over work_items. Visibility mirrors the view read path
-(spec 57): views the actor can't see are silently OMITTED, never errored —
-a batch of badges must not fail because one id went stale or private.
-Quick filters are deliberately NOT applied: the badge is the view's base
-membership count. Items are scoped like `GET /items` renders the view:
-archived items excluded, and only projects where the actor holds item.read
-count (so the number matches the rows they would actually see).
-"""
+"""Batched membership counts for view types with a sidebar section of their own
+(`ViewTypeSpec.sidebar_section`). Invisible or stale views are omitted, never
+errored; quick filters are not applied (base membership). Items are scoped as
+`GET /items` renders the view: archived excluded, readable projects only."""
 
 import uuid
 
@@ -36,11 +27,9 @@ async def view_counts(
     view_ids: list[uuid.UUID],
     extra_q: str | None = None,
 ) -> dict[uuid.UUID, int]:
-    """`{view_id: count}` for every REQUESTED view the actor can see (spec 57
-    visibility: owner / share grantee / global_access — plus the list_views
-    membership gate, global item.read). Unknown or invisible ids are omitted;
-    a view whose stored query no longer compiles is omitted too (a drifted
-    registry shouldn't take the whole batch down)."""
+    """`{view_id: count}` for every requested view the actor can see (owner, share
+    grantee or global_access). Unknown or invisible ids are omitted, and so is a
+    view whose stored query no longer compiles."""
     unique_ids = list(dict.fromkeys(view_ids))
     if not unique_ids:
         return {}
@@ -49,10 +38,7 @@ async def view_counts(
     )
     if not views:
         return {}
-    # The member floor, same bar as list_views (RADD-788). This used to read the
-    # GLOBAL item.read atom and return {} when it was absent — which for a
-    # project-scoped member meant every sidebar badge silently vanished rather than
-    # erroring, the harder failure to notice.
+    # The member floor (readable projects), same bar as the view list.
     readable_map = await authz.readable_projects(session, actor)
     readable_ids = set(readable_map)
     if not readable_ids:
@@ -98,8 +84,6 @@ async def _count_view(
             return 0  # visible view, unreadable items — the list they'd see is empty
         stmt = stmt.where(WorkItem.project_id == view.project_id)
     else:
-        if not readable_ids:
-            return 0
         stmt = stmt.where(WorkItem.project_id.in_(readable_ids))
     text = (view.query or "").strip()
     extra = (extra_q or "").strip()

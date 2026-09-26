@@ -1,13 +1,6 @@
-"""Timesheet aggregation — flat worklog entries in a window, for the report views.
-
-Returns entries (not pre-pivoted cells) so one query serves every presentation the
-UI needs: day/week/month grids and drill-down by day, employee, or issue. Recomputed
-per request (no materialization), like the reporting module — fine at prototype scale.
-
-Joins work_items/projects read-only to filter by project and to build issue
-keys — a tolerated inward read of dependency tables (timelogging depends on both),
-mirroring how reporting reads the events table directly.
-"""
+"""Timesheet aggregation: flat worklog entries in a window (not pre-pivoted
+cells), so one query serves every grid and drill-down the UI pivots. Reads
+work_items read-only for project scoping and issue keys (timelogging depends on items)."""
 
 import uuid
 from datetime import date
@@ -24,6 +17,17 @@ from radd.modules.projects import service as projects_service
 from . import categories
 from .models import ItemEstimate, Worklog
 from .schemas import CategoryRef, ItemRef, Timesheet, TimesheetEntry, UserRef
+
+
+async def visible_user_ids(
+    session: AsyncSession, actor: User, requested: set[uuid.UUID] | None
+) -> set[uuid.UUID] | None:
+    """Narrow `requested` authors (None = everyone) to whose time `actor` may see.
+    Without timesheet.view — held GLOBALLY: one project's grant must not expose the
+    instance's hours — that is only their own."""
+    if authz.Permission.TIMESHEET_VIEW in await authz.effective_permissions(session, actor):
+        return requested
+    return {actor.id} if requested is None else requested & {actor.id}
 
 
 async def build(
@@ -48,10 +52,8 @@ async def build(
     if not project_key or (user_ids is not None and not user_ids):
         return Timesheet(start=start, end=end, total_seconds=0, entries=[])
 
-    # Item-bound rows scope through their item's project; itemless rows (spec 59)
-    # carry an optional project anchor. A project filter keeps itemless rows only
-    # when they're anchored to that project (general time belongs to no project,
-    # so it drops out of project-filtered views). Unfiltered views keep general
+    # Itemless rows (spec 59) carry an optional project anchor: a project filter
+    # keeps only those anchored to it; unfiltered views keep unanchored general
     # rows (no project to leak) and drop rows anchored to unreadable projects.
     itemless = and_(
         Worklog.item_id.is_(None),
@@ -82,10 +84,8 @@ async def build(
     # Itemless project labels ignore the project FILTER but stay bounded by
     # readability (RADD-839).
     all_keys = {p.id: p.key for p in projects if p.id in readable}
-    # The epic per logged item, batched through items' public seam — the
-    # timesheet can group by epic without learning the hierarchy itself. An epic
-    # in an unreadable project is dropped (its ref is a key+title); EpicRef
-    # carries no project id, so the key prefix is the join.
+    # The epic per logged item, through items' public seam. An epic in an
+    # unreadable project is dropped; EpicRef has no project id, so the key prefix joins.
     readable_prefixes = set(all_keys.values())
     epics = await items_service.epics_for_items(
         session, {w.item_id for w in worklogs if w.item_id}

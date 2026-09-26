@@ -1,15 +1,6 @@
-"""Related links over MCP (RADD-1239, public report radd-hq/radd#11).
-
-The item view's "Related links" panel — a merge request, a design doc, a
-monitoring page — was REST-only, so an agent that had to attach a URL fell
-back to pasting it into a comment, and the panel stayed "No related links
-yet". These tools address the item by key and a link by its URL: an agent
-that just added a link holds the URL, and a removal names what it removes.
-
-Enforcement is the router's — `item.update` on the item's project, resolved
-through the item seam so per-item rules apply — re-used here verbatim via the
-same service call chain. `item.update` is the spec-114 catalog floor.
-"""
+"""Related links over MCP: the item by key, a link by its URL — what an agent
+holds after adding one. Writes need `item.update` on the item, proven exactly
+as the REST router proves it."""
 
 from collections.abc import Mapping
 from typing import Any
@@ -19,11 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import NotFoundError
 from radd.kernel.mcptools import object_schema
 from radd.kernel.specs import McpToolSpec
-from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
 from radd.modules.items import service as items_service
-from radd.modules.items.service.visibility import ensure_item_relation
 
 from . import service
 from .models import ItemWebLink
@@ -45,11 +34,10 @@ def _link(link: ItemWebLink) -> dict[str, Any]:
 
 
 async def _writable_item(session: AsyncSession, actor: User, key: str):
-    """The item, with `item.update` proven the way the REST router proves it."""
+    """The item, with `item.update` proven the way the REST router proves it
+    (`get_item_by_key` is the read seam)."""
     read = await items_service.get_item_by_key(session, key, actor=actor)
-    item, project, _perms = await items_service.require_readable_item(session, read.id, actor)
-    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    await items_service.require_item_permission(session, read.id, actor, Permission.ITEM_UPDATE)
     return read
 
 

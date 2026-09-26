@@ -1,13 +1,8 @@
-"""Typed parsing of the repeatable `GET /items` filter params (spec 08).
+"""Typed parsing of the repeatable `GET /items` filter params.
 
-`ItemFilterParam` is the canonical set of query-param names. The views module
-composes each saved view's `query_string` from exactly these params (spec 10:
-`q` + `project_id` — `views/service.py:_read`); `demo_views.sh` proves the
-round-trip end to end.
-
-Semantics: values repeated within one param are OR-ed (`state_id=a&state_id=b`
--> state IN (a, b)); different params are AND-ed. `cf` params are each their
-own AND condition. The `q` SLQ query (items/slq/) ANDs on top of all of them.
+`ItemFilterParam` is the canonical param-name set saved views compose against.
+Values repeated within one param are OR-ed; different params (and each `cf`)
+are AND-ed; the `q` SLQ query ANDs on top.
 """
 
 import uuid

@@ -1,12 +1,9 @@
-"""Input schemas for the item MCP tools (RADD-889) — moved verbatim from
-mcp/catalog.py.
+"""Input schemas for the item MCP tools.
 
-Two of these shapes are LIVE: custom fields and link types are studio-defined,
-so `create_item`/`update_item`/`link_items`/`unlink_items` carry
-`input_schema_builder`s the MCP catalog composer calls with the current
-projections (`custom_field_properties` from the field registry — the SAME
-source as OpenAPI — and `link_types` from the spec-91 catalog). The specs'
-static `input_schema` is the identical shape with the projections empty.
+`create_item`/`update_item`/`link_items`/`unlink_items` are LIVE: their
+`input_schema_builder`s receive the current custom-field properties (the same
+source as OpenAPI) and link-type keys; the static `input_schema` is the same
+shape with those projections empty.
 """
 
 from collections.abc import Mapping, Sequence
@@ -132,7 +129,8 @@ def search_items_schema() -> dict[str, Any]:
     )
 
 
-def get_item_schema() -> dict[str, Any]:
+def key_only_schema() -> dict[str, Any]:
+    """get_item / get_allowed_transitions: the item key and nothing else."""
     return object_schema({"key": key_property()}, ["key"])
 
 
@@ -167,10 +165,6 @@ def comment_item_schema() -> dict[str, Any]:
     )
 
 
-def get_allowed_transitions_schema() -> dict[str, Any]:
-    return object_schema({"key": key_property()}, ["key"])
-
-
 def transition_item_schema() -> dict[str, Any]:
     return object_schema(
         {
@@ -178,6 +172,48 @@ def transition_item_schema() -> dict[str, Any]:
             "state": {"type": "string", "description": "Target state name."},
         },
         ["key", "state"],
+    )
+
+
+def clone_item_schema() -> dict[str, Any]:
+    return object_schema(
+        {
+            "key": key_property(),
+            "title": {"type": "string", "description": "Clone's title; omitted = 'Copy of <source>'."},
+            "include_subtasks": {"type": "boolean", "default": False},
+        },
+        ["key"],
+    )
+
+
+def move_item_schema() -> dict[str, Any]:
+    return object_schema(
+        {
+            "key": key_property(),
+            "target_project_key": {"type": "string", "description": "Destination project key."},
+        },
+        ["key", "target_project_key"],
+    )
+
+
+def convert_item_schema() -> dict[str, Any]:
+    return object_schema(
+        {
+            "key": key_property(),
+            "kind": {"type": "string", "enum": _KIND_VALUES},
+            "parent": {"type": ["string", "null"], "description": "New parent's key; null = detach."},
+        },
+        ["key", "kind"],
+    )
+
+
+def merge_item_schema() -> dict[str, Any]:
+    return object_schema(
+        {
+            "source_key": {"type": "string", "description": "The duplicate being closed."},
+            "target_key": {"type": "string", "description": "The survivor."},
+        },
+        ["source_key", "target_key"],
     )
 
 

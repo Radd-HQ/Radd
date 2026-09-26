@@ -1,18 +1,7 @@
-"""Worklog SLQ AST -> SQLAlchemy over `Worklog`.
-
-Reuses the item dialect's lexer, parser and coercion helpers — those are generic
-query machinery, nothing in them knows about work items — and supplies only what
-is genuinely worklog-shaped: a seven-field catalog and this compiler.
-
-The `issue.<field>` delegation is the design's whole point. Rather than restate
-the item field surface here (which would fork and drift), an `issue.` term is
-rewritten into an ITEM condition and handed to `items.slq.compile_query`, whose
-result is wrapped as `worklog.item_id IN (SELECT id FROM work_items WHERE …)`.
-That inherits builtins, custom fields, ancestors, labels and plugin fields
-permanently. Delegating PER CONDITION is exact, not an approximation: a worklog
-has exactly one issue, so `issue.a AND issue.b` and "one issue matching a AND b"
-are the same set.
-"""
+"""Worklog SLQ AST -> SQLAlchemy. Reuses the item dialect's lexer/parser/helpers;
+`issue.<field>` is compiled by the ITEM compiler and wrapped as `item_id IN (…)` —
+exact per condition, since a worklog has one issue (`issue.a AND issue.b` is "one
+issue matching a AND b")."""
 
 import uuid
 from dataclasses import dataclass
@@ -158,13 +147,17 @@ def _rebase(node: Condition, field: str) -> Condition:
 # --- worklog's own fields ------------------------------------------------------
 
 
+def _empty(node: EmptyCheck, column) -> ColumnElement[bool]:
+    clause = column.is_(None)
+    return not_(clause) if node.negated else clause
+
+
 def _issue(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
     """Bare `issue`: EMPTY (general worklogs, spec 59) or a specific key.
     `issue != DEV-1` reads plainly and includes general worklogs (RADD-1139),
     like every other nullable to-one relation."""
     if isinstance(node, EmptyCheck):
-        clause = Worklog.item_id.is_(None)
-        return not_(clause) if node.negated else clause
+        return _empty(node, Worklog.item_id)
     keys = [plain(value, node.field).upper() for value in values_of(node)]
     matching = select(WorkItem.id).join(Project, Project.id == WorkItem.project_id)
     conditions = []
@@ -180,8 +173,7 @@ def _project(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
     """A worklog's OWN project column — set for item-linked rows and for
     project-anchored general ones, NULL for category-only entries."""
     if isinstance(node, EmptyCheck):
-        clause = Worklog.project_id.is_(None)
-        return not_(clause) if node.negated else clause
+        return _empty(node, Worklog.project_id)
     keys = [plain(value, node.field).upper() for value in values_of(node)]
     matching = select(Project.id).where(Project.key.in_(keys))
     return polarity(node, Worklog.project_id.in_(matching), nullable=True)
@@ -207,8 +199,7 @@ def _author(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
 
 def _category(ctx: _Ctx, node: Condition) -> ColumnElement[bool]:
     if isinstance(node, EmptyCheck):
-        clause = Worklog.category_id.is_(None)
-        return not_(clause) if node.negated else clause
+        return _empty(node, Worklog.category_id)
     names = [plain(value, node.field) for value in values_of(node)]
     matching = select(WorkCategory.id).where(
         or_(*[WorkCategory.name.ilike(name) for name in names])
@@ -259,15 +250,3 @@ _COMPILERS = {
     WorklogField.NOTE: _note,
 }
 
-
-def worklog_field_names() -> list[str]:
-    """Field names for autocomplete — worklog's own, plus the `issue.` prefix
-    whose completions the suggest layer delegates to the item dialect."""
-    return [f.value for f in WorklogField]
-
-
-__all__ = [
-    "CompiledWorklogQuery",
-    "compile_worklog_query",
-    "worklog_field_names",
-]

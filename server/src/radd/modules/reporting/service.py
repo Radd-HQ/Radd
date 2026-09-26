@@ -1,13 +1,6 @@
-"""Read-only analytics computed on the fly from the event log + cycles (spec 16).
-
-Each report is a small, mostly-pure fold over the reconstructed item timelines
-(`timeline.py`). Nothing is persisted.
-
-The bucketing (`bucket_start`/`bucket_starts`), the reader's item universe
-(`matching_ids`) and the scope a figure covers (`report_scope`) are public: a
-plugin's own report — the SLA report in `slas` (RADD-1386) — folds the same way
-instead of restating them.
-"""
+"""Read-only analytics folded on the fly over the reconstructed item timelines
+(spec 16). `bucket_start(s)`, `matching_ids` and `report_scope` are public so a
+plugin's own report (the SLA report in `slas`, RADD-1386) folds the same way."""
 
 import statistics
 import uuid
@@ -68,16 +61,9 @@ def _end_of(day: date) -> datetime:
     return datetime.combine(day + timedelta(days=1), time.min)
 
 
-# --- reports ---
-
-
 # --- the dashboard-wide SLQ filter seam ------------------------------------
-# Every report folds over an item-id UNIVERSE before touching history; the
-# filter intersects that universe with the SLQ's CURRENT matches (visibility
-# included — items/bulk.visible_matching_ids). Deliberate semantics: SLQ
-# evaluates an item's state TODAY, so `assignee = me` means "items assigned
-# to me now — report that subset's history", the pragmatic reading every
-# tracker picks. An uncompilable q raises SlqError → the usual 422.
+# SLQ evaluates an item's state TODAY: `assignee = me` reports the history of the
+# items assigned to me NOW. An uncompilable q raises SlqError -> the usual 422.
 
 
 async def matching_ids(
@@ -87,20 +73,9 @@ async def matching_ids(
     project_id: uuid.UUID | None = None,
     candidate_ids: list[uuid.UUID] | None = None,
 ) -> set[uuid.UUID] | None:
-    """The item ids a report may range over. None = unfiltered (no actor).
-
-    This used to return None whenever `q` was absent, which meant the ONLY thing
-    narrowing a cross-project report was the dashboard query — and without one,
-    the cross-project SLA report folded every project's bookkeeping rows into
-    the average (RADD-789). The global `item.read` gate was all that stood in
-    front of it, and RADD-788 relaxed that gate, so the two land together.
-
-    Now visibility is always applied and the query is intersected on top: one
-    mechanism, and the RBAC half cannot be skipped by omitting `q`.
-    `visible_matching_ids` already constrains a cross-project read to the
-    readable projects up front (RADD-672), so this is the same rule `GET /items`
-    follows rather than a second copy of it.
-    """
+    """The item ids a report may range over: visibility ALWAYS applied (omitting
+    `q` must not skip it, RADD-789), the SLQ intersected on top — the rule
+    `GET /items` follows. None = no actor, unfiltered."""
     if actor is None:
         return None
     return await items_bulk.visible_matching_ids(
@@ -128,6 +103,20 @@ def _keep(item_ids: list[uuid.UUID], matches: set[uuid.UUID] | None) -> list[uui
     return [item_id for item_id in item_ids if item_id in matches]
 
 
+async def _project_timelines(session: AsyncSession, project_id, actor: User | None, q: str | None):
+    matches = await matching_ids(session, actor, q, project_id)
+    item_ids = _keep(await timeline.item_ids_for_project(session, project_id), matches)
+    return await timeline.build_item_timelines(session, item_ids)
+
+
+async def _cycle_timelines(session: AsyncSession, cycle_id, actor: User | None, q: str | None):
+    """(the cycle's visible, q-matching item ids, their timelines)."""
+    candidates = await timeline.item_ids_for_cycle(session, cycle_id)
+    matches = await matching_ids(session, actor, q, candidate_ids=candidates)
+    item_ids = _keep(candidates, matches)
+    return item_ids, await timeline.build_item_timelines(session, item_ids)
+
+
 async def throughput(
     session: AsyncSession,
     project_id: uuid.UUID,
@@ -139,9 +128,7 @@ async def throughput(
     q: str | None = None,
 ) -> list[ThroughputBucket]:
     """Per bucket, the number of items that ENTERED a done-category state in it."""
-    matches = await matching_ids(session, actor, q, project_id)
-    item_ids = _keep(await timeline.item_ids_for_project(session, project_id), matches)
-    timelines = await timeline.build_item_timelines(session, item_ids)
+    timelines = await _project_timelines(session, project_id, actor, q)
     counts = {bucket: 0 for bucket in bucket_starts(start, end, interval)}
     for item in timelines.values():
         for entry in item.done_entries:
@@ -167,9 +154,7 @@ async def cumulative_flow(
     q: str | None = None,
 ) -> list[CumulativeFlowBucket]:
     """Per bucket, how many items sat in each StateCategory at the bucket's end."""
-    matches = await matching_ids(session, actor, q, project_id)
-    item_ids = _keep(await timeline.item_ids_for_project(session, project_id), matches)
-    timelines = await timeline.build_item_timelines(session, item_ids)
+    timelines = await _project_timelines(session, project_id, actor, q)
     step = timedelta(weeks=1) if interval is ReportInterval.WEEK else timedelta(days=1)
     result: list[CumulativeFlowBucket] = []
     for bucket in bucket_starts(start, end, interval):
@@ -192,9 +177,7 @@ async def time_in_state(
     q: str | None = None,
 ) -> list[TimeInStateRow]:
     """Avg + median hours items spent in each category (completed segments only)."""
-    matches = await matching_ids(session, actor, q, project_id)
-    item_ids = _keep(await timeline.item_ids_for_project(session, project_id), matches)
-    timelines = await timeline.build_item_timelines(session, item_ids)
+    timelines = await _project_timelines(session, project_id, actor, q)
     durations: dict[StateCategory, list[float]] = {category: [] for category in StateCategory}
     for item in timelines.values():
         if kind is not None and item.kind != kind.value:
@@ -266,10 +249,7 @@ async def velocity(
 
     rows: list[VelocityRow] = []
     for cycle in sorted(recent, key=lambda cycle: (cycle.start_date or finished_on(cycle), cycle.id)):
-        candidates = await timeline.item_ids_for_cycle(session, cycle.id)
-        matches = await matching_ids(session, actor, q, candidate_ids=candidates)
-        item_ids = _keep(candidates, matches)
-        timelines = await timeline.build_item_timelines(session, item_ids)
+        item_ids, timelines = await _cycle_timelines(session, cycle.id, actor, q)
         points = await _points_measure(session, measure, item_ids)
         done_ids = [
             item_id
@@ -305,10 +285,7 @@ async def burnup(
         raise ConflictError(
             CycleEntity.CYCLE, reason="burnup needs a scheduled cycle (set start and end dates)"
         )
-    candidates = await timeline.item_ids_for_cycle(session, cycle.id)
-    matches = await matching_ids(session, actor, q, candidate_ids=candidates)
-    item_ids = _keep(candidates, matches)
-    timelines = await timeline.build_item_timelines(session, item_ids)
+    item_ids, timelines = await _cycle_timelines(session, cycle.id, actor, q)
     points = await _points_measure(session, measure, item_ids)
     series: list[BurnupPoint] = []
     day = cycle.start_date

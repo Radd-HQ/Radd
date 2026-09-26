@@ -1,24 +1,15 @@
 """Merge a duplicate into its survivor (RADD-1090).
 
-merge(source → target): everything the duplicate accumulated — comments,
-attachments, links, watchers, participants, worklogs, VCS/web/page links,
-labels, service-desk thread — repoints to the target; the source becomes a
-closed tombstone in its project's canceled-category state, linked
-`duplicates` to the target. Worklogs keep their authors and dates: nothing
-is credited to the wrong person or the wrong day.
+Everything the source accumulated repoints to the target; the source becomes a
+tombstone in its project's canceled-category state, linked `duplicates` to the
+target. Worklogs keep their authors and dates.
 
-The repoint list is EXPLICIT and RATCHETED, the spec-89 lesson
-(`_MERGE_REPOINT` missed three columns and that was a latent merge bug):
-`tests/test_item_merge.py` enumerates every FK to work_items from the live
-schema and refuses any column no disposition here claims. Raw table names,
-not model imports — the same precedent as auth's user merge, because half of
-these tables belong to optional plugins items must not import.
-
-Deliberately KEPT on the source: `search_index` and `item_embeddings` (the
-tombstone is still an item and stays findable), `events` (history is what
-happened, not what we wish had happened), and the source's own key aliases'
-uniqueness (they repoint to the target, so every old URL lands on the
-survivor).
+The repoint list is explicit and ratcheted: `tests/test_item_merge.py` walks
+every FK to work_items and refuses a column no disposition here claims. Raw
+table names, because many of these tables belong to optional plugins items
+must not import. Kept on the source: `search_index`/`item_embeddings` (the
+tombstone stays findable) and `events` (history is what happened). Key aliases
+repoint, so every old URL lands on the survivor.
 """
 
 import uuid
@@ -32,6 +23,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
+from radd.modules.linktypes.types import ItemLinkType
 from radd.modules.projects import service as projects_service
 from radd.modules.workflow import service as workflow
 from radd.modules.workflow.types import StateCategory
@@ -41,8 +33,6 @@ from ..schemas import ItemRead
 from .queries import require_item
 from .read import get_item
 from .visibility import _check_builtin_field_rules, ensure_item_relation
-
-MERGE_LINK_TYPE = "duplicates"
 
 
 @dataclass(frozen=True)
@@ -214,7 +204,7 @@ async def _merge_items(
             "id": str(uuid.uuid4()),
             "src": str(source.id),
             "dst": str(target.id),
-            "lt": MERGE_LINK_TYPE,
+            "lt": ItemLinkType.DUPLICATES.value,
         },
     )
     await session.flush()

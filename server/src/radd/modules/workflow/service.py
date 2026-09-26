@@ -26,6 +26,11 @@ async def entered_categories(session: AsyncSession, project_id: uuid.UUID, paylo
     return before not in categories
 
 
+async def _next_position(session: AsyncSession, column, *where) -> int:
+    """One past the highest `column` among the matching rows (1 when there are none)."""
+    return (await session.scalar(select(func.max(column)).where(*where)) or 0) + 1
+
+
 async def create_default_states(session: AsyncSession, project: Project) -> None:
     for position, default in enumerate(DEFAULT_STATES, start=1):
         state = State(
@@ -50,13 +55,9 @@ async def create_state(
     )
     if existing:
         raise ConflictError(StateEntity.STATE, data.name)
-    if data.position is None:
-        max_position = await session.scalar(
-            select(func.max(State.position)).where(State.project_id == project.id)
-        )
-        position = (max_position or 0) + 1
-    else:
-        position = data.position
+    position = data.position
+    if position is None:
+        position = await _next_position(session, State.position, State.project_id == project.id)
     row = await get_state_category(session, data.category)
     state = State(
         project_id=project.id,
@@ -102,13 +103,9 @@ async def delete_state(
     reassign_to: uuid.UUID | None = None,
     actor=None,
 ) -> None:
-    """Delete a workflow state (spec 87 — the state.delete atom had no endpoint).
-
-    Refused (409) while anything still points at it: the project's default state
-    (every new item lands there), or any item currently sitting in it — move those
-    first, since silently relocating someone's work is not a delete. Transitions
-    mentioning the state are the workflow module's own rows and are cleaned up here.
-    """
+    """Refused (409) while it is the project default or any item sits in it —
+    silently relocating someone's work is not a delete. `reassign_to` first moves
+    those items to a same-project successor. Transitions naming it are removed."""
     state = await get_state(session, state_id)
     if state.is_default:
         raise ConflictError(
@@ -121,9 +118,7 @@ async def delete_state(
     from radd.modules.items import service as items_service
 
     if reassign_to is not None:
-        # RADD-853 (the spec-89 delete-with-successor precedent): items move
-        # to the named successor first, through the items seam that emits per
-        # item. Same project only; the state itself is not a successor.
+        # Items move to the successor first, through the items seam (per-item events).
         successor = await get_state(session, reassign_to)
         if successor.id == state.id:
             raise ConflictError(StateEntity.STATE, reason="a state cannot be its own successor")
@@ -229,8 +224,6 @@ from .transitions import check_transition, release_transitions  # noqa: E402, F4
 from .checks import state_moved  # noqa: E402, F401
 
 
-
-
 # --- state categories (RADD-854): the user-owned vocabulary tier -------------
 
 
@@ -278,11 +271,9 @@ async def create_state_category(
         raise ConflictError(
             StateEntity.STATE_CATEGORY, reason=f"category '{data.name}' already exists"
         )
-    if data.position is None:
-        max_position = await session.scalar(select(func.max(StateCategoryDef.position)))
-        position = (max_position or 0) + 1
-    else:
-        position = data.position
+    position = data.position
+    if position is None:
+        position = await _next_position(session, StateCategoryDef.position)
     row = StateCategoryDef(
         key=key,
         name=data.name,
@@ -333,8 +324,7 @@ async def update_state_category(
     if data.position is not None:
         row.position = data.position
     await session.flush()
-    # Spec 123: re-classifying a category changes what every report means —
-    # it used to leave no event at all.
+    # Re-classifying a category changes what every report means — audit it.
     diff = changes.diff_object(row, before)
     if diff:
         await events.emit(

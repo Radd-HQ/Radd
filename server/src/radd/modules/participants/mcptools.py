@@ -1,19 +1,8 @@
-"""Participants over MCP (RADD-1236, public report radd-hq/radd#8).
+"""Participants over MCP: the item by KEY, a person by EMAIL, a team by NAME —
+identities an agent already holds, never a participant row id.
 
-An agent asked to "add X as a participant" had two wrong answers — misuse
-`assignee_email`, or hand the human back to the UI — because the roster was a
-REST-only surface. These three tools address the item by KEY (every other tool
-does) and the person by EMAIL or the team by NAME: the identity forms an agent
-already holds from `list_users` and `update_item`, never a participant row id
-it would first have to fetch.
-
-RADD-1304: managing the roster is `participant.manage` — implied by
-`item.update`, and held `@own` on the Baseline so a reporter shares their own
-ticket. It used to be an identity check in the service (`item.update` OR the
-reporter), which the catalog could not see: the tools were listed by
-`item.update` and hidden from the reporter they existed for. Now the catalog,
-the dispatcher and the service read one rule. `remove_participant` alone stays
-service-enforced, because leaving an issue yourself needs no permission.
+Add/list gate on `participant.manage` like the service; `remove_participant`
+stays service-enforced because leaving an issue yourself needs no permission.
 """
 
 from collections.abc import Mapping

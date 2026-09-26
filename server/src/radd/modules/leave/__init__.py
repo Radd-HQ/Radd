@@ -20,14 +20,8 @@ plugin = RaddPlugin(
         EventTypeSpec(LeaveEvent.CREATED, "Leave recorded", "People", subjects=("user", "team")),
         EventTypeSpec(LeaveEvent.DELETED, "Leave removed", "People", subjects=("user", "team")),
     ),
-    # RADD-1031: the holidays recorded here are dates nobody works, which is
-    # what an SLA clock needs to skip. Contributed through the socket rather
-    # than called directly, so `slas` never learns this module exists and
-    # disabling leave withdraws the calendar with it (the clock then runs on
-    # weekends-only, exactly as it did before).
-    # RADD-1387: the per-person answer — who is away on a date — for whoever
-    # hands out work. Round-robin assignment reads it through the socket, so
-    # `automations` never imports this module either.
+    # Sockets, so neither `slas` (holidays, RADD-1031) nor round-robin assignment
+    # (who is away, RADD-1387) imports leave, and disabling it withdraws both.
     integrations=(
         IntegrationSpec(Socket.NON_WORKING_DAYS, "leave_holidays", impl=HolidayCalendar()),
         IntegrationSpec(Socket.PERSON_AVAILABILITY, "leave_absences", impl=LeaveAvailability()),

@@ -1,24 +1,11 @@
-"""Mirrored worklogs — time logged at a version-control host, copied here (RADD-1258).
+"""Mirrored worklogs — time logged at a VCS host, copied here (RADD-1258).
 
-The provider-neutral half of the epic RADD-1257: a connector hands this module
-the CURRENT set of time entries for one ref (a merge request, a pull request),
-each carrying the provider's own entry id, and this module makes the item's
-worklogs match it — create what is new, update what changed, delete what the
-source no longer has. Two properties fall out of doing it by external id:
-
-- **never twice** — a re-delivered webhook, a backfill after a webhook, three
-  backfills in a row: the same source id lands on the same row, by the partial
-  unique index on `worklogs (external_source, external_id)`;
-- **removal follows the source** — `/remove_time_spent` on GitLab or a deleted
-  tracked time on Forgejo leaves the entry out of the next set, and its mirror
-  goes with it.
-
-Deletion is scoped by `external_scope` (the ref's external id), never by item:
-one item can carry time from several merge requests, and a reconcile for MR A
-must not delete MR B's rows.
-
-A mirrored row is read-only in Radd (`service.authorize_mutation` refuses); the
-source of truth is where the time was logged.
+A connector hands over the CURRENT entries for one ref (MR/PR), each with the
+provider's entry id; this module makes the item's worklogs match — create,
+update, delete. Keyed by (source, external_id) under a partial unique index, so
+redeliveries and backfills land on one row. Deletion is scoped by
+`external_scope` (the ref), never by item: one item carries time from several
+MRs. A mirrored row is read-only here (`service.authorize_mutation` refuses).
 """
 
 import logging
@@ -111,13 +98,9 @@ async def _enabled_for_item(session: AsyncSession, item_id: uuid.UUID, cache: di
 async def upsert_external_worklog(
     session: AsyncSession, *, source: str, scope: str, entry: ExternalEntry
 ) -> tuple[Worklog, str]:
-    """Create or update the mirror of ONE source entry. Returns the row and what
-    happened: `created` | `updated` | `unchanged`.
-
-    Inserts under a SAVEPOINT so a unique-index refusal (two deliveries racing)
-    leaves the caller's transaction usable and turns into the update it should
-    have been — the `vcs.upsert_vcs_link` idiom.
-    """
+    """Create or update the mirror of ONE source entry -> (row, created|updated|unchanged).
+    Inserts under a SAVEPOINT, so two racing deliveries' unique-index refusal
+    becomes the update it should have been (the `vcs.upsert_vcs_link` idiom)."""
     existing = await _find_by_external(session, source, entry.external_id)
     if existing is None:
         worklog = Worklog(
@@ -170,19 +153,11 @@ async def reconcile_external_worklogs(
     entries: Sequence[ExternalEntry],
     id_prefix: str | None = None,
 ) -> ReconcileReport:
-    """Make the mirrored worklogs for (`source`, `scope`) equal `entries`.
-
-    Every entry is upserted by its external id; every existing mirrored row
-    under this scope whose external id is not in `entries` is deleted. Items
-    whose project has time logging disabled are skipped and counted — nothing
-    is written for them, and their existing rows (if any, from before the
-    switch was turned off) are left alone.
-
-    `id_prefix` narrows the DELETION to rows whose external id starts with it:
-    a source that reports one comment at a time (GitHub's `/spend` convention)
-    knows the current entries of THAT comment, not of the whole ref, so only
-    that comment's stale rows may go.
-    """
+    """Make the mirrored worklogs for (`source`, `scope`) equal `entries`: upsert each
+    by external id, delete the scope's rows not among them. Items whose project has
+    logging disabled are skipped and counted, their existing rows left alone.
+    `id_prefix` narrows the DELETION: a source reporting one comment at a time
+    (GitHub's `/spend`) knows only THAT comment's entries."""
     report = ReconcileReport()
     enabled_cache: dict[uuid.UUID, bool] = {}
     keep: set[str] = set()
@@ -232,4 +207,4 @@ async def delete_external_worklogs(
 async def parse_duration_text(session: AsyncSession, text: str) -> int:
     """`"1h30"` → seconds under the instance's hours-per-day, the same grammar the
     UI and MCP accept. Raises DurationError (a ValueError) on garbage."""
-    return service._parse(text, await service._hours_per_day(session))
+    return service._parse(text, await service.hours_per_day(session))

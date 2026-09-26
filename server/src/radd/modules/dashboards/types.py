@@ -23,6 +23,9 @@ class WidgetType(StrEnum):
     VIEW_COUNT = "view_count"  # POST /views/counts — a saved view's badge
 
 
+BUILTIN_WIDGET_TYPES = frozenset(t.value for t in WidgetType)
+
+
 class DashboardEvent(StrEnum):
     CREATED = "dashboard.created"
     UPDATED = "dashboard.updated"

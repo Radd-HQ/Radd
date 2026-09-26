@@ -92,7 +92,7 @@ async def test_project_seeds_roadmap_view_idempotently(db):
         db, ProjectCreate(key=f"RS{run[:4].upper()}", name="Seeded")
     )
 
-    seeded = await views_service.list_views(db, actor=member, project_id=project.id)
+    seeded = (await views_service.page_views(db, actor=member, project_id=project.id))[0]
     assert {(v.name, v.view_type) for v in seeded} == {
         ("Board", ViewType.BOARD),
         ("List", ViewType.LIST),

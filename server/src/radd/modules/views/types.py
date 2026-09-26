@@ -7,12 +7,7 @@ class ViewType(StrEnum):
     # Backlog & cycle planning: rendered as cycle-grouped sections with
     # cross-bucket drag — the group_by/swimlane_by axes are ignored (cycle implied).
     PLANNING = "planning"
-    # (The spec-64 triage queue is the slas plugin's `slas.queue` since RADD-1396: a
-    # plugin view type drawn by the host's list over the plugin's urgency-ordered rows.)
-    # Roadmap/Gantt (spec 79): the spec-77/78 timeline rendered as an ordinary
-    # saved view — axes stored-but-ignored like planning; the client
-    # fetches EVERY page of the view query (no Load-more) so bars + the
-    # Unscheduled tray always show the full match set.
+    # Timeline/Gantt; axes stored but ignored, like planning.
     ROADMAP = "roadmap"
 
 
@@ -22,19 +17,15 @@ class ViewAxis(StrEnum):
     (validated against the registry in views/service.py)."""
 
     STATE = "state"
-    # RADD-851 → 854: the CATEGORY tier above states — user-owned vocabulary
-    # rows since the consolidation (bucketed client-side via states'
-    # category_key; the semantic behaves_as stays server truth).
+    # The category tier above states (bucketed client-side via states' category_key).
     STATE_CATEGORY = "state_category"
     ASSIGNEE = "assignee"
     PRIORITY = "priority"
     KIND = "kind"
     TEAM = "team"
-    CYCLE = "cycle"  # buckets = workspace cycles (+ a Backlog bucket); see spec 23
-    # Buckets = the epics PRESENT in the result set (+ a No-epic bucket), RADD-697.
-    # "The epic an item belongs to" is the server's own notion (itself, else its
-    # parent, else its grandparent — `items.hierarchy.nearest_epic_case`), carried
-    # to the client as `ItemRead.epic` so grouping cannot invent a second rule.
+    CYCLE = "cycle"  # buckets = cycles (+ a Backlog bucket)
+    # Buckets = epics present in the result (+ No epic). The item's epic is the
+    # server's rule (`ItemRead.epic`), so grouping never invents a second one.
     EPIC = "epic"
 
 
@@ -47,10 +38,8 @@ AXIS_TOKEN_PATTERN = rf"^({'|'.join(axis.value for axis in ViewAxis)}|cf\.[a-z][
 
 
 class ShareLevel(StrEnum):
-    """Access a share grant (or `views.global_access`) confers (spec 57).
-    `owner` grants FULL control (edit + manage sharing + delete + transfer) —
-    co-ownership; `views.owner_id` stays the single accountable owner and can
-    be reassigned via POST /views/{id}/transfer."""
+    """What a share grant (or `views.global_access`) confers. `owner` = co-ownership
+    (edit, share, delete, transfer); `owner_id` stays the one accountable owner."""
 
     VIEWER = "viewer"
     EDITOR = "editor"

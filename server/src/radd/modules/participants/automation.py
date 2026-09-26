@@ -1,14 +1,8 @@
 """Add participant, as an automation action this plugin contributes (RADD-1387).
 
-It was built into `automations` (RADD-1267), which reached this module through
-a `settings.modules` check — BOOT config — so a participants plugin disabled at
-runtime kept being written to. Now the node is this plugin's own: disabled, it
-leaves the catalog, and a stored graph naming it reports the engine's "unknown
-action type" failure for that node rather than calling a withdrawn plugin.
-
-Like the AI nodes, it imports nothing from `automations`: the kernel spec is
-the whole contract, and the person param is read through `ctx.person`, the
-engine's own grammar (an email, or `reporter`/`assignee` on the target issue).
+Owned here so disabling the plugin withdraws the node (a stored graph naming it
+then fails as "unknown action type"). It imports nothing from `automations`: the
+kernel spec is the contract and the person param resolves through `ctx.person`.
 """
 
 from __future__ import annotations

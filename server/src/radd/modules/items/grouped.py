@@ -6,6 +6,7 @@ from sqlalchemy.orm import aliased
 from radd.exceptions import ForbiddenError
 from radd.modules.workflow.models import State, StateCategoryDef
 
+from .enums import FINISHED_CATEGORIES
 from .filters import ItemListFilters, FilterParseError
 from . import cursors
 from .hierarchy import nearest_epic_case
@@ -84,7 +85,7 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         query = query.where(
             or_(
                 WorkItem.cycle_id.in_(data.cycle_ids or []),
-                and_(WorkItem.cycle_id.is_(None), State.category.not_in(("done", "canceled"))),
+                and_(WorkItem.cycle_id.is_(None), State.category.not_in(FINISHED_CATEGORIES)),
             )
         )
     ranking = (

@@ -1,15 +1,9 @@
 """In-transaction hook points this module dispatches (spec 119).
 
-Distinct from `ItemEvent`, which is the OUTBOX vocabulary: those rows are read
-after commit by consumers that notify, index and fan out. A hook handler runs
-INSIDE the emitting transaction and can refuse the write — which is exactly what
-intake validation needs and exactly what an outbox event cannot do.
-
-The inversion is the point. `items` must never import `automations` (automations
-already depends on items, and `tests/test_module_contracts.py` refuses the cycle),
-so items DISPATCHES and whoever cares REGISTERS. Today that is one subscriber in
-`automations`; with the plugin absent the dispatch is a no-op and creation is
-byte-identical to what it was.
+Unlike `ItemEvent` (the outbox, read after commit), a hook handler runs INSIDE
+the emitting transaction and may refuse the write — what intake validation
+needs. `items` dispatches and `automations` registers, because items must never
+import automations (tests/test_module_contracts.py refuses the cycle).
 """
 
 from dataclasses import dataclass
@@ -22,13 +16,8 @@ from .models import WorkItem
 
 
 class ItemHook(StrEnum):
-    """Hook points, named for the MOMENT rather than the fact.
-
-    `item.creating`, present tense: the row exists and is flushed, nothing has
-    been emitted yet, and a handler that raises un-creates it. Naming it
-    `item.created` would have put it one letter from the outbox event and
-    invited exactly the confusion this module cannot afford.
-    """
+    """Named for the MOMENT: `item.creating` — the row is flushed, nothing is
+    emitted yet, and a handler that raises un-creates it."""
 
     CREATING = "item.creating"
 

@@ -1,11 +1,6 @@
-"""Time logging + timesheets (spec 22).
-
-Per-project-optional plugin: an item can carry an original estimate and worklog
-entries (duration, day, optional work category, note); a global timesheet
-aggregates logged time for the day/week/month reports, filterable by team or person.
-Estimates + worklogs live in this module's own tables, so the items module never
-depends on time logging.
-"""
+"""Time logging + timesheets (spec 22): per-project-optional estimates and
+worklogs in this module's own tables (items never depends on it), and a global
+timesheet."""
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -40,9 +35,7 @@ from radd.kernel.registry import register_relation  # noqa: E402 - bindings requ
 from radd.kernel.specs import RelationSpec  # noqa: E402 - bindings require initialized registries
 from .models import Worklog  # noqa: E402 - bindings require initialized registries
 
-# RADD-816 (Q4): what @own MEANS for a worklog — the author column. Both forms
-# mandatory (the RADD-823 contract); registered on the manifest so the loader's
-# clear() cannot drop it.
+# `@own` on a worklog = its author (RADD-816); on the manifest so clear() cannot drop it.
 WORKLOG_OWN = RelationSpec(
     resource="worklog",
     key="own",
@@ -80,9 +73,7 @@ plugin = RaddPlugin(
     project_purges=(
         ProjectPurgeSpec(name="timelogging", tables=("project_timelogging",), order=20),
     ),
-    # RADD-891: the scalar cascade keys timelogging/the timesheet read
-    # (`settings.service.resolve`) — moved out of `settings.types`'s old
-    # hardcoded `SETTINGS_REGISTRY` dict onto the module that owns them.
+    # The scalar cascade keys this module reads (RADD-891).
     settings_keys=(
         SettingSpec(
             key="work_week_days",

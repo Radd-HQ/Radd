@@ -28,16 +28,11 @@ from .service import require_readable_item
 # read path uses (RADD-834: history is an API response, not a stream consumer).
 from .service.visibility import _builtin_read_denied, _field_ctx
 
-# Related-entity event types whose payload carries `item_id` back to this item.
-# Wire strings (not enum imports) so `items` doesn't take a dependency on
-# comments/worklogs/weblinks/vcs — this is a read of the event stream, exactly as
-# reporting reads it. Keep in sync with those modules' *Event enums.
-# NOTE: csat.*, approval.*, and item.participant_* (specs 65/71/72) are emitted
-# with entity_type=item DIRECTLY, so they reach the feed without an entry here.
-# mail.* is the opposite case and the reason RADD-984 exists: the mail channel
-# emits under entity_type=mail_intake with the item as a SUBJECT, so it could
-# only ever arrive as a related type — and until it was listed, a reply that
-# never reached the customer was invisible on every screen in the product.
+# Related event types whose payload names this item. Wire strings, not enum
+# imports, so items takes no dependency on comments/worklogs/weblinks/vcs/mail.
+# csat.*, approval.* and item.participant_* are emitted with entity_type=item and
+# need no entry; mail.* is emitted under mail_intake with the item as a SUBJECT,
+# so it must be listed here (RADD-984).
 RELATED_EVENT_TYPES: tuple[str, ...] = (
     "comment.created",
     "comment.updated",
@@ -80,9 +75,7 @@ _DETAIL_KEYS = (
     "verdict",  # approval.voted: approve | decline
     "participant",  # item.participant_* (spec 72): the user/team display name
     "team",  # item.participant_*: set (a {id,name} ref) when the subject is a team
-    # Mail (RADD-984). `recipients` is one address per event since RADD-1036's
-    # per-message emission, but it stays a LIST on the wire — the renderer reads
-    # the count, so a future batched send needs no second shape.
+    # Mail: a list on the wire (one address per event today).
     "recipients",
     "recipient_count",
     "sender",  # mail.received: who wrote in
@@ -102,12 +95,12 @@ def _detail(event: Event) -> dict[str, Any] | None:
 _CHANGE_FIELD_TO_BUILTIN = {"points": "estimate_points"}
 
 
-def _redact_changes(
+def redact_changes(
     changes: list[dict], restricted_cf: set[str], builtin_denied: set[str]
 ) -> list[dict]:
     """Redact — never omit — change entries whose values the actor may not read
     (RADD-834). "Priority changed" with no values is honest; dropping the entry
-    would rewrite the audit trail."""
+    would rewrite the audit trail. Public: the audit log redacts item rows here too."""
     if not restricted_cf and not builtin_denied:
         return changes
     out: list[dict] = []
@@ -124,24 +117,19 @@ def _redact_changes(
 
 
 async def redaction_for(
-    session: AsyncSession, actor: User, project
+    session: AsyncSession, actor: User, project, permissions: frozenset | None = None
 ) -> tuple[set[str], set[str]]:
     """The (restricted custom-field keys, denied builtin names) an actor may
-    not read in `project` — the RADD-834 seam, public since spec 123 so the
-    audit log redacts item rows exactly as the History tab does."""
-    permissions = await authz.effective_permissions(session, actor, project=project)
+    not read in `project` — the RADD-834 seam, public so the audit log redacts
+    item rows exactly as the History tab does. Cheap no-ops when no
+    read-restricting grant exists (the common case)."""
+    if permissions is None:
+        permissions = await authz.effective_permissions(session, actor, project=project)
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     restricted_cf = {d.key for d in definitions} - fields.readable_keys(definitions, ctx)
     builtin_denied = set(await _builtin_read_denied(session, project, ctx))
     return restricted_cf, builtin_denied
-
-
-def redact_changes(
-    changes: list[dict], restricted_cf: set[str], builtin_denied: set[str]
-) -> list[dict]:
-    """Public name for `_redact_changes` (spec 123)."""
-    return _redact_changes(changes, restricted_cf, builtin_denied)
 
 
 async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemHistory:
@@ -155,13 +143,8 @@ async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -
         set() if has_manage else await teams.user_team_ids(session, actor.id)
     )
 
-    # Field-level read visibility (RADD-834): the same seams the item read path
-    # uses decide which change VALUES the actor may see. Cheap no-ops when no
-    # read-restricting grant exists (the common case).
-    definitions = await fields.definitions_for_project(session, project)
-    ctx = await _field_ctx(session, actor, project, permissions, definitions)
-    restricted_cf = {d.key for d in definitions} - fields.readable_keys(definitions, ctx)
-    builtin_denied = set(await _builtin_read_denied(session, project, ctx))
+    # RADD-834: the item read path's seams decide which change VALUES the actor sees.
+    restricted_cf, builtin_denied = await redaction_for(session, actor, project, permissions)
 
     raw = await events.entity_activity(
         session,
@@ -191,7 +174,7 @@ async def item_history(session: AsyncSession, item_id: uuid.UUID, actor: User) -
         # A rank-only reorder emits item.updated with no visible field change — skip.
         if is_update and not changes:
             continue
-        changes = _redact_changes(changes, restricted_cf, builtin_denied)
+        changes = redact_changes(changes, restricted_cf, builtin_denied)
         if event.event_type == ItemEvent.CREATED:
             detail: dict[str, Any] | None = {"title": (payload.get("item") or {}).get("title")}
         elif is_update:

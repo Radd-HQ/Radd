@@ -173,15 +173,9 @@ async def logout(request: Request, session: Session, response: Response) -> None
 
 
 async def _nav_facts(session: AsyncSession, user: User) -> dict[str, bool]:
-    """RADD-843: the area-visibility facts the client cannot derive from lists it
-    already loads — RADD-892: whichever ones are REGISTERED.
-
-    auth used to import timelogging and forms to ask them, which inverted the
-    load order: two optional features that load after auth, named by the module
-    they load under. Now each contributes a `NavFactSpec` and this reads the
-    registry — at request time, since a plugin may be enabled after boot. A
-    module that is not loaded leaves its key absent, which the SPA reads as
-    visible, exactly as the old feature-detection did."""
+    """RADD-843: area-visibility facts the client cannot derive from lists it
+    loads — the registered NavFactSpecs, read per request (a plugin may be
+    enabled after boot). An absent key reads as visible in the SPA."""
     return {
         spec.key: await spec.resolve(session, user)
         for spec in registries.nav_facts.values()
@@ -189,16 +183,11 @@ async def _nav_facts(session: AsyncSession, user: User) -> dict[str, bool]:
 
 
 async def _me_read(session: AsyncSession, user: User) -> MeRead:
-    """Spec 86 stage 3: flat shape — `global_role` + the global-scope
-    `permissions` union top-level (the synthetic `workspaces` entry is gone).
-
-    Spec 87: the union comes from `effective_permissions`, so instance-wide role
-    grants show up here — otherwise the SPA would hide affordances the server
-    would happily allow."""
+    """`permissions` is the global-scope `effective_permissions` union, so
+    instance-wide role grants show up and the SPA offers what the server allows."""
     from radd.modules.teams import service as teams  # deferred: teams loads after auth
 
-    admin = await authz.is_admin(session, user)
-    role = InstanceRole.ADMIN if admin else InstanceRole.MEMBER
+    role = InstanceRole.ADMIN if authz.is_instance_admin(user) else InstanceRole.MEMBER
     return MeRead(
         manages_teams=await teams.stewards_any_team(session, user.id),
         nav=await _nav_facts(session, user),
@@ -240,7 +229,7 @@ async def start_view_as(
     audited on entry. While previewing, deps.py refuses every write except
     exiting and logging out — enforcement is the resolution seam, not hidden
     buttons."""
-    if not await authz.is_admin(session, actor):
+    if not authz.is_instance_admin(actor):
         raise ForbiddenError("only an instance admin may preview as another user")
     token = request.cookies.get(SESSION_COOKIE_NAME)
     row = await service.session_row_for_token(session, token) if token else None
@@ -301,16 +290,8 @@ async def user_permissions(
     project_id: uuid.UUID | None = None,
     space_id: uuid.UUID | None = None,
 ) -> list[PermissionSourceRead]:
-    """What this person can do here, and WHY (RADD-779; space scope RADD-809).
-
-    The question the whole access-control epic started from — "why can this
-    member delete cycles?" — previously needed a read of `authz.py`, a query
-    against the database and a hand-computed union. It is answerable from one
-    request now, and from the Users page that raised it.
-
-    Gated on `user.manage`: it describes another account's authority, which is
-    administrative even though every atom in it is already enforced elsewhere.
-    """
+    """What this person can do here, and WHY (RADD-779/809). Gated on user.manage:
+    it describes another account's authority."""
     await authz.require(session, actor, authz.Permission.USER_MANAGE)
     if project_id is not None and space_id is not None:
         raise HTTPException(status_code=422, detail="inspect a project or a space, not both")
@@ -332,13 +313,8 @@ async def _carrier_grants(
     team_id: uuid.UUID | None = None,
     group_id: uuid.UUID | None = None,
 ) -> list[CarrierGrantRead]:
-    """What a team or group CONFERS on its members (RADD-933).
-
-    Returns an empty list rather than being omitted when the carrier grants
-    nothing, because "you are on this team and it gives you nothing" is a real
-    and common answer — and it is the row that explains the change when someone
-    later grants a role to that team.
-    """
+    """What a team or group CONFERS on its members (RADD-933); empty, never
+    omitted, when it confers nothing — a real and common answer."""
     from radd.modules.projects import service as projects_service
 
     rows = await grants.grants_for_subject(session, team_id=team_id, group_id=group_id)
@@ -374,9 +350,7 @@ async def user_resource_access(
 ) -> UserAccessRead:
     """The OTHER half of the inspector (RADD-809): spec-92 resource access —
     which grant rows reach this person, through what, at what scope — plus
-    plain-count effective answers. `permission_sources` explains atoms; this
-    explains the layer the atoms never see, which is exactly the half that
-    produced RADD-808's hour of hunting."""
+    plain-count effective answers."""
     await authz.require(session, actor, authz.Permission.USER_MANAGE)
     target = await service.get_user(session, user_id)
 
@@ -387,7 +361,7 @@ async def user_resource_access(
 
     team_ids = await teams_service.user_team_ids(session, target.id)
     group_ids = await groups_service.user_group_ids(session, target.id)
-    role_ids = await authz.all_held_role_ids(session, target)
+    role_ids = await grants.held_role_ids_anywhere(session, target.id)
     teams_by_id = await teams_service.teams_by_ids(session, team_ids)
     groups_by_id = await groups_service.groups_by_ids(session, group_ids)
     roles_by_id = await roles_service.roles_by_ids(session, set(role_ids))
@@ -402,9 +376,7 @@ async def user_resource_access(
         group_names={gid: group.name for gid, group in groups_by_id.items()},
     )
 
-    # RADD-933: the two counts are UNQUALIFIED vs qualified-only. `holds_base`
-    # (what require_anywhere gates on) is right for a gate and wrong for a
-    # summary — see AccessSummaryRead.
+    # RADD-933: UNQUALIFIED vs qualified-only counts — see AccessSummaryRead.
     def _split_reach(
         held: dict[uuid.UUID, frozenset[str]], atom: str
     ) -> tuple[int, int]:
@@ -427,10 +399,7 @@ async def user_resource_access(
     )
     total_projects = len(await projects_service.list_projects(session))
 
-    # The carriers between "granted to" and "held by" (RADD-933). team_ids and
-    # group_ids are already resolved above for the resource attribution; this
-    # endpoint used to compute them and return neither, so the Users page could
-    # not say which teams a person was on — let alone what those teams conferred.
+    # The carriers between "granted to" and "held by" (RADD-933).
     memberships: list[MembershipRead] = []
     for team_id, team in sorted(teams_by_id.items(), key=lambda kv: kv[1].name):
         memberships.append(
@@ -452,10 +421,8 @@ async def user_resource_access(
                 confers=await _carrier_grants(session, group_id=group_id),
             )
         )
-    # RADD-892: how much of a SCOPE KIND the actor reaches is the scope owner's
-    # answer — spaces carry per-space ACLs auth cannot compute. Absent kind (or a
-    # kind that cannot answer, like project, whose readability is an atom
-    # question auth answers above) leaves the counts null.
+    # RADD-892: space reach is the scope owner's answer (per-space ACLs auth
+    # cannot compute); no registered answer leaves the counts null.
     readable_spaces: int | None = None
     total_spaces: int | None = None
     space_scope = registries.grant_scopes.get(GrantScopeKind.SPACE)
@@ -513,39 +480,15 @@ async def list_user_directory(
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[UserDirectoryEntry]:
-    """Who exists, for anyone with an account (RADD-769).
+    """Who exists, for anyone signed in (RADD-769). Authentication is the gate; the
+    narrow `UserDirectoryEntry` shape (no email, role or sign-in history) is what
+    makes that safe — the admin directory stays behind `user.manage`.
 
-    Authentication IS the gate, and that is the finding rather than a shortcut.
-    Every atom in the system describes what someone may do to an *entity* —
-    there is none for "is a person here", because being able to sign in already
-    answers it. Requiring one would mean minting an atom and backfilling it onto
-    every builtin role so that it always held, which is a gate in name only.
-
-    What makes that safe is the SHAPE, not a permission: `UserDirectoryEntry`
-    carries no email, no instance role, no sign-in history. The administrative
-    directory keeps all of that behind `user.manage` below.
-
-    **`UserSource.EMAIL` accounts are excluded by default (RADD-1034).**
-    `mailintake._sender_user` provisions one of these, active, for every
-    unrecognized sender — so with no filter, one forged message made
-    "Stranger <stranger@evil.example>" pickable by every authenticated user,
-    forever (the shape guard above never covered this: it protects what a row
-    exposes, not which rows are IN the list). Pass `include_requesters=true`
-    for the surfaces that mean to offer them — the reporter picker on a
-    mail-born ticket is the one today — and those rows carry `external=True`
-    so the SPA can label them rather than hardcoding the `email` sentinel.
-    Precedent for the same exclusion pair: `preflight.py`'s Baseline report,
-    which also drops `UserSource.SERVICE`. Service accounts are NOT excluded
-    here — unlike a stranger's email, they're deliberately created by an admin
-    (spec 113), and `UserDirectoryEntry`'s own docstring is explicit that
-    omitting them would leave page/comment bylines unresolvable.
-
-    **Declared above `/users/{user_id}` on purpose (RADD-761):** Starlette
-    matches in declaration order, so a literal segment written after a `{uuid}`
-    route is answered by that route — this would 422 about parsing "directory"
-    as a UUID while appearing, correctly, in the schema and at /docs.
-    `tests/test_route_shadowing.py` asserts it for the whole app.
-    """
+    `UserSource.EMAIL` requesters are excluded unless `include_requesters=true`
+    (RADD-1034): mail ingest provisions one per unknown sender, so a forged message
+    would otherwise become pickable by everyone. Principals are always excluded;
+    service accounts are not (their bylines must resolve). Declared above
+    `/users/{user_id}` on purpose (RADD-761, `test_route_shadowing.py`)."""
     # Spec 121: the principal rows are never a person to pick, whatever is asked.
     sources_excluded = [UserSource.PRINCIPAL] if include_requesters else list(NON_PERSON_SOURCES)
     rows = await service.list_users(
@@ -559,27 +502,10 @@ async def list_user_directory(
     for entry in entries:
         entry.external = entry.source == UserSource.EMAIL.value
 
-    # RADD-938: `project_id` annotates each row with whether that person can
-    # actually reach the project, for the controls that attach someone TO work
-    # — assignee, participants, add-team. Without it the pickers offered every
-    # account with no hint, so you could assign an issue to someone who would
-    # never find it and learn about it days later.
-    #
-    # Annotated, never filtered. Hiding a colleague gives no reason and reads as
-    # a bug; and under RADD-937 adding a no-access person as a participant is
-    # exactly what makes the project visible to them, so the pick must stay
-    # possible. The SPA groups and labels.
-    #
-    # Resolved as a SET once — asking `effective_permissions` per row would be
-    # one resolution per account in the directory.
-    #
-    # Gated on the CALLER's own read of that project. Without this, any
-    # authenticated account could ask "who has access to <project I cannot
-    # see>?" and enumerate its membership — the directory is deliberately open
-    # to everyone (RADD-769), so an ungated annotation would have widened it
-    # from "who exists" to "who is on what". Silently unannotated rather than a
-    # 403: `has_access=None` already means "not asked", and a picker that cannot
-    # ask still works.
+    # RADD-938: annotate (never filter) whether each person can reach
+    # `project_id` through a grant, resolved as ONE set — and only when the
+    # caller can see that project, or the open directory would enumerate who is
+    # on projects the caller cannot see. Not asked = `has_access=None`.
     if project_id is not None:
         visible = await authz.visible_projects(session, actor)
         if project_id in visible:
@@ -654,16 +580,9 @@ async def list_duplicate_users(session: Session, actor: CurrentUser) -> list[Dup
 async def update_user(
     user_id: uuid.UUID, data: UserAdminUpdate, session: Session, actor: CurrentUser
 ) -> UserRead:
-    """User administration (spec 84 + 86): rename, activate/deactivate, and set
-    instance_role (admin|member — THE role ladder now that the members endpoints
-    are gone). Deactivation revokes sessions and blocks every login path;
-    deactivating or demoting yourself is a 409.
-
-    Spec 87 split the gate. Renaming and activating are governed by the
-    `user.update` atom, so an instance-wide grant can delegate day-to-day user
-    administration. Setting `instance_role` stays a hard instance-admin check —
-    otherwise user.update would be a self-serve route to admin.
-    """
+    """Rename, (de)activate and set instance_role (specs 84/86). Deactivation
+    revokes sessions; self-deactivation/demotion 409. instance_role stays a hard
+    instance-admin check — otherwise user.update would be a route to admin (spec 87)."""
     await authz.require(session, actor, authz.Permission.USER_UPDATE)
     if data.instance_role is not None:
         _require_instance_admin(actor, "changing a user's instance role")
@@ -699,18 +618,11 @@ async def successor_check(
 
 
 _DELETE_DOC = (
-    "HARD-delete a user (spec 89). Everything they authored — issues, comments, docs, views, "
-    "dashboards, attachments, approvals — is reassigned to `reassign_to`, which is "
-    "REQUIRED when the account owns anything (409 otherwise; use GET /users/{id}/content to "
-    "check first). Their WORKLOGS are deleted rather than moved, so nobody is credited with "
-    "hours they did not work. ACCESS dies with the account (RADD-784): project and team "
-    "memberships, role grants, delegation and shares are never inherited — and the successor "
-    "must already hold at least the account's effective permissions, or the delete is refused "
-    "naming what is missing (GET /users/{id}/successor-check?candidate_id= previews this). "
-    "Owned teams go ownerless rather than transferring. Personal state (sessions, tokens, "
-    "MFA, stars, watches, inbox) dies with the account. Deleting yourself is a 409. The row "
-    "really goes — use PATCH /users/{id} {active:false} to merely revoke access, or POST "
-    "/users/{id}/merge to keep a deactivated shell for audit."
+    "HARD-delete a user (spec 89). Authored work moves to `reassign_to` (required when the "
+    "account owns anything — see GET /users/{id}/content); worklogs are deleted, not moved. "
+    "Access never transfers (RADD-784): the successor must already hold the account's "
+    "effective permissions (GET /users/{id}/successor-check). Deleting yourself is a 409; "
+    "use PATCH {active:false} to revoke access or POST /users/{id}/merge to fold a duplicate."
 )
 
 
@@ -729,9 +641,8 @@ async def delete_user(
 async def merge_user(
     user_id: uuid.UUID, data: UserMergeRequest, session: Session, actor: CurrentUser
 ) -> UserRead:
-    """Fold a duplicate identity (Jira import / AD import / seed) into another user:
-    every reference repoints, the duplicate is revoked + deactivated. Instance
-    admins only."""
+    """Fold a duplicate identity (Jira/AD import, seed) into another user: every
+    reference repoints and the duplicate is deleted. Instance admins only."""
     if not authz.is_instance_admin(actor):
         raise ForbiddenError("user merge requires an instance admin")
     target = await service.merge_users(session, user_id, data.into_user_id, actor_id=actor.id)
@@ -744,6 +655,10 @@ async def create_token(data: TokenCreate, session: Session, user: CurrentUser) -
         token, raw = await service.create_api_token(session, user, data)
     except ValueError as exc:  # an unknown atom in the scope
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _token_created(token, raw)
+
+
+def _token_created(token, raw: str) -> TokenCreated:
     return TokenCreated(
         token=raw,
         id=token.id,
@@ -769,19 +684,13 @@ async def delete_token(token_id: uuid.UUID, session: Session, user: CurrentUser)
 service_account_router = APIRouter(prefix="/service-accounts", tags=["service accounts"])
 
 
-async def _account_read(session: Session, account) -> ServiceAccountRead:
-    read = ServiceAccountRead.model_validate(account)
-    read.token_count = await service_accounts.token_count(session, account.id)
-    return read
-
-
 @service_account_router.post("", response_model=ServiceAccountRead, status_code=201)
 async def create_service_account(
     data: ServiceAccountCreate, session: Session, user: CurrentUser
 ) -> ServiceAccountRead:
     await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_CREATE)
     account = await service_accounts.create_account(session, data, actor_id=user.id)
-    return await _account_read(session, account)
+    return await account_directory.by_id(session, account.id)
 
 
 @service_account_router.get("", response_model=list[ServiceAccountRead])
@@ -825,7 +734,7 @@ async def update_service_account(
     the same keep-reason as plugin uninstall."""
     await authz.require(session, user, authz.Permission.SERVICE_ACCOUNT_UPDATE)
     account = await service_accounts.update_account(session, account_id, data, actor_id=user.id)
-    return await _account_read(session, account)
+    return await account_directory.by_id(session, account.id)
 
 
 @service_account_router.post("/{account_id}/keys", response_model=TokenCreated, status_code=201)
@@ -841,14 +750,7 @@ async def create_service_account_key(
         token, raw = await service_accounts.create_key(session, account_id, data)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return TokenCreated(
-        token=raw,
-        id=token.id,
-        name=token.name,
-        prefix_display=token.prefix_display,
-        expires_at=token.expires_at,
-        scopes=token.scopes,
-    )
+    return _token_created(token, raw)
 
 
 @service_account_router.get("/{account_id}/keys", response_model=list[TokenRead])

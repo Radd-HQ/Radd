@@ -1,13 +1,11 @@
-from radd.kernel import EventTypeSpec
-from radd.kernel import RaddPlugin, SlqFieldSpec
-from radd.kernel import PermissionSpec
+from radd.kernel import EventTypeSpec, PermissionSpec, RaddPlugin, SlqFieldSpec
 
 from .automation import COMMENT_GATE, COMMENT_TOKENS  # RADD-1322/1324: "Comment is" + {{comment.*}}
 from .slq import commented_by_item_ids
 
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
-from .types import CommentEvent
+from .types import CommentEntity, CommentEvent
 
 from radd.kernel.registry import register_relation, register_relation_domain
 from radd.kernel.specs import RelationSpec
@@ -49,8 +47,6 @@ _COMMENT_PAYLOAD_SCHEMA: dict = {
 }
 
 
-from .types import CommentEntity  # noqa: E402 — RADD-1328
-
 plugin = RaddPlugin(
     name="comments",
     record_local_entities=(CommentEntity.COMMENT.value,),  # RADD-1328
@@ -75,8 +71,8 @@ plugin = RaddPlugin(
     slq_fields=(
         SlqFieldSpec(name="commented_by", label="Commented by", item_ids=commented_by_item_ids),
     ),
-    # Deferred import: `gc` -> `parents` -> `items.service`, and items imports
-    # back this way round.
+    # Deferred import: `gc` -> `service`/`parents` -> `items.service`, and items
+    # imports back this way round.
     cascades=lambda: __import__(
         "radd.modules.comments.gc", fromlist=["cascades"]
     ).cascades(),

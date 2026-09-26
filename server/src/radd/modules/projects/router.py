@@ -45,19 +45,16 @@ async def _instance_work_week(session: AsyncSession) -> list[str]:
 
 
 async def _instance_hours_per_day(session: AsyncSession) -> int:
-    """The global '1d'==N-hours factor (spec 67 follow-up: instance-only scalar) —
-    the SPA duration formatter consumes it. Same deferred-import idiom as above."""
+    """The global '1d'==N-hours factor the SPA duration formatter consumes."""
     from radd.modules.settings import service as settings_service
     from radd.modules.settings.types import SettingKey
 
     return int(await settings_service.resolve(session, SettingKey.TIMELOG_HOURS_PER_DAY))
 
 
-@instance_router.get("/instance", response_model=InstanceConfigRead)
-async def instance_config(session: Session, user: Actor) -> InstanceConfigRead:
-    """Safe instance-level config the frontend needs (spec 35): the work week +
-    the timelog duration factors (spec 67 follow-up). The auth flags come from the
-    kernel capability registry (chokepoint-2 inversion), not inlined settings."""
+async def _instance_config(session: AsyncSession, *, principals: bool) -> InstanceConfigRead:
+    """The shape both /instance endpoints serve. Auth flags come from the kernel
+    capability registry, not inlined settings."""
     caps = kcaps.capability_map()
     return InstanceConfigRead(
         work_week_days=await _instance_work_week(session),
@@ -65,25 +62,23 @@ async def instance_config(session: Session, user: Actor) -> InstanceConfigRead:
         timelog_days_per_week=settings.timelog_days_per_week,
         sso_enabled=caps.get("sso", {}).get("enabled", False),
         ldap_enabled=caps.get("ldap", {}).get("enabled", False),
-        anyone_id=ANYONE_ID,
-        signed_in_id=SIGNED_IN_ID,
+        **({"anyone_id": ANYONE_ID, "signed_in_id": SIGNED_IN_ID} if principals else {}),
     )
+
+
+@instance_router.get("/instance", response_model=InstanceConfigRead)
+async def instance_config(session: Session, user: Actor) -> InstanceConfigRead:
+    """Safe instance-level config the frontend needs (spec 35): the work week,
+    the timelog duration factors and the auth flags."""
+    return await _instance_config(session, principals=True)
 
 
 @instance_router.get("/instance/login-options", response_model=InstanceConfigRead)
 async def login_options(session: Session) -> InstanceConfigRead:
-    """UNAUTHENTICATED mirror of /instance for the login page (spec 40) — only
-    flags that must be known before sign-in (the timelog factors are harmless
-    non-secrets, included so the two endpoints share one shape). Auth flags from
-    the capability registry (no session/settings inlining)."""
-    caps = kcaps.capability_map()
-    return InstanceConfigRead(
-        work_week_days=await _instance_work_week(session),
-        timelog_hours_per_day=await _instance_hours_per_day(session),
-        timelog_days_per_week=settings.timelog_days_per_week,
-        sso_enabled=caps.get("sso", {}).get("enabled", False),
-        ldap_enabled=caps.get("ldap", {}).get("enabled", False),
-    )
+    """UNAUTHENTICATED mirror of /instance for the login page (spec 40): only what
+    must be known before sign-in (the timelog factors are harmless non-secrets,
+    kept so both endpoints share one shape)."""
+    return await _instance_config(session, principals=False)
 
 
 @project_router.post("", response_model=ProjectRead, status_code=201)

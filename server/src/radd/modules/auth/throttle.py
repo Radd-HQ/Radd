@@ -88,7 +88,7 @@ def _refuse(retry_after: int, what: str, detail: str) -> None:
     raise HTTPException(429, detail, headers={"Retry-After": str(retry_after)})
 
 
-class LoginThrottle:
+class _Throttle:
     def __init__(self) -> None:
         self._window = _SlidingWindow()
 
@@ -96,6 +96,8 @@ class LoginThrottle:
     def buckets(self) -> dict[str, deque[float]]:
         return self._window.buckets
 
+
+class LoginThrottle(_Throttle):
     def check(self, account: str, address: str, *, now: float | None = None) -> None:
         now = time.monotonic() if now is None else now
         identity = hashlib.sha256(account.strip().casefold().encode()).hexdigest()
@@ -113,15 +115,8 @@ class LoginThrottle:
             _refuse(retry_after, "login", "Too many sign-in attempts. Try again later.")
 
 
-class WriteThrottle:
+class WriteThrottle(_Throttle):
     """Per-(bucket, account) admission for the creation routes."""
-
-    def __init__(self) -> None:
-        self._window = _SlidingWindow()
-
-    @property
-    def buckets(self) -> dict[str, deque[float]]:
-        return self._window.buckets
 
     def check(self, bucket: WriteBucket, user_id: uuid.UUID, *, now: float | None = None) -> None:
         now = time.monotonic() if now is None else now

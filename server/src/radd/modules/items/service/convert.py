@@ -16,21 +16,19 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError
-from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.events import service as events
 from radd.modules.fields import service as fields
-from radd.modules.projects import service as projects_service
 
 from ..changes import diff_item_reads, field_name_map
 from ..enums import ItemEntity, ItemEvent, ItemKind
 from ..models import WorkItem
 from ..schemas import ItemRead
-from .queries import require_item
-from .read import _hydrate_one
+from .queries import require_item, require_item_permission
+from .read import _hydrate_one, event_item
 from .relations import _resolve_parent
-from .visibility import _builtin_read_denied, _field_ctx, _filter_read, ensure_item_relation
+from .visibility import _builtin_read_denied, _field_ctx, _filter_read
 
 _UNSET = object()
 
@@ -43,10 +41,9 @@ async def convert_item_kind(
     kind: ItemKind,
     parent_id: uuid.UUID | None | object = _UNSET,
 ) -> ItemRead:
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    item, project, permissions = await require_item_permission(
+        session, item_id, actor, Permission.ITEM_UPDATE
+    )
 
     old_kind = ItemKind(item.kind)
     if old_kind == kind and parent_id is _UNSET:
@@ -109,12 +106,7 @@ async def convert_item_kind(
         entity_type=ItemEntity.ITEM,
         entity_id=item.id,
         actor_id=actor.id,
-        payload={
-            "item": {
-                **after.model_dump(mode="json"),
-                "project": {"id": str(project.id), "key": project.key, "name": project.name},
-            },
-        },
+        payload={"item": event_item(after, project)},
         changes=changes,
     )
     builtin_denied = await _builtin_read_denied(session, project, ctx)

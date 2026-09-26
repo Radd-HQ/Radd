@@ -78,17 +78,28 @@ def tokenize(text: str) -> list[Token]:
     return tokens
 
 
+def decode_escapes(body: str) -> str:
+    """A string body with each escape pair reduced to the escaped character."""
+    chars: list[str] = []
+    i = 0
+    while i < len(body):
+        if body[i] == _ESCAPE and i + 1 < len(body):
+            chars.append(body[i + 1])
+            i += 2
+        else:
+            chars.append(body[i])
+            i += 1
+    return "".join(chars)
+
+
 def _read_string(text: str, start: int) -> tuple[Token, int]:
     quote = text[start]
-    chars: list[str] = []
     i = start + 1
     while i < len(text):
         if text[i] == _ESCAPE and i + 1 < len(text):
-            chars.append(text[i + 1])
             i += 2
         elif text[i] == quote:
-            return Token(TokenKind.STRING, "".join(chars), start), i + 1
+            return Token(TokenKind.STRING, decode_escapes(text[start + 1 : i]), start), i + 1
         else:
-            chars.append(text[i])
             i += 1
     raise SlqError("unterminated string", start)

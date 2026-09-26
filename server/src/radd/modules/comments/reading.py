@@ -18,6 +18,7 @@ from .models import Comment, CommentVisibilityTeam
 from .parents import binding_for
 from radd.exceptions import ForbiddenError, NotFoundError, UnauthorizedError
 
+from .resolution import reach_covers, resolve_reach
 from .schemas import CommentLocation, CommentPage, CommentRead
 from .types import CommentParentType, CommentSlice, CommentVisibility
 
@@ -87,20 +88,25 @@ async def _hydrate(session, rows, allowed=None, actor=None, entity=None):
     # RADD-1283: the reader's reach under the parent's rule, once per parent.
     reach = None
     if actor is not None and entity is not None and any(row.is_thread for row in rows):
-        from .resolution import resolve_reach
-
         reach = await resolve_reach(session, actor, *entity)
     return [_to_read(row, authors.get(row.author_id), restrictions.get(row.id),
                      authors.get(row.resolved_by) if row.resolved_by else None)
             .model_copy(update={"reply_count": counts.get(row.id, 0),
-                                "can_resolve": reach is not None and _covers(reach, row, actor)})
+                                "can_resolve": reach is not None and reach_covers(reach, row, actor)})
             for row in rows]
 
 
-def _covers(reach, row, actor) -> bool:
-    from .resolution import reach_covers
-
-    return reach_covers(reach, row, actor)
+async def _window(session, query, limit, allowed, actor=None, entity=None) -> CommentPage:
+    """The newest `limit` rows of `query` in chronological order, with an exclusive
+    cursor to the next older page (keyset on (created_at, id))."""
+    query = query.order_by(Comment.created_at.desc(), Comment.id.desc()).limit(limit + 1)
+    rows = list((await session.scalars(query)).all())
+    more = len(rows) > limit
+    rows = rows[:limit]
+    return CommentPage(
+        comments=await _hydrate(session, list(reversed(rows)), allowed, actor, entity),
+        older_cursor=_cursor(rows[-1]) if more else None,
+    )
 
 
 def _cursor(row: Comment) -> str:
@@ -161,14 +167,7 @@ async def comment_page(
                 )
             )
             limit = max(limit, min(newer or 0, THROUGH_MAX))
-    query = query.order_by(Comment.created_at.desc(), Comment.id.desc()).limit(limit + 1)
-    rows = list((await session.scalars(query)).all())
-    more = len(rows) > limit
-    rows = rows[:limit]
-    return CommentPage(
-        comments=await _hydrate(session, list(reversed(rows)), allowed, actor, (entity_type, entity_id)),
-        older_cursor=_cursor(rows[-1]) if more else None,
-    )
+    return await _window(session, query, limit, allowed, actor, (entity_type, entity_id))
 
 
 async def locate(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> CommentLocation:

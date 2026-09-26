@@ -59,11 +59,7 @@ from .types import (
 # The one mandatory card cell (spec 109) — a card without its title is unusable.
 CARD_TITLE_ATTR = "title"
 
-# View shares are grants in the generic access framework (spec 92): resource_type
-# "view", resource_id = the view id, subject user/team, access = a ShareLevel
-# (hierarchical viewer<editor<owner), owner-CLOSED by default, NOT project-scoped
-# (a view already belongs to one project). `global_access` + `owner_id` stay on
-# the View row (a public level + the accountable owner — not per-subject grants).
+# Share grants live in access_grants (see _VIEW_SPEC); owner_id and global_access stay on the row.
 VIEW_RESOURCE = "view"
 
 
@@ -395,9 +391,8 @@ async def _validate_quick_filters(
 
 
 def _validate_cycle_filter(pattern: str | None) -> str | None:
-    """cycle_filter is a REGEX (spec 56, case-insensitive, unanchored) deciding
-    which cycle headers a cycle-grouped view shows. Invalid patterns 409 here so
-    the client never stores one it can't apply."""
+    """Case-insensitive, unanchored cycle-name regex; invalid patterns 409 so the
+    client never stores one it cannot apply."""
     if not pattern:
         return None
     try:
@@ -410,10 +405,8 @@ def _validate_cycle_filter(pattern: str | None) -> str | None:
 
 
 def _validate_columns(columns: list[str] | None) -> list[str] | None:
-    """Spec 108 list columns: trimmed, deduped (order kept), empty = None. Ids
-    are deliberately validated loosely (builtin name or `cf.<key>`) — a custom
-    field can leave the registry at any time, and a stale id must degrade to an
-    unknown column in the editor, not brick the view."""
+    """Trimmed, deduped, empty = None. Ids stay loose so a departed custom field
+    degrades instead of bricking the view."""
     if not columns:
         return None
     cleaned = [entry for entry in dict.fromkeys(c.strip() for c in columns) if entry]
@@ -424,11 +417,8 @@ def _validate_columns(columns: list[str] | None) -> list[str] | None:
 
 
 def _validate_card_layout(layout: CardLayout | None) -> dict[str, Any] | None:
-    """Spec 109 card layout: shape (row/col/span bounds, cell cap) is
-    pydantic-enforced (422); semantics land here (409). Attr IDS are deliberately
-    validated loosely (the pydantic length cap only) — a departed custom field
-    must degrade to an empty cell, not brick the view. None/no-cells = None =
-    the view type's default card."""
+    """Semantic checks (409; shape is pydantic's 422). Attr ids stay loose so a departed
+    custom field degrades to an empty cell. No cells = None = the type's default card."""
     if layout is None or not layout.cells:
         return None
     attrs = [cell.attr for cell in layout.cells]
@@ -463,10 +453,8 @@ def _validate_card_layout(layout: CardLayout | None) -> dict[str, Any] | None:
 async def _validate_wip_limits(
     session: AsyncSession, view: View, limits: dict[uuid.UUID, int] | None
 ) -> dict[str, int] | None:
-    """Soft WIP limits (spec 76): value shape (int>=1) is pydantic-enforced (422);
-    on a PROJECT-scoped view every key must be one of that project's state ids
-    (409). All-projects boards bucket by state NAME, so any UUID key is
-    stored as-is — a limit simply only displays where the bucket key matches."""
+    """Project-scoped views: every key must be one of the project's states (409).
+    All-projects boards bucket by state NAME, so any key is stored as-is."""
     if not limits:
         return None
     if view.project_id is not None:
@@ -517,13 +505,8 @@ async def _require_scope(
     *,
     project_id: uuid.UUID | None,
 ) -> None:
-    """Enforce `permission` in the view's scope: its project, else across projects.
-
-    An ALL-PROJECTS view has no single scope to check against, so a global-atom
-    check was standing in for one — and a project-scoped grant never satisfies a
-    global check (RADD-788). Holding the atom in any project is the honest bar for
-    a view that spans them: the rows it returns are filtered per project anyway.
-    """
+    """Enforce `permission` in the view's project; an all-projects view needs it in
+    ANY project (a global check would refuse project-scoped holders)."""
     if project_id is not None:
         project = await projects_service.get_project(session, project_id)
         await authz.require(session, actor, permission, project=project)
@@ -559,7 +542,7 @@ async def visible_view(session: AsyncSession, view_id: uuid.UUID, actor: User) -
 
 
 async def _require_edit(session: AsyncSession, view_id: uuid.UUID, actor: User) -> View:
-    """Definition writes: the owner, an editor/owner-level grantee, or (LEGACY
+    """Definition writes: the owner, an editor/owner-level grantee, or (seeded
     owner-less views) a view.update atom holder. Visible-but-viewer -> 403."""
     await _lock_view(session, str(view_id))
     view, grant = await _load_visible(session, view_id, actor)
@@ -684,16 +667,6 @@ async def _add_share(
     )
 
 
-async def list_views(
-    session: AsyncSession,
-    *,
-    actor: User,
-    project_id: uuid.UUID | None,
-) -> list[ViewRead]:
-    rows, _total = await page_views(session, actor=actor, project_id=project_id)
-    return rows
-
-
 async def page_views(session: AsyncSession, *, actor: User, include_shares: bool = True, **filters) -> tuple[list[ViewRead], int]:
     from . import directory
     rows, total = await directory.page(session, actor, **filters)
@@ -770,11 +743,7 @@ async def update_view(
 async def update_sharing(
     session: AsyncSession, view_id: uuid.UUID, data: ViewSharingUpdate, actor: User
 ) -> ViewRead:
-    """Set the view's PUBLIC access level (spec 57 → spec 92): `global_access` = the
-    ShareLevel every active user gets, or null = not public. Owner-gated (seeded
-    owner-less: view.update); turning ON global visibility additionally needs
-    view.create (it's a server-wide broadcast). Per-subject shares are managed
-    grant-by-grant through the generic /grants API now."""
+    """Set `global_access` (owner-gated; turning it on also needs view.create)."""
     view = await _require_manage(session, view_id, actor, legacy_atom=Permission.VIEW_UPDATE)
     return await _update_sharing(session, view, data, actor)
 
@@ -808,11 +777,7 @@ async def _update_sharing(
 async def transfer_ownership(
     session: AsyncSession, view_id: uuid.UUID, data: "ViewTransfer", actor: User
 ) -> ViewRead:
-    """Reassign `owner_id` (spec 57): the owner or a co-owner (owner-level
-    grantee) hands the view to another user, who must be able to use views in
-    its scope (item.read there — 409 otherwise). The new owner's now-redundant
-    grant rows are dropped; the PREVIOUS owner stays on as an editor so a
-    transfer never locks anyone out by accident (the new owner can revoke)."""
+    """Reassign `owner_id`; the previous owner stays on as an editor grantee."""
     view = await _require_manage(session, view_id, actor, legacy_atom=Permission.VIEW_UPDATE)
     return await _transfer_ownership(session, view, data, actor)
 
@@ -828,10 +793,7 @@ async def _transfer_ownership(
         target_perms = await authz.effective_permissions(session, target, project=project)
         can_use = authz.holds_base(target_perms, Permission.ITEM_READ)
     else:
-        # All-projects view: the recipient needs item.read SOMEWHERE, not globally
-        # (RADD-788) — otherwise handing a shared view to a colleague whose access
-        # is project-scoped answered "they cannot use views in this scope" about a
-        # person who uses views every day.
+        # All-projects view: item.read in ANY project (a global check refuses project-scoped users).
         can_use = bool(await authz.readable_projects(session, target))
     if not can_use:
         raise ConflictError(
@@ -914,20 +876,16 @@ async def _emit(
     view: View,
     actor: User,
     *,
-    share_count: int | None = None,
     diff: list[dict] | None = None,
 ) -> None:
     payload = {
         "name": view.name,
         "view_type": view.view_type,
         "project_id": str(view.project_id) if view.project_id else None,
-        # Visible beyond the owner (server-wide or seeded owner-less);
-        # per-grant shares ride along when the emitter changed them.
+        # Visible beyond the owner (server-wide or seeded owner-less).
         "shared": view.owner_id is None or view.global_access is not None,
         "global_access": view.global_access,
     }
-    if share_count is not None:
-        payload["share_count"] = share_count
     await events.emit(
         session,
         event_type=event_type,
@@ -940,9 +898,7 @@ async def _emit(
     )
 
 
-# --- card-layout preset library (spec 109) -----------------------------------
-# Instance-wide named layouts, copy-on-apply: the client PATCHes the chosen
-# preset's layout onto the view, so a later preset edit never restyles boards.
+# --- card-layout presets: copy-on-apply, so editing a preset never restyles a board ---
 
 
 async def _emit_preset(
@@ -1035,9 +991,8 @@ async def delete_card_preset(session: AsyncSession, preset_id: uuid.UUID, actor:
 async def add_member(
     session: AsyncSession, view_id: uuid.UUID, item_id: uuid.UUID, actor: User
 ) -> None:
-    """Pin an item to the view (idempotent). Edit-gated like any definition
-    write; the item must exist, but is NOT RBAC-checked here — reads flow
-    through the item dialect (`roadmap = <view>`), where item RBAC applies."""
+    """Pin an item to the view (idempotent), edit-gated. The item is NOT RBAC-checked:
+    reads flow through the item dialect (`roadmap = <view>`), where item RBAC applies."""
     view = await _require_edit(session, view_id, actor)
     await items_service.require_item(session, item_id)
     await session.execute(

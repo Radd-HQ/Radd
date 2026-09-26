@@ -72,39 +72,28 @@ class FieldWritabilityRead(BaseModel):
 
 
 class FieldOptionsExtend(BaseModel):
-    """POST /fields/{id}/options — ADD options to a select field (spec 100's
-    additive-only seam, exposed for the settings UI in spec 107's cleanup)."""
+    """POST /fields/{id}/options: add options to a select field (additive only)."""
 
     values: list[str] = Field(min_length=1)
 
 
 class FieldOptionRemove(BaseModel):
-    """POST /fields/{id}/options/remove — drop one option and say what happens
-    to the items holding it (RADD-949).
-
-    `replace_with` is resolved through `model_fields_set` so an OMITTED
-    replacement differs from an explicit null: omitting it on a required
-    single-select is a mistake worth a 422, while `null` is a deliberate "clear
-    the value" that only an optional field may ask for. A multi_select ignores
-    it — dropping one value from a list needs no substitute.
-    """
+    """POST /fields/{id}/options/remove (RADD-949). `replace_with` names a surviving
+    option for a single select (None clears an optional one; a required one refuses);
+    a multi_select ignores it."""
 
     value: str = Field(min_length=1)
     replace_with: str | None = None
 
 
 class FieldDefinitionUpdate(BaseModel):
-    """PATCH /fields/{id} — the safely-mutable attrs (spec 52). Key/type/options
-    stay immutable; this edits presentation (name, render widget) and the default
-    value seeded onto new items. `default_value` uses model_fields_set to tell an
-    omitted field from an explicit null (which clears the default)."""
+    """PATCH /fields/{id}: name, render widget, default value and scope. Key/type/options
+    are immutable here. `default_value` uses model_fields_set: an explicit null clears it."""
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     display: FieldDisplay | None = None
     default_value: Any | None = None
-    # Scope expansion (spec 90 follow-up): omitted = unchanged; a list REPLACES the
-    # field's scope ([] promotes it to global, non-empty scopes it to those projects).
-    # Resolved via model_fields_set so an omitted list differs from an explicit [].
+    # Omitted = unchanged; a list REPLACES the scope ([] = global).
     project_ids: list[uuid.UUID] | None = None
 
 

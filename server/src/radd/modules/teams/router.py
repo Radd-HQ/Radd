@@ -1,4 +1,4 @@
-from radd.modules.auth.principals import require_key_permission
+from radd.modules.auth.principals import key_allows, require_key_permission
 import uuid
 from typing import Annotated, Literal
 
@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.apitypes import TOTAL_COUNT_HEADER
 from radd.choices import ChoiceRead
 from radd.db import get_session
-from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
@@ -66,16 +65,12 @@ async def _team_reads(session: AsyncSession, teams: list[Team], user) -> list[Te
         read = TeamRead.model_validate(team)
         read.managers = managers[team.id]
         owns = team.owner_id == user.id
-        read.can_manage = owns or user.id in read.managers or authz.holds_base(permissions, authz.Permission.TEAM_UPDATE)
-        read.can_delete = owns or authz.holds_base(permissions, authz.Permission.TEAM_DELETE)
-        try:
-            require_key_permission(user, authz.Permission.TEAM_UPDATE)
-        except ForbiddenError:
-            read.can_manage = False
-        try:
-            require_key_permission(user, authz.Permission.TEAM_DELETE)
-        except ForbiddenError:
-            read.can_delete = False
+        read.can_manage = (
+            owns or user.id in read.managers or authz.holds_base(permissions, authz.Permission.TEAM_UPDATE)
+        ) and key_allows(user, authz.Permission.TEAM_UPDATE)
+        read.can_delete = (
+            owns or authz.holds_base(permissions, authz.Permission.TEAM_DELETE)
+        ) and key_allows(user, authz.Permission.TEAM_DELETE)
         reads.append(read)
     return reads
 
@@ -158,8 +153,7 @@ async def get_team(team_id: uuid.UUID, session: Session, user: CurrentUser) -> T
 async def update_team(
     team_id: uuid.UUID, data: TeamUpdate, session: Session, user: CurrentUser
 ) -> TeamRead:
-    """Rename — open to the team's owner/managers (spec 87). (RADD-829 retired
-    the AD-link branch; group membership rides /teams/{id}/groups.)"""
+    """Rename — open to the team's owner/managers (spec 87)."""
     team = await service.get_team(session, team_id)
     await _require_manage(session, user, team)
     updated = await service.update_team(session, team_id, data, actor_id=user.id)
@@ -343,9 +337,8 @@ async def remove_team_group(
 
 @team_router.get("/{team_id}/access")
 async def team_access(team_id: uuid.UUID, session: Session, user: CurrentUser) -> dict:
-    """What membership of this team confers (RADD-809): atoms via project
-    attachments and role grants, plus the resource grants naming the team.
-    Gated like the user inspector — it describes conferred authority."""
+    """What membership of this team confers (RADD-809): atoms via role grants, plus
+    the resource grants naming the team. Gated like the user inspector."""
     from radd.modules.access import inspect as access_inspect
     from radd.modules.auth.schemas import PermissionSourceRead, ResourceTypeAccessRead
 

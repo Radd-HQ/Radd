@@ -9,16 +9,10 @@ from radd.db import Base, TimestampMixin
 
 
 class StateCategoryDef(Base, TimestampMixin):
-    """The ONE user-owned classification tier over states (RADD-854 — the
-    consolidation of RADD-851/852's two half-tiers). A row is vocabulary:
-    name, colour, order are the operator's. `behaves_as` is the semantic
-    anchor — one of the six fixed `StateCategory` behaviours — which is what
-    lets every report/sweep/guard keep working untouched by whatever words an
-    instance invents. The six builtins are seeded as EDITABLE rows (key = the
-    enum value, behaves_as = itself): rename Todo to Ready and boards say
-    Ready while throughput still counts todo-like work. Keys are immutable
-    (they are the reference states carry); builtins keep their behaves_as and
-    cannot be deleted."""
+    """The user-owned classification tier over states. Name, colour and order are
+    the operator's; `behaves_as` (a fixed StateCategory) is what reports, sweeps and
+    guards read. The six builtins are seeded as editable rows (key = the enum value)
+    and keep their behaves_as; keys are immutable because states reference them."""
 
     __tablename__ = "state_categories"
     __table_args__ = (UniqueConstraint("key"), UniqueConstraint("name"))
@@ -42,9 +36,8 @@ class State(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(String(20))
     position: Mapped[int] = mapped_column(Integer)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
-    # RADD-854: which VOCABULARY row classifies this state. `category` above
-    # is DERIVED-but-stored from the row's behaves_as at assignment time, so
-    # the 21 semantic consumers keep reading a plain enum column.
+    # The vocabulary row classifying this state; `category` is derived from its
+    # behaves_as at assignment time so consumers read a plain enum column.
     category_key: Mapped[str] = mapped_column(
         ForeignKey("state_categories.key"), default="todo"
     )
@@ -53,8 +46,8 @@ class State(Base, TimestampMixin):
 class WorkflowTransition(Base, TimestampMixin):
     """One guarded edge of a project's transition graph (spec 61).
 
-    `from_state_id` NULL = the wildcard (applies from any source state), which is
-    why (project, from, to) uniqueness is an app-level check, not a DB constraint.
+    `from_state_id` NULL = the wildcard (applies from any source state). Several
+    rows may share an edge, scoped by `applies_when` and resolved first-match.
     """
 
     __tablename__ = "workflow_transitions"
@@ -73,7 +66,6 @@ class WorkflowTransition(Base, TimestampMixin):
         JSONB, default=list, server_default="[]"
     )
     position: Mapped[int] = mapped_column(Integer)
-    # RADD-1285: publishing a release performs this move for every item sitting
-    # in `from_state_id`, recording the release — the spec-112 sweep, stated as
-    # a transition instead of two typed-in state names. Requires a from-state.
+    # A published release performs this move for every item in from_state_id,
+    # recording the release. Requires a from-state.
     on_release: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())

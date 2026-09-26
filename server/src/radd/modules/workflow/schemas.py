@@ -10,8 +10,7 @@ from radd.apitypes import UtcDatetime
 class StateCreate(BaseModel):
     project_id: uuid.UUID
     name: str = Field(min_length=1, max_length=100)
-    # RADD-854: a category KEY (vocabulary row). The six builtin keys coincide
-    # with the old enum values, so pre-854 payloads stay valid unchanged.
+    # A category KEY; the six builtin keys equal the StateCategory values.
     category: str = Field(min_length=1, max_length=60)
     position: int | None = None  # None = append at the end of the workflow
 

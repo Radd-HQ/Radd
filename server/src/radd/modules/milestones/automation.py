@@ -1,28 +1,9 @@
-"""A plugin-contributed ACTION node, acting on the plugin's OWN entity (RADD-923).
-
-This is the north-star's second half. `spec.py` proves a plugin can declare an
-entity and get a table, CRUD, RBAC atoms, events and nav for free. This proves
-the other direction: that those events are first-class in the automation engine,
-and that the plugin can contribute the ACTION that responds to them — with no
-edits to `automations`, the kernel, or the SPA.
-
-Until RADD-923 that was impossible in two separate ways:
-
-* A contributed action node could be DECLARED and never ran. `executor._run_action`
-  did `ActionType(node.type)`, which raises for anything outside the built-in
-  enum, logged "unknown action type" and dropped the node. So a plugin could add
-  a trigger and a gate but never an action.
-* Even if it had run, `milestone.created` carried `{"id": …, "project_id": …}` —
-  a stub with no way to reach the row's own fields, and nothing in the packet
-  identified a milestone at all. `Packet` knew only about items.
-
-Now: the auto-wired `milestone.*` events declare `subjects=("milestone",)`, the
-kernel writes the ref, `apply_event` reads it back into the packet, and this node
-declares `subject="milestone"` and is handed the ids. The plugin writes a `plan`
-and an `apply`; the executor supplies the savepoint, the budget and the loop
-guard, which is what keeps a third-party action from being able to destabilise a
-run.
-"""
+"""A plugin-contributed ACTION node acting on the plugin's OWN entity (RADD-923)
+— the north-star's second half: the auto-wired `milestone.*` events declare
+`subjects=("milestone",)`, this node declares `subject="milestone"`, and the
+executor hands it the ids plus the savepoint, budget and loop guard that keep a
+third-party action from destabilising a run. No edits to `automations`, the
+kernel or the SPA."""
 
 from __future__ import annotations
 
@@ -65,11 +46,7 @@ class _Plan:
 
 
 async def plan(ctx: Any) -> _Plan | None:
-    """Decide, and write nothing.
-
-    `ctx.subject_ids` is milestone ids because the spec says `subject="milestone"`
-    — the node never learns how an item-shaped packet is assembled.
-    """
+    """Decide, and write nothing. `ctx.subject_ids` are milestone ids (`subject="milestone"`)."""
     status = str(ctx.node.params.get("status") or "")
     if status not in STATUSES:
         return _Plan(None, status, f"set_status: {status!r} is not a milestone status", False)
@@ -88,19 +65,9 @@ async def plan(ctx: Any) -> _Plan | None:
 
 
 async def apply(ctx: Any, plan: _Plan) -> None:
-    """Perform it, and say so on the stream.
-
-    Runs inside the executor's SAVEPOINT and inside `events.automated()`, so the
-    `milestone.updated` this emits is marked automation-caused and the engine
-    skips it — an automation triggered by `milestone.updated` that also SETS a
-    status cannot spin. The plugin gets that for free by applying here rather
-    than reaching around the executor.
-
-    Emitting at all is a choice worth naming: mutating the row silently would
-    work, and would leave the change invisible to the audit log, the history feed
-    and every other automation. A plugin's actions should be as visible as the
-    product's own.
-    """
+    """Runs inside the executor's savepoint and `events.automated()`, so the
+    `milestone.updated` it emits cannot re-trigger this automation. It emits at
+    all so the change reaches audit, history and other automations."""
     from radd.modules.events import service as events
 
     row = await ctx.session.get(Milestone, plan.milestone_id)

@@ -9,7 +9,7 @@ from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from itertools import batched
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
@@ -24,7 +24,8 @@ from radd.modules.projects.models import Project
 
 from . import categories, enablement
 from .duration import format_duration, parse_duration
-from .models import ItemEstimate, Worklog
+from .models import ItemEstimate, ProjectTimeLogging, Worklog
+from .slq import compile_worklog_query, parse
 from .schemas import (
     CategoryRef,
     EstimateSet,
@@ -55,10 +56,9 @@ def _fmt(seconds: int, hours_per_day: int) -> str:
     )
 
 
-async def _hours_per_day(session: AsyncSession) -> int:
-    """The '1d'==N hours factor — GLOBAL since the spec-67 follow-up (instance
-    override → env default; the per-project override is retired so a duration
-    means the same thing on every timesheet row and cycle handle)."""
+async def hours_per_day(session: AsyncSession) -> int:
+    """The '1d'==N hours factor — GLOBAL (spec 67 follow-up), so a duration means
+    the same thing on every timesheet row and cycle handle."""
     from radd.modules.settings import service as settings_service
     from radd.modules.settings.types import SettingKey
 
@@ -67,31 +67,39 @@ async def _hours_per_day(session: AsyncSession) -> int:
 
 async def format_durations(session: AsyncSession, seconds: list[int]) -> list[str]:
     """Public presentation contract: format work durations using this instance's units."""
-    hours_per_day = await _hours_per_day(session)
-    return [_fmt(value, hours_per_day) for value in seconds]
+    hpd = await hours_per_day(session)
+    return [_fmt(value, hpd) for value in seconds]
+
+
+async def compile_worklog_filter(session: AsyncSession, actor: User, q: str):
+    """The worklog SLQ (spec 98) as a WHERE clause for `actor`: `1d` means what it
+    means on every worklog row, and read-restricted item fields refuse. Callers AND
+    it onto their scope filters, so a query can only narrow what the actor may see."""
+    hpd = await hours_per_day(session)
+    compiled = await compile_worklog_query(
+        session,
+        parse(q),
+        current_user_id=actor.id,
+        hours_per_day=hpd,
+        denied_item_fields=await items_service.denied_slq_fields(session, actor, None),
+    )
+    return compiled.where
 
 
 async def nav_timesheet_visible(session: AsyncSession, user) -> bool:
-    """THE definition of "is the Timesheet area useful to this actor"
-    (RADD-843): timesheet.view held anywhere (they review others' time), OR
-    any READABLE project has time logging enabled (they could log), OR they
-    have worklog rows at all (general/itemless worklogs exist, spec 59 — a
-    timesheet.view-less actor with history still needs their own sheet).
-    Access ∧ usefulness — never a feature flag alone."""
-    from sqlalchemy import exists as sa_exists, select as sa_select
-
-    from .models import ProjectTimeLogging
-
+    """THE definition of "is the Timesheet area useful to this actor" (RADD-843):
+    timesheet.view anywhere (they review others' time), OR they could log time
+    somewhere, OR they have worklog rows at all (general worklogs, spec 59).
+    Access AND usefulness — never a feature flag alone."""
     if await authz.holds(session, user, authz.Permission.TIMESHEET_VIEW, any_project=True):
         return True
-    # "They could log" means worklog.write SOMEWHERE with logging enabled
-    # there — not "some readable project logs time": since RADD-825 the floor
-    # makes every project readable-in-part (item.read@own), which would light
-    # this arm for accounts that cannot log a minute anywhere (RADD-835).
+    # "Could log" = worklog.write somewhere logging is enabled, NOT "some readable
+    # project logs time": the item.read@own floor makes every project readable in
+    # part (RADD-835).
     writable = await authz.require_anywhere(session, user, authz.Permission.WORKLOG_WRITE)
     if writable:
         enabled = await session.scalar(
-            sa_select(ProjectTimeLogging.project_id)
+            select(ProjectTimeLogging.project_id)
             .where(
                 ProjectTimeLogging.project_id.in_(writable.keys()),
                 ProjectTimeLogging.enabled.is_(True),
@@ -100,9 +108,7 @@ async def nav_timesheet_visible(session: AsyncSession, user) -> bool:
         )
         if enabled is not None:
             return True
-    has_rows = await session.scalar(
-        sa_select(sa_exists().where(Worklog.author_id == user.id))
-    )
+    has_rows = await session.scalar(select(exists().where(Worklog.author_id == user.id)))
     return bool(has_rows)
 
 
@@ -123,10 +129,8 @@ async def worklog_scope(
 
 
 async def category_names(session: AsyncSession) -> list[str]:
-    """Every work-category NAME, archived included — the prompt-vocabulary seam
-    ai.nlrepair enumerates for NL→SLQ value repair (RADD-887). Archived names
-    stay in: a historical worklog may still carry one, and a repaired query
-    must be able to name it."""
+    """Every work-category NAME, archived included (a historical worklog may carry
+    one) — the vocabulary ai.nlrepair repairs NL→SLQ values against (RADD-887)."""
     return [
         category.name
         for category in await categories.list_categories(session, include_archived=True)
@@ -147,15 +151,6 @@ async def worklogs_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[W
         .order_by(Worklog.worked_on.desc(), Worklog.created_at.desc())
     )
     return list(result.scalars())
-
-
-async def logged_seconds(session: AsyncSession, item_id: uuid.UUID) -> int:
-    total = await session.scalar(
-        select(func.coalesce(func.sum(Worklog.time_spent_seconds), 0)).where(
-            Worklog.item_id == item_id
-        )
-    )
-    return int(total or 0)
 
 
 async def logged_seconds_by_items(
@@ -281,13 +276,11 @@ async def create_worklog(
 ) -> WorklogRead:
     item, project = await _project_for_item(session, item_id)
     await enablement.require_enabled(session, project.id)
-    hpd = await _hours_per_day(session)
+    hpd = await hours_per_day(session)
     if data.category_id is not None:
         await categories.resolve_category(session, data.category_id)
-    # `data.author_id` is the IMPORT path stating who actually logged the time.
-    # It was accepted by the schema and then ignored here, so every imported
-    # worklog was credited to whoever ran the import (spec 90 follow-up,
-    #). The `author_id` argument stays the default for normal use.
+    # `data.author_id` is the IMPORT path naming who actually logged the time
+    # (spec 90 follow-up); otherwise the caller is the author.
     logged_by = data.author_id or author_id
     worklog = Worklog(
         item_id=item_id,
@@ -320,7 +313,7 @@ async def create_general_worklog(
         project = await projects_service.get_project(session, data.project_id)
         await enablement.require_enabled(session, project.id)
     await categories.resolve_category(session, data.category_id)
-    hpd = await _hours_per_day(session)
+    hpd = await hours_per_day(session)
     worklog = Worklog(
         item_id=None,
         project_id=project.id if project else None,
@@ -337,31 +330,18 @@ async def create_general_worklog(
 
 
 async def can_log_general(session: AsyncSession, user) -> bool:
-    """May log itemless general time: holds worklog.write on >= 1 project (spec 59).
-
-    Public because MCP needs the same answer the router does (RADD-741) — two
-    copies of "who may touch this worklog" is exactly the drift that lets an
-    agent do something the UI forbids, or vice versa.
-    """
-    from radd.modules.auth import authz
-    from radd.modules.projects import service as projects_service
-
+    """May log itemless general time: worklog.write on >= 1 project (spec 59).
+    Public so MCP and the router give one answer (RADD-741)."""
     projects = await projects_service.list_projects(session)
     perms_by_project = await authz.permissions_for_projects(session, user, projects)
     return any(authz.Permission.WORKLOG_WRITE in perms for perms in perms_by_project.values())
 
 
 async def authorize_mutation(session: AsyncSession, user, worklog, *, others) -> None:
-    """Author (with worklog.write) or a holder of `others` may edit/delete a
-    worklog (spec 50: worklog.delete to delete, project.manage to edit another's;
-    spec 59: itemless entries need the general-log gate for the author and
-    `others` at global scope for anyone else).
-
-    Lives in the service, not the router, so the MCP tools enforce the SAME rule
-    rather than a second reading of it.
-    """
-    from radd.modules.auth import authz
-
+    """Author (with worklog.write) or a holder of `others` may edit/delete a worklog
+    (spec 50: worklog.delete to delete, project.manage to edit another's; spec 59:
+    an itemless entry needs the general-log gate for its author and `others` at
+    global scope for anyone else). In the service so MCP enforces the SAME rule."""
     if worklog.external_source:
         # RADD-1258: a mirrored entry is corrected where it was logged. Refusing
         # here — not in the router — is what makes MCP `update_worklog` /
@@ -380,9 +360,7 @@ async def authorize_mutation(session: AsyncSession, user, worklog, *, others) ->
     else:
         perms = await authz.effective_permissions(session, user)
     if others is authz.Permission.WORKLOG_DELETE:
-        # RADD-816 (Q4): the author-own right is the Baseline's
-        # `worklog.delete@own` grant — relation-resolved, inspector-explainable,
-        # revocable. The hardcoded author arm is gone.
+        # The author-own right is the Baseline's revocable `worklog.delete@own` (RADD-816).
         relations = authz.relations_held(perms, authz.Permission.WORKLOG_DELETE)
         if relations:
             if authz.RELATION_ANY in relations:
@@ -405,7 +383,7 @@ async def authorize_mutation(session: AsyncSession, user, worklog, *, others) ->
 async def update_worklog(
     session: AsyncSession, worklog: Worklog, data: WorklogUpdate, actor_id: uuid.UUID
 ) -> WorklogRead:
-    hpd = await _hours_per_day(session)
+    hpd = await hours_per_day(session)
     before = await _worklog_audit_state(session, worklog)
     if data.time_spent is not None:
         worklog.time_spent_seconds = _parse(data.time_spent, hpd)
@@ -466,7 +444,7 @@ async def set_estimate(
     session: AsyncSession, item_id: uuid.UUID, data: EstimateSet, actor_id: uuid.UUID
 ) -> None:
     _, project = await _project_for_item(session, item_id)
-    seconds = _parse(data.estimate, await _hours_per_day(session))
+    seconds = _parse(data.estimate, await hours_per_day(session))
     estimate = await session.get(ItemEstimate, item_id)
     previous = estimate.original_estimate_seconds if estimate is not None else None
     if estimate is None:
@@ -518,12 +496,13 @@ async def has_estimate(session: AsyncSession, item_id: uuid.UUID) -> bool:
 async def item_summary(
     session: AsyncSession, item_id: uuid.UUID, project
 ) -> ItemTimeSummary:
-    hpd = await _hours_per_day(session)
+    hpd = await hours_per_day(session)
     estimate = await session.get(ItemEstimate, item_id)
     original = estimate.original_estimate_seconds if estimate else None
-    logged = await logged_seconds(session, item_id)
+    worklogs = await worklogs_for_item(session, item_id)
+    logged = sum(worklog.time_spent_seconds for worklog in worklogs)
     remaining = original - logged if original is not None else None
-    entries = await hydrate(session, await worklogs_for_item(session, item_id), hpd)
+    entries = await hydrate(session, worklogs, hpd)
     return ItemTimeSummary(
         item_id=item_id,
         enabled=await enablement.is_enabled(session, project.id),
@@ -551,12 +530,9 @@ async def _emit(
         entity_type=TimelogEntity.WORKLOG,
         entity_id=worklog.id,
         actor_id=actor_id,
-        # None for itemless (spec 59) entries — a general worklog has a project
-        # but no item, which is the whole point of spec 59.
+        # The item is None for an itemless (spec 59) entry: a project but no item.
         subjects={"item": worklog.item_id},
         payload={
-            # None for itemless (spec 59) entries — a general worklog has a
-            # project but no item, which is the whole point of spec 59.
             "project_id": str(worklog.project_id) if worklog.project_id else None,
             "category_id": str(worklog.category_id) if worklog.category_id else None,
             "author": await auth_service.user_ref_by_id(session, worklog.author_id),

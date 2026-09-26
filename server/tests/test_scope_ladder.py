@@ -4,8 +4,7 @@ declaration.
 The containment ladder (global ⊃ {project | space}) was always the resolver's
 de-facto behaviour; these pin it as named semantics through the one boolean
 seam (`holds`), pin the per-request project-map memo `require_anywhere` now
-rides, and pin the `checkable_at` declaration as behaviour-identical
-singletons with the `instance` tier retired.
+rides, and pin the `instance` tier as retired.
 
 DB-backed; flushed, never committed.
 """
@@ -20,12 +19,7 @@ from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz, authz_batch, grants as auth_grants, roles as auth_roles
 from radd.modules.auth.models import User
 from radd.modules.auth.schemas import RoleCreate
-from radd.modules.auth.types import (
-    Permission,
-    PermissionScope,
-    checkable_at,
-    permission_scope_of,
-)
+from radd.modules.auth.types import Permission, PermissionScope
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -108,16 +102,8 @@ async def test_require_anywhere_rides_one_memoised_map(db, member):
 # --- the declaration -----------------------------------------------------------
 
 
-def test_checkable_at_is_behaviour_identical_singletons():
-    for permission in Permission:
-        assert checkable_at(permission) == frozenset({permission_scope_of(permission)})
-
-
 def test_the_instance_tier_is_retired():
     assert "instance" not in {scope.value for scope in PermissionScope}
-    from radd.modules.auth import authz as authz_module
-
-    assert not hasattr(authz_module, "ALL_PERMISSIONS")
 
 
 # --- the member floor on an EMPTY instance (RADD-1132) -------------------------

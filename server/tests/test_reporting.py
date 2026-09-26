@@ -93,10 +93,6 @@ async def test_item_state_timeline_reconstructs_segments(db, admin, project):
     assert len(tl.done_entries) == 1
     assert tl.project_id == project.id and tl.kind == "issue"
 
-    # the public helper exposes just the ordered segments
-    segments = await timeline.item_state_timeline(db, [item.id])
-    assert segments[item.id] == tl.segments
-
 
 async def test_timeline_collapses_repeats_and_recounts_reentry(db, admin, project):
     states = await workflow.list_states(db, project.id)

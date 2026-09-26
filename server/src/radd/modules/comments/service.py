@@ -29,6 +29,7 @@ from .types import (
 )
 from .reading import comment_page as comment_page, list_comments as list_comments, locate as locate
 from .threads import has_unresolved_threads as has_unresolved_threads
+from .threads import lock_thread_parent, narrow_replies, reply_audience, require_thread
 from radd.clock import utcnow
 
 
@@ -40,13 +41,7 @@ def _to_read(
         id=comment.id,
         entity_type=comment.entity_type,
         entity_id=comment.entity_id,
-        author=UserRef(
-            id=author.id,
-            name=author.name,
-            avatar_color=author.avatar_color,
-            avatar_emoji=author.avatar_emoji,
-            avatar_url=author.avatar_url,
-        ) if author else None,
+        author=UserRef.model_validate(author, from_attributes=True) if author else None,
         body=comment.body,
         email_signature=comment.email_signature,
         is_thread=comment.is_thread,
@@ -121,17 +116,19 @@ async def _set_teams(
     return wanted
 
 
+#: PUBLIC comments on items. The visibility filter lives in the query (RADD-785),
+#: so no caller can compose a view that leaks an internal note.
+_PUBLIC_ON_ITEMS = (
+    Comment.entity_type == CommentParentType.ITEM.value,
+    Comment.visibility == CommentVisibility.PUBLIC.value,
+)
+
+
 async def public_bodies_for_item(session: AsyncSession, item_id: uuid.UUID) -> list[str]:
     """PUBLIC comment bodies, oldest first — the search indexer's aggregation seam.
     Internal bodies are excluded so their text is never findable via plain item.read."""
     result = await session.execute(
-        select(Comment.body)
-        .where(
-            Comment.entity_type == CommentParentType.ITEM,
-            Comment.entity_id == item_id,
-            Comment.visibility == CommentVisibility.PUBLIC.value,
-        )
-        .order_by(Comment.created_at)
+        select(Comment.body).where(*_PUBLIC_ON_ITEMS, Comment.entity_id == item_id).order_by(Comment.created_at)
     )
     return list(result.scalars())
 
@@ -140,18 +137,9 @@ async def public_comments_for_item(
     session: AsyncSession, item_id: uuid.UUID
 ) -> list[Comment]:
     """PUBLIC comment rows on one item, oldest first — the requester-portal
-    thread (forms.requests.get_request, RADD-887). A requester may read exactly
-    the public conversation, never the internal one, and the visibility filter
-    lives HERE in the query — the RADD-785 rule — so no caller can compose a
-    view that leaks an internal note."""
+    thread (forms.requests.get_request, RADD-887): exactly the public conversation."""
     result = await session.execute(
-        select(Comment)
-        .where(
-            Comment.entity_type == CommentParentType.ITEM,
-            Comment.entity_id == item_id,
-            Comment.visibility == CommentVisibility.PUBLIC.value,
-        )
-        .order_by(Comment.created_at)
+        select(Comment).where(*_PUBLIC_ON_ITEMS, Comment.entity_id == item_id).order_by(Comment.created_at)
     )
     return list(result.scalars())
 
@@ -168,11 +156,7 @@ async def public_comment_times(
         return []
     result = await session.execute(
         select(Comment.entity_id, Comment.author_id, Comment.created_at, Comment.origin)
-        .where(
-            Comment.entity_type == CommentParentType.ITEM,
-            Comment.entity_id.in_(ids),
-            Comment.visibility == CommentVisibility.PUBLIC.value,
-        )
+        .where(*_PUBLIC_ON_ITEMS, Comment.entity_id.in_(ids))
         .order_by(Comment.created_at)
     )
     return [tuple(row) for row in result.all()]  # type: ignore[misc]
@@ -183,12 +167,9 @@ async def public_reply_body(
 ) -> str | None:
     """Current public body for external mail; a stale event cannot disclose a
     comment that has since been made internal, deleted or moved."""
-    return await session.scalar(select(Comment.body).where(
-        Comment.id == comment_id,
-        Comment.entity_type == CommentParentType.ITEM.value,
-        Comment.entity_id == item_id,
-        Comment.visibility == CommentVisibility.PUBLIC.value,
-    ))
+    return await session.scalar(
+        select(Comment.body).where(*_PUBLIC_ON_ITEMS, Comment.id == comment_id, Comment.entity_id == item_id)
+    )
 
 
 async def comment_body(session: AsyncSession, comment_id: uuid.UUID) -> str | None:
@@ -208,12 +189,7 @@ async def _get(session: AsyncSession, comment_id: uuid.UUID) -> Comment:
 async def _parent_scope(
     session: AsyncSession, entity_type: str, entity_id: uuid.UUID
 ) -> tuple[object, Project | None]:
-    """The binding for this parent and the project it lives in, if any.
-
-    None is a legitimate answer, not a failure: a wiki page is global, so the
-    permission checks below run at global scope — which is exactly how page
-    atoms are granted.
-    """
+    """(binding, owning project); the project is None for a global parent such as a page."""
     binding = binding_for(entity_type)
     return binding, await binding.project_of(session, entity_id)
 
@@ -289,19 +265,14 @@ async def _emit(
             # The polymorphic parent, which may be a page rather than an item.
             "entity_type": comment.entity_type,
             "entity_id": str(comment.entity_id),
-            # RADD-1248: null for a thread root — the one fact that tells a
-            # reply from a comment (RADD-1246 promised it and did not carry it).
+            # RADD-1248: null for a thread root — the one fact that tells a reply from a comment.
             "parent_comment_id": (
                 str(comment.parent_comment_id) if comment.parent_comment_id else None
             ),
             "is_thread": comment.is_thread,
             # RADD-1318: where it came from when no person typed it (null = a person).
             "origin": comment.origin,
-            # The canonical item ref (RADD-922), None when the parent is not an
-            # item. It replaces the bare `item_id` that every consumer then had
-            # to resolve into a key and a project of its own accord.
-            # A REF, not a bare id: a notification that says "3f2a-…" wrote a
-            # comment is a notification nobody can read.
+            # A ref, not a bare id: a notification naming "3f2a-…" as the writer is unreadable.
             "author": await auth.user_ref_by_id(session, comment.author_id),
             "visibility": comment.visibility,
             "excerpt": comment.body[:EXCERPT_MAX_CHARS],
@@ -344,34 +315,22 @@ async def create_authorized_comment(
 ) -> CommentRead:
     """Write a comment whose authorisation the CALLER has already decided.
 
-    `create_comment` is the ordinary door and asks the parent binding. This one
-    exists for a caller that authorises by a different rule entirely: the
-    requester portal admits by RELATIONSHIP (you reported it, or it was filed for
-    your team — RADD-796), and a requester holds `comment.write` nowhere. The
-    submit path already extends exactly that trust to create the item.
-
-    It is a separate, named function rather than a `bypass_authz=True` flag on
-    the one above, because a boolean that skips permission checks is the kind of
-    parameter that gets copied into a caller which had no business skipping
-    anything. Passing an EMPTY permission set is deliberate too: an unprivileged
-    caller then cannot reach the import overrides or write an internal comment,
-    because both are gated on what is in that set.
-
-    Everything downstream is shared — one write path, so events, mentions,
-    notifications and watchers behave identically however the comment arrived.
+    For callers admitting by another rule: the requester portal admits by
+    relationship (RADD-796), and a requester holds `comment.write` nowhere. A named
+    function rather than a `bypass_authz=True` flag, because such a flag gets
+    copied into callers with no business skipping checks. An EMPTY `permissions`
+    keeps an unprivileged caller away from the import overrides and internal
+    comments, both gated on that set. Downstream (events, mentions, watchers) is
+    the one shared write path.
     """
     _check_internal(permissions, data.visibility)
     is_thread = parent_comment_id is None and (data.is_thread or data.anchor is not None)
     if is_thread:
-        from .threads import lock_thread_parent
-
         await lock_thread_parent(session, entity_type, entity_id)
     # Import overrides (author/timestamp) are honored only for a project manager.
     can_import = Permission.PROJECT_MANAGE in permissions
-    # An IMPORT states the author explicitly; falling back to the actor there
-    # credited whoever ran the import with thousands of other people's comments
-    # (spec 90 follow-up). A mapped source user resolves to a real account;
-    # skipped or absent source identities remain NULL (RADD-1195).
+    # An import names the author explicitly. Falling back to the actor would credit
+    # the importer with everyone's comments; unmapped identities stay NULL (RADD-1195).
     author_id = data.author_id if (can_import and "author_id" in data.model_fields_set) else actor.id
     occurred_at = data.created_at if (can_import and data.created_at) else None
     comment = Comment(
@@ -423,7 +382,6 @@ async def update_comment(
     comment = await _get(session, comment_id)
     root = None
     if comment.parent_comment_id:
-        from .threads import reply_audience, require_thread
         root = await require_thread(session, comment.parent_comment_id, actor)
         if data.visible_to_teams is not None:
             # RADD-1246: a reply may move within its thread's audience, never past it.
@@ -445,7 +403,6 @@ async def update_comment(
         stored_teams = await _set_teams(session, comment, data.visible_to_teams)
         if root is None and stored_teams != previous_teams:
             # The thread's audience is its replies' ceiling (RADD-1246).
-            from .threads import narrow_replies
             await narrow_replies(session, comment, stored_teams)
     else:
         stored_teams = previous_teams
@@ -470,7 +427,6 @@ async def update_comment(
 async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> None:
     comment = await _get(session, comment_id)
     if comment.parent_comment_id:
-        from .threads import require_thread
         await require_thread(session, comment.parent_comment_id, actor)
     binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
     permissions = await _require_author_or(
@@ -504,13 +460,8 @@ async def comment_counts(
 async def delete_for_parent(
     session: AsyncSession, entity_type: str, entity_id: uuid.UUID
 ) -> int:
-    """Remove every comment on a parent that is being destroyed (RADD-717).
-
-    The polymorphic column cannot carry a foreign key, so the ON DELETE CASCADE
-    the old `item_id` had is gone and each parent's hard-delete path calls this
-    instead. Left undone, a deleted item or page leaves comments that nothing
-    can reach and nothing can remove.
-    """
+    """Remove every comment on a parent being destroyed. The polymorphic column has no
+    FK cascade (RADD-717); `gc.py` catches any delete path that forgets to call this."""
     result = await session.execute(
         delete(Comment).where(
             Comment.entity_type == entity_type, Comment.entity_id == entity_id
@@ -522,15 +473,8 @@ async def delete_for_parent(
 async def set_resolved(
     session: AsyncSession, comment_id: uuid.UUID, actor: User, *, resolved: bool
 ) -> CommentRead:
-    """Resolve or reopen a resolvable root (inline or general discussion).
-
-    Same authorization as EDITING it — resolving is a statement about the
-    conversation, not a destructive act, and anyone who could rewrite the comment
-    can certainly close it. Idempotent: resolving a resolved comment is not an
-    error, because two people clicking at once is ordinary.
-    """
-    from .threads import lock_thread_parent, require_thread
-
+    """Resolve or reopen a resolvable root (inline or general discussion), under the
+    parent's thread-resolution rule. Idempotent: two people clicking at once is ordinary."""
     comment = await _get(session, comment_id)
     if comment.parent_comment_id:
         raise ConflictError(CommentEntity.COMMENT, reason="Resolve the thread, not an individual reply")

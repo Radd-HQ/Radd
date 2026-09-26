@@ -1,9 +1,5 @@
-"""Default project views: every new project ships with a Board, a List, a
-Planning, and a Roadmap view — plain saved views like any other (editable,
-deletable, globally-visible; owner NULL = managed via the view.* RBAC atoms).
-No special surface/designation concept: the sidebar simply lists the project's
-views.
-"""
+"""The views every new project ships with (Board, List, Planning, Roadmap): plain
+saved views (owner NULL = managed through the view.* atoms), editable and deletable."""
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

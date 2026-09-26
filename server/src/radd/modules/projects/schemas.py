@@ -9,10 +9,7 @@ class InstanceConfigRead(BaseModel):
     """Safe instance config for authenticated clients (spec 35)."""
 
     work_week_days: list[str]
-    # Spec 67 follow-up: hours-per-day is a GLOBAL scalar (instance override →
-    # env default) — the frontend duration formatter reads it from here instead
-    # of hardcoding 8. days-per-week stays env-only (config.timelog_days_per_week).
-    timelog_hours_per_day: int
+    timelog_hours_per_day: int  # global scalar; days-per-week stays env-only
     timelog_days_per_week: int
     sso_enabled: bool = False  # spec 40 — the login page shows the SSO button
     ldap_enabled: bool = False  # spec 42 — the login page offers directory sign-in
@@ -28,13 +25,9 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    """PATCH /projects/{id} (RADD-1009): rename and describe.
-
-    The KEY is deliberately absent. Every item key (`TD-1234`) derives from it,
-    it is the instance-wide address the connectors' regexes and every issue URL
-    carry, and the project counter rides on it — a renamed key would orphan all
-    of them at once. Omitted = unchanged.
-    """
+    """PATCH /projects/{id} (RADD-1009): rename and describe; omitted = unchanged.
+    The KEY is deliberately absent: every item key, issue URL and connector regex
+    derives from it, so a renamed key would orphan all of them at once."""
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
@@ -63,17 +56,9 @@ class ProjectRead(BaseModel):
     # hydrated by the router via auth.authz. Plain strings: projects loads before
     # auth in the module assembly, so schemas here must not import auth.
     permissions: list[str] = Field(default_factory=list)
-    #: RADD-1041 — presentation-only: WHY this row appears in a `GET /projects`
-    #: listing. "entitled" = item.read held by grant (theirs whether or not
-    #: anything is in it); "related" = item.read held only in qualified form
-    #: (own/participant/team) AND a real relationship, e.g. their own filed
-    #: ticket. `None` on `POST /projects`'s response, which has no
-    #: `visible_projects` lookup behind it. Never a filter: the SET of projects
-    #: returned is still exactly `auth.authz.visible_projects` (RADD-937) — this
-    #: only feeds the sidebar's "related projects" preference (RADD-1041) so it
-    #: can hide the related half without the server hiding anything. Plain
-    #: string, not the auth enum (`ProjectVia`): projects loads before auth, so
-    #: this file cannot import it — same reason `permissions` above is `str`.
+    #: RADD-1041 — presentation only: "entitled" | "related" (see authz.ProjectVia),
+    #: feeding the sidebar's related-projects preference; never a filter. None on
+    #: POST's response. A string because projects cannot import auth's enum.
     via: str | None = None
     #: Spec 121 — the two public-access switches, DERIVED from grants: the
     #: Public role held by the Anyone principal here, and the Contributor role
@@ -97,12 +82,9 @@ class ProjectSummaryRead(BaseModel):
 
 
 class BlockerRead(BaseModel):
-    """RADD-1174: one thing that stops a project being deleted, as the owner
-    module named it — the SPA prints `label`, and `hint` as a link to `url`.
-
-    `url` is the OWNER's page for that kind of row (RADD-1378), resolved from
-    the entity links it declared; None when it declares none or is not
-    mounted. The SPA never knows which plugin a blocker came from."""
+    """RADD-1174: one thing that stops a project being deleted. The SPA prints
+    `label`, and `hint` as a link to `url` — the owner's page for that row, from
+    its declared entity links (RADD-1378); None when it declares none."""
 
     kind: str
     id: str

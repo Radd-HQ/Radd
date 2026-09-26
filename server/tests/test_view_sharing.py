@@ -75,7 +75,7 @@ async def test_view_sharing_matrix(db):
     await teams_service.add_team_member(db, team.id, teammate.id)
 
     async def visible_names(actor) -> set[str]:
-        reads = await views_service.list_views(db, actor=actor, project_id=None)
+        reads = (await views_service.page_views(db, actor=actor, project_id=None))[0]
         return {r.name for r in reads}
 
     # A plain member creates a view shared at birth: direct viewer + team editor.
@@ -186,7 +186,7 @@ async def test_co_ownership_and_transfer(db):
     # Co-owner (owner-level grantee): full control — edit, re-share…
     read = next(
         r
-        for r in await views_service.list_views(db, actor=coowner, project_id=None)
+        for r in (await views_service.page_views(db, actor=coowner, project_id=None))[0]
         if r.id == view.id
     )
     assert read.can_edit and read.can_manage
@@ -217,7 +217,7 @@ async def test_co_ownership_and_transfer(db):
     assert transferred.owner_id == heir.id
     as_old_owner = next(
         r
-        for r in await views_service.list_views(db, actor=owner, project_id=None)
+        for r in (await views_service.page_views(db, actor=owner, project_id=None))[0]
         if r.id == view.id
     )
     assert as_old_owner.can_edit and not as_old_owner.can_manage
@@ -226,7 +226,7 @@ async def test_co_ownership_and_transfer(db):
     # The heir has full control now (and no lingering share row for themselves).
     as_heir = next(
         r
-        for r in await views_service.list_views(db, actor=heir, project_id=None)
+        for r in (await views_service.page_views(db, actor=heir, project_id=None))[0]
         if r.id == view.id
     )
     assert as_heir.can_manage
@@ -319,7 +319,7 @@ async def test_projects_ship_with_default_views(db):
         db, ProjectCreate(key=f"VD{run[:4].upper()}", name="Defaults")
     )
 
-    seeded = await views_service.list_views(db, actor=admin, project_id=project.id)
+    seeded = (await views_service.page_views(db, actor=admin, project_id=project.id))[0]
     assert {(v.name, v.view_type) for v in seeded} == {
         ("Board", "board"),
         ("List", "list"),
@@ -337,5 +337,5 @@ async def test_projects_ship_with_default_views(db):
     )
     assert renamed.name == "Kanban"
     await views_service.delete_view(db, next(v.id for v in seeded if v.name == "List"), actor=admin)
-    remaining = await views_service.list_views(db, actor=admin, project_id=project.id)
+    remaining = (await views_service.page_views(db, actor=admin, project_id=project.id))[0]
     assert {v.name for v in remaining} == {"Kanban", "Planning", "Roadmap"}

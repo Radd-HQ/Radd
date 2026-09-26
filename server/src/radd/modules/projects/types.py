@@ -22,17 +22,10 @@ class ProjectEntity(StrEnum):
 
 
 class ProjectHook(StrEnum):
-    """In-transaction hook points this module dispatches (RADD-1174), named for
-    the MOMENT like `ItemHook`. `project.created` seeds through the same
-    registry; these are its mirror image for teardown.
-
-    `projects` cannot know which modules hang rows off a project — comments and
-    attachments key to a polymorphic parent, settings and notification rules
-    carry a bare `scope_id`, and a plugin may have declared anything — so it
-    DISPATCHES and every owner subscribes. The `ProjectPurgeSpec` registry
-    covers the tables a plain `DELETE … WHERE project_id` can reach; these hooks
-    cover everything it cannot.
-    """
+    """In-transaction teardown hooks (RADD-1174), named for the MOMENT like
+    `ItemHook`. `projects` cannot know who hangs rows off a project (polymorphic
+    parents, bare `scope_id`s, plugins), so it dispatches and every owner
+    subscribes; `ProjectPurgeSpec` covers what a plain `DELETE … WHERE project_id` reaches."""
 
     #: Before anything is destroyed: report what of yours dies (`counts`) and
     #: what must stop the deletion outright (`blockers`). Read-only by contract.

@@ -1,11 +1,6 @@
-"""The worklog MCP tools (spec 114 / RADD-741), declared by their owner
-(RADD-889).
-
-Handlers moved verbatim from mcp/tools.py. Row-level authorization is
-`authorize_mutation` — the same function the REST router calls — and the
-listing's scope rules are the timesheet's own, so `kernel_enforced=False`: the
-spec's `permission` is the spec-114 catalog FLOOR, not the enforcement.
-"""
+"""The worklog MCP tools (spec 114 / RADD-741). Row-level authorization is
+`authorize_mutation`, the function the REST router calls, and the listing uses the
+timesheet's scope rules — so `kernel_enforced=False`: `permission` is only the catalog floor."""
 
 import uuid
 from collections.abc import Mapping
@@ -24,7 +19,6 @@ from radd.modules.projects import service as projects_service
 
 from . import categories as timelogging_categories, service as timelogging_service, timesheet
 from .schemas import WorklogCreate, WorklogUpdate
-from .slq import compile_worklog_query, parse as worklog_parse
 
 WORKLOG_WINDOW_DAYS = 30  # spec 114: list_worklogs default window
 
@@ -66,18 +60,8 @@ async def _log_work(session: AsyncSession, actor: User, args: Mapping[str, Any])
 
 
 async def _update_worklog(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
-    """Correct a time entry (RADD-741).
-
-    The gap this closes was found by hitting it: an allocation came out two
-    minutes over the session's wall clock, and trimming it had to go to REST
-    because MCP could log time but never correct it. Logged time is the one thing
-    the working agreement insists must be derived rather than estimated, which
-    makes "I got it slightly wrong" a routine event, not an edge case.
-
-    Row-level authorization is `timelogging.service.authorize_mutation` — the
-    same function the REST router calls, so an agent can do exactly what a person
-    can and nothing more. The catalog atom is only the floor.
-    """
+    """Correct a time entry (RADD-741): derived time is routinely slightly wrong.
+    Row-level authorization is `authorize_mutation`, the REST router's own."""
     from datetime import date as _date
 
     worklog = await timelogging_service.get_worklog(session, uuid.UUID(str(args["worklog_id"])))
@@ -124,8 +108,7 @@ async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, 
     # GLOBAL — timesheet.view is instance-wide, and a scoped key without it
     # defaults to its own time, which the SLQ below can only narrow.
     await authz.require_anywhere(session, actor, Permission.ITEM_READ, refuse_when_empty=True)
-    global_permissions = await authz.effective_permissions(session, actor)
-    user_ids = None if Permission.TIMESHEET_VIEW in global_permissions else {actor.id}
+    user_ids = await timesheet.visible_user_ids(session, actor, None)
     end = _date.fromisoformat(str(args["end"])) if args.get("end") else _date.today()
     start = (
         _date.fromisoformat(str(args["start"]))
@@ -134,16 +117,7 @@ async def _list_worklogs(session: AsyncSession, actor: User, args: Mapping[str, 
     )
     where = None
     if args.get("slq") and str(args["slq"]).strip():
-        hours_per_day = await timelogging_service._hours_per_day(session)
-        where = (
-            await compile_worklog_query(
-                session,
-                worklog_parse(str(args["slq"])),
-                current_user_id=actor.id,
-                hours_per_day=hours_per_day,
-                denied_item_fields=await items_service.denied_slq_fields(session, actor, None),
-            )
-        ).where
+        where = await timelogging_service.compile_worklog_filter(session, actor, str(args["slq"]))
     sheet = await timesheet.build(session, start, end, actor=actor, user_ids=user_ids, where=where)
     entries = [entry.model_dump(mode="json") for entry in sheet.entries[: limit_arg(args)]]
     return {
@@ -180,10 +154,7 @@ LOG_WORK = McpToolSpec(
     kernel_enforced=False,
 )
 
-# RADD-741: worklog.write is the CATALOG floor — anyone who may log time may
-# correct their own entry. Editing someone else's still needs project.manage
-# and deleting still needs worklog.delete, enforced per row by
-# `timelogging.service.authorize_mutation`, which the REST router also uses.
+# worklog.write is the catalog floor; per-row rules are `authorize_mutation`'s (RADD-741).
 UPDATE_WORKLOG = McpToolSpec(
     name="update_worklog",
     description="Correct a time entry — the amount, the date, the note or the "

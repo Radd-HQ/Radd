@@ -46,12 +46,8 @@ class WorkCategory(Base, TimestampMixin):
 
 
 class ItemEstimate(Base, TimestampMixin):
-    """A work item's original estimate (one row per item; absence == no estimate).
-
-    Kept in this module's table rather than on work_items so time logging stays a
-    per-project-optional plugin the items module doesn't depend on. Remaining is
-    derived (estimate − logged), never stored.
-    """
+    """A work item's original estimate (absence = none). Here, not on work_items, so
+    items never depends on time logging; remaining is derived, never stored."""
 
     __tablename__ = "item_estimates"
 
@@ -62,15 +58,9 @@ class ItemEstimate(Base, TimestampMixin):
 
 
 class Worklog(Base, TimestampMixin):
-    """A single logged-work entry, booked to a calendar day (`worked_on`).
-
-    Scope (spec 59): against an item (the classic path — item_id set, scope
-    derived from the item), or ITEMLESS (meetings/admin/general time) with an
-    optional project refinement. Itemless entries must carry a category — the
-    category is what identifies them everywhere (enforced by the CHECK below
-    plus service validation). Bucketing by a plain Date (not a datetime) keeps
-    the timesheet free of timezone math.
-    """
+    """A logged-work entry, booked to a calendar day (a Date: no timezone math).
+    Against an item, or ITEMLESS (spec 59) with an optional project; an itemless
+    entry must carry a category, which is what identifies it (CHECK + service)."""
 
     __tablename__ = "worklogs"
     __table_args__ = (
@@ -78,11 +68,9 @@ class Worklog(Base, TimestampMixin):
             "item_id IS NOT NULL OR category_id IS NOT NULL",
             name="ck_worklogs_scope",
         ),
-        # RADD-1258: one row per SOURCE entry. A mirrored worklog carries the
-        # provider's own entry id, and this index — not the lookup — is what
-        # makes a backfill after a webhook, a re-delivered webhook, or two
-        # deliveries racing land on ONE row (the `uq_item_vcs_links_ref`
-        # precedent). Hand-logged rows carry no external id and stay out of it.
+        # RADD-1258: one row per SOURCE entry — this index, not the lookup, makes
+        # backfills, redeliveries and races land on ONE row. Hand-logged rows have
+        # no external id and stay out of it.
         Index(
             "uq_worklogs_external",
             "external_source",
@@ -107,14 +95,10 @@ class Worklog(Base, TimestampMixin):
     worked_on: Mapped[date] = mapped_column(Date, index=True)
     time_spent_seconds: Mapped[int] = mapped_column(Integer)
     note: Mapped[str] = mapped_column(Text, default="")
-    # RADD-1258 — provenance of a MIRRORED entry (time logged on a merge request
-    # or pull request at the provider and copied here). `external_source` is a
-    # VcsProvider value ('' = logged in Radd); `external_scope` names the ref the
-    # time was logged on (`pr:<repo>:<n>`, the vcs link's external id) so a
-    # reconcile can drop the entries that vanished at the source WITHOUT
-    # touching another MR's rows on the same item; `external_id` is the
-    # provider's own entry id. A row with a source is read-only in Radd — it
-    # is corrected where it was logged.
+    # RADD-1258 — a MIRRORED entry's provenance: `external_source` a VcsProvider
+    # value ('' = logged here), `external_scope` the ref (`pr:<repo>:<n>`) so a
+    # reconcile never touches another MR's rows, `external_id` the provider's id.
+    # A row with a source is read-only here.
     external_source: Mapped[str] = mapped_column(String(20), default="", server_default="")
     external_scope: Mapped[str] = mapped_column(String(512), default="", server_default="")
     external_id: Mapped[str] = mapped_column(String(512), default="", server_default="")

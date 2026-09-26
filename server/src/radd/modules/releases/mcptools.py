@@ -1,14 +1,7 @@
-"""The release MCP tools (specs 112/114, RADD-673/908), declared by their owner
-(RADD-889).
-
-Each handler carries its own `authz.require` on the resolved project, so
-`kernel_enforced=False` and the spec's `permission`/`project_param` drive the
-spec-114 caller filter (and its project-enum rewrite) only.
-
-items is a weak dependency (it loads after releases), so `set_item_release`
-reaches for it inside the handler, as does the pipeline (whose import chain
-crosses into items too).
-"""
+"""The release MCP tools (specs 112/114). Each handler runs its own
+`authz.require` on the resolved project (`kernel_enforced=False`: the spec's
+`permission`/`project_param` drive only the catalog filter). items loads after
+releases, so `set_item_release` and the pipeline import it inside handlers."""
 
 from collections.abc import Mapping
 from typing import Any

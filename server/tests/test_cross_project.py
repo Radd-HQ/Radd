@@ -17,7 +17,8 @@ from radd.exceptions import ConflictError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items
-from radd.modules.items.enums import ItemKind, ItemLinkType
+from radd.modules.items.enums import ItemKind
+from radd.modules.linktypes.types import ItemLinkType
 from radd.modules.items.schemas import ItemCreate, ItemLinkCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate

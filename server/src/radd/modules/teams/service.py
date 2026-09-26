@@ -48,6 +48,10 @@ async def create_team(
     return team
 
 
+def _named_like(stmt, q: str | None):
+    return stmt.where(Team.name.ilike(ilike_term(q.strip()))) if q and q.strip() else stmt
+
+
 async def list_teams(
     session: AsyncSession,
     *,
@@ -55,19 +59,14 @@ async def list_teams(
     limit: int | None = None,
     offset: int = 0,
 ) -> list[Team]:
-    stmt = select(Team).order_by(Team.name, Team.id)
-    if q and q.strip():
-        stmt = stmt.where(Team.name.ilike(ilike_term(q.strip())))
+    stmt = _named_like(select(Team).order_by(Team.name, Team.id), q)
     if limit is not None:
         stmt = stmt.offset(offset).limit(limit)
     return list((await session.execute(stmt)).scalars())
 
 
 async def count_teams(session: AsyncSession, *, q: str | None = None) -> int:
-    stmt = select(func.count()).select_from(Team)
-    if q and q.strip():
-        stmt = stmt.where(Team.name.ilike(ilike_term(q.strip())))
-    return (await session.execute(stmt)).scalar_one()
+    return (await session.execute(_named_like(select(func.count()).select_from(Team), q))).scalar_one()
 
 
 async def get_team(session: AsyncSession, team_id: uuid.UUID, *, for_update: bool = False) -> Team:
@@ -114,20 +113,10 @@ async def update_team(
 async def delete_team(
     session: AsyncSession, team_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:
-    """Delete a team (spec 87 — the team.delete atom had no endpoint).
-
-    Refused while the team still grants access to a project: dropping it would
-    silently revoke everyone on it, and the project's access list is the place to
-    make that decision. Also refused while items are assigned to it —
-    `work_items.team_id` is RESTRICT, so asking first turns what would be a 500
-    into an answer that says what to do. Members, managers and any instance-wide
-    grants held by the team go with it (FK CASCADE).
-
-    RADD-929: the project count comes from the team's project-scoped ROLE GRANTS.
-    It used to count `project_teams` rows, which stopped being the whole answer
-    the moment a team could also be entitled by a grant — a team holding a
-    project only by grant deleted silently.
-    """
+    """Delete a team (spec 87). Refused while it holds a project-scoped role grant
+    (dropping it would silently revoke everyone on it; the loss must be deliberate)
+    or items are assigned to it (`team_id` is RESTRICT — a 409 beats a 500).
+    Members, managers and instance-wide grants CASCADE."""
     team = await get_team(session, team_id)
     from radd.modules.auth import grants as auth_grants  # deferred: auth loads first
 
@@ -171,27 +160,43 @@ async def delete_team(
 # --- team members (RADD-829: a member is a USER or a GROUP) --------------------
 
 
+async def _add_member_row(
+    session: AsyncSession, team: Team, column, value: uuid.UUID, actor_id, payload: dict, label: str
+) -> None:
+    """Insert one `team_members` row (`column` = user_id or group_id) and audit it."""
+    if await session.scalar(select(TeamMember.id).where(TeamMember.team_id == team.id, column == value)):
+        raise ConflictError(TeamEntity.MEMBER, value)
+    session.add(TeamMember(team_id=team.id, **{column.key: value}))
+    await session.flush()
+    forget_user_teams(session)
+    await _emit_updated(
+        session, team, actor_id, payload, [{"field": "members", "added": [label], "removed": []}]
+    )
+
+
+async def _remove_member_row(
+    session: AsyncSession, team: Team, column, value: uuid.UUID, actor_id, payload: dict, label
+) -> None:
+    """Delete one `team_members` row and audit it; `label` is awaited only once it is gone."""
+    result = await session.execute(
+        delete(TeamMember).where(TeamMember.team_id == team.id, column == value)
+    )
+    if result.rowcount == 0:
+        raise NotFoundError(TeamEntity.MEMBER, value)
+    forget_user_teams(session)
+    await _emit_updated(
+        session, team, actor_id, payload, [{"field": "members", "added": [], "removed": await label()}]
+    )
+
+
 async def add_team_member(
     session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> User:
     team = await get_team(session, team_id)
     user = await auth.get_user(session, user_id)
-    existing = await session.scalar(
-        select(TeamMember.id).where(
-            TeamMember.team_id == team_id, TeamMember.user_id == user_id
-        )
-    )
-    if existing:
-        raise ConflictError(TeamEntity.MEMBER, user_id)
-    session.add(TeamMember(team_id=team_id, user_id=user_id))
-    await session.flush()
-    forget_user_teams(session)
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
-        {"action": TeamChange.MEMBER_ADDED, "user_id": str(user_id)},
-        [{"field": "members", "added": [user.name], "removed": []}],
+    await _add_member_row(
+        session, team, TeamMember.user_id, user_id, actor_id,
+        {"action": TeamChange.MEMBER_ADDED, "user_id": str(user_id)}, user.name,
     )
     return user
 
@@ -200,18 +205,10 @@ async def remove_team_member(
     session: AsyncSession, team_id: uuid.UUID, user_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:
     team = await get_team(session, team_id)
-    result = await session.execute(
-        delete(TeamMember).where(TeamMember.team_id == team_id, TeamMember.user_id == user_id)
-    )
-    if result.rowcount == 0:
-        raise NotFoundError(TeamEntity.MEMBER, user_id)
-    forget_user_teams(session)
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
+    await _remove_member_row(
+        session, team, TeamMember.user_id, user_id, actor_id,
         {"action": TeamChange.MEMBER_REMOVED, "user_id": str(user_id)},
-        [{"field": "members", "added": [], "removed": await _user_names(session, [user_id])}],
+        lambda: _user_names(session, [user_id]),
     )
 
 
@@ -222,22 +219,10 @@ async def add_team_group(
     nesting included — count as team members everywhere membership is asked."""
     team = await get_team(session, team_id)
     group = await groups_service.get_group(session, group_id)
-    existing = await session.scalar(
-        select(TeamMember.id).where(
-            TeamMember.team_id == team_id, TeamMember.group_id == group_id
-        )
-    )
-    if existing:
-        raise ConflictError(TeamEntity.MEMBER, group_id)
-    session.add(TeamMember(team_id=team_id, group_id=group_id))
-    await session.flush()
-    forget_user_teams(session)
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
+    await _add_member_row(
+        session, team, TeamMember.group_id, group_id, actor_id,
         {"action": TeamChange.GROUP_ADDED, "group_id": str(group_id), "group": group.name},
-        [{"field": "members", "added": [f"group {group.name}"], "removed": []}],
+        f"group {group.name}",
     )
     return group
 
@@ -247,20 +232,14 @@ async def remove_team_group(
 ) -> None:
     team = await get_team(session, team_id)
     group = await groups_service.get_group(session, group_id)
-    result = await session.execute(
-        delete(TeamMember).where(
-            TeamMember.team_id == team_id, TeamMember.group_id == group_id
-        )
-    )
-    if result.rowcount == 0:
-        raise NotFoundError(TeamEntity.MEMBER, group_id)
-    forget_user_teams(session)
-    await _emit_updated(
-        session,
-        team,
-        actor_id,
+
+    async def label() -> list[str]:
+        return [f"group {group.name}"]
+
+    await _remove_member_row(
+        session, team, TeamMember.group_id, group_id, actor_id,
         {"action": TeamChange.GROUP_REMOVED, "group_id": str(group_id), "group": group.name},
-        [{"field": "members", "added": [], "removed": [f"group {group.name}"]}],
+        label,
     )
 
 
@@ -277,11 +256,9 @@ async def team_groups(session: AsyncSession, team_id: uuid.UUID) -> list[Group]:
 
 
 async def list_team_members(session: AsyncSession, team_id: uuid.UUID) -> list[User]:
-    """Every PERSON on the team: direct user rows plus the people its member
-    groups resolve to, nesting included. Group-expanded members count as
-    members — post-migration a directory team's people are reachable ONLY via
-    its group, so stewardship, leave and approval electorates all depend on
-    this expansion."""
+    """Every PERSON on the team: direct users plus the people its groups resolve to,
+    nesting included — a directory team's people are reachable ONLY via its group,
+    so stewardship, leave and approval electorates depend on this expansion."""
     users = await member_users_with_via(session, team_id)
     return sorted({u.id: u for u, _via in users}.values(), key=lambda u: u.name)
 

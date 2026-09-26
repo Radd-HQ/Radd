@@ -10,7 +10,7 @@ from radd.modules.auth.types import LoginMethod
 
 
 @pytest.fixture
-async def project_world(access_world):
+async def project_world(access_world):  # noqa: F811 — the imported fixture
     db,client,_,_,grants,roles,people,teams,groups,cookie,engine,prefix=access_world
     project=await db.scalar(select(Project).where(Project.key=='P'+prefix.upper()))
     hidden=Project(key='H'+prefix.upper(),name=prefix+'hidden');db.add(hidden);await db.flush()

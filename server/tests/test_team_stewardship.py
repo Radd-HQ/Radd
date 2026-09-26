@@ -4,7 +4,7 @@ import asyncio
 import uuid
 import httpx
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.app import create_app
 from radd.config import settings

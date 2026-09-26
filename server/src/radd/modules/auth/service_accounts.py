@@ -1,16 +1,6 @@
-"""Service accounts (spec 113): principals that authenticate by API key only.
-
-A service account IS a user row. Every FK in the system points at `users` —
-assignee, reporter, comment author, worklog author, `events.actor_id` — so an
-identity that is not a user would need a parallel path through all of them for no
-benefit. What makes it a service account is `source=service`, which
-`create_session` refuses, and the fact that its authority comes from grants an
-admin gives it rather than from a person.
-
-Keys are ordinary `api_tokens` rows, with the spec-113 `scopes` narrowing.
-Because a service account cannot log in, its keys have to be mintable BY an
-admin — which is the one thing personal tokens never needed.
-"""
+"""Service accounts (spec 113): user rows with `source=service`, which
+`create_session` refuses — so they authenticate by API key only, and their
+keys are minted BY an admin. A user row, because every FK points at users."""
 
 import re
 import uuid
@@ -23,30 +13,20 @@ from radd.kernel import changes
 from radd.modules.events import service as events
 
 from . import scopes as scopes_mod
-from . import service, security
 from .models import ApiToken, User
 from .schemas import ServiceAccountCreate, ServiceAccountUpdate, TokenCreate
-from .types import PAT_PREFIX_DISPLAY_CHARS, AuthEntity, AuthEvent, InstanceRole, UserSource
+from .service_tokens import _mint_token, _naive_utc
+from .types import AuthEntity, AuthEvent, InstanceRole, UserSource
 
-#: Synthetic addresses live on a domain that cannot receive mail — the DEFAULT
-#: address is undeliverable, so email notifications to an unconfigured service
-#: account go nowhere. That is the whole guarantee (RADD-869): a caller may
-#: still set a real address, the account can be assigned work and accrues
-#: notification rows like anyone, and pickers rely on `UserDirectoryEntry.
-#: source` (badged as a service account in the SPA) to tell it from a person.
+#: The DEFAULT address is undeliverable, so mail to an unconfigured service
+#: account goes nowhere — that is the whole guarantee (RADD-869); pickers tell
+#: it from a person by `UserDirectoryEntry.source`.
 SERVICE_EMAIL_DOMAIN = "service.radd.local"
 
 
 def synthetic_email(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-") or "service"
     return f"{slug}@{SERVICE_EMAIL_DOMAIN}"
-
-
-async def list_accounts(session: AsyncSession) -> list[User]:
-    rows = await session.execute(
-        select(User).where(User.source == UserSource.SERVICE.value).order_by(User.name)
-    )
-    return list(rows.scalars())
 
 
 async def get_account(session: AsyncSession, account_id: uuid.UUID) -> User:
@@ -135,18 +115,13 @@ async def create_key(
     looks granted and is not."""
     account = await get_account(session, account_id)
     scope = scopes_mod.parse_scope(data.scopes)  # raises ValueError -> 422
-    raw = security.new_api_token()
-    token = ApiToken(
-        user_id=account.id,
-        name=data.name,
-        token_hash=security.hash_token(raw),
-        prefix_display=raw[:PAT_PREFIX_DISPLAY_CHARS],
-        expires_at=service._naive_utc(data.expires_at),
+    return await _mint_token(
+        session,
+        account.id,
+        data.name,
+        expires_at=_naive_utc(data.expires_at),
         scopes=scope.to_json() if scope is not None else None,
     )
-    session.add(token)
-    await session.flush()
-    return token, raw
 
 
 async def list_keys(session: AsyncSession, account_id: uuid.UUID) -> list[ApiToken]:

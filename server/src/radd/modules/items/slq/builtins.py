@@ -7,7 +7,9 @@ Nullable to-one relations (assignee/reporter/team/type/cycle/release) pass
 the positive ones, so `assignee != x` includes the unassigned (RADD-1139).
 """
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Any
 
 from sqlalchemy import ColumnElement, and_, false, not_, or_, select
 from sqlalchemy.orm import aliased
@@ -16,20 +18,21 @@ from radd.modules.auth.models import User
 from radd.modules.cycles import service as cycles_service
 from radd.modules.cycles.types import CycleStatus
 from radd.modules.itemtypes import service as itemtypes_service
+from radd.modules.linktypes.types import ItemLinkType
 from radd.modules.releases import service as releases_service
 from radd.modules.teams.models import Team
 from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
 from radd.modules.projects.models import Project
 
-from ..enums import ItemKind, ItemLinkType, ItemVisibility, Priority
+from ..enums import ItemKind, ItemVisibility, Priority
 from ..filters import NONE_LITERAL
 from ..models import ItemLabel, ItemLink, ItemStar, WorkItem
 from .catalog import ME_LITERAL, SlqField
-from .errors import SlqError
 from .helpers import (
     LIKE_ESCAPE,
     Context,
+    bool_value,
     compare,
     date_value,
     enum_values,
@@ -44,6 +47,8 @@ from .helpers import (
 )
 from .lexer import CompareOp
 from .parser import Comparison, Condition, EmptyCheck, Membership
+
+Compiler = Callable[[Context, Condition], ColumnElement[bool]]
 
 
 def _project(ctx: Context, node: Condition) -> ColumnElement[bool]:
@@ -89,46 +94,36 @@ def user_match(
     return or_(*conditions)
 
 
-def _assignee(ctx: Context, node: Condition) -> ColumnElement[bool]:
-    if isinstance(node, EmptyCheck):
-        return polarity(node, WorkItem.assignee_id.is_(None))
-    return polarity(node, user_match(ctx, node, WorkItem.assignee_id), nullable=True)
+def _user_field(column: ColumnElement) -> Compiler:
+    """assignee/reporter: IS [NOT] EMPTY, else the shared user-value language."""
+
+    def compile_(ctx: Context, node: Condition) -> ColumnElement[bool]:
+        if isinstance(node, EmptyCheck):
+            return polarity(node, column.is_(None))
+        return polarity(node, user_match(ctx, node, column), nullable=True)
+
+    return compile_
 
 
-def _reporter(ctx: Context, node: Condition) -> ColumnElement[bool]:
-    if isinstance(node, EmptyCheck):
-        return polarity(node, WorkItem.reporter_id.is_(None))
-    return polarity(node, user_match(ctx, node, WorkItem.reporter_id), nullable=True)
+def _named_relation(column: ColumnElement, ids_for: Callable[[list[str]], Any]) -> Compiler:
+    """A nullable to-one relation addressed by NAME (team/type/cycle/release):
+    IS [NOT] EMPTY, the `none` sentinel, else `column IN ids_for(names)`."""
 
+    def compile_(ctx: Context, node: Condition) -> ColumnElement[bool]:
+        if isinstance(node, EmptyCheck):
+            return polarity(node, column.is_(None))
+        conditions: list[ColumnElement[bool]] = []
+        names: list[str] = []
+        for value in values_of(node):
+            if is_sentinel(value, NONE_LITERAL):
+                conditions.append(column.is_(None))
+            else:
+                names.append(plain(value, node.field))
+        if names:
+            conditions.append(column.in_(ids_for(names)))
+        return polarity(node, or_(*conditions), nullable=True)
 
-def _team(ctx: Context, node: Condition) -> ColumnElement[bool]:
-    if isinstance(node, EmptyCheck):
-        return polarity(node, WorkItem.team_id.is_(None))
-    conditions: list[ColumnElement[bool]] = []
-    names: list[str] = []
-    for value in values_of(node):
-        if is_sentinel(value, NONE_LITERAL):
-            conditions.append(WorkItem.team_id.is_(None))
-        else:
-            names.append(plain(value, node.field))
-    if names:
-        conditions.append(WorkItem.team_id.in_(select(Team.id).where(Team.name.in_(names))))
-    return polarity(node, or_(*conditions), nullable=True)
-
-
-def _type(ctx: Context, node: Condition) -> ColumnElement[bool]:
-    if isinstance(node, EmptyCheck):
-        return polarity(node, WorkItem.type_id.is_(None))
-    conditions: list[ColumnElement[bool]] = []
-    names: list[str] = []
-    for value in values_of(node):
-        if is_sentinel(value, NONE_LITERAL):
-            conditions.append(WorkItem.type_id.is_(None))
-        else:
-            names.append(plain(value, node.field))
-    if names:
-        conditions.append(WorkItem.type_id.in_(itemtypes_service.ids_by_names(names)))
-    return polarity(node, or_(*conditions), nullable=True)
+    return compile_
 
 
 def _label(ctx: Context, node: Condition) -> ColumnElement[bool]:
@@ -205,21 +200,6 @@ def _timestamp(column: ColumnElement[datetime], node: Condition) -> ColumnElemen
     raise TypeError(node.op)  # pragma: no cover
 
 
-def _cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
-    if isinstance(node, EmptyCheck):
-        return polarity(node, WorkItem.cycle_id.is_(None))
-    conditions: list[ColumnElement[bool]] = []
-    names: list[str] = []
-    for value in values_of(node):
-        if is_sentinel(value, NONE_LITERAL):
-            conditions.append(WorkItem.cycle_id.is_(None))
-        else:
-            names.append(plain(value, node.field))
-    if names:
-        conditions.append(WorkItem.cycle_id.in_(cycles_service.ids_by_names(names)))
-    return polarity(node, or_(*conditions), nullable=True)
-
-
 def _past_cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
     """Closed cycle stints (spec 56): cycles the item was in and LEFT — the
     carryover trail. The current cycle is `cycle`; `past_cycle IS NOT EMPTY`
@@ -237,21 +217,6 @@ def _past_cycle(ctx: Context, node: Condition) -> ColumnElement[bool]:
     if names:
         conditions.append(WorkItem.id.in_(cycles_service.closed_stint_item_ids(names)))
     return polarity(node, or_(*conditions))
-
-
-def _release(ctx: Context, node: Condition) -> ColumnElement[bool]:
-    if isinstance(node, EmptyCheck):
-        return polarity(node, WorkItem.release_id.is_(None))
-    conditions: list[ColumnElement[bool]] = []
-    versions: list[str] = []
-    for value in values_of(node):
-        if is_sentinel(value, NONE_LITERAL):
-            conditions.append(WorkItem.release_id.is_(None))
-        else:
-            versions.append(plain(value, node.field))
-    if versions:
-        conditions.append(WorkItem.release_id.in_(releases_service.ids_by_versions(versions)))
-    return polarity(node, or_(*conditions), nullable=True)
 
 
 def _block_link(*, incoming: bool, target_ids: ColumnElement | None = None) -> ColumnElement[bool]:
@@ -286,17 +251,10 @@ def _date_field(column: ColumnElement, node: Condition) -> ColumnElement[bool]:
     return compare(column, node.op, date_value(node.value, node.field))
 
 
-_BOOLEAN_WORDS = {"true": True, "false": False}
-
-
 def _flagged(ctx: Context, node: Condition) -> ColumnElement[bool]:
     """First-class boolean flag (spec 24): `flagged = true` / `flagged = false`."""
     assert isinstance(node, Comparison)  # ops table: EQUALITY only, no EmptyCheck
-    if node.value.text not in _BOOLEAN_WORDS:
-        raise SlqError(
-            f"field 'flagged' expects true or false, got '{node.value.text}'", node.value.position
-        )
-    return compare(WorkItem.flagged, node.op, _BOOLEAN_WORDS[node.value.text])
+    return compare(WorkItem.flagged, node.op, bool_value(node.value, node.field))
 
 
 def _visibility(ctx: Context, node: Condition) -> ColumnElement[bool]:
@@ -310,11 +268,7 @@ def _starred(ctx: Context, node: Condition) -> ColumnElement[bool]:
     """Personal star for the requesting user (spec 24): `starred = true|false`.
     An EXISTS over item_stars scoped to the current user."""
     assert isinstance(node, Comparison)  # ops table: EQUALITY only
-    if node.value.text not in _BOOLEAN_WORDS:
-        raise SlqError(
-            f"field 'starred' expects true or false, got '{node.value.text}'", node.value.position
-        )
-    wanted = _BOOLEAN_WORDS[node.value.text]
+    wanted = bool_value(node.value, node.field)
     has_star = (
         select(ItemStar.item_id)
         .where(ItemStar.item_id == WorkItem.id, ItemStar.user_id == ctx.current_user_id)
@@ -329,25 +283,33 @@ BUILTIN_COMPILERS = {
     SlqField.STATE: _state,
     SlqField.CATEGORY: _category,
     SlqField.KIND: _kind,
-    SlqField.TYPE: _type,
+    SlqField.TYPE: _named_relation(
+        WorkItem.type_id, lambda names: itemtypes_service.ids_by_names(names)
+    ),
     SlqField.PRIORITY: _priority,
-    SlqField.ASSIGNEE: _assignee,
-    SlqField.REPORTER: _reporter,
-    SlqField.TEAM: _team,
+    SlqField.ASSIGNEE: _user_field(WorkItem.assignee_id),
+    SlqField.REPORTER: _user_field(WorkItem.reporter_id),
+    SlqField.TEAM: _named_relation(
+        WorkItem.team_id, lambda names: select(Team.id).where(Team.name.in_(names))
+    ),
     SlqField.LABEL: _label,
     SlqField.TITLE: _title,
     SlqField.KEY: _key,
     SlqField.NUMBER: _number,
     SlqField.CREATED: lambda ctx, node: _timestamp(WorkItem.created_at, node),
     SlqField.UPDATED: lambda ctx, node: _timestamp(WorkItem.updated_at, node),
-    SlqField.CYCLE: _cycle,
+    SlqField.CYCLE: _named_relation(
+        WorkItem.cycle_id, lambda names: cycles_service.ids_by_names(names)
+    ),
     SlqField.CYCLE_STATUS: lambda ctx, node: polarity(
         node, WorkItem.cycle_id.in_(cycles_service.ids_by_status(
             [value.value for value in enum_values(node, CycleStatus)]
         )), nullable=True
     ),
     SlqField.PAST_CYCLE: _past_cycle,
-    SlqField.RELEASE: _release,
+    SlqField.RELEASE: _named_relation(
+        WorkItem.release_id, lambda names: releases_service.ids_by_versions(names)
+    ),
     SlqField.FLAGGED: _flagged,
     SlqField.VISIBILITY: _visibility,
     SlqField.STARRED: _starred,

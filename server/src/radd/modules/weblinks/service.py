@@ -6,8 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import NotFoundError
 from radd.kernel import changes
 from radd.modules.events import service as events
-from radd.modules.items import service as items_service
-from radd.modules.projects import service as projects_service
 
 from .models import ItemWebLink
 from .schemas import WebLinkCreate, WebLinkUpdate
@@ -84,8 +82,6 @@ async def _emit(
     actor_id: uuid.UUID | None,
     diff: list[dict] | None = None,
 ) -> None:
-    item = await items_service.require_item(session, link.item_id)
-    await projects_service.get_project(session, item.project_id)
     await events.emit(
         session,
         event_type=event_type,

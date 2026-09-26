@@ -1,11 +1,4 @@
-"""Personal API tokens, split out of `service.py` (RADD-902) along its own
-"API tokens" marker (formerly lines 360-425).
-
-`_naive_utc` moved here with it — its one in-file consumer is `create_api_token`
-below — but it is ALSO reached as `service._naive_utc` from
-`service_accounts.py` (service-account keys share the same expiry
-normalization), so `service.py`'s facade re-exports it under that name too.
-"""
+"""API tokens: personal keys, service-account keys and server-minted ephemeral keys."""
 
 import logging
 import uuid
@@ -32,26 +25,45 @@ def _naive_utc(dt: datetime | None) -> datetime | None:
     return dt.astimezone(UTC).replace(tzinfo=None)
 
 
+async def _mint_token(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    name: str,
+    *,
+    expires_at: datetime | None,
+    scopes: dict | None,
+    **extra,
+) -> tuple[ApiToken, str]:
+    """Insert a token row; returns (row, raw token). The raw token is shown once."""
+    raw = security.new_api_token()
+    token = ApiToken(
+        user_id=user_id,
+        name=name,
+        token_hash=security.hash_token(raw),
+        prefix_display=raw[:PAT_PREFIX_DISPLAY_CHARS],
+        expires_at=expires_at,
+        scopes=scopes,
+        **extra,
+    )
+    session.add(token)
+    await session.flush()
+    return token, raw
+
+
 async def create_api_token(
     session: AsyncSession, user: User, data: TokenCreate
 ) -> tuple[ApiToken, str]:
     """Returns (row, raw token). The raw token is shown exactly once."""
     require_account_session(user)
-    raw = security.new_api_token()
-    # Spec 113: a personal token may narrow itself too — same vocabulary, same
-    # intersection. Omitted stays NULL, so existing behaviour is untouched.
+    # Spec 113: a personal token may narrow itself too; omitted stays NULL.
     scope = scopes.parse_scope(data.scopes)  # ValueError -> 422 at the router
-    token = ApiToken(
-        user_id=user.id,
-        name=data.name,
-        token_hash=security.hash_token(raw),
-        prefix_display=raw[:PAT_PREFIX_DISPLAY_CHARS],
+    return await _mint_token(
+        session,
+        user.id,
+        data.name,
         expires_at=_naive_utc(data.expires_at),
         scopes=scope.to_json() if scope is not None else None,
     )
-    session.add(token)
-    await session.flush()
-    return token, raw
 
 
 async def mint_ephemeral_token(
@@ -71,23 +83,16 @@ async def mint_ephemeral_token(
 
     `automation_cause` (RADD-1314) marks every request made with the key as
     automation-caused — the loop guard for writes that arrive over REST."""
-    from datetime import timedelta
-
     from radd.clock import utcnow
 
-    raw = security.new_api_token()
-    token = ApiToken(
-        user_id=user.id,
-        name=name[:200],
-        token_hash=security.hash_token(raw),
-        prefix_display=raw[:PAT_PREFIX_DISPLAY_CHARS],
+    return await _mint_token(
+        session,
+        user.id,
+        name[:200],
         expires_at=utcnow() + timedelta(seconds=max(1, ttl_seconds)),
         scopes=None,
         automation_cause=automation_cause,
     )
-    session.add(token)
-    await session.flush()
-    return token, raw
 
 
 async def discard_token(session: AsyncSession, token: ApiToken) -> None:

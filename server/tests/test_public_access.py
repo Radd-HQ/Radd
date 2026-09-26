@@ -16,7 +16,7 @@ from radd.config import settings as config
 from radd.modules.auth import grants, principals, public_access, roles, service as auth
 from radd.modules.auth.models import GlobalRoleGrant
 from radd.modules.auth.schemas import UserCreate
-from radd.modules.auth.types import SESSION_COOKIE_NAME, BuiltinRoleKey, InstanceRole
+from radd.modules.auth.types import SESSION_COOKIE_NAME, BuiltinRoleKey, GrantScopeKind, InstanceRole
 from radd.modules.projects import service as projects
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.auth.types import LoginMethod
@@ -129,7 +129,7 @@ async def test_http_switches_are_the_grants_the_world_reads_by(db):
     async with httpx.AsyncClient(transport=transport, base_url="http://test", cookies={SESSION_COOKIE_NAME: admin_cookie}) as client:
         closed = await client.put(path, json={"public": False, "contributions": False})
         assert closed.status_code == 200 and closed.json()["public"] is False
-        rows = await grants.grants_for_project(db, project.id)
+        rows = await grants.grants_for_scope(db, GrantScopeKind.PROJECT, project.id)
         assert not [g for g in rows if g.user_id in principals.PRINCIPAL_IDS]
 
     # The override shares ONE session across requests, so drop the per-request

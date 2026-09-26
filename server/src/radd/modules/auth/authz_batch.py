@@ -1,12 +1,4 @@
-"""The batched + cross-project resolvers, split out of `authz.py` (RADD-902)
-along its own "batched + downstream seams" marker (formerly lines 385+).
-
-`permissions_for_projects` is the list-hydration batch path; `require_anywhere`/
-`project_permission_map`/`holds`/`readable_projects`/`require_member` are the
-cross-project tier built on top of it (RADD-672/774/814 — see each docstring).
-Everything here calls into `authz_core.py` (the pure core + the seam) and
-nothing else in the split; `authz.py` re-exports it all under its own name.
-"""
+"""Batched and cross-project resolvers; everything here calls into authz_core."""
 
 import uuid
 from collections.abc import Sequence
@@ -30,7 +22,7 @@ from .authz_core import (
     holds_base,
 )
 from .models import Role, User
-from .types import InstanceRole, Permission, all_permission_keys
+from .types import GrantScopeKind, InstanceRole, Permission, all_permission_keys
 
 #: Key prefix for the per-request memo of `readable_projects` (per actor).
 _READABLE_CACHE_KEY = "radd.readable_projects"
@@ -43,11 +35,7 @@ _PROJECT_MAP_CACHE_KEY = "radd.project_permission_map"
 async def permissions_for_projects(
     session: AsyncSession, user: User, projects: Sequence[Project]
 ) -> dict[uuid.UUID, frozenset[Permission]]:
-    """Effective permissions for many projects in one batched pass (list hydration).
-
-    One instance role decides the tier (admin -> all, active -> member floor +
-    project grants, inactive -> nothing) for every project.
-    """
+    """Effective permissions for many projects in one batched pass (list hydration)."""
     return await _permissions_for_project_ids(session, user, [project.id for project in projects])
 
 
@@ -67,18 +55,13 @@ async def _permissions_for_project_ids(
         }
 
     granted: dict[uuid.UUID, set[uuid.UUID]] = {project_id: set() for project_id in project_ids}
-    # RADD-929: two more queries used to run here — `project_members` and the
-    # teams module's `project_teams` join — producing role ids the two grant
-    # lookups below now produce on their own. Three tables, one fact; the batch
-    # path lost a query per hydration along with the duplication.
-    #
     # Instance-wide grants (spec 87) apply on every project — one lookup, not N.
     global_role_ids = await grants.granted_role_ids(session, user.id)
     for role_ids in granted.values():
         role_ids |= global_role_ids
     # Project-scoped grants (spec 91) apply only on their project.
     for project_id, role_ids in (
-        await grants.project_granted_role_ids(session, user.id, project_ids)
+        await grants.scoped_role_ids(session, user.id, GrantScopeKind.PROJECT, project_ids)
     ).items():
         granted[project_id] |= role_ids
     all_role_ids = {role_id for role_ids in granted.values() for role_id in role_ids}
@@ -125,8 +108,8 @@ async def permissions_for_spaces(
     if InstanceRole(role) is InstanceRole.ADMIN:
         held = _narrow_to_key_scope(user, all_permission_keys(), None)
         return {space_id: held for space_id in space_ids}
-    unscoped = await grants.unscoped_role_ids(session, user.id)
-    scoped = await grants.space_granted_role_ids(session, user.id, space_ids)
+    unscoped = await grants.granted_role_ids(session, user.id)
+    scoped = await grants.scoped_role_ids(session, user.id, GrantScopeKind.SPACE, space_ids)
     role_ids = unscoped | {role_id for ids in scoped.values() for role_id in ids}
     by_role: dict[uuid.UUID, list[str]] = {}
     if role_ids:
@@ -153,30 +136,17 @@ async def permissions_for_spaces(
 
 
 class ProjectVia(StrEnum):
-    """How a project earned its spot in a `visible_projects` map (RADD-1041).
+    """How a project earned its place in `visible_projects` (RADD-1041) —
+    presentation only, never who may reach it."""
 
-    Presentation metadata ONLY — it explains a key that is already there, it
-    never decides whether the key IS there. `GET /projects` threads this onto
-    each row so the sidebar's per-user "related projects" preference can hide
-    the RELATED half without touching security: `visible_projects` computes
-    the exact same set of project ids it always has, tagged is all that's new.
-    """
-
-    #: `item.read` held UNQUALIFIED, i.e. by a grant. Theirs whether or not
-    #: anything is in it yet.
-    ENTITLED = "entitled"
-    #: `item.read` held only in QUALIFIED form (own/participant/team) AND a
-    #: real relationship exists. This is the half a requester's view of their
-    #: own filed ticket depends on — see `visible_projects`.
-    RELATED = "related"
+    ENTITLED = "entitled"  # item.read held unqualified (a grant)
+    RELATED = "related"  # held only qualified AND a real relationship exists
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectVisibility:
-    """One `visible_projects` row: the resolved permission set plus WHY the
-    project is in the map (RADD-1041). `via` is additive over the RADD-937
-    resolution — dropping or hiding it must never change which projects
-    appear, only how a caller chooses to DISPLAY them."""
+    """One `visible_projects` row: the permission set plus WHY the project is in
+    the map. `via` never changes which projects appear, only how they display."""
 
     permissions: frozenset[Permission]
     via: ProjectVia
@@ -187,7 +157,6 @@ def _entitling_relation_held(permissions: frozenset[Permission], base: Permissio
     atom does — it says what the project shows, not who the actor is to a
     row — so a public project is offered to everyone who holds it, with no
     relationship required. Reads the kernel flag; names no relation."""
-    from radd.kernel import registries
     from .types import relation_contains, relations_held, split_permission
 
     resource = split_permission(base)[0].split(".", 1)[0]
@@ -201,40 +170,15 @@ def _entitling_relation_held(permissions: frozenset[Permission], base: Permissio
 async def visible_projects(
     session: AsyncSession, user: User
 ) -> dict[uuid.UUID, ProjectVisibility]:
-    """The projects this actor should be OFFERED (RADD-937), each tagged with
-    WHY (RADD-1041).
+    """The projects this actor should be OFFERED (RADD-937), tagged with WHY.
 
-    `require_anywhere(item.read)` answers "where could they read something",
-    and `holds_base` counts a qualified atom as its base — correct, because
-    `item.read@own` really does let them read their own rows there. Used as a
-    LIST that made every project on the instance appear for an account holding
-    nothing but the Baseline, since "your own rows, anywhere" covers everywhere.
-
-    So visibility is the union of two different facts, each row's `via`
-    (`ProjectVia`) names which one produced it:
-
-    * **entitled** — `item.read` held UNQUALIFIED, i.e. by a grant. The project
-      is theirs whether or not anything is in it.
-    * **related** — held qualified AND the relationship is real: they have an
-      item there, their team does, or they are a participant. This is what keeps
-      a person's own tickets visible after every grant is revoked, which is the
-      half that made emptying the Baseline unacceptable.
-
-    Requiring the qualified read as well as the relationship is deliberate: with
-    the own-item atoms removed from the Baseline, having an item somewhere
-    confers nothing, because the actor cannot read it. The operator lever keeps
-    working.
-
-    The relationships come from the kernel registry, so this function names no
-    module that produces one — `items` and `participants` contribute, and the
-    next one does too without editing this.
-
-    RADD-1041 threaded `via` through so a DISPLAY choice (the rail's "related
-    projects" toggle) could be built without touching the SECURITY decision
-    here: the key set below is identical to what this function returned before
-    `via` existed — only the tag is new, and no caller may use it to filter who
-    can reach a project.
-    """
+    `require_anywhere(item.read)` is wrong for a list: `item.read@own` counts as
+    the base, so a Baseline-only account would be offered every project. So:
+      * ENTITLED — item.read held unqualified (or via a row-property relation such
+        as @public), whether or not anything is in the project;
+      * RELATED — held only qualified AND a real relationship exists (their item,
+        their team's, a participation), from `registries.project_relations`.
+    `via` is display metadata (RADD-1041); it never decides membership."""
     reachable = await require_anywhere(session, user, Permission.ITEM_READ)
     entitled = {
         project_id: permissions
@@ -269,42 +213,15 @@ async def visible_projects(
 async def require_anywhere(
     session: AsyncSession, user: User, permission: Permission, *, refuse_when_empty: bool = False
 ) -> dict[uuid.UUID, frozenset[Permission]]:
-    """The per-project permission map for every project where `permission` holds.
+    """The per-project permission map for every project where `permission` holds —
+    the cross-project gate (RADD-672): a key scoped to one project never holds the
+    GLOBAL atom, so cross-project reads ask this and constrain their query to the
+    returned ids.
 
-    The cross-project gate (RADD-672). `require(permission)` with no project asks
-    for the GLOBAL atom, which a spec-113 key scoped to one project never holds —
-    so every cross-project read (GET /projects, un-scoped item listing, MCP
-    search_items) refused exactly the principals the spec-114 catalog was built
-    for. Holding the permission in ANY project satisfies this gate; the caller
-    constrains its query to the returned project ids.
-
-    **Does not raise by default** (RADD-774). An actor entitled to no project
-    gets an empty map, which every list surface renders as an empty state. "There
-    is nothing here for you" and "you did something you are not allowed to do"
-    are different answers, and only the second deserves an error.
-
-    `refuse_when_empty=True` restores the refusal, and the MCP tools pass it. The
-    audiences genuinely differ: a person looking at an empty projects list can
-    see that it is empty, whereas an AGENT handed `{"projects": []}` will
-    conclude the instance has none and act on it. A refusal is the only way to
-    tell a caller that has no eyes apart "you may not look" from "there is
-    nothing there".
-
-    This used to raise when the permission held nowhere, and that branch was
-    unreachable: `item.read` sat in the hardcoded member floor, so every active
-    user held it on every project. RADD-773 made the floor an editable Baseline
-    role, and the first admin to remove `item.read` from it got a 403 on
-    `GET /projects` — a permission toast as the greeting on a viewer-restricted
-    instance.
-
-    Nothing becomes readable: the atom still gates each project's contents. The
-    only change is whether "you may see none of them" arrives as a result or as
-    a failure.
-
-    RADD-814: filters the request-memoised `project_permission_map`, so the
-    seven cross-project surfaces that each used to run a projects listing plus
-    a full batched resolution now share one.
-    """
+    Returns an empty map rather than raising (RADD-774): an empty list is an
+    answer, a 403 is for acts. `refuse_when_empty=True` (the MCP tools) restores
+    the 403, because an agent handed `[]` concludes there is nothing rather than
+    that it may not look. Filters the request-memoised `project_permission_map`."""
     per_project = await project_permission_map(session, user)
     held = {
         pid: permissions
@@ -321,14 +238,8 @@ async def require_anywhere(
 async def project_permission_map(
     session: AsyncSession, user: User
 ) -> dict[uuid.UUID, frozenset[Permission]]:
-    """The effective union for EVERY project, memoised per request (RADD-814).
-
-    The ladder's project tier, resolved once: `require_anywhere` and
-    `readable_projects` are filters over this. Memoised beside
-    `baseline_permissions` for the same reason — a page load crosses several
-    cross-project surfaces, and each used to pay a projects listing plus a
-    batched permission resolution of its own.
-    """
+    """The effective union for EVERY project, memoised per request (RADD-814) —
+    `require_anywhere`/`readable_projects` filter it."""
     key = f"{_PROJECT_MAP_CACHE_KEY}:{user.id}"
     cached: dict[uuid.UUID, frozenset[Permission]] | None = session.info.get(key)
     if cached is not None:
@@ -350,17 +261,8 @@ async def holds(
     space_id: uuid.UUID | None = None,
     any_project: bool = False,
 ) -> bool:
-    """THE one boolean question, under the scope ladder (RADD-814):
-
-        global  ⊃  {project | space}
-
-    A grant at an outer scope satisfies a check at any scope it contains —
-    which `effective_permissions` has always done by unioning global grants
-    into every scoped resolution; this seam names it. `any_project` is the
-    cross-project tier (RADD-672): held on at least one project, or globally.
-    `require`/`require_anywhere` are the raising/map-returning forms of the
-    same resolution — never a second opinion.
-    """
+    """THE boolean question under the ladder global ⊃ {project | space};
+    `any_project` = held on at least one project or globally (RADD-672)."""
     if any_project:
         per_project = await project_permission_map(session, user)
         if any(holds_base(perms, permission) for perms in per_project.values()):
@@ -375,46 +277,13 @@ async def holds(
 async def readable_projects(
     session: AsyncSession, user: User
 ) -> dict[uuid.UUID, frozenset[Permission]]:
-    """THE member floor: the projects this actor may read items in (RADD-788).
+    """The projects this actor may read items in, memoised per request (RADD-788).
 
-    Ask this — never `require(ITEM_READ)` with no project — whenever a surface
-    needs to know "is this an ordinary member of this instance?".
-
-    ## Why the global check was wrong
-
-    Roughly 28 endpoints used to gate on `item.read` at GLOBAL scope as a stand-in
-    for membership. That check could not fail: `item.read` sat in the hardcoded
-    `MEMBER_FLOOR`, so every active user held it globally and the gate was
-    decoration — the same vacuous-gate class RADD-770 found on `page.write`.
-
-    RADD-773 made the floor an editable Baseline role and made an absent one fail
-    closed, both correctly. But a grant on this instance is normally SCOPED to a
-    project, and a project-scoped grant contributes nothing at global scope — so
-    the first admin to empty the Baseline turned every one of those gates into a
-    hard 403 for people who were, in fact, members. `GET /views` was the one that
-    decided the experience: specs 61–67 deleted the builtin board/list/planning
-    pages, so refusing that list leaves a project with nothing in it.
-
-    ## What callers do with the answer
-
-    - **Rows scoped to a project** (views, dashboards, reports, worklogs): filter
-      to these ids. That is the RADD-672 pattern and it is what makes an
-      all-projects view show exactly the issues the viewer may see.
-    - **Instance-wide catalogs** (labels, roles, teams, fields, cycles, work
-      categories, canned responses): serve the catalog, and return an EMPTY list
-      when this map is empty.
-
-    Empty means "entitled to nothing anywhere", and it answers with emptiness
-    rather than a refusal — RADD-774's rule. "There is nothing here for you" and
-    "you did something you are not allowed to do" are different answers, and a
-    new account landing on a wall of permission toasts is neither useful nor true.
-
-    Memoised per request like `baseline_permissions`, and for the same reason: a
-    page load hits several of these surfaces, each of which would otherwise repeat
-    a projects listing plus a batched permission resolution. (RADD-814 moved the
-    expensive half into `project_permission_map`, shared with every
-    `require_anywhere` caller; this memo now caches only the filter.)
-    """
+    Ask this — never `require(ITEM_READ)` with no project — for "is this a member
+    of this instance?": grants are usually project-scoped, so a global check 403s
+    real members. Project-scoped rows (views, dashboards, reports, worklogs) filter
+    to these ids; instance-wide catalogs return [] when it is empty — emptiness,
+    not a refusal (RADD-774)."""
     key = f"{_READABLE_CACHE_KEY}:{user.id}"
     cached: dict[uuid.UUID, frozenset[Permission]] | None = session.info.get(key)
     if cached is not None:
@@ -427,22 +296,9 @@ async def readable_projects(
 async def require_member(
     session: AsyncSession, user: User
 ) -> dict[uuid.UUID, frozenset[Permission]]:
-    """`readable_projects`, but REFUSES when the actor is entitled to nothing.
-
-    The same floor; the difference is what an empty answer can be expressed as.
-    A LIST endpoint says "nothing here for you" by returning nothing, so it calls
-    `readable_projects` and returns `[]`. A single-resource read has no such
-    answer — a cycle either comes back or it does not — so this one raises.
-
-    "Entitled to nothing" is decided the way `require_anywhere` decides it
-    (RADD-774): holding `item.read` in no project AND not globally. The map is
-    per-project, so on an instance with NO projects it is empty for everyone —
-    the seeded admin of a fresh install included, who then met a 403 on the
-    timesheet, cycles, dashboards and reports before creating the first project
-    (RADD-1132). A global holder gets the empty map back and the surface renders
-    its empty state; nothing becomes readable that the per-project gates would
-    refuse.
-    """
+    """`readable_projects`, but a single-resource read has no empty answer, so
+    this REFUSES when the actor holds item.read nowhere — no project and not
+    globally (a fresh instance's admin has no projects yet, RADD-1132)."""
     readable = await readable_projects(session, user)
     if not readable and not holds_base(
         await effective_permissions(session, user), Permission.ITEM_READ

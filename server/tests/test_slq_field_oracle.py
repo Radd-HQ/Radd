@@ -18,14 +18,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.access import service as access_service
-from radd.modules.access.types import GrantSubject
+from radd.modules.access.types import Access, GrantSubject
 from radd.modules.auth import roles as auth_roles
 from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.schemas import RoleCreate
 from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.fields import service as fields_service
 from radd.modules.fields.schemas import FieldDefinitionCreate
-from radd.modules.fields.types import BuiltinItemField, FieldAccess, FieldType
+from radd.modules.fields.types import BuiltinItemField, FieldType
 from radd.modules.items import bulk, service as items
 from radd.modules.items.filters import ItemListFilters
 from radd.modules.items.schemas import ItemCreate
@@ -95,7 +95,7 @@ async def _restrict_custom_read(db, definition):
         str(definition.id),
         subject_type=GrantSubject.ROLE,
         subject_id=await _restricting_role(db),
-        access=FieldAccess.READ.value,
+        access=Access.READ.value,
     )
 
 
@@ -106,7 +106,7 @@ async def _restrict_builtin_read(db, field: str, project_id=None):
         field,
         subject_type=GrantSubject.ROLE,
         subject_id=await _restricting_role(db),
-        access=FieldAccess.READ.value,
+        access=Access.READ.value,
         project_id=project_id,
     )
 

@@ -190,7 +190,7 @@ async def test_search_inherits_the_relation_filter(db, scenario):
     """The RADD-841 mirror pays off: FTS answers only the rows the list would."""
     project, restricted, admin, fixture = scenario
     await _grant(db, restricted, project, ["item.read@own"])
-    for name, item in fixture.items():
+    for item in fixture.values():
         await indexer._index_item(
             db,
             type(

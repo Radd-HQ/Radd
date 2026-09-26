@@ -1,20 +1,12 @@
-"""Request participants (spec 72): users + whole teams following an item.
+"""Request participants: users and whole teams following an item.
 
-Participation rides the existing watcher + notify machinery, and since
-RADD-844 it is also a RELATION on the item (`@participant`, registered in
+Participation is the `@participant` relation on the item (registered in
 __init__): the Baseline's `item.read@participant` + `comment.write@participant`
-give a share the second-reporter meaning — the person opens that one item,
-comments on it, and passes notify's per-row read gate — while recipients still
-pass every notify filter (internal comments stay internal). Direct USER
-participants are auto-watched on add (`notify.add_watchers` — one fan-out
-mechanism, no parallel path); TEAM participants stay LIVE: the notify consumer
-unions `team_recipient_ids` (CURRENT members at fan-out time) into the watcher
-set through the kernel `NOTIFICATION_AUDIENCE` socket this plugin serves
-(`audience.py`, RADD-1385) — so disabling it stops the widening.
-
-The management gate is the feature's point: `item.update` OR being the item's
-REPORTER — an identity check, not a permission — so a requester can share
-their own ticket. Flush, never commit; cross-module via public service fns.
+let a share open, comment on and be notified about that one item. Direct users
+are auto-watched on add; team rows stay LIVE — notify reads current members
+through the `NOTIFICATION_AUDIENCE` socket (`audience.py`). Managing the roster
+is `participant.manage` (`@own` on the Baseline lets a reporter share their own
+ticket); leaving is always allowed.
 """
 
 from radd.modules.items.service.visibility import require_key_item_permission
@@ -64,20 +56,10 @@ async def team_recipient_ids(session: AsyncSession, item_id: uuid.UUID) -> set[u
 # --- helpers ---
 
 
-async def _item_project(
-    session: AsyncSession, item_id: uuid.UUID, actor: User
-) -> tuple[WorkItem, Project, frozenset[Permission]]:
-    # RADD-823: THE item seam — participants inherit per-item read rules.
-    return await items_service.require_readable_item(session, item_id, actor)
-
-
 async def _require_manage(
     session: AsyncSession, actor: User, item: WorkItem, permissions: frozenset[Permission]
 ) -> None:
-    """RADD-1304: `participant.manage` in the project, for THIS row. The
-    Baseline's `@own` is what lets a reporter share their own ticket — the
-    rule that used to be `actor.id == item.reporter_id` here, now a grant the
-    REST gate, the `can_manage` flag and the MCP catalog all read the same way."""
+    """`participant.manage` for THIS row (@own lets a reporter share their own ticket)."""
     manage = Permission.PARTICIPANT_MANAGE
     if not authz.holds_base(permissions, manage):
         raise ForbiddenError("adding or removing participants needs participant.manage on this project")
@@ -86,15 +68,7 @@ async def _require_manage(
 
 
 def _user_ref(user: User | None) -> UserRef | None:
-    if user is None:
-        return None
-    return UserRef(
-        id=user.id,
-        name=user.name,
-        avatar_color=user.avatar_color,
-        avatar_emoji=user.avatar_emoji,
-        avatar_url=user.avatar_url,
-    )
+    return None if user is None else UserRef.model_validate(user, from_attributes=True)
 
 
 async def _rows(session: AsyncSession, item_id: uuid.UUID) -> list[ItemParticipant]:
@@ -162,7 +136,7 @@ async def _emit(
 async def list_participants(
     session: AsyncSession, item_id: uuid.UUID, actor: User
 ) -> ItemParticipantsRead:
-    item, project, permissions = await _item_project(session, item_id, actor)
+    item, project, permissions = await items_service.require_readable_item(session, item_id, actor)
     reads = await _reads(session, await _rows(session, item_id))
     try:
         await _require_manage(session, actor, item, permissions)
@@ -180,7 +154,7 @@ async def list_participants(
 async def add_participant(
     session: AsyncSession, item_id: uuid.UUID, data: ParticipantAdd, actor: User
 ) -> ParticipantRow:
-    item, project, permissions = await _item_project(session, item_id, actor)
+    item, project, permissions = await items_service.require_readable_item(session, item_id, actor)
     await _require_manage(session, actor, item, permissions)
     if data.user_id is not None:
         await _validate_user_subject(session, data.user_id)
@@ -228,7 +202,7 @@ async def remove_participant(
         # access hardening); an ordinary session passes through untouched.
         await require_key_item_permission(session, actor, item, Permission.PARTICIPANT_MANAGE)
     else:
-        item, project, permissions = await _item_project(session, item_id, actor)
+        item, project, permissions = await items_service.require_readable_item(session, item_id, actor)
         await _require_manage(session, actor, item, permissions)
     read = (await _reads(session, [row]))[0]
     await session.delete(row)
@@ -265,19 +239,11 @@ async def _validate_team_subject(
 
 
 async def projects_with_participation(session: AsyncSession, user) -> set[uuid.UUID]:
-    """Projects holding an item this actor is a PARTICIPANT on (RADD-937).
-
-    Direct rows and team rows alike: a team participant row stays live (the
-    notify consumer resolves current membership at fan-out), so visibility
-    resolves the same way rather than snapshotting who was on the team when the
-    row was written.
-
-    Contributed to the kernel's project-relation registry so the visibility
-    resolver never learns that participants exist.
-    """
-    from radd.modules.teams import service as teams  # deferred: teams loads first
-
-    team_ids = await teams.user_team_ids(session, user.id)
+    """Projects holding an item this actor is a PARTICIPANT on (RADD-937), direct
+    or through a team (membership read live, as notify does). Contributed to the
+    kernel's project-relation registry so the visibility resolver never learns
+    that participants exist."""
+    team_ids = await teams_service.user_team_ids(session, user.id)
     condition = ItemParticipant.user_id == user.id
     if team_ids:
         condition = condition | ItemParticipant.team_id.in_(team_ids)

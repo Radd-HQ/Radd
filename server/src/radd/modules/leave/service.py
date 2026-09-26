@@ -23,14 +23,10 @@ from .schemas import CurrentLeave, LeaveCalendarEntry, LeaveCreate
 from .types import LeaveEntity, LeaveEvent, LeaveKind
 
 
-def _is_admin(actor: User) -> bool:
-    return authz.is_instance_admin(actor)
-
-
 async def may_manage_user(session: AsyncSession, actor: User, user_id: uuid.UUID) -> bool:
     if getattr(actor, "token_scope", None) is not None:
         return False
-    if actor.id == user_id or _is_admin(actor):
+    if actor.id == user_id or authz.is_instance_admin(actor):
         return True
     # A steward (owner/manager) of any team the subject belongs to may cover
     # for them — the "forgot to log their vacation" case.
@@ -44,7 +40,7 @@ async def _authorize(session: AsyncSession, actor: User, period: LeavePeriod) ->
     if getattr(actor, "token_scope", None) is not None:
         raise ForbiddenError("leave changes require an account session or a full-access key")
     if period.team_id is not None:
-        if not _is_admin(actor):
+        if not authz.is_instance_admin(actor):
             raise ForbiddenError("team holidays are managed by instance admins")
         return
     assert period.user_id is not None
@@ -156,47 +152,30 @@ async def calendar(
     entries: list[LeaveCalendarEntry] = []
     for period in await _overlapping(session, start, end):
         if period.user_id is not None:
-            entries.append(
-                LeaveCalendarEntry(
-                    user_id=period.user_id,
-                    kind=period.kind,
-                    label=period.label,
-                    start_date=period.start_date,
-                    end_date=period.end_date,
-                )
+            user_ids = [period.user_id]
+        else:
+            assert period.team_id is not None
+            members = await teams_service.list_team_members(session, period.team_id)
+            user_ids = [member.id for member in members]
+        entries.extend(
+            LeaveCalendarEntry(
+                user_id=user_id,
+                kind=period.kind,
+                label=period.label,
+                start_date=period.start_date,
+                end_date=period.end_date,
             )
-            continue
-        assert period.team_id is not None
-        for member in await teams_service.list_team_members(session, period.team_id):
-            entries.append(
-                LeaveCalendarEntry(
-                    user_id=member.id,
-                    kind=period.kind,
-                    label=period.label,
-                    start_date=period.start_date,
-                    end_date=period.end_date,
-                )
-            )
+            for user_id in user_ids
+        )
     return entries
 
 
 async def holiday_dates(session: AsyncSession, start: date, end: date) -> set[date]:
-    """Every date in [start, end] a HOLIDAY period covers (RADD-1031).
-
-    Holidays only, never personal leave: a holiday is a day the studio is shut,
-    which is a property of the calendar, while one person's absence is a
-    property of that person. The distinction matters because this feeds the SLA
-    clock (through the kernel's non-working-days socket) and an item's timer has
-    no person to be absent.
-
-    Team-scoped rows are read as instance-wide here, unlike `calendar()`, which
-    expands them to members. That is not sloppiness but the same rule applied to
-    a different subject: `calendar()` answers "who is away", so it needs the
-    membership; a clock has no subject to resolve a team against, so any
-    declared shutdown stops it. A regionally-split instance that wants
-    per-desk clocks needs a per-project calendar — a bigger design than a filter
-    here could fake.
-    """
+    """Every date in [start, end] a HOLIDAY covers (RADD-1031) — the SLA clock's
+    non-working days. Holidays only (an item's timer has no person to be absent),
+    and team-scoped rows count instance-wide: a clock has no subject to resolve a
+    team against, unlike `calendar()`. Per-desk clocks would need a per-project
+    calendar, not a filter here."""
     dates: set[date] = set()
     result = await session.execute(
         select(LeavePeriod).where(

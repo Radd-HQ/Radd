@@ -20,14 +20,10 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def _require_item_perm(
     session: AsyncSession, user: CurrentUser, item_id: uuid.UUID, permission: authz.Permission
 ) -> None:
-    # RADD-823: read-resolution goes through THE item seam, so this child
-    # surface inherits per-item rules (relations) by construction; the write
-    # atom layers on top of the same resolution.
-    _item, project, _perms = await items_service.require_readable_item(session, item_id, user)
+    # Read through THE item seam first (a hidden item 404s); a write atom layers on top.
+    await items_service.require_readable_item(session, item_id, user)
     if permission is not authz.Permission.ITEM_READ:
-        permissions = await authz.require(session, user, permission, project=project)
-        from radd.modules.items.service.visibility import ensure_item_relation
-        await ensure_item_relation(session, user, _item, permissions, permission)
+        await items_service.require_item_permission(session, item_id, user, permission)
 
 
 @router.post("/items/{item_id}/web-links", response_model=WebLinkRead, status_code=201)

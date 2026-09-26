@@ -1,31 +1,11 @@
-"""auth's OWN RBAC atoms (RADD-890).
-
-Until this change `auth/types.py::Permission` enumerated every feature module's
-atoms — `item.*`, `page.*`, `worklog.*`, `sla.*`, `vcsconn.*` — so adding a
-permission to any module meant editing auth, while the kernel permissions
-registry that exists for exactly that had one client (`milestones`). Two ways to
-define an atom, and the one the platform advertises was used by nothing shipped.
-
-Now every module declares the atoms it ENFORCES, and this file is auth's share:
-the governance primitives whose endpoints auth actually serves.
-
-  - `global.manage` — the instance umbrella. Not auth's feature, but auth's
-    concept: it is the top of the containment ladder every other umbrella hangs
-    from, and it must exist before any module can name it as its `manage`.
-  - `project.create` / `project.manage` — project governance. `project.manage`
-    is the project-scope umbrella the same way `global.manage` is the instance
-    one; releases, views, members and issue types all name it.
-  - users, roles, project membership, service accounts — the four resources
-    whose tables and routers live here.
-
-Everything else moved out. What auth kept is what auth refuses on.
-"""
+"""auth's OWN RBAC atoms (RADD-890): the instance and project umbrellas,
+project creation/deletion, and the four resources whose tables and routers
+live here (users, roles, project access, service accounts). Every other atom
+is declared by the module that enforces it."""
 
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
-#: The two umbrellas + project creation. Declared as standalone atoms rather
-#: than falling out of a CRUD resource because neither umbrella has a resource:
-#: `global.manage` governs an instance, not a table.
+#: Standalone atoms: no CRUD resource owns them (`global.manage` governs an instance).
 AUTH_PERMISSIONS: tuple[PermissionSpec, ...] = (
     PermissionSpec(
         key="global.manage",
@@ -55,9 +35,7 @@ AUTH_PERMISSIONS: tuple[PermissionSpec, ...] = (
         description="Delete a project and everything in it (global).",
         implied_by=("global.manage",),
     ),
-    # The bespoke sentence for the user umbrella — "Manage users." (what the CRUD
-    # resource below would generate) undersells it: holding it is also what makes
-    # the directory readable.
+    # Bespoke sentence: holding it is also what makes the directory readable.
     PermissionSpec(
         key="user.manage",
         scope="global",
@@ -66,23 +44,16 @@ AUTH_PERMISSIONS: tuple[PermissionSpec, ...] = (
 )
 
 AUTH_CRUD_RESOURCES: tuple[CrudResourceSpec, ...] = (
-    # Project ACCESS rows (ProjectMember) — the grant, not the person.
+    # Project access: the project-scoped grant rows, not the person.
     CrudResourceSpec("member", "project", "project access", "project.manage"),
-    # RADD-816 (F6): `role.read` is a deliverable atom (Baseline-seeded, so
-    # day-one behaviour is the old member floor) rather than a member-floor
-    # freebie — revocable for the first time.
+    # RADD-816: role.read is Baseline-seeded but revocable.
     CrudResourceSpec(
         "role", "global", "roles", "global.manage",
         actions=("create", "read", "update", "delete"),
     ),
-    # Spec 89 restored the full triple: deleting a user is real, and gated by
-    # reassigning their work to a named successor rather than by the atom not
-    # existing.
     CrudResourceSpec("user", "global", "users", "user.manage"),
-    # Spec 113: service accounts sit beside users but are managed separately —
-    # granting someone the ability to mint agent keys is not the same as granting
-    # them the ability to edit people. RADD-816: no delete route exists, so no
-    # delete atom is minted.
+    # Spec 113: minting agent keys is not editing people. No delete route, so no
+    # delete atom.
     CrudResourceSpec(
         "service_account", "global", "service accounts", "global.manage",
         actions=("create", "update"),

@@ -21,11 +21,16 @@ from .schemas import (
     VelocityReport,
 )
 from .service import DEFAULT_WINDOW_DAYS
-from .types import ReportInterval, ReportMeasure
+from .types import VELOCITY_MAX_LAST, ReportInterval, ReportMeasure
 
 router = APIRouter(prefix="/reports", tags=["reporting"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+async def _require_project_read(session: AsyncSession, user, project_id: uuid.UUID) -> None:
+    project = await projects_service.get_project(session, project_id)
+    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
 
 
 def _window(start: date | None, end: date | None) -> tuple[date, date]:
@@ -47,8 +52,7 @@ async def throughput(
     interval: ReportInterval = ReportInterval.DAY,
     q: str | None = None,
 ) -> list[ThroughputBucket]:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    await _require_project_read(session, user, project_id)
     start, end = _window(start, end)
     return await service.throughput(session, project_id, start, end, interval, actor=user, q=q)
 
@@ -63,8 +67,7 @@ async def cumulative_flow(
     interval: ReportInterval = ReportInterval.DAY,
     q: str | None = None,
 ) -> list[CumulativeFlowBucket]:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    await _require_project_read(session, user, project_id)
     start, end = _window(start, end)
     return await service.cumulative_flow(session, project_id, start, end, interval, actor=user, q=q)
 
@@ -77,8 +80,7 @@ async def time_in_state(
     kind: Annotated[ItemKind | None, Query()] = None,
     q: str | None = None,
 ) -> list[TimeInStateRow]:
-    project = await projects_service.get_project(session, project_id)
-    await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
+    await _require_project_read(session, user, project_id)
     return await service.time_in_state(session, project_id, kind, actor=user, q=q)
 
 
@@ -86,7 +88,7 @@ async def time_in_state(
 async def velocity(
     session: Session,
     user: Actor,
-    last: Annotated[int, Query(ge=1, le=50)] = 5,
+    last: Annotated[int, Query(ge=1, le=VELOCITY_MAX_LAST)] = 5,
     measure: ReportMeasure = ReportMeasure.COUNT,
     q: str | None = None,
 ) -> VelocityReport:

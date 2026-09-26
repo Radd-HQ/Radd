@@ -18,11 +18,10 @@ from radd.modules.itemtypes import service as itemtypes
 from radd.modules.projects import service as projects_service
 from radd.modules.workflow import service as workflow
 from radd.modules.workflow.models import State
-from radd.modules.workflow.types import StateCategory
 
 from radd.hooks import hooks
 
-from ..enums import ItemEntity, ItemEvent, ItemKind, ItemVisibility
+from ..enums import FINISHED_CATEGORIES, ItemEntity, ItemEvent, ItemKind, ItemVisibility
 from ..hooks import ItemCreating, ItemHook
 from ..models import ItemStar, WorkItem
 from ..schemas import ItemCreate, ItemRankUpdate, ItemRead, ItemUpdate
@@ -34,6 +33,7 @@ from .queries import (
     _rebalance_ranks,
     _resolve_number,
     require_item,
+    require_item_permission,
     require_readable_item,
 )
 from .read import _finish, _hydrate_one, get_item
@@ -48,7 +48,7 @@ from .relations import (
     _set_labels,
     _validate_dates,
 )
-from .visibility import _check_builtin_field_rules, _field_ctx, ensure_item_relation
+from .visibility import _check_builtin_field_rules, _field_ctx
 
 
 # --- CRUD ---
@@ -163,17 +163,10 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
             data.updated_at.replace(tzinfo=None) if data.updated_at is not None else occurred_at
         )
         event_actor_id = item.reporter_id
-    # Spec 119: the row, its stint, its labels, its mentions and the hook that
-    # may REFUSE all of it, in one savepoint.
-    #
-    # The hook is the last moment a creation can be turned down, and a handler
-    # that raises has to leave nothing behind. Without the savepoint that was
-    # only true for callers who let the exception reach a transaction boundary:
-    # a caller that catches and carries on — the Jira importer's per-issue
-    # `except Exception` is exactly that shape — kept the flushed row and
-    # committed it with the batch, so a refused draft became a half-created
-    # orphan with no event and no labels-of-record. Rolling back to here makes
-    # the promise true for every caller, whatever it does with the error.
+    # One savepoint for the row, its stint, labels, mentions and the CREATING
+    # hook, so a refusal leaves nothing behind even for callers that catch and
+    # carry on (the Jira importer's per-issue `except Exception` did, and
+    # committed half-created orphans).
     guard = await session.begin_nested()
     try:
         session.add(item)
@@ -204,10 +197,9 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
 async def update_item(
     session: AsyncSession, item_id: uuid.UUID, data: ItemUpdate, actor: User
 ) -> ItemRead:
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    item, project, permissions = await require_item_permission(
+        session, item_id, actor, Permission.ITEM_UPDATE
+    )
     await _check_builtin_field_rules(session, actor, project, permissions, data.model_fields_set)
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
@@ -342,10 +334,9 @@ async def set_archived(
 ) -> ItemRead:
     """Soft archive/unarchive (spec 38) — hidden from lists by default, still
     reachable by key/detail. An ordinary item.updated with an `archived` diff."""
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    item, project, permissions = await require_item_permission(
+        session, item_id, actor, Permission.ITEM_UPDATE
+    )
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     before = await _hydrate_one(session, item, project, actor, permissions)
@@ -357,20 +348,12 @@ async def set_archived(
 
 
 async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> None:
-    """Hard delete (spec 38): gated by `item.delete` (spec 50 — was project.manage,
-    which still implies it), children must be gone first (the parent FK restricts),
-    dependents CASCADE. The event log's rows for the item remain — the audit trail
-    survives the row.
-
-    RADD-717: comments no longer carry a foreign key to work_items (the column is
-    polymorphic), so the CASCADE that used to take them is gone and they are
-    removed explicitly. Missing this leaves rows nothing can reach."""
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    delete_permissions = await authz.require(
-        session, actor, Permission.ITEM_DELETE, project=project
+    """Hard delete, gated by `item.delete`: children must be re-parented first
+    (the parent FK restricts), dependents CASCADE, event rows remain. Comments
+    carry no FK (polymorphic parent, RADD-717), so they are deleted explicitly."""
+    item, _project, _permissions = await require_item_permission(
+        session, item_id, actor, Permission.ITEM_DELETE
     )
-    await ensure_item_relation(session, actor, item, delete_permissions, Permission.ITEM_DELETE)
     child_count = await session.scalar(
         select(func.count()).select_from(WorkItem).where(WorkItem.parent_id == item_id)
     )
@@ -379,13 +362,7 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) ->
             ItemEntity.ITEM,
             reason=f"item has {child_count} child item(s) — delete or re-parent them first",
         )
-    # The full ref, like every other item-scoped event (RADD-922). It used to be
-    # three hand-picked fields, so a webhook receiver saw a completely different
-    # object on delete than on update — and the item is gone a line later, which
-    # is exactly when a consumer cannot go and look the rest up.
-    # Emitted while the row is still present (the delete is ~15 lines down), so
-    # the kernel resolves the subject normally — a delete event is exactly when a
-    # consumer cannot go and look the rest up afterwards.
+    # Emitted while the row still exists, so the kernel resolves the full ref.
     await events.emit(
         session,
         event_type=ItemEvent.DELETED,
@@ -394,9 +371,7 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) ->
         actor_id=actor.id,
         subjects={"item": item.id},
     )
-    # RADD-717: the polymorphic comment column carries no FK, so its rows do not
-    # cascade with the item. Deferred import — items must not depend on comments
-    # at module scope (comments already depends on items).
+    # Deferred: comments depends on items.
     from radd.modules.comments import service as comments_service
     from radd.modules.comments.types import CommentParentType
 
@@ -433,10 +408,9 @@ async def reorder_item(
     session: AsyncSession, item_id: uuid.UUID, data: ItemRankUpdate, actor: User
 ) -> ItemRead:
     """Set an item's manual rank between two neighbours (drag-to-rank, spec 24)."""
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    item, project, permissions = await require_item_permission(
+        session, item_id, actor, Permission.ITEM_UPDATE
+    )
 
     async def rank_of(neighbour_id: uuid.UUID | None) -> float | None:
         if neighbour_id is None or neighbour_id == item_id:
@@ -489,7 +463,7 @@ async def move_open_cycle_items(
         .where(
             WorkItem.cycle_id == cycle_id,
             WorkItem.archived_at.is_(None),
-            State.category.notin_([StateCategory.DONE, StateCategory.CANCELED]),
+            State.category.notin_(FINISHED_CATEGORIES),
         )
     )
     item_ids = list((await session.execute(stmt)).scalars())
@@ -507,7 +481,6 @@ async def annotate_email_signature(session: AsyncSession, item_id: uuid.UUID, si
 
 
 async def restore_email_signature(session: AsyncSession, item_id: uuid.UUID, actor: User) -> None:
-    from .queries import require_readable_item
     item, _, _ = await require_readable_item(session, item_id, actor)
     # Reuse description write restrictions as well as the item update permission.
     await update_item(session, item_id, ItemUpdate(description=item.description), actor)

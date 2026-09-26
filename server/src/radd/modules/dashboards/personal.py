@@ -1,9 +1,6 @@
-"""My Work uses the same validated widget definitions, privately stored per user.
-
-Two kinds of personal widget (RADD-1393). My Work's OWN kinds below — the shell's basics and the
-request widgets of forms, a core module. And every `WidgetTypeSpec(personal=True)` a plugin
-contributes (approvals' "Awaiting my approval"): offered, accepted and suggested only while that
-plugin is registered, so dashboards never names an optional plugin."""
+"""My Work: the same validated widget definitions, stored privately per user. Its
+own kinds, plus every `WidgetTypeSpec(personal=True)` a plugin contributes —
+offered only while that plugin is registered (RADD-1393)."""
 
 import uuid
 
@@ -16,9 +13,7 @@ from radd.kernel import WidgetTypeSpec, registries
 from radd.modules.auth.models import User
 
 from .schemas import PluginWidget, WidgetLayoutSave, WidgetRead
-from .types import WidgetType
-
-_BUILTIN = frozenset(t.value for t in WidgetType)
+from .types import BUILTIN_WIDGET_TYPES
 
 TITLES = {
     "assigned": "Assigned to me",
@@ -104,7 +99,7 @@ async def save(session, user, data: WidgetLayoutSave):
     for index, raw in enumerate(data.widgets):
         widget_type = raw.get("widget_type")
         # Personal surface types have no privileged data config; every renderer uses its ordinary read API.
-        orphan = widget_type not in _BUILTIN and widget_type not in registries.widget_types
+        orphan = widget_type not in BUILTIN_WIDGET_TYPES and widget_type not in registries.widget_types
         if is_personal(widget_type) or (orphan and (str(raw.get("id")), widget_type) in kept):
             parsed = _personal_widget(raw)
         else:

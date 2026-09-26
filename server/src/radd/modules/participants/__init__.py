@@ -14,15 +14,10 @@ from .audience import ParticipantTeamAudience
 from .router import router
 from .types import PARTICIPANT_MANAGE, TEAM_AUDIENCE, ParticipantEvent
 
-# RADD-844: being shared into an item is a RELATION on it — the second-reporter
-# model. `item.read@participant` + `comment.write@participant` (seeded on the
-# Baseline) are what let a share actually reach someone with no standing in the
-# project: they can open that one item, comment on it, and get notified — and
-# nothing else. Membership lives in item_participants, not on the item row, so
-# there is no pure `holds` form: gates answer it through the where-form
-# (`relation_holds_row_async`), and sync resolvers fail closed. A TEAM
-# participant row covers its CURRENT members — same live semantics as the
-# notify fan-out.
+# Being shared into an item is a RELATION on it (RADD-844). Membership lives in
+# item_participants, so there is no pure `holds` form: gates use the where-form
+# (`relation_holds_row_async`) and sync resolvers fail closed. A team row covers
+# its CURRENT members.
 ITEM_PARTICIPANT = RelationSpec(
     resource="item",
     key="participant",
@@ -84,8 +79,6 @@ plugin = RaddPlugin(
         EventTypeSpec(ParticipantEvent.ADDED, "Participant added", "Service desk", item_scoped=True),
         EventTypeSpec(ParticipantEvent.REMOVED, "Participant removed", "Service desk", item_scoped=True),
     ),
-    # Federated UI (spec 94): the Participants card in the issue right-rail ships as this plugin's
-    # own module-federation remote (web/remotes/participants), loaded at runtime — not baked into
-    # the host. The host renders it through the `issue.panel.section` slot.
+    # Federated UI: the issue rail's Participants card (issue.panel.section slot).
     ui=PluginUiManifest(remote="/plugins/participants/remoteEntry.js", ui_api_version="1.0.0"),
 )

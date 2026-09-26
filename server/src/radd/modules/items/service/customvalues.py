@@ -1,18 +1,9 @@
-"""Bulk rewrites of ONE custom field's stored values (RADD-949).
+"""Bulk rewrites of ONE custom field's stored values — the public seam `fields`
+calls when an option is removed (it cannot touch `work_items` itself; it
+declares `weak_depends=("items",)` because a hard edge would be a cycle).
 
-Custom-field values live in `work_items.custom_fields` (JSONB, keyed by the
-field's registry key), and that table is `items`'. So when `fields` removes a
-select option it cannot go and fix the items itself — rule 1 — and this is the
-public seam it calls instead. `fields` declares `weak_depends=("items",)` for the
-reach, because `items` already depends on `fields` and a hard edge would be a
-cycle.
-
-Set-based, not a loop: one statement for single-selects and one for multi, each
-touching only the rows that actually carry the value. A field with an option on
-90k items must not become 90k round trips.
-
-Nothing here validates — the caller owns the decision about what the replacement
-should be, and it is the only place that knows whether the field is required.
+Set-based: one statement per shape, touching only rows that carry the value.
+Nothing here validates; the caller decides the replacement.
 """
 
 from __future__ import annotations

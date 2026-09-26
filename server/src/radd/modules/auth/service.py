@@ -1,19 +1,5 @@
-"""Users CRUD + TOTP/MFA — and the facade for the rest of `auth`'s service
-layer (RADD-902).
-
-This file used to hold everything: users, sessions + view-as, API tokens, and
-the user-merge/hard-delete raw-SQL repoint block, in that order, ~1100 lines.
-It's now split along those same markers into sibling modules — `sessions +
-view-as` -> `service_sessions.py`, `API tokens` -> `service_tokens.py`, `user
-merge + delete` -> `lifecycle.py` — each re-exported here under its original
-name, so `from radd.modules.auth import service` + `service.create_session(...)`
-(or any direct `from radd.modules.auth.service import X`) is unaffected.
-
-Users CRUD and TOTP/MFA stay here: neither was called out as its own seam, and
-together with `authenticate`/`update_profile` they're the part of this module
-that isn't about a login artifact (session, token) or the merge/delete
-lifecycle.
-"""
+"""Users CRUD + TOTP/MFA, and the facade re-exporting sessions, tokens and
+merge/delete (`service_sessions`, `service_tokens`, `lifecycle`)."""
 
 import time
 import uuid
@@ -29,14 +15,10 @@ from radd.modules.events import service as events
 
 from . import security, totp
 from .lifecycle import (
-    _CONTENT_COUNTS as _CONTENT_COUNTS,
-    _DELETE_WITH_ACCOUNT as _DELETE_WITH_ACCOUNT,
     _MERGE_DEDUPE as _MERGE_DEDUPE,
     _MERGE_PURGE as _MERGE_PURGE,
     _MERGE_REPOINT as _MERGE_REPOINT,
-    _dedupe_sql as _dedupe_sql,
     _permission_gaps as _permission_gaps,
-    _repoint_user_access_grants as _repoint_user_access_grants,
     delete_user as delete_user,
     ensure_deletable as ensure_deletable,
     ensure_imported_user as ensure_imported_user,
@@ -54,10 +36,8 @@ from .service_sessions import (
     resolve_session_users as resolve_session_users,
     session_row_for_token as session_row_for_token,
     start_view_as as start_view_as,
-    user_for_session_token as user_for_session_token,
 )
 from .service_tokens import (
-    _naive_utc as _naive_utc,
     create_api_token as create_api_token,
     delete_api_token as delete_api_token,
     list_api_tokens as list_api_tokens,
@@ -114,22 +94,10 @@ def _user_filters(
     active: bool | None,
     sources_excluded: Iterable[UserSource] | None = None,
 ):
-    """THE directory filter (RADD-936). One builder, two callers.
-
-    `list_users` and `count_users` used to construct this predicate separately,
-    and the copies drifted: the count filtered on `User.is_active`, a column that
-    does not exist, so every paginated + status-filtered request 500'd — which is
-    exactly and only what Settings → Users sends. Neither `?active=true` nor
-    `?limit=25` alone touches the broken line, so nothing else on the instance
-    ever hit it.
-
-    `sources_excluded` (RADD-1034) is a SEPARATE knob from `source`: the latter
-    is an admin exact-match filter (Settings → Users' dropdown), the former is
-    a caller-side exclusion set (`/users/directory`'s default hiding of
-    `UserSource.EMAIL`). Keeping them distinct means the directory's default
-    exclusion never has to fight an admin's explicit `?source=email` request —
-    only `/users/directory` ever passes `sources_excluded`.
-    """
+    """THE directory filter shared by `list_users`/`count_users` — two copies once
+    drifted and 500'd every paginated, status-filtered request (RADD-936).
+    `sources_excluded` is a caller-side exclusion, distinct from the admin's exact
+    `source` filter."""
     if q:
         pattern = ilike_term(q)
         query = query.where(User.email.ilike(pattern) | User.name.ilike(pattern))
@@ -151,13 +119,8 @@ async def list_users(
     offset: int = 0,
     sources_excluded: Iterable[UserSource] | None = None,
 ) -> list[User]:
-    """User directory, optionally filtered (spec 84): q matches email OR name
-    (case-insensitive substring, wildcards escaped), source/active match
-    exactly; limit/offset page (RADD-883). `sources_excluded` (RADD-1034) is an
-    additional exclusion set on top of `source`/`active`, used by the member
-    directory to hide requester accounts by default — every OTHER caller
-    (Settings → Users, the MCP `list_users` tool, the Jira importer's email
-    lookup) leaves it unset and is unaffected."""
+    """User directory (spec 84): q matches email OR name (case-insensitive
+    substring), source/active exactly; limit/offset page (RADD-883)."""
     query = _user_filters(
         select(User).order_by(User.created_at),
         q=q,
@@ -177,11 +140,8 @@ async def count_users(
     active: bool | None = None,
     sources_excluded: Iterable[UserSource] | None = None,
 ) -> int:
-    """Pre-pagination count for the directory/admin lists (RADD-883). Shares
-    `_user_filters` with `list_users` — the count and the page must answer the
-    same question, and they stopped doing so once the predicate was written
-    twice. `sources_excluded` must match whatever `list_users` was called with
-    (RADD-1034), same reasoning as `source`/`active` above."""
+    """Pre-pagination count (RADD-883); pass the same filters as the `list_users`
+    call it counts."""
     query = _user_filters(
         select(func.count()).select_from(User),
         q=q,
@@ -209,12 +169,8 @@ async def users_by_ids(session: AsyncSession, ids: Iterable[uuid.UUID]) -> dict[
 
 
 def user_ref(user: User | None) -> dict[str, str] | None:
-    """`{id, name, email}` for an event payload (RADD-922).
-
-    One shape for every person named in the stream. Emitters used to write bare
-    `author_id` / `requester` / `user_id` columns, so a webhook body or a chat
-    message that wanted to say WHO had to resolve a uuid it was handed — and
-    mostly did not, and printed the uuid."""
+    """`{id, name, email}` for an event payload (RADD-922): one shape for every
+    person named in the stream, so no consumer prints a bare uuid."""
     if user is None:
         return None
     return {"id": str(user.id), "name": user.name, "email": user.email}
@@ -551,10 +507,7 @@ async def record_user_changes(
     session: AsyncSession, user: User, before: dict, *, actor_id: uuid.UUID | None = None
 ) -> bool:
     """Emit `user.updated` with the diff when a sign-in path changed the account
-    (RADD-1320). SSO and LDAP rewrote `instance_role` and `source` on every
-    login with no event at all, so an automation could not see a promotion and
-    the audit log (spec 123) could not say who became an admin, or when.
-    Nothing changed → nothing emitted; returns whether it emitted."""
+    (RADD-1320), so a promotion by SSO/LDAP is audited. Returns whether it emitted."""
     diff = changes.diff_object(user, before)
     if not diff:
         return False

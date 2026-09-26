@@ -38,26 +38,6 @@ from .types import (
     series_windows,
 )
 
-# Re-exported so consumers (items hydration/SLQ) touch only this service seam.
-__all__ = [
-    "active_cycles",
-    "complete_cycle",
-    "create_cycle",
-    "cycle_status",
-    "cycles_by_ids",
-    "delete_cycle",
-    "delete_series",
-    "ensure_series_drafts",
-    "get_cycle",
-    "get_series",
-    "list_cycles",
-    "list_series",
-    "recent_completed_cycles",
-    "to_read",
-    "update_cycle",
-    "update_series",
-]
-
 # Fallback sprint length when starting a next cycle that has no dates and the
 # closed one carried none either (a two-week sprint, inclusive dates).
 DEFAULT_CYCLE_LENGTH = timedelta(days=13)
@@ -90,7 +70,6 @@ def to_read(
 
 def ids_by_status(statuses: list[str]):
     """Derived lifecycle query shared by Planning and SLQ; no date rules duplicated."""
-    from datetime import date
     from .directory import status_expression
 
     return select(Cycle.id).where(status_expression(date.today()).in_(statuses))
@@ -100,18 +79,14 @@ def ids_by_names(names: list[str]):
     """Select of cycle ids matching these NAMES — the query-fragment seam the
     items SLQ `cycle` builtin composes into `WorkItem.cycle_id IN (…)`
     (RADD-888: the fragment crosses the boundary, the table does not)."""
-    from sqlalchemy import select as _select
-
-    return _select(Cycle.id).where(Cycle.name.in_(names))
+    return select(Cycle.id).where(Cycle.name.in_(names))
 
 
 def closed_stint_item_ids(names: list[str] | None = None):
     """Select of WORK-ITEM ids with a closed cycle stint (spec 56 carryover),
     optionally narrowed to stints in the named cycles — the whole `past_cycle`
     subquery, owned here because ItemCycleRecord is this module's table."""
-    from sqlalchemy import select as _select
-
-    stmt = _select(ItemCycleRecord.item_id).where(ItemCycleRecord.removed_at.is_not(None))
+    stmt = select(ItemCycleRecord.item_id).where(ItemCycleRecord.removed_at.is_not(None))
     if names is not None:
         stmt = stmt.join(Cycle, Cycle.id == ItemCycleRecord.cycle_id).where(Cycle.name.in_(names))
     return stmt
@@ -136,8 +111,8 @@ async def set_cycle_teams(
     """Full-replace the cycle's team associations ([] = public again)."""
     from radd.modules.teams import service as teams_service  # deferred: teams loads later
 
-    valid = {team.id for team in await teams_service.list_teams(session)}
     unique = list(dict.fromkeys(team_ids))
+    valid = await teams_service.existing_ids(session, unique)
     for team_id in unique:
         if team_id not in valid:
             raise ConflictError(CycleEntity.CYCLE, reason=f"unknown team {team_id}")
@@ -145,21 +120,6 @@ async def set_cycle_teams(
     session.add_all(CycleTeam(cycle_id=cycle.id, team_id=team_id) for team_id in unique)
     await session.flush()
     return unique
-
-
-async def visible_cycles(
-    session: AsyncSession,
-    user: User,
-    *,
-    status: CycleStatus | None = None,
-    today: date | None = None,
-) -> tuple[list[Cycle], dict[uuid.UUID, list[uuid.UUID]]]:
-    """(cycles the user may see, team_ids per cycle). Cycle managers see every
-    cycle; everyone else sees public cycles plus their own teams' (spec 60)."""
-    from .directory import page
-
-    rows, teams, _ = await page(session, user, status=status, today=today)
-    return rows, teams
 
 
 async def cycle_visible_to(session: AsyncSession, cycle: Cycle, user: User) -> bool:
@@ -172,7 +132,7 @@ async def cycle_visible_to(session: AsyncSession, cycle: Cycle, user: User) -> b
     if not restricted:
         return True
     perms = await authz.effective_permissions(session, user)
-    if authz.Permission.GLOBAL_MANAGE in perms:  # admins; see visible_cycles
+    if authz.Permission.GLOBAL_MANAGE in perms:  # admins see every cycle
         return True
     my_teams = await teams_service.user_team_ids(session, user.id)
     return bool(set(my_teams) & set(restricted))
@@ -310,35 +270,9 @@ async def cycles_by_ids(
     return {cycle.id: cycle for cycle in result.scalars()}
 
 
-async def list_cycles(
-    session: AsyncSession,
-    *,
-    status: CycleStatus | None = None,
-    today: date | None = None,
-) -> list[Cycle]:
-    """All cycles, ordered by start date. `status` filters by the derived
-    status (requires `today`, which the router passes as date.today())."""
-    result = await session.execute(select(Cycle).order_by(Cycle.start_date))
-    cycles = list(result.scalars())
-    if status is not None:
-        pivot = today or date.today()
-        cycles = [c for c in cycles if _status(c, pivot) is status]
-    return cycles
-
-
-async def active_cycles(session: AsyncSession, today: date) -> list[Cycle]:
-    """Cycles currently running (start_date <= today <= end_date, not
-    explicitly closed early)."""
-    result = await session.execute(
-        select(Cycle)
-        .where(
-            Cycle.start_date <= today,
-            Cycle.end_date >= today,
-            Cycle.completed_at.is_(None),
-        )
-        .order_by(Cycle.start_date)
-    )
-    return list(result.scalars())
+async def list_cycles(session: AsyncSession) -> list[Cycle]:
+    """All cycles, ordered by start date."""
+    return list((await session.execute(select(Cycle).order_by(Cycle.start_date))).scalars())
 
 
 async def complete_cycle(
