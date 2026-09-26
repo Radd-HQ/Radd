@@ -19,7 +19,7 @@ import {
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, BookmarkPlus, CalendarClock, Download, GanttChartSquare, Globe, List, ListOrdered, Pencil, Pin, Plus, Rocket, RotateCcw, SearchCode, SquareKanban, Trash2, UserRound, X } from "lucide-react";
-import { Slot, SlotId, useDisabledMatches } from "@radd/plugin-sdk";
+import { Slot, SlotId, useDisabledMatches, Pager, useDebounced } from "@radd/plugin-sdk";
 import { MissingPluginType } from "../components/shell/MissingPluginType";
 import { api, errorMessage } from "../lib/api";
 import { Entity, invalidateEntities } from "../lib/cache";
@@ -36,24 +36,8 @@ import {
   roadmapMembersOnlyStorageKey,
   roadmapShowClosedStorageKey, ITEMS_PAGE_SIZES } from "../lib/constants";
 import { downloadCsv, itemsToCsv } from "../lib/csv";
-import { useCurrentUser, useDebounced, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
-import {
-  capabilitiesQuery,
-  cyclesQuery,
-  fieldsQuery,
-  infiniteViewItemsQuery,
-  itemIdsQuery,
-  itemsCountQuery,
-  pagedViewItemsQuery,
-  projectByIdQuery,
-  queryKeys,
-  roadmapMembersQuery,
-  statesQuery,
-  useTimelogBatches,
-  usersQuery,
-  viewQuery as viewDefinitionQuery,
-  allStatesQuery,
-stateCategoriesQuery } from "../lib/queries";
+import { useCurrentUser, useKeyboardShortcut, usePermissions, usePointsEnabled, useAnonymousBounce, useIsAuthenticated, useItemsPageLimit } from "../lib/hooks";
+import { capabilitiesQuery, cyclesQuery, infiniteViewItemsQuery, itemIdsQuery, itemsCountQuery, pagedViewItemsQuery, queryKeys, roadmapMembersQuery, statesQuery, useTimelogBatches, usersQuery, viewQuery as viewDefinitionQuery, allStatesQuery, stateCategoriesQuery } from "../lib/queries";
 import { pushToast } from "../lib/toast";
 import { useReorderItem, useToggleStar, useUpdateItemInView } from "../lib/item-mutations";
 import {
@@ -63,15 +47,7 @@ import {
   type BucketCreatePreset,
   type BucketRef,
 } from "../lib/axis-dnd";
-import {
-  FieldType,
-  ItemKind,
-  Permission,
-  ViewAxis,
-  ViewType,
-  type Item,
-  type View,
-} from "../lib/types";
+import { ItemKind, Permission, ViewAxis, ViewType, type Item, type View } from "../lib/types";
 import {
   columnCatalog,
   defaultColumnsFor,
@@ -97,7 +73,6 @@ import {
 } from "../lib/card-layout";
 import { CardDesignerModal } from "../components/views/carddesigner/CardDesignerModal";
 import { Button } from "../components/Button";
-import { Pager } from "../components/Pager";
 import { DropdownMenu } from "../components/DropdownMenu";
 import { Spinner } from "../components/Spinner";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
@@ -124,6 +99,9 @@ import { ViewSwimlanes } from "../components/views/ViewSwimlanes";
 import { RoadmapSurface } from "../components/roadmap/RoadmapSurface";
 import { QueryError } from "../components/QueryError";
 import { CycleModal } from "./settings/cycles";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
+import { FieldType } from "@radd-plugin-ui/fields/types";
 
 /**
  * Saved-view page (specs 09/11): `/p/$projectKey/v/$viewId` and the
@@ -1375,6 +1353,7 @@ export function ViewPage() {
             page={page}
             pageCount={pageCount}
             total={totalCount}
+            noun="issues"
             onPage={setPage}
             pageSize={pageLimit}
             pageSizes={ITEMS_PAGE_SIZES}

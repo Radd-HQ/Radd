@@ -8,13 +8,11 @@ import { GRANTS_PAGE_SIZE, spaceGrantsPageQuery, projectGrantsPageQuery } from "
 import { useDirectory } from "../../lib/useDirectory";
 import { QueryError } from "../QueryError";
 import { Button } from "../Button";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
+import { IconButton, ErrorText, formatDate } from "@radd/plugin-sdk";
 import { ListSearchInput } from "../ListSearchInput";
 import { DirectoryPager } from "../DirectoryPager";
 import { GrantScopedRoleDialog } from "./GrantScopedRoleDialog";
 import { GrantExpiryButton } from "./GrantExpiryButton";
-import { formatDate } from "../../lib/dates";
 
 /** Direct grants in one space. Global grants remain on the global role surface. */
 export function ScopedAccessPanel({ scopeId, scopeName, kind, canGrant, canRevoke, canRenew }: {

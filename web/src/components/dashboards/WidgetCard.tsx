@@ -1,17 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { SlotId, useSlotMatch, useDisabledMatches } from "@radd/plugin-sdk";
+import { SlotId, useSlotMatch, useDisabledMatches, isoDaysAgo } from "@radd/plugin-sdk";
 import { MissingPluginType } from "../shell/MissingPluginType";
 import { REPORT_DEFAULT_RANGE_DAYS, RoutePath } from "../../lib/constants";
-import { isoDaysAgo } from "../../lib/dates";
 import { usePeek, usePointsEnabled } from "../../lib/hooks";
-import {
-  itemsCountQuery,
-  projectByIdQuery,
-  slqListItemsQuery,
-  viewCountsQuery,
-  viewQuery,
-} from "../../lib/queries";
+import { itemsCountQuery, slqListItemsQuery, viewCountsQuery, viewQuery } from "../../lib/queries";
 import {
   ReportInterval,
   ReportMeasure,
@@ -28,6 +21,7 @@ import { SlaCard } from "../reports/SlaCard";
 import { ThroughputCard } from "../reports/ThroughputCard";
 import { TimeInStateCard } from "../reports/TimeInStateCard";
 import { VelocityCard } from "../reports/VelocityCard";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * One dashboard widget's body (spec 75): every type renders through an

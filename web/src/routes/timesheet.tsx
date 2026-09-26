@@ -1,4 +1,4 @@
-import { usePluginData, type TimesheetAnnotation } from "@radd/plugin-sdk";
+import { usePluginData, type TimesheetAnnotation, EmptyState, Table, TBody, Td, THead, Th, ErrorText, formatIso, todayIso } from "@radd/plugin-sdk";
 import { Fragment, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, ChevronLeft, ChevronRight, Plus, Tag } from "lucide-react";
@@ -16,14 +16,7 @@ import {
 } from "../lib/constants";
 import { formatDuration } from "../lib/duration";
 import { useDurationConfig, usePeek, usePermissions, useCurrentUser } from "../lib/hooks";
-import {
-  instanceConfigQuery,
-  projectsQuery,
-  teamsQuery,
-  timesheetQuery,
-  usersQuery,
-  workCategoriesQuery,
-} from "../lib/queries";
+import { instanceConfigQuery, teamsQuery, timesheetQuery, usersQuery, workCategoriesQuery } from "../lib/queries";
 import {
   Permission,
   type Timesheet,
@@ -44,17 +37,14 @@ import {
   type TimesheetRow,
 } from "../lib/timesheet";
 import { Button } from "../components/Button";
-import { EmptyState } from "../components/EmptyState";
 import { Modal } from "../components/Modal";
 import { QueryError } from "../components/QueryError";
 import { Select, type SelectOption } from "../components/Select";
 import { SelectField } from "../components/SelectField";
 import { Spinner } from "../components/Spinner";
-import { Table, TBody, Td, THead, Th } from "../components/Table";
 import { TextField } from "../components/TextField";
-import { ErrorText } from "../components/ErrorText";
 import { MirroredBadge } from "../components/items/MirroredBadge";
-import { formatIso, todayIso } from "../lib/dates";
+import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 const PERIODS: { value: TimesheetPeriodValue; label: string }[] = [
   { value: TimesheetPeriod.day, label: "Day" },

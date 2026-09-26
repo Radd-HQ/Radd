@@ -6,8 +6,7 @@ import { api } from "../../lib/api";
 import { apiRoleGlobalGrantsPath } from "../../lib/constants";
 import { groupsQuery, queryKeys, roleGlobalGrantsQuery, teamsQuery, usersQuery } from "../../lib/queries";
 import type { GlobalGrant } from "../../lib/types";
-import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
-import { ErrorText } from "../ErrorText";
+import { TokenMultiSelect, type TokenOption, ErrorText } from "@radd/plugin-sdk";
 
 /**
  * Who holds this role INSTANCE-WIDE (spec 87).

@@ -70,7 +70,6 @@ export interface TotpSetup {
   otpauth_uri: string;
 }
 
-export type { Project } from "../../../../server/src/radd/modules/projects/ui/src/types";
 
 /** PATCH /projects/{id} (RADD-1009). Omitted = unchanged. The KEY is not
  *  editable — item keys derive from it — so it is not a field here. */
@@ -104,7 +103,6 @@ export interface PublicAccessUpdate {
 }
 
 /** Aggregate visible-project authority, independent of a directory page. */
-export type { ProjectSummary } from "../../../../server/src/radd/modules/projects/ui/src/types";
 
 export interface ProjectCreate {
   key: string;

@@ -93,7 +93,7 @@ export function Avatar({
       {indicators.length > 0 && (
         <span
           aria-label={indicators.map(i => i.ariaLabel).join(", ")}
-          className={`absolute -bottom-px -right-px rounded-full ${{ neutral: "bg-fg-muted", warning: "bg-amber-400", danger: "bg-red-400", success: "bg-green-400" }[indicators[0].tone]} ring-2 ring-base ${DOT_SIZES[size]}`}
+          className={`absolute -bottom-px -right-px rounded-full ${{ neutral: "bg-fg-muted", warning: "bg-status-warning", danger: "bg-status-danger", success: "bg-status-success" }[indicators[0].tone]} ring-2 ring-base ${DOT_SIZES[size]}`}
         />
       )}
     </span>

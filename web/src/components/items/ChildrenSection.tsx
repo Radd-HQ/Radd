@@ -8,18 +8,12 @@ import { ApiPath, RoutePath, apiItemPath } from "../../lib/constants";
 import { useOpenIssueRef, usePermissions } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";
 import { childItemPagesQuery, statesQuery } from "../../lib/queries";
-import {
-  ItemKind,
-  Permission,
-  StateCategory,
-  type Item,
-  type ItemRollup,
-  type Project,
-} from "../../lib/types";
+import { ItemKind, Permission, StateCategory, type Item, type ItemRollup } from "../../lib/types";
 import { Avatar } from "../Avatar";
 import { formatPoints } from "./ItemBadges";
 import { Spinner } from "../Spinner";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * An item's children, on the item (RADD-655, RADD-660).

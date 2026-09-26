@@ -2,9 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
-import type { FieldDef } from "../../lib/types";
 import { FieldProjectScope } from "./FieldProjectScope";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * Edit a field's SCOPE (spec 90 follow-up): global (every project) or scoped to a

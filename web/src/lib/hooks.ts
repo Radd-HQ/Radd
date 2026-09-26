@@ -14,36 +14,10 @@ import {
   RoutePath, SLQ_PROBE_DEBOUNCE_MS, ITEMS_PAGE_LIMIT, ITEMS_PAGE_LIMIT_PHONE, ITEMS_PAGE_SIZES,
   ITEMS_PAGE_SIZE_STORAGE_KEY,
 } from "./constants";
-import {
-  allowedTransitionsQuery,
-  authStateQuery,
-  capabilitiesQuery,
-  fieldWritabilityQuery,
-  effectiveScreenQuery,
-  fieldsQuery,
-  statesQuery,
-  instanceConfigQuery,
-  itemByKeyQuery,
-  pageSpaceSummaryQuery,
-  projectSummaryQuery,
-  projectByKeyQuery,
-  projectByIdQuery,
-  resolvedSettingQuery,
-  slqValidateQuery,
-} from "./queries";
+import { allowedTransitionsQuery, authStateQuery, capabilitiesQuery, fieldWritabilityQuery, effectiveScreenQuery, statesQuery, instanceConfigQuery, itemByKeyQuery, pageSpaceSummaryQuery, resolvedSettingQuery, slqValidateQuery } from "./queries";
 import { DEFAULT_DURATION_CONFIG, type DurationConfig } from "./duration";
 import { AuthStatus, type AuthState, currentPath } from "./auth";
-import { slqErrorOf, type SlqError } from "./slq";
-import {
-  InstanceRole,
-  Permission,
-  SettingKey,
-  type Item,
-  type Me,
-  type PageSpace,
-  type PermissionValue,
-  type Project,
-} from "./types";
+import { InstanceRole, Permission, SettingKey, type Item, type Me, type PageSpace, type PermissionValue } from "./types";
 
 /** Auth state from the boot query; the app-layout gate guarantees it resolved. */
 export function useAuthState(): AuthState | undefined {
@@ -414,8 +388,11 @@ export function useKeyboardShortcut(key: string, onTrigger: () => void) {
 }
 
 /** `value`, trailing-debounced. */
-export { useDebounced } from "@radd/plugin-sdk";
-import { useDebounced } from "@radd/plugin-sdk";
+import { useDebounced, positionedErrorOf } from "@radd/plugin-sdk";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import { projectSummaryQuery, projectByKeyQuery, projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { PositionedError } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Live SLQ probe outcome (specs 11/55) — drives the editor's validation line. */
 export const SlqProbeStatus = {
@@ -438,7 +415,7 @@ export interface SlqProbe {
   status: SlqProbeStatusValue;
   /** The debounced query text the current status corresponds to. */
   query: string;
-  error: SlqError | null;
+  error: PositionedError | null;
   failure: string | null;
   /** Result numbers — only on surfaces that actually ran the query. */
   count?: number;
@@ -464,7 +441,7 @@ export function useSlqValidation(
     enabled: trimmed !== "",
   });
 
-  const slqError = probe.isError ? slqErrorOf(probe.error) : null;
+  const slqError = probe.isError ? positionedErrorOf(probe.error) : null;
   const status: SlqProbeStatusValue =
     trimmed === ""
       ? SlqProbeStatus.idle

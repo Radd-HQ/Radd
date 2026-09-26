@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { FIELD_TYPE_LABELS } from "../../lib/meta";
-import type { FieldDef, FormField } from "../../lib/types";
+import type { FormField } from "../../lib/types";
 import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
-import { IconButton } from "../IconButton";
+import { IconButton } from "@radd/plugin-sdk";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 interface FormFieldsPickerProps {
   /** Registry fields in the form's project scope (global + project-scoped). */

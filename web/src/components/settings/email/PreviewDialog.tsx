@@ -9,7 +9,7 @@ import {
   type RoutingPreviewResult,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { ErrorText } from "../../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { Modal } from "../../Modal";
 import { TextField } from "../../TextField";
 

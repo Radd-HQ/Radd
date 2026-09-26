@@ -3,21 +3,19 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, CheckCircle2, Target } from "lucide-react";
 import { RoutePath } from "../lib/constants";
-import { formatDate } from "../lib/dates";
+import { formatDate, EmptyState, DirectorySelect } from "@radd/plugin-sdk";
 import { usePeek, usePermissions } from "../lib/hooks";
-import { CATEGORY_META, CATEGORY_ORDER, CYCLE_STATUS_META } from "../lib/meta";
-import { CYCLE_ITEMS_PAGE_SIZE, cycleItemsQuery, cycleQuery, cycleStatsQuery } from "../lib/queries";
+import { CATEGORY_META, CATEGORY_ORDER } from "../lib/meta";
+import { CYCLE_ITEMS_PAGE_SIZE, cycleItemsQuery, cycleStatsQuery } from "../lib/queries";
 import { useSlqQueryState } from "../lib/slq-filter";
-import { CycleStatus, Permission, StateCategory, type Item } from "../lib/types";
+import { Permission, StateCategory, type Item } from "../lib/types";
 import { Button } from "../components/Button";
 import { CompleteCycleModal } from "../components/cycles/CompleteCycleModal";
 import { CycleTimeChips } from "../components/cycles/CycleBadges";
-import { EmptyState } from "../components/EmptyState";
 import { Spinner } from "../components/Spinner";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
 import { QueryError } from "../components/QueryError";
-import { PeopleDirectorySelect } from "../components/PeopleDirectorySelect";
 import { DirectoryPager } from "../components/DirectoryPager";
 import type { PeopleChoice } from "../lib/queries/users";
 import {
@@ -27,6 +25,9 @@ import {
   PriorityIcon,
   ReleaseChip,
 } from "../components/items/ItemBadges";
+import { CYCLE_STATUS_META } from "@radd-plugin-ui/cycles/status";
+import { cycleQuery } from "@radd-plugin-ui/cycles/directory-queries";
+import { CycleStatus } from "@radd-plugin-ui/cycles/types";
 
 /** Cycle items use bounded server windows. Person, team and committed SLQ
  * scope both the rows and full-result progress/time statistics. */
@@ -163,9 +164,9 @@ export function CyclePage() {
             </>
           )}
           <span className="ml-auto flex max-w-full flex-wrap items-center gap-2">
-            <PeopleDirectorySelect kind="person" value={assigneeFilter} onChange={setAssigneeFilter}
+            <DirectorySelect source="auth.people" value={assigneeFilter} onChange={setAssigneeFilter}
               label="Filter by person" emptyLabel="Anyone" />
-            <PeopleDirectorySelect kind="team" value={teamFilter} onChange={setTeamFilter}
+            <DirectorySelect source="teams.teams" value={teamFilter} onChange={setTeamFilter}
               label="Filter by team" emptyLabel="Any team" />
           </span>
         </div>

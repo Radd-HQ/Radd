@@ -3,7 +3,7 @@ import { ClipboardList, ConciergeBell } from "lucide-react";
 import { errorMessage } from "../lib/api";
 import { portalFormsQuery } from "../lib/queries";
 import { type PortalGroup } from "../lib/types";
-import { EmptyState } from "../components/EmptyState";
+import { EmptyState } from "@radd/plugin-sdk";
 import { Spinner } from "../components/Spinner";
 import { FormCard, FormCardGrid } from "../components/requests/FormCard";
 import { MyRequests } from "../components/requests/RequestSection";

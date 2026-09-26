@@ -1,6 +1,7 @@
 /** Searchable option controls. Providers own transport, nouns, scope and row meaning. */
+import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Slot } from "./slots";
 import { Button, Modal, Spinner, TextField } from "./primitives";
 import { DirectoryPager, QueryError, TokenList } from "./host";
@@ -37,6 +38,8 @@ export interface OptionSource {
   resolve: (args: { value: string; scope: Scope; signal: AbortSignal }) => Promise<DirectoryOption[]>;
 }
 export const OPTION_CONTROL_SLOT = "directory.options";
+/** Directory rows change rarely; a remount within this window reuses them. */
+const DIRECTORY_STALE_MS = 30_000;
 
 /** Register a feature's option source through normal plugin lifecycle ownership. */
 export function optionContribution(source: OptionSource): PluginContribution {
@@ -61,20 +64,22 @@ function choiceText(row: DirectoryOption, source?: OptionSource) {
   return (source?.hintAfter ? [row.label, row.hint] : [row.hint, row.label]).filter(Boolean).join(" · ");
 }
 function SelectControl({ source, label, value, onChange, presets = [], canBrowse = true, scope = {}, resource }: OptionSelectProps & { source?: OptionSource }) {
-  const id = useId(), session = useId();
+  const id = useId();
   const [open, setOpen] = useState(false);
   const preset = presets.find(row => row.value === value);
   const active = Boolean(source && canBrowse && value && !preset);
-  const selected = useQuery({ queryKey: ["directory-options", resource, "value", value, scope, session],
+  // One cache entry per (resource, value, scope): every control resolving the same saved value
+  // shares it (RADD-1373 — it used to be one request per mounted control).
+  const selected = useQuery({ queryKey: ["directory-options", resource, "value", value, scope],
     queryFn: ({ signal }) => source!.resolve({ value, scope, signal }), meta: source?.meta,
-    enabled: active, gcTime: 0, staleTime: 0, retry: false });
+    enabled: active, staleTime: DIRECTORY_STALE_MS });
   const choice = preset ?? (active ? selected.data?.[0] : undefined);
   const text = choice ? choiceText(choice, source) : value
     ? active && selected.isPending ? "Loading choice…" : `${value} (unavailable)` : "Choose…";
   return <div className="flex min-w-0 flex-1 flex-col gap-1.5">
     <label htmlFor={id} className="text-xs font-medium text-fg-secondary">{label}</label>
     <Button id={id} variant="secondary" className="w-full justify-between" aria-haspopup="dialog"
-      disabled={!(source && canBrowse) && !presets.length} onClick={() => setOpen(true)}><span className="truncate">{text}</span><span aria-hidden>⌄</span></Button>
+      disabled={!(source && canBrowse) && !presets.length} onClick={() => setOpen(true)}><span className="truncate">{text}</span><ChevronDown size={14} className="shrink-0 text-fg-muted" aria-hidden /></Button>
     {selected.isError && active && <div className="text-xs"><QueryError label="choice" error={selected.error} /><Button variant="ghost" size="sm" onClick={() => void selected.refetch()}>Retry choice</Button></div>}
     {open && <Choices resource={resource} source={source} scope={scope} selected={value} presets={presets} canBrowse={canBrowse}
       onClose={() => setOpen(false)} onSelect={row => { setOpen(false); onChange(row.value); }} />}
@@ -99,7 +104,6 @@ function EditableControl(props: (({ kind: "text" } & OptionTextFieldProps) | ({ 
   </div>;
 }
 function Choices({ source, resource, selected = "", selectedValues = [], presets = [], canBrowse = true, scope = {}, onSelect, onClose, title, footer }: OptionChoicesProps & { source?: OptionSource }) {
-  const session = useId();
   const [filter, setFilter] = useState("");
   const [q, setQ] = useState("");
   useEffect(() => { const timer = setTimeout(() => setQ(filter.trim()), 150); return () => clearTimeout(timer); }, [filter]);
@@ -108,9 +112,9 @@ function Choices({ source, resource, selected = "", selectedValues = [], presets
   if (position.q !== q || position.scope !== scopeKey) setPosition({ q, scope: scopeKey, page: 0 });
   const page = position.q === q && position.scope === scopeKey ? position.page : 0;
   const pageSize = 50, active = Boolean(source && canBrowse), noun = source?.noun ?? "choices";
-  const result = useQuery({ queryKey: ["directory-options", resource, { q, page }, scope, session], meta: source?.meta,
+  const result = useQuery({ queryKey: ["directory-options", resource, { q, page }, scope], meta: source?.meta,
     queryFn: ({ signal }) => source!.fetch({ q, limit: pageSize, offset: page * pageSize, scope, signal }),
-    enabled: active, gcTime: 0, staleTime: 0, retry: false });
+    enabled: active, staleTime: DIRECTORY_STALE_MS, placeholderData: keepPreviousData });
   const busy = result.isFetching || q !== filter.trim();
   const rows = active ? result.data?.rows ?? [] : [];
   return <Modal title={title ?? `Choose ${noun}`} onClose={onClose}>
@@ -118,13 +122,13 @@ function Choices({ source, resource, selected = "", selectedValues = [], presets
     {presets.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{presets.map(row => <Button key={row.value} variant="secondary" disabled={selectedValues.includes(row.value)} onClick={() => onSelect(row)}>{row.label}</Button>)}</div>}
     {!source && <p className="py-3 text-sm text-fg-muted">This directory is unavailable. Saved values are preserved.</p>}
     {active && <><div aria-busy={busy} className="mt-3 max-h-[45dvh] overflow-y-auto">
-      {result.isPending ? <Spinner /> : result.isError ? <div className="space-y-2"><QueryError label={noun} error={result.error} /><Button variant="secondary" onClick={() => void result.refetch()}>Retry choices</Button></div>
+      {result.isPending ? <Spinner label={`Loading ${noun}…`} /> : result.isError ? <div className="space-y-2"><QueryError label={noun} error={result.error} /><Button variant="secondary" onClick={() => void result.refetch()}>Retry choices</Button></div>
         : !rows.length ? <p className="py-3 text-sm text-fg-muted">No matching choices.</p>
         : <ul>{rows.map(row => <li key={row.value}><Button variant="ghost" disabled={selectedValues.includes(row.value)}
           className={`w-full justify-start ${source?.stacked ? "h-auto min-h-11 py-2" : ""}`} onClick={() => onSelect(row)}>
           {source?.stacked ? <span className="min-w-0 text-left" title={choiceText(row, source)}><span className="block truncate">{row.label}</span><span className="block truncate text-xs text-fg-muted">{row.hint}</span></span>
             : <span className="truncate">{choiceText(row, source)}</span>}
-          {(row.value === selected || selectedValues.includes(row.value)) && <span className="ml-auto shrink-0" aria-label="Selected">✓</span>}
+          {(row.value === selected || selectedValues.includes(row.value)) && <Check size={14} className="ml-auto shrink-0 text-accent-text" aria-label="Selected" />}
         </Button></li>)}</ul>}
     </div><DirectoryPager page={page} pageSize={pageSize} total={result.data?.total ?? rows.length} busy={busy}
       onPage={next => setPosition({ q, scope: scopeKey, page: next })} label={noun} /></>}

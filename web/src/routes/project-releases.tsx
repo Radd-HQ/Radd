@@ -3,11 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronRight, Pencil, Plus, Rocket, Ship, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import { ApiPath, apiReleasePath, apiReleaseSweepPath } from "../lib/constants";
-import { formatDate } from "../lib/dates";
+import { formatDate, useListFilter, useConfirm, EmptyState, TableSkeleton, IconButton, ErrorText } from "@radd/plugin-sdk";
 import { usePermissions, useProjectByKey } from "../lib/hooks";
-import { useListFilter } from "../lib/list-filter";
 import { RELEASE_STATUS_META } from "../lib/meta";
-import { projectByIdQuery, queryKeys, releasesQuery, statesQuery, transitionsQuery } from "../lib/queries";
+import { queryKeys, releasesQuery, statesQuery, transitionsQuery } from "../lib/queries";
 import { RoutePath } from "../lib/constants";
 import { Entity, entityMeta, invalidateEntities } from "../lib/cache";
 import { pushToast, ToastKind } from "../lib/toast";
@@ -21,16 +20,12 @@ import {
   type ReleaseUpdate,
 } from "../lib/types";
 import { Button } from "../components/Button";
-import { useConfirm } from "../components/ConfirmDialog";
-import { EmptyState } from "../components/EmptyState";
 import { ListSearchInput } from "../components/ListSearchInput";
 import { Modal } from "../components/Modal";
-import { TableSkeleton } from "../components/TableSkeleton";
 import { TextField } from "../components/TextField";
 import { Link, useParams } from "@tanstack/react-router";
 import { QueryError } from "../components/QueryError";
-import { IconButton } from "../components/IconButton";
-import { ErrorText } from "../components/ErrorText";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * A project's releases (RADD-1290): a PROJECT page, readable by anyone who can

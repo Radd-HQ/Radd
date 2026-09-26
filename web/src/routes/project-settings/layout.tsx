@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import { useProjectByKey, usePermissions, type PermissionChecks } from "../../lib/hooks";
-import { PROJECT_HOMED_SECTIONS, Permission, SettingScope, type Project } from "../../lib/types";
+import { PROJECT_HOMED_SECTIONS, Permission, SettingScope } from "../../lib/types";
 import { ProjectIdentityCard } from "../../components/projects/ProjectIdentityCard";
 import { DeleteProjectCard } from "../../components/projects/DeleteProjectCard";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
@@ -25,6 +25,7 @@ import { StatesSettingsPage } from "./states";
 import { FormsSettingsPage } from "./forms";
 import { ProjectTimeloggingSettingsPage } from "./timelogging";
 import { ProjectSlaSettingsPage } from "./sla";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Resolve the URL's `$projectKey` to its project (shared by layout + wrappers). */
 function useUrlProject() {

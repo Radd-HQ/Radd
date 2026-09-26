@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { viewColumnWidthsStorageKey } from "./constants";
 import { fieldInScope } from "./field-scope";
-import { FieldType, ViewType, type FieldDef } from "./types";
+import { ViewType } from "./types";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * List-view table columns (spec 108). The column SET (ids + order) lives on

@@ -5,12 +5,11 @@ import type { ShareLevelValue } from "../../lib/types";
 import { useDirectory } from "../../lib/useDirectory";
 import { Button } from "../Button";
 import { DirectoryPager } from "../DirectoryPager";
-import { ErrorText } from "../ErrorText";
+import { ErrorText, formatDate } from "@radd/plugin-sdk";
 import { Select } from "../Select";
 import { Spinner } from "../Spinner";
 import { TextField } from "../TextField";
 import { AddSharingGrantDialog, SHARE_LEVEL_OPTIONS } from "./AddSharingGrantDialog";
-import { formatDate } from "../../lib/dates";
 
 /**
  * Who a view/dashboard is shared with, edited in place and saved with the

@@ -3,16 +3,8 @@ import { CalendarClock, CornerDownRight, Flag, Globe, Rocket, RefreshCw, Star, U
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { RoutePath } from "../../lib/constants";
 import { ItemVisibility, type ItemVisibilityValue } from "../../lib/types";
-import { shortDate } from "../../lib/dates";
-import {
-  CATEGORY_META,
-  CYCLE_STATUS_META,
-  KIND_META,
-  NO_KIND_ICON,
-  PRIORITY_META,
-  RELEASE_STATUS_META,
-  VISIBILITY_META,
-} from "../../lib/meta";
+import { shortDate } from "@radd/plugin-sdk";
+import { CATEGORY_META, KIND_META, NO_KIND_ICON, PRIORITY_META, RELEASE_STATUS_META, VISIBILITY_META } from "../../lib/meta";
 import type {
   CycleRef,
   ItemKindValue,
@@ -26,6 +18,7 @@ import type {
 } from "../../lib/types";
 import { Avatar } from "../Avatar";
 import { ValueChip } from "./ValueChip";
+import { CYCLE_STATUS_META } from "@radd-plugin-ui/cycles/status";
 
 /** Small presentational atoms shared by board cards, list rows, and the detail panel. */
 

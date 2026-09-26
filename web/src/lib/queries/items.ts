@@ -12,13 +12,8 @@ import {
   apiItemCommentsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
-import type {
-  Attachment,
-  AttachmentTarget,
-  Comment,
-  Item,
-  ValidationContext,
-} from "../types";
+import type { Attachment, AttachmentTarget, Comment, Item } from "../types";
+import type { ValidationContext } from "@radd-plugin-ui/automations/types";
 
 /**
  * Resolve an item by its canonical key (`TD-25`) via the server's by-key

@@ -4,13 +4,13 @@ import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { Permission, type RoleGrantCreate } from "../../lib/types";
-import { OptionResource, type DirectoryOption } from "../../lib/queries/options";
+import { OptionResource } from "../../lib/queries/options";
 import { Button } from "../Button";
-import { Choices } from "../DirectoryChoices";
-import { ErrorText } from "../ErrorText";
+import { ErrorText, OptionChoices } from "@radd/plugin-sdk";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
 import { Select } from "../Select";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 const subjectResources = { person: OptionResource.person, team: OptionResource.teamReference, group: OptionResource.group };
 type SubjectKind = keyof typeof subjectResources;
@@ -60,7 +60,7 @@ export function GrantScopedRoleDialog({ scopeId, scopeName, kind: scopeKind, onC
       {grant.isError && <div role="alert"><ErrorText error={grant.error} /></div>}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!role || !subject || grant.isPending}>{grant.isPending ? "Granting…" : "Grant"}</Button></div>
     </form>
-    {picker === "subject" && <Choices resource={subjectResources[kind]} selected={subject?.value} onSelect={value => { setSubject(value); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
-    {picker === "role" && <Choices resource={OptionResource.assignableRole} scope={scopeKind === "project" ? { project_id: scopeId } : { space_id: scopeId }} selected={role?.value} onSelect={value => { setRole(value); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
+    {picker === "subject" && <OptionChoices resource={subjectResources[kind]} selected={subject?.value} onSelect={value => { setSubject(value); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
+    {picker === "role" && <OptionChoices resource={OptionResource.assignableRole} scope={scopeKind === "project" ? { project_id: scopeId } : { space_id: scopeId }} selected={role?.value} onSelect={value => { setRole(value); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
   </Modal>;
 }

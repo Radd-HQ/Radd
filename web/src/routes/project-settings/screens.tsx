@@ -4,12 +4,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import {
-  effectiveScreenQuery,
-  fieldsQuery,
-  issueTypesQuery,
-  projectByIdQuery,
-} from "../../lib/queries";
+import { effectiveScreenQuery, issueTypesQuery } from "../../lib/queries";
 import {
   Permission,
   ScreenPlacement,
@@ -21,7 +16,9 @@ import { SelectField } from "../../components/SelectField";
 import { Spinner } from "../../components/Spinner";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
-import { ErrorText } from "../../components/ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 const BUILTIN_LABELS: Record<string, string> = {
   assignee: "Assignee",

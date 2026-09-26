@@ -6,6 +6,7 @@ import {readFileSync,existsSync,statSync} from 'node:fs';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {openBrowser} from './lib/cdp.mjs';
+import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 const root=new URL('../../',import.meta.url).pathname,dist=path.join(root,'web/dist');
 const evidence=JSON.parse(execFileSync(path.join(root,'server/.venv/bin/python'),['-c',`
 import json,importlib
@@ -37,7 +38,7 @@ const server=http.createServer((req,res)=>{
   }
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:['audit',...evidence.plugins.filter(name=>(name!=='github'||github)&&(name!=='milestones'||milestones))],remotes:[{name:'audit',remote_entry:'/plugins/audit/remoteEntry.js',ui_api_version:'1.11.0'},{name:'items',remote_entry:'/plugins/items/remoteEntry.js',ui_api_version:'1.11.0'},...(milestones?[{name:'milestones',remote_entry:`/plugins/milestones/remoteEntry.js?v=${version}`,ui_api_version:'1.0.0'}]:[])],nav:milestones?[{key:'milestones',plugin:'milestones',label:'Milestones',path:'/milestones',section:'main',requires:[]}]:[],widget_types:[],view_types:[]};
+  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:[...CORE_PLUGINS,'audit',...evidence.plugins.filter(name=>(name!=='github'||github)&&(name!=='milestones'||milestones))],remotes:[{name:'audit',remote_entry:'/plugins/audit/remoteEntry.js',ui_api_version:'1.11.0'},{name:'items',remote_entry:'/plugins/items/remoteEntry.js',ui_api_version:'1.11.0'},...(milestones?[{name:'milestones',remote_entry:`/plugins/milestones/remoteEntry.js?v=${version}`,ui_api_version:'1.0.0'}]:[])],nav:milestones?[{key:'milestones',plugin:'milestones',label:'Milestones',path:'/milestones',section:'main',requires:[]}]:[],widget_types:[],view_types:[]};
   else if(p==='/api/v1/audit/access')data={allowed:true,instance_wide:true};
   else if(p==='/api/v1/audit/catalog')data={entity_types:evidence.rows.map(row=>({key:row.entity_type,label:row.entity_type})),event_types:[]};
   else if(p==='/api/v1/milestones')data=[{id:'saved',project_id:'project',title:'Owner-linked milestone',description:'Preserved navigation',status:'open',due_on:null}];

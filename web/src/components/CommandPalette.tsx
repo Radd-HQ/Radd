@@ -22,27 +22,12 @@ import { useNavFacts } from "../lib/nav-facts";
 import { PALETTE_SEARCH_LIMIT, RoutePath, SEARCH_DEBOUNCE_MS } from "../lib/constants";
 import { usePermissions } from "../lib/hooks";
 import { pagePermalink } from "../lib/page-links";
-import {
-  aiStatusQuery,
-  pageSearchQuery,
-  projectsQuery,
-  searchQuery,
-  semanticSearchQuery,
-  entitySearchQuery,
-  projectByKeyQuery,
-} from "../lib/queries";
-import {
-  AiFeature,
-  Permission,
-  type EntityHit,
-  type PageSearchResult,
-  type Project,
-  type SearchResult,
-  type SemanticDoc,
-  type SemanticItem,
-} from "../lib/types";
+import { aiStatusQuery, pageSearchQuery, searchQuery, semanticSearchQuery, entitySearchQuery } from "../lib/queries";
+import { AiFeature, Permission, type EntityHit, type PageSearchResult, type SearchResult, type SemanticDoc, type SemanticItem } from "../lib/types";
 import { NewItemModal } from "./items/NewItemModal";
 import { listRecentItems } from "../lib/recent";
+import { projectsQuery, projectByKeyQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Cmd-K command palette (spec 28): quick-open issues via the search module +

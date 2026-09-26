@@ -10,7 +10,7 @@ depends on time logging.
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from radd.kernel import EntityLinkSpec, PluginUiManifest
+from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin, SlqFieldSpec
 from radd.kernel import NavFactSpec, PermissionSpec, ProjectPurgeSpec
@@ -56,7 +56,6 @@ from .types import TimelogEntity  # noqa: E402 — RADD-1328
 
 plugin = RaddPlugin(
     name="timelogging",
-    ui=PluginUiManifest(remote="/plugins/timelogging/remoteEntry.js", ui_api_version="1.13.0"),
     entity_links=(
         EntityLinkSpec('work_category', ('/settings/timelogging',)),
     ),

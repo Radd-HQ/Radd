@@ -1,7 +1,7 @@
 import { DashboardCanvas } from "../components/dashboards/DashboardCanvas";
 import { WidgetBody } from "../components/dashboards/WidgetCard";
 import { ActivityWidget } from "../components/dashboards/ActivityWidget";
-import { ErrorText } from "../components/ErrorText";
+import { ErrorText, shiftIsoDay, shortDate, todayIso } from "@radd/plugin-sdk";
 import { QuickStar } from "../components/items/QuickStar";
 import type { LucideIcon } from "lucide-react";
 import { api, ApiError, type CursorPage } from "../lib/api";
@@ -14,7 +14,6 @@ import { useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-quer
 import { CalendarClock, History, Inbox, ShieldCheck, Star, UserRound } from "lucide-react";
 import { listRecentItems } from "../lib/recent";
 import { RoutePath } from "../lib/constants";
-import { shiftIsoDay, shortDate, todayIso } from "../lib/dates";
 import { usePeek } from "../lib/hooks";
 import { notificationsQuery, pendingApprovalsQuery, itemsCountQuery } from "../lib/queries";
 import { PRIORITY_META } from "../lib/meta";

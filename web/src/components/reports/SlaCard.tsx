@@ -10,7 +10,7 @@ import { ChartLegend } from "../charts/ChartLegend";
 import { ReportCard } from "../charts/ReportCard";
 import { Select } from "../Select";
 import { StackedBarChart, type StackedBar } from "../charts/StackedBarChart";
-import { shortDate } from "../charts/chart-utils";
+import { shortDate } from "@radd/plugin-sdk";
 import { CardBody, ScopeNote } from "./report-state";
 
 /** CSAT (spec 65) renders amber — the star color, distinct from met/breached.

@@ -4,7 +4,7 @@ import { ArrowRight, ChevronDown, ChevronRight, Lock, UserRound } from "lucide-r
 import { Link } from "@tanstack/react-router";
 import { ApiError, api } from "../../lib/api";
 import { ApiPath, RoutePath, SEARCH_DEBOUNCE_MS, apiUserPath, apiUserTotpPath } from "../../lib/constants";
-import { useCurrentUser, useDebounced, usePermissions } from "../../lib/hooks";
+import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
 import { USERS_PAGE_SIZE, queryKeys, usersAdminPageQuery, usersAdminQuery } from "../../lib/queries";
 import {
@@ -15,11 +15,8 @@ import {
   type User,
   type UserAdminUpdate,
 } from "../../lib/types";
-import { EmptyState } from "../../components/EmptyState";
-import { useConfirm } from "../../components/ConfirmDialog";
+import { EmptyState, useConfirm, TableSkeleton, Table, TBody, Td, THead, Th, ErrorText, formatDateTime, Pager, useDebounced } from "@radd/plugin-sdk";
 import { SelectField } from "../../components/SelectField";
-import { Pager } from "../../components/Pager";
-import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { QueryError } from "../../components/QueryError";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -30,10 +27,7 @@ import {
 import { DeleteUserDialog } from "../../components/settings/DeleteUserDialog";
 import { DuplicatesSection } from "../../components/settings/UserDuplicates";
 import { SOURCE_LABELS, SourceBadge } from "../../components/settings/UserSourceBadge";
-import { Table, TBody, Td, THead, Th } from "../../components/Table";
 import { RoleGrantsSection } from "../../components/settings/RoleGrantsSection";
-import { ErrorText } from "../../components/ErrorText";
-import { formatDateTime } from "../../lib/dates";
 
 /**
  * THE people page (spec 84; spec 86 collapsed the membership layer): every
@@ -198,6 +192,7 @@ export function UsersSettingsPage() {
                 page={page}
                 pageCount={Math.ceil(total / USERS_PAGE_SIZE)}
                 total={total}
+                noun="users"
                 onPage={setPage}
               />
             </div>

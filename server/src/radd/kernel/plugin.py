@@ -169,7 +169,7 @@ class RaddPlugin:
     on_shutdown: tuple[StartupHook, ...] = ()
 
     #: Optional operator-facing descriptions, declared beside the owning consumer.
-    #: Appended for positional compatibility. Names must belong to consumer_names.
+    #: Names must belong to consumer_names.
     consumer_descriptions: tuple[tuple[str, str], ...] = ()
 
     #: Historical entity destinations, owned independently of any consuming UI.

@@ -1,12 +1,11 @@
 import { useState } from "react";
-import type { DirectoryOption } from "../../../lib/queries/options";
 import { OptionResource } from "../../../lib/queries/options";
-import { IconButton } from "../../IconButton";
+import { IconButton, OptionChoices } from "@radd/plugin-sdk";
 import { Button } from "../../Button";
 import { Modal } from "../../Modal";
-import { Choices } from "../../DirectoryChoices";
 import { ProjectPicker } from "../../projects/ProjectPicker";
 import { X } from "lucide-react";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 export function StartingRoleDialog({ onClose, onAdd }: { onClose: () => void; onAdd: (roleId: string, projectIds: string[]) => void }) {
   const [role, setRole] = useState<DirectoryOption>();
@@ -22,7 +21,7 @@ export function StartingRoleDialog({ onClose, onAdd }: { onClose: () => void; on
       </div>
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button disabled={!role} onClick={() => onAdd(role!.value, projects.map(p => p.value))}>Add</Button></div>
     </div>
-    {picker === "role" && <Choices resource={OptionResource.assignableRole} selected={role?.value} onSelect={row => { setRole(row); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
+    {picker === "role" && <OptionChoices resource={OptionResource.assignableRole} selected={role?.value} onSelect={row => { setRole(row); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
     {picker === "project" && <ProjectPicker title="Choose starting projects" onSelect={project => { setProjects(rows => rows.some(r => r.value === project.id) ? rows : [...rows, { value: project.id, label: project.key, hint: project.name }]); setPicker(undefined); }} onClose={() => setPicker(undefined)} />}
   </Modal>;
 }

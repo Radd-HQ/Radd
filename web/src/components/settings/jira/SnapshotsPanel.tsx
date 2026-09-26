@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Database, Loader2, Trash2, X } from "lucide-react";
 import { api, errorMessage } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
-import { relativeTime } from "../../../lib/dates";
+import { relativeTime, useConfirm, EmptyState, Table, TBody, Td, THead, Th, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import {
   jiraConnectionsQuery,
   jiraProjectsQuery,
@@ -18,16 +18,11 @@ import {
   type SnapshotStartInput,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
-import { EmptyState } from "../../EmptyState";
 import { Modal } from "../../Modal";
 import { QueryError } from "../../QueryError";
 import { SelectField } from "../../SelectField";
-import { Table, TBody, Td, THead, Th } from "../../Table";
-import { TableSkeleton } from "../../TableSkeleton";
 import { TextField } from "../../TextField";
 import { ProblemList } from "./ProblemList";
-import { ErrorText } from "../../ErrorText";
 
 const POLL_MS = 1500;
 

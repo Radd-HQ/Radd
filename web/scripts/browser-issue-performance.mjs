@@ -7,6 +7,7 @@ import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openBrowser } from "./lib/cdp.mjs";
+import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const project = {id: "project", key: "PRF", name: "Performance fixture", permissions: ["*"], created_at: "2026-01-01"};
@@ -30,7 +31,7 @@ const server = http.createServer(async (req, res) => {
     requests.push({route, query: url.search, method: req.method});
     let data = [];
     if (route === "/auth/me") data = {id: "admin", name: "Fixture Admin", email: "fixture@example.test", instance_role: "admin", permissions: ["*"], timezone: "UTC"};
-    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [], ui: []};
+    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS], ui: []};
     else if (route === "/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};

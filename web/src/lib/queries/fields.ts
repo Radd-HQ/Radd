@@ -1,7 +1,7 @@
 /** Fields registry, labels, access/role grants, and issue link types. */
 
 import { queryOptions } from "@tanstack/react-query";
-import { api, type Paged } from "../api";
+import { api } from "../api";
 import {
   ApiPath,
 } from "../constants";
@@ -13,8 +13,8 @@ import type {
   LinkTypeDef,
   RoleGrant,
 } from "../types";
+import type { Paged } from "@radd/plugin-sdk";
 
-export { fieldsQuery } from "../../../../server/src/radd/modules/fields/ui/src/catalog";
 
 /**
  * Every registered resource's GRANT MODEL (RADD-947) — accesses, subject kinds,
@@ -95,4 +95,3 @@ export const linkTypesQuery = (projectId?: string) =>
     staleTime: 60_000,
   });
 
-export { labelsQuery } from "../../../../server/src/radd/modules/labels/ui/src/catalog";

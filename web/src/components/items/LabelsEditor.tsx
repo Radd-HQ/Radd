@@ -1,7 +1,7 @@
 import { useId } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { labelsQuery } from "../../lib/queries";
-import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
+import { TokenMultiSelect, type TokenOption } from "@radd/plugin-sdk";
+import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
 
 interface LabelsEditorProps {
   value: string[];

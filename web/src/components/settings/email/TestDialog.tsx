@@ -4,7 +4,7 @@ import { api } from "../../../lib/api";
 import { apiMailSenderTestPath } from "../../../lib/constants";
 import type { MailSender, MailTestResult } from "../../../lib/types";
 import { Button } from "../../Button";
-import { ErrorText } from "../../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { Modal } from "../../Modal";
 import { TextField } from "../../TextField";
 

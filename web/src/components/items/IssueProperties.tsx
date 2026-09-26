@@ -1,7 +1,7 @@
 import { TeamSelect } from "../teams/TeamSelect";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Slot, SlotId } from "@radd/plugin-sdk";
+import { Slot, SlotId, DateField } from "@radd/plugin-sdk";
 import { ChevronDown, ChevronRight, SlidersHorizontal } from "lucide-react";
 import { SidePanelCollapse } from "../SidePanel";
 import {
@@ -43,28 +43,17 @@ function ChipSelect({ chip, children }: { chip: ReactNode; children: ReactNode }
     </div>
   );
 }
-import {
-  ItemVisibility,
-  ScreenPlacement,
-  type CustomFieldValue,
-  type CustomFields,
-  type EffectiveFieldRow,
-  type FieldDef,
-  type Item,
-  type ItemUpdate,
-  type ItemVisibilityValue,
-  type PriorityValue,
-  type Project,
-  type State,
-} from "../../lib/types";
+import { ItemVisibility, ScreenPlacement, type EffectiveFieldRow, type Item, type ItemUpdate, type ItemVisibilityValue, type PriorityValue, type State } from "../../lib/types";
 import { SelectField } from "../SelectField";
 import { VisibilityChip } from "./ItemBadges";
 import { PersonName } from "../PersonName";
 import { CustomFieldControl } from "./CustomFieldsForm";
 import { LabelsEditor } from "./LabelsEditor";
-import { CyclePicker, DateField, ReleasePicker } from "./PlanningFields";
+import { CyclePicker, ReleasePicker } from "./PlanningFields";
 import { SlaTimerChip } from "./SlaChips";
 import { TimeTrackingPanel } from "./TimeTrackingPanel";
+import type { CustomFieldValue, CustomFields, FieldDef } from "@radd-plugin-ui/fields/types";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 interface IssuePropertiesProps {
   project: Project;

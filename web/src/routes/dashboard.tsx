@@ -12,7 +12,7 @@ import { Entity, invalidateEntities } from "../lib/cache";
 import { RoutePath, apiDashboardPath } from "../lib/constants";
 import { dashboardQuery } from "../lib/queries";
 import { Button } from "../components/Button";
-import { useConfirm } from "../components/ConfirmDialog";
+import { useConfirm, ErrorText } from "@radd/plugin-sdk";
 import { Spinner } from "../components/Spinner";
 import { DashboardModal } from "../components/dashboards/DashboardModal";
 import { DashboardSharingModal } from "../components/dashboards/DashboardSharingModal";
@@ -21,7 +21,6 @@ import { WidgetBody } from "../components/dashboards/WidgetCard";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
 import { useSlqQueryState } from "../lib/slq-filter";
-import { ErrorText } from "../components/ErrorText";
 
 export function DashboardPage() {
   const { dashboardId = "" } = useParams({ strict: false });

@@ -12,7 +12,7 @@ import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
 import { PersonName } from "../PersonName";
 import { Spinner } from "../Spinner";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /** The things that MOVE to the successor, in the order the dialog reads best.
  * Owned teams are NOT here (RADD-784): running a team is delegation, not

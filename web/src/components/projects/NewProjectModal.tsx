@@ -3,11 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ApiPath, PROJECT_KEY_HINT, PROJECT_KEY_PATTERN } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
-import type { Project, ProjectCreate } from "../../lib/types";
+import type { ProjectCreate } from "../../lib/types";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 interface NewProjectModalProps {
   onClose: () => void;

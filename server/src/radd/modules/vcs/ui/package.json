@@ -4,16 +4,17 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "vite build"
-  },
   "dependencies": {
     "@radd/plugin-sdk": "*",
     "@radd-plugin-ui/projects": "*",
     "@radd-plugin-ui/timelogging": "*"
   },
   "exports": {
+    ".": "./src/index.tsx",
     "./host-contract": "./src/host-contract.ts",
     "./types": "./src/types.ts"
+  },
+  "radd": {
+    "bundled": true
   }
 }

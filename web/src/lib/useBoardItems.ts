@@ -5,7 +5,8 @@ import { entityMeta, Entity } from "./cache";
 import { groupItemsForView, type ViewGroup } from "./view-utils";
 import { CATEGORY_META } from "./meta";
 import type { State } from "./types";
-import type { Cycle, Item, ItemParentRef, View } from "./types";
+import type { Item, ItemParentRef, View } from "./types";
+import type { Cycle } from "@radd-plugin-ui/cycles/types";
 
 const PAGE_SIZE = 25;
 const BOARD_STALE_MS = 30_000;

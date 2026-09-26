@@ -12,7 +12,7 @@ import { Button } from "../../Button";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
 import { MappingSection } from "./MappingSection";
-import { useListFilter } from "../../../lib/list-filter";
+import { useListFilter } from "@radd/plugin-sdk";
 import { ListSearchInput } from "../../ListSearchInput";
 
 /** Below this many people the table needs no filter chrome (RADD-882). */

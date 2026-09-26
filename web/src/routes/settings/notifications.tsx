@@ -11,7 +11,7 @@ import {
 } from "../../lib/types";
 import { subscriptionOptionsKey } from "../../lib/queries/notifications";
 import { Button } from "../../components/Button";
-import { ErrorText } from "../../components/ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { NotificationMatrix } from "../../components/settings/notifications/NotificationMatrix";
 import {

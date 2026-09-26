@@ -7,13 +7,14 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { RoutePath, apiProjectPath } from "../../lib/constants";
 import { projectContentQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
-import type { Project, ProjectContentSummary } from "../../lib/types";
+import type { ProjectContentSummary } from "../../lib/types";
 import { Button, ButtonVariant } from "../Button";
 import { Callout, CalloutKind } from "../Callout";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { Modal } from "../Modal";
 import { Spinner } from "../Spinner";
 import { TextField } from "../TextField";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** The counts the dialog knows how to name, in reading order. Anything else
  * the server reports (a plugin's noun) is ignored rather than mis-labelled. */

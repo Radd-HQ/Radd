@@ -22,7 +22,6 @@ import type {
   Transition,
 } from "../types";
 
-export { projectsQuery, firstProjectQuery, PROJECTS_PAGE_SIZE, projectSummaryQuery, projectsPageQuery, projectByIdQuery, projectByKeyQuery } from "../../../../server/src/radd/modules/projects/ui/src/directory-queries";
 
 /** RADD-1174: the delete dialog's numbers + blockers. Never stale — it is
  * read at the moment of the decision. */

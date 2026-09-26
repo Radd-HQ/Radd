@@ -18,44 +18,17 @@ import { TRANSITION_MODE_LABELS } from "../../lib/meta";
 import { ApiPath, apiTransitionPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
-import {
-  fieldsQuery,
-  issueTypesQuery,
-  labelsQuery,
-  queryKeys,
-  releasesQuery,
-  scopedSettingsQuery,
-  teamsQuery,
-  transitionsQuery,
-  usersQuery,
-} from "../../lib/queries";
-import {
-  ConditionOp,
-  ItemKind,
-  Permission,
-  Priority,
-  SettingScope,
-  TransitionCheck,
-  TransitionMode,
-  WORKFLOW_TRANSITION_MODE_KEY,
-  type ApproverEntry,
-  type ConditionOpValue,
-  type FieldConditionParams,
-  type FieldDef,
-  type Project,
-  type State,
-  type Transition,
-  type TransitionCreate,
-  type TransitionRule,
-  type TransitionUpdate,
-} from "../../lib/types";
+import { issueTypesQuery, queryKeys, releasesQuery, scopedSettingsQuery, teamsQuery, transitionsQuery, usersQuery } from "../../lib/queries";
+import { ConditionOp, ItemKind, Permission, Priority, SettingScope, TransitionCheck, TransitionMode, WORKFLOW_TRANSITION_MODE_KEY, type ApproverEntry, type ConditionOpValue, type FieldConditionParams, type State, type Transition, type TransitionCreate, type TransitionRule, type TransitionUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { SubjectPicker, type Subject } from "./SubjectPicker";
-import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
+import { TokenMultiSelect, type TokenOption, IconButton, ErrorText } from "@radd/plugin-sdk";
 import { useKeyedRows } from "../../lib/keyed-rows";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Any-state wildcard sentinel for the from-state selects ("" = NULL). */
 const ANY_STATE = "";

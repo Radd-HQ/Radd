@@ -9,12 +9,10 @@ import { useDirectory } from "../../lib/useDirectory";
 import { pushToast, ToastKind } from "../../lib/toast";
 import { Permission, type DirectorySyncResult, type Team, type TeamGroup } from "../../lib/types";
 import { Button } from "../Button";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
+import { IconButton, ErrorText, formatDateTime } from "@radd/plugin-sdk";
 import { TextField } from "../TextField";
 import { DirectoryPager } from "../DirectoryPager";
 import { Modal } from "../Modal";
-import { formatDateTime } from "../../lib/dates";
 
 /** Groups remain directory-owned; a team attaches them and inherits their people. */
 export function TeamGroupsSection({ team, canManage }: { team: Team; canManage: boolean }) {

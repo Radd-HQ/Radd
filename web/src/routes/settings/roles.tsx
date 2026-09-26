@@ -16,15 +16,13 @@ import {
   withRelations,
 } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { EmptyState, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import { TextField } from "../../components/TextField";
 import { PermissionMatrix } from "../../components/settings/PermissionMatrix";
 import { RoleGlobalGrants } from "../../components/settings/RoleGlobalGrants";
 import { RoleModal } from "../../components/settings/RoleModal";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
-import { ErrorText } from "../../components/ErrorText";
 import { ChangeHistoryPanel } from "../../components/history/ChangeHistoryPanel";
 
 /** Roles admin (spec 09): list + expandable permission matrix per role. */

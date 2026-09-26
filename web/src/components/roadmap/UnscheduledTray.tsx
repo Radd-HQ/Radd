@@ -9,7 +9,7 @@ import { itemsCountQuery, roadmapTrayItemsQuery } from "../../lib/queries";
 import { combineQueryWithFilters } from "../../lib/slq";
 import type { Item } from "../../lib/types";
 import { ItemKeyLink, KindBadge, PriorityIcon } from "../items/ItemBadges";
-import { Pager } from "../Pager";
+import { Pager } from "@radd/plugin-sdk";
 
 /** Tray filter chips (spec 79): everything, or unscheduled epics only (the
  * "populate the roadmap top-down" flow). Persisted per view in localStorage. */

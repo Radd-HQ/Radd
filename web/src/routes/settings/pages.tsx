@@ -9,21 +9,17 @@ import { usePermissions } from "../../lib/hooks";
 import { usePageSpaceDirectory } from "../../lib/usePageSpaceDirectory";
 import { Permission, type PageSpace } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { IconButton } from "../../components/IconButton";
+import { IconButton, useConfirm, EmptyState, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import { DirectoryPager } from "../../components/DirectoryPager";
 import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
 import { pushToast } from "../../lib/toast";
-import { useConfirm } from "../../components/ConfirmDialog";
-import { EmptyState } from "../../components/EmptyState";
 import { PublicBadge } from "../../components/pages/PublicBadge";
-import { TableSkeleton } from "../../components/TableSkeleton";
 import { PageTemplatesSection } from "../../components/settings/PageTemplatesSection";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { SpaceAccessPanel } from "../../components/settings/SpaceAccessPanel";
 import { SpaceForm } from "../../components/settings/SpaceForm";
 import { QueryError } from "../../components/QueryError";
-import { ErrorText } from "../../components/ErrorText";
 
 /** Space mutations follow this space's authority; instance operations stay global. */
 export function PagesSettingsPage() {

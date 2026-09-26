@@ -1,25 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SlotId, useDisabledMatches } from "@radd/plugin-sdk";
+import { SlotId, useDisabledMatches, IconButton, ErrorText, positionedErrorOf } from "@radd/plugin-sdk";
 import { api } from "../../lib/api";
 import { ApiPath, RoutePath, apiViewPath } from "../../lib/constants";
 import { SlqProbeStatus, usePermissions, useSlqValidation } from "../../lib/hooks";
-import { capabilitiesQuery, fieldsQuery, queryKeys } from "../../lib/queries";
-import { slqErrorOf } from "../../lib/slq";
-import {
-  Permission,
-  ViewAxis,
-  ViewType,
-  type AxisToken,
-  type Project,
-  type QuickFilter,
-  type ShareLevelValue,
-  type View,
-  type ViewCreate,
-  type ViewTypeValue,
-  type ViewUpdate,
-} from "../../lib/types";
+import { capabilitiesQuery, queryKeys } from "../../lib/queries";
+import { Permission, ViewAxis, ViewType, type AxisToken, type QuickFilter, type ShareLevelValue, type View, type ViewCreate, type ViewTypeValue, type ViewUpdate } from "../../lib/types";
 import { axisOptions } from "../../lib/view-utils";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
@@ -29,10 +16,10 @@ import { SlqCheatSheet } from "./SlqCheatSheet";
 import { SlqEditor } from "./SlqEditor";
 import { ViewSharingEditor, SERVER_PRIVATE, type LocalShare } from "./ViewSharingEditor";
 import { useKeyedRows } from "../../lib/keyed-rows";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
 import { emptySharingDraft, sharingEdits, type SharedSave } from "../../lib/sharing-draft";
 import { Entity, invalidateEntities } from "../../lib/cache";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 interface ViewModalProps {
   /** View scope, fixed at open time: a project, or null = all-projects. */
@@ -207,7 +194,7 @@ export function ViewModal({ project, view, onClose }: ViewModalProps) {
   };
 
   // The server re-parses on save — a 422 here means the draft outran the probe.
-  const saveSlqError = save.isError ? slqErrorOf(save.error) : null;
+  const saveSlqError = save.isError ? positionedErrorOf(save.error) : null;
 
   return (
     <Modal title={view ? "Edit view" : "New view"} onClose={() => { if (!save.isPending) onClose(); }} wide>

@@ -12,7 +12,6 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 from radd.modules.events import service as events_service
 
-from . import service
 from .schemas import DatabaseHealth, EntityCount, MonitoringOverview, WorkerStatus
 
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
@@ -77,7 +76,4 @@ async def overview(session: Session, user: CurrentUser) -> MonitoringOverview:
         counts=counts,
         workers=workers,
         workers_in_process=settings.run_workers,
-        # RADD-1036: terminally-failed outbound mail, which until now existed
-        # only as two events in a stream nobody aggregated.
-        mail=await service.mail_health(session),
     )

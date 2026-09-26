@@ -3,7 +3,7 @@ import { ViewSelect } from "../views/ViewSelect";
 import { CycleSelect } from "../cycles/CycleSelect";
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SlotId, useDisabledMatches } from "@radd/plugin-sdk";
+import { SlotId, useDisabledMatches, ErrorText, positionedErrorOf } from "@radd/plugin-sdk";
 import { api } from "../../lib/api";
 import {
   apiDashboardWidgetPath,
@@ -15,7 +15,6 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { SlqProbeStatus, useSlqValidation } from "../../lib/hooks";
 import { KIND_META, KIND_ORDER, REPORT_INTERVAL_LABELS, REPORT_INTERVAL_ORDER } from "../../lib/meta";
 import { capabilitiesQuery } from "../../lib/queries";
-import { slqErrorOf } from "../../lib/slq";
 import {
   ReportInterval,
   ReportMeasure,
@@ -37,7 +36,6 @@ import { TextField } from "../TextField";
 import { Segmented } from "../reports/report-state";
 import { MEASURE_OPTIONS } from "../reports/measure";
 import { SlqEditor } from "../views/SlqEditor";
-import { ErrorText } from "../ErrorText";
 
 /** Widget-type picker entries (spec 75) — labels use "cycles", never "sprint". */
 const WIDGET_TYPE_OPTIONS: readonly { value: WidgetTypeValue; label: string }[] = [
@@ -201,7 +199,7 @@ export function WidgetModal({
   };
 
   // The server re-parses SLQ on save — a 422 here means the draft outran the probe.
-  const saveSlqError = save.isError ? slqErrorOf(save.error) : null;
+  const saveSlqError = save.isError ? positionedErrorOf(save.error) : null;
 
   return (
     <Modal title={widget ? "Edit widget" : "Add widget"} onClose={onClose} wide>

@@ -5,8 +5,7 @@
  * lazy: it loads when an editor first renders, not with the app shell.
  */
 import { Suspense, lazy } from "react";
-import { provideHostComponents } from "@radd/plugin-sdk";
-import { TokenMultiSelect } from "./components/TokenMultiSelect";
+import { provideHostComponents, TokenMultiSelect } from "@radd/plugin-sdk";
 
 const CodeEditor = lazy(() =>
   import("./components/CodeEditor").then((module) => ({ default: module.CodeEditor })),

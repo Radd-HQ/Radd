@@ -6,11 +6,8 @@ import { useKeyedRows } from "../../../lib/keyed-rows";
 import { provisioningReferencesQuery } from "../../../lib/queries/provisioning";
 import { OptionResource } from "../../../lib/queries/options";
 import { Button } from "../../Button";
-import { Choices } from "../../DirectoryChoices";
 import { DirectoryPager } from "../../DirectoryPager";
-import { ErrorText } from "../../ErrorText";
-import { IconButton } from "../../IconButton";
-import { TokenMultiSelect } from "../../TokenMultiSelect";
+import { ErrorText, IconButton, TokenMultiSelect, OptionChoices } from "@radd/plugin-sdk";
 import { StartingRoleDialog } from "./StartingRoleDialog";
 
 function useWindow<T>(all: T[], pageSize: number) {
@@ -59,6 +56,6 @@ function RuleCard({ rule, onChange, onRemove }: { rule: SsoProvisioningRule; onC
       const key = (g: SsoDefaultGrant) => `${g.role_id}:${g.project_id ?? "global"}`;
       const seen = new Set(rule.grants.map(key));const next = [...rule.grants, ...additions.filter(g => !seen.has(key(g)))];onChange({ grants: next });grants.setPage(Math.floor(Math.max(0, next.length - 1) / 50));setAdding(undefined);
     }} />}
-    {adding === "team" && <Choices resource={OptionResource.teamReference} selectedValues={rule.team_ids} onClose={() => setAdding(undefined)} onSelect={row => { if (!rule.team_ids.includes(row.value)) { onChange({ team_ids: [...rule.team_ids, row.value] }); teams.setPage(Math.floor(rule.team_ids.length / 50)); } setAdding(undefined); }} />}
+    {adding === "team" && <OptionChoices resource={OptionResource.teamReference} selectedValues={rule.team_ids} onClose={() => setAdding(undefined)} onSelect={row => { if (!rule.team_ids.includes(row.value)) { onChange({ team_ids: [...rule.team_ids, row.value] }); teams.setPage(Math.floor(rule.team_ids.length / 50)); } setAdding(undefined); }} />}
   </div>;
 }

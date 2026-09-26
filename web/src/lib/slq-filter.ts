@@ -3,9 +3,9 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ITEMS_PAGE_LIMIT } from "./constants";
 import { SlqProbeStatus, useSlqValidation, type SlqProbe } from "./hooks";
 import { infiniteSlqItemsQuery, slqItemsQuery } from "./queries";
-import { slqErrorOf } from "./slq";
 import { readUrlState, writeUrlState } from "./url-state";
 import type { Item } from "./types";
+import { positionedErrorOf } from "@radd/plugin-sdk";
 
 /**
  * Page-level ad-hoc SLQ filtering (spec 55): the state behind the
@@ -125,7 +125,7 @@ export function useSlqPageFilter(
   } else if (validation.query !== committed) {
     probe = { ...validation, status: SlqProbeStatus.ready };
   } else if (resultError) {
-    const slqError = slqErrorOf(resultError);
+    const slqError = positionedErrorOf(resultError);
     probe = {
       status: slqError ? SlqProbeStatus.invalid : SlqProbeStatus.failed,
       query: committed,

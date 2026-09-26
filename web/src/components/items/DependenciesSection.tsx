@@ -4,20 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { errorMessage } from "../../lib/api";
 import { RoutePath } from "../../lib/constants";
-import { useDebounced } from "../../lib/hooks";
 import { useAddItemLink, useRemoveItemLink } from "../../lib/item-mutations";
 import { linkSearchQuery, linkTypesQuery } from "../../lib/queries";
-import {
-  ItemLinkType,
-  type Item,
-  type ItemLink,
-  type ItemLinkCreate,
-  type ItemLinks,
-  type Project,
-} from "../../lib/types";
+import { ItemLinkType, type Item, type ItemLink, type ItemLinkCreate, type ItemLinks } from "../../lib/types";
 import { Button } from "../Button";
 import { Select } from "../Select";
-import { IconButton } from "../IconButton";
+import { IconButton, useDebounced } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Dependency links for an item (spec 18/91): edges grouped by their directional

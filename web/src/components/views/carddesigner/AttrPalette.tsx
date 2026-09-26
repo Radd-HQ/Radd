@@ -3,8 +3,8 @@ import { Search } from "lucide-react";
 import type { BucketDrop } from "../../../lib/bucket-drop";
 import { CARD_EXCLUDED_BUILTINS, type CardLayout } from "../../../lib/card-layout";
 import { columnCatalog, type ColumnDef } from "../../../lib/columns";
-import type { FieldDef } from "../../../lib/types";
 import type { DesignerDrag } from "./layout-ops";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /** Palette grouping — a scan order, not a taxonomy the model knows about. */
 const GROUPS: { label: string; ids: string[] }[] = [

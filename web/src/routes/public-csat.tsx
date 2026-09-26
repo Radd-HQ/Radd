@@ -9,7 +9,7 @@ import type { PublicCsat, PublicCsatSubmit } from "../lib/types";
 import { Button } from "../components/Button";
 import { RaddTile } from "../components/RaddMark";
 import { Spinner } from "../components/Spinner";
-import { ErrorText } from "../components/ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 const RATING_LABELS: Record<number, string> = {
   1: "Very dissatisfied",

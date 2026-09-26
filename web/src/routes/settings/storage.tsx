@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 import { useCurrentUser } from "../../lib/hooks";
 import { InstanceRole } from "../../lib/types";
-import { EmptyState } from "../../components/EmptyState";
+import { EmptyState } from "@radd/plugin-sdk";
 import { HostsPanel } from "../../components/settings/storage/HostsPanel";
 import { RuleChainPanel } from "../../components/settings/storage/RuleChainPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";

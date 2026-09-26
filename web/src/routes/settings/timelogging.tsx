@@ -13,13 +13,10 @@ import {
   type WorkCategoryUpdate,
 } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { EmptyState, TableSkeleton, Slot, SlotId, IconButton } from "@radd/plugin-sdk";
 import { TextField } from "../../components/TextField";
-import { Slot, SlotId } from "@radd/plugin-sdk";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
-import { IconButton } from "../../components/IconButton";
 
 /**
  * Instance-wide time-logging admin (spec 50; RADD-932).

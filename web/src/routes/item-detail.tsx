@@ -1,6 +1,6 @@
 import { EmailBody } from "../components/editor/EmailBody";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Slot, SlotId } from "@radd/plugin-sdk";
+import { Slot, SlotId, CollapsibleCard, useConfirm } from "@radd/plugin-sdk";
 import { Archive, ArchiveRestore, CopyPlus, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -9,22 +9,8 @@ import { RoutePath } from "../lib/constants";
 import { useArchiveItem, useCloneItem, useConvertItem, useDeleteItem, useToggleDescriptionTask, useToggleStarOnItem, useUpdateItem } from "../lib/item-mutations";
 import { useItemWritability, usePermissions, usePointsEnabled, useIsAuthenticated } from "../lib/hooks";
 import { useCan } from "../lib/can";
-import {
-  fieldsQuery,
-  itemPagesQuery,
-  itemWebLinksQuery,
-  projectTimeloggingQuery,
-  statesQuery,
-} from "../lib/queries";
-import {
-  AttachmentParentType,
-  ItemKind,
-  Permission,
-  type CustomFieldValue,
-  type CustomFields,
-  type Item,
-  type Project,
-} from "../lib/types";
+import { itemPagesQuery, itemWebLinksQuery, projectTimeloggingQuery, statesQuery } from "../lib/queries";
+import { AttachmentParentType, ItemKind, Permission, type Item } from "../lib/types";
 import type { AiRun } from "../components/editor/ai";
 import { AiReadMenu } from "../components/editor/AiReadMenu";
 import { Button } from "../components/Button";
@@ -40,7 +26,6 @@ import { attachmentUrl } from "../lib/constants";
 import { ActivityPanel } from "../components/items/ActivityPanel";
 import { useRollupBatch } from "../components/items/RollupBar";
 import { ChildrenSection } from "../components/items/ChildrenSection";
-import { CollapsibleCard } from "../components/CollapsibleCard";
 import { DependenciesSection, dependencyLinkCount } from "../components/items/DependenciesSection";
 import { MentionsSection } from "../components/items/MentionsSection";
 import { SidePanel } from "../components/SidePanel";
@@ -51,7 +36,9 @@ import { AiResultsContext, type AiResultRequest } from "../components/items/ai-r
 import { RelatedLinksSection } from "../components/items/RelatedLinksSection";
 import { ItemPagesSection } from "../components/items/ItemPagesSection";
 import { Callout } from "../components/Callout";
-import { useConfirm } from "../components/ConfirmDialog";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import type { CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Debounce for text-ish custom-field edits before PATCHing. */
 const CUSTOM_FIELD_SAVE_DELAY_MS = 600;

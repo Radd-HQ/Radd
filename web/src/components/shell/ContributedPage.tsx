@@ -3,7 +3,7 @@ import { useLocation } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Slot, useSlotMatch, useDisabledNavPaths, type SlotIdValue } from "@radd/plugin-sdk";
 import { capabilitiesQuery } from "../../lib/queries";
-import { readRemoteStates, subscribeRemoteStates } from "../../lib/plugin-loader";
+import { isBundledPlugin, readRemoteStates, subscribeRemoteStates } from "../../lib/plugin-loader";
 import { Spinner } from "../Spinner";
 import { QueryError } from "../QueryError";
 import { Callout } from "../Callout";
@@ -22,7 +22,8 @@ export function ContributedPage({ slot }: { slot: SlotIdValue }) {
   if (manifest.isPending) return <Spinner label="Loading plugin page…" />;
   if (manifest.isError) return <QueryError label="plugin availability" error={manifest.error} />;
   const owner = manifest.data.nav.find(n => n.path === pathname)?.plugin;
-  const remotes = (manifest.data.remotes ?? []).filter(r => !owner || r.name === owner);
+  // A bundled core plugin is never a remote to wait for (RADD-1373), whatever the manifest lists.
+  const remotes = (manifest.data.remotes ?? []).filter(r => !isBundledPlugin(r.name) && (!owner || r.name === owner));
   const relevant = states.filter(state => remotes.some(remote => remote.name === state.name));
   if (owner && relevant.some(state => state.status === "errored" || state.status === "incompatible")) return failed;
   if (remotes.some(remote => !states.some(state => state.name === remote.name)) || relevant.some(state => state.status === "loading")) {

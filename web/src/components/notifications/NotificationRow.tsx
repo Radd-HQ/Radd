@@ -13,7 +13,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { formatDateTime, shortDate } from "../../lib/dates";
+import { formatDateTime, shortDate } from "@radd/plugin-sdk";
 import {
   NotificationType,
   type Notification,

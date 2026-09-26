@@ -4,14 +4,15 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "vite build"
-  },
   "dependencies": {
     "@radd/plugin-sdk": "*"
   },
   "exports": {
+    ".": "./src/index.tsx",
     "./metadata": "./src/metadata.ts",
     "./lookup-contract": "./src/lookup-contract.ts"
+  },
+  "radd": {
+    "bundled": true
   }
 }

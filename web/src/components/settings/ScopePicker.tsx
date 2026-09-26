@@ -1,5 +1,5 @@
-import type { Project } from "../../lib/types";
-import { TokenMultiSelect, type TokenOption } from "../TokenMultiSelect";
+import { TokenMultiSelect, type TokenOption } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Scope selector shared by fields, link types, and grants (spec 92) — now the app-wide token

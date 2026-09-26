@@ -26,8 +26,6 @@ export const CHART_GRID = "var(--color-strong)";
 export const CHART_AXIS_TEXT = "var(--color-fg-secondary)";
 export const CHART_MUTED_TEXT = "var(--color-fg-muted)";
 
-// Re-exported so the report cards keep their one-stop chart-helpers import.
-export { shortDate } from "../../lib/dates";
 
 /** Pick ~`max` roughly-even indices from `length` items (for thinning x labels). */
 export function sampledIndices(length: number, max: number): number[] {

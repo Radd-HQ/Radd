@@ -6,11 +6,9 @@ import { ApiPath, apiAiPresetPath } from "../../lib/constants";
 import { aiPresetsQuery, queryKeys } from "../../lib/queries";
 import { type AiPreset } from "../../lib/types";
 import { Button } from "../Button";
-import { EmptyState } from "../EmptyState";
+import { EmptyState, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import { QueryError } from "../QueryError";
-import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
-import { ErrorText } from "../ErrorText";
 
 const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 

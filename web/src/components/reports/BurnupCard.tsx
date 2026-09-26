@@ -11,7 +11,7 @@ import { ChartLegend } from "../charts/ChartLegend";
 import { LineChart } from "../charts/LineChart";
 import { ReportCard } from "../charts/ReportCard";
 import { CycleSelect } from "../cycles/CycleSelect";
-import { shortDate } from "../charts/chart-utils";
+import { shortDate } from "@radd/plugin-sdk";
 import { CardBody, ScopeNote, Segmented } from "./report-state";
 import { MEASURE_OPTIONS } from "./measure";
 

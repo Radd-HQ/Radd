@@ -7,9 +7,7 @@ import { ApiPath, apiCardLayoutPresetPath } from "../../../lib/constants";
 import { usePermissions } from "../../../lib/hooks";
 import { cardLayoutPresetsQuery } from "../../../lib/queries";
 import { Permission, type CardLayout, type CardLayoutPreset } from "../../../lib/types";
-import { useConfirm } from "../../ConfirmDialog";
-import { IconButton } from "../../IconButton";
-import { ErrorText } from "../../ErrorText";
+import { useConfirm, IconButton, ErrorText } from "@radd/plugin-sdk";
 import { Button } from "../../Button";
 
 /**

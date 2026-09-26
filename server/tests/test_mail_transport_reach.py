@@ -49,7 +49,6 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.mailintake import service as mail_service, transport
 from radd.modules.mailintake.models import MailSender
 from radd.modules.mailintake.types import MailEvent, MailFailureReport, MailSenderKind
-from radd.modules.monitoring import service as monitoring
 from radd.modules.notify import emailer, service as notify_service
 from radd.modules.notify.models import Notification
 from radd.modules.notify.types import NotificationType
@@ -476,14 +475,6 @@ async def test_mail_health_reports_the_count_the_last_error_and_the_give_ups(
     assert "451" in addressed[0].error
     assert addressed[0].given_up is True
 
-    # …and out through the page's own composition, which is what the router
-    # serves. `available` is the mailintake-is-loaded answer, not a health one.
-    card = await monitoring.mail_health(db)
-    assert card.available is True
-    assert card.failures == 2 and card.given_up == 1
-    assert card.window_hours > 0
-    assert "451" in card.recent[0].error
-
 
 async def test_mail_health_ignores_failures_older_than_its_window(
     db, world, sender_row, rows_only
@@ -507,15 +498,3 @@ async def test_mail_health_ignores_failures_older_than_its_window(
     )
     assert (await mail_service.mail_health(db)).failures == 0
 
-
-async def test_the_card_is_absent_rather_than_green_without_the_mail_module(
-    db, monkeypatch
-):
-    """mailintake disabled is not a mail problem. `available=False` is what lets
-    the page omit the card instead of claiming zero failures on an instance that
-    cannot send at all — the ai-coverage precedent, one step further in."""
-    monkeypatch.setattr(settings, "modules", tuple(
-        m for m in settings.modules if m != "radd.modules.mailintake"
-    ))
-    card = await monitoring.mail_health(db)
-    assert card.available is False and card.failures == 0

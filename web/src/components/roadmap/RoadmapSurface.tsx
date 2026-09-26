@@ -44,10 +44,9 @@ import {
   ROADMAP_ZOOM_LEVELS,
 } from "../../lib/constants";
 import { pushToast } from "../../lib/toast";
-import { ItemKind, type Item, type Project, type View } from "../../lib/types";
+import { ItemKind, type Item, type View } from "../../lib/types";
 import { Button } from "../Button";
-import { useConfirm } from "../ConfirmDialog";
-import { EmptyState } from "../EmptyState";
+import { useConfirm, EmptyState, todayIso } from "@radd/plugin-sdk";
 import { Select } from "../Select";
 import { useRollupBatch } from "../items/RollupBar";
 import { RoadmapTimeline } from "./RoadmapTimeline";
@@ -73,7 +72,7 @@ import { useRoadmapDraft } from "./useRoadmapDraft";
 import { useRoadmapViewport } from "./useRoadmapViewport";
 import { ExtendDirection, type ExtendDirectionValue } from "./useBarDrag";
 import { MOD_KEY, modShortcut, shiftModShortcut } from "../../lib/platform";
-import { todayIso } from "../../lib/dates";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 export interface RoadmapSurfaceProps {
   /** The saved view being rendered (spec 79): `id` keys the per-view

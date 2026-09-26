@@ -10,12 +10,12 @@ import {
   type CardLayoutCell,
 } from "../../../lib/card-layout";
 import { startHorizontalDrag } from "../../../lib/drag";
-import type { FieldDef } from "../../../lib/types";
 import { cellStyle, laneMargin } from "../../board/BoardCard";
 import { renderCardCell, type CardCellCtx } from "../../board/card-cells";
 import { FlagBadge, ItemKeyLink, KindBadge, StarBadge, TypeChip } from "../../items/ItemBadges";
 import { dropKey, type DesignerDrag, type DropTarget } from "./layout-ops";
 import { SAMPLE_ITEM, SAMPLE_ROLLUP, SAMPLE_SLA, SAMPLE_TIMELOG, sampleCustomValue } from "./sample-item";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /** ~296px card content (w-80 minus p-3) → one grid column's pixel width, for
  * translating a span-handle drag into columns. */

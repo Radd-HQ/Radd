@@ -1,8 +1,7 @@
-import { api, type DataSource, type PersonIndicator, type StatusIndicator, type TimesheetAnnotation } from "@radd/plugin-sdk";
+import { api, type DataSource, type PersonIndicator, type StatusIndicator, type TimesheetAnnotation, shortDate } from "@radd/plugin-sdk";
 interface Current { user_id: string; label: string; until: string }
 interface Calendar { user_id: string; label: string; kind: "leave" | "holiday"; start_date: string; end_date: string }
 const badge: StatusIndicator = { id: "leave", label: "away", ariaLabel: "On leave", title: "", tone: "warning", dim: true, textSuffix: "🌴" };
-const shortDate = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 
 export const leaveDataSources: DataSource[] = [
   {

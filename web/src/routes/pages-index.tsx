@@ -10,7 +10,7 @@ import { pageByKeyQuery, pageSpaceSummaryQuery } from "../lib/queries";
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
 import { DirectoryPager } from "../components/DirectoryPager";
-import { EmptyState } from "../components/EmptyState";
+import { EmptyState } from "@radd/plugin-sdk";
 import { ListSearchInput } from "../components/ListSearchInput";
 import { Spinner } from "../components/Spinner";
 import { QueryError } from "../components/QueryError";

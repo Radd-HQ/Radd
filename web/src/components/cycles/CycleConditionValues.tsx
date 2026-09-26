@@ -1,8 +1,8 @@
 import { useQueries } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { cycleQuery } from "../../lib/queries/cycles";
 import { CycleSelect } from "./CycleSelect";
-import { IconButton } from "../IconButton";
+import { IconButton } from "@radd/plugin-sdk";
+import { cycleQuery } from "@radd-plugin-ui/cycles/directory-queries";
 
 /** Conditions retain selected IDs/names; adding a value searches the catalog.
  * Only legacy selections without saved display names need direct lookups. */

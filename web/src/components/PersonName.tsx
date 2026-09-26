@@ -16,9 +16,9 @@ export function usePersonStatusSuffixes(): Map<string, string> {
 }
 export const STATUS_TONES = {
   neutral: "bg-elevated text-fg-secondary",
-  warning: "bg-amber-400/15 text-amber-300",
-  danger: "bg-red-400/15 text-red-300",
-  success: "bg-green-400/15 text-green-300",
+  warning: "bg-status-warning/15 text-status-warning-ink",
+  danger: "bg-status-danger/15 text-status-danger-ink",
+  success: "bg-status-success/15 text-status-success-ink",
 };
 export function StatusChip({ indicator }: { indicator: StatusIndicator }) {
   return <span aria-label={indicator.ariaLabel} title={indicator.title}

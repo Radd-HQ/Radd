@@ -24,15 +24,11 @@ import {
   type StorageHostTypeValue,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
+import { useConfirm, EmptyState, Table, TBody, Td, Th, THead, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import { DropdownMenu } from "../../DropdownMenu";
-import { EmptyState } from "../../EmptyState";
 import { QueryError } from "../../QueryError";
-import { Table, TBody, Td, Th, THead } from "../../Table";
-import { TableSkeleton } from "../../TableSkeleton";
 import { HostDialog } from "./HostDialog";
 import { MoveHostDialog, MoveJobProgress } from "./MoveJobProgress";
-import { ErrorText } from "../../ErrorText";
 
 const TYPE_LABELS: Record<StorageHostTypeValue, string> = {
   [StorageHostType.filesystem]: "Filesystem",

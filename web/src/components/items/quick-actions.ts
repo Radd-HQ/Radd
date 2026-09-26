@@ -4,12 +4,9 @@ import { useContributedCommands } from "@radd/plugin-sdk";
 import { useCurrentUser } from "../../lib/hooks";
 import { useUpdateItem } from "../../lib/item-mutations";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
-import {
-  labelsQuery,
-  statesQuery,
-  usersQuery,
-} from "../../lib/queries";
+import { statesQuery, usersQuery } from "../../lib/queries";
 import type { Item, ItemUpdate } from "../../lib/types";
+import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
 
 /** One entry in the editor's `/` quick-action menu. Filtered by every typed token
  * against label+keywords; `run` acts on the issue (never on the text). */

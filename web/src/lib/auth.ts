@@ -2,7 +2,7 @@ import { setStorageAccount } from "./account-storage";
 import { api, ApiError, setAnonymousMode } from "./api";
 import { ApiPath, On401 } from "./constants";
 import type { LoginRequest, Me, TotpLoginRequest, TotpRecoveryCodes, TotpSetup } from "./types";
-import { setReaderTimeZone } from "./dates";
+import { setReaderTimeZone } from "@radd/plugin-sdk";
 
 /** Authentication fails closed when the backend is missing or unavailable. */
 export const AuthStatus = {

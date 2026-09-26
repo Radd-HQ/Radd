@@ -17,18 +17,8 @@ import {
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { Avatar } from "../Avatar";
 import { PersonName } from "../PersonName";
-import { cannedResponsesQuery, itemCommentFeedQuery, queryKeys, teamReferencesQuery, TEAMS_PAGE_SIZE } from "../../lib/queries";
-import {
-  AttachmentParentType,
-  CommentVisibility,
-  Permission,
-  type CannedRender,
-  type Comment,
-  type CommentCreate,
-  type CommentVisibilityValue,
-  type Item,
-  type Project,
-} from "../../lib/types";
+import { cannedResponsesQuery, itemCommentFeedQuery, queryKeys, TEAMS_PAGE_SIZE } from "../../lib/queries";
+import { AttachmentParentType, Permission, type CannedRender, type Comment, type CommentCreate, type Item } from "../../lib/types";
 import { useIssueQuickActions, type QuickAction } from "./quick-actions";
 import { CommentHistory } from "../CommentHistory";
 import { chronologicalComments } from "../../lib/queries/comment-feed";
@@ -46,7 +36,11 @@ import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from 
 import type { AiRun } from "../editor/ai";
 import { AiReadMenu } from "../editor/AiReadMenu";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
-import { formatDateTime } from "../../lib/dates";
+import { formatDateTime } from "@radd/plugin-sdk";
+import { teamReferencesQuery } from "@radd-plugin-ui/teams/references";
+import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
+import type { CommentVisibilityValue } from "@radd-plugin-ui/comments/visibility";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Upload a pasted/inserted image to the item and resolve its served URL —
  * through the storage-choice seam (spec 102); a dismissed prompt rejects, so

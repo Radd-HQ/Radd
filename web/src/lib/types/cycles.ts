@@ -4,8 +4,7 @@ import type { StateCategoryValue } from "./workflow";
 // Cycles, releases, dependency links (spec 18)
 // ---------------------------------------------------------------------------
 
-import type { Cycle, CycleStatusValue } from "../../../../server/src/radd/modules/cycles/ui/src/types";
-export { CycleStatus, type Cycle, type CycleStatusValue } from "../../../../server/src/radd/modules/cycles/ui/src/types";
+import type { Cycle, CycleStatusValue } from "@radd-plugin-ui/cycles/types";
 
 /** POST /cycles/{id}/complete — the cycle-completion flow. */
 export interface CycleComplete {

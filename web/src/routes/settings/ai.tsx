@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 import { useCurrentUser } from "../../lib/hooks";
 import { InstanceRole } from "../../lib/types";
-import { EmptyState } from "../../components/EmptyState";
+import { EmptyState } from "@radd/plugin-sdk";
 import { AiFeaturesSection } from "../../components/settings/AiFeaturesSection";
 import { AiPresetsSection } from "../../components/settings/AiPresetsSection";
 import { AiProvidersSection } from "../../components/settings/AiProvidersSection";

@@ -1,4 +1,4 @@
-import { useId, useMemo, useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { useQueries, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 /** Nonvisual commands for contextual menus. The provider owns discovery and execution. */
@@ -12,45 +12,38 @@ export interface CommandSource {
   execute: (commandId: string, context: CommandContext, signal: AbortSignal) => Promise<void>;
 }
 export interface ContributedCommand extends Command { run: () => Promise<void> }
-interface Entry { plugin: string; generation: number; source: CommandSource; pending: Set<AbortController> }
+interface Entry { plugin: string; generation: number; source: CommandSource }
 let entries: Entry[] = [];
 let generation = 0;
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => {listeners.delete(listener);}; };
 const changed = () => { for (const listener of listeners) listener(); };
-function cancel(entry: Entry) { for (const controller of entry.pending) controller.abort(); entry.pending.clear(); }
 export function registerCommandSource(plugin: string, source: CommandSource): void {
   if (!source.id || !source.entityType || typeof source.list !== "function" || typeof source.execute !== "function") throw new Error("Invalid command source");
-  for (const entry of entries) if (entry.plugin === plugin && entry.source.id === source.id) cancel(entry);
-  entries = [...entries.filter(entry => entry.plugin !== plugin || entry.source.id !== source.id), {plugin, source, generation: ++generation, pending: new Set()}];
+  entries = [...entries.filter(entry => entry.plugin !== plugin || entry.source.id !== source.id), {plugin, source, generation: ++generation}];
   changed();
 }
 export function unregisterCommandSources(plugin: string): void {
-  for (const entry of entries) if (entry.plugin === plugin) cancel(entry);
   entries = entries.filter(entry => entry.plugin !== plugin);
   changed();
 }
+/** Run a command. A menu may retain a rendered callback, so a withdrawn provider is refused BEFORE
+ * anything starts; once started, a command is a write and runs to completion — withdrawing its
+ * provider must not abort a request the server may already have acted on (RADD-1373). */
 async function execute(entry: Entry, id: string, context: CommandContext): Promise<void> {
-  // A menu may retain a previously rendered callback. Never let it invoke a withdrawn provider.
   if (!entries.includes(entry)) throw new Error("This command is no longer available");
-  const controller = new AbortController();
-  entry.pending.add(controller);
-  try {
-    await entry.source.execute(id, context, controller.signal);
-    if (controller.signal.aborted || !entries.includes(entry)) throw new DOMException("Command provider was withdrawn", "AbortError");
-  } finally {entry.pending.delete(controller);}
+  await entry.source.execute(id, context, new AbortController().signal);
 }
 export function useContributedCommands(context: CommandContext, enabled = true): ContributedCommand[] {
   const all = useSyncExternalStore(subscribe, () => entries);
   const sources = all.filter(entry => entry.source.entityType === context.entityType);
-  const session = useId();
   const client = useQueryClient();
   const results = useQueries({queries: sources.map(entry => ({
-    queryKey: ["plugin-commands", entry.plugin, entry.generation, entry.source.id, context, session, enabled],
+    queryKey: ["plugin-commands", entry.plugin, entry.generation, entry.source.id, context, enabled],
     queryFn: ({signal}: {signal: AbortSignal}) => {
       if (!enabled || !entries.includes(entry)) throw new Error("Command discovery is unavailable");
       return entry.source.list(context, signal);
-    }, meta: entry.source.meta, enabled, staleTime: 0, gcTime: 0, retry: false,
+    }, meta: entry.source.meta, enabled, staleTime: 0,
   }))});
   return useMemo(() => !enabled ? [] : results.flatMap((result, index) => result.isError ? [] : (result.data ?? []).map(command => ({
     ...command, id: `${sources[index].plugin}/${sources[index].source.id}/${command.id}`,

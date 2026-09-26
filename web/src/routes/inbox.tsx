@@ -11,11 +11,9 @@ import {
 import { INBOX_PAGE_SIZE, notificationsQuery } from "../lib/queries";
 import type { Notification } from "../lib/types";
 import { Button } from "../components/Button";
-import { EmptyState } from "../components/EmptyState";
+import { EmptyState, Switch, Pager } from "@radd/plugin-sdk";
 import { NotificationRow } from "../components/notifications/NotificationRow";
-import { Pager } from "../components/Pager";
 import { Spinner } from "../components/Spinner";
-import { Switch } from "../components/Switch";
 import { groupNotificationBursts } from "../lib/notification-bursts";
 
 /** The personal notification Inbox (spec 26). */

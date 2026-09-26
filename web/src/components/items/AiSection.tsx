@@ -6,7 +6,7 @@ import { useOpenIssueRef, useIsAuthenticated } from "../../lib/hooks";
 import { aiStatusQuery } from "../../lib/queries";
 import type { Item, SimilarCandidate } from "../../lib/types";
 import { Button } from "../Button";
-import { useConfirm } from "../ConfirmDialog";
+import { useConfirm } from "@radd/plugin-sdk";
 import { useMergeItem } from "../../lib/item-mutations";
 import { useOpenAiResults } from "./ai-results";
 import { SimilarHoverCard, useIssuePreview } from "./SimilarHoverCard";

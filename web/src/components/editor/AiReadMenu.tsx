@@ -14,7 +14,7 @@ import { SimilarCandidatesList } from "../items/AiSection";
 import { useOpenAiResults, type SimilarSeed } from "../items/ai-results";
 import { useEditorAi, type AiRun } from "./ai";
 import { AiActionPicker } from "./AiActionPicker";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 const PANEL_WIDTH = 320;
 

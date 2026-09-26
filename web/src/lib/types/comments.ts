@@ -6,7 +6,6 @@ import type { UserRef } from "./items";
 
 /** Internal comments are gated by `comment.read_internal` (spec 07). */
 import type { CommentVisibilityValue } from "@radd-plugin-ui/comments/visibility";
-export { CommentVisibility, type CommentVisibilityValue } from "@radd-plugin-ui/comments/visibility";
 
 /** Where an inline comment points (RADD-726) — a text-quote selector, not an
  *  offset. See `lib/anchoring.ts` for why. */

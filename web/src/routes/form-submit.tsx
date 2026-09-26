@@ -4,18 +4,13 @@ import { ClipboardList, TriangleAlert } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { apiFormSubmitPath } from "../lib/constants";
 import { useProjectByKey } from "../lib/hooks";
-import { fieldsQuery, formQuery } from "../lib/queries";
-import {
-  type CustomFieldValue,
-  type FieldDef,
-  type Form,
-  type FormField,
-  type Item,
-  type FormSubmit as FormSubmitBody,
-} from "../lib/types";
+import { formQuery } from "../lib/queries";
+import { type Form, type FormField, type Item, type FormSubmit as FormSubmitBody } from "../lib/types";
 import { CustomFieldControl } from "../components/items/CustomFieldsForm";
 import { IntakeSubmitShell } from "../components/forms/IntakeSubmitShell";
 import { Spinner } from "../components/Spinner";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import type { CustomFieldValue, FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * Public-shaped intake form submit page (spec 20) — route

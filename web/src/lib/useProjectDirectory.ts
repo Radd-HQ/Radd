@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { projectSummaryQuery, projectsPageQuery, PROJECTS_PAGE_SIZE } from "./queries/projects";
 import type { PermissionValue } from "./types";
 import { useDirectory } from "./useDirectory";
+import { projectSummaryQuery, projectsPageQuery, PROJECTS_PAGE_SIZE } from "@radd-plugin-ui/projects/directory-queries";
 
 /** Search all visible projects while retaining only one rendered page. `available`
  * is the UNFILTERED count (the summary), so an empty search page can still say

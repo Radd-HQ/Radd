@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { createAppRouter } from "./router";
 import { applyAppearance } from "./lib/theme";
+import { bindQueryClient, syncStaticPlugins } from "./lib/plugin-loader";
 import "./index.css";
 
 // Theme/density before first paint (spec 39) — avoids a dark→light flash.
@@ -30,6 +31,11 @@ const queryClient = new QueryClient({
 // Expose the query client for debugging + the federation live-toggle harness (invalidating the
 // capabilities query is exactly what the plugins admin does to load/unload a remote live).
 (globalThis as { __RADD_QUERY_CLIENT__?: QueryClient }).__RADD_QUERY_CLIENT__ = queryClient;
+
+// RADD-1373: core plugins' UI is bundled — register it before the first render, so no picker or
+// page waits on a network round trip. Optional remotes load once capabilities answer.
+bindQueryClient(queryClient);
+syncStaticPlugins();
 
 const router = createAppRouter(queryClient);
 

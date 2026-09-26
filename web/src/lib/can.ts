@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { usePermissions } from "./hooks";
-import type { PageSpace, Project } from "./types";
+import type { PageSpace } from "./types";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * "May this actor do X?" — one question, one answer, one treatment (RADD-771).

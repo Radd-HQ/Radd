@@ -12,11 +12,8 @@ import {
   type SsoProviderRead,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
-import { EmptyState } from "../../EmptyState";
+import { useConfirm, EmptyState, Table, TBody, Td, Th, THead, TableSkeleton } from "@radd/plugin-sdk";
 import { QueryError } from "../../QueryError";
-import { Table, TBody, Td, Th, THead } from "../../Table";
-import { TableSkeleton } from "../../TableSkeleton";
 import { ProviderDialog } from "./ProviderDialog";
 
 /** The host a pinned kind talks to — its row has no issuer of its own to show. */

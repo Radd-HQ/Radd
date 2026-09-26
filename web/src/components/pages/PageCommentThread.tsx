@@ -1,5 +1,5 @@
 import { Check, RotateCcw, Unlink } from "lucide-react";
-import { relativeTime } from "../../lib/dates";
+import { relativeTime } from "@radd/plugin-sdk";
 import type { Comment } from "../../lib/types";
 import { LazyRichViewer as RichViewer } from "../editor/LazyRichViewer";
 import { useQueryClient } from "@tanstack/react-query";

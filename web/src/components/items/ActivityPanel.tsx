@@ -3,11 +3,12 @@ import { useState, type ReactNode, useEffect } from "react";
 import { useLinkedCommentId } from "../../lib/comment-links";
 import { Clock, GitBranch, History, MessageSquare, type LucideIcon } from "lucide-react";
 import { useSlot, SlotId } from "@radd/plugin-sdk";
-import type { Item, Project } from "../../lib/types";
+import type { Item } from "../../lib/types";
 import { CommentsThread } from "./CommentsThread";
 import { HistoryTab } from "./HistoryTab";
 import { VcsPanel } from "./VcsPanel";
 import { WorklogTab } from "./WorklogTab";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 const ActivityTab = {
   comments: "comments",

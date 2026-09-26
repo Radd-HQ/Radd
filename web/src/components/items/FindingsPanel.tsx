@@ -13,7 +13,7 @@
  */
 import { useEffect, useRef } from "react";
 import { AlertTriangle, Info } from "lucide-react";
-import { type Finding } from "../../lib/types";
+import type { Finding } from "@radd-plugin-ui/automations/types";
 
 interface FindingsPanelProps {
   findings: Finding[];

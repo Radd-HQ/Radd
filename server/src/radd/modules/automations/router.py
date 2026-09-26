@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.schedule_preview import preview_schedule as schedule_preview
+from radd.schedule_preview import SchedulePreviewRead, SchedulePreviewRequest, preview_schedule as schedule_preview
 from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ConflictError
@@ -46,8 +46,6 @@ from .schemas import (
     RunRead,
     VersionDetailRead,
     VersionRead,
-    SchedulePreviewRead,
-    SchedulePreviewRequest,
     RunnableRuleRead,
     ScheduleKindInfo,
     TriggerInfo,

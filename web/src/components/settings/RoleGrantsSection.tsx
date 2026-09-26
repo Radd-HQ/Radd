@@ -7,15 +7,12 @@ import { queryKeys } from "../../lib/queries";
 import { GRANTS_PAGE_SIZE, type GrantDirectoryRow, type GrantSubject, subjectGrantsPageQuery } from "../../lib/queries/roles";
 import { OptionResource } from "../../lib/queries/options";
 import { Button } from "../Button";
-import { Choices } from "../DirectoryChoices";
 import { DirectoryPager } from "../DirectoryPager";
-import { ErrorText } from "../ErrorText";
-import { IconButton } from "../IconButton";
+import { ErrorText, IconButton, formatDate, OptionChoices } from "@radd/plugin-sdk";
 import { QueryError } from "../QueryError";
 import { Spinner } from "../Spinner";
 import { GrantExpiryButton } from "./GrantExpiryButton";
 import { GrantRoleDialog } from "./GrantRoleDialog";
-import { formatDate } from "../../lib/dates";
 
 /** Individual mutations preserve off-page grants, including expired rows. */
 export function RoleGrantsSection({ subject, canManage }: { subject: GrantSubject; canManage: boolean }) {
@@ -64,7 +61,7 @@ export function RoleGrantsSection({ subject, canManage }: { subject: GrantSubjec
     {revoke.isError && <ErrorText className="mt-1" error={revoke.error} />}
     {changeRole.isError && <ErrorText className="mt-1" error={changeRole.error} />}
     {granting && <GrantRoleDialog subject={subject} onClose={() => setGranting(false)} onGranted={() => void invalidate()} />}
-    {editing && <Choices resource={OptionResource.role} selected={editing.role_id} onClose={() => setEditing(undefined)} onSelect={row => {
+    {editing && <OptionChoices resource={OptionResource.role} selected={editing.role_id} onClose={() => setEditing(undefined)} onSelect={row => {
       changeRole.mutate({ grantId: editing.id, roleId: row.value }); setEditing(undefined);
     }} />}
   </section>;

@@ -20,17 +20,9 @@ import {
   apiItemStarPath,
 } from "./constants";
 import { queryKeys } from "./queries";
-import { IntakeCommit } from "./types";
-import type {
-  IntakeCommitValue,
-  IntakeVerdict,
-  Item,
-  ItemCreate,
-  ItemKindValue,
-  ItemLinkCreate,
-  ItemUpdate,
-  View,
-} from "./types";
+import type { Item, ItemCreate, ItemKindValue, ItemLinkCreate, ItemUpdate, View } from "./types";
+import { IntakeCommit } from "@radd-plugin-ui/automations/types";
+import type { IntakeCommitValue, IntakeVerdict } from "@radd-plugin-ui/automations/types";
 
 /** Shared TanStack Query mutations for items (board, detail panel, modal). */
 

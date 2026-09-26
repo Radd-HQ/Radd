@@ -6,12 +6,13 @@ import { api, errorMessage, type CursorPage } from "../lib/api";
 import { Entity, entityMeta } from "../lib/cache";
 import { accountStorageKey } from "../lib/account-storage";
 import { RoutePath } from "../lib/constants";
-import { useDebounced, useOpenIssueRef } from "../lib/hooks";
+import { useOpenIssueRef } from "../lib/hooks";
 import { itemsCountQuery } from "../lib/queries";
 import type { Item } from "../lib/types";
 import { QuickStar } from "../components/items/QuickStar";
 import { Avatar } from "../components/Avatar";
 import { PRIORITY_META } from "../lib/meta";
+import { useDebounced } from "@radd/plugin-sdk";
 
 const ORDERS = {updated:"updated DESC",priority:"priority DESC, updated DESC",created:"created DESC"};
 const control = "rounded-md border border-subtle bg-surface px-3 py-2 text-sm text-fg focus-visible:outline-2 focus-visible:outline-focus";

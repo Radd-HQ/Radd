@@ -27,11 +27,9 @@ import {
 import { GrantSubject, type Membership, type PermissionSource, type ResourceTypeAccess } from "../../lib/types";
 import { SelectField } from "../SelectField";
 import { ProjectSelect } from "../projects/ProjectSelect";
-import { OptionSelect } from "../DirectoryChoices";
 import { OptionResource } from "../../lib/queries/options";
 import { Button } from "../Button";
-import { ErrorText } from "../ErrorText";
-import { formatDate, formatDateTime } from "../../lib/dates";
+import { ErrorText, formatDate, formatDateTime, OptionSelect } from "@radd/plugin-sdk";
 
 /** The atom half resolves only an explicitly selected scope; catalogs open lazily. */
 export function EffectivePermissions({ userId }: { userId: string }) {

@@ -8,14 +8,7 @@ import {
   apiCycleStatsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
-import type {
-  Cycle,
-  CycleSeries,
-  CycleStats,
-  CycleStatusValue,
-  Item,
-  Release,
-} from "../types";
+import type { CycleSeries, CycleStats, Item, Release } from "../types";
 
 /** All cycles (spec 18); optional `status` filter (derived server-side). */
 /** RADD-1291: `projectId` narrows to the cycles that project plans with —
@@ -27,8 +20,8 @@ export const cyclesQuery = (status?: CycleStatusValue, projectId?: string) =>
     queryFn: ({ signal }) => api.get<Cycle[]>(ApiPath.cycles, { signal, query: { status, project_id: projectId } }),
   });
 
-export { CYCLES_PAGE_SIZE, cyclesPageQuery, cycleQuery } from "../../../../server/src/radd/modules/cycles/ui/src/directory-queries";
-import { CYCLES_PAGE_SIZE } from "../../../../server/src/radd/modules/cycles/ui/src/directory-queries";
+import { CYCLES_PAGE_SIZE } from "@radd-plugin-ui/cycles/directory-queries";
+import type { Cycle, CycleStatusValue } from "@radd-plugin-ui/cycles/types";
 
 /** Prefer an active dated cycle, then the most recent dated cycle. The server
  * chooses from the whole visible catalog before limiting the result. */

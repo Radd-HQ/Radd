@@ -48,7 +48,7 @@ export function ChangeHistoryPanel({
           {page && rows.length === PANEL_LIMIT && (
             <li>
               <Link
-                to={"/settings/audit"}
+                to="/settings/$" params={{ _splat: "audit" }}
                 search={{ entity: entityType, entity_id: entityId, project: projectId }}
                 className="text-xs text-accent-text hover:text-accent-text-strong"
               >

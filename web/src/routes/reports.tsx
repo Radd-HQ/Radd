@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { CalendarRange } from "lucide-react";
 import { REPORT_DEFAULT_RANGE_DAYS } from "../lib/constants";
-import { isoDaysAgo } from "../lib/dates";
+import { isoDaysAgo } from "@radd/plugin-sdk";
 import { useProjectByKey, usePointsEnabled } from "../lib/hooks";
 import { REPORT_INTERVAL_LABELS, REPORT_INTERVAL_ORDER } from "../lib/meta";
 import { ReportInterval, type ReportIntervalValue } from "../lib/types";

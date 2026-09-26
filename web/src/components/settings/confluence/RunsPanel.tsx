@@ -2,7 +2,7 @@ import { QueryError } from "../../QueryError";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Undo2, X } from "lucide-react";
 import { Button, ButtonVariant } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
+import { useConfirm } from "@radd/plugin-sdk";
 import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import { confluenceRunsQuery, queryKeys } from "../../../lib/queries";

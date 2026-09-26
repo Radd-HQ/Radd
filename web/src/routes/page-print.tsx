@@ -7,7 +7,7 @@ import { PageBody } from "../components/pages/PageBody";
 import { PageExtensionCtx } from "../lib/page-extensions";
 import { headingAnchorId, headingsOf } from "../lib/markdown-outline";
 import type { PageSummary } from "../lib/types";
-import { formatDate } from "../lib/dates";
+import { formatDate } from "@radd/plugin-sdk";
 import "./page-print.css";
 
 /**

@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { projectByIdQuery } from "../../lib/queries";
 import { usePermissions } from "../../lib/hooks";
 import { Permission } from "../../lib/types";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { ScopedAccessPanel } from "../../components/settings/ScopedAccessPanel";
 import { PublicAccessCard } from "../../components/settings/PublicAccessCard";
 import { QueryError } from "../../components/QueryError";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { TableSkeleton } from "@radd/plugin-sdk";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 export function ProjectAccessSettingsPage({ projectId }: { projectId?: string }) {
   const query = useQuery(projectByIdQuery(projectId ?? ""));

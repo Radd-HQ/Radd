@@ -1,5 +1,6 @@
 import { fieldInScope } from "./field-scope";
-import { FieldType, type FieldDef, type FieldTypeValue } from "./types";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { FieldDef, FieldTypeValue } from "@radd-plugin-ui/fields/types";
 
 /**
  * SLQ (Radd Query language) — client-side mirror of spec 10's FROZEN grammar.
@@ -106,7 +107,6 @@ export function cheatSheetFields(fields: FieldDef[], projectId: string | null): 
 // Positioned parse errors (422 {detail, position})
 // ---------------------------------------------------------------------------
 
-export { positionedErrorOf as slqErrorOf, type PositionedError as SlqError } from "@radd/plugin-sdk";
 
 
 export interface SlqErrorContext {

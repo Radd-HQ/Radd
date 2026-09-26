@@ -4,7 +4,7 @@ import { api } from "../../lib/api";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 export function GrantExpiryButton({ path, onSaved }: { path: string; onSaved: () => void }) {
   const [open, setOpen] = useState(false);

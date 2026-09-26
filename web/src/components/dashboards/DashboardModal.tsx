@@ -8,7 +8,7 @@ import type { Dashboard, DashboardCreate, DashboardUpdate } from "../../lib/type
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /**
  * New/Edit dashboard dialog (spec 75). Create takes just a name (any member —

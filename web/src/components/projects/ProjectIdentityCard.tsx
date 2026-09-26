@@ -5,10 +5,11 @@ import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiProjectPath } from "../../lib/constants";
 import { pushToast, ToastKind } from "../../lib/toast";
-import type { Project, ProjectUpdate } from "../../lib/types";
+import type { ProjectUpdate } from "../../lib/types";
 import { Button } from "../Button";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { TextField } from "../TextField";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Name + description (RADD-1009) — the first card on Settings → Project →

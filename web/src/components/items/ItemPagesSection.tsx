@@ -10,12 +10,11 @@ import {
   apiPageItemPath,
   apiPageItemsPath,
 } from "../../lib/constants";
-import { useDebounced, usePermissions } from "../../lib/hooks";
+import { usePermissions } from "../../lib/hooks";
 import { pageSearchQuery, itemPagesQuery } from "../../lib/queries";
 import { Permission, type PageLinkedItem, type Item } from "../../lib/types";
 import { Button } from "../Button";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
+import { IconButton, ErrorText, useDebounced } from "@radd/plugin-sdk";
 import { pagePermalink } from "../../lib/page-links";
 
 /**

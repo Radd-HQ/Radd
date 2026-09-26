@@ -17,9 +17,8 @@ export function CycleSelect({ value, onChange, valueBy = "id", selectedLabel, la
   const [open, setOpen] = useState(false);
   const hasValue = Boolean(value) && value !== emptyValue;
   const definition = cycleQuery(value);
-  const session = useId();
-  const selected = useQuery({ ...definition, queryKey: [...definition.queryKey, session], gcTime: 0, staleTime: 0,
-    enabled: hasValue && valueBy === "id" && !selectedLabel, retry: false });
+  const selected = useQuery({ ...definition, staleTime: 30_000,
+    enabled: hasValue && valueBy === "id" && !selectedLabel });
   const selectedName = selectedLabel ?? (valueBy === "name" ? value : selected.data?.name);
   const emptyText = placeholder ?? (value === emptyValue ? emptyLabel : null) ?? "Choose a cycle…";
   const text = hasValue ? selectedName ?? (selected.isError ? "Unavailable cycle" : "Loading cycle…")
@@ -60,7 +59,7 @@ export function CycleChoices({ value = "", valueBy = "id", emptyLabel = "No cycl
     {emptyLabel && <Button variant="ghost" className="mt-2" onClick={() => onSelect(null)}>{emptyLabel}</Button>}
     <div className="mt-2 max-h-[45dvh] overflow-y-auto" aria-busy={directory.busy}>
       {directory.isError ? <div><QueryError label="cycles" error={directory.error} /><Button variant="secondary" onClick={() => void directory.refetch()}>Retry cycles</Button></div>
-        : directory.isPending ? <Spinner />
+        : directory.isPending ? <Spinner label="Loading cycles…" />
         : !directory.rows.length ? <p className="py-4 text-sm text-fg-muted">No matching cycles.</p>
         : <ul>{directory.rows.map(cycle => <li key={cycle.id}>
           <Button variant="ghost" className="w-full justify-start" onClick={() => onSelect(cycle)}>

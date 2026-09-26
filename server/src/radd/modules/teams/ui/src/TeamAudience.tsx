@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { Button, DirectoryPager, QueryError } from "@radd/plugin-sdk";
@@ -12,9 +12,8 @@ export function TeamAudience({ value, onChange, emptyText = "No teams selected."
   const [page, setPage] = useState(0);
   const [choosing, setChoosing] = useState(false);
   const ids = value.slice(page * TEAMS_PAGE_SIZE, (page + 1) * TEAMS_PAGE_SIZE);
-  const session = useId();
   const definition = teamReferencesQuery(ids, Boolean(onChange));
-  const references = useQuery({ ...definition, queryKey: [...definition.queryKey, session], gcTime: 0, staleTime: 0, retry: false });
+  const references = useQuery({ ...definition, staleTime: 30_000 });
   const names = new Map(references.data?.map(row => [row.id, row]));
   useEffect(() => {
     if (page > 0 && page * TEAMS_PAGE_SIZE >= value.length) setPage(Math.max(0, Math.ceil(value.length / TEAMS_PAGE_SIZE) - 1));

@@ -3,7 +3,7 @@ import { useBlocker } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import type { Dashboard, DashboardWidget } from "../../lib/types";
 import { Button } from "../Button";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { WidgetGrid } from "./WidgetGrid";
 import { WidgetModal } from "./WidgetModal";
 

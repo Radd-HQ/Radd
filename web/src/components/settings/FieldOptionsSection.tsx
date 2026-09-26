@@ -5,8 +5,7 @@ import { api } from "../../lib/api";
 import { apiFieldOptionsPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { queryKeys } from "../../lib/queries";
-import { FieldType, type FieldDef } from "../../lib/types";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TokenMultiSelect, ErrorText } from "@radd/plugin-sdk";
 import { Button, ButtonVariant } from "../Button";
 import { Modal } from "../Modal";
 import { FieldOptionChoices } from "./FieldOptionChoices";
@@ -15,7 +14,8 @@ import { useDirectory } from "../../lib/useDirectory";
 import { DirectoryPager } from "../DirectoryPager";
 import { QueryError } from "../QueryError";
 import { Spinner } from "../Spinner";
-import { ErrorText } from "../ErrorText";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /** Option payloads and mounted rows use bounded server search windows. */
 export function FieldOptionsSection({ field, canManage }: { field: ManagedField; canManage: boolean }) {

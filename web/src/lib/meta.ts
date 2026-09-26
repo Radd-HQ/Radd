@@ -34,29 +34,11 @@ import {
   ItemVisibility,
   type ItemVisibilityValue,
 } from "./types";
-import {
-  CycleStatus,
-  FieldType,
-  InstanceRole,
-  ItemKind,
-  ItemLinkType,
-  Priority,
-  ReleaseStatus,
-  ReportInterval,
-  StateCategory,
-  ViewAxis,
-  type BuiltinRuleField,
-  type CycleStatusValue,
-  type FieldTypeValue,
-  type InstanceRoleValue,
-  type ItemKindValue,
-  type ItemLinkTypeValue,
-  type PriorityValue,
-  type ReleaseStatusValue,
-  type ReportIntervalValue,
-  type StateCategoryValue,
-  type ViewAxisValue,
-} from "./types";
+import { InstanceRole, ItemKind, ItemLinkType, Priority, ReleaseStatus, ReportInterval, StateCategory, ViewAxis, type BuiltinRuleField, type InstanceRoleValue, type ItemKindValue, type ItemLinkTypeValue, type PriorityValue, type ReleaseStatusValue, type ReportIntervalValue, type StateCategoryValue, type ViewAxisValue } from "./types";
+import { CycleStatus } from "@radd-plugin-ui/cycles/types";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { CycleStatusValue } from "@radd-plugin-ui/cycles/types";
+import type { FieldTypeValue } from "@radd-plugin-ui/fields/types";
 
 /**
  * Display metadata for backend enums — the single place mapping enum members
@@ -324,7 +306,6 @@ export interface StatusMeta {
   pillClassName?: string;
 }
 
-export { CYCLE_STATUS_META } from "../../../server/src/radd/modules/cycles/ui/src/status";
 
 /**
  * Cycle-header ordering when grouping a view by cycle (spec 23): live work
@@ -402,7 +383,6 @@ export const SLA_BREACHED_COLOR = "var(--status-danger)";
 // Automations + intake forms (spec 20)
 // ---------------------------------------------------------------------------
 
-export { COMMENT_VISIBILITY_LABELS } from "@radd-plugin-ui/comments/visibility";
 
 /** Initials for avatar chips ("Hussein Jarrar" → "HJ"). */
 export function initials(name: string): string {
@@ -422,7 +402,6 @@ export function initials(name: string): string {
 // ---------------------------------------------------------------------------
 
 /** Human labels for item-history change fields (`custom_field` uses the change's `name`). */
-export { HISTORY_FIELD_LABELS } from "@radd-plugin-ui/items/metadata";
 
 interface IconMeta {
   label: string;

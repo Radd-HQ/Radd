@@ -6,7 +6,7 @@ import { API_BASE, ApiPath } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
 import type { Me } from "../../lib/types";
 import { Button } from "../Button";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 type AvatarRead = { avatar_url: string | null };
 

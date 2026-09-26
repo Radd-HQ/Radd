@@ -6,7 +6,6 @@ from .router import router
 plugin = RaddPlugin(
     name="audit",
     ui=PluginUiManifest(
-        remote="/plugins/audit/remoteEntry.js", ui_api_version="1.11.0",
         nav=(NavItemSpec(
             key="audit", label="Audit log", path="/settings/audit", section="settings",
             group="Server", icon="ScrollText", order=190,

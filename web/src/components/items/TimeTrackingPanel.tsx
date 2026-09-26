@@ -14,21 +14,12 @@ import {
   queryKeys,
   workCategoriesQuery,
 } from "../../lib/queries";
-import {
-  Permission,
-  type EstimateSet,
-  type ItemTimeSummary,
-  type Project,
-  type Worklog,
-  type WorklogCreate,
-  type WorklogUpdate,
-} from "../../lib/types";
+import { Permission, type EstimateSet, type ItemTimeSummary, type Worklog, type WorklogCreate, type WorklogUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { Select } from "../Select";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
-import { todayIso } from "../../lib/dates";
+import { IconButton, ErrorText, todayIso } from "@radd/plugin-sdk";
 import { MirroredBadge, sourceLabel } from "./MirroredBadge";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 interface Props {
   project: Project;

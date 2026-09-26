@@ -6,7 +6,7 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiPagePath } from "../../lib/constants";
 import type { Page, PageUpdate } from "../../lib/types";
 import { Button } from "../Button";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { ListSearchInput } from "../ListSearchInput";
 import { Modal } from "../Modal";
 import { comparePagesNaturally } from "./PageTree";

@@ -23,7 +23,7 @@ import {
   apiPageUnarchivePath,
   attachmentUrl,
 } from "../../lib/constants";
-import { relativeTime } from "../../lib/dates";
+import { relativeTime, useConfirm, IconButton, ErrorText } from "@radd/plugin-sdk";
 import { AccessGrantsEditor } from "../settings/AccessGrantsEditor";
 import { Modal } from "../Modal";
 import { PageBody } from "./PageBody";
@@ -41,7 +41,6 @@ import { useCollabSession } from "../editor/collab/useCollabSession";
 import { pushToast } from "../../lib/toast";
 import { PageEditPanel } from "./PageEditPanel";
 import { Button } from "../Button";
-import { useConfirm } from "../ConfirmDialog";
 import { DropdownMenu } from "../DropdownMenu";
 import { PageExtensionCtx } from "../../lib/page-extensions";
 import { pageLink, pagePermalink, pagePrintHref } from "../../lib/page-links";
@@ -52,8 +51,6 @@ import { PageInlineComments } from "./PageInlineComments";
 import { PageLabels } from "./PageLabels";
 import { PageLinkedItems } from "./PageLinkedItems";
 import { PageHistory } from "./PageHistory";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
 import { Callout } from "../Callout";
 
 const Tab = { content: "content", history: "history" } as const;

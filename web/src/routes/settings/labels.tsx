@@ -4,19 +4,16 @@ import { Check, Pencil, Plus, Tags, Trash2, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { useListFilter } from "../../lib/list-filter";
-import { labelsQuery, queryKeys } from "../../lib/queries";
-import { Permission, type Label, type LabelCreate } from "../../lib/types";
+import { useListFilter, useConfirm, EmptyState, IconButton, TableSkeleton, formatDate } from "@radd/plugin-sdk";
+import { queryKeys } from "../../lib/queries";
+import { Permission } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { useConfirm } from "../../components/ConfirmDialog";
-import { EmptyState } from "../../components/EmptyState";
-import { IconButton } from "../../components/IconButton";
 import { ListSearchInput } from "../../components/ListSearchInput";
-import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
-import { formatDate } from "../../lib/dates";
+import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
+import type { Label, LabelCreate } from "@radd-plugin-ui/labels/types";
 
 /** Default swatch offered by the color input for a fresh label. */
 const DEFAULT_LABEL_COLOR = "#6366f1";

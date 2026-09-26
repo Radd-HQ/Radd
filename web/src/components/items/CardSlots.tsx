@@ -1,5 +1,5 @@
 import { StateCategory, type Item } from "../../lib/types";
-import { todayIso } from "../../lib/dates";
+import { todayIso } from "@radd/plugin-sdk";
 
 /** True when the item's target date has passed and it isn't finished. */
 export function isOverdue(item: Item): boolean {

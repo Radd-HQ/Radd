@@ -897,6 +897,8 @@ templates that duplicated them are deleted; the triggers and the
 `release.publish` node stay. Settings → Version control shows them on each
 repository row.
 
+RADD-1373 — **core plugins' UI is bundled into the host; optional plugins stay remotes.** A core module's `ui/package.json` carries `"radd": {"bundled": true}` and an entry export; its manifest declares no `remote`. `web/scripts/plugin-packages.mjs` links plugin packages and generates `web/src/plugins/static.generated.ts`, and `plugin-loader.syncStaticPlugins` registers them at boot, withdrawing them only when `/capabilities` stops listing the plugin. The host imports plugin contracts through package exports only. SDK: `setRemotesLoading`/`useRemotesLoading` + `Slot`'s `pending`; per-mount query identities are gone from option/directory/query-source/command queries and the core pickers. Details: `docs/plugin-platform.md` §8 "Bundled core plugins, remote optional plugins".
+
 RADD-1366 moves version-control settings into VCS and connector remotes.
 `vcs/ui` owns the provider-neutral page (hosts, repository rows, identity map);
 GitHub, Forgejo and GitLab each contribute one tab carrying only their WORDING

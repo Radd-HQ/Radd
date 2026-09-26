@@ -2,18 +2,10 @@ import type { ReactNode } from "react";
 import { ChevronRight, CornerDownRight } from "lucide-react";
 import { CARD_TITLE_ATTR } from "../../lib/card-layout";
 import { CUSTOM_COLUMN_PREFIX } from "../../lib/columns";
-import { formatSeconds } from "../../lib/dates";
+import { formatSeconds } from "@radd/plugin-sdk";
 import type { formatDuration } from "../../lib/duration";
 import { PRIORITY_META } from "../../lib/meta";
-import {
-  type FieldDef,
-  type Item,
-  type ItemParentRef,
-  type ItemRollup,
-  type ItemTimelogBatchEntry,
-  type PriorityValue,
-  type SlaBatchTimer,
-} from "../../lib/types";
+import { type Item, type ItemParentRef, type ItemRollup, type ItemTimelogBatchEntry, type PriorityValue, type SlaBatchTimer } from "../../lib/types";
 import { isOverdue } from "../items/CardSlots";
 import { CustomCell, DateText, isEmptyCustomValue } from "../items/CustomFieldValue";
 import {
@@ -30,6 +22,7 @@ import {
 } from "../items/ItemBadges";
 import { RollupRowBar } from "../items/RollupBar";
 import { SlaRowChip } from "../items/SlaChips";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * Attribute-id → chip rendering for board-card cells (spec 109). One registry

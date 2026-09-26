@@ -64,9 +64,11 @@ A four-way review of RADD-1340–1366 changed the plan (Hussein's decisions):
 | RADD-1364 | Audit page/history/footer ownership and exact scope access | Verified; Waiting for release |
 | RADD-1365 | Automations frontend contribution | Verified; Waiting for release |
 | RADD-1366 | VCS settings and connector-owned declarations | Revised after review; Waiting for release |
-| RADD-1371 | Automations review fixes (catalog 500, page-space gate, aborted writes) | In progress |
-| RADD-1372 | Live plugin toggling: per-plugin drain, no process-wide 503, no backlog replay | In progress |
-| RADD-1373 | Core modules as static plugins; pending state for optional remotes | Todo |
+| RADD-1371 | Automations review fixes (catalog 500, page-space gate, aborted writes) | Waiting for release |
+| RADD-1372 | Live plugin toggling: per-plugin drain, no process-wide 503, no backlog replay | Waiting for release |
+| RADD-1373 | Core modules as static plugins; pending state for optional remotes | In progress |
+| RADD-1375 | Compatibility re-exports deleted; a boundary test refuses new ones | In progress |
+| RADD-1376 | UI details the moves lost (change lines, focus ring, spinner labels, tokens, Leave) | In progress |
 | RADD-1374 | Ledger out of git and CI; module table is the record | Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |

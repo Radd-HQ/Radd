@@ -15,7 +15,7 @@ import { Button } from "../Button";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 
 import { PageCommentThread as Thread, type OrphanReason } from "./PageCommentThread";
-import { useConfirm } from "../ConfirmDialog";
+import { useConfirm } from "@radd/plugin-sdk";
 import { PageCommentPopover } from "./PageCommentPopover";
 import { useCommentPointer, type CommentHit } from "./useCommentPointer";
 

@@ -12,7 +12,7 @@ import {
   type StorageHostRead,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
+import { useConfirm } from "@radd/plugin-sdk";
 import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
 

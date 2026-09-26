@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, rmSync, symlinkSync, lstatSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { discover, linkPackages, writeStaticList } from "./plugin-packages.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, "..");
@@ -31,5 +32,12 @@ ensureLink(resolve(scopeDir, "plugin-sdk"), "../../packages/plugin-sdk");
 
 // Regenerate the shared-singleton shims.
 execFileSync(process.execPath, [resolve(here, "gen-shared-shims.mjs")], { stdio: "inherit" });
+
+// RADD-1373: link plugin UI packages and regenerate the bundled (static) plugin list, so a plain
+// host build sees the same packages build-all does.
+const packages = discover();
+linkPackages(packages);
+writeStaticList(packages);
+console.log(`  ${packages.filter((p) => p.bundled).length} bundled plugin UI(s), ${packages.filter((p) => p.remote).length} remote(s)`);
 
 console.log("federation workspace prepared.");

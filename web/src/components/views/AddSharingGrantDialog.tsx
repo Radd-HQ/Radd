@@ -1,12 +1,13 @@
+import { OptionChoices } from "@radd/plugin-sdk";
 import { useState } from "react";
 import type { LocalShare } from "../../lib/sharing-draft";
-import { OptionResource, type DirectoryOption } from "../../lib/queries/options";
+import { OptionResource } from "../../lib/queries/options";
 import { ShareLevel, type ShareLevelValue } from "../../lib/types";
 import { Button } from "../Button";
-import { Choices } from "../DirectoryChoices";
 import { Modal } from "../Modal";
 import { Select } from "../Select";
 import { GroupReachHint } from "../settings/GroupReachHint";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 export const SHARE_LEVEL_OPTIONS = [
   { value: ShareLevel.viewer, label: "can view" },
@@ -31,7 +32,7 @@ export function AddSharingGrantDialog({ onAdd, onClose }: { onAdd: (share: Local
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button>
         <Button disabled={!subject} onClick={() => { if (subject) onAdd({ draftId: crypto.randomUUID(), kind, subjectId: subject.value, subjectName: subject.label, level }); }}>Add</Button></div>
     </div>
-    {choosing && <Choices resource={resources[kind]} selected={subject?.value} onClose={() => setChoosing(false)}
+    {choosing && <OptionChoices resource={resources[kind]} selected={subject?.value} onClose={() => setChoosing(false)}
       onSelect={row => { setSubject(row); setChoosing(false); }} />}
   </Modal>;
 }

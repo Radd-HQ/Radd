@@ -7,17 +7,13 @@ import { pageTemplatesPageQuery, pageTemplateByIdQuery, PAGE_TEMPLATES_PAGE_SIZE
 import { OptionResource } from "../../lib/queries/options";
 import { useDirectory } from "../../lib/useDirectory";
 import type { PageTemplate } from "../../lib/types";
-import { OptionSelect } from "../DirectoryChoices";
 import { Button } from "../Button";
-import { IconButton } from "../IconButton";
-import { useConfirm } from "../ConfirmDialog";
+import { IconButton, useConfirm, TableSkeleton, ErrorText, OptionSelect } from "@radd/plugin-sdk";
 import { Modal } from "../Modal";
 import { DirectoryPager } from "../DirectoryPager";
 import { ListSearchInput } from "../ListSearchInput";
-import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
 import { QueryError } from "../QueryError";
-import { ErrorText } from "../ErrorText";
 
 /** The template catalog is bounded; only the open editor downloads markdown. */
 export function PageTemplatesSection() {

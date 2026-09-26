@@ -3,14 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquare, Package, UserRound } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import { formatDateTime, relativeTime } from "../../lib/dates";
+import { formatDateTime, relativeTime, ErrorText } from "@radd/plugin-sdk";
 import { portalRequestDetailQuery, queryKeys } from "../../lib/queries";
 import type { PortalRequestComment } from "../../lib/types";
 import { Button } from "../Button";
 import { PageBody } from "../pages/PageBody";
 import { EmailBody } from "../editor/EmailBody";
 import { Spinner } from "../Spinner";
-import { ErrorText } from "../ErrorText";
 
 /**
  * A requester's view of one request, rendered INSIDE the ordinary peek drawer

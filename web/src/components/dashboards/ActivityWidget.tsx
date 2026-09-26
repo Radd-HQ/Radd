@@ -4,8 +4,7 @@ import { api } from "../../lib/api";
 import { Entity, entityMeta } from "../../lib/cache";
 import { ProjectSelect } from "../projects/ProjectSelect";
 import { Button } from "../Button";
-import { ErrorText } from "../ErrorText";
-import { shiftIsoDay } from "../../lib/dates";
+import { ErrorText, shiftIsoDay } from "@radd/plugin-sdk";
 
 interface ActivityPage { entries: { id: number; at: string; action: string; item_key: string; comment_id: string | null }[]; next: number | null }
 export function ActivityWidget({ config = {} }: { config?: { project_id?: string | null; start?: string; end?: string } }) {

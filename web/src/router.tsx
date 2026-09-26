@@ -245,6 +245,9 @@ const issueRoute = createRoute({
 const pluginPageRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "$",
+  // A plugin page owns its own search params (RADD-1373: bundled core plugins compile against
+  // this router's types, and must be able to link to their own pages with their own params).
+  validateSearch: (search: Record<string, unknown>) => search,
   component: PluginPage,
 });
 
@@ -415,6 +418,7 @@ const settingsRoute = createRoute({
 const settingsPluginPageRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "$",
+  validateSearch: (search: Record<string, unknown>) => search,
   component: SettingsPluginPage,
 });
 

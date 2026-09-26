@@ -41,7 +41,7 @@ export function AuditSettingsPage() {
   const setSearch = (patch: Partial<AuditSearch>) => {
     const next: Record<string, unknown> = { ...search, ...patch };
     for (const key of Object.keys(next)) if (!next[key]) delete next[key];
-    void navigate({ to: "/settings/audit", search: next as AuditSearch, replace: true });
+    void navigate({ to: "/settings/$", params: { _splat: "audit" }, search: next, replace: true });
   };
 
   // A draft is attached to its URL value. Back/forward, reset or an external link

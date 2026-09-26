@@ -5,7 +5,7 @@ import { useOpenIssueRef } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";
 import { childItemPagesQuery } from "../../lib/queries";
 import { Spinner } from "../Spinner";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /**
  * A board card's children, listed in place (RADD-698).

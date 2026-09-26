@@ -10,7 +10,7 @@ import {
 import { timeInStateQuery } from "../../lib/queries";
 import { ItemKind, type ItemKindValue } from "../../lib/types";
 import { ReportCard } from "../charts/ReportCard";
-import { Table, TBody, Td, THead, Th } from "../Table";
+import { Table, TBody, Td, THead, Th } from "@radd/plugin-sdk";
 import { CardBody, Segmented } from "./report-state";
 
 const KIND_FILTER = { all: "all", ...ItemKind } as const;

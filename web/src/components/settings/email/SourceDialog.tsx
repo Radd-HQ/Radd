@@ -3,15 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { ApiPath, apiMailSourcePath } from "../../../lib/constants";
-import { mailKindsQuery, mailSendersQuery, projectsQuery, queryKeys } from "../../../lib/queries";
+import { mailKindsQuery, mailSendersQuery, queryKeys } from "../../../lib/queries";
 import { MailSourceKind, type MailSourceKindValue, type MailSource } from "../../../lib/types";
 import { Button, ButtonVariant } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
-import { ErrorText } from "../../ErrorText";
+import { useConfirm, ErrorText } from "@radd/plugin-sdk";
 import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
 import { CheckboxField, KindGuidance, findKind, kindLabel } from "./shared";
+import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * Create or edit one mail source (RADD-958; presets RADD-969).

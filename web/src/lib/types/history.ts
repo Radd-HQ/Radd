@@ -21,7 +21,6 @@ export interface LinkChangeRef {
  * `field`: scalars/relations use from/to; `labels`/`links` use added/removed;
  * `custom_field` adds key/name; `description` carries only `field`.
  */
-export type { HistoryChange } from "@radd/plugin-sdk";
 import type { HistoryChange } from "@radd/plugin-sdk";
 
 export interface HistoryEntry {

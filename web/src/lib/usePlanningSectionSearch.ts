@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { useDebounced } from "./hooks";
 import { pagedViewItemsQuery } from "./queries/views";
 import { planningCountQuery } from "./usePlanningSprints";
 import { combineQueryWithFilters, splitQueryOrder } from "./slq";
 import { RESCHEDULING_KEY, type planningQueries } from "./planning-query";
 import { BACKLOG_KEY, type ViewGroup } from "./view-utils";
 import type { Item, View } from "./types";
+import { useDebounced } from "@radd/plugin-sdk";
 
 /** Section filters search the server result, never only the already-loaded rows. */
 export function usePlanningSectionSearch(plan: ReturnType<typeof planningQueries>, enabled: boolean, scope: string, showHistory: boolean) {

@@ -1,5 +1,5 @@
 import { MessageSquare, Package, UserRound } from "lucide-react";
-import { formatDateTime, relativeTime } from "../../lib/dates";
+import { formatDateTime, relativeTime } from "@radd/plugin-sdk";
 import { StateCategory, type PortalRequest } from "../../lib/types";
 
 /**

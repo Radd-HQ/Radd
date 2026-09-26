@@ -18,8 +18,12 @@ import {
   UserRound,
 } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
-import { projectByIdQuery, formsQuery, notificationsBadgeQuery, viewCountsQuery } from "../../lib/queries";
-import { CycleStatus, ViewType, type Cycle, type Project, type View } from "../../lib/types";
+import { formsQuery, notificationsBadgeQuery, viewCountsQuery } from "../../lib/queries";
+import { ViewType, type View } from "../../lib/types";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
+import { CycleStatus } from "@radd-plugin-ui/cycles/types";
+import type { Cycle } from "@radd-plugin-ui/cycles/types";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 export const navLinkClasses =
   "relative flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-fg-secondary hover:bg-overlay " +

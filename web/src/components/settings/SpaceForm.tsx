@@ -7,7 +7,7 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import type { PageSpace, PageSpaceCreate, PageSpaceUpdate, SpacePublicAccessUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /** The shareable wiki URL + a copy button (the spec-62 PublicLinkRow idiom). */
 function PublicPagesLinkRow({ spaceSlug }: { spaceSlug: string }) {

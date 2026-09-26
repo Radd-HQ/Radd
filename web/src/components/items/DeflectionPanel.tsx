@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpen, CheckCircle2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { DEFLECT_DEBOUNCE_MS, DEFLECT_MIN_QUERY_CHARS, RoutePath } from "../../lib/constants";
-import { useDebounced, useOpenIssueRef } from "../../lib/hooks";
+import { useOpenIssueRef } from "../../lib/hooks";
 import { deflectQuery } from "../../lib/queries";
 import type { DeflectPage, DeflectItem } from "../../lib/types";
 import { SimilarHoverCard, useIssuePreview } from "./SimilarHoverCard";
 import { pagePermalink } from "../../lib/page-links";
+import { useDebounced } from "@radd/plugin-sdk";
 
 interface DeflectionPanelProps {
   /** The half-typed issue title driving the lookup. */

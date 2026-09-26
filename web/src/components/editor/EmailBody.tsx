@@ -4,7 +4,7 @@ import { LazyRichViewer } from "./LazyRichViewer";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { Button } from "../Button";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /** A signature is a reversible annotation over an exact suffix of the original text. */
 export function EmailBody({ signature, parent, canRestore, ...props }: ComponentProps<typeof LazyRichViewer> & {

@@ -10,20 +10,15 @@ import {
   validationFindings,
 } from "../../lib/api";
 import { RoutePath } from "../../lib/constants";
-import { IntakeCommit } from "../../lib/types";
-import type {
-  CustomFieldValue,
-  CustomFields,
-  Finding,
-  IntakeCommitValue,
-  ValidationModeValue,
-} from "../../lib/types";
 import { Button, ButtonVariant } from "../Button";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { TextField } from "../TextField";
 import { FindingsPanel } from "../items/FindingsPanel";
 import { FormAssistPanel } from "./FormAssistPanel";
 import { FormDescriptionArea, collectValues } from "./PublicFormFields";
+import type { CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
+import { IntakeCommit } from "@radd-plugin-ui/automations/types";
+import type { Finding, IntakeCommitValue, ValidationModeValue } from "@radd-plugin-ui/automations/types";
 
 /** How a finding names a custom field (spec 119) — mirrors the server. */
 const CUSTOM_FIELD_PREFIX = "cf.";

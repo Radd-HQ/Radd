@@ -12,7 +12,7 @@ import {
   ChevronRight,
   Focus,
 } from "lucide-react";
-import { shortDate } from "../../lib/dates";
+import { shortDate } from "@radd/plugin-sdk";
 import { usePeek } from "../../lib/hooks";
 import { CATEGORY_CHART_COLORS } from "../../lib/meta";
 import { ItemLinkType, StateCategory } from "../../lib/types";

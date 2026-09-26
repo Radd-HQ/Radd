@@ -6,6 +6,7 @@ import {mkdtemp} from "node:fs/promises";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {openBrowser} from "./lib/cdp.mjs";
+import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const user = {id: "admin", name: "Fixture Admin", email: "fixture@example.test", global_role: "admin", permissions: ["*"], timezone: "UTC"};
@@ -34,7 +35,7 @@ const server = http.createServer(async (req, res) => {
     requests.push({route, method: req.method});
     let data = [], status = 200;
     if (route === "/auth/me") data = user;
-    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: ["pages"], ui: []};
+    else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS, "pages"], ui: []};
     else if (route === "/preferences") data = {};
     else if (route === "/projects/summary") data = {total: 0, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 1, permissions: ["*"]};
@@ -182,13 +183,15 @@ try {
   await until(`!!document.querySelector('[aria-label="Inline comment thread"] [data-comment-replies] [data-open-reply]')`);
   await s.click('[aria-label="Inline comment thread"] [data-comment-replies] [data-open-reply]');
   await until(`!!document.querySelector('[aria-label="Inline comment thread"] [data-reply-composer] .ProseMirror')`);
-  assert(await s.eval(`(() => {const r=document.querySelector('[data-page-comment-popover]').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight;})()`));
+  // Opening the composer grows the popover; its ResizeObserver re-places it on a later task, so the
+  // grown popover is briefly below the fold. The property is the SETTLED position: wait for it.
+  await until(`(() => {const p=document.querySelector('[data-page-comment-popover]'); if (!p?.querySelector('[data-reply-composer] .ProseMirror')) return false; const r=p.getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight;})()`);
   await s.screenshot('/tmp/radd-page-comment-thread-mobile.png');
   assert.equal(s.consoleErrors.filter(e => e.startsWith("EXCEPTION:")).length, 0, s.consoleErrors.join("\n"));
   console.log("Page annotations: sidebar, prose/code jumps, hover previews, pinned threads, lazy replies, preserved drafts, failed reply retry, keyboard dismissal, orphan safety, resolve/reopen, editor input and mobile bounds passed.");
 } catch (error) {
   await browser?.session.screenshot("/tmp/radd-page-comments-failure.png");
-  console.error(await browser?.session.eval(`JSON.stringify({sidebar:document.querySelector('[data-page-comment-sidebar]')?.getBoundingClientRect(),focus:[...(CSS.highlights.get('radd-inline-comment-focus')??[])].map(r=>r.getBoundingClientRect())})`));
+  console.error(await browser?.session.eval(`JSON.stringify({viewport:{width:innerWidth,height:innerHeight},popover:document.querySelector('[data-page-comment-popover]')?.getBoundingClientRect(),sidebar:document.querySelector('[data-page-comment-sidebar]')?.getBoundingClientRect(),focus:[...(CSS.highlights.get('radd-inline-comment-focus')??[])].map(r=>r.getBoundingClientRect())})`));
   console.error(JSON.stringify({requests, errors: browser?.session.consoleErrors, body: await browser?.session.eval("document.body.innerText")}, null, 2));
   throw error;
 } finally {

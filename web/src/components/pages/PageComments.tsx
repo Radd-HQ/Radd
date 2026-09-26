@@ -11,7 +11,7 @@ import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath, apiCommentTasksPath, apiParentCommentsPath } from "../../lib/constants";
 import { sendTaskToggle } from "../../lib/task-toggle";
-import { relativeTime } from "../../lib/dates";
+import { relativeTime, useConfirm } from "@radd/plugin-sdk";
 import { pageCommentFeedQuery, usersQuery } from "../../lib/queries";
 import { useCurrentUser, useIsAuthenticated } from "../../lib/hooks";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
@@ -20,7 +20,6 @@ import { Avatar } from "../Avatar";
 import { CommentHistory } from "../CommentHistory";
 import { chronologicalComments, CommentSection } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
-import { useConfirm } from "../ConfirmDialog";
 
 /**
  * A page's discussion (RADD-717).

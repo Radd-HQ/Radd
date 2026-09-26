@@ -1,5 +1,4 @@
 from radd.kernel import EntityLinkSpec
-from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec, EventTypeSpec, GrantScopeSpec
 from radd.kernel import RaddPlugin
 
@@ -15,7 +14,6 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('project', ('/p/{project.key}/settings/general',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/projects/remoteEntry.js", ui_api_version="1.9.0"),
     description="Projects: the containers issues live in.",
     depends_on=("events",),
     weak_depends=("auth", "settings"),

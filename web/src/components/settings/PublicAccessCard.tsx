@@ -4,7 +4,8 @@ import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiProjectPublicAccessPath } from "../../lib/constants";
 import { pushToast } from "../../lib/toast";
-import type { Project, PublicAccessUpdate } from "../../lib/types";
+import type { PublicAccessUpdate } from "../../lib/types";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Spec 121 — the two public-access switches, a PRESENTATION of two role grants:

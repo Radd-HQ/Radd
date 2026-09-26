@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 from radd.apitypes import UtcDatetime
 from radd import schedule
 
+#: Occurrences a preview returns — enough to show a PATTERN (that a weekly rule
+#: really is weekly) without turning into a calendar.
+PREVIEW_RUNS = 5
+
+
 class SchedulePreviewRequest(BaseModel):
     """A candidate schedule, not necessarily a valid one — the point of the
     endpoint is to say WHY when it is not, so this deliberately does not reuse
@@ -39,7 +44,7 @@ def preview_schedule(data: SchedulePreviewRequest, timezone: str, *, now: dateti
         schedule.validate_config(cfg)
         at = now if now is not None else datetime.now(UTC).replace(tzinfo=None)
         runs = []
-        for _ in range(5):
+        for _ in range(PREVIEW_RUNS):
             at = schedule.next_run(cfg, at, timezone)
             runs.append(at)
     except ValueError as exc:

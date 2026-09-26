@@ -1,8 +1,8 @@
-import { cycleDirectoryKeys } from "../../../../server/src/radd/modules/cycles/ui/src/query-keys";
-import { projectQueryKeys } from "../../../../server/src/radd/modules/projects/ui/src/query-keys";
+import { cycleDirectoryKeys } from "@radd-plugin-ui/cycles/query-keys";
+import { projectQueryKeys } from "@radd-plugin-ui/projects/query-keys";
+import type { CycleStatusValue } from "@radd-plugin-ui/cycles/types";
 /** Query keys — the single source of truth; never inline key arrays elsewhere. */
 
-import type { CycleStatusValue } from "../types";
 
 /** Query keys — the single source of truth; never inline key arrays elsewhere. */
 export const queryKeys = {

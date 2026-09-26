@@ -1,14 +1,10 @@
-import { createContext, createElement, useContext, useId, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useCapabilities } from "@radd/plugin-sdk";
 
-const Scope = createContext<string | null>(null);
-export function AutomationScope({children}: {children: ReactNode}) {
-  const session = useId();
-  return createElement(Scope.Provider, {value: session}, children);
-}
-/** A mounted editor owns its reads. Changing the active plugin catalog replaces
- * observers and cancels unused requests; reopening never revives old permission data. */
+/** An Automations read. Keyed by the loaded plugin set, because the catalog, shapes and samples
+ * are a function of which plugins are loaded; everything else is an ordinary shared query
+ * (RADD-1373 — it used to carry a per-mount identity and never cache). A failed refresh hides
+ * what it had: a revoked permission must not keep showing rules. */
 export function useAutomationQuery<T>(options: {
   queryKey: readonly unknown[];
   queryFn?: (context: {signal: AbortSignal}) => Promise<T>;
@@ -16,15 +12,14 @@ export function useAutomationQuery<T>(options: {
   refetchInterval?: number;
   staleTime?: number;
 }) {
-  const localSession = useId();
-  const session = useContext(Scope) ?? localSession;
   const caps = useCapabilities();
-  const revision = JSON.stringify([caps?.plugins, caps?.remotes]);
+  const plugins = caps?.plugins?.join(",") ?? "";
   const enabled = caps?.plugins?.includes("automations") === true && options.enabled !== false;
   const result = useQuery<T>({
-    queryKey: [...options.queryKey, session, revision, enabled],
-    enabled, gcTime: 0, staleTime: options.staleTime ?? 0, retry: false,
-    meta: {entities: ["automation", "role", "member", "team", "group", "accessGrant"]},
+    queryKey: [...options.queryKey, plugins],
+    enabled,
+    staleTime: options.staleTime ?? 0,
+    meta: {entities: ["automation", "role"]},
     ...(typeof options.refetchInterval === "number" ? {refetchInterval: options.refetchInterval} : {}),
     queryFn: context => {
       if (!enabled || typeof options.queryFn !== "function") throw new Error("Automations is unavailable");

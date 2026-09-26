@@ -1,4 +1,4 @@
-import type { FieldDef } from "./types";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * Whether a field applies to a project (spec 90 follow-up: multi-project scope).

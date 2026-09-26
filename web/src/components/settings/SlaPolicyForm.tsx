@@ -12,7 +12,7 @@ import { SlaMetOnField, metRuleValid, type MetRule } from "./SlaMetOnField";
 import { TeamAudience } from "../teams/TeamAudience";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TokenMultiSelect } from "@radd/plugin-sdk";
 
 export function minutesLabel(minutes: number | null): string {
   if (minutes === null) return "—";

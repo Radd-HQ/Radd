@@ -1,6 +1,6 @@
-import { cyclesPageQuery, CYCLES_PAGE_SIZE } from "./queries/cycles";
-import type { CycleStatusValue } from "./types";
 import { useDirectory } from "./useDirectory";
+import { cyclesPageQuery, CYCLES_PAGE_SIZE } from "@radd-plugin-ui/cycles/directory-queries";
+import type { CycleStatusValue } from "@radd-plugin-ui/cycles/types";
 
 /** One visible cycle window; filters never operate on a truncated local list. */
 export function useCycleDirectory({ status, includeCompleted = true, excludeId = "", initialFilter = "", datedOnly = false, projectId = "" }: {

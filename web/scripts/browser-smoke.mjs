@@ -6,6 +6,7 @@ import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openBrowser } from "./lib/cdp.mjs";
+import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 let account = "A";
@@ -37,7 +38,7 @@ const server = http.createServer(async (req, res) => {
     } else if (url.pathname.endsWith("/projects/summary")) data = {total: account === "A" ? 1 : 0, related_count: 0, permissions: []};
     else if (url.pathname.endsWith("/page-spaces/summary")) data = {total: 0, permissions: []};
     else if (url.pathname.endsWith("/preferences")) data = {};
-    else if (url.pathname.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [], ui: []};
+    else if (url.pathname.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS], ui: []};
     else if (url.pathname.includes("/notifications")) data = {items: [], notifications: [], unread_count: 0, total: 0};
     else if (url.pathname.endsWith("/ai/status")) data = {enabled: false, features: {}};
     else if (url.pathname.endsWith("/instance")) data = {work_week_days: ["mon"], timelog_hours_per_day: 8, timelog_days_per_week: 5};

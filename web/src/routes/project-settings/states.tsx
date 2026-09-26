@@ -7,7 +7,7 @@ import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiStatePath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { CATEGORY_META, CATEGORY_ORDER } from "../../lib/meta";
-import { projectByIdQuery, queryKeys, stateCategoriesQuery, statesQuery } from "../../lib/queries";
+import { queryKeys, stateCategoriesQuery, statesQuery } from "../../lib/queries";
 import {
   Permission,
   StateCategory,
@@ -22,17 +22,15 @@ import { Modal } from "../../components/Modal";
 import { useCurrentUser } from "../../lib/hooks";
 import { InstanceRole } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
+import { EmptyState, TableSkeleton, IconButton, ErrorText } from "@radd/plugin-sdk";
 import { Select } from "../../components/Select";
 import { SelectField } from "../../components/SelectField";
-import { TableSkeleton } from "../../components/TableSkeleton";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TransitionsSection } from "../../components/settings/TransitionsSection";
 import { ThreadResolutionSection } from "../../components/settings/ThreadResolutionSection";
 import { QueryError } from "../../components/QueryError";
-import { IconButton } from "../../components/IconButton";
-import { ErrorText } from "../../components/ErrorText";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * Per-project workflow states (spec 50). The project comes from the URL context

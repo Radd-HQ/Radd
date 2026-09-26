@@ -6,6 +6,7 @@
  */
 
 export { UI_API_VERSION, isUiApiCompatible } from "./version";
+export { setRemotesLoading, useRemotesLoading } from "./remote-loading";
 
 export {
   SlotId,

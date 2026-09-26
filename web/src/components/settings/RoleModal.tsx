@@ -8,7 +8,7 @@ import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
 import { PermissionMatrix } from "./PermissionMatrix";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 interface RoleModalProps {
   catalog: PermissionInfo[];

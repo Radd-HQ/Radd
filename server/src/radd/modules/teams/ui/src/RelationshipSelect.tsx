@@ -10,8 +10,7 @@ export function TeamSelect({ value, onChange, label, selectedLabel, placeholder,
   const id = useId();
   const [open, setOpen] = useState(false);
   const definition = teamReferencesQuery(value ? [value] : []);
-  const selected = useQuery({ ...definition, queryKey: [...definition.queryKey, id],
-    gcTime: 0, staleTime: 0, retry: false, enabled: Boolean(value) && !selectedLabel });
+  const selected = useQuery({ ...definition, staleTime: 30_000, enabled: Boolean(value) && !selectedLabel });
   const text = value ? selectedLabel ?? selected.data?.find(row => row.id === value)?.name ?? (selected.isPending ? "Loading team…" : "Unavailable team") : placeholder ?? emptyLabel;
   return <div className="flex min-w-0 flex-col gap-1.5">
     {label && <label htmlFor={id} className="text-xs font-medium text-fg-secondary">{label}</label>}

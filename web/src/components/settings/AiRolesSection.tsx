@@ -14,8 +14,7 @@ import {
 import { Select, type SelectOption } from "../Select";
 import { Spinner } from "../Spinner";
 import { QueryError } from "../QueryError";
-import { Table, TBody, Td, Th, THead } from "../Table";
-import { ErrorText } from "../ErrorText";
+import { Table, TBody, Td, Th, THead, ErrorText } from "@radd/plugin-sdk";
 
 const sectionHeadClasses = "mb-2 text-[11px] font-medium uppercase tracking-wide text-fg-muted";
 

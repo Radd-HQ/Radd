@@ -1,13 +1,20 @@
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { GitBranch } from "lucide-react";
-import { SettingsPage, EmptyState, Slot, useSlot } from "@radd/plugin-sdk";
+import { SettingsPage, EmptyState, Slot, Spinner, useRemotesLoading, useSlot } from "@radd/plugin-sdk";
 import { VCS_PROVIDER_SETTINGS_SLOT } from "./host-contract";
 /** VCS owns the workflow; providers contribute their own tabs and configuration. */
 export function VcsSettingsPage() {
  const search = useSearch({strict: false}) as {host?: string};
  const navigate = useNavigate();
  const providers = useSlot(VCS_PROVIDER_SETTINGS_SLOT);
+ // Connectors are optional remotes: while one may still arrive, wait rather than claim there are
+ // none or that the requested one is unavailable (RADD-1373).
+ const loading = useRemotesLoading();
+ const requestedMissing = Boolean(search.host) && !providers.some(entry => entry.contribution.match === search.host);
  const active = providers.find(entry => entry.contribution.match === search.host) ?? providers[0];
+ if (loading && (providers.length === 0 || requestedMissing)) {
+  return <SettingsPage title="Version control" description="Connect code hosts, link references to issues, and configure time mirroring."><div role="status" className="flex items-center gap-2 text-sm text-fg-muted"><Spinner />Loading connectors…</div></SettingsPage>;
+ }
  const select = (host: string) => void navigate({to: "/settings/$", params: {_splat: "vcs"}, search: {host}, replace: true});
  return <SettingsPage title="Version control" description="Connect code hosts, link references to issues, and configure time mirroring.">
   {!active ? <EmptyState icon={GitBranch} message="No version control connectors are available." action={<Link to="/settings/plugins" className="text-accent-text hover:underline">Manage plugins →</Link>} /> : <>

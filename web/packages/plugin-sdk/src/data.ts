@@ -72,7 +72,6 @@ export function usePluginData<K extends DataKind>(kind: K, args: DataContracts[K
     enabled: Boolean(actorId),
     staleTime: entry.source.staleTime ?? 30_000,
     refetchInterval: entry.source.refetchInterval,
-    gcTime: 0,
   })) });
   return (actorId ? queries.flatMap((query, index) => (query.data ?? []).map(value => ({ ...value, id: `${sources[index].plugin}/${sources[index].source.id}/${value.id}` }))) : []) as DataContracts[K]["result"];
 }

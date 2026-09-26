@@ -2,12 +2,13 @@ import { Link, useParams } from "@tanstack/react-router";
 import { BarChart3, ChevronDown, ChevronRight, Plus, Rocket, Settings } from "lucide-react";
 import { RoutePath } from "../../lib/constants";
 import type { PermissionChecks } from "../../lib/hooks";
-import { Permission, ViewType, type Project } from "../../lib/types";
+import { Permission, ViewType } from "../../lib/types";
 import { useQuery } from "@tanstack/react-query";
 import { viewQuery } from "../../lib/queries/shared-directories";
 import { useViewDirectory } from "../../lib/useSharedDirectory";
 import { SidebarDirectory } from "./SidebarDirectory";
 import { ProjectFormLinks, ViewRowContent, subLinkClasses } from "./SidebarRows";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** A project tree also renders independently for the current route's context. */
 export function SidebarProjectRow({ project, expanded, permissions, onToggle, onNewItem, onNewView }: {

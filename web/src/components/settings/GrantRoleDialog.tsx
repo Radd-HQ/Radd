@@ -4,14 +4,14 @@ import { X } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { type GrantSubject, grantSubjectParams } from "../../lib/queries/roles";
-import { type DirectoryOption, OptionResource } from "../../lib/queries/options";
+import { OptionResource } from "../../lib/queries/options";
 import { queryKeys } from "../../lib/queries";
 import { Button } from "../Button";
-import { Choices } from "../DirectoryChoices";
-import { ErrorText } from "../ErrorText";
+import { ErrorText, OptionChoices } from "@radd/plugin-sdk";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
 import { ProjectPicker } from "../projects/ProjectPicker";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 function Preset({ roleKey, label, onSelect }: {
   roleKey: string; label: string; onSelect: (role: DirectoryOption) => void;
@@ -94,12 +94,12 @@ export function GrantRoleDialog({ subject, onClose, onGranted }: {
         <Button type="submit" disabled={!role || !hasScope || grant.isPending}>{grant.isPending ? "Granting…" : "Grant"}</Button>
       </div>
     </form>
-    {picker === "role" && <Choices resource={OptionResource.role} selected={role?.value} onClose={() => setPicker(undefined)} onSelect={row => { setRole(row); setPicker(undefined); }} />}
+    {picker === "role" && <OptionChoices resource={OptionResource.role} selected={role?.value} onClose={() => setPicker(undefined)} onSelect={row => { setRole(row); setPicker(undefined); }} />}
     {picker === "project" && <ProjectPicker title="Choose projects" onClose={() => setPicker(undefined)} onSelect={project => {
       setProjects(rows => rows.some(row => row.value === project.id) ? rows : [...rows, { value: project.id, label: project.key, hint: project.name }]);
       setPicker(undefined);
     }} />}
-    {picker === "space" && <Choices resource={OptionResource.space} onClose={() => setPicker(undefined)} onSelect={space => {
+    {picker === "space" && <OptionChoices resource={OptionResource.space} onClose={() => setPicker(undefined)} onSelect={space => {
       setSpaces(rows => rows.some(row => row.value === space.value) ? rows : [...rows, space]); setPicker(undefined);
     }} />}
   </Modal>;

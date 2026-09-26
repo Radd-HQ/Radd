@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { shortDate } from "../../lib/dates";
+import { shortDate } from "@radd/plugin-sdk";
 import { formatDuration } from "../../lib/duration";
 import { useDurationConfig } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";

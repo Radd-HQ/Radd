@@ -13,7 +13,7 @@ import {
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { SourceBadge } from "./UserSourceBadge";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 const KIND_LABELS = {
   [DuplicateKind.emailLocalPart]: "Same email local part",

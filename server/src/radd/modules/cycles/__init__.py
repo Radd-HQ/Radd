@@ -1,5 +1,4 @@
 from radd.kernel import EntityLinkSpec
-from radd.kernel import PluginUiManifest
 from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
@@ -14,7 +13,6 @@ plugin = RaddPlugin(
         EntityLinkSpec('cycle', ('/settings/cycles',)),
         EntityLinkSpec('cycle_series', ('/settings/cycles',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/cycles/remoteEntry.js", ui_api_version="1.7.0"),
     crud_resources=(
         CrudResourceSpec(
             "cycle", "global", "cycles", "global.manage",

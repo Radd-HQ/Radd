@@ -2,8 +2,9 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RoutePath } from "./constants";
 import { useCurrentUser, useIsAuthenticated, usePermissions } from "./hooks";
-import { dashboardSummaryQuery, pageSpaceSummaryQuery, projectSummaryQuery } from "./queries";
+import { dashboardSummaryQuery, pageSpaceSummaryQuery } from "./queries";
 import { Permission } from "./types";
+import { projectSummaryQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * ONE source of area visibility for the shell nav (RADD-843), consumed by the

@@ -18,7 +18,7 @@ import {
   unknownKeys,
   type SchemaField,
 } from "./extension-schema";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /**
  * Configure one `radd:<name>` block, with a form GENERATED from its schema

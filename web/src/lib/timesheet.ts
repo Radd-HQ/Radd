@@ -3,7 +3,7 @@
  * [start, end] window, enumerate the day columns, and pivot flat worklog
  * entries into grid rows grouped by issue or person. Dates are calendar days
  * handled as local Y/M/D and formatted as `YYYY-MM-DD` to match the API;
- * labels and "today" come from `lib/dates` (the reader's zone, RADD-1008).
+ * labels and "today" come from the SDK date helpers (the reader's zone, RADD-1008).
  */
 
 import {
@@ -13,7 +13,7 @@ import {
   type TimesheetPeriodValue,
 } from "./constants";
 import type { TimesheetEntry } from "./types";
-import { formatIso } from "./dates";
+import { formatIso } from "@radd/plugin-sdk";
 
 // TimesheetGroupByValue/TimesheetPeriodValue live in constants; re-export the
 // value objects here so callers import period/grouping from one place.

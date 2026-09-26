@@ -9,7 +9,7 @@ import { CATEGORY_META } from "../../lib/meta";
 import { pageItemsQuery } from "../../lib/queries";
 import type { PageLinkedItem, StateCategoryValue } from "../../lib/types";
 import { Button } from "../Button";
-import { IconButton } from "../IconButton";
+import { IconButton } from "@radd/plugin-sdk";
 
 /**
  * Linked-issues section on a page (spec 43): key chip + title + state dot, plus

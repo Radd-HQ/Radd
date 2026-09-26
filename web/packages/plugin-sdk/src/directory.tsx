@@ -1,5 +1,6 @@
-import { useEffect, useId, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Slot } from "./slots";
 import { Button, Modal, Spinner } from "./primitives";
 import { QueryError, DirectoryPager, ListSearchInput } from "./host";
@@ -45,7 +46,7 @@ export function PagedDirectorySelect(props: PagedDirectorySelectProps) {
   return <>
     <Button variant="secondary" size="sm" aria-label={props.label} aria-haspopup="dialog"
       disabled={props.disabled} className="max-w-full" onClick={() => setOpen(true)}>
-      <span className="truncate">{props.value?.name ?? props.emptyLabel}</span><span aria-hidden>⌄</span>
+      <span className="truncate">{props.value?.name ?? props.emptyLabel}</span><ChevronDown size={14} className="shrink-0 text-fg-muted" aria-hidden />
     </Button>
     {open && <DirectoryChoices {...props} onClose={() => setOpen(false)} onChange={choice => { props.onChange(choice); setOpen(false); }} />}
   </>;
@@ -58,11 +59,10 @@ function DirectoryChoices({ label, emptyLabel, clearLabel, noun, searchPlacehold
   const [position, setPosition] = useState({ q, page: 0 });
   if (position.q !== q) setPosition({ q, page: 0 });
   const page = position.q === q ? position.page : 0;
-  const sessionId = useId();
   const definition = query(q, page, pageSize);
-  // Reopening a picker gets a fresh read even when a previous GC timer has not fired.
-  // Retain the provider's key prefix and entity metadata for cross-feature invalidation.
-  const result = useQuery({ ...definition, queryKey: [...definition.queryKey, sessionId], gcTime: 0, staleTime: 0 });
+  // The provider's key prefix and entity metadata drive cross-feature invalidation; the previous
+  // page stays up while the next loads.
+  const result = useQuery({ ...definition, staleTime: 30_000, placeholderData: keepPreviousData });
   const busy = result.isFetching || q !== filter.trim();
   const rows = result.data?.rows ?? [];
   const total = result.data?.total ?? rows.length;
@@ -71,7 +71,7 @@ function DirectoryChoices({ label, emptyLabel, clearLabel, noun, searchPlacehold
     <Button className="mt-2" variant="ghost" onClick={() => onChange(null)}>{clearLabel ?? emptyLabel}</Button>
     <div aria-busy={busy} className="mt-2 max-h-[45dvh] overflow-y-auto">
       {result.isError ? <div className="space-y-2"><QueryError label={noun} error={result.error} /><Button variant="secondary" onClick={() => void result.refetch()}>Retry choices</Button></div>
-        : result.isPending ? <Spinner />
+        : result.isPending ? <Spinner label={`Loading ${noun}…`} />
         : !rows.length ? <p className="py-4 text-sm text-fg-muted">No matches.</p>
         : <ul>{rows.map(row => <li key={row.id}><Button variant="ghost" className="w-full justify-start" onClick={() => onChange(row)}>{row.name}</Button></li>)}</ul>}
     </div>

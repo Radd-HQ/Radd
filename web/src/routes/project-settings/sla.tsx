@@ -6,15 +6,15 @@ import { apiSlaPolicyPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { usePermissions } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";
-import { issueTypesQuery, projectByIdQuery, slaPoliciesQuery, statesQuery } from "../../lib/queries";
+import { issueTypesQuery, slaPoliciesQuery, statesQuery } from "../../lib/queries";
 import { Permission, SettingScope, type SlaPolicy } from "../../lib/types";
-import { EmptyState } from "../../components/EmptyState";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { EmptyState, TableSkeleton } from "@radd/plugin-sdk";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { SlaPolicyForm, minutesLabel, windowLabel } from "../../components/settings/SlaPolicyForm";
 import { metRuleSummary } from "../../components/settings/SlaMetOnField";
 import { QueryError } from "../../components/QueryError";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /** SLA policies for one project (specs 30/63; project-level since spec 67):
  * targets, priority tiers, business hours, and first-match ordering (up/down,

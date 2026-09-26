@@ -18,14 +18,12 @@ import {
   type TeamMember,
 } from "../../lib/types";
 import { Button } from "../Button";
-import { PeopleDirectorySelect } from "../PeopleDirectorySelect";
 import { DirectoryPager } from "../DirectoryPager";
 import { TextField } from "../TextField";
 import { useDirectory } from "../../lib/useDirectory";
 import { TeamGroupsSection } from "./TeamDirectoryGroup";
 import { TeamStewardship } from "./TeamStewardship";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
+import { IconButton, ErrorText, DirectorySelect } from "@radd/plugin-sdk";
 import { TeamAccessImpact } from "./TeamAccessImpact";
 import { ChangeHistoryPanel } from "../history/ChangeHistoryPanel";
 
@@ -142,7 +140,7 @@ export function TeamPanel({ team, onDeleted }: TeamPanelProps) {
           <form onSubmit={onAddMember} className="mt-3 flex flex-wrap items-end gap-2">
             <p className="w-full text-xs text-fg-muted">Adding a member gives them this team’s roles and shared-resource access. Review the role grants and access sources below before adding them.</p>
             <div className="flex-1">
-              <PeopleDirectorySelect kind="person" candidateTeamId={team.id}
+              <DirectorySelect source="teams.candidates" context={{ teamId: team.id }}
                 label="Add member" emptyLabel="Choose a person…" value={candidate} onChange={setCandidate} />
             </div>
             <Button type="submit" variant="ghost" disabled={!candidate || addMember.isPending}>

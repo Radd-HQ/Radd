@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { apiMailRulePath, apiMailSourceRulesPath } from "../../../lib/constants";
-import { projectsQuery } from "../../../lib/queries";
 import {
   MAIL_NO_MATCH_ANSWER,
   MailRuleType,
@@ -12,13 +11,12 @@ import {
   type MailSource,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { ErrorText } from "../../ErrorText";
-import { IconButton } from "../../IconButton";
+import { ErrorText, IconButton, TokenMultiSelect } from "@radd/plugin-sdk";
 import { Modal } from "../../Modal";
 import { Select } from "../../Select";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
-import { TokenMultiSelect } from "../../TokenMultiSelect";
+import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /** What each rule kind matches on, in the operator's words. */
 export const RULE_LABELS: Record<MailRuleTypeValue, string> = {

@@ -18,11 +18,12 @@ test('a retained command refuses execution after withdrawal and after replacemen
  const [fresh]=api.useContributedCommands(context);await fresh.run();assert.equal(calls,2);
  api.unregisterCommandSources('example');
 });
-test('withdrawal aborts in-flight execution and late results cannot report success',async()=>{
+test('a started command is a write: withdrawal lets it finish, and refuses it only before it starts',async()=>{
  let finish,signal;
  api.registerCommandSource('example',provider((_id,_context,s)=>{signal=s;return new Promise(resolve=>{finish=resolve;});}));
  const [command]=api.useContributedCommands(context);const pending=command.run();
- api.unregisterCommandSources('example');assert(signal.aborted);finish();await assert.rejects(pending,{name:'AbortError'});
+ api.unregisterCommandSources('example');assert(!signal.aborted,'withdrawal must not abort a request the server may have acted on');finish();await pending;
+ await assert.rejects(command.run(),/no longer available/);
 });
 test('command providers remain isolated and repeated registration replaces only its own source',()=>{
  api.registerCommandSource('a',provider(async()=>{}));api.registerCommandSource('b',provider(async()=>{}));

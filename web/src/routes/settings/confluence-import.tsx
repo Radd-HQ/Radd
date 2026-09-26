@@ -14,7 +14,7 @@ import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { confluencePlansQuery, queryKeys } from "../../lib/queries";
 import type { ConfluenceSnapshot, ConfluenceMappingSection } from "../../lib/types";
-import { todayIso } from "../../lib/dates";
+import { todayIso } from "@radd/plugin-sdk";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 
 /**

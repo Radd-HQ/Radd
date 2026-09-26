@@ -4,9 +4,6 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "vite build"
-  },
   "dependencies": {
     "@radd/plugin-sdk": "*",
     "@xyflow/react": "^12.11.2",
@@ -18,5 +15,12 @@
     "@radd-plugin-ui/items": "*",
     "@radd-plugin-ui/comments": "*",
     "@radd-plugin-ui/pages": "*"
+  },
+  "exports": {
+    ".": "./src/index.tsx",
+    "./types": "./src/types.ts"
+  },
+  "radd": {
+    "bundled": true
   }
 }

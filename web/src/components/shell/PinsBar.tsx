@@ -30,14 +30,16 @@ import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, RoutePath } from "../../lib/constants";
 import { pageLink } from "../../lib/page-links";
 import { usePermissions, useIsAuthenticated } from "../../lib/hooks";
-import { pageByPathQuery, pageSpaceByIdentityQuery, projectByIdQuery, projectByKeyQuery, viewQuery } from "../../lib/queries";
+import { pageByPathQuery, pageSpaceByIdentityQuery, viewQuery } from "../../lib/queries";
 import { useNavFacts } from "../../lib/nav-facts";
 import { pinKey, useNavPins, type NavPin } from "../../lib/topbar-prefs";
-import { Permission, type Page, type PageCreate, type Project, type View } from "../../lib/types";
+import { Permission, type Page, type PageCreate, type View } from "../../lib/types";
 import { NewItemModal } from "../items/NewItemModal";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { Button } from "../Button";
 import { RenamePinDialog } from "./RenamePinDialog";
+import { projectByIdQuery, projectByKeyQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 const tabBase =
   "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[13px] text-fg-secondary " +

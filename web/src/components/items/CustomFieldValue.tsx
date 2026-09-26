@@ -1,7 +1,8 @@
-import { formatDate } from "../../lib/dates";
+import { formatDate } from "@radd/plugin-sdk";
 import { formatDuration } from "../../lib/duration";
-import { FieldType, type CustomFieldValue } from "../../lib/types";
 import { LabelChip } from "./ItemBadges";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { CustomFieldValue } from "@radd-plugin-ui/fields/types";
 
 /**
  * Typed rendering for a custom-field VALUE (spec 108, extracted for spec 109):

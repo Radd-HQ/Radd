@@ -20,9 +20,8 @@ import { Modal } from "../../Modal";
 import { Select } from "../../Select";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
-import { TokenMultiSelect, type TokenOption } from "../../TokenMultiSelect";
+import { TokenMultiSelect, type TokenOption, IconButton } from "@radd/plugin-sdk";
 import { useKeyedRows } from "../../../lib/keyed-rows";
-import { IconButton } from "../../IconButton";
 
 /** Backend defaults mirrored for the form's initial state (LlmConfig). */
 const LLM_DEFAULT_PREFIXES = ["image/"];

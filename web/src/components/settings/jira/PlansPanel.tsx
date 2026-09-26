@@ -10,15 +10,11 @@ import {
 } from "../../../lib/queries";
 import { SnapshotStage, type JiraPlan } from "../../../lib/types";
 import { Button } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
-import { EmptyState } from "../../EmptyState";
+import { useConfirm, EmptyState, Table, TBody, Td, THead, Th, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import { Modal } from "../../Modal";
 import { QueryError } from "../../QueryError";
 import { SelectField } from "../../SelectField";
-import { Table, TBody, Td, THead, Th } from "../../Table";
-import { TableSkeleton } from "../../TableSkeleton";
 import { TextField } from "../../TextField";
-import { ErrorText } from "../../ErrorText";
 
 /**
  * Import plans (spec 100) — one per cached download, holding every mapping

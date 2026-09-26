@@ -1,3 +1,4 @@
+import { OptionTextField } from "@radd/plugin-sdk";
 import { CycleSelect } from "../cycles/CycleSelect";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -20,7 +21,6 @@ import {
 import { LabelsEditor } from "../items/LabelsEditor";
 import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
-import { OptionTextField } from "../DirectoryChoices";
 import { OptionResource } from "../../lib/queries/options";
 import { usePermissions } from "../../lib/hooks";
 

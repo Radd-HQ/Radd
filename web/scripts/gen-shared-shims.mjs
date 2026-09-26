@@ -33,7 +33,7 @@ const SDK_EXPORTS = [
   "positionedErrorOf",
   "registerCommandSource", "unregisterCommandSources", "useContributedCommands", "invalidatePluginCommands", "invalidateEntities",
   "IconButton", "ConfirmDialog", "useConfirm", "copyText", "useListFilter", "useDebounced",
-  "UI_API_VERSION", "isUiApiCompatible",
+  "UI_API_VERSION", "isUiApiCompatible", "setRemotesLoading", "useRemotesLoading",
   "ChangeList", "ChangeLine", "changeLabel", "humanize", "formatChangeValue", "CollapsibleCard", "Pager", "DateField", "Table", "THead", "TBody", "Th", "Td", "TableSkeleton",
   "ScheduleEditor", "ScheduleKind", "defaultSchedule", "isScheduleValid",
   "SlotId", "Slot", "useSlot", "useSlotMatch", "registerSlot", "unregisterSlot",

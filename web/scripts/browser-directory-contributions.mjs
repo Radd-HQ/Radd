@@ -1,13 +1,16 @@
-/** Auth and Teams actual bundles own directory queries; SDK supplies generic control behavior. */
+/** Auth and Teams (core plugins bundled with the host, RADD-1373) own directory queries; the SDK
+ * supplies generic control behavior. The server's loaded set is the only lifecycle they have. */
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {readFileSync,existsSync,statSync} from 'node:fs';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {openBrowser} from './lib/cdp.mjs';
+import {CORE_PLUGINS} from './lib/core-plugins.mjs';
 const dist=new URL('../dist/',import.meta.url).pathname;
-const enabled=new Set(['fixture']),broken=new Set(),requests=[];
-const versions={auth:1,teams:1};
+// Every other core plugin stays loaded (the Audit page below is one); Auth and Teams come and go.
+const enabled=new Set(['fixture']),requests=[];
+const alwaysLoaded=CORE_PLUGINS.filter(name=>!['auth','teams'].includes(name));
 let hold=false,release,aborted=0,refuse=false;
 const harness=`import {createElement as h,useState} from 'react';import{definePlugin,SlotId,SettingsPage,DirectorySelect}from'@radd/plugin-sdk';
 function Harness(){const [values,setValues]=useState({});return h(SettingsPage,{title:'Directory contribution proof'},...[
@@ -17,13 +20,13 @@ export default definePlugin({contributions:[{id:'directory-proof',slot:SlotId.se
 const server=http.createServer(async(req,res)=>{
  const url=new URL(req.url,'http://fixture'),p=url.pathname;
  if(p.startsWith('/plugins/')){
-  const name=p.split('/')[2];if(broken.has(name)){res.writeHead(404);res.end();return;}
-  res.setHeader('content-type','text/javascript');res.end(name==='fixture'?harness:readFileSync(new URL(`../../server/src/radd/modules/${name}/ui/dist/remoteEntry.js`,import.meta.url)));return;
+  if(p.split('/')[2]!=='fixture'){res.writeHead(404);res.end();return;}
+  res.setHeader('content-type','text/javascript');res.end(harness);return;
  }
  if(p.startsWith('/api/')){
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${name==='fixture'?1:versions[name]}`,ui_api_version:'1.4.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/directory-proof',section:'settings',label:'Directory proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...alwaysLoaded,...enabled],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version:'1.4.0'}],nav:[{key:'fixture',plugin:'fixture',path:'/settings/directory-proof',section:'settings',label:'Directory proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/users/directory')||p.endsWith('/teams')||p.includes('-candidates')){
    // Ignore unrelated host directory reads, which lack pagination parameters.
    if(url.searchParams.has('limit')){
@@ -51,7 +54,9 @@ try{
  const text=t=>s.eval(`document.body.innerText.includes(${JSON.stringify(t)})`);
  const until=async(p,label)=>{for(let i=0;i<300;i++){if(await p())return;await new Promise(r=>setTimeout(r,40));}throw Error(label+': '+await s.eval('document.body.innerText')+' '+JSON.stringify(s.consoleErrors));};
  const refresh=()=>s.eval(`window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['capabilities']})`);
- const change=async(fn)=>{const state=n=>`${enabled.has(n)}/${broken.has(n)}`;const before=Object.fromEntries(Object.keys(versions).map(n=>[n,state(n)]));fn();for(const n of Object.keys(versions))if(before[n]!==state(n))versions[n]++;await refresh();};
+ const change=async(fn)=>{fn();await refresh();};
+ // Directory reads are shared and cached by key (RADD-1373): drop them before a step that must see a request.
+ const forget=key=>s.eval(`window.__RADD_QUERY_CLIENT__.removeQueries({queryKey:${JSON.stringify(key)}})`);
  const open=id=>s.eval(`document.querySelector('[data-picker="${id}"] button').focus();document.querySelector('[data-picker="${id}"] button').click()`);
  const close=()=>s.eval(`document.querySelector('[role="dialog"] [aria-label="Close"]').click()`);
  const filter=async value=>s.eval(`(()=>{const el=document.querySelector('[role="dialog"] input[type="search"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));})()`);
@@ -66,12 +71,11 @@ try{
  assert(await s.eval(`!document.querySelector('[role="dialog"]')`));checks.push('people pagination/search preserves totals and selected label; modal owns focus');
  await open('team');await until(()=>text('team 001'),'team directory');assert(requests.at(-1).path.endsWith('/teams'));await close();
  for(const purpose of ['member','manager','owner']){await open(purpose);await until(()=>text(purpose+' 001'),purpose+' choices');assert.equal(requests.at(-1).purpose,purpose==='member'?null:purpose);assert(requests.at(-1).path.endsWith(purpose==='member'?'/member-candidates':'/steward-candidates'));await close();}checks.push('Teams owns directory and member/manager/owner candidate semantics');
- hold=true;await open('person');await until(()=>Boolean(release),'request held');await change(()=>enabled.delete('auth'));await until(()=>aborted>0,'withdrawal aborts');assert(!await s.eval(`document.querySelector('[role="dialog"]')!==null`));assert(await s.eval(`document.querySelector('[data-picker="person"]').textContent.includes('person 125')`));release();release=undefined;hold=false;checks.push('withdrawal closes dialog and aborts request while retaining selected value');
- await change(()=>enabled.add('auth'));await until(()=>s.eval(`!document.querySelector('[data-picker="person"] button').disabled`),'auth restored');await open('person');await until(()=>text('person 001'),'fresh read on reopen');assert.equal(await s.eval(`document.querySelectorAll('[role="dialog"]').length`),1);await close();checks.push('re-enable restores one control with fresh data');
- await change(()=>{broken.add('auth');});await until(()=>s.eval(`document.querySelector('[data-picker="person"] button').disabled`),'failed remote unavailable');assert(!await s.eval(`document.querySelector('[data-picker="team"] button').disabled`));await change(()=>broken.delete('auth'));await until(()=>s.eval(`!document.querySelector('[data-picker="person"] button').disabled`),'failed remote recovered');checks.push('failed Auth remote leaves Teams usable and recovers');
- refuse=true;await open('person');await until(()=>text('Directory access refused'),'permission error');assert.equal(await s.eval(`document.querySelectorAll('[role="dialog"] li').length`),0);refuse=false;await s.click('[role="dialog"] button',t=>t.trim()==='Retry choices');await until(()=>text('person 001'),'retry works');checks.push('permission error hides cached rows and offers retry');
+ await forget(['users','choices']);hold=true;await open('person');await until(()=>Boolean(release),'request held');const personAborts=aborted;await change(()=>enabled.delete('auth'));await until(()=>aborted>personAborts,'withdrawal aborts');assert(!await s.eval(`document.querySelector('[role="dialog"]')!==null`));assert(await s.eval(`document.querySelector('[data-picker="person"] button').disabled`));assert(await s.eval(`document.querySelector('[data-picker="person"]').textContent.includes('person 125')`));assert(!await s.eval(`document.querySelector('[data-picker="team"] button').disabled`));release();release=undefined;hold=false;checks.push('Auth withdrawal closes the dialog and aborts its read, retains the selected value, and leaves Teams usable');
+ await change(()=>enabled.add('auth'));await until(()=>s.eval(`!document.querySelector('[data-picker="person"] button').disabled`),'auth restored');const beforeReopen=requests.length;await open('person');await until(async()=>requests.length>beforeReopen&&await text('person 001'),'reopen reads afresh after the aborted read');assert.equal(await s.eval(`document.querySelectorAll('[role="dialog"]').length`),1);assert.equal(await s.eval(`document.querySelectorAll('[data-picker="person"] button[aria-haspopup="dialog"]').length`),1);await close();checks.push('re-enable restores one control; the aborted read left nothing cached and reopening fetches');
+ await open('person');await until(()=>text('person 001'),'cached rows shown');refuse=true;await s.eval(`window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['users','choices']})`);await until(()=>text('Directory access refused'),'permission error');assert.equal(await s.eval(`document.querySelectorAll('[role="dialog"] li').length`),0);refuse=false;await s.click('[role="dialog"] button',t=>t.trim()==='Retry choices');await until(()=>text('person 001'),'retry works');checks.push('a refused refresh hides the cached rows and offers retry');
  await s.eval(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await until(()=>s.eval(`!document.querySelector('[role="dialog"]')`),'Escape dismisses');assert(await s.eval(`document.activeElement.getAttribute('aria-label')==='Choose person'`));checks.push('shared modal dismisses and restores focus');
- hold=true;await open('owner');await until(()=>Boolean(release),'candidate request held');const priorAborts=aborted;
+ await forget(['teamMembers']);hold=true;await open('owner');await until(()=>Boolean(release),'candidate request held');const priorAborts=aborted;
  await change(()=>enabled.delete('teams'));await until(()=>aborted>priorAborts,'Teams withdrawal aborts');assert(!await s.eval(`document.querySelector('[role="dialog"]')!==null`));assert(!await s.eval(`document.querySelector('[data-picker="person"] button').disabled`));release();release=undefined;hold=false;
  await change(()=>enabled.add('teams'));await until(()=>s.eval(`!document.querySelector('[data-picker="owner"] button').disabled`),'Teams restored');await open('owner');await until(()=>text('owner 001'),'owner choices restored');await close();checks.push('Teams withdrawal aborts candidates, leaves Auth usable, and recovers');
  await s.navigate(`http://127.0.0.1:${server.address().port}/settings/audit`);await until(()=>s.eval(`document.querySelector('[aria-label="Filter by person"]')!==null`),'host audit adapter mounted');

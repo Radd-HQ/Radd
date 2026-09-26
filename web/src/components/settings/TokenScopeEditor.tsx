@@ -1,9 +1,10 @@
 import { useId, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { permissionsCatalogQuery, projectsQuery } from "../../lib/queries";
+import { permissionsCatalogQuery } from "../../lib/queries";
 import type { PermissionValue, TokenScopes } from "../../lib/types";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TokenMultiSelect } from "@radd/plugin-sdk";
 import { ScopePicker } from "./ScopePicker";
+import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * ONE editor for a key's spec-113 scope, shared by personal tokens and

@@ -1,4 +1,3 @@
-import { useId } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@radd/plugin-sdk";
 import type { AuditEntry, AuditCatalog, AuditSourceValue } from "./types";
@@ -37,24 +36,23 @@ const auditWire = (params: AuditParams): Record<string, string | undefined> => (
 });
 
 
-/** Observer-owned keys prevent stale authorization/results surviving an unmount or activation. */
+/** Access and rows refresh when anything that decides who may read them changes. A failed read
+ * hides what it had (a revoked scope must not keep showing rows); otherwise these are ordinary
+ * shared queries (RADD-1373 — they carried a per-mount identity and never cached). */
 const ACCESS_META = {entities: ["project", "role", "team", "group", "member", "accessGrant"]};
 export function useAudit(params: AuditParams, revision: string, enabled = true) {
-  const session = useId();
-  return useQuery({queryKey: ["audit", "rows", session, revision, auditWire(params), enabled], enabled,
-    gcTime: 0, staleTime: 0, retry: false, meta: {...ACCESS_META, entities: [...ACCESS_META.entities, "field"]},
+  return useQuery({queryKey: ["audit", "rows", revision, auditWire(params), enabled], enabled,
+    meta: {...ACCESS_META, entities: [...ACCESS_META.entities, "field"]},
     queryFn: ({signal}) => api.get<AuditEntry[]>("/audit", {signal, query: auditWire(params)}),
   });
 }
 export function useAuditCatalog(revision: string) {
-  const session = useId();
-  return useQuery({queryKey: ["audit", "catalog", session, revision], gcTime: 0, staleTime: 0, retry: false,
+  return useQuery({queryKey: ["audit", "catalog", revision], staleTime: 5 * 60_000,
     queryFn: ({signal}) => api.get<AuditCatalog>("/audit/catalog", {signal}),
   });
 }
 export function useAuditAccess(projectId?: string, enabled = true) {
-  const session = useId();
-  const result = useQuery({queryKey: ["audit", "access", session, projectId ?? "", enabled], enabled, gcTime: 0, staleTime: 0, retry: false, meta: ACCESS_META,
+  const result = useQuery({queryKey: ["audit", "access", projectId ?? "", enabled], enabled, staleTime: 30_000, meta: ACCESS_META,
     queryFn: ({signal}) => api.get<{allowed: boolean; instance_wide: boolean}>("/audit/access", {signal, query: {project_id: projectId}}),
   });
   return {...result, data: !enabled || result.isError ? undefined : result.data};

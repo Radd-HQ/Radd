@@ -7,7 +7,7 @@ import { queryKeys, totpStatusQuery } from "../../lib/queries";
 import type { TotpRecoveryCodes, TotpSetup, TotpStatus } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 import { RecoveryCodesOnce, TotpEnrolmentStep } from "./TotpEnrolment";
 
 const INVALID_CODE_MESSAGE = "Invalid code.";

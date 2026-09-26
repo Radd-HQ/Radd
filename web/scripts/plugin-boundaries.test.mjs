@@ -73,9 +73,8 @@ test('Monitoring UI consumes contributions instead of importing AI or mail featu
 
 
 test('host directory adapter owns no queries or feature implementation',()=>{
-  const file='web/src/components/PeopleDirectorySelect.tsx';
-  const imports=nodes(file).filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
-  assert.deepEqual(imports,['@radd/plugin-sdk']);
+  // RADD-1375: the compatibility adapter is gone; callers use the SDK DirectorySelect directly.
+  assert(!existsSync('web/src/components/PeopleDirectorySelect.tsx'));
   assert(!readFileSync('web/src/lib/queries/users.ts','utf8').includes('peopleChoicesQuery'));
 });
 
@@ -108,8 +107,7 @@ test('generic option controls have no feature endpoints or owner catalog',()=>{
   const controls=nodes('web/packages/plugin-sdk/src/options.tsx');
   assert(!controls.some(n=>n.type==='ImportDeclaration'&&n.importKind!=='type'&&/api|web\/src|modules/.test(n.source.value)));
   assert(!controls.some(n=>n.type==='StringLiteral'&&/^\/(?:users|teams|roles|states|issue-types|releases|forms|page-spaces|groups)/.test(n.value)));
-  const adapter=nodes('web/src/components/DirectoryChoices.tsx');
-  assert(adapter.filter(n=>n.type==='ExportNamedDeclaration').every(n=>n.source?.value==='@radd/plugin-sdk'));
+  assert(!existsSync('web/src/components/DirectoryChoices.tsx'),'the Choices alias is gone (RADD-1375)');
   const legacy=nodes('web/src/lib/queries/options.ts');
   assert(!legacy.some(n=>n.type==='CallExpression'||n.type==='FunctionDeclaration'||n.type==='ArrowFunctionExpression'));
 });
@@ -155,10 +153,7 @@ test('Fields owns registry form rendering and the SDK token/error primitives are
   const adapter=nodes('web/src/components/items/CustomFieldsForm.tsx');
   assert(adapter.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='@radd/plugin-sdk'||n.source.value.endsWith('/control-contract')));
   assert(!adapter.some(n=>n.type==='SwitchStatement'||n.type==='CallExpression'&&['useQuery','useState'].includes(n.callee?.name)));
-  for(const file of ['web/src/components/TokenMultiSelect.tsx','web/src/components/ErrorText.tsx']){
-    assert(nodes(file).filter(n=>n.type==='ExportNamedDeclaration').every(n=>n.source?.value==='@radd/plugin-sdk'));
-    assert(!nodes(file).some(n=>n.type==='FunctionDeclaration'));
-  }
+  for(const file of ['web/src/components/TokenMultiSelect.tsx','web/src/components/ErrorText.tsx']) assert(!existsSync(file),`${file} re-exported the SDK (RADD-1375)`);
   for(const file of ['web/packages/plugin-sdk/src/token-multi-select.tsx','web/packages/plugin-sdk/src/error-text.tsx']){
     assert(!nodes(file).some(n=>n.type==='ImportDeclaration'&&/modules|web\/src|components\//.test(n.source.value)));
   }
@@ -279,4 +274,34 @@ test('VCS settings and connector transport are owned by plugins',()=>{
   }
   assert.deepEqual(violations,[]);
   for(const file of ['web/src/routes/settings/vcs.tsx','web/src/components/settings/vcs-hosts.ts','web/src/components/settings/VcsHostSettings.tsx','web/src/components/settings/VcsIdentityMap.tsx'])assert(!existsSync(file),file);
+});
+
+test('the host never imports plugin source by relative path, only declared package exports (RADD-1373)',()=>{
+  const root=new URL('../src',import.meta.url).pathname;
+  const violations=[];
+  for (const file of files(root)) for (const node of nodes(file)) {
+    const source=(node.type==='ImportDeclaration'||node.type==='ExportNamedDeclaration'||node.type==='ExportAllDeclaration')?node.source?.value:
+      node.type==='ImportExpression'||node.type==='CallExpression'&&node.callee?.type==='Import'?node.arguments?.[0]?.value??node.source?.value:undefined;
+    if (typeof source==='string'&&source.includes('server/src/radd/modules')) violations.push(`${path.relative(root,file)} -> ${source}`);
+  }
+  assert.deepEqual(violations,[]);
+});
+
+test('the bundled core plugin list is generated from the packages that declare it (RADD-1373)',async()=>{
+  const {discover,staticListSource,STATIC_LIST}=await import('./plugin-packages.mjs');
+  const packages=discover();
+  assert.equal(readFileSync(STATIC_LIST,'utf8'),staticListSource(packages),'run node web/scripts/prepare-federation.mjs');
+  for (const pkg of packages.filter(p=>p.bundled)) assert(!pkg.remote,`${pkg.pkg.name} is bundled and builds a remote`);
+  assert(packages.filter(p=>p.bundled).length>=15);
+});
+
+test('the host never re-exports the SDK or a plugin package (RADD-1375)',()=>{
+  // A forwarding address for something that moved is a compatibility shim; callers import the
+  // owner directly. Barrels over the host's OWN modules (relative sources) are fine.
+  const offenders=[];
+  for (const file of files('web/src')) {
+    const body=parse(readFileSync(file,'utf8'),{sourceType:'module',plugins:['typescript','jsx']}).program.body;
+    if (body.some(n=>(n.type==='ExportNamedDeclaration'||n.type==='ExportAllDeclaration')&&/^@radd/.test(n.source?.value??''))) offenders.push(file);
+  }
+  assert.deepEqual(offenders,[]);
 });

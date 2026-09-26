@@ -13,15 +13,11 @@ import {
   type AiWireShapeValue,
 } from "../../lib/types";
 import { Button } from "../Button";
-import { useConfirm } from "../ConfirmDialog";
-import { EmptyState } from "../EmptyState";
+import { useConfirm, EmptyState, Table, TBody, Td, Th, THead, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import { Modal } from "../Modal";
 import { QueryError } from "../QueryError";
 import { SelectField } from "../SelectField";
-import { Table, TBody, Td, Th, THead } from "../Table";
-import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
-import { ErrorText } from "../ErrorText";
 
 const WIRE_SHAPE_LABELS: Record<AiWireShapeValue, string> = {
   [AiWireShape.openai]: "OpenAI-compatible",

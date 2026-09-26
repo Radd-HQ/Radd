@@ -1,3 +1,4 @@
+import { OptionSelect } from "@radd/plugin-sdk";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, Earth } from "lucide-react";
@@ -7,7 +8,6 @@ import { useKeyedRows } from "../../lib/keyed-rows";
 import { ShareLevel, type ShareLevelValue } from "../../lib/types";
 import type { LocalShare, SharingDraft } from "../../lib/sharing-draft";
 import { Button } from "../Button";
-import { OptionSelect } from "../DirectoryChoices";
 import { Select } from "../Select";
 import { AddSharingGrantDialog, SHARE_LEVEL_OPTIONS } from "./AddSharingGrantDialog";
 import { SharingGrantsEditor } from "./SharingGrantsEditor";

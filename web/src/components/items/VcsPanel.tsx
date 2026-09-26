@@ -13,20 +13,12 @@ import {
   vcsRefVisual,
 } from "../../lib/meta";
 import { itemVcsLinksQuery } from "../../lib/queries";
-import {
-  Permission,
-  VcsRefType,
-  type Item,
-  type Project,
-  type VcsLink,
-  type VcsLinkCreate,
-  type VcsRefTypeValue,
-} from "../../lib/types";
+import { Permission, VcsRefType, type Item, type VcsLink, type VcsLinkCreate, type VcsRefTypeValue } from "../../lib/types";
 import { Button } from "../Button";
 import { Select } from "../Select";
 import { Spinner } from "../Spinner";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
+import { IconButton, ErrorText } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * The Version-control tab: branches, commits, and merge/pull requests linked to

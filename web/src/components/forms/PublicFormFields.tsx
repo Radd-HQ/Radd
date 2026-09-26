@@ -1,12 +1,8 @@
-import {
-  type CustomFieldValue,
-  type CustomFields,
-  type FieldDef,
-  type PublicFormField,
-} from "../../lib/types";
+import { type PublicFormField } from "../../lib/types";
 import { CustomFieldControl } from "../items/CustomFieldsForm";
 import { LazyRichEditor } from "../editor/LazyRichEditor";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import type { CustomFieldValue, CustomFields, FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * Shared rendering for the TRIMMED form payloads (spec 62 public tokened page,

@@ -9,7 +9,7 @@ import { Permission, type Dashboard, type ShareLevelValue } from "../../lib/type
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { ViewSharingEditor, SERVER_PRIVATE } from "../views/ViewSharingEditor";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /** Local sharing draft committed by one owner-authorized transaction. */
 export function DashboardSharingModal({

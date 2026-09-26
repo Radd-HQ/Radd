@@ -21,7 +21,7 @@ import {
 } from "../../lib/types";
 import { SimilarCandidatesList } from "./AiSection";
 import type { AiResultRequest } from "./ai-results";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 interface AiResultsPanelProps {
   request: AiResultRequest;

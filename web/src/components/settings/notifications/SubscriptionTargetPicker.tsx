@@ -1,4 +1,3 @@
-import type { DirectoryOption } from "../../../lib/queries/options";
 import { subscriptionOptionsQuery } from "../../../lib/queries/notifications";
 import { useDirectory } from "../../../lib/useDirectory";
 import type { RuleScopeValue } from "../../../lib/types";
@@ -9,6 +8,7 @@ import { DirectoryPager } from "../../DirectoryPager";
 import { QueryError } from "../../QueryError";
 import { Spinner } from "../../Spinner";
 import { SCOPE_LABELS } from "./matrix";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 export function SubscriptionTargetPicker({ scope, onSelect, onClose }: {
   scope: RuleScopeValue; onSelect: (row: DirectoryOption) => void; onClose: () => void;

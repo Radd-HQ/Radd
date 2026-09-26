@@ -7,13 +7,14 @@ import { sendTaskToggle } from "../../lib/task-toggle";
 import { CopyCommentLink } from "./CopyCommentLink";
 import { Entity, entityMeta, invalidateEntities } from "../../lib/cache";
 import { chronologicalComments, type CommentPage } from "../../lib/queries/comment-feed";
-import { relativeTime } from "../../lib/dates";
-import { CommentVisibility, type Comment } from "../../lib/types";
+import { relativeTime } from "@radd/plugin-sdk";
+import { type Comment } from "../../lib/types";
 import { EmailBody } from "../editor/EmailBody";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import type { QuickAction } from "../items/quick-actions";
 import { Button } from "../Button";
 import { CommentHistory } from "../CommentHistory";
+import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
 
 /**
  * The replies under one comment, on every surface (RADD-1246): an issue

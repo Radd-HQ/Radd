@@ -14,7 +14,7 @@ import {
 } from "../../../lib/types";
 import { SelectField } from "../../SelectField";
 import { MappingSection, RowLabel, splitByUse } from "./MappingSection";
-import { useListFilter } from "../../../lib/list-filter";
+import { useListFilter } from "@radd/plugin-sdk";
 import { ListSearchInput } from "../../ListSearchInput";
 
 const ACTION_OPTIONS: [VocabActionValue, string][] = [

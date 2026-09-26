@@ -6,7 +6,7 @@ import type { ReportIntervalValue } from "../../lib/types";
 import { ChartLegend } from "../charts/ChartLegend";
 import { ReportCard } from "../charts/ReportCard";
 import { StackedBarChart, type StackedBar } from "../charts/StackedBarChart";
-import { shortDate } from "../charts/chart-utils";
+import { shortDate } from "@radd/plugin-sdk";
 import { CardBody } from "./report-state";
 
 /** Cumulative flow: the category mix at each bucket's end, as stacked bars (spec 19). */

@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button, ButtonVariant, ButtonSize } from "../../Button";
 import { Select } from "../../Select";
-import { useConfirm } from "../../ConfirmDialog";
-import type { DirectoryOption } from "../../../lib/queries/options";
+import { useConfirm } from "@radd/plugin-sdk";
 import { SubscriptionTargetPicker } from "./SubscriptionTargetPicker";
 import {
   Channel,
@@ -17,6 +16,7 @@ import {
 } from "../../../lib/types";
 import { ChannelCell } from "./ChannelCell";
 import { SCOPE_HINTS, SCOPE_LABELS, SUBSCRIPTION_SCOPES, resolveSubscriptionCell, subscriptions } from "./matrix";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 /**
  * Subscriptions: "tell me about everything in this project / space / team".

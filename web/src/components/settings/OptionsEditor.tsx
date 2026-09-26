@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TokenMultiSelect } from "@radd/plugin-sdk";
 
 interface OptionsEditorProps {
   label: string;

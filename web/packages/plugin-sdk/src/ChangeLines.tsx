@@ -74,8 +74,18 @@ function ValueSpan({
 export function formatChangeValue(value: HistoryChange["from"]): string {
   if (value === null || value === undefined || value === "") return "—";
   if (typeof value === "boolean") return value ? "yes" : "no";
-  if (typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "object") return legible(value as Record<string, unknown>);
   return String(value);
+}
+
+/** A structured value by a generic legible key — its name, title, label or key — instead of raw JSON
+ * (RADD-1376); only a value with none of them shows its JSON, so nothing is hidden. Domain wording
+ * (a grant's "Alice as manager (project TEST)") is the owner's contributed formatter, not this. */
+function legible(record: Record<string, unknown>): string {
+  const text = ["name", "title", "label", "key"]
+    .map((key) => record[key])
+    .find((value): value is string => typeof value === "string" && value !== "");
+  return text ?? JSON.stringify(record);
 }
 
 function ChipDelta({ added, removed }: { added: string[]; removed: string[] }) {
@@ -95,7 +105,7 @@ function ChipDelta({ added, removed }: { added: string[]; removed: string[] }) {
   );
 }
 
-/** Unknown structured values remain complete; owners may contribute friendlier presentation. */
+/** A collection's entries as text: strings as they are, objects by their most legible key. */
 function asStrings(value: HistoryChange["added"]): string[] {
   return Array.isArray(value) ? value.map(formatChangeValue) : [];
 }

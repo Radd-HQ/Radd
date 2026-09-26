@@ -121,3 +121,34 @@ def test_entry_point_discovery_is_wired():
     installable = discovery.installable_plugins()
     for pid in eps:
         assert pid in installable
+
+
+def test_core_plugins_ui_is_bundled_and_optional_plugins_ui_is_a_remote():
+    """RADD-1373: a core (non-disableable) plugin's UI is bundled into the host and registered at
+    boot — `"radd": {"bundled": true}` in its ui/package.json and NO remote on its manifest; an
+    optional plugin's UI is a remote it declares. A core plugin shipped as a remote paid a load gap
+    on every picker for a withdrawal that can never happen; an optional plugin bundled into the host
+    could not be installed separately. The flag and the manifest must agree."""
+    import json
+    from pathlib import Path
+
+    load_plugins(settings.modules)
+    modules = Path(__file__).resolve().parents[1] / "src" / "radd" / "modules"
+    checked = 0
+    for package in sorted(modules.glob("*/ui/package.json")):
+        name = package.parent.parent.name
+        plugin = registries.plugins.get(name) or next(
+            (p for p in registries.plugins.values() if p.name == name), None
+        )
+        if plugin is None:
+            continue  # an installable plugin not loaded by default
+        bundled = json.loads(package.read_text()).get("radd", {}).get("bundled") is True
+        has_remote = (package.parent / "vite.config.mjs").exists()
+        declares_remote = bool(plugin.ui and plugin.ui.remote)
+        if not has_remote and not bundled:
+            continue  # a contracts-only package (types/constants other packages import)
+        assert bundled == plugin.core, f"{name}: bundled={bundled} but core={plugin.core}"
+        assert declares_remote == (not bundled), f"{name}: remote declared={declares_remote}, bundled={bundled}"
+        assert has_remote == (not bundled), f"{name}: builds a remote={has_remote}, bundled={bundled}"
+        checked += 1
+    assert checked >= 20, checked

@@ -4,19 +4,10 @@ import { Globe, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { useCurrentUser } from "../../lib/hooks";
-import { useListFilter } from "../../lib/list-filter";
-import { linkTypesQuery, projectsQuery, queryKeys } from "../../lib/queries";
-import {
-  InstanceRole,
-  LinkDirection,
-  type LinkDirectionValue,
-  type LinkTypeCreate,
-  type LinkTypeDef,
-  type Project,
-} from "../../lib/types";
+import { useListFilter, useConfirm, EmptyState, ErrorText } from "@radd/plugin-sdk";
+import { linkTypesQuery, queryKeys } from "../../lib/queries";
+import { InstanceRole, LinkDirection, type LinkDirectionValue, type LinkTypeCreate, type LinkTypeDef } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { useConfirm } from "../../components/ConfirmDialog";
-import { EmptyState } from "../../components/EmptyState";
 import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
 import { SelectField } from "../../components/SelectField";
@@ -24,7 +15,8 @@ import { Spinner } from "../../components/Spinner";
 import { TextField } from "../../components/TextField";
 import { ScopePicker } from "../../components/settings/ScopePicker";
 import { SettingsPage, settingsTableClasses } from "../../components/settings/SettingsPage";
-import { ErrorText } from "../../components/ErrorText";
+import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Issue link types (spec 91): the relationships items can have. Built-ins

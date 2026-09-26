@@ -6,12 +6,9 @@ import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { ApiPath, apiPageUnarchivePath } from "../../lib/constants";
 import { pageLink } from "../../lib/page-links";
-import { formatDateTime } from "../../lib/dates";
+import { formatDateTime, useConfirm, EmptyState, ErrorText } from "@radd/plugin-sdk";
 import type { Page, PageSummary } from "../../lib/types";
 import { Button } from "../Button";
-import { useConfirm } from "../ConfirmDialog";
-import { EmptyState } from "../EmptyState";
-import { ErrorText } from "../ErrorText";
 import { TextField } from "../TextField";
 import { comparePagesNaturally } from "./PageTree";
 

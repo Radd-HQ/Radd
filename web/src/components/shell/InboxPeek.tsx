@@ -12,7 +12,7 @@ import {
 import { notificationsQuery } from "../../lib/queries";
 import type { Notification } from "../../lib/types";
 import { Button } from "../Button";
-import { EmptyState } from "../EmptyState";
+import { EmptyState } from "@radd/plugin-sdk";
 import { NotificationRow } from "../notifications/NotificationRow";
 import { Spinner } from "../Spinner";
 

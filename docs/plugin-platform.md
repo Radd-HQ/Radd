@@ -461,6 +461,42 @@ action, and a service-desk plugin all consume the same permission-scoped SDK.
 
 ## 8. The frontend — the genuinely hard half
 
+### Bundled core plugins, remote optional plugins (RADD-1373)
+
+**Decided 2026-09-26.** Every plugin's UI lives in its own module (`<module>/ui/src`) and contributes
+through the same `definePlugin` API — slots, query/data/command sources, `activate`. What differs is
+how it reaches the browser:
+
+- **Core plugins are bundled.** A core (`core=True`, non-disableable) plugin's `ui/package.json`
+  says `"radd": {"bundled": true}` and exports its entry (`"."`). `web/scripts/plugin-packages.mjs`
+  (run by `prepare-federation`) generates `web/src/plugins/static.generated.ts`; the host imports
+  those entries at build time and `plugin-loader.syncStaticPlugins()` registers them BEFORE the
+  first render. The manifest declares no `remote`, so `/capabilities` lists no remote for it. It is
+  still gated: when `/capabilities` `plugins` omits it (a module left out of `RADD_MODULES`) it is
+  withdrawn, and it returns when the plugin does.
+- **Optional plugins are remotes.** They build to `ui/dist/remoteEntry.js`, and the loader imports
+  and activates one when it is enabled and withdraws it on disable, live. A bundled plugin's name in
+  `remotes` is ignored.
+
+Why: a core plugin can never be withdrawn at runtime, so shipping it as a remote bought nothing and
+cost a network round trip before any picker could render. It showed as "Selection unavailable ·
+<uuid>" on every page load, plus a per-mount query identity that refetched shared catalogs on every
+mount. The invariants are tested: `test_frontend_federation.py` (bundled == core, no remote on a
+bundled manifest); `plugin-boundaries.test.mjs` (no `web/src` import of plugin source by relative
+path, the generated list in sync); `plugin-loader.test.mjs` (boot registration, withdrawal and
+return without duplicates, a same-named remote ignored).
+
+**Public contracts.** The host and other packages import a plugin's types and contracts only through
+its package `exports` (`@radd-plugin-ui/<plugin>/<file>`), never by relative source path.
+
+**Loading and caching.** While any remote is loading, `setRemotesLoading(true)` lets an empty `Slot`
+render its `pending` prop (default nothing) instead of its "unavailable" `fallback`. Contributed
+queries are ordinary shared TanStack queries, keyed by owner plus arguments with normal stale
+times, and paging keeps the previous page. The loader removes a withdrawn plugin's cached queries
+(`["plugin-query", name, …]` and `[name, …]`), so a re-enable reads fresh. Writes are plain
+`useMutation`s and are never aborted.
+
+
 ### Current ownership migration: automation graph surface (RADD-1354)
 
 Automations owns `ui/src/GraphCanvas.tsx`, the graph wire types, layout/catalog/output

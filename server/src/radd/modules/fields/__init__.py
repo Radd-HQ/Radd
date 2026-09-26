@@ -2,7 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from radd.kernel import EntityLinkSpec
-from radd.kernel import EventTypeSpec, PluginUiManifest
+from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec, PermissionSpec
 
@@ -29,7 +29,6 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('field', ('/settings/fields',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/fields/remoteEntry.js", ui_api_version="1.9.0"),
     permissions=(
         PermissionSpec(
             "field.manage",

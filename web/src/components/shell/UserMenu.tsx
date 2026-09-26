@@ -13,6 +13,10 @@ export function UserMenu() {
   const authState = useAuthState();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // RADD-1238: subscribed, so the entry flips with the theme instead of
+  // repeating the previous click. Called before the early returns: a hook
+  // after them changes the hook count when auth state changes (React #300).
+  const dark = useAppearance().theme === Theme.dark;
 
   if (!authState) return null;
 
@@ -28,10 +32,6 @@ export function UserMenu() {
       window.location.assign(RoutePath.login);
     }
   };
-
-  // RADD-1238: subscribed, so the entry flips with the theme instead of
-  // repeating the previous click.
-  const dark = useAppearance().theme === Theme.dark;
 
   return (
     <DropdownMenu

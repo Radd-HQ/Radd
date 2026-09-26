@@ -8,7 +8,6 @@ import {
   NOTIFICATIONS_POLL_MS,
   apiItemWatchersPath,
 } from "../constants";
-import type { DirectoryOption } from "./options";
 import { queryKeys } from "./shared";
 import type {
   NotificationList,
@@ -16,6 +15,7 @@ import type {
   WatchersRead,
   RuleScopeValue,
 } from "../types";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 /** Inbox page size (RADD-884) — the server pages at ≤200; before this the page
  * hard-capped at the first 100 and older notifications were unreachable. */

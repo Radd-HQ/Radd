@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, CircleAlert, Link2, Loader2, Undo2, X } from "lucide-react";
 import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
-import { relativeTime } from "../../../lib/dates";
+import { relativeTime, useConfirm, EmptyState, Table, TBody, Td, THead, Th, TableSkeleton, CollapsibleCard, ErrorText } from "@radd/plugin-sdk";
 import { jiraPendingQuery, jiraRunsQuery, queryKeys } from "../../../lib/queries";
 import {
   JIRA_RUN_STAGE_LABELS,
@@ -15,14 +15,8 @@ import {
   type RollbackPreflight,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
-import { EmptyState } from "../../EmptyState";
 import { QueryError } from "../../QueryError";
-import { Table, TBody, Td, THead, Th } from "../../Table";
-import { TableSkeleton } from "../../TableSkeleton";
-import { CollapsibleCard } from "../../CollapsibleCard";
 import { ProblemList } from "./ProblemList";
-import { ErrorText } from "../../ErrorText";
 
 const isRunning = (run: JiraRun) => !TERMINAL_JIRA_RUN_STAGES.includes(run.stage);
 

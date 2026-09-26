@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useQuery, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
-import type { Paged } from "./api";
 import { SEARCH_DEBOUNCE_MS } from "./constants";
-import { useDebounced } from "./hooks";
+import type { Paged } from "@radd/plugin-sdk";
+import { useDebounced } from "@radd/plugin-sdk";
 
 export interface DirectoryOptions {
   /** Spec 121: a caller may hold the directory back (a visitor has no dashboards);

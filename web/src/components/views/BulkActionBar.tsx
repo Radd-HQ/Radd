@@ -10,29 +10,17 @@ import { ApiPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { useCurrentUser, useItemWritability, usePermissions } from "../../lib/hooks";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
-import {
-  issueTypesQuery,
-  labelsQuery,
-  projectSummaryQuery,
-  releasesQuery,
-  statesQuery,
-  usersQuery,
-} from "../../lib/queries";
+import { issueTypesQuery, releasesQuery, statesQuery, usersQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import { Permission } from "../../lib/types";
-import type {
-  BulkMoveResult,
-  BulkSkipReasonValue,
-  BulkSkipped,
-  BulkUpdateResult,
-  ItemBulkPatch,
-  PriorityValue,
-  Project,
-} from "../../lib/types";
+import type { BulkMoveResult, BulkSkipReasonValue, BulkSkipped, BulkUpdateResult, ItemBulkPatch, PriorityValue } from "../../lib/types";
 import { Button } from "../Button";
 import { useCan } from "../../lib/can";
 import { Modal } from "../Modal";
 import { Select } from "../Select";
+import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
+import { projectSummaryQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 interface BulkActionBarProps {
   selectedIds: Set<string>;

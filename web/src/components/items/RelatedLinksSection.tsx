@@ -7,19 +7,11 @@ import { apiItemWebLinksPath, apiWebLinkPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { WEBLINK_CATEGORY_META, WEBLINK_CATEGORY_ORDER } from "../../lib/meta";
 import { itemWebLinksQuery } from "../../lib/queries";
-import {
-  Permission,
-  WebLinkCategory,
-  type Item,
-  type Project,
-  type WebLink,
-  type WebLinkCategoryValue,
-  type WebLinkCreate,
-} from "../../lib/types";
+import { Permission, WebLinkCategory, type Item, type WebLink, type WebLinkCategoryValue, type WebLinkCreate } from "../../lib/types";
 import { Button } from "../Button";
 import { Select } from "../Select";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
+import { IconButton, ErrorText } from "@radd/plugin-sdk";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Related / external links on an item (`weblinks` module): docs, design files,

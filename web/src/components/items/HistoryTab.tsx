@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { errorMessage } from "../../lib/api";
-import { formatDateTime, relativeTime } from "../../lib/dates";
+import { formatDateTime, relativeTime, ChangeList } from "@radd/plugin-sdk";
 import { useDurationConfig } from "../../lib/hooks";
 import { itemHistoryQuery } from "../../lib/queries";
 import { initials } from "../../lib/meta";
 import type { HistoryEntry } from "../../lib/types";
 import { formatDuration, type DurationConfig } from "../../lib/duration";
-import { ChangeList } from "@radd/plugin-sdk";
 import { Spinner } from "../Spinner";
 
 /**

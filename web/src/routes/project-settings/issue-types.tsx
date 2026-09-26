@@ -4,16 +4,15 @@ import { Check, ChevronDown, ChevronUp, FileText, Plus, Shapes, Star, Trash2 } f
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { issueTypesQuery, projectByIdQuery, queryKeys } from "../../lib/queries";
+import { issueTypesQuery, queryKeys } from "../../lib/queries";
 import { Permission, type IssueType } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { EmptyState, TableSkeleton, IconButton } from "@radd/plugin-sdk";
 import { TextField } from "../../components/TextField";
 import { ValueChip } from "../../components/items/ValueChip";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
-import { IconButton } from "../../components/IconButton";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 const PALETTE = ["#64748b", "#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"];
 

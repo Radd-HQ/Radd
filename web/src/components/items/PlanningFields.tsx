@@ -1,6 +1,5 @@
 import { CycleSelect } from "../cycles/CycleSelect";
 import { DateField } from "@radd/plugin-sdk";
-export { DateField } from "@radd/plugin-sdk";
 import { useQuery } from "@tanstack/react-query";
 import { RELEASE_STATUS_META } from "../../lib/meta";
 import { releasesQuery } from "../../lib/queries";

@@ -7,8 +7,6 @@ from radd.modules.comments.types import CommentVisibility
 from radd.modules.items.enums import ItemKind, ItemVisibility, Priority
 
 from radd import schedule as schedule_math
-# Compatibility exports; both consumers use the platform schedule contract.
-from radd.schedule_preview import SchedulePreviewRead, SchedulePreviewRequest  # noqa: F401
 
 
 from . import catalog

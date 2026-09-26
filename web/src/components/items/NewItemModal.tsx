@@ -13,7 +13,7 @@ import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { fieldInScope } from "../../lib/field-scope";
 import { PARENT_SEARCH_LIMIT, RoutePath } from "../../lib/constants";
 import { pushToast, ToastKind } from "../../lib/toast";
-import { useDebounced, useItemWritability, usePointsEnabled } from "../../lib/hooks";
+import { useItemWritability, usePointsEnabled } from "../../lib/hooks";
 import { useValidateItem } from "../../lib/item-mutations";
 import {
   KIND_META,
@@ -23,33 +23,8 @@ import {
   VISIBILITY_META,
   VISIBILITY_ORDER,
 } from "../../lib/meta";
-import {
-  issueTypesQuery,
-  fieldsQuery,
-  linkSearchQuery,
-  releasesQuery,
-  statesQuery,
-  usersQuery,
-  validationContextQuery,
-  effectiveScreenQuery,
-} from "../../lib/queries";
-import {
-  ItemVisibility,
-  type ItemVisibilityValue,
-  IntakeCommit,
-  ItemKind,
-  ScreenPlacement,
-  Priority,
-  type CustomFieldValue,
-  type CustomFields,
-  type ItemCreate,
-  type ItemKindValue,
-  type ItemLinkSearchResult,
-  type Finding,
-  type IntakeCommitValue,
-  type PriorityValue,
-  type Project,
-} from "../../lib/types";
+import { issueTypesQuery, linkSearchQuery, releasesQuery, statesQuery, usersQuery, validationContextQuery, effectiveScreenQuery } from "../../lib/queries";
+import { ItemVisibility, type ItemVisibilityValue, ItemKind, ScreenPlacement, Priority, type ItemCreate, type ItemKindValue, type ItemLinkSearchResult, type PriorityValue } from "../../lib/types";
 import { Button, ButtonVariant } from "../Button";
 import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
@@ -60,9 +35,12 @@ import { DeflectionPanel } from "./DeflectionPanel";
 import { FindingsPanel } from "./FindingsPanel";
 import { LabelsEditor } from "./LabelsEditor";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
-import { IconButton } from "../IconButton";
-import { ErrorText } from "../ErrorText";
-import { CollapsibleCard } from "../CollapsibleCard";
+import { IconButton, ErrorText, CollapsibleCard, useDebounced } from "@radd/plugin-sdk";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import type { CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
+import type { Project } from "@radd-plugin-ui/projects/types";
+import { IntakeCommit } from "@radd-plugin-ui/automations/types";
+import type { Finding, IntakeCommitValue } from "@radd-plugin-ui/automations/types";
 
 interface NewItemModalProps {
   project: Project;

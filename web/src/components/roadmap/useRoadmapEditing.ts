@@ -44,7 +44,7 @@ import {
 } from "./roadmap-model";
 import { BarDragMode, type CommitModifiers } from "./useBarDrag";
 import type { RoadmapDraft } from "./useRoadmapDraft";
-import { todayIso } from "../../lib/dates";
+import { todayIso } from "@radd/plugin-sdk";
 
 /**
  * Everything stateful about roadmap EDITING (specs 77 + 78 + 79 + 82), so

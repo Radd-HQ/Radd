@@ -5,6 +5,7 @@ import {readFileSync, existsSync, statSync} from 'node:fs';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {openBrowser} from './lib/cdp.mjs';
+import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
 const dist = new URL('../dist/', import.meta.url).pathname;
 let enabled = false;
@@ -24,7 +25,7 @@ const server = http.createServer(async(req,res) => {
   if (p.startsWith('/api/')) {
     let data = [];
     if (p.endsWith('/auth/me')) data = user;
-    else if (p.includes('capabilities')) data = {capabilities:[],nav:[],plugins:enabled?['leave']:[],remotes:enabled?[{name:'leave',remote_entry:brokenRemote?'/plugins/leave/missing.js':'/plugins/leave/remoteEntry.js',ui_api_version:'1.0.0'}]:[],widget_types:[],view_types:[]};
+    else if (p.includes('capabilities')) data = {capabilities:[],nav:[],plugins:enabled?[...CORE_PLUGINS,'leave']:[...CORE_PLUGINS],remotes:enabled?[{name:'leave',remote_entry:brokenRemote?'/plugins/leave/missing.js':'/plugins/leave/remoteEntry.js',ui_api_version:'1.0.0'}]:[],widget_types:[],view_types:[]};
     else if (p === '/api/v1/leave' && req.method === 'POST') {
       let raw = ''; for await (const chunk of req) raw += chunk;
       data = { ...period, ...JSON.parse(raw), id: 'created' }; saved.push(data); writes.push(JSON.parse(raw));

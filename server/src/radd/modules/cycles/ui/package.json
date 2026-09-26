@@ -4,13 +4,18 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
-  "scripts": {
-    "build": "vite build"
-  },
   "dependencies": {
     "@radd/plugin-sdk": "*"
   },
   "exports": {
-    "./picker-contract": "./src/picker-contract.ts"
+    ".": "./src/index.tsx",
+    "./picker-contract": "./src/picker-contract.ts",
+    "./directory-queries": "./src/directory-queries.ts",
+    "./query-keys": "./src/query-keys.ts",
+    "./status": "./src/status.ts",
+    "./types": "./src/types.ts"
+  },
+  "radd": {
+    "bundled": true
   }
 }

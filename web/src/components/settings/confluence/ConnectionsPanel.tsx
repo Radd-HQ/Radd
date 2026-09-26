@@ -7,7 +7,7 @@ import { Button, ButtonVariant } from "../../Button";
 import { Modal } from "../../Modal";
 import { SelectField } from "../../SelectField";
 import { TextField } from "../../TextField";
-import { useConfirm } from "../../ConfirmDialog";
+import { useConfirm } from "@radd/plugin-sdk";
 import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
 import {

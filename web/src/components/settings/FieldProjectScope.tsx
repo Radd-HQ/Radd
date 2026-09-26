@@ -4,7 +4,7 @@ import { Plus, X } from "lucide-react";
 import { fieldProjectChoicesQuery, fieldProjectReferencesQuery, FIELD_DIRECTORY_PAGE_SIZE, type FieldScopePermission } from "../../lib/queries/field-settings";
 import { useDirectory } from "../../lib/useDirectory";
 import { Button } from "../Button";
-import { IconButton } from "../IconButton";
+import { IconButton } from "@radd/plugin-sdk";
 import { Modal } from "../Modal";
 import { ListSearchInput } from "../ListSearchInput";
 import { DirectoryPager } from "../DirectoryPager";

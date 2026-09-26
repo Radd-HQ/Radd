@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../lib/api";
 import { Button } from "../../Button";
-import { ErrorText } from "../../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 interface Rule { domain: string; include_subdomains: boolean; pattern: string; enabled: boolean }
 interface Settings { rules: Rule[]; ai_enabled: boolean }
 export function SignaturesPanel() {

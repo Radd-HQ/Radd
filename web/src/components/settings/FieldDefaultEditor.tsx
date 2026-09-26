@@ -3,11 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { queryKeys } from "../../lib/queries";
-import { FieldType, type CustomFieldValue, type FieldDef } from "../../lib/types";
 import { CustomFieldControl } from "../items/CustomFieldsForm";
 import { Button } from "../Button";
 import { FieldDefaultSelection } from "./FieldOptionChoices";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { CustomFieldValue, FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * Inline editor for a field's default_value (spec 50 follow-up). Reuses the same

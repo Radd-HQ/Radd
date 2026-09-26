@@ -2,9 +2,9 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import { Entity, entityMeta } from "../cache";
-import type { FieldDef } from "../types";
-import type { DirectoryOption } from "./options";
 import { queryKeys } from "./shared";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 export const FIELD_DIRECTORY_PAGE_SIZE = 50;
 export type FieldScopePermission = "field.create" | "field.update" | "field.manage";

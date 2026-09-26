@@ -9,7 +9,7 @@ import { archivedPagesQuery, pageByKeyQuery, pageByPathQuery, pagesQuery, pageSp
 import { Permission } from "../lib/types";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
-import { EmptyState } from "../components/EmptyState";
+import { EmptyState, ErrorText } from "@radd/plugin-sdk";
 import { Spinner } from "../components/Spinner";
 import { PageView } from "../components/pages/PageView";
 import { BreadcrumbCrumb } from "../components/pages/BreadcrumbCrumb";
@@ -19,7 +19,6 @@ import { PublicBadge } from "../components/pages/PublicBadge";
 import { QueryError } from "../components/QueryError";
 import { AiResultsPanel } from "../components/items/AiResultsPanel";
 import { AiResultsContext, type AiResultRequest } from "../components/items/ai-results";
-import { ErrorText } from "../components/ErrorText";
 
 /**
  * `/pages/$spaceSlug` (+ `/pages/$spaceSlug/<path…>`) — the two-pane pages

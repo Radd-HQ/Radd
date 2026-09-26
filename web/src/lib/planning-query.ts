@@ -1,6 +1,7 @@
 import { combineQueryWithFilters, splitQueryOrder } from "./slq";
 import { BACKLOG_KEY, groupItemsForView, type ViewGroup } from "./view-utils";
-import type { Cycle, Item, View } from "./types";
+import type { Item, View } from "./types";
+import type { Cycle } from "@radd-plugin-ui/cycles/types";
 
 export const RESCHEDULING_KEY = "__rescheduling__";
 export type BacklogOrder = "priority" | "recent" | "manual";

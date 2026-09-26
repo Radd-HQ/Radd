@@ -234,7 +234,7 @@ async def test_the_preview_answers_with_the_engines_own_math(db, admin):
     calls `next_run` rather than reimplementing anything — and why a refusal
     comes back as text to show, not an exception to swallow."""
     from radd.modules.automations.router import preview_schedule
-    from radd.modules.automations.schemas import SchedulePreviewRequest
+    from radd.schedule_preview import SchedulePreviewRequest
 
     monthly = await preview_schedule(
         SchedulePreviewRequest(kind="monthly", time="09:00", day=31), admin

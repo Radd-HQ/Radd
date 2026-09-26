@@ -5,22 +5,17 @@ import { ArrowLeft, Check, ExternalLink } from "lucide-react";
 import { api } from "../../lib/api";
 import { fieldInScope } from "../../lib/field-scope";
 import { ApiPath, RoutePath, apiFormPath } from "../../lib/constants";
-import { fieldsQuery, queryKeys } from "../../lib/queries";
-import {
-  type FieldDef,
-  type Form,
-  type FormCreate,
-  type FormDefaults,
-  type FormField,
-  type FormUpdate,
-  type Project,
-} from "../../lib/types";
+import { queryKeys } from "../../lib/queries";
+import { type Form, type FormCreate, type FormDefaults, type FormField, type FormUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { TextField } from "../TextField";
 import { FormDefaultsEditor, emptyDefaults } from "./FormDefaultsEditor";
 import { FormFieldsPicker } from "./FormFieldsPicker";
 import { FormSharing } from "./FormSharing";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 interface FormEditorProps {
   project: Project;

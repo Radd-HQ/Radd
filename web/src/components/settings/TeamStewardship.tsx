@@ -12,11 +12,9 @@ import { queryKeys, teamStewardshipQuery, teamByIdQuery, TEAM_STEWARDS_PAGE_SIZE
 import { pushToast, ToastKind } from "../../lib/toast";
 import { Permission, type Team } from "../../lib/types";
 import { Button } from "../Button";
-import { PeopleDirectorySelect } from "../PeopleDirectorySelect";
 import { DirectoryPager } from "../DirectoryPager";
-import { IconButton } from "../IconButton";
+import { IconButton, ErrorText, DirectorySelect } from "@radd/plugin-sdk";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
-import { ErrorText } from "../ErrorText";
 
 /**
  * Team ownership + managers (spec 87) — the per-team delegation surface.
@@ -104,7 +102,7 @@ export function TeamStewardship({
           )}
         </p>
         <div className="ml-auto min-w-44">
-          <PeopleDirectorySelect kind="person" candidateTeamId={team.id} candidatePurpose="owner"
+          <DirectorySelect source="teams.candidates" context={{ teamId: team.id, purpose: "owner" }}
             label="Transfer ownership" emptyLabel="Transfer ownership…" value={null}
             disabled={busy || !stewards.isSuccess} onChange={person => { if (person) transfer.mutate(person); }} />
         </div>
@@ -125,7 +123,7 @@ export function TeamStewardship({
         {!total && <p className="text-xs text-fg-muted">No managers appointed.</p>}
         <DirectoryPager page={page} pageSize={TEAM_STEWARDS_PAGE_SIZE} total={total} busy={stewards.isFetching || busy}
           onPage={setPage} label="managers" />
-        <PeopleDirectorySelect kind="person" candidateTeamId={team.id} candidatePurpose="manager"
+        <DirectorySelect source="teams.candidates" context={{ teamId: team.id, purpose: "manager" }}
           label="Add manager" emptyLabel="Add a manager…" value={null} disabled={busy || total >= 50}
           onChange={person => { if (person) addManager.mutate(person); }} />
         {total >= 50 && <p className="mt-1 text-xs text-fg-muted">Up to 50 managers can be appointed. Remove a manager before adding another.</p>}

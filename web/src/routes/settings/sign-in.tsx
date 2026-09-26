@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 import { useCurrentUser } from "../../lib/hooks";
 import { InstanceRole } from "../../lib/types";
-import { EmptyState } from "../../components/EmptyState";
+import { EmptyState } from "@radd/plugin-sdk";
 import { ProvidersPanel } from "../../components/settings/signin/ProvidersPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";

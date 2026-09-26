@@ -10,7 +10,7 @@ import {
   startOfWeek,
   toIsoDay,
 } from "./dates";
-import { formatIso, todayIso } from "../../../lib/dates";
+import { formatIso, todayIso } from "@radd/plugin-sdk";
 
 // ---------------------------------------------------------------------------
 // Row model

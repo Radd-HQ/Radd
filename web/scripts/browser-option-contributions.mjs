@@ -1,10 +1,11 @@
-/** Exercise each owner's actual built option contribution and the SDK controls. */
+/** Exercise each owner's actual option contribution (bundled core owners + the Pages remote) and the SDK controls. */
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import path from 'node:path';
 import { openBrowser } from './lib/cdp.mjs';
+import { CORE_PLUGINS } from './lib/core-plugins.mjs';
 const dist = new URL('../dist/', import.meta.url).pathname;
 const owners = {users:'auth','users/directory':'auth',roles:'auth','roles/assignable':'auth',teams:'teams','teams/directory':'teams',states:'workflow','issue-types':'itemtypes',releases:'releases',forms:'forms','page-spaces':'pages',groups:'groups'};
 const enabled = new Set(['fixture']), broken = new Set(), versions = {}, requests = [];
@@ -36,7 +37,7 @@ const server = http.createServer(async (req, res) => {
       data = matched.slice(Number(query.offset??0),Number(query.offset??0)+Number(query.limit??50));
       res.setHeader('X-Total-Count',String(matched.length));
     } else if(p.endsWith('/auth/me')) data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-    else if(p.includes('capabilities')) data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.6.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/options-proof',section:'settings',label:'Options proof',requires:[]}],widget_types:[],view_types:[]};
+    else if(p.includes('capabilities')) data={capabilities:[],plugins:[...enabled],remotes:[...enabled].filter(name=>!CORE_PLUGINS.includes(name)).map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.6.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/options-proof',section:'settings',label:'Options proof',requires:[]}],widget_types:[],view_types:[]};
     else if(p.endsWith('/projects/summary')||p.endsWith('/page-spaces/summary')) data={total:0,related_count:0,permissions:[]};
     else if(p.includes('notifications')) data={items:[],notifications:[],unread_count:0,total:0};
     else if(p.includes('preferences')) data={};
@@ -82,7 +83,7 @@ try {
     assert.equal(await s.eval("document.querySelectorAll('[data-option-proof] label').length"),1);
     await ev("window.__options.setValue('saved')");
   }
-  checks.push('all twelve sources from eight actual owner bundles resolve, browse, withdraw and restore with saved values, owner endpoints and cache metadata');
+  checks.push('all twelve sources from eight actual owners (seven bundled, Pages remote) resolve, browse, withdraw and restore with saved values, owner endpoints and cache metadata');
 
   await ev("window.__options.setResource('users')");await until(()=>text('users choice 001'),'people ready');await s.click('[data-option-proof] button');
   await until(()=>text('users choice 050'),'first page');await s.click('button[aria-label="Next people"]');
@@ -105,26 +106,31 @@ try {
 
   await ev("window.__options.setCanBrowse(true);window.__options.setPresets([]);window.__options.setScope({});window.__options.setResource('groups');window.__options.setValue('')");
   await until(()=>text('Choose…'),'new empty group control');
-  hold='browse';await s.click('[data-option-proof] button');await until(()=>Boolean(release),'held browse');
-  enabled.delete('groups');await refresh();await until(()=>s.eval("document.querySelector('[role=dialog]')===null"),'withdrawn open picker');
-  await until(()=>aborted===1,'withdrawal abort');hold=false;release();release=undefined;suffix=' fresh';
+  await ev("window.__RADD_QUERY_CLIENT__.removeQueries({queryKey:['directory-options','groups',{q:'',page:0}]})");hold='browse';await s.click('[data-option-proof] button');await until(()=>Boolean(release),'held browse');
+  const ab1=aborted;enabled.delete('groups');await refresh();await until(()=>s.eval("document.querySelector('[role=dialog]')===null"),'withdrawn open picker');
+  await until(()=>aborted>ab1,'withdrawal abort');hold=false;release();release=undefined;suffix=' fresh';
   enabled.add('groups');await refresh();await until(()=>s.eval("!document.querySelector('[data-option-proof] button').disabled"),'source re-enabled');
   await s.click('[data-option-proof] button');await until(()=>text('groups choice 001 fresh'),'fresh rows');
   assert.equal(await s.eval("document.querySelectorAll('[role=dialog]').length"),1);await choose('groups choice 002 fresh');
-  checks.push('withdrawing an open source cancels its request; re-enable starts fresh without duplicate modals or stale rows');
+  checks.push('withdrawing an open source (server drops Groups) cancels its request; re-enable starts fresh without duplicate modals or the late reply');
 
-  hold='resolve';await ev("window.__options.setValue('saved')");await until(()=>Boolean(release),'held saved-value resolution');
-  enabled.delete('groups');await refresh();await until(()=>text('saved (unavailable)'),'resolution withdrawn');await until(()=>aborted===2,'resolution abort');
-  hold=false;release();release=undefined;enabled.add('groups');await refresh();await until(()=>text('groups choice 001 fresh'),'resolution recovered');
+  await ev("window.__RADD_QUERY_CLIENT__.removeQueries({queryKey:['directory-options','groups','value','saved']})");hold='resolve';await ev("window.__options.setValue('saved')");await until(()=>Boolean(release),'held saved-value resolution');
+  const ab2=aborted;enabled.delete('groups');await refresh();await until(()=>text('saved (unavailable)'),'resolution withdrawn');await until(()=>aborted>ab2,'resolution abort');
+  hold=false;release();release=undefined;suffix=' fresh!';enabled.add('groups');await refresh();await until(()=>text('groups choice 001 fresh!'),'resolution recovered from a new read, not the held reply');
   checks.push('saved-value resolution is canceled on withdrawal and cannot display a late result');
 
-  broken.add('groups');versions.groups=2;await refresh();await until(()=>text('saved (unavailable)'),'failed remote');
-  broken.delete('groups');versions.groups=3;await refresh();await until(()=>text('groups choice 001 fresh'),'remote recovered');
-  checks.push('a failed owner bundle preserves the value and recovers through a new activation');
+  // Groups is bundled and cannot fail to load; Pages (page-spaces) is still a remote that can.
+  await ev("window.__options.setResource('page-spaces')");await until(()=>text('page-spaces choice 001'),'optional owner ready');
+  broken.add('pages');versions.pages=2;await refresh();await until(()=>s.consoleErrors.some(e=>e.includes('"pages" failed to load')),'failed remote quarantined');
+  await until(()=>text('saved (unavailable)'),'failed remote');assert.equal(await s.eval('window.__options.value'),'saved');
+  broken.delete('pages');versions.pages=3;await refresh();await until(()=>text('page-spaces choice 001'),'remote recovered');
+  assert.equal(await s.eval("document.querySelectorAll('[data-option-proof] label').length"),1);
+  checks.push('a failed optional owner bundle (Pages) preserves the value and recovers through a new activation');
+  await ev("window.__options.setResource('groups')");await until(()=>text('groups choice 001 fresh'),'groups again');
 
   refuse=true;await ev("window.__options.setValue('groups-3')");await until(()=>text('Directory denied'),'denied resolution');assert(!await text('groups choice 001 fresh'));
   refuse=false;await choose('Retry choice');await until(()=>text('groups choice 003 fresh'),'resolve retry');
-  refuse=true;await s.click('[data-option-proof] button');await until(()=>text('Retry choices'),'denied browse');refuse=false;await choose('Retry choices');await until(()=>text('groups choice 050 fresh'),'browse retry');
+  await ev("window.__RADD_QUERY_CLIENT__.removeQueries({queryKey:['directory-options','groups',{q:'',page:0}]})");refuse=true;await s.click('[data-option-proof] button');await until(()=>text('Retry choices'),'denied browse');refuse=false;await choose('Retry choices');await until(()=>text('groups choice 050 fresh'),'browse retry');
   await choose('groups choice 004 fresh');checks.push('denied reads report errors, hide previous rows and recover through explicit retry');
 
   await ev("window.__options.setKind('names');window.__options.setNames(['legacy','saved'])");await until(()=>text('Browse directory groups'),'multi control mounted');await choose('Browse directory groups');await until(()=>text('groups choice 050 fresh'),'multi choices');

@@ -5,6 +5,7 @@ import { Button, QueryError } from "@radd/plugin-sdk";
 import { projectByIdQuery, projectByKeyQuery } from "./directory-queries";
 import { ProjectPicker } from "./ProjectPicker";
 import type { ProjectSelectProps } from "./picker-contract";
+import type { Project } from "./types";
 
 /** Resolve the selected project directly; mount a bounded catalog only when opened. */
 export function ProjectSelect({ value, onChange, label = "Project", emptyLabel = null,
@@ -14,8 +15,7 @@ export function ProjectSelect({ value, onChange, label = "Project", emptyLabel =
   const [open, setOpen] = useState(false);
   const current = value && value !== emptyValue ? value : "";
   const definition = valueBy === "key" ? projectByKeyQuery(current) : projectByIdQuery(current);
-  const session = useId();
-  const selected = useQuery({ ...definition, queryKey: [...definition.queryKey, session], gcTime: 0, staleTime: 0, retry: false });
+  const selected = useQuery<Project | null, Error, Project | null, readonly unknown[]>({ ...definition, staleTime: 30_000 });
   const hasValue = Boolean(value) && value !== emptyValue;
   const text = hasValue
     ? selected.data ? `${selected.data.key} · ${selected.data.name}`

@@ -1,7 +1,7 @@
 /** Intake forms, public submit path, requester portal, and mail contacts (specs 20/62/73). */
-import type { FieldDisplayValue, FieldTypeValue } from "./fields";
-import type { CustomFieldValue, CustomFields, ItemKindValue, PriorityValue } from "./items";
-import type { IntakeCommitValue, ValidationModeValue } from "./automations";
+import type { ItemKindValue, PriorityValue } from "./items";
+import type { IntakeCommitValue, ValidationModeValue } from "@radd-plugin-ui/automations/types";
+import type { FieldDisplayValue, FieldTypeValue, CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
 // ---------------------------------------------------------------------------
 // Intake forms (spec 20 — /forms). Per-project public-shaped submission forms
 // that create a work item from a title + exposed registry-field values.

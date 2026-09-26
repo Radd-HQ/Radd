@@ -3,16 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, Wand2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { apiMailRulePath, apiMailSourceRulesOrderPath } from "../../../lib/constants";
-import { mailRulesQuery, projectsQuery, queryKeys } from "../../../lib/queries";
+import { mailRulesQuery, queryKeys } from "../../../lib/queries";
 import type { MailRule, MailSource } from "../../../lib/types";
 import { Button } from "../../Button";
-import { EmptyState } from "../../EmptyState";
-import { IconButton } from "../../IconButton";
+import { EmptyState, IconButton, TableSkeleton } from "@radd/plugin-sdk";
 import { Modal } from "../../Modal";
-import { TableSkeleton } from "../../TableSkeleton";
 import { PreviewDialog } from "./PreviewDialog";
 import { RULE_LABELS, RuleDialog } from "./RuleDialog";
 import { Chip } from "./shared";
+import { projectsQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * One source's ordered routing chain (RADD-958/961): first enabled match wins,

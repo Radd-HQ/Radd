@@ -34,13 +34,8 @@ import {
   type NavPin,
 } from "../../lib/topbar-prefs";
 import { ContextMenu } from "../ContextMenu";
-import {
-  capabilitiesQuery,
-  cycleSummaryQuery,
-  projectSummaryQuery,
-  projectByKeyQuery,
-} from "../../lib/queries";
-import { Permission, ViewType, type Project } from "../../lib/types";
+import { capabilitiesQuery, cycleSummaryQuery } from "../../lib/queries";
+import { Permission, ViewType } from "../../lib/types";
 import { openCommandPalette } from "../CommandPalette";
 import { DashboardModal } from "../dashboards/DashboardModal";
 import { NewItemModal } from "../items/NewItemModal";
@@ -63,6 +58,8 @@ import {
 import { SidebarProjectRow } from "./SidebarProjectRow";
 import { UserMenu } from "./UserMenu";
 import { modShortcut } from "../../lib/platform";
+import { projectSummaryQuery, projectByKeyQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /** Scope a New-view dialog was opened for: a project, or all-projects (null). */
 type ViewModalScope = { project: Project | null };

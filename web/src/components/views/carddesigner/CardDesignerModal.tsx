@@ -6,7 +6,7 @@ import {
   isDefaultCardLayout,
   type CardLayout,
 } from "../../../lib/card-layout";
-import type { FieldDef, View } from "../../../lib/types";
+import type { View } from "../../../lib/types";
 import { Button } from "../../Button";
 import { Modal } from "../../Modal";
 import { Select } from "../../Select";
@@ -24,6 +24,7 @@ import {
   type DropTarget,
 } from "./layout-ops";
 import { PresetPicker } from "./PresetPicker";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * The card designer (spec 109): a WYSIWYG editor for the view's board-card

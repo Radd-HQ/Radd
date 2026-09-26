@@ -5,15 +5,14 @@ import { ClipboardList, ExternalLink, Pencil, Plus, Trash2, X } from "lucide-rea
 import { api, errorMessage } from "../../lib/api";
 import { RoutePath, apiFormPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { formsQuery, projectByIdQuery, queryKeys } from "../../lib/queries";
+import { formsQuery, queryKeys } from "../../lib/queries";
 import { Permission, type Form, type FormUpdate } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { EmptyState, TableSkeleton, IconButton } from "@radd/plugin-sdk";
 import { FormEditor } from "../../components/forms/FormEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { QueryError } from "../../components/QueryError";
-import { IconButton } from "../../components/IconButton";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 /**
  * Intake forms admin (spec 20/50) — per-project, gated on form.manage. The

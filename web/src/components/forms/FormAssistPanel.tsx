@@ -8,11 +8,11 @@ import {
   DEFLECT_MIN_QUERY_CHARS,
   FORM_SIMILAR_DEBOUNCE_MS,
 } from "../../lib/constants";
-import { useDebounced } from "../../lib/hooks";
 import { aiStatusQuery, deflectQuery } from "../../lib/queries";
 import type { SimilarResponse } from "../../lib/types";
 import { SimilarCandidatesList } from "../items/AiSection";
 import { DeflectPagesSection, DeflectItemsSection } from "../items/DeflectionPanel";
+import { useDebounced } from "@radd/plugin-sdk";
 
 interface FormAssistPanelProps {
   /** The draft title — seeds deflection alone (FTS wants short, dense text). */

@@ -4,13 +4,6 @@ import { api } from "../../lib/api";
 import { ApiPath, FIELD_KEY_HINT, FIELD_KEY_PATTERN } from "../../lib/constants";
 import { FIELD_TYPE_LABELS, FIELD_TYPE_ORDER, fieldTypeHasOptions } from "../../lib/meta";
 import { queryKeys } from "../../lib/queries";
-import {
-  FieldType,
-  type CustomFieldValue,
-  type FieldDef,
-  type FieldDefCreate,
-  type FieldTypeValue,
-} from "../../lib/types";
 import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
@@ -18,7 +11,9 @@ import { TextField } from "../TextField";
 import { CustomFieldControl } from "../items/CustomFieldsForm";
 import { OptionsEditor } from "./OptionsEditor";
 import { FieldProjectScope } from "./FieldProjectScope";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { CustomFieldValue, FieldDef, FieldDefCreate, FieldTypeValue } from "@radd-plugin-ui/fields/types";
 
 interface NewFieldModalProps {
   onClose: () => void;

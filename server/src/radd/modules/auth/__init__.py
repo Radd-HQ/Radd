@@ -1,5 +1,5 @@
 from radd.kernel import EntityLinkSpec
-from radd.kernel import PluginUiManifest, EntityRefSpec, EventTypeSpec, RaddPlugin, SettingSpec
+from radd.kernel import EntityRefSpec, EventTypeSpec, RaddPlugin, SettingSpec
 
 from . import service, subscribers
 from . import entityhost  # noqa: F401 — installs the kernel's EntityHost (RADD-892)
@@ -24,7 +24,6 @@ plugin = RaddPlugin(
         EntityLinkSpec('service_account', ('/settings/service-accounts',)),
         EntityLinkSpec('role', ('/settings/roles',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/auth/remoteEntry.js", ui_api_version="1.11.0"),
     description=(
         "People, sign-in sessions, API tokens and roles."
     ),

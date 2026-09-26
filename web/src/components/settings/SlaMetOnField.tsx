@@ -1,5 +1,5 @@
 import { SelectField } from "../SelectField";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TokenMultiSelect } from "@radd/plugin-sdk";
 import { TeamAudience } from "../teams/TeamAudience";
 import { SlaMetOn, type SlaMetOnValue } from "../../lib/types";
 

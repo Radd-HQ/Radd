@@ -7,17 +7,16 @@ import { X } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { OptionResource, type DirectoryOption } from "../../lib/queries/options";
+import { OptionResource } from "../../lib/queries/options";
 import { GrantSubject, Permission, type AccessGrantCreate, type GrantSubjectValue } from "../../lib/types";
 import { Button } from "../Button";
-import { Choices } from "../DirectoryChoices";
-import { ErrorText } from "../ErrorText";
-import { IconButton } from "../IconButton";
+import { ErrorText, IconButton, OptionChoices } from "@radd/plugin-sdk";
 import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
 import { TextField } from "../TextField";
 import { ProjectPicker } from "../projects/ProjectPicker";
 import { GroupReachHint } from "./GroupReachHint";
+import type { DirectoryOption } from "@radd/plugin-sdk";
 
 const subjects = {
   [GrantSubject.user]: { label: "Person", resource: OptionResource.person },
@@ -93,7 +92,7 @@ export function AddResourceGrantDialog({ resourceType, resourceId, accesses, sub
       {add.isError && <div role="alert"><ErrorText error={add.error} /></div>}
       <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!subject || (!scopeChosen && !projects.length) || add.isPending}>{add.isPending ? "Adding…" : "Add grant"}</Button></div>
     </form>
-    {picker === "subject" && <Choices resource={subjects[kind].resource} selected={subject?.value} onClose={() => setPicker(undefined)} onSelect={row => { setSubject(row); setPicker(undefined); }} />}
+    {picker === "subject" && <OptionChoices resource={subjects[kind].resource} selected={subject?.value} onClose={() => setPicker(undefined)} onSelect={row => { setSubject(row); setPicker(undefined); }} />}
     {picker === "project" && projectPermission && <FieldProjectChoices permission={projectPermission} selected={projects.map(p => p.value)} onClose={() => setPicker(undefined)} onSelect={(id, label) => {
       setProjects(rows => rows.some(p => p.value === id) ? rows : [...rows, { value: id, label, hint: "" }]); setPicker(undefined);
     }} />}

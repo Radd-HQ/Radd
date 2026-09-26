@@ -1,7 +1,9 @@
 import { api, type QuerySource } from "@radd/plugin-sdk";
 import type { FieldDef } from "./types";
 const meta = { entities: ["field", "project", "role", "team", "group", "member", "accessGrant"] };
-/** Compatibility query for consumers still awaiting owner migration. */
+/** The whole catalog as an ordinary query — for host pages that read it directly (settings,
+ * filters). Plugins that must not depend on this package read the catalog
+ * through the SDK query-source registry instead. */
 export const fieldsQuery = () => ({
   queryKey: ["fields"] as const, meta, staleTime: 60_000,
   queryFn: ({ signal }: { signal: AbortSignal }) => api.get<FieldDef[]>("/fields", { signal }),

@@ -3,18 +3,14 @@ import { FolderKanban } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiProjectTimeloggingPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
-import { projectByIdQuery, projectTimeloggingQuery, queryKeys } from "../../lib/queries";
-import {
-  Permission,
-  SettingScope,
-  type Project,
-  type ProjectTimeLogging,
-} from "../../lib/types";
+import { projectTimeloggingQuery, queryKeys } from "../../lib/queries";
+import { Permission, SettingScope, type ProjectTimeLogging } from "../../lib/types";
 import { QueryError } from "../../components/QueryError";
-import { EmptyState } from "../../components/EmptyState";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { EmptyState, TableSkeleton } from "@radd/plugin-sdk";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
+import { projectByIdQuery } from "@radd-plugin-ui/projects/directory-queries";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 /**
  * Per-project time-logging enablement (spec 50). Split out of the global

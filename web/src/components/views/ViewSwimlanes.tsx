@@ -8,16 +8,11 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useBucketDrop } from "../../lib/bucket-drop";
 import type { CardLayout } from "../../lib/card-layout";
 import { swimlaneCollapseStorageKey } from "../../lib/constants";
-import type {
-  FieldDef,
-  Item,
-  RollupResponse,
-  SlaBatchResponse,
-  TimelogBatchResponse,
-} from "../../lib/types";
+import type { Item, RollupResponse, SlaBatchResponse, TimelogBatchResponse } from "../../lib/types";
 import type { BucketRef } from "../../lib/axis-dnd";
 import type { ViewGroup } from "../../lib/view-utils";
 import { BoardCard } from "../board/BoardCard";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 interface ViewSwimlanesProps {
   loading?: BoardLoading;

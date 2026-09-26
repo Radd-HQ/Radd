@@ -1,7 +1,7 @@
 import { ApiError, provideApiTransport, type ApiRequestOptions, type Paged } from "@radd/plugin-sdk";
 import { API_BASE, On401, RoutePath, type On401Value } from "./constants";
 import { FORBIDDEN_FALLBACK_MESSAGE, pushToast } from "./toast";
-import type { Finding } from "./types/automations";
+import type { Finding } from "@radd-plugin-ui/automations/types";
 
 /**
  * Thin typed fetch wrapper for the Radd API.
@@ -91,7 +91,6 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 /** Rows + the pre-pagination total from X-Total-Count (RADD-883). `total` is
  * null when the server didn't send the header — an unpaged request. */
-export type { Paged } from "@radd/plugin-sdk";
 
 export interface CursorPage<T> { rows: T[]; next: string | null }
 

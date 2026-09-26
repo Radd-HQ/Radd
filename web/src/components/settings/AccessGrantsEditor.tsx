@@ -10,15 +10,13 @@ import type { FieldScopePermission } from "../../lib/queries/field-settings";
 import type { GrantSubjectValue } from "../../lib/types";
 import { Button } from "../Button";
 import { DirectoryPager } from "../DirectoryPager";
-import { ErrorText } from "../ErrorText";
-import { IconButton } from "../IconButton";
+import { ErrorText, IconButton, formatDate } from "@radd/plugin-sdk";
 import { Spinner } from "../Spinner";
 import { TextField } from "../TextField";
 import { ExpiryChip } from "./AccessInspector";
 import { AddResourceGrantDialog } from "./AddResourceGrantDialog";
 import { SUBJECT_ICON } from "./SubjectPicker";
 import { GrantExpiryButton } from "./GrantExpiryButton";
-import { formatDate } from "../../lib/dates";
 
 export interface ResourceGrantScope { id: string | null; label: string }
 

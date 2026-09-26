@@ -11,7 +11,7 @@ import { Permission, type ServiceAccount } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { DirectoryPager } from "../../components/DirectoryPager";
 import { QueryError } from "../../components/QueryError";
-import { TableSkeleton } from "../../components/TableSkeleton";
+import { TableSkeleton } from "@radd/plugin-sdk";
 import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { ServiceAccountKeysModal } from "../../components/settings/ServiceAccountKeysModal";

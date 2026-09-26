@@ -7,6 +7,7 @@ import { mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openBrowser } from "./lib/cdp.mjs";
+import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 
 const dist = fileURLToPath(new URL("../dist/", import.meta.url));
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -70,7 +71,7 @@ const server = http.createServer(async (req, res) => {
     else if (url.pathname.includes("/samples/events")) data = {sampled:0,subjects:[],declared_schema:{},paths:[],declared_paths:[],changed_fields:[]};
     else if (url.pathname.endsWith("/projects/summary") || url.pathname.endsWith("/page-spaces/summary")) data = {total:0,permissions:[],related_count:0};
     else if (url.pathname.endsWith("/preferences")) data = {};
-    else if (url.pathname.includes("capabilities")) data = {capabilities:[],nav:[],plugins:["github"],ui:[]};
+    else if (url.pathname.includes("capabilities")) data = {capabilities:[],nav:[],plugins:[...CORE_PLUGINS,"github"],ui:[]};
     else if (url.pathname.includes("/notifications")) data = {items:[],notifications:[],unread_count:0,total:0};
     else if (url.pathname.endsWith("/ai/status")) data = {enabled:false,features:{}};
     else if (url.pathname.endsWith("/instance")) data = {work_week_days:["mon"],timelog_hours_per_day:8,timelog_days_per_week:5};

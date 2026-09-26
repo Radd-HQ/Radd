@@ -11,8 +11,7 @@ import type { Page } from "../../lib/types";
 import { Button } from "../Button";
 import { PageVersionDiff } from "./PageVersionDiff";
 import { Spinner } from "../Spinner";
-import { relativeTime } from "../../lib/dates";
-import { ErrorText } from "../ErrorText";
+import { relativeTime, ErrorText } from "@radd/plugin-sdk";
 
 /**
  * History tab (spec 43): past versions (the CURRENT content is v{page.version},

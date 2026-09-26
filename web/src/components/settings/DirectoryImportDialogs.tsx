@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Download } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath, SEARCH_DEBOUNCE_MS } from "../../lib/constants";
-import { useDebounced } from "../../lib/hooks";
 import { ldapDirectoryUsersQuery, ldapGroupsQuery, queryKeys } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import {
@@ -20,7 +19,7 @@ import { Button } from "../Button";
 import { Modal } from "../Modal";
 import { TextField } from "../TextField";
 import { DirectoryImportReview } from "./DirectoryImportReview";
-import { ErrorText } from "../ErrorText";
+import { ErrorText, useDebounced } from "@radd/plugin-sdk";
 
 const rowClasses =
   "flex items-start gap-2 rounded-md border border-subtle px-2.5 py-2 text-[13px] " +

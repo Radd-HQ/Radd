@@ -9,7 +9,7 @@ import {
   cfOpsHint,
   cheatSheetFields,
 } from "../../lib/slq";
-import type { FieldDef } from "../../lib/types";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 interface SlqCheatSheetProps {
   /** Registry definitions — custom-field rows come live from here. */

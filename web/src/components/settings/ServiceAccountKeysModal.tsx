@@ -11,11 +11,10 @@ import { Button } from "../Button";
 import { DirectoryPager } from "../DirectoryPager";
 import { Modal } from "../Modal";
 import { QueryError } from "../QueryError";
-import { TableSkeleton } from "../TableSkeleton";
+import { TableSkeleton, formatDate } from "@radd/plugin-sdk";
 import { TextField } from "../TextField";
 import { CopyValue } from "./CopyValue";
 import { TokenScopeEditor, composeScopes, scopeIsIncomplete } from "./TokenScopeEditor";
-import { formatDate } from "../../lib/dates";
 
 /** Direct detail keeps an off-page account and its unfinished key form reachable. */
 export function ServiceAccountKeysModal({ id, onClose }: { id: string; onClose: () => void }) {

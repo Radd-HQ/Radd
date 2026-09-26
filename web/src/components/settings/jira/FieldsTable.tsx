@@ -12,7 +12,7 @@ import {
 } from "../../../lib/types";
 import { SelectField } from "../../SelectField";
 import { MappingSection, RowLabel } from "./MappingSection";
-import { useListFilter } from "../../../lib/list-filter";
+import { useListFilter } from "@radd/plugin-sdk";
 import { ListSearchInput } from "../../ListSearchInput";
 
 /** Below this many rows a mapping table needs no filter chrome (RADD-882). */

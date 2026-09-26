@@ -4,15 +4,11 @@ import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiProjectThreadResolutionPath } from "../../lib/constants";
 import { issueTypesQuery, queryKeys, threadResolutionQuery } from "../../lib/queries";
-import {
-  ThreadResolvers,
-  type Project,
-  type ThreadResolutionPolicy,
-  type ThreadResolversValue,
-} from "../../lib/types";
+import { ThreadResolvers, type ThreadResolutionPolicy, type ThreadResolversValue } from "../../lib/types";
 import { Button } from "../Button";
-import { IconButton } from "../IconButton";
+import { IconButton } from "@radd/plugin-sdk";
 import { SelectField } from "../SelectField";
+import type { Project } from "@radd-plugin-ui/projects/types";
 
 const RESOLVER_LABELS: Record<ThreadResolversValue, string> = {
   [ThreadResolvers.author]: "The thread's author and project managers",

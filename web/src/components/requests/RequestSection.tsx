@@ -6,7 +6,7 @@ import type { PortalRequest } from "../../lib/types";
 import { usePeek } from "../../lib/hooks";
 import { ListSection } from "./ListSection";
 import { RequestRow } from "./RequestRow";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 /**
  * The grouped request list, shared by `/portal` and My Work (RADD-799).

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, Loader2, Play, Save, Wand2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { ApiPath } from "../../../lib/constants";
-import { fieldsQuery, jiraPlanQuery, queryKeys, statesQuery, issueTypesQuery, projectByKeyQuery, teamsQuery } from "../../../lib/queries";
+import { jiraPlanQuery, queryKeys, statesQuery, issueTypesQuery, teamsQuery } from "../../../lib/queries";
 import {
   RunKind,
   type FieldMappingEntry,
@@ -28,7 +28,9 @@ import {
   VersionsTable,
 } from "./VocabTables";
 import { UsersTable } from "./UsersTable";
-import { ErrorText } from "../../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
+import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
+import { projectByKeyQuery } from "@radd-plugin-ui/projects/directory-queries";
 
 type TabKey = keyof PlanMappings;
 

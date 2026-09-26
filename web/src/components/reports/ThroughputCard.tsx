@@ -5,7 +5,7 @@ import { throughputQuery } from "../../lib/queries";
 import type { ReportIntervalValue } from "../../lib/types";
 import { BarChart } from "../charts/BarChart";
 import { ReportCard } from "../charts/ReportCard";
-import { shortDate } from "../charts/chart-utils";
+import { shortDate } from "@radd/plugin-sdk";
 import { CardBody } from "./report-state";
 
 /** Throughput: items entering a done state per bucket, as a bar chart (spec 19). */

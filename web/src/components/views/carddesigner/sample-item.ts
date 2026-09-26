@@ -1,17 +1,7 @@
-import {
-  ItemKind,
-  Priority,
-  StateCategory,
-  CycleStatus,
-  ReleaseStatus,
-  FieldType,
-  SlaKind,
-  type FieldDef,
-  type Item,
-  type ItemRollup,
-  type ItemTimelogBatchEntry,
-  type SlaBatchTimer,
-} from "../../../lib/types";
+import { ItemKind, Priority, StateCategory, ReleaseStatus, SlaKind, type Item, type ItemRollup, type ItemTimelogBatchEntry, type SlaBatchTimer } from "../../../lib/types";
+import { CycleStatus } from "@radd-plugin-ui/cycles/types";
+import { FieldType } from "@radd-plugin-ui/fields/types";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 /**
  * The designer preview's stand-in card data (spec 109): every builtin

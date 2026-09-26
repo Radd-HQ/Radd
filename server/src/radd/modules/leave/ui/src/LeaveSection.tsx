@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, invalidatePluginData, Button, Select, Spinner, TextField, tokens, useCurrentUser } from "@radd/plugin-sdk";
+import { X } from "lucide-react";
+import { api, invalidatePluginData, shortDate, todayIso, Button, IconButton, Select, Spinner, TextField, tokens, useCurrentUser } from "@radd/plugin-sdk";
 
 type Kind = "leave" | "holiday";
 interface Period {
@@ -12,18 +13,6 @@ interface Period {
 }
 interface Team { id: string; name: string }
 
-// Date-only values have no timezone; today's default follows the reader's profile.
-function shortDate(day: string): string {
-  return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
-}
-function today(zone?: string | null): string {
-  let formatter: Intl.DateTimeFormat;
-  const options = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
-  try { formatter = new Intl.DateTimeFormat("en-CA", { ...options, timeZone: zone || undefined }); }
-  catch { formatter = new Intl.DateTimeFormat("en-CA", options); }
-  const parts = formatter.formatToParts(new Date());
-  return ["year", "month", "day"].map(type => parts.find(p => p.type === type)?.value).join("-");
-}
 function ErrorText({ error }: { error: unknown }) {
   return <p role="alert" style={{ color: tokens.danger, fontSize: 13 }}>{error instanceof Error ? error.message : "The request failed."}</p>;
 }
@@ -47,7 +36,7 @@ export function LeaveSection({ kind }: { kind: Kind }) {
       </p>
       {periods.isPending ? <Spinner /> : periods.isError ? <ErrorText error={periods.error} /> : <>
         <PeriodList periods={periods.data} holiday={holiday} readonly={readonly} />
-        {user && !readonly && <AddPeriodForm kind={kind} timezone={user.timezone} />}
+        {user && !readonly && <AddPeriodForm kind={kind} />}
       </>}
     </section>
   );
@@ -57,7 +46,7 @@ function PeriodList({ periods, holiday, readonly }: { periods: Period[]; holiday
   const client = useQueryClient();
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/leave/${id}`),
-    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ["leave"] }), invalidatePluginData(client, "leave")]),
+    onSuccess: () => Promise.all([client.invalidateQueries({ queryKey: ["leave"], predicate: (query) => query.queryKey[1] !== "teams" }), invalidatePluginData(client, "leave")]),
   });
   return <>
     {periods.length === 0 ? <p style={{ marginBottom: 12, fontSize: 13, color: tokens.textFaint }}>{holiday ? "No team holidays defined." : "No leave recorded."}</p> :
@@ -66,23 +55,23 @@ function PeriodList({ periods, holiday, readonly }: { periods: Period[]; holiday
           <span>{shortDate(period.start_date)} – {shortDate(period.end_date)}</span>
           {holiday && period.team_name && <span style={{ color: tokens.textMuted }}>{period.team_name}</span>}
           <span style={{ color: tokens.textMuted }}>{period.label}</span>
-          {!readonly && <Button variant="ghost" small style={{ marginLeft: "auto", color: tokens.danger }} disabled={remove.isPending} onClick={() => remove.mutate(period.id)} aria-label="Remove" title="Remove">×</Button>}
+          {!readonly && <IconButton danger className="ml-auto" disabled={remove.isPending} onClick={() => remove.mutate(period.id)} aria-label={`Remove ${shortDate(period.start_date)} – ${shortDate(period.end_date)}`}><X size={13} aria-hidden /></IconButton>}
         </li>)}
       </ul>}
     {remove.isError && <ErrorText error={remove.error} />}
   </>;
 }
 
-function AddPeriodForm({ kind, timezone }: { kind: Kind; timezone?: string | null }) {
+function AddPeriodForm({ kind }: { kind: Kind }) {
   const client = useQueryClient();
   const teams = useQuery({ queryKey: ["leave", "teams"], queryFn: ({ signal }) => api.get<Team[]>("/teams", { signal }), enabled: kind === "holiday" });
   const [teamId, setTeamId] = useState("");
   const [label, setLabel] = useState("");
-  const [startDate, setStartDate] = useState(() => today(timezone));
-  const [endDate, setEndDate] = useState(() => today(timezone));
+  const [startDate, setStartDate] = useState(() => todayIso());
+  const [endDate, setEndDate] = useState(() => todayIso());
   const save = useMutation({
     mutationFn: () => api.post<Period>("/leave", { label: label.trim(), start_date: startDate, end_date: endDate, ...(kind === "holiday" ? { team_id: teamId } : {}) }),
-    onSuccess: () => { void client.invalidateQueries({ queryKey: ["leave"] }); void invalidatePluginData(client, "leave"); setLabel(""); },
+    onSuccess: () => { void client.invalidateQueries({ queryKey: ["leave"], predicate: (query) => query.queryKey[1] !== "teams" }); void invalidatePluginData(client, "leave"); setLabel(""); },
   });
   const canSave = startDate !== "" && endDate !== "" && endDate >= startDate && (kind !== "holiday" || teamId !== "");
   const submit = (event: FormEvent) => { event.preventDefault(); if (canSave && !save.isPending) save.mutate(); };

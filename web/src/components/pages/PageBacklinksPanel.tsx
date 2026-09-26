@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Link2 } from "lucide-react";
 import { pageBacklinksQuery } from "../../lib/queries";
-import { relativeTime } from "../../lib/dates";
+import { relativeTime } from "@radd/plugin-sdk";
 import { pageLink } from "../../lib/page-links";
 
 /**

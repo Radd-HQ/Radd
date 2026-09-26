@@ -16,7 +16,7 @@ import { Button } from "../Button";
 import { SelectField } from "../SelectField";
 import { Spinner } from "../Spinner";
 import { QueryError } from "../QueryError";
-import { ErrorText } from "../ErrorText";
+import { ErrorText } from "@radd/plugin-sdk";
 
 interface Props {
   scope: SettingScopeValue;

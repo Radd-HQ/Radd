@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 
 let serial = 0;
-async function fixture(importer) {
+async function fixture(importer, statics = {}) {
   const slots = new Set();
   const dataSources = new Set();
   const querySources = new Set();
@@ -20,11 +20,16 @@ async function fixture(importer) {
     unregisterQuerySources: (name) => querySources.delete(name),
     registerDataSource: (name) => dataSources.add(name),
     unregisterDataSources: (name) => dataSources.delete(name),
+    setRemotesLoading: (value) => { globalThis[key].loading = value; },
+    loading: undefined,
+    statics,
     importer,
   };
   const source = readFileSync('web/src/lib/plugin-loader.ts', 'utf8')
     .replace(/import \{[\s\S]*?\} from "@radd\/plugin-sdk";/,
-      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources} = globalThis.${key};`)
+      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources, setRemotesLoading} = globalThis.${key};`)
+    // Bundled core plugins are exercised by the browser proofs; the remote lifecycle is tested here.
+    .replace(/import \{ STATIC_PLUGINS \} from "[^"]+";/, `const STATIC_PLUGINS = globalThis.${key}.statics;`)
     .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`);
   const js = stripTypeScriptTypes(source, { mode: 'transform' });
   const loader = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
@@ -172,4 +177,22 @@ test('failed or late activation cannot retain command registrations',async()=>{
   const gate=deferred(),f=await fixture(async()=>({async activate(ctx){await gate.promise;ctx.registerCommandSource(source);}}));
   const pending=f.syncPluginRemotes(remote());await new Promise(resolve=>setImmediate(resolve));
   await f.syncPluginRemotes([]);gate.resolve();await pending;assert.equal(f.commandSources.size,0);
+});
+
+test('bundled plugins register at boot, follow the enabled set, and never load as a remote (RADD-1373)', async () => {
+  let registrations = 0;
+  const core = { contributions: [contribution], activate: () => { registrations++; } };
+  const imports = [];
+  const loader = await fixture(async (url) => { imports.push(url); return { contributions: [contribution] }; }, { core });
+  loader.syncStaticPlugins();
+  assert(loader.slots.has('core'), 'registered before capabilities are known');
+  loader.syncStaticPlugins(['core']);
+  assert.equal(registrations, 1, 'idempotent while enabled');
+  loader.syncStaticPlugins(['other']);
+  assert(!loader.slots.has('core'), 'withdrawn when the server stops loading it');
+  loader.syncStaticPlugins(['core']);
+  assert(loader.slots.has('core') && registrations === 2, 're-registered once when it returns');
+  await loader.syncPluginRemotes([{ name: 'core', remote_entry: 'x', ui_api_version: '1.0' }]);
+  assert.deepEqual(imports, [], 'a bundled plugin is never imported as a remote');
+  assert(loader.slots.has('core'));
 });

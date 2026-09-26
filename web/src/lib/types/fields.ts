@@ -1,5 +1,4 @@
 /** Fields registry + screens (field-layout config per project + issue type). */
-export { FieldType, FieldDisplay, type FieldTypeValue, type FieldDisplayValue, type FieldDef, type FieldDefCreate } from "../../../../server/src/radd/modules/fields/ui/src/types";
 // ---------------------------------------------------------------------------
 // Screens (field-layout config per project + issue type)
 // ---------------------------------------------------------------------------

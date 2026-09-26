@@ -1,5 +1,5 @@
 from radd.kernel import EntityLinkSpec
-from radd.kernel import PluginUiManifest, EntityRefSpec, EventTypeSpec
+from radd.kernel import EntityRefSpec, EventTypeSpec
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
 
@@ -12,7 +12,6 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('team', ('/settings/teams',)),
     ),
-    ui=PluginUiManifest(remote="/plugins/teams/remoteEntry.js", ui_api_version="1.6.0"),
     crud_resources=(
         CrudResourceSpec(
             "team", "global", "teams", "global.manage",

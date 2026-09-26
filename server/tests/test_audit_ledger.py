@@ -241,13 +241,15 @@ async def test_access_endpoint_uses_the_exact_ledger_scope(db, admin, project):
         admin.token_scope = None
 
 
-async def test_audit_and_items_own_remote_and_navigation_contract(admin):
+async def test_audit_and_items_own_their_navigation_contract(admin):
+    """Audit and Items are core plugins, so their UI is bundled with the host (RADD-1373): the
+    capabilities list them as loaded plugins with no remote, and Audit still declares its nav."""
     from radd.modules.capabilities.router import get_capabilities
     manifest = await get_capabilities(admin)
-    remotes = {remote.name: remote for remote in manifest.remotes}
+    remotes = {remote.name for remote in manifest.remotes}
     for owner in ("audit", "items"):
-        assert remotes[owner].ui_api_version == "1.11.0"
-        assert remotes[owner].remote_entry.startswith(f"/plugins/{owner}/remoteEntry.js")
+        assert owner in manifest.plugins
+        assert owner not in remotes
     nav = next(row for row in manifest.nav if row.plugin == "audit")
     assert nav.path == "/settings/audit"
     assert nav.requires_any_project == ["project.manage"]

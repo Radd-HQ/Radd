@@ -6,7 +6,7 @@ import { CheckCircle2, CircleAlert, Database } from "lucide-react";
 import { useCurrentUser } from "../../lib/hooks";
 import { InstanceRole } from "../../lib/types";
 import { jiraStatusQuery } from "../../lib/queries";
-import { EmptyState } from "../../components/EmptyState";
+import { EmptyState, ErrorText } from "@radd/plugin-sdk";
 import { Spinner } from "../../components/Spinner";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { ConnectionsPanel } from "../../components/settings/jira/ConnectionsPanel";
@@ -14,7 +14,6 @@ import { PlanEditor } from "../../components/settings/jira/PlanEditor";
 import { PlansPanel } from "../../components/settings/jira/PlansPanel";
 import { RunsPanel } from "../../components/settings/jira/RunsPanel";
 import { SnapshotsPanel } from "../../components/settings/jira/SnapshotsPanel";
-import { ErrorText } from "../../components/ErrorText";
 import { Callout } from "../../components/Callout";
 
 /**

@@ -12,7 +12,7 @@ import { ListSearchInput } from "../components/ListSearchInput";
 import { Spinner } from "../components/Spinner";
 import { NewProjectModal } from "../components/projects/NewProjectModal";
 import { QueryError } from "../components/QueryError";
-import { formatDate } from "../lib/dates";
+import { formatDate } from "@radd/plugin-sdk";
 
 export function ProjectsIndexPage() {
   // Global-scope project.create gates the affordance (spec 06 permission union).

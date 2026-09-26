@@ -4,8 +4,8 @@ import { Tags } from "lucide-react";
 import { api } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiPageLabelsPath } from "../../lib/constants";
-import { labelsQuery } from "../../lib/queries";
-import { TokenMultiSelect } from "../TokenMultiSelect";
+import { TokenMultiSelect } from "@radd/plugin-sdk";
+import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
 
 /**
  * A page's labels (RADD-718) — the cross-cutting axis the tree cannot express.

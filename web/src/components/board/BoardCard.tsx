@@ -10,13 +10,7 @@ import {
   type CardLayoutCell,
 } from "../../lib/card-layout";
 import { useDurationConfig, usePeek } from "../../lib/hooks";
-import type {
-  FieldDef,
-  Item,
-  ItemRollup,
-  ItemTimelogBatchEntry,
-  SlaBatchTimer,
-} from "../../lib/types";
+import type { Item, ItemRollup, ItemTimelogBatchEntry, SlaBatchTimer } from "../../lib/types";
 import {
   FlagBadge,
   VisibilityBadge,
@@ -27,6 +21,7 @@ import {
 import { renderCardCell, type CardCellCtx } from "./card-cells";
 import { QuickStar } from "../items/QuickStar";
 import { CardChildren } from "./CardChildren";
+import type { FieldDef } from "@radd-plugin-ui/fields/types";
 
 interface BoardCardProps {
   item: Item;

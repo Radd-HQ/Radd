@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Slot, SlotId } from "@radd/plugin-sdk";
+import { Slot, SlotId, ErrorText, browserTimeZone } from "@radd/plugin-sdk";
 import { Bell, Save } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, RoutePath } from "../../lib/constants";
@@ -18,8 +18,6 @@ import { TextField } from "../../components/TextField";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { TotpPanel } from "../../components/settings/TotpPanel";
 import { ProfilePicture } from "../../components/settings/ProfilePicture";
-import { ErrorText } from "../../components/ErrorText";
-import { browserTimeZone } from "../../lib/dates";
 
 /** Curated avatar palette (any hex works via the color input). */
 const AVATAR_COLORS = [

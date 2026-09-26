@@ -2,7 +2,7 @@ import { SignaturesPanel } from "../../components/settings/email/SignaturesPanel
 import { Inbox } from "lucide-react";
 import { usePermissions } from "../../lib/hooks";
 import { Permission } from "../../lib/types";
-import { EmptyState } from "../../components/EmptyState";
+import { EmptyState } from "@radd/plugin-sdk";
 import { AutomaticMessagesPanel } from "../../components/settings/email/AutomaticMessagesPanel";
 import { SendersPanel } from "../../components/settings/email/SendersPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";

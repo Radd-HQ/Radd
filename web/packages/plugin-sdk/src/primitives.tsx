@@ -158,8 +158,16 @@ export function Card({
   );
 }
 
-export function Spinner({ className = "" }: { className?: string }) {
-  return <span className={`radd-spinner ${className}`} role="status" aria-label="Loading" />;
+/** A loading indicator; `label` says what is loading, visibly (RADD-1376 — the pickers' "Loading
+ * projects…" had gone silent when they moved onto this). */
+export function Spinner({ className = "", label }: { className?: string; label?: string }) {
+  if (!label) return <span className={`radd-spinner ${className}`} role="status" aria-label="Loading" />;
+  return (
+    <span role="status" className="inline-flex items-center gap-2 py-2 text-xs text-fg-muted">
+      <span className={`radd-spinner ${className}`} aria-hidden />
+      {label}
+    </span>
+  );
 }
 
 export function EmptyState({ children, icon: Icon, message, action }: {

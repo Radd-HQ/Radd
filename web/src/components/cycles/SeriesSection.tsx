@@ -5,17 +5,16 @@ import { api, errorMessage } from "../../lib/api";
 import { apiCycleSeriesPath } from "../../lib/constants";
 import { WEEKDAY_LABELS } from "../../lib/cycle-series";
 import { Entity, invalidateEntities } from "../../lib/cache";
-import { cycleSeriesPageQuery, CYCLES_PAGE_SIZE } from "../../lib/queries/cycles";
+import { cycleSeriesPageQuery } from "../../lib/queries/cycles";
 import { useDirectory } from "../../lib/useDirectory";
 import type { CycleSeries, CycleSeriesUpdate } from "../../lib/types";
 import { Button } from "../Button";
 import { DirectoryPager } from "../DirectoryPager";
-import { EmptyState } from "../EmptyState";
-import { IconButton } from "../IconButton";
+import { EmptyState, IconButton, TableSkeleton } from "@radd/plugin-sdk";
 import { QueryError } from "../QueryError";
 import { Select } from "../Select";
-import { TableSkeleton } from "../TableSkeleton";
 import { TextField } from "../TextField";
+import { CYCLES_PAGE_SIZE } from "@radd-plugin-ui/cycles/directory-queries";
 
 /** Recurring series: per-label auto-provisioning config (created via the New-cycle
  * modal's Recurring checkbox; look-ahead + next number editable here). */

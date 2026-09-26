@@ -10,12 +10,10 @@ import {
   type StorageRuleTypeValue,
 } from "../../../lib/types";
 import { Button } from "../../Button";
-import { useConfirm } from "../../ConfirmDialog";
+import { useConfirm, TableSkeleton, ErrorText } from "@radd/plugin-sdk";
 import { DropdownMenu } from "../../DropdownMenu";
 import { QueryError } from "../../QueryError";
-import { TableSkeleton } from "../../TableSkeleton";
 import { RuleDialog } from "./RuleDialog";
-import { ErrorText } from "../../ErrorText";
 
 const TYPE_LABELS: Record<StorageRuleTypeValue, string> = {
   [StorageRuleType.userChoice]: "Ask the uploader",

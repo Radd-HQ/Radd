@@ -3,7 +3,7 @@ import { Check, MessagesSquare, RotateCcw } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "../../lib/cache";
 import { apiCommentPath } from "../../lib/constants";
-import { relativeTime } from "../../lib/dates";
+import { relativeTime } from "@radd/plugin-sdk";
 import type { Comment } from "../../lib/types";
 import { Button } from "../Button";
 
