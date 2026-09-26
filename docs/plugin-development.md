@@ -17,10 +17,11 @@ for multi-node replicas; the filesystem must support locking and atomic rename.
 Back up this volume alongside the database.
 
 To remove an upload: **Disable → wait for acknowledgement → Forget → Remove files**. Business
-data remains. File removal waits for process acknowledgements. Stale reports
-require an operator to confirm that the recorded process has stopped before
-removing that report. Replacing the same Python module requires a restart after
-removal; live backend code replacement is not supported yet.
+data remains. Forget and file removal wait until every live process has acknowledged
+the latest state in the database. A process that stopped reporting lost its lease
+before its report went stale, so it no longer blocks anything. Replacing the same
+Python module requires a restart after removal; live backend code replacement is not
+supported yet.
 
 See [spec 125](specs/125-managed-plugin-packages.md) for the original package workflow
 and the runtime activation section below for current lifecycle behavior. The image-based recipe below remains available for
@@ -171,10 +172,12 @@ graph assembled. Both speak the same client.
 
 ## Runtime activation (RADD-1341)
 
-Installed plugins enable and disable without restarting. Desired state is committed first; each running web/worker reconciles it. The manager shows Applying until every process with a live database lease acknowledges the desired state, or Apply failed with retry information. Leases last 30 seconds; a process that cannot renew stops admitting HTTP and periodic work before its acknowledgement expires. Core plugins remain required.
+Installed plugins enable and disable without restarting. Desired state is committed first; each running web/worker reconciles it. The manager shows Applying until every process with a live database lease acknowledges the desired state, or Apply failed with that plugin's own error and retry information. A process that cannot reconcile at all is reported once, above the list, not on every plugin. Leases last 25 seconds and reports go stale after 30; a process that cannot renew stops admitting work to non-core plugins (their routes answer 503, their loops wait) before its report goes stale, while core routes keep serving and `/health` reports `"plugin_lease": "lapsed"`. Core plugins remain required.
 
-The runtime closes admissions to a changing plugin, pauses new periodic ticks, and drains admitted HTTP requests and tracked jobs before replacing contributions. Other HTTP requests continue while draining. A request to a draining plugin receives 503 with Retry-After. Routes and generated CRUD are owned by the plugin and removed before the SPA fallback can expose them as APIs. Owned WebSockets close when disabled; lifecycle shutdown must flush their pending state. Startup failure cleans up routes, hooks and contributions; shutdown failure remains visible and retries. Existing data, connection configuration and saved automation graphs are preserved.
+Work is counted per plugin (RADD-1372): a request to the plugin's routes until its response is sent, a tick of a loop the plugin started, a job it spawned. A change to one plugin closes only that plugin's admissions, waits only for its own work, and pauses only its loops; every other plugin keeps serving, so a long import in one plugin never delays toggling another. A request to a changing plugin receives 503 with Retry-After. A disable that cannot drain in time (30 seconds by default) is retried with backoff, and the plugin stays closed meanwhile so the drain converges; enabling it again cancels the disable. Routes and generated CRUD are owned by the plugin and removed before the SPA fallback can expose them as APIs. Owned WebSockets close when disabled; lifecycle shutdown must flush their pending state. Startup failure cleans up routes, hooks and contributions; shutdown failure remains visible and retries. Existing data, connection configuration and saved automation graphs are preserved.
 
-Use manifest `tasks` or `PeriodicLoop` for recurring work, and `radd.kernel.runtime.spawn` for request-spawned jobs that must finish before disable. Pair background resources started by `on_startup` with idempotent `on_shutdown` cleanup. Lifecycle hooks must finish; do not await a periodic task from startup. Arbitrary detached asyncio tasks cannot be drained by the host. Transactional data-integrity hooks may remain registered to protect retained data; optional feature hooks must check that their owner is active, as the collaboration hooks do.
+An event consumer declares in `consumer_resume` where it continues when its plugin is re-enabled: `ConsumerResume.CURSOR` (the default) catches up on everything emitted while the plugin was off, which suits an index; `ConsumerResume.HEAD` skips it, which suits anything that delivers outside the instance, such as mail about an event from weeks ago.
+
+Use manifest `tasks` or `PeriodicLoop` for recurring work, and `radd.kernel.runtime.spawn` for request-spawned jobs that must finish before disable. Both are counted against the plugin whose code started them. Pair background resources started by `on_startup` with idempotent `on_shutdown` cleanup. Lifecycle hooks must finish; do not await a periodic task from startup. Arbitrary detached asyncio tasks cannot be drained by the host. Transactional data-integrity hooks may remain registered to protect retained data; optional feature hooks must check that their owner is active, as the collaboration hooks do.
 
 This lifecycle does not hot-reload Python packages or dependencies. Installing/upgrading code is still a separate deployment operation. Migration `d1341liveplugin` must be applied before running this version.

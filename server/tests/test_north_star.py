@@ -33,7 +33,6 @@ def _load_milestones(_kernel_registries_loaded):
     registries.register_plugin(milestones_plugin)
     for spec in milestones_plugin.entities:
         kentities.register_entity(spec)
-        registries.entity_routers.append(kentities.crud_router(spec))
     yield
 
 
@@ -71,11 +70,12 @@ def test_milestone_has_a_nav_item():
 def test_milestone_entity_and_crud_router_registered():
     assert "milestone" in registries.entities
     assert registries.entities["milestone"].table == "milestones"
-    # a generated CRUD router exists (mounted at /api/v1/milestones by app.py)
-    assert any(
-        any(getattr(r, "path", "") == "/milestones" for r in router.routes)
-        for router in registries.entity_routers
-    )
+    # a generated CRUD router exists (mounted at /api/v1/milestones with the
+    # plugin's own routers by PluginRuntime.mount)
+    from radd.kernel import entities as kentities
+
+    router = kentities.crud_router(registries.entities["milestone"])
+    assert any(getattr(r, "path", "") == "/milestones" for r in router.routes)
 
 
 def test_milestone_plugin_is_disableable():

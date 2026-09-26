@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -22,26 +23,11 @@ from radd.collection_compression import CollectionCompressionMiddleware
 _DEFAULT_WEB_DIST = Path(__file__).resolve().parents[3] / "web" / "dist"
 
 
-def _schedule_registered_tasks(backend: Any) -> list[Any]:
-    """Schedule every kernel-registered TaskSpec on the active task backend
-    (RADD-872). Until this reader existed, `registries.tasks` was write-only and
-    a registered periodic task — the RADD-820 access expiry sweep — never ran.
-    Enqueue-only specs (interval=None) have no periodic tick to schedule; a spec
-    without its own gate runs under the spec-48 worker split like every
-    hand-rolled loop."""
-    loops = []
-    for spec in registries.tasks.values():
-        if spec.interval is None:
-            continue
-        loops.append(
-            backend.schedule(
-                spec.name,
-                spec.run,
-                spec.interval,
-                gate=spec.gate or (lambda: settings.run_workers),
-            )
-        )
-    return loops
+class HealthStatus(StrEnum):
+    OK = "ok"
+    #: Serving, but this process's plugin lease lapsed (its heartbeat cannot
+    #: reach the database): non-core plugin routes answer 503 until it renews.
+    DEGRADED = "degraded"
 
 
 def create_app() -> FastAPI:
@@ -63,23 +49,30 @@ def create_app() -> FastAPI:
         # a backup system that silently cannot back up is worse than one that
         # refuses to start (RADD_BACKUP_TOOLS_OPTIONAL downgrades this to a warning).
         await backup_postgres.preflight()
+        from radd.kernel import admission
         from radd.modules.pluginmgr import live
         live.bind(runtime)
-        from radd.kernel.runtime import gate
-        gate.changing = True
-        gate.wake.clear()
+        # RADD-872: no periodic tick runs until every plugin has started (a run
+        # function may touch a table a later plugin's startup ensures).
+        admission.gate.hold_ticks()
         try:
             for plugin in plugins:
                 await runtime.start_plugin(plugin)
-            gate.changing = False
-            gate.wake.set()
+            admission.gate.release_ticks()
             await live.start()
             yield
         finally:
-            gate.changing = False
-            gate.wake.set()
-            await live.stop()
-            await runtime.shutdown()
+            # RADD-1372: each step is guarded so none can skip the next. The
+            # reconciler stops first (cancellation only, it cannot fail) so
+            # nothing enables a plugin mid-shutdown; then every plugin's
+            # on_shutdown runs (collab flushes its rooms); only then is this
+            # process's acknowledgement withdrawn, which logs rather than raises.
+            admission.gate.release_ticks()
+            await live.halt()
+            try:
+                await runtime.shutdown()
+            finally:
+                await live.withdraw()
 
     # orjson for every route response (RADD-1067): serialization is the slowest
     # pure-Python step left on the hot read paths, and the encoder in front of it
@@ -98,7 +91,16 @@ def create_app() -> FastAPI:
         # Unprefixed liveness probe (RADD-870): CLAUDE.md and the helm chart
         # assumed this endpoint for two waves before anything registered it —
         # GET /health fell through to the SPA catch-all and answered index.html.
-        return {"status": "ok", "version": __version__}
+        # RADD-1372: it reports the plugin lease instead of staying green while
+        # plugin routes refuse work, but stays 200: a lapsed lease means the
+        # database is unreachable (a restore, an outage), and restarting the
+        # process or pulling it from the service would not bring it back.
+        from radd.kernel import admission
+
+        lease = admission.gate.lease_state()
+        lapsed = lease is admission.LeaseState.LAPSED
+        status = HealthStatus.DEGRADED if lapsed else HealthStatus.OK
+        return {"status": status, "version": __version__, "plugin_lease": lease}
 
     app.add_middleware(CommitBeforeSendMiddleware)
     app.add_middleware(CollectionCompressionMiddleware)

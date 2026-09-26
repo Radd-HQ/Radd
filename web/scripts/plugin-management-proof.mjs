@@ -7,7 +7,7 @@ import path from 'node:path';
 import { openBrowser } from './lib/cdp.mjs';
 const dist = new URL('../dist/', import.meta.url).pathname;
 const plugin = {id:'acme-tools',name:'acme-tools',version:'0.1.0',core:false,state:'installed',
-  description:'Company extension',can_toggle:true,capabilities:[],active:false,restart_required:false,runtime_state:'disabled',live_supported:true,pending_processes:0,runtime_errors:[],
+  description:'Company extension',can_toggle:true,capabilities:[],active:false,runtime_state:'disabled',live_supported:true,pending_processes:0,runtime_errors:[],
   origin:'package',dependencies:[],problems:[]};
 let failDisable = false;
 let uploaded = null;

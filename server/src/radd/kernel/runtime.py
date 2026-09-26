@@ -1,182 +1,85 @@
-"""Safe points for runtime contribution changes.
+"""A process's plugin routes, hooks and scheduled loops, swapped at safe points.
 
-Requests and worker ticks retain the registry until they finish. A change stops
-new worker ticks and admissions to the affected plugin, then swaps contributions
-at a quiet point. Other HTTP requests remain available while work drains.
+Enable and disable change ONE plugin at a time, after that plugin's own admitted
+work has drained (`kernel.admission`, RADD-1372). Every other plugin keeps
+serving and ticking while it happens.
+
+- **enable** closes the plugin, registers and mounts it, starts it, then opens
+  it: its routes and ticks admit nothing until its startup has finished.
+- **disable** closes the plugin and keeps it closed until it is enabled again.
+  A drain that times out, or a shutdown hook that fails, leaves it registered
+  and closed for the reconciler to retry; reopening in between would admit the
+  very work that keeps the drain from finishing. `resume` cancels a pending
+  disable.
+- **shutdown** stops every started plugin, and one plugin's failure never skips
+  another's hooks.
 """
-import asyncio
-from contextlib import asynccontextmanager
-from contextvars import ContextVar
-import time
 
-from starlette.responses import JSONResponse
+import importlib
+import logging
+from dataclasses import fields
 
-owner: ContextVar[str | None] = ContextVar('plugin_owner', default=None)
+from . import admission
+from .admission import RuntimeGate, RuntimeMiddleware, owner, spawn
 
+__all__ = ["PluginRuntime", "RuntimeGate", "RuntimeMiddleware", "owner", "spawn"]
 
-class RuntimeGate:
-    def __init__(self):
-        self.count = 0
-        self.drain_timeout = 30
-        self.changing = False
-        self.exclusive = False
-        self.blocked: set[str] = set()
-        self.wake = asyncio.Event()
-        self.wake.set()
-        self.idle = asyncio.Event()
-        self.idle.set()
-        self.lease_until: float | None = None
-        self.sockets: dict[asyncio.Task, tuple[str, object]] = {}
-
-    def available(self):
-        return self.lease_until is None or time.monotonic() < self.lease_until
-
-    def add(self):
-        self.count += 1
-        self.idle.clear()
-
-    def done(self):
-        self.count -= 1
-        if not self.count:
-            self.idle.set()
-
-    @asynccontextmanager
-    async def work(self, *, background=False):
-        while self.exclusive or (background and self.changing):
-            await self.wake.wait()
-        if not self.available():
-            raise RuntimeError('Plugin runtime lease expired; waiting for reconciliation')
-        self.add()
-        try:
-            yield
-        finally:
-            self.done()
-
-    @asynccontextmanager
-    async def change(self, plugin_id):
-        self.changing = True
-        self.blocked.add(plugin_id)
-        self.wake.clear()
-        try:
-            # Do not cancel admitted work to force a change through. Retry later
-            # and expose the failure if a long request/job has not drained yet.
-            async with asyncio.timeout(self.drain_timeout):
-                await self.idle.wait()
-            self.exclusive = True
-            yield
-        finally:
-            self.exclusive = False
-            self.changing = False
-            self.blocked.discard(plugin_id)
-            self.wake.set()
-
-    async def close_sockets(self, plugin_id):
-        tasks = []
-        for task, (pid, send) in list(self.sockets.items()):
-            if pid == plugin_id:
-                try:
-                    await send({'type': 'websocket.close', 'code': 1012})
-                except Exception:  # Transport may already be closed; still cancel and drain the session.
-                    pass
-                task.cancel()
-                tasks.append(task)
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+logger = logging.getLogger(__name__)
 
 
-gate = RuntimeGate()
+def schedule_tasks(plugin, backend=None) -> list:
+    """RADD-872: the loops for every periodic TaskSpec a plugin declares.
 
+    Enqueue-only specs (interval=None) have no tick to schedule. A spec without
+    its own gate runs under the spec-48 worker split like every hand-rolled loop."""
+    from radd.config import settings
 
-def spawn(coro, *, name=None):
-    """Adopt request-spawned jobs so a disable cannot abandon their writes."""
-    gate.add()  # before scheduling: also covers tasks that have not started yet
+    from .sockets import Socket, provider
 
-    async def run():
-        return await coro
-
-    task = asyncio.create_task(run(), name=name)
-    def finished(task):
-        gate.done()
-        if task.cancelled():
-            coro.close()
-    task.add_done_callback(finished)
-    return task
-
-
-class RuntimeMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope['type'] == 'websocket':
-            if not gate.available():
-                return await send({'type': 'websocket.close', 'code': 1013})
-            scope['_plugin_send'] = send
-            async def leased_receive():
-                message = await receive()
-                if not gate.available() and message['type'] != 'websocket.disconnect':
-                    await send({'type': 'websocket.close', 'code': 1013})
-                    return {'type': 'websocket.disconnect', 'code': 1013}
-                return message
-            return await self.app(scope, leased_receive, send)
-        if scope['type'] != 'http' or scope.get('path') == '/health':
-            return await self.app(scope, receive, send)
-        if not gate.available():
-            return await JSONResponse({'detail': 'Plugin runtime is reconnecting'}, status_code=503,
-                                      headers={'Retry-After': '2'})(scope, receive, send)
-        async with gate.work():
-            await self.app(scope, receive, send)
-
-
-def admission(plugin_id):
-    """Dependency attached to each owned router, including generated CRUD."""
-    from fastapi import HTTPException
-    from starlette.requests import HTTPConnection
-
-    async def admit(connection: HTTPConnection):
-        from .registry import registries
-        if plugin_id in gate.blocked or plugin_id not in registries.plugins:
-            if connection.scope['type'] == 'websocket':
-                from fastapi import WebSocketException
-                raise WebSocketException(code=1012)
-            raise HTTPException(503, 'Plugin is changing state', headers={'Retry-After': '2'})
-        token = owner.set(plugin_id)
-        task = asyncio.current_task()
-        if connection.scope['type'] == 'websocket':
-            gate.sockets[task] = (plugin_id, connection.scope['_plugin_send'])
-        try:
-            yield
-        finally:
-            gate.sockets.pop(task, None)
-            owner.reset(token)
-    return admit
+    periodic = [spec for spec in plugin.tasks if spec.interval is not None]
+    if not periodic:
+        return []
+    backend = backend or provider(Socket.TASK_BACKEND, settings.task_backend)
+    if backend is None:
+        raise RuntimeError("No task backend is available")
+    return [
+        backend.schedule(spec.name, spec.run, spec.interval,
+                         gate=spec.gate or (lambda: settings.run_workers))
+        for spec in periodic
+    ]
 
 
 class PluginRuntime:
     """Owns routes, hooks, and scheduled loops for this application process."""
+
     def __init__(self, app):
         self.app = app
         self.routes: dict[str, list] = {}
         self.loops: dict[str, list] = {}
         self.started: list = []
+        #: Plugins whose shutdown began but did not finish (a hook raised).
+        self.stopping: set[str] = set()
         self.base_handlers = dict(app.exception_handlers)
 
     def mount(self, plugin):
         from fastapi import Depends
+
         from radd.config import settings
+
         from . import entities
+
         start = len(self.app.routes)
+        owned = [Depends(admission.admission(plugin.id))]
         for router in plugin.routers:
-            self.app.include_router(router, prefix=settings.api_prefix,
-                                    dependencies=[Depends(admission(plugin.id))])
+            self.app.include_router(router, prefix=settings.api_prefix, dependencies=owned)
         for spec in plugin.entities:
             entities.register_entity(spec)
             self.app.include_router(entities.crud_router(spec), prefix=settings.api_prefix,
-                                    dependencies=[Depends(admission(plugin.id))])
+                                    dependencies=owned)
         added = self.app.routes[start:]
         del self.app.routes[start:]
         # API routes precede the plugin-assets/SPA fallback, including late enables.
-        index = getattr(self, 'route_end', len(self.app.routes))
+        index = getattr(self, "route_end", len(self.app.routes))
         self.app.routes[index:index] = added
         self.route_end = index + len(added)
         self.routes[plugin.id] = added
@@ -193,42 +96,43 @@ class PluginRuntime:
         # Starlette copies handlers when building its middleware stack. Update
         # that existing ExceptionMiddleware as well as the app's declarations.
         from starlette.middleware.exceptions import ExceptionMiddleware
+
         node = self.app.middleware_stack
         while node is not None:
             if isinstance(node, ExceptionMiddleware):
                 node._exception_handlers = {**ExceptionMiddleware(self.app)._exception_handlers,
                                             **self.app.exception_handlers}
                 break
-            node = getattr(node, 'app', None)
+            node = getattr(node, "app", None)
 
     async def start_plugin(self, plugin):
-        from radd.config import settings
-        from .sockets import Socket, provider
+        # The owner is copied into every task started here, so a loop's ticks
+        # and a hook's spawned jobs are counted against this plugin.
         token = owner.set(plugin.id)
         self.loops.setdefault(plugin.id, [])
         try:
             for hook in plugin.on_startup:
                 await hook()
-            backend = provider(Socket.TASK_BACKEND, settings.task_backend)
-            if plugin.tasks and backend is None:
-                raise RuntimeError('No task backend is available')
-            for spec in plugin.tasks:
-                if spec.interval is not None:
-                    loop = backend.schedule(spec.name, spec.run, spec.interval,
-                                            gate=spec.gate or (lambda: settings.run_workers))
-                    self.loops[plugin.id].append(loop)
-                    await loop.start()
+            for loop in schedule_tasks(plugin):
+                self.loops[plugin.id].append(loop)
+                await loop.start()
             self.started.append(plugin)
         finally:
             owner.reset(token)
 
     async def stop_plugin(self, plugin):
-        for loop in reversed(self.loops.get(plugin.id, [])):
-            await loop.stop()
-        for hook in plugin.on_shutdown:
-            await hook()
+        self.stopping.add(plugin.id)
+        token = owner.set(plugin.id)
+        try:
+            for loop in reversed(self.loops.get(plugin.id, [])):
+                await loop.stop()
+            for hook in plugin.on_shutdown:
+                await hook()
+        finally:
+            owner.reset(token)
         self.loops.pop(plugin.id, None)
         self.started[:] = [p for p in self.started if p.id != plugin.id]
+        self.stopping.discard(plugin.id)
 
     def unmount(self, plugin):
         owned = {id(r) for r in self.routes.pop(plugin.id, [])}
@@ -236,6 +140,7 @@ class PluginRuntime:
         self.route_end -= len(owned)
         self.refresh_routes()
         from .registry import registries
+
         self.app.exception_handlers = dict(self.base_handlers)
         for remaining in registries.plugins.values():
             for exc_type, handler in remaining.exception_handlers:
@@ -243,13 +148,15 @@ class PluginRuntime:
         self.refresh_handlers()
 
     async def enable(self, plugin, path):
-        import importlib
         from . import entities
         from .loader import _check_subjects
         from .registry import registries
-        async with gate.change(plugin.id):
-            from dataclasses import fields
-            snapshot = {field.name: getattr(registries, field.name).copy() for field in fields(registries)}
+
+        gate = admission.gate
+        gate.close(plugin.id)  # routes mount below; nothing is admitted until it has started
+        try:
+            await gate.drain(plugin.id)
+            snapshot = {f.name: getattr(registries, f.name).copy() for f in fields(registries)}
             registries.register_plugin(plugin)
             try:
                 registries.register_plugin_ui_dir(plugin, importlib.import_module(path))
@@ -267,15 +174,33 @@ class PluginRuntime:
                         target.extend(value) if isinstance(target, list) else target.update(value)
                     self.unmount(plugin)
                 raise
+        finally:
+            gate.open(plugin.id)
 
     async def disable(self, plugin):
         from .registry import registries
-        async with gate.change(plugin.id):
-            await gate.close_sockets(plugin.id)
+
+        gate = admission.gate
+        gate.close(plugin.id)  # stays closed until enabled again (module docstring)
+        await gate.drain(plugin.id)
+        await gate.close_sockets(plugin.id)
+        await self.stop_plugin(plugin)
+        registries.unregister_plugin(plugin)
+        self.unmount(plugin)
+
+    async def resume(self, plugin):
+        """Cancel a pending disable of a still-registered plugin: restart it if
+        its shutdown had begun, then reopen its admissions."""
+        if plugin.id in self.stopping:
             await self.stop_plugin(plugin)
-            registries.unregister_plugin(plugin)
-            self.unmount(plugin)
+            await self.start_plugin(plugin)
+        admission.gate.open(plugin.id)
 
     async def shutdown(self):
+        """Stop every started plugin, dependents first. A failing hook is logged
+        and never skips another plugin's (collab's flush must always run)."""
         for plugin in reversed(list(self.started)):
-            await self.stop_plugin(plugin)
+            try:
+                await self.stop_plugin(plugin)
+            except Exception:
+                logger.exception("Stopping plugin %s failed during shutdown", plugin.id)

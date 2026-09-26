@@ -11,7 +11,7 @@ governed by this contract.
 """
 
 from .loader import PluginLoadError, import_models, load_plugins
-from .plugin import KERNEL_API_VERSION, RaddPlugin
+from .plugin import KERNEL_API_VERSION, ConsumerResume, RaddPlugin
 from .registry import (
     KernelRegistries,
     register_capability,
@@ -63,6 +63,7 @@ from .specs import (
 
 __all__ = [
     "RaddPlugin",
+    "ConsumerResume",
     "KERNEL_API_VERSION",
     "PluginLoadError",
     "load_plugins",

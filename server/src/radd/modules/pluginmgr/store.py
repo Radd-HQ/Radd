@@ -241,10 +241,9 @@ def install_wheel(payload: bytes) -> dict:
 
 
 def remove(plugin_id: str) -> None:
-    """Caller verifies desired state and process acknowledgements first."""
+    """Caller verifies desired state and process acknowledgements first
+    (`acks.ensure_unused`). The lock still serializes this against discovery."""
     with locked() as folder:
-        from .live import ensure_unused
-        ensure_unused(plugin_id)
         entries = catalog()
         match = next(((key, info) for key, info in entries.items() if info['id'] == plugin_id), None)
         if match is None:

@@ -20,7 +20,7 @@ from radd.modules.events import service as events
 
 from . import discovery
 from .models import InstalledPlugin
-from .types import PluginOrigin, PluginEntity, PluginEvent, PluginState
+from .types import PluginOrigin, PluginEntity, PluginEvent, PluginState, RuntimeState
 
 
 @dataclass(frozen=True)
@@ -38,13 +38,14 @@ class PluginInfo:
     # page is the home for per-connector status; settings reorg).
     capabilities: tuple[dict, ...] = ()
     active: bool = False
-    restart_required: bool = False
     origin: str = "builtin"
     dependencies: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()
     live_supported: bool = False
     managed: bool = False
-    runtime_state: str = "applying"
+    runtime_state: RuntimeState = RuntimeState.APPLYING
+    #: Failures to apply THIS plugin, per process. A process that cannot
+    #: reconcile at all reports that once, on GET /plugins/runtime (RADD-1372).
     runtime_errors: tuple[str, ...] = ()
     pending_processes: int = 0
 
@@ -94,24 +95,28 @@ async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
                                 capabilities=_capabilities(plugin)))
     known = {**core_plugins, **installable_plugins}
     enabled_names = {i.name for i in infos if i.state == PluginState.ENABLED}
-    from . import live, store
+    from . import acks, live, store
     managed_ids = {entry["id"] for entry in store.catalog().values()}
-    peers = [p for p in await live.cluster_reports(session) if not p.get('stale')]
+    peers = [p for p in await acks.cluster_reports(session) if not p.get("stale")]
 
     def runtime_info(info):
+        # Only what a process reports about THIS plugin counts against it: a
+        # process-level reconcile failure is not a failure of every plugin.
         desired = info.state == PluginState.ENABLED
-        pending = [p for p in peers if (info.id in p.get('active', [])) != desired
-                   or (info.id in p.get('observed', [])) != desired
-                   or p.get('versions', {}).get(info.id, 'bootstrap') != live.state_version(rows.get(info.id))
-                   or info.id in p.get('pending', []) or p.get('error')]
-        errors = tuple(dict.fromkeys(p.get('errors', {}).get(info.id) or p.get('error')
-                                     for p in peers if p.get('errors', {}).get(info.id) or p.get('error')))
+        version = acks.state_version(rows.get(info.id))
+        pending = [p for p in peers if (info.id in p.get("active", [])) != desired
+                   or (info.id in p.get("observed", [])) != desired
+                   or (p.get("versions") or {}).get(info.id, acks.BOOTSTRAP_VERSION) != version
+                   or info.id in p.get("pending", [])]
+        errors = tuple(dict.fromkeys(
+            (p.get("errors") or {})[info.id] for p in peers if (p.get("errors") or {}).get(info.id)))
         local_pending = desired != (info.id in registries.plugins)
-        state = 'error' if errors else 'applying' if pending or local_pending else 'enabled' if desired else 'disabled'
+        state = (RuntimeState.ERROR if errors
+                 else RuntimeState.APPLYING if pending or local_pending
+                 else RuntimeState.ENABLED if desired else RuntimeState.DISABLED)
         return dict(runtime_state=state, runtime_errors=errors, pending_processes=len(pending))
     infos = [replace(
         i, active=i.id in registries.plugins,
-        restart_required=False,
         **runtime_info(i),
         origin="builtin" if i.id in core_plugins else "package",
         dependencies=known[i.id][0].depends_on,
@@ -212,9 +217,21 @@ async def enable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | No
     problems = plugin_problems(plugin, {i.name for i in infos if i.state == PluginState.ENABLED and i.origin != "missing"})
     if problems:
         raise ConflictError(PluginEntity.PLUGIN, reason="; ".join(problems))
+    was_enabled = any(i.id == plugin_id and i.state == PluginState.ENABLED for i in infos)
     row = await _upsert(session, plugin, PluginState.ENABLED)
+    if not was_enabled:
+        await _resume_consumers(session, plugin)
     await _emit(session, PluginEvent.ENABLED, plugin_id, actor_id)
     return row
+
+
+async def _resume_consumers(session: AsyncSession, plugin) -> None:
+    """RADD-1372: a (re-)enabled plugin's HEAD consumers skip what happened while
+    it was off, in the same transaction as the desired state, so a restart
+    between the two cannot replay it. CURSOR consumers keep their place."""
+    heads = plugin.head_consumers()
+    if heads:
+        await events.resume_at_head(session, heads)
 
 
 async def disable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> InstalledPlugin:
@@ -403,17 +420,15 @@ async def uninstall(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID |
                   and plugin.name in i.dependencies]
     if dependents:
         raise ConflictError(PluginEntity.PLUGIN, reason=f"Required by {', '.join(dependents)}")
-    from . import live
-    peers = await live.cluster_reports(session)
-    if plugin.id in registries.plugins or any(
-        not peer.get('stale') and (plugin.id in peer.get('active', [])
-                                  or plugin.id in peer.get('pending', []) or peer.get('error'))
-        for peer in peers
-    ):
+    from . import acks
+    row = await _row(session, plugin_id)
+    # Every live process must have OBSERVED this disabled version and run none of
+    # it. Another process's unrelated reconcile failure does not block this one.
+    blockers = acks.unconfirmed(await acks.cluster_reports(session), plugin.id, acks.state_version(row))
+    if plugin.id in registries.plugins or blockers:
         raise ConflictError(PluginEntity.PLUGIN,
                             reason="Disable this plugin and wait for every process before uninstalling")
     await sweep_plugin_atoms(session, plugin, actor_id)
-    row = await _row(session, plugin_id)
     if row is not None:
         await session.delete(row)
         await session.flush()

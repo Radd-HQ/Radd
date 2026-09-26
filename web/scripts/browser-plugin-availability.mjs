@@ -6,7 +6,7 @@ import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import {openBrowser} from './lib/cdp.mjs';
 const dist = new URL('../dist/', import.meta.url).pathname;
-const plugins = ['github','forgejo','gitlab'].map(name => ({id:name,name,version:'1',core:false,state:'enabled',active:true,restart_required:false,live_supported:true,runtime_state:"enabled",pending_processes:0,runtime_errors:[],can_toggle:true,capabilities:[],origin:'builtin',dependencies:[],problems:[],description:`${name} connector`}));
+const plugins = ['github','forgejo','gitlab'].map(name => ({id:name,name,version:'1',core:false,state:'enabled',active:true,live_supported:true,runtime_state:"enabled",pending_processes:0,runtime_errors:[],can_toggle:true,capabilities:[],origin:'builtin',dependencies:[],problems:[],description:`${name} connector`}));
 let catalogReads=0, templateReads=0;
 const connectorReads=[];
 const titles={github:'GitHub',forgejo:'Forgejo',gitlab:'GitLab'};

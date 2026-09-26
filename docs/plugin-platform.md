@@ -298,7 +298,7 @@ class RaddPlugin:
 >
 > | Sketch | Built |
 > |---|---|
-> | `consumers: ConsumerSpec` | `consumer_names` + the SDK's consumer API: `read_events`, `get_offset`/`set_offset`/`offset_exists`, `run_consumer` (the head-seeded, at-most-once runner the core delivery consumers use) — `tests/test_sdk_consumer.py` runs one on `radd.sdk` alone |
+> | `consumers: ConsumerSpec` | `consumer_names` (+ `consumer_descriptions`, and `consumer_resume` — `ConsumerResume.CURSOR`/`HEAD`, where each continues when the plugin is re-enabled, RADD-1372) + the SDK's consumer API: `read_events`, `get_offset`/`set_offset`/`offset_exists`, `run_consumer` (the head-seeded, at-most-once runner the core delivery consumers use) — `tests/test_sdk_consumer.py` runs one on `radd.sdk` alone |
 > | `automation_actions`, `automation_conditions` | `automation_nodes: AutomationNodeSpec` — every node kind (source/filter/gate/action/verdict); the built-in nodes are registered the same way (RADD-1322) |
 > | `triggers` | `trigger_kinds: TriggerKindSpec` (a button, a clock, a validation, or anything event-backed a plugin defines — RADD-1323); event triggers are every `EventTypeSpec` with `trigger=True` |
 > | — | `token_providers` (`{{root.field}}` vocabularies), `automation_templates` (whole automations offered as disabled drafts) |
@@ -382,7 +382,8 @@ Today: `radd/worker.py` `PeriodicLoop` + `RADD_RUN_WORKERS`, poll-based, in-proc
 default builtin backend; a Celery plugin provides an alternative.**
 
 - Define `TaskSpec` (a unit of background work: periodic tick, or an enqueued job) and a `TaskBackend`
-  interface (`enqueue(job)`, `schedule(periodic)`, `run_workers()`). Consumers (automations, notify,
+  interface (`enqueue(job)`, `schedule(periodic)`; as built, the backend keeps no roster and
+  `kernel.runtime.PluginRuntime` starts/stops each plugin's loops with the plugin, RADD-1372). Consumers (automations, notify,
   search, SLA timers) **register `TaskSpec`s** instead of hand-rolling loops.
 - The kernel ships the **`localloop` backend** (today's `PeriodicLoop`, unchanged behavior). A
   `celery` plugin registers a `TaskBackend` provider; selecting it routes all `TaskSpec`s through

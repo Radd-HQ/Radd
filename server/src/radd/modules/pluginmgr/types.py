@@ -22,6 +22,15 @@ class PluginState(StrEnum):
     ERRORED = "errored"  # quarantined: load/startup threw (boot survives)
 
 
+class RuntimeState(StrEnum):
+    """How the running processes stand against a plugin's desired state (RADD-1341)."""
+
+    APPLYING = "applying"  # some live process has not applied it yet
+    ERROR = "error"  # a live process failed to apply it; retried with backoff
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+
+
 class PluginEvent(StrEnum):
     PACKAGE_UPLOADED = "plugin.package_uploaded"
     PACKAGE_REMOVED = "plugin.package_removed"

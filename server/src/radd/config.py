@@ -25,6 +25,24 @@ class Settings(BaseSettings):
     web_dist: str = ""
     # Shared persistent volume, identical on every web and worker process.
     plugins_dir: str = "var/plugins"
+    # Live plugin lifecycle (RADD-1341/1372; kernel/admission.py, pluginmgr/live.py).
+    # Every process polls desired state this often (one small query; discovery
+    # only runs when something moved).
+    plugin_reconcile_interval_seconds: float = 2.0
+    # Each process writes its acknowledgement row and renews its lease this often.
+    plugin_heartbeat_seconds: float = 5.0
+    # Without a heartbeat for this long, a process refuses non-core plugin work.
+    # MUST stay below plugin_process_stale_seconds: peers disregard a stale row
+    # only because its process has already stopped admitting.
+    plugin_lease_seconds: float = 25.0
+    plugin_process_stale_seconds: float = 30.0
+    # How long a toggle waits for the plugin's own requests/jobs/ticks before
+    # reporting and retrying; never cancels them.
+    plugin_drain_timeout_seconds: float = 30.0
+    # A failed apply retries after the reconcile interval, doubling up to this.
+    plugin_retry_max_seconds: float = 60.0
+    # Acknowledgement rows of processes gone this long are deleted.
+    plugin_process_retention_hours: int = 24
 
     # Auth (see radd/modules/auth)
     session_ttl_hours: int = 720

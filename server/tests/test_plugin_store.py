@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from radd.kernel import RaddPlugin, registries
-from radd.modules.pluginmgr import discovery, live, service, store
+from radd.modules.pluginmgr import acks, discovery, live, service, store
 
 
 @pytest.fixture
@@ -101,27 +101,37 @@ def test_size_limit(plugin_store, monkeypatch):
 async def test_live_enable_disable_then_remove_cleans_owned_files(plugin_store, monkeypatch):
     info = store.install_wheel(wheel())
     monkeypatch.setattr(service, '_states', AsyncMock(return_value={info['id']: SimpleNamespace(state='enabled')}))
+    async def this_process(session):  # the acknowledgement this process would publish
+        return [{**live._report(), 'process': 'this', 'stale': False}]
+    monkeypatch.setattr(acks, 'cluster_reports', this_process)
     await live.reconcile()
     assert info['id'] in registries.plugins
-    assert live.reports()[0]['active'].count(info['id']) == 1
-    with pytest.raises(store.PackageError, match='active or unconfirmed'):
-        store.remove(info['id'])
+    assert (await this_process(None))[0]['active'].count(info['id']) == 1
+    with pytest.raises(store.PackageError, match='active'):
+        await acks.ensure_unused(None, info['id'])
     monkeypatch.setattr(service, '_states', AsyncMock(return_value={}))
     await live.reconcile()
     assert info['id'] not in registries.plugins
+    await acks.ensure_unused(None, info['id'])
     store.remove(info['id'])
     assert store.catalog() == {}
     assert not (plugin_store / 'packages' / info['sha256']).exists()
     assert info['id'] not in discovery.installable_plugins()
 
 
-def test_stale_process_prevents_cleanup(plugin_store):
+async def test_unacknowledged_process_prevents_cleanup(plugin_store, monkeypatch):
     info = store.install_wheel(wheel())
-    directory = plugin_store / 'runtime'
-    directory.mkdir()
-    (directory / 'stale.json').write_text(json.dumps({'process':'stale','updated_at':0,'active':[]}))
-    with pytest.raises(store.PackageError, match='unconfirmed'):
-        store.remove(info['id'])
+    peers = [{'process': 'lagging', 'stale': False, 'active': [],
+              'versions': {info['id']: 'disabled:before-forget'}}]
+    monkeypatch.setattr(acks, 'cluster_reports', AsyncMock(return_value=peers))
+    with pytest.raises(store.PackageError, match='unconfirmed on processes: lagging'):
+        await acks.ensure_unused(None, info['id'])
+    # A stale row's process lost its lease first, so it admits no plugin work.
+    peers[0]['stale'] = True
+    with pytest.raises(store.PackageError, match='No process acknowledgements'):
+        await acks.ensure_unused(None, info['id'])
+    peers.append({'process': 'caught-up', 'stale': False, 'active': [], 'versions': {}})
+    await acks.ensure_unused(None, info['id'])
     assert info['distribution'] in store.catalog()
 
 
@@ -162,52 +172,81 @@ async def test_upload_enforces_stream_limit_before_install(monkeypatch):
     assert error.value.status_code == 413
 
 
-def test_two_processes_must_both_disable_before_removal(plugin_store):
+async def test_two_processes_must_both_disable_before_removal(plugin_store):
+    """Two real processes acknowledging through the ONE channel, plugin_processes."""
+    import asyncio
     import os
     import select
     import subprocess
+    from radd.db import SessionLocal
     info = store.install_wheel(wheel())
     script = '''
 import asyncio,json,sys
 from types import SimpleNamespace
 from radd.modules.pluginmgr import live,service
 from radd.kernel import registries
-for line in sys.stdin:
-    command=json.loads(line)
-    if command.get("stop"):
-        asyncio.run(live.stop()); break
-    async def states(session):
-        return {command["id"]:SimpleNamespace(state=command["state"])}
-    service._states=states
-    asyncio.run(live.reconcile())
-    print(json.dumps({"active":list(registries.plugins)}),flush=True)
+async def main():
+    loop = asyncio.get_running_loop()
+    live._process = sys.argv[1]
+    while line := await loop.run_in_executor(None, sys.stdin.readline):
+        command = json.loads(line)
+        if command.get("stop"):
+            await live.stop(); break
+        async def states(session):
+            if command["state"] == "forgotten":
+                return {}
+            return {command["id"]: SimpleNamespace(state=command["state"])}
+        service._states = states
+        await live.reconcile()
+        await live.heartbeat()
+        print(json.dumps({"active": list(registries.plugins)}), flush=True)
+asyncio.run(main())
 '''
     env = {**os.environ, 'RADD_PLUGINS_DIR': str(plugin_store)}
-    peers = [subprocess.Popen([sys.executable, '-u', '-c', script], env=env,
+    names = [f'test-peer-{uuid.uuid4().hex[:8]}' for _ in range(2)]
+    peers = [subprocess.Popen([sys.executable, '-u', '-c', script, name], env=env,
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE, text=True) for _ in range(2)]
-    def command(peer, state):
-        peer.stdin.write(json.dumps({'id':info['id'],'state':state})+'\n')
+                              stderr=subprocess.PIPE, text=True) for name in names]
+    def exchange(peer, state):
+        peer.stdin.write(json.dumps({'id': info['id'], 'state': state}) + '\n')
         peer.stdin.flush()
         assert select.select([peer.stdout], [], [], 15)[0], 'peer failed to acknowledge'
         return json.loads(peer.stdout.readline())
+    async def command(peer, state):
+        return await asyncio.to_thread(exchange, peer, state)
+    async def ensure_unused():
+        async with SessionLocal() as session:
+            reports = [r for r in await acks.cluster_reports(session) if r['process'] in names]
+            async def ours(_session):
+                return reports
+            original, acks.cluster_reports = acks.cluster_reports, ours
+            try:
+                await acks.ensure_unused(session, info['id'])
+            finally:
+                acks.cluster_reports = original
     try:
         for peer in peers:
-            assert info['id'] in command(peer, 'enabled')['active']
-        assert len(live.reports()) == 2
-        assert info['id'] not in command(peers[0], 'disabled')['active']
-        with pytest.raises(store.PackageError, match='active or unconfirmed'):
-            store.remove(info['id'])
-        assert info['id'] not in command(peers[1], 'disabled')['active']
+            assert info['id'] in (await command(peer, 'enabled'))['active']
+        async with SessionLocal() as session:
+            assert {r['process'] for r in await acks.cluster_reports(session)} >= set(names)
+        for peer in peers:
+            assert info['id'] not in (await command(peer, 'disabled'))['active']
+        await command(peers[0], 'forgotten')
+        with pytest.raises(store.PackageError, match='unconfirmed on processes: ' + names[1]):
+            await ensure_unused()  # the second process has not observed the Forget yet
+        await command(peers[1], 'forgotten')
+        await ensure_unused()
         store.remove(info['id'])
         assert store.catalog() == {}
     finally:
         for peer in peers:
             try:
-                peer.communicate('{"stop":true}\n', timeout=5)
+                await asyncio.to_thread(peer.communicate, '{"stop":true}\n', timeout=5)
             except (subprocess.TimeoutExpired, BrokenPipeError):
                 peer.kill()
                 peer.communicate()
+    async with SessionLocal() as session:  # both withdrew their acknowledgement on stop
+        assert not {r['process'] for r in await acks.cluster_reports(session)} & set(names)
 
 
 async def test_upload_endpoint_audits_valid_package(plugin_store):

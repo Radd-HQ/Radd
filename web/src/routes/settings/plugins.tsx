@@ -7,7 +7,7 @@ import { Blocks, ChevronDown, ChevronRight, Lock, SlidersHorizontal } from "luci
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { pluginsQuery, queryKeys } from "../../lib/queries";
-import { type Plugin } from "../../lib/types";
+import { type Plugin, type PluginProcessReport } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { useConfirm } from "../../components/ConfirmDialog";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -68,7 +68,7 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
   const busy = removePackage.isPending || enable.isPending || disable.isPending || install.isPending || uninstall.isPending;
   const actionError = enable.error || disable.error || install.error || uninstall.error || removePackage.error;
   const enabled = plugin.state === "enabled";
-  const applying = plugin.runtime_state === "applying" || plugin.restart_required;
+  const applying = plugin.runtime_state === "applying";
   const failed = plugin.runtime_state === "error";
   // A plugin OPTS IN to instance-wide contribution toggles (spec 94) by contributing a
   // `pluginManagerSection` widget keyed by its registry name — the kernel forces nothing. If it did,
@@ -276,9 +276,13 @@ export function PluginsSettingsPage() {
   const activeKey = (plugins ?? []).filter(p => p.active).map(p => p.id).sort().join(",");
   useEffect(() => {void client.invalidateQueries({queryKey: ["capabilities"]});}, [client, activeKey]);
   const {data: peers} = useQuery({queryKey: ["plugin-processes"],
-    queryFn: () => api.get<Array<{process: string; stale: boolean; error?: string}>>(`${ApiPath.plugins}/runtime`),
+    queryFn: () => api.get<PluginProcessReport[]>(`${ApiPath.plugins}/runtime`),
     refetchInterval: 5000});
-  const pendingChanges = (plugins ?? []).filter(plugin => plugin.runtime_state === "applying" || plugin.restart_required);
+  // RADD-1372: a process that cannot reconcile at all is shown ONCE, here — not
+  // as "Apply failed" on every plugin row. Stale processes lost their lease
+  // before their report went stale, so they no longer block anything.
+  const failing = (peers ?? []).filter(peer => !peer.stale && peer.error);
+  const pendingChanges = (plugins ?? []).filter(plugin => plugin.runtime_state === "applying");
   const [search, setSearch] = useState("");
   const visible = (plugins ?? []).filter(plugin =>
     `${plugin.id} ${plugin.name} ${plugin.description}`.toLowerCase().includes(search.trim().toLowerCase()));
@@ -294,9 +298,13 @@ export function PluginsSettingsPage() {
           Stored settings and data are retained.</p>
       </Callout>}
       <PackageUpload />
-      {peers?.some(peer => peer.stale || peer.error) && <p role="status" className="mb-4 text-[13px] text-fg">
-        Some process reports are stale or failed. Package removal is blocked until those processes are confirmed stopped.
-      </p>}
+      {failing.length > 0 && <Callout kind="warning" role="status" className="mb-4 text-sm">
+        <strong>{failing.length === 1 ? "A server or worker" : `${failing.length} servers or workers`} cannot read plugin changes</strong>
+        <p>Plugins keep their current state on {failing.length === 1 ? "that process" : "those processes"} and changes are retried automatically.</p>
+        <ul className="mt-1">
+          {failing.map(peer => <li key={peer.process}><code>{peer.process}</code>: {peer.error}</li>)}
+        </ul>
+      </Callout>}
       <div className="mb-4">
         <TextField label="Find a plugin" placeholder="Search by name or description…"
           value={search} onChange={event => setSearch(event.target.value)} />

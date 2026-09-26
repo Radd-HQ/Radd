@@ -138,7 +138,6 @@ class KernelRegistries:
     consumer_names: set[str] = field(default_factory=set)  # RADD-1093
     integrations: dict[tuple[str, str], IntegrationSpec] = field(default_factory=dict)
     nav: list[NavItemSpec] = field(default_factory=list)
-    entity_routers: list = field(default_factory=list)  # auto-generated CRUD routers
     # name -> absolute path of the plugin's built UI bundle dir (`<plugin_dir>/ui/dist`), for the
     # plugins that ship a federated UI (spec 94). The backend serves /plugins/<name>/* from here, so
     # a plugin's UI lives IN the plugin's own directory (no central assets dir).
@@ -161,7 +160,6 @@ class KernelRegistries:
             f.clear()
         self.cascades.clear()
         self.nav.clear()
-        self.entity_routers.clear()
 
     # --- registration (called by the loader per plugin) ---
     def register_plugin(self, plugin: RaddPlugin) -> None:

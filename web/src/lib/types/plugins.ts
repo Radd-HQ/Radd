@@ -71,8 +71,9 @@ export interface Plugin {
   description: string;
   can_toggle: boolean;
   active: boolean;
-  restart_required: boolean;
   runtime_state?: "enabled" | "disabled" | "applying" | "error";
+  /** Failures to apply THIS plugin. A process that cannot reconcile at all is
+   * reported once, by GET /plugins/runtime (RADD-1372). */
   runtime_errors?: string[];
   pending_processes?: number;
   origin: string;
@@ -81,4 +82,12 @@ export interface Plugin {
   managed: boolean;
   live_supported: boolean;
   capabilities: PluginCapability[];
+}
+
+/** One process's acknowledgement row (GET /plugins/runtime). */
+export interface PluginProcessReport {
+  process: string;
+  stale: boolean;
+  /** This process could not reconcile at all — not a failure of any one plugin. */
+  error?: string | null;
 }

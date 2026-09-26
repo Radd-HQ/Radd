@@ -6,7 +6,10 @@ here:
 
 - no offset row yet → seed the cursor AT THE STREAM HEAD, commit, log, return 0
   (a chat channel / requester inbox must never be replayed the historical
-  backlog);
+  backlog). That covers a consumer's FIRST start only; one that must also skip
+  what happened while its plugin was disabled declares
+  `ConsumerResume.HEAD` on its plugin, and the plugin manager moves its cursor
+  to the head when the plugin is re-enabled (RADD-1372);
 - read one batch after the cursor;
 - build per-event delivery "plans" via the `plan` callback (log-don't-crash per
   event; planning MAY write rows through the session — csat creates survey rows

@@ -2,8 +2,10 @@
 
 `registries.tasks` was write-only from spec 93 until this wave — the access
 module registered its RADD-820 expiry sweep and nothing ever scheduled it, so
-expired grant rows accumulated forever. Two pins: (1) the app schedules every
-registered periodic TaskSpec on the active task backend; (2) the sweep itself
+expired grant rows accumulated forever. Two pins: (1) every registered periodic
+TaskSpec is scheduled on the task backend — since RADD-1341 by
+`PluginRuntime.start_plugin`, pinned in test_plugin_runtime.py
+(`test_every_periodic_taskspec_is_scheduled_with_a_gate`); (2) the sweep itself
 deletes expired rows when it finally runs.
 """
 
@@ -13,32 +15,9 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from radd.app import _schedule_registered_tasks
 from radd.config import settings
-from radd.kernel import registries
 from radd.modules.access.models import AccessGrant
 from radd.modules.access.service import sweep_expired_grants
-
-
-class _RecordingBackend:
-    def __init__(self) -> None:
-        self.scheduled: list[tuple] = []
-
-    def schedule(self, name, run, interval, gate=None):
-        self.scheduled.append((name, run, interval, gate))
-        return object()
-
-
-def test_every_periodic_taskspec_is_scheduled():
-    backend = _RecordingBackend()
-    loops = _schedule_registered_tasks(backend)
-    names = [entry[0] for entry in backend.scheduled]
-    # The sweep that motivated the fix — dormant from RADD-820 to RADD-872.
-    assert "access.expiry-sweep" in names
-    periodic = [s for s in registries.tasks.values() if s.interval is not None]
-    assert len(loops) == len(periodic) == len(backend.scheduled)
-    # Every scheduled spec carries a gate: its own, or the spec-48 worker split.
-    assert all(entry[3] is not None for entry in backend.scheduled)
 
 
 async def test_expiry_sweep_deletes_expired_rows():

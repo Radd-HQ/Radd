@@ -10,6 +10,7 @@ plugin with `core: true` and empty new fields (§11.1).
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, fields
+from enum import StrEnum
 from typing import Any, get_origin
 
 from fastapi import APIRouter, Request, Response
@@ -52,6 +53,19 @@ StartupHook = Callable[[], Awaitable[None]]
 
 # The kernel SDK version plugins target (§9). Loader refuses an incompatible major.
 KERNEL_API_VERSION = "1.0"
+
+
+class ConsumerResume(StrEnum):
+    """Where an event consumer continues when its plugin is (re-)enabled (RADD-1372)."""
+
+    #: Keep the cursor and catch up on everything emitted while the plugin was
+    #: off — an index or projection that must converge (search, embeddings).
+    #: The default for every consumer a plugin does not declare otherwise.
+    CURSOR = "cursor"
+    #: Jump to the stream head and skip what happened while the plugin was off.
+    #: For consumers that DELIVER outside the instance (a requester reply, a
+    #: survey): mail about a weeks-old event is worse than none.
+    HEAD = "head"
 
 
 @dataclass(frozen=True)
@@ -161,13 +175,27 @@ class RaddPlugin:
     #: Historical entity destinations, owned independently of any consuming UI.
     entity_links: tuple[EntityLinkSpec, ...] = ()
 
+    #: RADD-1372: where each of this plugin's consumers continues when the plugin
+    #: is (re-)enabled. Names must belong to consumer_names; a consumer not
+    #: listed resumes from its CURSOR. The plugin manager applies it when the
+    #: desired state becomes enabled, so it holds across restarts too.
+    consumer_resume: tuple[tuple[str, ConsumerResume], ...] = ()
+
     def __post_init__(self) -> None:
         if not self.id:
             object.__setattr__(self, "id", self.name)
         self._reject_unwrapped_contributions()
-        names = [name for name, _description in self.consumer_descriptions]
-        if len(names) != len(set(names)) or not set(names) <= set(self.consumer_names):
-            raise ValueError(f"RaddPlugin({self.name!r}): descriptions must uniquely name its own consumers")
+        for field_name, pairs in (("descriptions", self.consumer_descriptions),
+                                  ("consumer_resume", self.consumer_resume)):
+            names = [name for name, _value in pairs]
+            if len(names) != len(set(names)) or not set(names) <= set(self.consumer_names):
+                raise ValueError(
+                    f"RaddPlugin({self.name!r}): {field_name} must uniquely name its own consumers"
+                )
+
+    def head_consumers(self) -> tuple[str, ...]:
+        """The consumers that skip to the stream head on (re-)enable."""
+        return tuple(name for name, resume in self.consumer_resume if resume is ConsumerResume.HEAD)
 
     def _reject_unwrapped_contributions(self) -> None:
         """Refuse a single contribution passed where a tuple is declared.

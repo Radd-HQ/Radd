@@ -30,6 +30,7 @@ from radd.kernel import (
     SearchableSpec as SearchableSpec,
     KERNEL_API_VERSION,
     CapabilitySpec as CapabilitySpec,
+    ConsumerResume as ConsumerResume,
     CrudResourceSpec as CrudResourceSpec,
     EntityFieldSpec as EntityFieldSpec,
     EntitySpec as EntitySpec,

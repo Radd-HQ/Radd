@@ -17,29 +17,21 @@ logger = logging.getLogger(__name__)
 class LocalLoopBackend:
     """The default `task_backend` socket provider (spec 93 / A8, §6) — today's
     poll-loop runner, wrapped in the TaskBackend interface so a `celery` plugin can
-    provide an alternative by registering another `task_backend` provider. Consumers
-    migrating from hand-rolled `PeriodicLoop`s to `schedule()` is incremental."""
-
-    def __init__(self) -> None:
-        self._loops: list["PeriodicLoop"] = []
+    provide an alternative by registering another `task_backend` provider. It keeps
+    no roster: `PluginRuntime` owns each plugin's loops and starts/stops them with
+    the plugin (RADD-1341)."""
 
     def schedule(self, name, run, interval, gate=None) -> "PeriodicLoop":
-        loop = PeriodicLoop(
+        return PeriodicLoop(
             run,
             interval=interval if callable(interval) else (lambda: float(interval)),
             name=name,
             enabled=gate or (lambda: True),
         )
-        self._loops.append(loop)
-        return loop
 
     def enqueue(self, name, run):
-        from radd.kernel.runtime import spawn
+        from radd.kernel.admission import spawn
         return spawn(run(), name=name)
-
-    async def run_workers(self) -> None:
-        for loop in self._loops:
-            await loop.start()
 
 
 # The default TaskBackend singleton — registered on the `task_backend` socket.
@@ -82,8 +74,11 @@ class PeriodicLoop:
                 await asyncio.sleep(self._interval())
             worked = False
             try:
-                from radd.kernel.runtime import gate
-                async with gate.work(background=True):
+                # Admitted under the plugin that started this loop (the owner
+                # ContextVar the task copied): only a change to THAT plugin, or
+                # its unconfirmed state, pauses this tick (RADD-1372).
+                from radd.kernel import admission
+                async with admission.gate.work():
                     worked = bool(await self._run_once())
             except asyncio.CancelledError:
                 raise

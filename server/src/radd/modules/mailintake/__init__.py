@@ -1,6 +1,6 @@
 from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
-from radd.kernel import RaddPlugin
+from radd.kernel import ConsumerResume, RaddPlugin
 from radd.kernel import SettingSpec
 
 from . import dispatcher, registry, seeding
@@ -21,6 +21,8 @@ plugin = RaddPlugin(
     ),
     consumer_names=(OUTBOUND_CONSUMER_NAME,),
     consumer_descriptions=((OUTBOUND_CONSUMER_NAME, "Sends outbound mail replies"),),
+    # RADD-1372: re-enabled after weeks off, never mail requesters about the backlog.
+    consumer_resume=((OUTBOUND_CONSUMER_NAME, ConsumerResume.HEAD),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Email in and out: turns incoming mail into issues and comments, and replies to requesters.",
     # attachments: mail parts become item attachments through the spec-102

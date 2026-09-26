@@ -1,6 +1,6 @@
 import uuid
 from contextlib import contextmanager
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -336,6 +336,20 @@ async def set_offset(session: AsyncSession, consumer: str, event_id: int) -> Non
         session.add(ConsumerOffset(name=consumer, last_event_id=event_id))
     else:
         row.last_event_id = event_id
+
+
+async def resume_at_head(session: AsyncSession, consumers: Iterable[str]) -> int:
+    """Move each named consumer's cursor to the stream head and return it.
+
+    RADD-1372: how a `ConsumerResume.HEAD` consumer continues when its plugin is
+    re-enabled. The head-seeded runner seeds only a consumer's FIRST start, so
+    without this a disable→enable replayed every event since the disable into
+    requesters' inboxes. Written in the enabling transaction, so the skipped
+    stretch is exactly the time the plugin was switched off."""
+    head = await latest_event_id(session)
+    for name in consumers:
+        await set_offset(session, name, head)
+    return head
 
 
 async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:

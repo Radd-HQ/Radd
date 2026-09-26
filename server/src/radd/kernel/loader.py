@@ -63,14 +63,14 @@ def load_plugins(paths: tuple[str, ...]) -> list[RaddPlugin]:
         # serves /plugins/<name>/* from the plugin's OWN directory (spec 94 colocation).
         registries.register_plugin_ui_dir(plugin, pkg)
         # Auto-wire declared entities: build the model + register CRUD-resource
-        # atoms + created/updated/deleted event types + a generated CRUD router
-        # (the payoff of mediation — the plugin writes no model/router/RBAC code).
+        # atoms + created/updated/deleted event types (the payoff of mediation —
+        # the plugin writes no model/router/RBAC code). The generated CRUD router
+        # is mounted with the plugin's own routers by `PluginRuntime.mount`.
         if plugin.entities:
             from . import entities as kentities
 
             for spec in plugin.entities:
                 kentities.register_entity(spec)
-                registries.entity_routers.append(kentities.crud_router(spec))
         plugins.append(plugin)
     _check_subjects(plugins)
     return plugins

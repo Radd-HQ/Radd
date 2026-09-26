@@ -1,5 +1,5 @@
 from radd.kernel import EventTypeSpec, PluginUiManifest
-from radd.kernel import RaddPlugin
+from radd.kernel import ConsumerResume, RaddPlugin
 from radd.kernel import SettingSpec
 
 from . import dispatcher
@@ -11,6 +11,8 @@ plugin = RaddPlugin(
     name="csat",
     consumer_names=(CONSUMER_NAME,),
     consumer_descriptions=((CONSUMER_NAME, "Sends satisfaction surveys"),),
+    # RADD-1372: re-enabled after weeks off, never survey issues resolved meanwhile.
+    consumer_resume=((CONSUMER_NAME, ConsumerResume.HEAD),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Customer satisfaction surveys emailed to requesters when their issue is resolved.",
     depends_on=("projects", "auth", "items", "settings", "events", "mailintake", "workflow"),

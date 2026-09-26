@@ -9,7 +9,7 @@ from radd.exceptions import ForbiddenError
 from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
-from . import service, store, live
+from . import acks, service, store
 from .schemas import ContributionSettings, PluginCapabilityRead, PluginRead
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
@@ -27,8 +27,7 @@ def _read(info: service.PluginInfo) -> PluginRead:
         id=info.id, name=info.name, version=info.version, core=info.core,
         state=info.state.value, description=info.description, can_toggle=info.can_toggle,
         capabilities=[PluginCapabilityRead(**cap) for cap in info.capabilities],
-        active=info.active, restart_required=info.restart_required,
-        origin=info.origin, dependencies=list(info.dependencies), problems=list(info.problems),
+        active=info.active, origin=info.origin, dependencies=list(info.dependencies), problems=list(info.problems),
         live_supported=info.live_supported, managed=info.managed,
         runtime_state=info.runtime_state, runtime_errors=list(info.runtime_errors),
         pending_processes=info.pending_processes,
@@ -61,8 +60,10 @@ async def upload_package(request: Request, session: Session, user: CurrentUser) 
 
 @router.get("/runtime")
 async def runtime_status(session: Session, user: CurrentUser) -> list[dict]:
+    """Every process's acknowledgement row — the one place a process-level
+    reconcile failure (`error`) is shown, once, instead of on every plugin."""
     _require_admin(user)
-    return await live.cluster_reports(session)
+    return await acks.cluster_reports(session)
 
 
 @router.delete("/{plugin_id}/package")
@@ -73,6 +74,7 @@ async def remove_package(plugin_id: str, session: Session, user: CurrentUser) ->
     if await service._row(session, plugin_id) is not None:
         raise HTTPException(status_code=409, detail="Disable, wait for all processes, then Forget before removing files")
     try:
+        await acks.ensure_unused(session, plugin_id)
         await asyncio.to_thread(store.remove, plugin_id)
     except (store.PackageError, OSError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
