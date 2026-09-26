@@ -72,6 +72,8 @@ export interface Capability {
   category: string;
   enabled: boolean;
   detail?: Record<string, unknown>;
+  /** The owning plugin's name (RADD-1389). */
+  plugin?: string;
 }
 
 /** A plugin UI remote the host should load (from GET /capabilities). */

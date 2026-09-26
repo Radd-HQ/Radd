@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
-import { EmptyState, QueryError, ScopedSettings, SettingsPage, Spinner, useCurrentUser } from "@radd/plugin-sdk";
+import { EmptyState, ScopedSettings, SettingsPage, Spinner, useCapabilities, useCurrentUser } from "@radd/plugin-sdk";
 import { GroupsTab } from "./GroupsTab";
-import { deployStatusQuery } from "./queries";
 import { StatusRow } from "./StatusRow";
 import { sectionHeadClasses } from "./sync";
 import { UserSyncTab } from "./UserSyncTab";
@@ -21,8 +19,11 @@ export function DirectorySettingsPage() {
   const [tab, setTab] = useState<DirectoryTab>("connection");
   const me = useCurrentUser();
   const isInstanceAdmin = me?.instance_role === "admin";
-  const status = useQuery({ ...deployStatusQuery, enabled: isInstanceAdmin });
-  const directoryReady = Boolean(status.data?.ldap_bind_account);
+  // What this plugin and the workers report as capabilities (RADD-1389) — the host's
+  // /instance/status schema that used to carry these flags is gone.
+  const caps = useCapabilities();
+  const capability = (key: string) => caps?.capabilities.find((c) => c.key === key);
+  const directoryReady = Boolean(capability("ldap")?.detail?.bind_account);
 
   return (
     <SettingsPage history={{ entities: ["group", "user", "scoped_setting"] }}
@@ -37,15 +38,13 @@ export function DirectorySettingsPage() {
         <div className="flex flex-col gap-8" data-directory-page>
           <section>
             <h2 className={sectionHeadClasses}>Status</h2>
-            {status.isPending ? (
+            {!caps ? (
               <Spinner label="Loading status…" />
-            ) : status.isError ? (
-              <QueryError label="status" error={status.error} />
             ) : (
               <div className="grid gap-2 sm:grid-cols-3">
-                <StatusRow label="LDAP / AD sign-in" on={status.data.ldap_enabled} />
-                <StatusRow label="Bind (service) account" on={status.data.ldap_bind_account} />
-                <StatusRow label="Background workers" on={status.data.workers_enabled} />
+                <StatusRow label="LDAP / AD sign-in" on={Boolean(capability("ldap")?.enabled)} />
+                <StatusRow label="Bind (service) account" on={directoryReady} />
+                <StatusRow label="Background workers" on={Boolean(capability("workers")?.enabled)} />
               </div>
             )}
           </section>

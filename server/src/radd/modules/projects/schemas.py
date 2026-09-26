@@ -22,22 +22,6 @@ class InstanceConfigRead(BaseModel):
     signed_in_id: uuid.UUID | None = None
 
 
-class InstanceStatusRead(BaseModel):
-    """Non-secret deploy-level status for the instance settings surface (spec 50) —
-    instance-admin only. Secrets stay env-only; this is what's ENABLED, not the values."""
-
-    sso_enabled: bool
-    ldap_enabled: bool
-    # Spec 84: a service (bind) account is configured — gates the AD group/user
-    # import + team-sync affordances in the admin UI.
-    ldap_bind_account: bool
-    smtp_configured: bool
-    ai_provider: str  # "" = AI off
-    attachment_storage: str  # "filesystem" | "s3"
-    workers_enabled: bool
-    connectors: dict[str, bool]  # {gitlab, forgejo, github, alertmanager, email_intake}
-
-
 class ProjectCreate(BaseModel):
     key: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9]{0,9}$", description="Short key, e.g. TD")
     name: str = Field(min_length=1, max_length=200)

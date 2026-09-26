@@ -11,7 +11,6 @@ export const LdapPath = {
   syncUsers: "/ldap/sync/users",
   syncGroups: "/ldap/sync/groups",
   /** Owned by core modules this plugin depends on (projects, groups). */
-  instanceStatus: "/instance/status",
   mirroredGroups: "/groups",
   teamGroups: (teamId: string) => `/teams/${teamId}/groups`,
 } as const;
@@ -30,13 +29,6 @@ export const AffectedKeys = {
   teamMembers: ["teamMembers"],
   groups: ["groups"],
 } as const;
-
-/** The slice of GET /instance/status this page reads. */
-export interface DeployStatus {
-  ldap_enabled: boolean;
-  ldap_bind_account: boolean;
-  workers_enabled: boolean;
-}
 
 /** One AD group from GET /ldap/groups. member_count is the DIRECT member-attribute length. */
 export interface DirectoryGroup {

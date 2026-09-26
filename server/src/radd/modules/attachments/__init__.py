@@ -25,10 +25,12 @@ def _storage_capability() -> dict[str, object]:
     """Sync capability check off the default-host snapshot (refreshed at startup
     and after admin writes) — `backend` keeps its pre-102 meaning for the pill."""
     default = hosts.default_snapshot()
+    backend, name = default.get("type", ""), default.get("name", "")
     return {
         "enabled": bool(default),
-        "backend": default.get("type", ""),
-        "default": default.get("name", ""),
+        "backend": backend,
+        "default": name,
+        "summary": f"{name} ({backend})" if default else "",
     }
 
 

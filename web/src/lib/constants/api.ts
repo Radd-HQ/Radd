@@ -112,7 +112,6 @@ export const ApiPath = {
   // Safe instance config: the work week (spec 35).
   instance: "/instance",
   // Instance deploy status (spec 50) — instance-admin only.
-  instanceStatus: "/instance/status",
   // Backend-assembled UI manifest (spec 93 / A7): capability flags + plugin nav.
   capabilities: "/capabilities",
   // Plugin manager (spec 93 / A4): GET list + POST {id}/{install,enable,disable,uninstall}.

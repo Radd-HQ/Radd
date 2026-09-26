@@ -40,6 +40,13 @@ def capability_state() -> dict:
     return {"enabled": _configured["inbound"] or _configured["outbound"]}
 
 
+def outbound_capability() -> dict:
+    """Outbound email (RADD-1389): an enabled sender ROW exists. The env SMTP
+    host only seeds a row, so reading it here reported Off on an instance whose
+    mail is configured the way the product configures it."""
+    return {"enabled": _configured["outbound"]}
+
+
 async def refresh_snapshot(session: AsyncSession) -> None:
     sources = await session.execute(select(MailSource).where(MailSource.enabled.is_(True)))
     senders = await session.execute(select(MailSender).where(MailSender.enabled.is_(True)))

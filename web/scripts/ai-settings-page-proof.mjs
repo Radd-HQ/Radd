@@ -160,7 +160,7 @@ try {
   // 6. links that lead here.
   await session.navigate(`${baseUrl}/settings/instance`, 1500);
   check("Server status's AI row links to the plugin's page",
-    await waitFor(session, `[...document.querySelectorAll('a[href="/settings/ai"]')].some((a) => a.textContent.includes("AI provider"))`));
+    await waitFor(session, `[...document.querySelectorAll('a[href="/settings/ai"][data-status-row]')].length === 1`));
   await session.navigate(`${baseUrl}/settings/plugins`, 1500);
   check("the Plugins page links the ai plugin to its settings",
     await waitFor(session, `document.querySelectorAll('main a[href="/settings/ai"]').length > 0`));

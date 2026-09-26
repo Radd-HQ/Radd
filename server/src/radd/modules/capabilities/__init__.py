@@ -1,7 +1,8 @@
 """The /capabilities aggregator — a thin core plugin over the kernel capability
-registry (docs/plugin-platform.md §3.2/§8a). Owns the two cross-cutting *infra*
-capabilities (background workers + outbound SMTP) that belong to no single feature;
-every feature/connector plugin registers its own CapabilitySpec in its manifest.
+registry (docs/plugin-platform.md §3.2/§8a). Owns the one cross-cutting *infra*
+capability that belongs to no feature (background workers); every feature and
+connector plugin registers its own CapabilitySpec in its manifest — outbound
+email is mailintake's, since it owns the senders (RADD-1389).
 """
 
 from radd.config import settings
@@ -27,12 +28,6 @@ plugin = RaddPlugin(
             label="Background workers",
             category="infra",
             check=lambda: {"enabled": settings.run_workers},
-        ),
-        CapabilitySpec(
-            key="smtp",
-            label="Outbound email (SMTP)",
-            category="infra",
-            check=lambda: {"enabled": bool(settings.smtp_host)},
         ),
     ),
 )

@@ -57,6 +57,7 @@ plugin = RaddPlugin(
             check=lambda: {
                 "enabled": service.enabled(),
                 "providers": len(registry.snapshot()),
+                "summary": f"{len(registry.snapshot())} provider(s)",
             },
         ),
     ),

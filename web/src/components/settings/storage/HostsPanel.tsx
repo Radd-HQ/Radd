@@ -9,7 +9,7 @@ import {
 } from "../../../lib/constants";
 import { formatSize } from "../../../lib/attachments";
 import {
-  instanceStatusQuery,
+  capabilitiesQuery,
   queryKeys,
   storageHostsQuery,
   storageMoveJobsQuery,
@@ -64,7 +64,7 @@ export function HostsPanel() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: queryKeys.storageHosts });
     // The Server page's "Attachment storage" pill reads the default host.
-    void queryClient.invalidateQueries({ queryKey: instanceStatusQuery.queryKey });
+    void queryClient.invalidateQueries({ queryKey: capabilitiesQuery.queryKey });
   };
 
   const health = useMutation({

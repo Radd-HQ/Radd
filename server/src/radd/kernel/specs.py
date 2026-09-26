@@ -187,7 +187,9 @@ class SearchableSpec:
 class CapabilitySpec:
     """What a plugin reports to `/capabilities` — a status/flag descriptor. `check`
     is an optional callable returning extra runtime detail (e.g. whether SSO is
-    configured). Replaces the inlined provider `enabled()` logic in /instance/status."""
+    configured); a `summary` string in that detail is the one line Settings →
+    Server status shows beside the row (RADD-1389), which renders every
+    capability generically instead of a schema naming plugins."""
 
     key: str
     label: str

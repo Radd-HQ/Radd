@@ -1,17 +1,4 @@
 /** Instance status, scoped settings cascade, and instance roles (specs 50/67/85). */
-/** Non-secret deploy status for the instance settings surface (spec 50). */
-export interface InstanceStatus {
-  sso_enabled: boolean;
-  ldap_enabled: boolean;
-  /** Spec 84: a directory service account is configured — gates the AD
-   * group/user import + team-sync affordances. */
-  ldap_bind_account: boolean;
-  smtp_configured: boolean;
-  ai_provider: string;
-  attachment_storage: string;
-  workers_enabled: boolean;
-  connectors: Record<string, boolean>;
-}
 
 /** Two-scope settings (spec 67): instance defaults, project overrides. */
 export const SettingScope = {

@@ -22,7 +22,10 @@ export interface CapabilityFlag {
   label: string;
   category: string;
   enabled: boolean;
+  /** Plugin-specific detail; `summary` is the one line Server status shows (RADD-1389). */
   detail: Record<string, unknown>;
+  /** The owning plugin's name — what a status row links through. */
+  plugin?: string;
 }
 export interface CapabilitiesManifest {
   capabilities: CapabilityFlag[];

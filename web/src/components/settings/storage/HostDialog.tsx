@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage } from "../../../lib/api";
 import { ApiPath, apiStorageHostPath } from "../../../lib/constants";
-import { instanceStatusQuery, queryKeys } from "../../../lib/queries";
+import { capabilitiesQuery, queryKeys } from "../../../lib/queries";
 import {
   DeliveryMode,
   StorageHostType,
@@ -102,7 +102,7 @@ export function HostDialog({
         : api.post<StorageHostRead>(ApiPath.storageHosts, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.storageHosts });
-      void queryClient.invalidateQueries({ queryKey: instanceStatusQuery.queryKey });
+      void queryClient.invalidateQueries({ queryKey: capabilitiesQuery.queryKey });
       onClose();
     },
   });

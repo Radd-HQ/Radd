@@ -9,6 +9,8 @@ class CapabilityRead(BaseModel):
     category: str  # feature | auth | connector | storage | ai | infra
     enabled: bool
     detail: dict[str, Any] = {}
+    #: The owning plugin's name — what the SPA links a status row through (RADD-1389).
+    plugin: str = ""
 
 
 class NavItemRead(BaseModel):

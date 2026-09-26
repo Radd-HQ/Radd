@@ -173,6 +173,7 @@ plugin = RaddPlugin(
             check=lambda: {
                 "enabled": service.enabled(),
                 "bind_account": service.bind_account_enabled(),
+                "summary": "bind account on" if service.bind_account_enabled() else "no bind account",
             },
         ),
     ),

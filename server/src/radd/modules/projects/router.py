@@ -20,8 +20,7 @@ from .schemas import (
     BlockerRead,
     ProjectContentRead,
     InstanceConfigRead,
-    InstanceStatusRead,
-    ProjectCreate,
+        ProjectCreate,
     ProjectRead,
     ProjectSummaryRead,
     ProjectUpdate,
@@ -68,37 +67,6 @@ async def instance_config(session: Session, user: Actor) -> InstanceConfigRead:
         ldap_enabled=caps.get("ldap", {}).get("enabled", False),
         anyone_id=ANYONE_ID,
         signed_in_id=SIGNED_IN_ID,
-    )
-
-
-@instance_router.get("/instance/status", response_model=InstanceStatusRead)
-async def instance_status(user: Actor) -> InstanceStatusRead:
-    """Non-secret deploy status for the instance settings surface (spec 50) — admin only.
-
-    Chokepoint-2 inversion (docs/plugin-platform.md §3): every flag is now read from
-    the kernel capability registry — each plugin declares its own `CapabilitySpec`
-    (`sso`, `ldap`, `ai`, `storage`, `mfa`, `smtp`, `workers`, and each connector) —
-    instead of this endpoint inlining `bool(settings.*)`. `connectors` is derived
-    generically from every capability in the `connector` category, so a new connector
-    plugin appears here with zero edits."""
-    from radd.exceptions import ForbiddenError
-
-    if not authz.is_instance_admin(user):
-        raise ForbiddenError("instance settings require an instance admin")
-    caps = kcaps.capability_map()
-    return InstanceStatusRead(
-        sso_enabled=caps.get("sso", {}).get("enabled", False),
-        ldap_enabled=caps.get("ldap", {}).get("enabled", False),
-        ldap_bind_account=caps.get("ldap", {}).get("bind_account", False),
-        smtp_configured=caps.get("smtp", {}).get("enabled", False),
-        ai_provider=caps.get("ai", {}).get("provider", ""),
-        attachment_storage=caps.get("storage", {}).get("backend", ""),
-        workers_enabled=caps.get("workers", {}).get("enabled", False),
-        connectors={
-            key: cap["enabled"]
-            for key, cap in caps.items()
-            if cap.get("category") == "connector"
-        },
     )
 
 

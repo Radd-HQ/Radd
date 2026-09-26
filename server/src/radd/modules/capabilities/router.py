@@ -29,6 +29,11 @@ def _versioned_remote(name: str, remote: str) -> str:
             pass
     return remote
 
+def _owner(key: str) -> str:
+    """The name of the plugin that declared capability `key` ("" if none is loaded)."""
+    return next((p.name for p in registries.plugins.values() if any(c.key == key for c in p.capabilities)), "")
+
+
 router = APIRouter(tags=["capabilities"])
 
 
@@ -44,7 +49,7 @@ async def get_capabilities(user: Actor) -> CapabilitiesRead:
     Authenticated. The pre-sign-in subset stays on `/instance/login-options`.
     """
     return CapabilitiesRead(
-        capabilities=[CapabilityRead(**c) for c in kcaps.evaluate()],
+        capabilities=[CapabilityRead(**c, plugin=_owner(c["key"])) for c in kcaps.evaluate()],
         nav=[
             NavItemRead(
                 key=n.key, label=n.label, path=n.path, icon=n.icon,

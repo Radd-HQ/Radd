@@ -100,6 +100,8 @@ plugin = RaddPlugin(
             # refreshes on seed and on every write.
             check=registry.capability_state,
         ),
+        # RADD-1389: whoever owns the senders reports whether mail can go out.
+        CapabilitySpec("outbound_mail", "Outbound email", "infra", check=registry.outbound_capability),
     ),
     # RADD-960: the mail channel's own events, so a rule can tell a customer's
     # REPLY from an agent typing in the UI. `item_scoped` is what makes SLQ

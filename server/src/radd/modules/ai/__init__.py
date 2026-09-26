@@ -52,10 +52,12 @@ def _chat_capability() -> dict[str, object]:
     """Sync capability check off the process-local role snapshot (refreshed at
     startup and after admin writes) — CapabilitySpec.check cannot await."""
     chat = registry.role_snapshot().get(AiRole.CHAT.value)
+    provider = (chat or {}).get("provider", "")
     return {
         "enabled": chat is not None,
-        "provider": (chat or {}).get("provider", ""),
+        "provider": provider,
         "model": (chat or {}).get("model", ""),
+        "summary": provider,  # the one line Server status shows (RADD-1389)
     }
 
 

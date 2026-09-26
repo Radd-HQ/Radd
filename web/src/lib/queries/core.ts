@@ -10,7 +10,6 @@ import { queryKeys } from "./shared";
 import type {
   CapabilitiesManifest,
   InstanceConfig,
-  InstanceStatus,
   Plugin,
   ResolvedSetting,
   ScopedSetting,
@@ -26,11 +25,6 @@ export const authStateQuery = queryOptions({
   retry: false,
 });
 
-export const instanceStatusQuery = queryOptions({
-  queryKey: ["instance-status"] as const,
-  queryFn: ({ signal }) => api.get<InstanceStatus>(ApiPath.instanceStatus, { signal }),
-  staleTime: 60_000,
-});
 
 /** The backend-assembled UI manifest (spec 93 / A7): capability flags + plugin
  * nav. Drives the sidebar's plugin-contributed nav — chokepoint 3. */

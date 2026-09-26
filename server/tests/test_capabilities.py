@@ -16,7 +16,7 @@ def _map():
 def test_all_expected_capabilities_registered():
     keys = set(_map())
     assert {
-        "sso", "ldap", "ai", "storage", "smtp", "workers",
+        "sso", "ldap", "ai", "storage", "outbound_mail", "workers",
         "gitlab", "forgejo", "alertmanager", "email_intake",
     } <= keys
 
@@ -29,7 +29,8 @@ def test_capability_checks_match_the_old_inline_logic():
     assert cm["ldap"]["bind_account"] == bool(
         settings.ldap_url and settings.ldap_bind_dn and settings.ldap_bind_password
     )
-    assert cm["smtp"]["enabled"] == bool(settings.smtp_host)
+    # RADD-1389: outbound email is mailintake's, read from sender ROWS (below).
+    assert "smtp" not in cm
     # RADD-1279: the "mfa" capability is GONE — it reported that TOTP ships,
     # which read like enforcement. The policy is the `require_mfa` setting.
     assert "mfa" not in cm
@@ -94,7 +95,7 @@ async def test_email_intake_capability_follows_the_enabled_source_rows():
 
     from radd.modules.mailintake import registry
     from radd.modules.mailintake.models import MailSender, MailSource
-    from radd.modules.mailintake.types import MailSourceKind
+    from radd.modules.mailintake.types import MailSenderKind, MailSourceKind
 
     engine = create_async_engine(settings.database_url)
     async with async_sessionmaker(engine, expire_on_commit=False)() as db:
@@ -112,6 +113,17 @@ async def test_email_intake_capability_follows_the_enabled_source_rows():
         source.enabled = False
         await registry.save_source(db, source)
         assert _map()["email_intake"]["enabled"] is False
+
+        # RADD-1389: Outbound email follows the SENDER rows, not RADD_SMTP_HOST —
+        # the env only seeds a row, so an env check read Off on a working instance.
+        assert _map()["outbound_mail"]["enabled"] is False
+        sender = await registry.save_sender(
+            db, MailSender(name="Desk", kind=MailSenderKind.SMTP.value, host="smtp.example.com", from_address="desk@example.com")
+        )
+        assert _map()["outbound_mail"]["enabled"] is True
+        sender.enabled = False
+        await registry.save_sender(db, sender)
+        assert _map()["outbound_mail"]["enabled"] is False
         await db.rollback()
     await engine.dispose()
 
@@ -140,3 +152,15 @@ async def test_navigation_carries_ownership_and_generic_display_constraints(monk
     monkeypatch.setattr(registries, "plugins", {})
     monkeypatch.setattr(registries, "nav", [])
     assert (await get_capabilities(None)).nav == []
+
+
+async def test_each_capability_names_its_owner():
+    """RADD-1389: Server status links a row through its OWNER plugin, so the row
+    says who declared it — and outbound email is mailintake's, not the aggregator's."""
+    from radd.modules.capabilities.router import get_capabilities
+
+    owners = {c.key: c.plugin for c in (await get_capabilities(None)).capabilities}
+    assert owners["outbound_mail"] == "mailintake"
+    assert owners["workers"] == "capabilities"
+    assert owners["ldap"] == "ldap"
+    assert all(owners.values()), "every loaded capability has a loaded owner"

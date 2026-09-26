@@ -3,20 +3,11 @@ import { api } from "@radd/plugin-sdk";
 import {
   LdapPath,
   ldapKeys,
-  type DeployStatus,
   type DirectoryGroup,
   type DirectorySyncStatus,
   type DirectoryUser,
   type MirroredGroup,
 } from "./types";
-
-/** Deploy status (the projects module's endpoint): sign-in, bind account, workers. */
-export const deployStatusQuery = queryOptions({
-  queryKey: ["instance-status"] as const,
-  queryFn: ({ signal }) => api.get<DeployStatus>(LdapPath.instanceStatus, { signal }),
-  staleTime: 60_000,
-  retry: false,
-});
 
 /** Both sync-state rows (null = never ran). Readable without a bind account. */
 export const syncStatusQuery = queryOptions({
