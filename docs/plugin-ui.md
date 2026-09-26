@@ -37,6 +37,11 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `issueTitleAction` | Issue header, by Star/Watch/Flag | `{item, project}` | buttons/links by the title | `routes/item-detail.tsx` |
 | `issuePanelSection` | Issue right-rail, above the fields | `{item, project}` | cards; `order` sorts them | `components/items/IssueProperties.tsx` |
 | `issueRailBottom` | Issue right-rail, below the fields | `{item, project}` | your own section under Fields | `IssueProperties.tsx` |
+| `issueRailTop` | Issue right-rail, ABOVE the fields card (RADD-1395) | `{item, project}` | draws its own card; `order` sorts them | `routes/item-detail.tsx` |
+| `itemDraftAssist` | Beside an issue being drafted — the submission form's assist panel (RADD-1395) | `ItemDraftAssistProps` `{title, description, projectId, exclude}` | render nothing when there is nothing to say: the frame is `empty:hidden`; `exclude` = keys another section shows | `components/forms/FormAssistPanel.tsx` |
+| `editorToolbarAction` | A button in the rich editor's toolbar (RADD-1395) | `EditorToolbarActionProps` `{editor}` | draw it with `EditorToolbarButton`; see "The editor's extension points" | `components/editor/RichEditor.tsx` |
+| `editorSelectionAction` | Chrome over a text selection (RADD-1395) | `EditorSelectionActionProps` `{editor, selection}` | the host places it; `selection` null ⇒ show no trigger | `components/editor/SelectionActions.tsx` |
+| `contentReadAction` | An action on RENDERED content — a description, a comment, a page body (RADD-1395) | `ReadActionProps` `{text, context, transform?, subject, className?}` | shown for every reader; `transform` only when they may rewrite | `routes/item-detail.tsx`, `components/items/CommentsThread.tsx`, pages' `view/PageReading.tsx` |
 | `issueTab` | Activity tab bar, next to VCS | `{item, project}` | needs `title` (+ optional `icon`); `render` = tab body | `components/items/ActivityPanel.tsx` |
 | `viewHeader` | A view's header/toolbar | `{view, items}` | `items` = the view's loaded, permission-scoped issues | `routes/view.tsx` |
 | `viewType` | A whole saved-view TYPE | `{view, items}` | `match` = the view_type key; pair with a `view_types=` manifest entry. A type declared a LIST surface needs no contribution — see "View types on the host's list" below | `routes/view.tsx` |
@@ -79,7 +84,7 @@ receive an opener for the peek panel) and `MissingPluginType`. It also added `Ch
 `usePagedDirectory`. The host implements them in `web/src/host-surfaces.tsx`.
 
 **Documents, comments and the kit (RADD-1392, UI API 1.15.0).** The wiki moved into the pages plugin's package, and it reaches the host's heavy surfaces the same way, with typed contracts beside each wrapper:
-- `host-document.tsx` — `RichEditor` (`attachTo` names the attachment parent images go to; `live` is an opaque `LiveRoom` from `useLiveSession`, whose `session` keys the editor), `RichViewer`, `Markdown`, `AiReadMenu` + the `AiRun` hand-off, `AiResultsPane`, `EditingNow`, and `useLiveSession` (a page's co-editing room; without a host it reports `failed`, so the caller runs its single-editor flow).
+- `host-document.tsx` — `RichEditor` (`attachTo` names the attachment parent images go to; `live` is an opaque `LiveRoom` from `useLiveSession`, whose `session` keys the editor; `initialTransform` is a read action's hand-off), `RichViewer`, `Markdown`, `ReadingPane` (room beside the text for `useReadingPane`), `EditorToolbarButton`, `EditingNow`, and `useLiveSession` (a page's co-editing room; without a host it reports `failed`, so the caller runs its single-editor flow). Until RADD-1395 this file also bridged `AiReadMenu`, `AiRun` and `AiResultsPane`; the SDK names no feature now, and those are the ai plugin's contributions through the editor's extension points below.
 - `host-comments.tsx` — `useCommentFeed` (a parent's section, newest window first), `CommentReplies`, `CommentHistory`, `CopyCommentLink`, `ThreadBadge`/`ThreadFilter`/`ResolveThreadButton`, `useLinkedComment`/`useLandOnComment`/`useThreadExpansion`, `commentHref`, `repliesLabel`, `threadRuleClass`, `sendTaskToggle`, and the `CommentRow` shape.
 - `host-kit.tsx` — `DropdownMenu`, `Popover`, `useDismiss` (the host's one Escape stack), `AccessGrantsEditor`, `ScopedAccess`, `StateCategoryDot`, and the sidebar chrome `SidebarSection`/`SidebarLink` for the new `sidebar.section` slot.
 Hooks are bridged too: the host provides them before the first render, so every render calls the same function. Shared STATE lives in the SDK itself rather than behind a bridge: the `radd:*` registry (`registerPageExtension`, `PageExtensionCtx`, `MarkdownSourceContext`, `splitExtensionBlocks`…), `headingsOf`/`headingAnchorId`, text-quote anchoring (`makeAnchor`, `locateAnchor`, `orderByAnchor`) and the rendered-text helpers (`renderedText`, `rangeForOffsets`, `registerTextProjection`…). A bridged hook must return STABLE values: `useCommentFeed`'s list is memoised on the feed, because a fresh array per render re-ran the inline rail's anchor scan forever — and a render loop at default priority starves Suspense's retries, which read as lazy host surfaces that never finished loading.
@@ -270,6 +275,77 @@ ViewTypeSpec(key="slas.queue", label="Queue (triage list)", icon="list-ordered",
 `meta: { entities: ["sla_policy"] }` — and invalidate with the SDK's `invalidateEntities(queryClient,
 "sla_policy")`. The host's realtime subscribes every tag it does not map itself as that exact server
 string, so a plugin needs no host table row for its entities to go live.
+
+## The editor's extension points (SDK 1.16)
+
+The rich editor — Milkdown/ProseMirror, its toolbar, the per-block diff review, CodeMirror code
+blocks, `radd:*` nodes — is HOST code that issues, comments and the wiki share. A plugin extends it
+through three slots and one mechanism; none of them names a feature (RADD-1395). The types live in
+`packages/plugin-sdk/src/editor-extensions.ts`.
+
+```tsx
+import { Megaphone } from "lucide-react";
+import { definePlugin, EditorToolbarButton, SlotId, type EditorToolbarActionProps,
+  type EditorTransform } from "@radd/plugin-sdk";
+
+const shout: EditorTransform = {
+  label: "Shout",
+  emptyMessage: "Nothing to shout.",
+  run: async ({ document, selection }, { signal, onText }) => {
+    const text = (selection || document).toUpperCase();   // stream from your endpoint instead
+    onText(text);                                           // the replacement SO FAR, not a chunk
+    return signal.aborted ? null : { replacement: text, notes: [] };
+  },
+};
+
+function ShoutButton({ editor }: EditorToolbarActionProps) {
+  return <EditorToolbarButton icon={<Megaphone size={16} aria-hidden />} title="Shout"
+    disabled={editor.busy} onPick={() => editor.transform(shout)} />;
+}
+
+export default definePlugin({
+  contributions: [{ id: "shout", slot: SlotId.editorToolbarAction, render: (p) => <ShoutButton {...(p as EditorToolbarActionProps)} /> }],
+});
+```
+
+- **`editor.toolbar.action`** — props `{ editor }`. Render a button (`EditorToolbarButton` draws it
+  like the host's own and keeps the editor's selection on press). Render `null` to offer nothing: a
+  contribution's own gate (a feature toggle, a user preference) decides. Popovers are the
+  contribution's (portal them).
+- **`editor.selection.action`** — props `{ editor, selection }`. The host PLACES the anchor above
+  the selection and keeps it mounted while the editor is idle; `selection` (`{from, to, left, top,
+  bottom}`) is null while nothing is selected or the editor lost focus. Opening a prompt field moves
+  focus and collapses the selection, so CAPTURE `selection` when your chrome opens and pass that
+  range to `editor.transform` — reading the live selection later silently widens the run to the
+  whole document. Nothing is offered while `editor.busy`.
+- **`content.read.action`** — props `{ text, context, transform?, subject, className? }` on
+  RENDERED content, for every reader. `context` says what the content is: `{entityType, entityId,
+  parent?}` — an issue's content is its description (`item`), a comment names its `parent`, a page
+  is `page`. `transform` is present only when the reader may rewrite it: calling it opens the
+  editor, which runs your transform first (`RichEditorProps.initialTransform`). `subject` ("the
+  description", "this comment") is for accessible names; `className` is the host's placement for
+  your trigger (a reveal on hover).
+- **A transform** — `editor.transform(transform, range?)`. `run(input, {signal, onText})` receives
+  `{document, selection}` as markdown (`selection` is "" for a document-wide run) and resolves
+  `{replacement, notes?}`; the editor splices the replacement over the range, shows its run band
+  (label, live preview, Stop), then its per-block review with Accept all / Reject all, the notes,
+  and — where the document carries inline comments — the passages the replacement would strand.
+  Resolve `null` for a withdrawn run; reject with a presentable error (its message is shown);
+  `emptyMessage` is said when nothing changed. Whatever must survive the round trip is the
+  transform's business: the ai plugin masks `radd:*` fences, images and attachment links behind
+  placeholders and restores them (RADD-1274) — the editor never learns there was a mask.
+- **The reading pane** — `useReadingPane()` returns `open({title, label?, icon?, render})` on a
+  surface with room beside its text (the issue page; a wiki page, which wraps itself in the
+  `ReadingPane` bridge), else null: answer in place then. The frame is the host's; each open renders
+  `render()` afresh; a panel opened from your contribution closes when your plugin is withdrawn.
+- **`IssueSuggestion`** — the host's row for a suggested issue (peek-aware link, preview on a
+  resting pointer, optional `badge`/`note`, and `mergeFrom` for the merge-this-duplicate action).
+
+The ai plugin is the worked example (`modules/ai/ui`): the toolbar button and Ask AI over a
+selection (`editor/`), the read menu (`read/`), answers in the reading pane (`results/`), the issue
+rail's card (`issue.rail.top`), Similar issues beside a draft (`item.draft.assist`) and its Profile
+opt-out. Disabling it withdraws every one of them live — from an open editor too — and its
+`deactivate()` stops any run in flight. Remotes that use these declare `ui_api_version="1.16.0"`.
 
 ## Logic & data access — where computation goes and what a plugin can see
 

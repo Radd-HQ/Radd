@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Bookmark, CornerDownLeft, Sparkles } from "lucide-react";
-import { AiEditorActionKind, type AiEditorAction } from "../../lib/types";
-import { actionRun, type AiRun } from "./ai";
+import { AiEditorActionKind, type AiEditorAction } from "../types";
+import { actionRun, type AiRun } from "./gate";
 
 /** How much of a freeform prompt the streaming indicator shows as its label. */
 const FREEFORM_LABEL_MAX = 40;
@@ -15,9 +15,9 @@ interface AiActionPickerProps {
 }
 
 /**
- * "Pick an AI action or type a prompt" — the shared inner panel of the editor
- * toolbar's AI button and the read-mode AI menu (both scopes where Crepe's
- * selection tooltip can't reach: it needs a text selection to anchor to).
+ * "Pick an AI action or type a prompt" — the shared inner panel of the toolbar's AI button, the
+ * selection's Ask AI and the read-mode AI menu, so the curated list and the freeform prompt cannot
+ * drift between them.
  */
 export function AiActionPicker({ actions, onPick, autoFocus, placeholder }: AiActionPickerProps) {
   const [prompt, setPrompt] = useState("");

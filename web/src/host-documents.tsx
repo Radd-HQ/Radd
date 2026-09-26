@@ -1,15 +1,17 @@
 /**
  * The host's document and comment surfaces, handed to the plugin SDK (RADD-1392) so the wiki —
- * the pages plugin's bundled UI — renders the same editor, viewer, markdown, AI menu, live room
- * and comment kit as the issue page, without importing host code. Heavy surfaces stay lazy: the
- * editor engine, the markdown renderer and the AI panels load when one first renders.
+ * the pages plugin's bundled UI — renders the same editor, viewer, markdown, reading pane, live
+ * room and comment kit as the issue page, without importing host code. Heavy surfaces stay lazy:
+ * the editor engine and the markdown renderer load when one first renders. What plugins ADD to the
+ * editor arrives through its extension points (RADD-1395), not through here.
  */
 import { Suspense, lazy, useCallback, useMemo, type ComponentProps } from "react";
 import { provideHostComponents, type RichEditorProps } from "@radd/plugin-sdk";
 import { LazyRichEditor } from "./components/editor/LazyRichEditor";
 import { LazyRichViewer } from "./components/editor/LazyRichViewer";
 import { EditingNow } from "./components/editor/collab/EditingNow";
-import { AiResultsPane } from "./components/items/AiResultsPane";
+import { ToolbarExtraButton } from "./components/editor/ToolbarExtraButton";
+import { ReadingPane } from "./components/reading/ReadingPane";
 import { useCollabSession } from "./components/editor/collab/useCollabSession";
 import type { CollabRoom } from "./components/editor/collab/provider";
 import type { AttachmentTarget } from "./lib/types";
@@ -25,7 +27,6 @@ import { sendTaskToggle } from "./lib/task-toggle";
 import { useInfiniteQuery } from "@tanstack/react-query";
 
 const Markdown = lazy(() => import("./lib/markdown").then((module) => ({ default: module.Markdown })));
-const AiReadMenu = lazy(() => import("./components/editor/AiReadMenu").then((module) => ({ default: module.AiReadMenu })));
 const CommentReplies = lazy(() =>
   import("./components/comments/CommentReplies").then((module) => ({ default: module.CommentReplies })),
 );
@@ -88,9 +89,9 @@ provideHostComponents({
       <Markdown {...props} />
     </Suspense>
   ),
-  AiReadMenu: (props) => <Suspense fallback={null}><AiReadMenu {...props} /></Suspense>,
   // Eager: its children are the page, and a lazy pane would remount them when it loads.
-  AiResultsPane,
+  ReadingPane,
+  EditorToolbarButton: ToolbarExtraButton,
   EditingNow,
   useLiveSession: useCollabSession,
 

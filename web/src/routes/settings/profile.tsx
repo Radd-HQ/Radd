@@ -1,16 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Slot, SlotId, ErrorText, browserTimeZone } from "@radd/plugin-sdk";
+import { Slot, SlotId, browserTimeZone } from "@radd/plugin-sdk";
 import { Bell, Save } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, RoutePath } from "../../lib/constants";
 import { AuthStatus } from "../../lib/auth";
 import { useAuthState } from "../../lib/hooks";
-import { mePreferencesQuery, queryKeys } from "../../lib/queries";
+import { queryKeys } from "../../lib/queries";
 import { type Me, type ProfileUpdate } from "../../lib/types";
 import { Avatar } from "../../components/Avatar";
-import { EDITOR_AI_PREF_KEY } from "../../components/editor/ai";
 import { Density, Theme, setDensity, setTheme, useAppearance } from "../../lib/theme";
 import { Button } from "../../components/Button";
 import { Select } from "../../components/Select";
@@ -58,15 +57,6 @@ export function ProfileSettingsPage() {
           <Bell size={14} aria-hidden />
           Notification settings
         </Link>
-      </section>
-
-      <section className="mt-8 border-t border-subtle pt-6">
-        <h2 className="mb-1 text-sm font-semibold text-fg">AI assistance</h2>
-        <p className="mb-4 text-xs text-fg-muted">
-          Personal opt-out for the editor's AI menu. Whether the feature exists at all is an
-          instance setting (Settings → AI).
-        </p>
-        <EditorAiPanel />
       </section>
 
       <section className="mt-8 border-t border-subtle pt-6">
@@ -244,41 +234,6 @@ function ProfileForm({ user }: { user: Me }) {
   );
 }
 
-
-/** The editor-AI opt-out (specs 101/103), stored server-side in the preferences
- * dict (spec 94 shallow-merge PUT) so it follows the account across browsers.
- * An absent key means enabled; the key lives with the editor wiring in
- * components/editor/ai.ts, which reads the same gate. */
-function EditorAiPanel() {
-  const queryClient = useQueryClient();
-  const prefs = useQuery(mePreferencesQuery());
-  const save = useMutation({
-    mutationFn: (enabled: boolean) =>
-      api.put<Record<string, unknown>>(ApiPath.mePreferences, { [EDITOR_AI_PREF_KEY]: enabled }),
-    onSuccess: (data) => queryClient.setQueryData(queryKeys.mePreferences, data),
-  });
-
-  if (prefs.isPending) return <p className="text-xs text-fg-faint">Loading preferences…</p>;
-  if (prefs.isError)
-    return <p className="text-xs text-red-400">Failed to load: {errorMessage(prefs.error)}</p>;
-
-  const enabled = prefs.data[EDITOR_AI_PREF_KEY] !== false;
-  return (
-    <div className="flex flex-col gap-2">
-      <label className="flex items-center gap-2 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={() => save.mutate(!enabled)}
-          disabled={save.isPending}
-          className="size-3.5 accent-accent"
-        />
-        AI writing actions in the editor
-      </label>
-      {save.isError && <ErrorText error={save.error} />}
-    </div>
-  );
-}
 
 /** Theme + density (spec 39) — per-browser, applied instantly. */
 function AppearanceSection() {

@@ -1,16 +1,18 @@
 import type { ComponentType, ReactNode } from "react";
 import type { TextAnchor } from "./anchoring";
+import type { EditorTransform } from "./editor-extensions";
 import { providedNow, useProvided } from "./host-registry";
 import { TextArea, type AvatarUser } from "./primitives";
 
 /**
  * The host's document surfaces, bridged (RADD-1392).
  *
- * The rich editor, its viewer, the read-mode markdown renderer, the AI read menu and live
+ * The rich editor, its viewer, the read-mode markdown renderer, the reading pane and live
  * co-editing are HOST code: issues and comments use them too, and Milkdown + ProseMirror +
  * CodeMirror are far too heavy to bundle into a plugin. The host provides them at startup; a
  * plugin renders them through the wrappers below with the typed contracts declared here. The
  * contracts carry no editor internals — a live room is an opaque handle a plugin passes back.
+ * What a plugin ADDS to the editor goes through its extension points (`editor-extensions.ts`).
  */
 
 /** A reader ticked a checklist box: its index among the task items in document order. */
@@ -19,14 +21,7 @@ export interface TaskToggle {
   checked: boolean;
 }
 
-/** An AI transform to run over the whole document once an editor is ready (the read-mode AI
- *  menu's hand-off to edit mode). */
-export interface AiRun {
-  instruction: string;
-  label: string;
-}
-
-/** An open inline comment anchored in the document, so an AI review can count what it strands. */
+/** An open inline comment anchored in the document, so a review can count what it strands. */
 export interface InlineAnchorRef {
   id: string;
   anchor: TextAnchor;
@@ -49,7 +44,9 @@ export interface RichEditorProps {
   extensions?: boolean;
   /** The attachment parent pasted and inserted images are stored on. Omit to disable images. */
   attachTo?: { entityType: string; entityId: string };
-  initialAiRun?: AiRun;
+  /** A transform to run over the whole document once the editor is ready — a read action's
+   *  hand-off to edit mode (`ReadActionProps.transform`). */
+  initialTransform?: EditorTransform;
   inlineAnchors?: InlineAnchorRef[];
   /** A review ended with those passages gone and the person chose to resolve their comments. */
   onDetachedComments?: (ids: string[]) => void;
@@ -74,23 +71,19 @@ export interface MarkdownProps {
   text: string;
 }
 
-export interface AiReadMenuProps {
-  /** The markdown this menu operates on. */
-  text: string;
-  /** Find similar issues from a text seed. */
-  similar?: { seedKey: string; excludeItemId?: string };
-  /** The entity whose image attachments Summarize may show a vision model. */
-  imagesOf?: { entity_type: string; entity_id: string };
-  /** Present when the actor may rewrite the text: a transform opens the editor with the run. */
-  onTransform?: (run: AiRun) => void;
-  /** Accessible name for the trigger button. */
-  label: string;
-  className?: string;
+/** A reading surface with room for a panel beside its text (`useReadingPane`). */
+export interface ReadingPaneProps {
+  children: ReactNode;
 }
 
-/** Where AI answers open: a results pane beside `children` instead of the menu's popover. */
-export interface AiResultsPaneProps {
-  children: ReactNode;
+/** A button in the editor toolbar, drawn like the host's own. */
+export interface EditorToolbarButtonProps {
+  icon: ReactNode;
+  /** Its accessible name and tooltip. */
+  title: string;
+  /** Clicked: the button's rect, to anchor a popover under it. The editor keeps its selection. */
+  onPick: (anchor: DOMRect) => void;
+  disabled?: boolean;
 }
 
 export const LiveRole = { editor: "editor", observer: "observer" } as const;
@@ -138,8 +131,8 @@ export interface DocumentHost {
   RichEditor?: ComponentType<RichEditorProps>;
   RichViewer?: ComponentType<RichViewerProps>;
   Markdown?: ComponentType<MarkdownProps>;
-  AiReadMenu?: ComponentType<AiReadMenuProps>;
-  AiResultsPane?: ComponentType<AiResultsPaneProps>;
+  ReadingPane?: ComponentType<ReadingPaneProps>;
+  EditorToolbarButton?: ComponentType<EditorToolbarButtonProps>;
   EditingNow?: ComponentType<EditingNowProps>;
   /** A hook: provided once at startup, so every render calls the same function. */
   useLiveSession?: (options: LiveSessionOptions) => LiveSession;
@@ -167,16 +160,24 @@ export function Markdown(props: MarkdownProps) {
   return Host ? <Host {...props} /> : <div className={plain}>{props.text}</div>;
 }
 
-/** The read-mode AI menu. Renders nothing without a host (or when no AI gate lets anything through). */
-export function AiReadMenu(props: AiReadMenuProps) {
-  const { AiReadMenu: Host } = useProvided();
-  return Host ? <Host {...props} /> : null;
+/** Room for a panel beside the content (`useReadingPane`); without a host, just the content —
+ *  answers then open where they were asked for. */
+export function ReadingPane(props: ReadingPaneProps) {
+  const { ReadingPane: Host } = useProvided();
+  return Host ? <Host {...props} /> : <>{props.children}</>;
 }
 
-/** An AI results pane beside the content; without a host, just the content. */
-export function AiResultsPane(props: AiResultsPaneProps) {
-  const { AiResultsPane: Host } = useProvided();
-  return Host ? <Host {...props} /> : <>{props.children}</>;
+/** A toolbar button for an `editor.toolbar.action` contribution. */
+export function EditorToolbarButton(props: EditorToolbarButtonProps) {
+  const { EditorToolbarButton: Host } = useProvided();
+  if (Host) return <Host {...props} />;
+  return (
+    <button type="button" title={props.title} aria-label={props.title} disabled={props.disabled}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => props.onPick(event.currentTarget.getBoundingClientRect())}>
+      {props.icon}
+    </button>
+  );
 }
 
 /** Who else is in the live room. */

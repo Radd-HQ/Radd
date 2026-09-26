@@ -14,7 +14,7 @@ import { join } from "node:path";
 
 const dir = mkdtempSync(join(tmpdir(), "ai-protect-"));
 const file = join(dir, "ai-protect.ts");
-writeFileSync(file, readFileSync("web/src/components/editor/ai-protect.ts", "utf8"));
+writeFileSync(file, readFileSync("server/src/radd/modules/ai/ui/src/editor/protect.ts", "utf8"));
 const { maskProtected, restoreProtected, droppedCount, placeholderFor } = await import(file);
 
 let failures = 0;

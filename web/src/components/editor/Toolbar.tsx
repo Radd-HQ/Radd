@@ -95,7 +95,7 @@ export function EditorToolbar({
   onInsertSymbol: (text: string) => void;
   images: boolean;
   tables: boolean;
-  /** AI and extension buttons, which are per-surface. */
+  /** Contributed and extension buttons, which are per-surface. */
   extra?: React.ReactNode;
 }) {
   const insertItems: Item[] = [

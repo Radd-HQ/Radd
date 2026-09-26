@@ -153,17 +153,6 @@ export const apiCannedRenderPath = (responseId: string) =>
  *  endpoints are the pages plugin's (RADD-1392). */
 export const apiCollabJoinPath = (pageId: string) => `/collab/pages/${pageId}/join`;
 
-/** AI paths (spec 46): on-demand summary + candidate duplicates for an item. */
-export const apiItemAiSummarizePath = (itemId: string) =>
-  `${ApiPath.items}/${itemId}/ai/summarize`;
-/** SSE variant of summarize (the Stream-AI-responses instance setting). */
-export const apiItemAiSummarizeStreamPath = (itemId: string) =>
-  `${ApiPath.items}/${itemId}/ai/summarize/stream`;
-export const apiItemSimilarPath = (itemId: string) => `${ApiPath.items}/${itemId}/similar`;
-/** SSE: per-candidate LLM reasoning for a displayed similar list. */
-export const apiItemAiSimilarReasonsPath = (itemId: string) =>
-  `${ApiPath.items}/${itemId}/ai/similar/reasons`;
-
 /** Where a login button points. No id = the only configured provider (spec 40 shape). */
 export const ssoLoginPath = (providerId?: string, next?: string) => {
   const params = new URLSearchParams();

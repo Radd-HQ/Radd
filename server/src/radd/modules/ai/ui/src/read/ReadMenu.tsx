@@ -1,67 +1,52 @@
-import { useIsAuthenticated } from "../../lib/hooks";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, FileSearch, Sparkles, X } from "lucide-react";
-import { aiErrorText } from "../../lib/ai";
-import { api } from "../../lib/api";
-import { ApiPath, apiItemAiSummarizePath } from "../../lib/constants";
-import { Markdown } from "../../lib/markdown";
-import { aiStatusQuery, similarItemsQuery, similarToTextQuery } from "../../lib/queries";
-import { streamSse } from "../../lib/sse";
-import { AiBuiltinEditorAction, AiFeature, type AiSummary } from "../../lib/types";
-import { SimilarCandidatesList } from "../items/AiSection";
-import { useOpenAiResults, type SimilarSeed } from "../items/ai-results";
-import { useEditorAi, type AiRun } from "./ai";
-import { AiActionPicker } from "./AiActionPicker";
-import { ErrorText } from "@radd/plugin-sdk";
+import { api, ErrorText, Markdown, type ReadActionProps } from "@radd/plugin-sdk";
+import { AiActionPicker } from "../editor/ActionPicker";
+import { useEditorAi } from "../editor/gate";
+import { aiTransform } from "../editor/transform";
+import { useAiStatus, similarItemsQuery, similarToTextQuery } from "../queries";
+import { SimilarCandidatesList } from "../results/SimilarList";
+import { useOpenAiResults } from "../results/open";
+import { streamSse } from "../sse";
+import { AiEndpoint, aiErrorText, itemSummarizePath } from "../transport";
+import { AiBuiltinEditorAction, AiFeature, type AiSummary, type ImagesOf, type SimilarSeed } from "../types";
 
 const PANEL_WIDTH = 320;
 
-export type { SimilarSeed };
-
-interface AiReadMenuProps {
-  /** The markdown this menu operates on (comment body / description / page). */
-  text: string;
-  similar?: SimilarSeed;
-  /** Summarize the whole ISSUE (description + comments + history + worklogs
-   * where the project logs time) via POST /items/{id}/ai/summarize, instead of
-   * just this text — set on the description's menu. */
-  summarizeItemId?: string;
-  /** RADD-1275: the entity whose image attachments the read-mode Summarize
-   *  may show a vision model (a page). Ignored by every transform. */
-  imagesOf?: { entity_type: string; entity_id: string };
-  /** Present when the actor can rewrite this text — the pick opens the editor
-   * with the transform streaming in as a reviewable diff. Leave out where the
-   * actor has no write access: the menu then only offers query actions. */
-  onTransform?: (run: AiRun) => void;
-  /** Accessible name for the trigger button ("AI actions for this comment"). */
-  label: string;
-  className?: string;
-}
-
 type View = "menu" | "similar" | "summary";
 
+/** What this plugin reads out of a read action's context. The host says what the content IS; the
+ * seeds, the whole-issue summary and the images a summary may look at are this plugin's policy. */
+function readingOf(context: ReadActionProps["context"]): {
+  similar: SimilarSeed;
+  summarizeItemId?: string;
+  imagesOf?: ImagesOf;
+} {
+  // An issue's own content is its description: the issue seeds Find similar (its stored vector +
+  // rerank), and Summarize speaks for the whole issue.
+  if (context.entityType === "item") return { similar: { itemId: context.entityId }, summarizeItemId: context.entityId };
+  const excludeItemId = context.parent?.entityType === "item" ? context.parent.entityId : undefined;
+  return {
+    similar: { seedKey: context.entityId, excludeItemId },
+    // RADD-1275: a page's image attachments may be shown to the vision role.
+    imagesOf: context.entityType === "page" ? { entity_type: "page", entity_id: context.entityId } : undefined,
+  };
+}
+
 /**
- * The read-mode AI menu (spec 103 follow-up): a sparkle button on RENDERED
- * content — no edit mode, no selection needed. Query actions (Find similar,
- * Summarize) answer right in the popover without touching the text; transform
- * actions and the freeform prompt hand off to the editor via `onTransform`.
- * Renders nothing when no gate lets any entry through.
+ * The read-mode AI menu (spec 103 follow-up) — this plugin's `content.read.action` (RADD-1395): a
+ * sparkle button on RENDERED content — no edit mode, no selection needed. Query actions (Find
+ * similar, Summarize) answer in the reading pane where the surface has one, else in this popover,
+ * without touching the text; transform actions and the freeform prompt hand off to the editor via
+ * the host's `transform`. Renders nothing when no gate lets any entry through.
  */
-export function AiReadMenu({
-  text,
-  similar,
-  summarizeItemId,
-  imagesOf,
-  onTransform,
-  label,
-  className = "",
-}: AiReadMenuProps) {
-  const status = useQuery({ ...aiStatusQuery, enabled: useIsAuthenticated() });
+export function AiReadMenu({ text, context, transform, subject, className = "" }: ReadActionProps) {
+  const label = `AI actions for ${subject}`;
+  const { similar, summarizeItemId, imagesOf } = readingOf(context);
+  const status = useAiStatus();
   const editorAi = useEditorAi();
-  // On the issue page, query answers open in the reading-area results pane
-  // (the dead-space fix); elsewhere (pages pages) they answer in this popover.
   const openResults = useOpenAiResults();
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
   const [view, setView] = useState<View>("menu");
@@ -71,25 +56,23 @@ export function AiReadMenu({
   const abortRef = useRef<AbortController | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Issue-level summarize (spec 46 endpoint) — used instead of the text
-  // stream when the menu speaks for the whole issue (the description).
+  // Issue-level summarize (spec 46 endpoint) — used instead of the text stream when the menu
+  // speaks for the whole issue (the description).
   const itemSummary = useMutation({
-    mutationFn: () => api.post<AiSummary>(apiItemAiSummarizePath(summarizeItemId ?? "")),
+    mutationFn: () => api.post<AiSummary>(itemSummarizePath(summarizeItemId ?? "")),
   });
 
   const aiEnabled = status.data?.enabled === true;
-  const itemSummarizeOn =
-    summarizeItemId !== undefined && status.data?.features[AiFeature.summarize] === true;
+  const itemSummarizeOn = summarizeItemId !== undefined && status.data?.features[AiFeature.summarize] === true;
   const summarizeAction =
     summarizeItemId !== undefined
       ? undefined // whole-issue menus never fall back to text-only summarize
       : editorAi?.actions.find((action) => action.id === AiBuiltinEditorAction.summarize);
-  const canQuery =
-    aiEnabled && (similar !== undefined || summarizeAction !== undefined || itemSummarizeOn);
-  const canTransform = editorAi !== null && onTransform !== undefined;
+  const canQuery = aiEnabled && (similar !== undefined || summarizeAction !== undefined || itemSummarizeOn);
+  const canTransform = editorAi !== null && transform !== undefined;
 
-  const itemSeed = similar && "itemId" in similar ? similar : undefined;
-  const textSeed = similar && "seedKey" in similar ? similar : undefined;
+  const itemSeed = "itemId" in similar ? similar : undefined;
+  const textSeed = "seedKey" in similar ? similar : undefined;
   const itemSimilar = useQuery({
     ...similarItemsQuery(itemSeed?.itemId ?? ""),
     enabled: anchor !== null && view === "similar" && itemSeed !== undefined,
@@ -114,10 +97,7 @@ export function AiReadMenu({
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
     setView("menu");
-    setAnchor({
-      left: Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8),
-      top: rect.bottom + 4,
-    });
+    setAnchor({ left: Math.min(rect.left, window.innerWidth - PANEL_WIDTH - 8), top: rect.bottom + 4 });
   };
 
   const startSummary = async () => {
@@ -129,7 +109,7 @@ export function AiReadMenu({
     abortRef.current = controller;
     try {
       const frames = streamSse(
-        ApiPath.aiEditorStream,
+        AiEndpoint.editorStream,
         {
           action_id: AiBuiltinEditorAction.summarize,
           document: text,
@@ -138,9 +118,7 @@ export function AiReadMenu({
         },
         controller.signal,
       );
-      for await (const chunk of frames) {
-        setSummary((current) => current + chunk);
-      }
+      for await (const chunk of frames) setSummary((current) => current + chunk);
       setSummaryState("done");
     } catch (error) {
       if (controller.signal.aborted) return;
@@ -158,9 +136,8 @@ export function AiReadMenu({
         aria-label={label}
         title={label}
         aria-expanded={anchor !== null}
-        className={
-          "rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer " + className
-        }
+        data-ai-read-menu
+        className={"rounded p-1 text-fg-muted hover:bg-elevated hover:text-fg cursor-pointer " + className}
       >
         <Sparkles size={12} aria-hidden />
       </button>
@@ -171,23 +148,22 @@ export function AiReadMenu({
             <div
               style={{ position: "fixed", left: anchor.left, top: anchor.top, width: PANEL_WIDTH }}
               className="z-[60] rounded-md border border-strong bg-surface p-1.5 shadow-pop animate-menu-in"
+              data-ai-read-panel
             >
               {view === "menu" ? (
                 <div className="flex flex-col gap-1">
                   {canQuery && (
                     <ul className="flex flex-col">
-                      {similar && (
-                        <MenuEntry
-                          icon={<FileSearch size={12} aria-hidden />}
-                          label="Find similar issues"
-                          onClick={() => {
-                            if (openResults) {
-                              openResults({ kind: "similar", seed: similar, text });
-                              close();
-                            } else setView("similar");
-                          }}
-                        />
-                      )}
+                      <MenuEntry
+                        icon={<FileSearch size={12} aria-hidden />}
+                        label="Find similar issues"
+                        onClick={() => {
+                          if (openResults) {
+                            openResults({ kind: "similar", seed: similar, text });
+                            close();
+                          } else setView("similar");
+                        }}
+                      />
                       {itemSummarizeOn && (
                         <MenuEntry
                           icon={<Sparkles size={12} aria-hidden />}
@@ -209,7 +185,7 @@ export function AiReadMenu({
                           label={summarizeAction.label}
                           onClick={() => {
                             if (openResults) {
-                              openResults({ kind: "text-summary", text });
+                              openResults({ kind: "text-summary", text, imagesOf });
                               close();
                             } else void startSummary();
                           }}
@@ -227,7 +203,7 @@ export function AiReadMenu({
                         actions={editorAi.actions}
                         onPick={(run) => {
                           close();
-                          onTransform?.(run);
+                          transform?.(aiTransform(run));
                         }}
                       />
                     </>
@@ -265,10 +241,7 @@ export function AiReadMenu({
                       ) : (similarResult.data?.candidates.length ?? 0) === 0 ? (
                         <p className="text-xs text-fg-faint">No similar issues found.</p>
                       ) : (
-                        <SimilarCandidatesList
-                          candidates={similarResult.data?.candidates ?? []}
-                          onOpen={close}
-                        />
+                        <SimilarCandidatesList candidates={similarResult.data?.candidates ?? []} onOpen={close} />
                       )
                     ) : summarizeItemId !== undefined ? (
                       itemSummary.isPending ? (
@@ -296,15 +269,7 @@ export function AiReadMenu({
   );
 }
 
-function MenuEntry({
-  icon,
-  label,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
+function MenuEntry({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
   return (
     <li>
       <button

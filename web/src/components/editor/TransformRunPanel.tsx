@@ -3,52 +3,46 @@ import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles, Undo2, X } from "l
 import { Button } from "../Button";
 
 /**
- * The AI run band (RADD-762) — one surface for the whole life of a run.
+ * The transform run band (RADD-762) — one surface for the whole life of a run, whichever
+ * contribution started it (RADD-1395).
  *
- * What it replaces was a 224px strip positioned at `selection.left - 110`,
- * which for a run with no selection (the toolbar's AI button, and the read-mode
- * hand-off that is "Summarize" in edit mode) meant `x: -110`: painted, correct,
- * and off the left edge of the screen. That is why a document-wide transform
- * read as no feedback at all.
+ * What it replaces was a 224px strip positioned at `selection.left - 110`, which for a run with
+ * no selection (a document-wide toolbar run, and the read-mode hand-off) meant `x: -110`: painted,
+ * correct, and off the left edge of the screen. That is why a document-wide transform read as no
+ * feedback at all.
  *
- * The fix is not a better offset. A floating panel was tried first and the
- * screenshot settled it: anchored to the editor's bottom-right it covered the
- * second and third paragraphs of the very diff it was asking about, and no
- * clamp fixes that — an editor as tall as the viewport leaves a floating box
- * nowhere to go. So this is not floating at all. It is a band in the editor's
- * own chrome, directly under the toolbar, which takes layout space instead of
- * borrowing it: it cannot cover the document, it needs no measurement, no
- * viewport clamp and no scroll listener, and it is on screen exactly when the
- * editor is.
+ * The fix is not a better offset. A floating panel was tried first and the screenshot settled it:
+ * anchored to the editor's bottom-right it covered the second and third paragraphs of the very diff
+ * it was asking about, and no clamp fixes that — an editor as tall as the viewport leaves a
+ * floating box nowhere to go. So this is not floating at all. It is a band in the editor's own
+ * chrome, directly under the toolbar, which takes layout space instead of borrowing it: it cannot
+ * cover the document, it needs no measurement, no viewport clamp and no scroll listener, and it is
+ * on screen exactly when the editor is.
  *
- * It also carries the two things a per-block review cannot: what is happening
- * while nothing has arrived yet, and a way out of a twenty-button review in one
- * click. The per-block pairs stay — granular review is the point of the
- * decoration fork — but they stop being the only exit.
+ * It also carries the two things a per-block review cannot: what is happening while nothing has
+ * arrived yet, and a way out of a twenty-button review in one click. The per-block pairs stay —
+ * granular review is the point of the decoration fork — but they stop being the only exit.
  */
 
-/** What the run is doing. `sending`/`writing` are derived from whether any text
- * has arrived, which is the only progress signal a token stream actually gives
- * us — inventing finer phases would be narration, not information. */
-export const AiRunStatus = {
+/** What the run is doing. Whether any text has arrived is the only progress signal a stream
+ * actually gives us — inventing finer phases would be narration, not information. */
+export const TransformRunStatus = {
   streaming: "streaming",
   reviewing: "reviewing",
 } as const;
 
-export type AiRunStatusValue = (typeof AiRunStatus)[keyof typeof AiRunStatus];
+export type TransformRunStatusValue = (typeof TransformRunStatus)[keyof typeof TransformRunStatus];
 
-export interface AiRunView {
-  /** The action's name, or the freeform prompt — `AiRun.label`, which until now
-   *  was documented as "the label the streaming indicator shows" and passed to
-   *  nothing. */
+export interface TransformRunView {
+  /** The transform's label — an action's name, or the typed instruction. */
   label: string;
-  status: AiRunStatusValue;
-  /** Result markdown so far. Empty until the first token lands. */
+  status: TransformRunStatusValue;
+  /** The replacement so far. Empty until the first text lands. */
   text: string;
 }
 
-interface AiRunPanelProps {
-  run: AiRunView;
+interface TransformRunPanelProps {
+  run: TransformRunView;
   /** Accept/Reject pairs still pending (review only). */
   changes: number;
   /** Which pair the person has stepped to, or -1 for none yet. */
@@ -57,17 +51,17 @@ interface AiRunPanelProps {
   onStop: () => void;
   onAcceptAll: () => void;
   onRejectAll: () => void;
-  /** RADD-1274: open inline comments whose passages the proposed document no
-   *  longer contains — what accepting it would detach. */
+  /** RADD-1274: open inline comments whose passages the proposed document no longer contains —
+   *  what accepting it would detach. */
   detached?: number;
   /** Resolve those comments when the review ends with their passages gone. */
   resolveDetached?: boolean;
   onResolveDetachedChange?: (resolve: boolean) => void;
-  /** Protected blocks the model left out, restored at the end of the reply. */
-  dropped?: number;
+  /** What the transform said about its result (e.g. blocks it had to keep). */
+  notes?: string[];
 }
 
-export function AiRunPanel({
+export function TransformRunPanel({
   run,
   changes,
   current,
@@ -78,13 +72,13 @@ export function AiRunPanel({
   detached = 0,
   resolveDetached = true,
   onResolveDetachedChange,
-  dropped = 0,
-}: AiRunPanelProps) {
-  const streaming = run.status === AiRunStatus.streaming;
+  notes = [],
+}: TransformRunPanelProps) {
+  const streaming = run.status === TransformRunStatus.streaming;
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Follow the stream. Without this the preview shows the first two lines and
-  // then sits still for the rest of the run, which reads as a stall.
+  // Follow the stream. Without this the preview shows the first two lines and then sits still
+  // for the rest of the run, which reads as a stall.
   useEffect(() => {
     const preview = previewRef.current;
     if (preview) preview.scrollTop = preview.scrollHeight;
@@ -92,10 +86,8 @@ export function AiRunPanel({
 
   return (
     <div
-      data-ai-run-panel
-      // The selector the RADD-753 proof waits on. It named the streaming state,
-      // not the old widget, so it keeps meaning what it meant.
-      {...(streaming ? { "data-ai-streaming": true } : {})}
+      data-editor-run-panel
+      {...(streaming ? { "data-editor-run-streaming": true } : {})}
       className="flex flex-col gap-1.5 border-b border-subtle bg-elevated px-2.5 py-2 animate-fade-in"
     >
       <div className="flex items-center gap-2">
@@ -162,33 +154,30 @@ export function AiRunPanel({
       {streaming ? (
         <div
           ref={previewRef}
-          data-ai-run-preview
+          data-editor-run-preview
           className="max-h-16 overflow-y-auto whitespace-pre-wrap break-words rounded border border-subtle bg-base px-2 py-1.5 text-[11px] leading-relaxed text-fg-secondary"
         >
           {run.text || <span className="text-fg-faint">Waiting for the first words…</span>}
         </div>
       ) : (
-        // The diff plugin's filterTransaction drops every document transaction
-        // while a review is open, so typing genuinely does nothing. Saying so
-        // beats letting someone conclude the editor broke.
+        // The diff plugin's filterTransaction drops every document transaction while a review is
+        // open, so typing genuinely does nothing. Saying so beats letting someone conclude the
+        // editor broke.
         <div className="flex flex-col gap-1 text-[11px] text-fg-muted">
           <p>
             Editing is paused until you accept or reject. Use the buttons beside a change to decide
             that one on its own.
           </p>
-          {dropped > 0 && (
-            <p data-ai-dropped-blocks>
-              {dropped === 1
-                ? "The result left out 1 protected block (media, image or widget); it was kept at the end of the text."
-                : `The result left out ${dropped} protected blocks (media, images or widgets); they were kept at the end of the text.`}
+          {notes.map((note) => (
+            <p key={note} data-editor-run-note>
+              {note}
             </p>
-          )}
+          ))}
           {detached > 0 && (
-            // RADD-1274: the review names the comments it is about to strand.
-            // Their passages go with the text; the comments do not — RADD-726
-            // never resolves one on anyone's behalf — unless the person says so
-            // here, in the same click that removes the passages.
-            <label data-ai-detached-comments className="flex items-center gap-1.5 text-fg">
+            // RADD-1274: the review names the comments it is about to strand. Their passages go
+            // with the text; the comments do not — RADD-726 never resolves one on anyone's behalf
+            // — unless the person says so here, in the same click that removes the passages.
+            <label data-editor-detached-comments className="flex items-center gap-1.5 text-fg">
               <input
                 type="checkbox"
                 checked={resolveDetached}

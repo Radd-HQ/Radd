@@ -33,10 +33,8 @@ import { CopyCommentLink } from "../comments/CopyCommentLink";
 import { issueCommentHref, useLandOnComment, useLinkedComment } from "../../lib/comment-links";
 import { ResolveThreadButton, ThreadBadge, ThreadFilter, repliesLabel, threadRuleClass } from "../comments/ThreadResolution";
 
-import type { AiRun } from "../editor/ai";
-import { AiReadMenu } from "../editor/AiReadMenu";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
-import { formatDateTime } from "@radd/plugin-sdk";
+import { formatDateTime, Slot, SlotId, type EditorTransform } from "@radd/plugin-sdk";
 import { teamReferencesQuery } from "@radd-plugin-ui/teams/references";
 import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
 import type { CommentVisibilityValue } from "@radd-plugin-ui/comments/visibility";
@@ -115,9 +113,9 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const expansion = useThreadExpansion(linked?.root_id);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   useLandOnComment(linked?.id);
-  // A read-mode AI transform pending for the comment being opened for edit —
+  // A read action's transform pending for the comment being opened for edit —
   // handed to the editor as its initial whole-document run.
-  const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
+  const [pendingTransform, setPendingTransform] = useState<EditorTransform | null>(null);
   const canManageProject = perms.project(project, Permission.projectManage);
   const uploadCommentImage = useCommentImageUploader(itemId);
   // RADD-1296: tick a checklist box in a comment without opening its editor —
@@ -228,20 +226,21 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                           href={issueCommentHref(item.key, comment.id)}
                           className="opacity-0 transition-opacity group-hover/comment:opacity-100"
                         />
-                        {/* Read-mode AI (spec 103 follow-up): query actions for
-                            every reader; transforms only where edit is allowed. */}
-                        <AiReadMenu
+                        {/* Contributed read actions (RADD-1395) for every reader;
+                            a transform only where edit is allowed. */}
+                        <Slot
+                          id={SlotId.contentReadAction}
                           text={comment.body}
-                          similar={{ seedKey: comment.id, excludeItemId: itemId }}
-                          onTransform={
+                          context={{ entityType: "comment", entityId: comment.id, parent: { entityType: "item", entityId: itemId } }}
+                          transform={
                             (!!comment.author && user?.id === comment.author.id) || canManageProject
-                              ? (run) => {
-                                  setPendingAiRun(run);
+                              ? (transform: EditorTransform) => {
+                                  setPendingTransform(transform);
                                   setEditingId(comment.id);
                                 }
                               : undefined
                           }
-                          label="AI actions for this comment"
+                          subject="this comment"
                           className="opacity-0 transition-opacity group-hover/comment:opacity-100 aria-expanded:opacity-100"
                         />
                         {((!!comment.author && user?.id === comment.author.id) || canManageProject) && (
@@ -249,7 +248,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                             comment={comment}
                             itemId={itemId}
                             onEdit={() => {
-                              setPendingAiRun(null);
+                              setPendingTransform(null);
                               setEditingId(comment.id);
                             }}
                           />
@@ -262,9 +261,9 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                       comment={comment}
                       itemId={itemId}
                       quickActions={quickActions}
-                      initialAiRun={pendingAiRun ?? undefined}
+                      initialTransform={pendingTransform ?? undefined}
                       onDone={() => {
-                        setPendingAiRun(null);
+                        setPendingTransform(null);
                         setEditingId(null);
                       }}
                     />
@@ -509,14 +508,14 @@ function CommentEditForm({
   comment,
   itemId,
   quickActions,
-  initialAiRun,
+  initialTransform,
   onDone,
 }: {
   comment: Comment;
   itemId: string;
   quickActions: QuickAction[];
-  /** From the read-mode AI menu: run this transform as soon as the editor mounts. */
-  initialAiRun?: AiRun;
+  /** From a read action: run this transform as soon as the editor mounts. */
+  initialTransform?: EditorTransform;
   onDone: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -542,7 +541,7 @@ function CommentEditForm({
         autoFocus
         onSubmitShortcut={submit}
         quickActions={quickActions}
-        initialAiRun={initialAiRun}
+        initialTransform={initialTransform}
       />
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={submit} disabled={save.isPending}>

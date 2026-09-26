@@ -134,7 +134,7 @@ export function PageView({
                 <PageEditPanel
                   draft={edit.draft}
                   onDraft={edit.onDraft}
-                  pendingAiRun={edit.pendingAiRun}
+                  pendingTransform={edit.pendingTransform}
                   // Pasted/inserted images go through the storage-choice seam (spec 102).
                   attachTo={{ entityType: "page", entityId: page.id }}
                   collab={edit.collab}

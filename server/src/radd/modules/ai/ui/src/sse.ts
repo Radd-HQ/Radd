@@ -1,10 +1,9 @@
-import { ApiError } from "./api";
-import { API_BASE } from "./constants";
+import { API_BASE, ApiError } from "@radd/plugin-sdk";
 
 /**
  * POST an API path and consume the `text/event-stream` reply as an async
- * string generator (spec 103: the editor AI stream). Plain fetch for the same
- * reason as attachments.ts — the typed client is JSON-in/JSON-out; everything
+ * string generator (spec 103: the editor AI stream). Plain fetch, because
+ * the typed client is JSON-in/JSON-out; everything
  * else (cookies, the pre-stream error shape: ApiError, so `isAiGone()` and
  * `aiErrorText()` keep working) matches it.
  *

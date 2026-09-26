@@ -1,6 +1,6 @@
 import { EmailBody } from "../components/editor/EmailBody";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Slot, SlotId, CollapsibleCard, useConfirm } from "@radd/plugin-sdk";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Slot, SlotId, CollapsibleCard, ReadingPaneContext, useConfirm, type EditorTransform } from "@radd/plugin-sdk";
 import { Archive, ArchiveRestore, CopyPlus, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -12,8 +12,6 @@ import { useCan } from "../lib/can";
 import { itemWebLinksQuery, projectTimeloggingQuery, statesQuery } from "../lib/queries";
 import { itemPagesQuery } from "@radd-plugin-ui/pages/queries";
 import { AttachmentParentType, ItemKind, Permission, type Item } from "../lib/types";
-import type { AiRun } from "../components/editor/ai";
-import { AiReadMenu } from "../components/editor/AiReadMenu";
 import { Button } from "../components/Button";
 import { useIssueQuickActions } from "../components/items/quick-actions";
 import { recordRecentItem, removeRecentItem } from "../lib/recent";
@@ -31,9 +29,7 @@ import { DependenciesSection, dependencyLinkCount } from "../components/items/De
 import { MentionsSection } from "../components/items/MentionsSection";
 import { SidePanel } from "../components/SidePanel";
 import { IssueProperties } from "../components/items/IssueProperties";
-import { AiSection } from "../components/items/AiSection";
-import { AiResultsPanel } from "../components/items/AiResultsPanel";
-import { AiResultsContext, type AiResultRequest } from "../components/items/ai-results";
+import { ReadingPanelView, useReadingPaneState } from "../components/reading/ReadingPane";
 import { RelatedLinksSection } from "../components/items/RelatedLinksSection";
 import { ItemPagesSection } from "../components/items/ItemPagesSection";
 import { Callout } from "../components/Callout";
@@ -126,18 +122,12 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const [description, setDescription] = useState(item.description);
   const [editingDescription, setEditingDescription] = useState(false);
   const quickActions = useIssueQuickActions(item, project.id, editingDescription);
-  // A read-mode AI transform pending for the description edit session about to
-  // open — handed to the editor as its initial whole-document run.
-  const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
-  // AI results pane (the dead-space fix): summarize / find-similar answers
-  // open BESIDE the reading column instead of a popover or the w-72 rail.
-  // runId bumps per request so re-running the same summarize re-fires.
-  const [aiResults, setAiResults] = useState<{ request: AiResultRequest; runId: number } | null>(
-    null,
-  );
-  const openAiResults = useCallback((request: AiResultRequest) => {
-    setAiResults((current) => ({ request, runId: (current?.runId ?? 0) + 1 }));
-  }, []);
+  // A read action's transform pending for the description edit session about
+  // to open — handed to the editor as its initial whole-document run.
+  const [pendingTransform, setPendingTransform] = useState<EditorTransform | null>(null);
+  // The reading pane (the dead-space fix, RADD-772): answers contributions open
+  // land BESIDE the reading column instead of a popover or the w-72 rail.
+  const pane = useReadingPaneState();
   const [customFields, setCustomFields] = useState<CustomFields>(item.custom_fields);
   const pendingCustom = useRef<CustomFields>({});
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -157,7 +147,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   const saveDescription = () => {
     if (description !== item.description) patch({ description });
     setEditingDescription(false);
-    setPendingAiRun(null);
+    setPendingTransform(null);
   };
 
   const onCustomFieldChange = (fieldKey: string, value: CustomFieldValue) => {
@@ -185,7 +175,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
   }, [updateItem.isError, updateItem.error]);
 
   return (
-    <AiResultsContext.Provider value={openAiResults}>
+    <ReadingPaneContext.Provider value={pane.open}>
       <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-subtle px-4 py-3 sm:px-5">
         {item.kind === ItemKind.subtask ? (
           <KindBadge kind={item.kind} withLabel />
@@ -384,15 +374,14 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           {/* Reading column: description, dependencies, links, then the
               conversation — ALWAYS stacked (discussion belongs under the
               document), capped at a prose measure and centered in the space
-              left of the edge-anchored properties rail. When the AI results
-              pane is open it sits BESIDE the stack (in what was dead space),
+              left of the edge-anchored properties rail. When the reading pane
+              is open it sits BESIDE the stack (in what was dead space),
               shifting the reading measure left; below @4xl it stacks on top. */}
           <div className="order-2 flex min-w-0 flex-1 flex-col items-center gap-3 @4xl:flex-row @4xl:items-start @4xl:justify-center">
-          {aiResults && (
-            <AiResultsPanel
-              request={aiResults.request}
-              runId={aiResults.runId}
-              onClose={() => setAiResults(null)}
+          {pane.current && (
+            <ReadingPanelView
+              open={pane.current}
+              onClose={pane.close}
               className="order-first w-full max-w-[64rem] @4xl:sticky @4xl:top-0 @4xl:order-2 @4xl:max-h-[calc(100vh-12rem)] @4xl:w-96 @4xl:shrink-0"
             />
           )}
@@ -412,7 +401,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                   placeholder="Add a description… (toolbar above, or type markdown)"
                   autoFocus
                   quickActions={quickActions}
-                  initialAiRun={pendingAiRun ?? undefined}
+                  initialTransform={pendingTransform ?? undefined}
                   className="[&_.ProseMirror]:min-h-[12rem]"
                 />
                 <div className="flex gap-2">
@@ -425,7 +414,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                     onClick={() => {
                       setDescription(item.description);
                       setEditingDescription(false);
-                      setPendingAiRun(null);
+                      setPendingTransform(null);
                     }}
                   >
                     Cancel
@@ -441,27 +430,27 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
                   }
                 />
                 <span className="absolute right-1 top-1 hidden items-center gap-1 group-hover/desc:flex">
-                  {/* Read-mode AI (spec 103 follow-up): find-similar/summarize
-                      for every reader; transforms only when writable. */}
-                  <AiReadMenu
+                  {/* Contributed read actions (RADD-1395) for every reader; a
+                      transform — which opens the editor with it — only when writable. */}
+                  <Slot
+                    id={SlotId.contentReadAction}
                     text={item.description}
-                    similar={{ itemId: item.id }}
-                    summarizeItemId={item.id}
-                    onTransform={
+                    context={{ entityType: "item", entityId: item.id }}
+                    transform={
                       canEditDescription
-                        ? (run) => {
-                            setPendingAiRun(run);
+                        ? (transform: EditorTransform) => {
+                            setPendingTransform(transform);
                             setEditingDescription(true);
                           }
                         : undefined
                     }
-                    label="AI actions for the description"
+                    subject="the description"
                   />
                   {canEditDescription && (
                     <button
                       type="button"
                       onClick={() => {
-                        setPendingAiRun(null);
+                        setPendingTransform(null);
                         setEditingDescription(true);
                       }}
                       aria-label="Edit description"
@@ -557,10 +546,9 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             className="order-1 @3xl:order-2 @3xl:ml-3 @3xl:self-start"
             expandedClassName="flex flex-col gap-3 @3xl:w-72 @3xl:shrink-0"
           >
-            {/* AI affordances (spec 46) — renders nothing while AI is disabled.
-                Above the properties: summarize/find-similar orient the reader
-                before the metadata wall, in the page rail AND the peek. */}
-            <AiSection item={item} />
+            {/* Contributed cards above the fields (RADD-1395) — whatever orients
+                the reader before the metadata wall, in the page rail AND the peek. */}
+            <Slot id={SlotId.issueRailTop} item={item} project={project} />
             <IssueProperties
               project={project}
               item={item}
@@ -576,6 +564,6 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           </div>
         </div>
       </div>
-    </AiResultsContext.Provider>
+    </ReadingPaneContext.Provider>
   );
 }

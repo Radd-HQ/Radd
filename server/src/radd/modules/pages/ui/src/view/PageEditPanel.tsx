@@ -1,4 +1,4 @@
-import { Button, Callout, RichEditor, type AiRun, type InlineAnchorRef, type LiveSession } from "@radd/plugin-sdk";
+import { Button, Callout, RichEditor, type EditorTransform, type InlineAnchorRef, type LiveSession } from "@radd/plugin-sdk";
 import type { PageUpdate } from "../types";
 
 const EDITOR_CLASS = "[&_.ProseMirror]:min-h-[24rem]";
@@ -17,7 +17,7 @@ const PLACEHOLDER =
 export function PageEditPanel({
   draft,
   onDraft,
-  pendingAiRun,
+  pendingTransform,
   attachTo,
   collab,
   legacy,
@@ -34,7 +34,7 @@ export function PageEditPanel({
 }: {
   draft: string;
   onDraft: (markdown: string) => void;
-  pendingAiRun: AiRun | null;
+  pendingTransform: EditorTransform | null;
   /** Where pasted and inserted images are stored (spec 102). */
   attachTo: { entityType: string; entityId: string };
   collab: LiveSession;
@@ -48,7 +48,7 @@ export function PageEditPanel({
   onCancel: () => void;
   finishing: boolean;
   onDone: () => void;
-  /** RADD-1274: the page's open inline comments, for the AI review's count. */
+  /** RADD-1274: the page's open inline comments, for a transform review's count. */
   inlineAnchors: InlineAnchorRef[];
   onDetachedComments: (ids: string[]) => void;
 }) {
@@ -69,7 +69,7 @@ export function PageEditPanel({
             attachTo={attachTo}
             autoFocus
             placeholder={PLACEHOLDER}
-            initialAiRun={pendingAiRun ?? undefined}
+            initialTransform={pendingTransform ?? undefined}
             inlineAnchors={inlineAnchors}
             onDetachedComments={onDetachedComments}
             live={room}
@@ -131,7 +131,7 @@ export function PageEditPanel({
         attachTo={attachTo}
         autoFocus
         placeholder={PLACEHOLDER}
-        initialAiRun={pendingAiRun ?? undefined}
+        initialTransform={pendingTransform ?? undefined}
         inlineAnchors={inlineAnchors}
         onDetachedComments={onDetachedComments}
         className={EDITOR_CLASS}

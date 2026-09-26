@@ -52,16 +52,6 @@ export function inSection(rows: readonly ScopedSetting[], section: string): Scop
  * `SettingKey` — only the ones with a client-side gate are listed). */
 export const SettingKey = {
   estimationPoints: "estimation_points",
-  // AI feature toggles (spec 101) — instance-only; edited on Settings → AI.
-  aiEditorActions: "ai_editor_actions",
-  aiSemanticSearch: "ai_semantic_search",
-  aiStorageRouting: "ai_storage_routing",
-  aiMailSignature: "ai_mail_signature",
-  aiMailRouting: "ai_mail_routing",
-  aiSummarize: "ai_summarize",
-  aiNlSlq: "ai_nl_slq",
-  aiSimilarRerank: "ai_similar_rerank",
-  aiStreamResponses: "ai_stream_responses",
 } as const;
 export type SettingKeyValue = (typeof SettingKey)[keyof typeof SettingKey];
 

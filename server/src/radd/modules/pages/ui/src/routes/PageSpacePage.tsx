@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Archive, BookOpen, ChevronRight } from "lucide-react";
-import { AiResultsPane, Button, EmptyState, ErrorText, Modal, QueryError } from "@radd/plugin-sdk";
+import { Button, EmptyState, ErrorText, Modal, QueryError, ReadingPane } from "@radd/plugin-sdk";
 import { PageRoute, pageLink } from "../links";
 import { archivedPagesQuery, pageByKeyQuery, pageByPathQuery, pagesQuery, pageSpaceByIdentityQuery } from "../queries";
 import { PagePermission, useSpacePermissions } from "../permissions";
@@ -199,8 +199,8 @@ export function PageSpacePage() {
           )}
         </nav>
 
-        {/* `@container/page` so the AI pane's `@4xl:` variants have something to
-            query — without a container ancestor those rules never match, and the
+        {/* `@container/page` so the reading pane's `@4xl:` variants have something
+            to query — without a container ancestor those rules never match, and the
             panel would silently stay stacked at every width (same wrapper the
             issue route carries). */}
         <div className="@container/page min-w-0 flex-1 overflow-y-auto">
@@ -212,11 +212,11 @@ export function PageSpacePage() {
                 <QueryError label="page" error={page.error} />
               </div>
             ) : (
-              // The panel, not the popover (RADD-772). `AiReadMenu` already
-              // prefers a results pane wherever one is offered — providing it
-              // IS the switch — and only the issue route ever offered one, so
-              // the surface with the longest document got the smallest box.
-              <AiResultsPane>
+              // The panel, not the popover (RADD-772). A read action answers in
+              // the reading pane wherever one is offered — providing it IS the
+              // switch — and only the issue route ever offered one, so the
+              // surface with the longest document got the smallest box.
+              <ReadingPane>
                 <PageView
                   key={page.data.id}
                   page={page.data}
@@ -225,7 +225,7 @@ export function PageSpacePage() {
                   canComment={canComment}
                   canManage={canManage}
                 />
-              </AiResultsPane>
+              </ReadingPane>
             )
           ) : browsingArchive && canBrowseArchive ? (
             archive.isPending ? (

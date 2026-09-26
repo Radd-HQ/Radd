@@ -2,7 +2,7 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { locateAnchor, type TextAnchor } from "@radd/plugin-sdk";
 
 /**
- * Which inline comments an AI review would strand (RADD-1274).
+ * Which inline comments a transform review would strand (RADD-1274).
  *
  * An inline comment is a text quote re-located on every render (RADD-726); a
  * passage the replacement removes turns its comment into an orphan. The rule

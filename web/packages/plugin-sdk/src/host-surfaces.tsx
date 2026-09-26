@@ -11,6 +11,7 @@ import { TextArea } from "./primitives";
 import { Callout } from "./host";
 import {
   useProvided,
+  type IssueSuggestionProps,
   type ItemKeyLinkProps,
   type ItemPeekProps,
   type MissingPluginTypeProps,
@@ -69,6 +70,18 @@ export function ItemKeyLink(props: ItemKeyLinkProps) {
 export function ItemPeek(props: ItemPeekProps) {
   const { ItemPeek: Host } = useProvided();
   return Host ? <Host {...props} /> : <>{props.children(() => window.location.assign(`/issues/${props.itemKey}`))}</>;
+}
+
+/** A suggested issue as a list row (`<li>`); render a list of them inside a `<ul>`. */
+export function IssueSuggestion(props: IssueSuggestionProps) {
+  const { IssueSuggestion: Host } = useProvided();
+  if (Host) return <Host {...props} />;
+  return (
+    <li>
+      <a href={`/issues/${props.itemKey}`}>{props.itemKey} {props.title}</a> {props.badge}
+      {props.note && <p>{props.note}</p>}
+    </li>
+  );
 }
 
 export function MissingPluginType(props: MissingPluginTypeProps) {

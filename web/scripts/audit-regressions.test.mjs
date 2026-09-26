@@ -23,7 +23,7 @@ const pageQueries = evaluate(pagesSource("queries.ts"), {
 let factories = source("queries/shared.ts");
 for (const [file, names] of [
   ["items", ["commentsQuery"]], ["activity", ["linkSearchQuery"]],
-  ["ai-search", ["searchQuery", "similarToTextQuery"]],
+  ["ai-search", ["searchQuery"]],
 ]) {
   const code = source(`queries/${file}.ts`);
   for (const name of names) {
@@ -33,9 +33,12 @@ for (const [file, names] of [
 }
 const { Entity, entityMeta } = evaluate(source("cache.ts"), {}, ["Entity", "entityMeta"]);
 const { invalidateEntities } = evaluate(readFileSync(new URL("../packages/plugin-sdk/src/cache.ts", import.meta.url), "utf8"), {}, ["invalidateEntities"]);
-const names = ["commentsQuery", "linkSearchQuery", "searchQuery", "similarToTextQuery"];
+const names = ["commentsQuery", "linkSearchQuery", "searchQuery"];
+// Similar issues for a text seed are the ai plugin's own read (RADD-1395).
+const aiQueries = evaluate(readFileSync(new URL("../../server/src/radd/modules/ai/ui/src/queries.ts", import.meta.url), "utf8"),
+  { queryOptions: x => x, api: {}, AiEndpoint: {}, AiEntity: {}, itemSimilarPath: () => "" }, ["similarToTextQuery"]);
 const queries = { ...evaluate(factories, { ...ownerKeys, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined }, names),
-  pageSearchQuery: pageQueries.pageSearchQuery };
+  pageSearchQuery: pageQueries.pageSearchQuery, similarToTextQuery: aiQueries.similarToTextQuery };
 for (const [name, a, b] of [
   ["linkSearchQuery", ["p", "q", "a", 20], ["p", "q", "b", 20]],
   ["searchQuery", ["q", 5], ["q", 20]],

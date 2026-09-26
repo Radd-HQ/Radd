@@ -115,8 +115,6 @@ export const queryKeys = {
   deflect: (q: string, projectId: string) => ["deflect", { q, projectId }] as const,
   totp: ["auth", "totp"] as const,
   aiStatus: ["aiStatus"] as const,
-  // Editor AI (spec 103) — the curated action menu behind the editor's AI entry.
-  aiEditorActions: ["aiEditorActions"] as const,
   // Storage host registry + routing chain + move jobs (spec 102).
   storageHosts: ["storageHosts"] as const,
   storageRules: ["storageRules"] as const,
@@ -128,7 +126,4 @@ export const queryKeys = {
   searchSemantic: (q: string) => ["searchSemantic", { q }] as const,
   // The signed-in user's server-side preferences dict (spec 94).
   mePreferences: ["auth", "me", "preferences"] as const,
-  similarItems: (itemId: string) => ["similarItems", { itemId }] as const,
-  // seedKey identifies the text's origin (a comment id), not the text itself.
-  similarToText: (seedKey: string, text: string, excludeItemId?: string) => ["similarToText", { seedKey, text, excludeItemId }] as const,
 } as const;

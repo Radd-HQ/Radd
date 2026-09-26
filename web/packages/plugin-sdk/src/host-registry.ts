@@ -127,6 +127,20 @@ export interface ReportWidgetProps {
 export interface ItemKeyLinkProps { itemKey: string; className?: string }
 /** Opens an issue in the shell's peek panel: `children` receives the opener. */
 export interface ItemPeekProps { itemKey: string; children: (open: () => void) => ReactNode }
+/** One suggested issue in a list (RADD-1395): its key and title link — opening in the peek panel
+ *  when there is one, so a half-typed draft survives — and a preview on a resting pointer. */
+export interface IssueSuggestionProps {
+  itemKey: string;
+  title: string;
+  /** Beside the link: a score, a status. */
+  badge?: ReactNode;
+  /** A line under it: why it was suggested. */
+  note?: ReactNode;
+  /** Offer merging THIS issue (its id) into the suggestion — the reader is looking at a duplicate. */
+  mergeFrom?: string;
+  /** The row's link opened the issue, or a merge landed; a popover hosting the list may close. */
+  onOpen?: () => void;
+}
 /** Where a contributed type or page cannot render: its plugin is gone, or it was turned off. */
 export interface MissingPluginTypeProps { typeKey: string; kind: "view" | "widget" | "page"; disabled?: boolean }
 export const ToastKind = { success: "success", error: "error" } as const;
@@ -168,6 +182,7 @@ export interface HostComponents extends DocumentHost, CommentHost, KitHost {
   ItemKeyLink?: ComponentType<ItemKeyLinkProps>;
   ItemPeek?: ComponentType<ItemPeekProps>;
   MissingPluginType?: ComponentType<MissingPluginTypeProps>;
+  IssueSuggestion?: ComponentType<IssueSuggestionProps>;
 }
 
 let provided: HostComponents = {};

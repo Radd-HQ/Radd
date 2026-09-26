@@ -28,13 +28,16 @@ const {api,abortAccountRequests}=evaluate(source('api.ts'),{
   API_BASE:'/api/v1',On401:{redirect:'redirect'},RoutePath:{login:'/login'},pushToast(){},FORBIDDEN_FALLBACK_MESSAGE:'Denied',
 },['api','abortAccountRequests']);
 const imports={api,Entity,entityMeta,projectEntityMeta,queryKeys,queryOptions:x=>x,keepPreviousData:undefined,
- ApiPath:{search:'/search',aiSimilar:'/ai/similar',searchSemantic:'/search/semantic',searchDeflect:'/search/deflect',items:'/items'},
- DEFLECT_MIN_QUERY_CHARS:2,apiItemSimilarPath:id=>'/items/'+id+'/similar',
+ ApiPath:{search:'/search',searchSemantic:'/search/semantic',searchDeflect:'/search/deflect',items:'/items'},
+ DEFLECT_MIN_QUERY_CHARS:2,
  apiItemLinkSearchPath:()=>'/items/link-search',apiItemHistoryPath:id=>'/items/'+id+'/history',
  apiItemVcsLinksPath:()=>'',apiItemWebLinksPath:()=>'',
  ITEMS_PAGE_LIMIT:200,ROADMAP_MEMBERS_LIMIT:200,ROADMAP_TRAY_PAGE_LIMIT:50,VIEW_COUNTS_MAX_VIEWS:50,VIEW_COUNTS_REFETCH_MS:60000,
 };
-const ai=evaluate(source('queries/ai-search.ts'),imports,['searchQuery','similarToTextQuery','semanticSearchQuery','deflectQuery']);
+const ai=evaluate(source('queries/ai-search.ts'),imports,['searchQuery','semanticSearchQuery','deflectQuery']);
+// Similar issues for a text seed are the ai plugin's own read (RADD-1395).
+const aiPlugin=evaluate(readFileSync(new URL('../../server/src/radd/modules/ai/ui/src/queries.ts',import.meta.url),'utf8'),
+  {...imports,AiEndpoint:{similar:'/ai/similar'},AiEntity:{},itemSimilarPath:id=>'/items/'+id+'/similar'},['similarToTextQuery']);
 const provisioning=evaluate(readFileSync(new URL('../../server/src/radd/modules/sso/ui/src/queries.ts',import.meta.url),'utf8'),imports,['provisioningReferencesQuery']);
 const fieldSettings=evaluate(source('queries/field-settings.ts'),imports,['fieldDirectoryQuery','managedFieldQuery','fieldProjectChoicesQuery','fieldProjectReferencesQuery','fieldOptionsQuery']);
 const formSharing=evaluate(source('queries/forms.ts'),{...imports,apiFormPath:id=>'/forms/'+id},['formSharingQuery','formShareCandidatesQuery']);
@@ -54,7 +57,7 @@ try {
     ['team counts',q=>teams.teamReferencesQuery([q],true)],
     ['text search',q=>ai.searchQuery(q,20)],
     ['semantic search',q=>ai.semanticSearchQuery(q)],
-    ['similarity POST',q=>ai.similarToTextQuery('comment',q,'issue')],
+    ['similarity POST',q=>aiPlugin.similarToTextQuery('comment',q,'issue')],
     ['deflection',q=>ai.deflectQuery(q,'project')],
     ['link picker',q=>activity.linkSearchQuery('project',q)],
     ['provisioning references',q=>provisioning.provisioningReferencesQuery([q],[],[])],

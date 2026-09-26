@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError, CommentSection, LiveRole, api, errorMessage, invalidateEntities, toast, useCommentFeed, useCurrentUser,
-  useIsAuthenticated, useLiveSession, type AiRun, type InlineAnchorRef,
+  useIsAuthenticated, useLiveSession, type EditorTransform, type InlineAnchorRef,
 } from "@radd/plugin-sdk";
 import { commentPath, pagePath } from "../endpoints";
 import { Tag } from "../queries";
@@ -30,12 +30,12 @@ export function usePageEditing(page: Page) {
    *  refetch may bump page.version mid-edit; saving must still 409 against what the author read. */
   const [editVersion, setEditVersion] = useState(page.version);
   const [conflict, setConflict] = useState(false);
-  // A read-mode AI transform pending for the session about to open — the editor's initial run.
-  const [pendingAiRun, setPendingAiRun] = useState<AiRun | null>(null);
+  // A read action's transform pending for the session about to open — the editor's initial run.
+  const [pendingTransform, setPendingTransform] = useState<EditorTransform | null>(null);
   const [finishing, setFinishing] = useState(false);
 
-  // RADD-1274: the open inline comments, handed to the editor so an AI review can count the
-  // passages it removes. The same feed the rail reads, and only while editing.
+  // RADD-1274: the open inline comments, handed to the editor so a transform review can count
+  // the passages it removes. The same feed the rail reads, and only while editing.
   const inlineFeed = useCommentFeed({ parentType: "page", parentId: page.id, section: CommentSection.inline, enabled: editing });
   const inlineAnchors = useMemo<InlineAnchorRef[]>(
     () => inlineFeed.comments
@@ -73,15 +73,15 @@ export function usePageEditing(page: Page) {
   });
 
   return {
-    editing, draft, editVersion, conflict, pendingAiRun, finishing, collab, inlineAnchors, save,
+    editing, draft, editVersion, conflict, pendingTransform, finishing, collab, inlineAnchors, save,
     /** The room refused us (or there is no account): the single-editor flow. */
     legacy: collab.failed || !me,
     onDraft: (markdown: string) => { draftRef.current = markdown; setDraft(markdown); },
-    open: (run: AiRun | null) => {
+    open: (transform: EditorTransform | null) => {
       draftRef.current = page.body;
       setDraft(page.body);
       setEditVersion(page.version);
-      setPendingAiRun(run);
+      setPendingTransform(transform);
       setEditing(true);
     },
     /** Leave the room: the final write first, if this client is the saver. */
@@ -90,11 +90,11 @@ export function usePageEditing(page: Page) {
       try { await collab.finish(); } finally {
         setFinishing(false);
         setEditing(false);
-        setPendingAiRun(null);
+        setPendingTransform(null);
         invalidate();
       }
     },
-    cancel: () => { setEditing(false); setConflict(false); setPendingAiRun(null); },
+    cancel: () => { setEditing(false); setConflict(false); setPendingTransform(null); },
     reload: () => { setConflict(false); setEditing(false); invalidate(); },
     resolveDetached: (ids: string[]) => resolveDetached.mutate(ids),
     invalidate,

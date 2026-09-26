@@ -17,9 +17,6 @@ export const PARENT_SEARCH_LIMIT = 25;
 /** KB deflection (spec 66): debounce + minimum title length before querying. */
 export const DEFLECT_DEBOUNCE_MS = 400;
 export const DEFLECT_MIN_QUERY_CHARS = 3;
-/** Similar-issues on the form pages (spec 106): each probe embeds the draft
- * server-side, so it settles noticeably later than the FTS deflection. */
-export const FORM_SIMILAR_DEBOUNCE_MS = 800;
 
 /** Realtime WebSocket (spec 27). */
 export const REALTIME_WS_PATH = `${API_BASE}/ws`;

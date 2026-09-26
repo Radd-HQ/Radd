@@ -147,16 +147,16 @@ async function main() {
     checks.modelSawNoSyntax = !/radd:media|!\[whiteboard|attachments\//.test(sent);
     checks.promptCarriesTheRule = /keep-N/.test(sent);
     const panel = await session.eval(`({
-      dropped: document.querySelector("[data-ai-dropped-blocks]")?.textContent ?? null,
-      detached: document.querySelector("[data-ai-detached-comments]")?.textContent ?? null,
-      resolveChecked: document.querySelector("[data-ai-detached-comments] input")?.checked ?? null,
+      dropped: document.querySelector("[data-editor-run-note]")?.textContent ?? null,
+      detached: document.querySelector("[data-editor-detached-comments]")?.textContent ?? null,
+      resolveChecked: document.querySelector("[data-editor-detached-comments] input")?.checked ?? null,
     })`);
     checks.panelReportsDroppedBlock = /left out 1 protected block/.test(panel.dropped ?? "");
     checks.panelCountsTwoComments = /passages of 2 open comments/.test(panel.detached ?? "");
     checks.resolveOnByDefault = panel.resolveChecked === true;
 
     // --- accept everything
-    await session.click("[data-ai-run-panel] button", (t) => /accept all/i.test(t));
+    await session.click("[data-editor-run-panel] button", (t) => /accept all/i.test(t));
     checks.reviewClosed = await waitFor(session, `document.querySelectorAll(".milkdown-diff-controls").length === 0`, 30);
     await sleep(3500); // the room's elected saver writes 1.5 s after the change
     await session.screenshot(output + "/accepted.png");

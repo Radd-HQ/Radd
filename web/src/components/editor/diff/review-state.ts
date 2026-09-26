@@ -51,7 +51,7 @@ export const reviewStatePlugin = (onChange: (state: ReviewState) => void) =>
           return {
             update: publish,
             // A destroyed editor has no review, and this runs on a mode switch
-            // or an AI-gate recreate — where the component lives on and would
+            // — where the component lives on and would
             // otherwise keep a review panel open over an editor that is gone.
             destroy: () => onChange(NO_REVIEW),
           };

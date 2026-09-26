@@ -69,7 +69,9 @@ try {
   check("the manifest declares the page's nav entry",
     truth.nav.length === 1 && truth.nav[0].path === "/settings/ai" && truth.nav[0].group === "Server" && truth.nav[0].requires_admin,
     JSON.stringify(truth.nav));
-  check("the ai remote asks for UI API 1.14.0 (ScopedSettings)", truth.remote?.ui_api_version === "1.14.0", JSON.stringify(truth.remote));
+  // At least 1.14.0, where ScopedSettings arrived; later plugin work raises it (1.16.0 since RADD-1395).
+  const [major, minor] = String(truth.remote?.ui_api_version ?? "0.0").split(".").map(Number);
+  check("the ai remote asks for a UI API with ScopedSettings (≥ 1.14.0)", major === 1 && minor >= 14, JSON.stringify(truth.remote));
 
   // 1–2. the page.
   await session.navigate(`${baseUrl}/settings/ai`, 1500);

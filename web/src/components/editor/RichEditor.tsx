@@ -33,21 +33,28 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { diffComponent, diffDecorationPlugin } from "@milkdown/kit/component/diff";
 import { acceptAllDiffsCmd, clearDiffReviewCmd, diff } from "@milkdown/kit/plugin/diff";
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from "@prosemirror-adapter/react";
-import { Blocks, Sparkles, type LucideIcon } from "lucide-react";
+import { Blocks } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { aiErrorText, isAiGone } from "../../lib/ai";
+import { errorMessage } from "../../lib/api";
 import { jiraToMarkdown } from "../../lib/jira-markup";
-import { MarkdownSourceContext } from "@radd/plugin-sdk";
+import {
+  MarkdownSourceContext,
+  Slot,
+  SlotId,
+  useSlot,
+  type EditorHandle,
+  type EditorRange,
+  type EditorTransform,
+} from "@radd/plugin-sdk";
 import { entitySearchQuery, searchQuery, usersQuery } from "../../lib/queries";
 import { pushToast } from "../../lib/toast";
-import { useEditorAi, type AiRun } from "./ai";
-import { AiActionPicker } from "./AiActionPicker";
 import { ExtensionPicker, insertExtensionBlock } from "./ExtensionPicker";
 import { DIFF_CONTROLS_SELECTOR, raddDiffDecoration } from "./diff/decoration-plugin";
 import { NO_REVIEW, reviewStatePlugin, type ReviewState } from "./diff/review-state";
-import { AiSelectionToolbar } from "./AiSelectionToolbar";
-import { AiRunPanel, AiRunStatus, type AiRunView } from "./AiRunPanel";
-import { AiRunOutcome, reviewPending, runAi } from "./ai-run";
+import { SelectionActions } from "./SelectionActions";
+import { ToolbarExtraButton } from "./ToolbarExtraButton";
+import { TransformRunPanel, TransformRunStatus, type TransformRunView } from "./TransformRunPanel";
+import { TransformOutcome, reviewPending, runTransform } from "./transform-run";
 import { detachedComments, type InlineAnchorRef } from "./detached-comments";
 import { NO_SELECTION, selectionRectPlugin, type SelectionRect } from "./selection-state";
 import { makeEditor } from "./create-editor";
@@ -102,21 +109,21 @@ interface RichEditorProps {
    * actions on the issue in context, NOT text inserts (the toolbar covers those).
    * Omit where there's no issue context (pages, new-item modal): `/` stays inert. */
   quickActions?: QuickAction[];
-  /** Run this AI transform over the whole document as soon as the editor is
-   * ready (read-mode AI menu → edit-with-pending-diff). Consumed once. */
-  initialAiRun?: AiRun;
+  /** Run this transform over the whole document as soon as the editor is ready
+   * (a read action's hand-off → edit-with-pending-diff, RADD-1395). Consumed once. */
+  initialTransform?: EditorTransform;
   /** The page has NO session (the public tokened form): skip every authed
-   * affordance wholesale — the editor-AI gate queries (each would bounce the
-   * visitor to /login via the api client's 401 redirect) and the `@`/`#`/`/`
-   * triggers (the user directory and issue search are logged-in surfaces).
-   * Formatting only. */
+   * affordance wholesale — the contributed toolbar and selection actions
+   * (their gates query authenticated endpoints, and the api client answers a
+   * 401 by bouncing the visitor to /login) and the `@`/`#`/`/` triggers (the
+   * user directory and issue search are logged-in surfaces). Formatting only. */
   anonymous?: boolean;
   /** Spec 122: bind the document to a live room instead of the local copy.
    *  History is replaced by the Yjs undo manager, the plain-text mode is
    *  unavailable (a textarea cannot bind a CRDT), and `value` is the seed
    *  template. Fixed for the instance's life — a new room means a new `key`. */
   collab?: CollabConfig;
-  /** RADD-1274: the open inline comments anchored to this document, so an AI
+  /** RADD-1274: the open inline comments anchored to this document, so a
    *  review can say how many passages it is about to remove. Pages only. */
   inlineAnchors?: InlineAnchorRef[];
   /** Called when a review ends with those passages gone and the person chose
@@ -128,47 +135,6 @@ interface RichEditorProps {
 
 /** GitLab-style editing-mode preference, sticky across all editors + sessions. */
 const PLAIN_PREF_KEY = "radd.editor.plainText";
-
-/**
- * A toolbar button that opens a popover rather than running a command.
- *
- * The class is the handle its popover anchors to, and the handle the render
- * proofs already look for — `svg.radd-ai-toolbar-icon` and
- * `svg.radd-extension-toolbar-icon` were the selectors when these were raw SVG
- * strings handed to a third-party toolbar builder. Keeping them means the proofs
- * assert the same rendered output across the change, which is the point of them.
- */
-function ToolbarExtraButton({
-  icon: Icon,
-  title,
-  className,
-  onPick,
-  disabled = false,
-}: {
-  icon: LucideIcon;
-  title: string;
-  className: string;
-  onPick: (anchor: DOMRect) => void;
-  /** A run or review already owns the editor — a second one is refused
-   *  downstream anyway, and a button that only ever earns a toast is worse
-   *  than one that says it is unavailable. */
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={title}
-      disabled={disabled}
-      // Keep the editor's selection: an AI run applies to it.
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={(event) => onPick(event.currentTarget.getBoundingClientRect())}
-      className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-fg-secondary transition-colors hover:bg-elevated hover:text-heading focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40"
-    >
-      <Icon size={16} className={className} aria-hidden />
-    </button>
-  );
-}
 
 interface Candidate {
   label: string;
@@ -219,7 +185,7 @@ function RichEditorInner({
   onSubmitShortcut,
   onUploadImage,
   quickActions,
-  initialAiRun,
+  initialTransform,
   anonymous = false,
   extensions = false,
   collab: collabConfig,
@@ -242,7 +208,8 @@ function RichEditorInner({
   const preReviewDoc = useRef<ProseNode | null>(null);
   const [detached, setDetached] = useState<string[]>([]);
   const [resolveDetached, setResolveDetached] = useState(true);
-  const [dropped, setDropped] = useState(0);
+  // What the transform said about its result, shown beside the review.
+  const [notes, setNotes] = useState<string[]>([]);
   // Latest callbacks without recreating the editor (create-once, uncontrolled).
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -255,10 +222,10 @@ function RichEditorInner({
   // when switching between rich and plain modes.
   const contentRef = useRef(jiraToMarkdown(value));
   // GitLab-style plain-markdown mode: a plain textarea over the same markdown value.
-  // An initial AI run needs the rich surface (the diff review is ProseMirror
+  // An initial transform needs the rich surface (the diff review is ProseMirror
   // decorations), so it overrides the sticky plain preference for this mount.
   const [plain, setPlain] = useState(
-    () => localStorage.getItem(PLAIN_PREF_KEY) === "1" && !initialAiRun && !collabConfig,
+    () => localStorage.getItem(PLAIN_PREF_KEY) === "1" && !initialTransform && !collabConfig,
   );
   const [plainDraft, setPlainDraft] = useState(() => contentRef.current);
   // Stable bridge to the ProseMirror mention plugin (its handlers are reassigned below).
@@ -270,24 +237,22 @@ function RichEditorInner({
   const [mention, setMention] = useState<MentionQuery | null>(null);
   const [index, setIndex] = useState(0);
 
-  // Editor AI (spec 103): non-null only once the instance feature, the user's
-  // preference AND the fetched action menu all line up (see useEditorAi).
-  // Anonymous pages never even ask — the gate queries are authenticated.
-  const ai = useEditorAi(!anonymous);
-  // The AI chrome binds at create time, so the instance must be rebuilt when
-  // the gate flips or the curated menu changes — content survives via contentRef.
-  const aiSignature = ai
-    ? "on:" + ai.actions.map((action) => `${action.id}:${action.label}`).join(",")
-    : "off";
-  // The live editor, for dispatching AI runs and inserts from React chrome.
+  // Contributed editor actions (RADD-1395): toolbar buttons and chrome over a
+  // selection, from whichever plugins extend the editor. Anonymous pages offer
+  // none — a contribution's gate may query authenticated endpoints.
+  const offersActions = !anonymous;
+  const selectionContributions = useSlot(SlotId.editorSelectionAction);
+  const offersSelectionActions = offersActions && selectionContributions.length > 0;
+  // Read by the selection plugin, which is created once per instance: where
+  // nothing would float over a selection, moving it re-renders nothing.
+  const offersSelectionRef = useRef(offersSelectionActions);
+  offersSelectionRef.current = offersSelectionActions;
+  // The live editor, for dispatching transforms and inserts from React chrome.
   const editorRef = useRef<Editor | null>(null);
-  // The toolbar AI popover, anchored under the TopBar's AI button when open.
-  const [aiMenu, setAiMenu] = useState<{ left: number; top: number } | null>(null);
   // The extension insert popover, anchored under its own TopBar button.
   const [extensionMenu, setExtensionMenu] = useState<{ left: number; top: number } | null>(null);
-  // Consumed once — survives the gate-flip recreate (the first instance often
-  // mounts before the AI queries resolve, without the AI feature).
-  const initialAiRunRef = useRef(initialAiRun ?? null);
+  // Consumed once, by the first instance that finishes creating.
+  const initialTransformRef = useRef(initialTransform ?? null);
   // Read inside the create effect, which must not re-run when the flag changes
   // identity — it is a static per-surface choice, not live state.
   const extensionsRef = useRef(extensions);
@@ -310,15 +275,15 @@ function RichEditorInner({
   // What the toolbar lights up. Published by a plugin view only when it CHANGES,
   // so typing inside one paragraph does not re-render the chrome per keystroke.
   const [snapshot, setSnapshot] = useState<ToolbarSnapshot>(EMPTY_SNAPSHOT);
-  // Where the selection is, for the floating AI surface (RADD-753).
+  // Where the selection is, for the contributed chrome over it (RADD-753).
   const [selectionRect, setSelectionRect] = useState<SelectionRect>(NO_SELECTION);
-  // The live AI run — streaming, then reviewing — or null when there is none.
-  const [aiRun, setAiRun] = useState<AiRunView | null>(null);
+  // The live transform run — streaming, then reviewing — or null when there is none.
+  const [activeRun, setActiveRun] = useState<TransformRunView | null>(null);
   // What the diff plugin has pending, published from the editor (RADD-762).
   const [review, setReview] = useState<ReviewState>(NO_REVIEW);
   // Which Accept/Reject pair the panel has stepped to; -1 = none yet.
   const [current, setCurrent] = useState(-1);
-  const aiHandleRef = useRef<{ cancel: () => void } | null>(null);
+  const runHandleRef = useRef<{ cancel: () => void } | null>(null);
   // The table size picker, anchored under the toolbar's table button.
   const [tableMenu, setTableMenu] = useState<{ left: number; top: number } | null>(null);
   // Table operations bound to whichever instance is live. A stable identity, so
@@ -398,58 +363,69 @@ function RichEditorInner({
     level === 0 ? run(turnIntoTextCommand.key) : run(wrapInHeadingCommand.key, level);
 
   /**
-   * Stream a transform and land it as a reviewable diff (RADD-753).
+   * Run a contributed transform and land it as a reviewable diff (RADD-753,
+   * RADD-1395).
    *
    * A direct call, not a command dispatched by NAME. That workaround existed
    * because importing Crepe's `runAICmd` from its subpath bound a second, dead
    * copy of the feature module — and a `$command`'s `.key` is only assigned when
-   * its plugin instance runs. Owning the orchestration removes the reason for
-   * the trick rather than making the trick tidier.
+   * its plugin instance runs. Owning the orchestration removed the reason for
+   * the trick; RADD-1395 moved what the run IS to the contribution.
    */
-  const dispatchAiRun = (run: AiRun, range?: { from: number; to: number }) => {
-    setAiMenu(null);
+  const dispatchTransform = (transform: EditorTransform, range?: EditorRange) => {
     const editor = editorRef.current;
     if (!editor) return;
     editor.action((ctx) => {
       if (reviewPending(ctx)) {
-        pushToast("Finish the current AI review first.");
+        pushToast("Finish the current review first.");
         return;
       }
-      const handle = runAi(ctx, run, range);
-      aiHandleRef.current = handle;
-      setAiRun({ label: run.label, status: AiRunStatus.streaming, text: "" });
+      const handle = runTransform(ctx, transform, range);
+      runHandleRef.current = handle;
+      setActiveRun({ label: transform.label, status: TransformRunStatus.streaming, text: "" });
       setCurrent(-1);
-      handle.onChunk((text) =>
-        setAiRun((live) => (live === null ? live : { ...live, text })),
+      handle.onText((text) =>
+        setActiveRun((live) => (live === null ? live : { ...live, text })),
       );
       handle.done
         .then((outcome) => {
-          if (outcome === AiRunOutcome.review) {
+          if (outcome === TransformOutcome.review) {
             const before = ctx.get(editorViewCtx).state.doc;
             const proposed = handle.proposed();
             preReviewDoc.current = before;
             setDetached(proposed ? detachedComments(inlineAnchorsRef.current, before, proposed) : []);
             setResolveDetached(true);
-            setDropped(handle.dropped());
-            setAiRun((live) =>
-              live === null ? live : { ...live, status: AiRunStatus.reviewing },
+            setNotes(handle.notes());
+            setActiveRun((live) =>
+              live === null ? live : { ...live, status: TransformRunStatus.reviewing },
             );
             return;
           }
-          // Stopped, or a reply with nothing in it — either way there is no
+          // Stopped, or a result with nothing in it — either way there is no
           // review to hand over, and the panel should not sit there implying one.
-          setAiRun(null);
-          if (outcome === AiRunOutcome.empty) pushToast("The AI suggested no changes.");
+          setActiveRun(null);
+          if (outcome === TransformOutcome.empty) {
+            pushToast(transform.emptyMessage ?? "No changes were suggested.");
+          }
         })
         .catch((error) => {
-          setAiRun(null);
-          pushToast(isAiGone(error) ? "AI editor actions are unavailable." : aiErrorText(error));
+          setActiveRun(null);
+          pushToast(errorMessage(error));
         })
         .finally(() => {
-          aiHandleRef.current = null;
+          runHandleRef.current = null;
         });
     });
   };
+  // What contributions drive: stable per busy state, so a contribution's
+  // effects do not re-run on every keystroke.
+  const dispatchRef = useRef(dispatchTransform);
+  dispatchRef.current = dispatchTransform;
+  const busy = activeRun !== null;
+  const editorHandle = useMemo<EditorHandle>(
+    () => ({ busy, transform: (transform, range) => dispatchRef.current(transform, range) }),
+    [busy],
+  );
 
   /**
    * Step to a pending change and mark it as the one being looked at.
@@ -481,7 +457,7 @@ function RichEditorInner({
       ?.querySelectorAll<HTMLElement>(DIFF_CONTROLS_SELECTOR)
       .forEach((node) => node.removeAttribute("data-current"));
     if (!review.active) {
-      setAiRun((live) => (live?.status === AiRunStatus.reviewing ? null : live));
+      setActiveRun((live) => (live?.status === TransformRunStatus.reviewing ? null : live));
       // RADD-1274: the review is over — against what was ACTUALLY accepted,
       // which comments lost their passage? Only those, and only when asked.
       const before = preReviewDoc.current;
@@ -495,7 +471,7 @@ function RichEditorInner({
         });
       }
       setDetached([]);
-      setDropped(0);
+      setNotes([]);
     }
   }, [review.active, review.changes]);
 
@@ -595,16 +571,14 @@ function RichEditorInner({
   useEffect(() => {
     const root = rootRef.current;
     if (!root || plain) return; // plain mode: the textarea below, no editor instance
-    // Feature-flag choices cascade into Crepe's own menus: TopBar entries for image,
-    // table and math only render when their feature is enabled. Crepe's BlockEdit
-    // slash menu stays OFF: it only duplicated the toolbar's inserts — our own `/`
-    // menu (mention.ts trigger + `quickActions`) acts on the ISSUE instead.
-    const aiOn = ai !== null;
+    // Crepe's BlockEdit slash menu stays OFF: it only duplicated the toolbar's
+    // inserts — our own `/` menu (mention.ts trigger + `quickActions`) acts on
+    // the ISSUE instead.
     const extensionsOn = extensionsRef.current;
     const collabOn = collabRef.current;
-    // A recreate (the AI gate resolving) rebinds the room; typing is refused
-    // again until it has — the window is a few milliseconds, but a keystroke
-    // in it would land in a document about to be replaced.
+    // A recreate (a switch back from plain mode) rebinds the room; typing is
+    // refused again until it has — the window is a few milliseconds, but a
+    // keystroke in it would land in a document about to be replaced.
     if (collabOn) collabEditableRef.current = false;
     let sourceTimer: ReturnType<typeof setTimeout> | undefined;
     // Milkdown directly (RADD-755). Every feature this used to switch off is a
@@ -737,26 +711,28 @@ function RichEditorInner({
     let offRemoteUpdate: (() => void) | undefined;
     let remoteSerializeTimer: ReturnType<typeof setTimeout> | undefined;
     const created = (async () => {
-      if (aiOn) {
-        // The review machinery, registered by us now that Crepe's AI feature is
-        // not doing it: the diff STATE plugin plus our own decoration fork (see
-        // diff/decoration-plugin.ts). The upstream decoration component is
-        // removed first — with the feature off it is usually absent, and
-        // `remove` on something unregistered is a no-op, so this stays correct
-        // either way rather than depending on which.
-        // `diffComponent` carries the ctx slice our fork reads (labels +
-        // customBlockTypes) — Crepe's AI feature used to bring it, and reaching
-        // for that slice without it raises "Context not found" before the editor
-        // can even create. Its defaults are already Accept/Reject, so it is
-        // registered for the SLICE and then has its decoration plugin swapped
-        // for ours.
-        editor.use(diff).use(diffComponent);
-        await editor.remove(diffDecorationPlugin);
-        editor
-          .use(raddDiffDecoration)
-          .use(reviewStatePlugin(setReview))
-          .use(selectionRectPlugin(setSelectionRect));
-      }
+      // The review machinery (RADD-1395: the editor's own, whoever runs the
+      // transform): the diff STATE plugin plus our own decoration fork (see
+      // diff/decoration-plugin.ts). Registered on every instance — inert until a
+      // review opens — so a contribution arriving mid-edit needs no recreate,
+      // and one leaving cannot take an open review with it. The upstream
+      // decoration component is removed first; `remove` on something
+      // unregistered is a no-op, so this stays correct either way.
+      // `diffComponent` carries the ctx slice our fork reads (labels +
+      // customBlockTypes) — reaching for that slice without it raises "Context
+      // not found" before the editor can even create. Its defaults are already
+      // Accept/Reject, so it is registered for the SLICE and then has its
+      // decoration plugin swapped for ours.
+      editor.use(diff).use(diffComponent);
+      await editor.remove(diffDecorationPlugin);
+      editor
+        .use(raddDiffDecoration)
+        .use(reviewStatePlugin(setReview))
+        .use(
+          selectionRectPlugin((rect) => {
+            if (offersSelectionRef.current) setSelectionRect(rect);
+          }),
+        );
       await editor.create();
       if (collabOn) {
         // The seed rule (spec 122): wait for the room, and only the client
@@ -807,12 +783,11 @@ function RichEditorInner({
         };
       }
       if (autoFocus) root.querySelector<HTMLElement>(".ProseMirror")?.focus();
-      // Read-mode transform hand-off: run once, on the first instance that has
-      // AI (the first mount often precedes the AI gate queries resolving).
-      const run = initialAiRunRef.current;
-      if (aiOn && run) {
-        initialAiRunRef.current = null;
-        dispatchAiRun(run);
+      // Read-mode transform hand-off: run once, on the first instance created.
+      const handedOff = initialTransformRef.current;
+      if (handedOff && !disposed) {
+        initialTransformRef.current = null;
+        dispatchRef.current(handedOff);
       }
     })();
     return () => {
@@ -835,11 +810,13 @@ function RichEditorInner({
         editor.destroy();
       });
       if (editorRef.current === editor) editorRef.current = null;
+      // A run belongs to the instance it started on.
+      runHandleRef.current?.cancel();
     };
-    // Recreated on mode switch + AI gate/menu changes — `value` changes are
-    // ignored (remount to reseed).
+    // Recreated on mode switch only — `value` changes are ignored (remount to
+    // reseed).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plain, aiSignature]);
+  }, [plain]);
 
   const togglePlain = () => {
     setPlain((current) => {
@@ -899,7 +876,7 @@ function RichEditorInner({
           />
         ) : (
           <>
-            {/* Toolbar + AI band travel together, so both stay reachable in a
+            {/* Toolbar + run band travel together, so both stay reachable in a
                 long document. The wrapper carries the stickiness: the toolbar's
                 own `sticky top-0` then has no room to move inside it, which is
                 what keeps the two from sliding over each other. */}
@@ -919,25 +896,12 @@ function RichEditorInner({
                 tables
                 extra={
                   <>
-                    {ai && (
-                      <ToolbarExtraButton
-                        icon={Sparkles}
-                        title="AI"
-                        className="radd-ai-toolbar-icon"
-                        disabled={aiRun !== null}
-                        onPick={(rect) =>
-                          setAiMenu({
-                            left: Math.min(rect.left, window.innerWidth - 300),
-                            top: rect.bottom + 4,
-                          })
-                        }
-                      />
-                    )}
+                    {/* Contributed buttons (RADD-1395), before the host's own. */}
+                    {offersActions && <Slot id={SlotId.editorToolbarAction} editor={editorHandle} />}
                     {extensions && (
                       <ToolbarExtraButton
-                        icon={Blocks}
+                        icon={<Blocks size={16} className="radd-extension-toolbar-icon" aria-hidden />}
                         title="Insert extension"
-                        className="radd-extension-toolbar-icon"
                         onPick={(rect) =>
                           setExtensionMenu({
                             left: Math.min(rect.left, window.innerWidth - 300),
@@ -949,19 +913,19 @@ function RichEditorInner({
                   </>
                 }
               />
-              {ai && aiRun && (
-                <AiRunPanel
-                  run={aiRun}
+              {activeRun && (
+                <TransformRunPanel
+                  run={activeRun}
                   changes={review.changes}
                   current={current}
                   onNavigate={navigateReview}
-                  onStop={() => aiHandleRef.current?.cancel()}
+                  onStop={() => runHandleRef.current?.cancel()}
                   onAcceptAll={() => run(acceptAllDiffsCmd.key)}
                   onRejectAll={() => run(clearDiffReviewCmd.key)}
                   detached={detached.length}
                   resolveDetached={resolveDetached}
                   onResolveDetachedChange={setResolveDetached}
-                  dropped={dropped}
+                  notes={notes}
                 />
               )}
             </div>
@@ -992,31 +956,7 @@ function RichEditorInner({
           </span>
         </div>
       </div>
-      {/* Toolbar AI popover: same curated actions + freeform prompt the
-          selection tooltip offers, minus the need for a selection. */}
-      {aiMenu &&
-        ai &&
-        createPortal(
-          <>
-            <div className="fixed inset-0 z-[59]" onMouseDown={() => setAiMenu(null)} />
-            <div
-              style={{ position: "fixed", left: aiMenu.left, top: aiMenu.top }}
-              className="z-[60] w-72 rounded-md border border-strong bg-surface p-1.5 shadow-pop animate-menu-in"
-              data-ai-toolbar-menu
-            >
-              <AiActionPicker actions={ai.actions} onPick={dispatchAiRun} autoFocus />
-            </div>
-          </>,
-          document.body,
-        )}
-      {ai && (
-        <AiSelectionToolbar
-          rect={selectionRect}
-          actions={ai.actions}
-          onRun={dispatchAiRun}
-          busy={aiRun !== null}
-        />
-      )}
+      {!plain && offersSelectionActions && <SelectionActions rect={selectionRect} editor={editorHandle} />}
       {tableMenu &&
         createPortal(
           <TableGridPicker

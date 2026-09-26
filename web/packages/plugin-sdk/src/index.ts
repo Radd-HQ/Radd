@@ -20,6 +20,7 @@ export {
   useActiveSlotPlugins,
   useDisabledNavPaths,
   useDisabledMatches,
+  useContributionOwner,
   syncContributionPrefs,
   setUserContributionEnabled,
   setGlobalContributionEnabled,
@@ -152,12 +153,13 @@ export { positionedErrorOf, type PositionedError } from "./positioned-error";
 
 export { invalidateEntities } from "./cache";
 
-export { SlqField, PageQueryFilter, ViewSelect, SharingDialog, ReportWidget, ItemKeyLink, ItemPeek, MissingPluginType } from "./host-surfaces";
-export type { SlqFieldProps, PageQueryFilterProps, ViewSelectProps, SharingDialogProps, SharedResourceSave, ReportWidgetProps, ItemKeyLinkProps, ItemPeekProps, MissingPluginTypeProps } from "./host-registry";
+export { SlqField, PageQueryFilter, ViewSelect, SharingDialog, ReportWidget, ItemKeyLink, ItemPeek, IssueSuggestion, MissingPluginType } from "./host-surfaces";
+export type { SlqFieldProps, PageQueryFilterProps, ViewSelectProps, SharingDialogProps, SharedResourceSave, ReportWidgetProps, ItemKeyLinkProps, ItemPeekProps, IssueSuggestionProps, MissingPluginTypeProps } from "./host-registry";
 export { ChartHeightContext } from "./chart-height";
 // Documents (RADD-1392): the `radd:*` block registry and its contexts are shared state, the text
-// helpers are shared by the host editor and plugin surfaces, and the editor, viewer, markdown, AI
-// and live-editing surfaces are the host's, bridged.
+// helpers are shared by the host editor and plugin surfaces, and the editor, viewer, markdown,
+// reading pane and live-editing surfaces are the host's, bridged. What a plugin adds to the editor
+// and to rendered content goes through the editor's extension points (RADD-1395).
 export {
   MarkdownSourceContext, PageExtensionCtx, usePageExtensionContext, registerPageExtension, pageExtensions,
   lookupPageExtension, extensionNameOf, extensionNameOfInfo, splitExtensionBlocks, parseExtensionParams,
@@ -171,11 +173,17 @@ export {
   scrollRangeIntoView,
 } from "./dom-text";
 export {
-  RichEditor, RichViewer, Markdown, AiReadMenu, AiResultsPane, EditingNow, useLiveSession, LiveRole,
-  type RichEditorProps, type RichViewerProps, type MarkdownProps, type AiReadMenuProps, type AiResultsPaneProps,
-  type EditingNowProps, type AiRun, type TaskToggle, type InlineAnchorRef, type LiveRoom, type LiveRoleValue,
+  RichEditor, RichViewer, Markdown, ReadingPane, EditorToolbarButton, EditingNow, useLiveSession, LiveRole,
+  type RichEditorProps, type RichViewerProps, type MarkdownProps, type ReadingPaneProps, type EditorToolbarButtonProps,
+  type EditingNowProps, type TaskToggle, type InlineAnchorRef, type LiveRoom, type LiveRoleValue,
   type LivePerson, type LiveSession, type LiveSessionOptions,
 } from "./host-document";
+export {
+  ReadingPaneContext, useReadingPane,
+  type EditorRange, type EditorSelection, type EditorTransform, type EditorTransformInput, type EditorTransformResult,
+  type EditorHandle, type EditorToolbarActionProps, type EditorSelectionActionProps, type ContentContext,
+  type ReadActionProps, type ItemDraftAssistProps, type ReadingPanel,
+} from "./editor-extensions";
 export {
   CommentReplies, CommentHistory, CopyCommentLink, ThreadBadge, ThreadFilter, ResolveThreadButton, CommentSection,
   useCommentFeed, useLinkedComment, useLandOnComment, useThreadExpansion, commentHref, repliesLabel, threadRuleClass,

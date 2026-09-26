@@ -214,7 +214,7 @@ async function main() {
 
   await session.click("[data-ai-selection-menu] button", (t) => /grammar/i.test(t));
   // A streaming indicator must appear, then a diff review.
-  const streamed = await waitFor(session, `!!document.querySelector("[data-ai-streaming]")`, 20);
+  const streamed = await waitFor(session, `!!document.querySelector("[data-editor-run-streaming]")`, 20);
   const reviewed = await waitFor(session,
     `document.querySelectorAll('[class*="milkdown-diff"]').length > 0`, 90);
 

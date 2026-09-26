@@ -1,6 +1,8 @@
 import { useRemotesLoading } from "./remote-loading";
 import {
   Component,
+  createContext,
+  useContext,
   useMemo,
   useSyncExternalStore,
   type ErrorInfo,
@@ -35,9 +37,27 @@ export const SlotId = {
   issuePanelSection: "issue.panel.section",
   /** Cards at the BOTTOM of the issue right-rail (below the fields). Props: { item, project }. */
   issueRailBottom: "issue.rail.bottom",
+  /** Cards at the TOP of the issue right-rail, above the fields card; each draws its own card
+   *  (RADD-1395). Props: { item, project }. Order-sortable. */
+  issueRailTop: "issue.rail.top",
   /** An extra Activity tab next to Comments/History/VCS. Needs `title`; render is the tab body.
    *  Props: { item, project }. */
   issueTab: "issue.tab",
+  /** Suggestions beside an issue being DRAFTED — the submission form's assist panel (RADD-1395).
+   *  Props: `ItemDraftAssistProps` { title, description, projectId, exclude }. Render nothing
+   *  when there is nothing to suggest: the host hides the panel when every section is empty. */
+  itemDraftAssist: "item.draft.assist",
+  // --- the rich editor and rendered content (RADD-1395) ---
+  /** A button in the rich editor's toolbar. Props: `EditorToolbarActionProps` { editor } — draw it
+   *  with `EditorToolbarButton`; `editor.transform(…)` streams a reviewable replacement. */
+  editorToolbarAction: "editor.toolbar.action",
+  /** Chrome over a text selection, placed by the host above it. Props: `EditorSelectionActionProps`
+   *  { editor, selection } — `selection` is null while nothing is selected or the editor lost
+   *  focus, so a contribution holding a popover open keeps its CAPTURED range. */
+  editorSelectionAction: "editor.selection.action",
+  /** An action on RENDERED content (a description, a comment, a page body), shown for every
+   *  reader. Props: `ReadActionProps` { text, context, transform?, subject, className? }. */
+  contentReadAction: "content.read.action",
   // --- views (board/list/roadmap) ---
   /** An item in a view's header/toolbar. Props: { view, items } — the view + its currently-loaded,
    *  permission-scoped issues, so a plugin can compute over exactly what the user sees. */
@@ -736,8 +756,21 @@ class SlotErrorBoundary extends Component<
   }
 }
 
+/** Which plugin's contribution this subtree is — so a host surface a contribution OPENS (a reading
+ *  panel) can be withdrawn with the plugin that opened it (RADD-1395). */
+const ContributionOwnerContext = createContext<string | null>(null);
+
+/** The plugin whose slot contribution renders the calling component; null outside one. */
+export function useContributionOwner(): string | null {
+  return useContext(ContributionOwnerContext);
+}
+
 function Contribution({ entry, props }: { entry: Entry; props: Record<string, unknown> }) {
-  return <>{entry.contribution.render(props)}</>;
+  return (
+    <ContributionOwnerContext.Provider value={entry.plugin}>
+      {entry.contribution.render(props)}
+    </ContributionOwnerContext.Provider>
+  );
 }
 
 /**

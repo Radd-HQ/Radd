@@ -436,3 +436,47 @@ test('every plugin nav icon is a name the one icon registry ships (RADD-1390)',(
   assert(declared.length>=10,'the scan must find the manifests\' nav icons');
   assert.deepEqual(declared.filter(d=>!known.has(d.split(': ')[1])),[]);
 });
+
+test('editor, read-mode, issue and draft AI are the ai plugin\'s: the host and the SDK name none of it (RADD-1395)',()=>{
+  for (const file of ['web/src/components/editor/ai.ts','web/src/components/editor/ai-run.ts','web/src/components/editor/ai-protect.ts',
+    'web/src/components/editor/AiRunPanel.tsx','web/src/components/editor/AiSelectionToolbar.tsx','web/src/components/editor/AiActionPicker.tsx',
+    'web/src/components/editor/AiReadMenu.tsx','web/src/components/items/AiResultsPanel.tsx','web/src/components/items/AiResultsPane.tsx',
+    'web/src/components/items/AiSection.tsx','web/src/components/items/ai-results.ts','web/src/lib/sse.ts']) assert(!existsSync(file),file);
+  // The palette's Ask mode and the query bar's natural-language ask are the host's last AI surfaces:
+  // each needs a contribution point of its own. What they read is listed here and may not grow.
+  const residue=new Set(['web/src/components/CommandPalette.tsx','web/src/components/views/QueryBar.tsx','web/src/lib/ai.ts',
+    'web/src/lib/queries/ai-search.ts','web/src/lib/types/ai.ts','web/src/lib/types/index.ts','web/src/lib/cache.ts',
+    'web/src/lib/queries/shared.ts','web/src/lib/constants/api.ts']);
+  const residueNames=new Set(['aiStatusQuery','aiStatus','AiStatus','AiFeature','AiFeatureValue','aiProvider','aiRole','isAiGone','aiErrorText']);
+  const residueStrings=new Set(['/ai/status','../../lib/ai','./ai']);
+  const vocabulary=/(?:^|[a-z])Ai(?:[A-Z]|$)|^ai[A-Z]|^data-ai-/;
+  const violations=[];
+  for (const file of [...files('web/src'),...files('web/packages/plugin-sdk/src'),...files('server/src/radd/modules/pages/ui/src')]) {
+    const allowed=residue.has(file);
+    for (const node of nodes(file)) {
+      const name=node.type==='Identifier'||node.type==='JSXIdentifier'?node.name:null;
+      if (name!==null && vocabulary.test(name) && !(allowed && residueNames.has(name))) violations.push(`${file}:${node.loc.start.line}: ${name}`);
+      const text=node.type==='StringLiteral'?node.value:node.type==='TemplateElement'?node.value.raw:null;
+      if (text!==null && /\/ai(?:\/|$)/.test(text) && !(allowed && residueStrings.has(text))) violations.push(`${file}:${node.loc.start.line}: ${text}`);
+    }
+  }
+  assert.deepEqual(violations,[]);
+  // …and it is not vacuous: the host places each extension point, and the ai remote fills them.
+  const slotsOf=file=>new Set(nodes(file).filter(n=>n.type==='MemberExpression'&&n.object.name==='SlotId').map(n=>n.property.name));
+  const anchors={'web/src/components/editor/RichEditor.tsx':['editorToolbarAction'],
+    'web/src/components/editor/SelectionActions.tsx':['editorSelectionAction'],
+    'web/src/routes/item-detail.tsx':['contentReadAction','issueRailTop'],
+    'web/src/components/items/CommentsThread.tsx':['contentReadAction'],
+    'web/src/components/forms/FormAssistPanel.tsx':['itemDraftAssist'],
+    'server/src/radd/modules/pages/ui/src/view/PageReading.tsx':['contentReadAction']};
+  for (const [file,ids] of Object.entries(anchors)) for (const id of ids) assert(slotsOf(file).has(id),`${file} places ${id}`);
+  const contributed=new Set(nodes('server/src/radd/modules/ai/ui/src/index.tsx')
+    .filter(n=>n.type==='ObjectProperty'&&n.key.name==='slot'&&n.value.type==='MemberExpression').map(n=>n.value.property.name));
+  for (const id of ['editorToolbarAction','editorSelectionAction','contentReadAction','issueRailTop','itemDraftAssist','profileSection']) {
+    assert(contributed.has(id),`the ai remote contributes ${id}`);
+  }
+  // RADD-1274's guarantee travels with the transform: the remote masks and restores protected blocks.
+  const transform=readFileSync('server/src/radd/modules/ai/ui/src/editor/transform.ts','utf8');
+  assert.match(transform,/maskProtected\(input\.document\)/);
+  assert.match(transform,/restoreProtected\(text, kept\)/);
+});

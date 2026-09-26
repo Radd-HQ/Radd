@@ -68,7 +68,7 @@ async function waitFor(session, expression, tries = 60) {
 const TOASTS = `[...document.querySelectorAll('[role="status"][aria-live="polite"] span')]
   .map((s) => s.textContent.trim())`;
 
-const PANEL = `document.querySelector("[data-ai-run-panel]")`;
+const PANEL = `document.querySelector("[data-editor-run-panel]")`;
 
 /** Two rectangles intersect. Injected into the page beside each measurement. */
 const OVERLAPS = `const overlaps = (a, b) =>
@@ -213,19 +213,19 @@ async function main() {
       overlapsDocument: overlaps(r, document.querySelector(".ProseMirror").getBoundingClientRect()),
       namesTheAction: /grammar/i.test(p.textContent || ""),
       saysWhatItIsDoing: /reading your text|writing the result/i.test(p.textContent || ""),
-      streamingFlag: p.hasAttribute("data-ai-streaming"),
+      streamingFlag: p.hasAttribute("data-editor-run-streaming"),
       hasStop: !!p.querySelector('button[aria-label="Stop"]'),
     };
   })()`);
 
   // The stream is visible as it arrives: sample the preview twice.
   const previewText = () =>
-    session.eval(`(document.querySelector("[data-ai-run-preview]")?.textContent || "")`);
+    session.eval(`(document.querySelector("[data-editor-run-preview]")?.textContent || "")`);
   const firstSample = await previewText();
   await sleep(400);
   const secondSample = await previewText();
 
-  await session.click('[data-ai-run-panel] button[aria-label="Stop"]');
+  await session.click('[data-editor-run-panel] button[aria-label="Stop"]');
   await sleep(1500);
   const afterStop = await session.eval(`({
     panelGone: !${PANEL},
@@ -279,7 +279,7 @@ async function main() {
     return { background: s.backgroundColor, border: s.borderTopColor };
   })()`);
 
-  await session.click("[data-ai-run-panel] button", (t) => /reject all/i.test(t));
+  await session.click("[data-editor-run-panel] button", (t) => /reject all/i.test(t));
   await sleep(1200);
   const afterReject = await session.eval(`({
     text: document.querySelector(".ProseMirror").textContent,
@@ -292,7 +292,7 @@ async function main() {
   await startDocumentRun(session);
   const secondReview = await waitFor(session,
     `document.querySelectorAll(".milkdown-diff-controls").length > 0`, 120);
-  await session.click("[data-ai-run-panel] button", (t) => /accept all/i.test(t));
+  await session.click("[data-editor-run-panel] button", (t) => /accept all/i.test(t));
   await sleep(1500);
   const afterAccept = await session.eval(`({
     text: document.querySelector(".ProseMirror").textContent,

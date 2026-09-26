@@ -118,12 +118,9 @@ export const ApiPath = {
   // Builtin-field write rules (spec 36).
   // The wiki's endpoints are the pages plugin's `PageApi` (RADD-1392).
   webhooks: "/webhooks",
+  // The query bar's Ask mode and the palette's semantic search still gate on it (RADD-1395
+  // moved every other AI surface to the ai plugin).
   aiStatus: "/ai/status",
-  // Similar issues for a TEXT seed (read-mode AI menu on comments).
-  aiSimilar: "/ai/similar",
-  // Editor AI (spec 103) — the curated action menu + the SSE writing stream.
-  aiEditorActions: "/ai/editor/actions",
-  aiEditorStream: "/ai/editor/stream",
   // UNAUTHENTICATED — the login page's buttons (label + kind only). The
   // provider registry's admin paths are the sso plugin's own (RADD-1380).
   ssoPublicProviders: "/auth/sso/providers",
