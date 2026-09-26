@@ -1,15 +1,5 @@
-"""The import plan's wire + stored shapes (spec 100).
-
-A plan is one explicit decision per inbound *thing* — every Jira field, and every
-value of every Jira vocabulary. Spec 90 mapped fields only; everything else was a
-hardcoded English lookup table (`PRIORITY_MAP`, `CATEGORY_MAP`, `LINK_TYPE_MAP`,
-`"epic" in name`), which is what tied it to one instance and left the admin unable
-to correct a single wrong guess.
-
-Every entry carries its snapshot `count`. That is what drives "hidden and ignored
-unless used": a value with count 0 is real (the instance allows it) but absent
-from this project, so it collapses and defaults to ignore, with the reason shown.
-"""
+"""The import plan: one explicit decision per inbound field and vocabulary value;
+`count` 0 = hidden + ignored."""
 
 from __future__ import annotations
 
@@ -37,13 +27,7 @@ class VocabMapping(BaseModel):
 
 
 class IssueTypeMapping(VocabMapping):
-    """A Jira issue type → Radd's TWO orthogonal axes.
-
-    Spec 90 collapsed this to `"epic" in name` / `"sub" in name`, so "Initiative",
-    "Milestone", "Sous-tâche" and every renamed type became a plain issue. Both
-    axes are now explicit: `kind` is the hierarchy (epic ← issue ← subtask) and
-    `type_name` is the spec-51 classification chip.
-    """
+    """A Jira issue type → Radd's two axes: `kind` (hierarchy) and `type_name` (the classification chip)."""
 
     kind: ItemKind = ItemKind.ISSUE
     action: VocabAction = VocabAction.CREATE  # create/map/ignore the Radd issue type
@@ -51,14 +35,8 @@ class IssueTypeMapping(VocabMapping):
 
 
 class StatusMapping(VocabMapping):
-    """A Jira status → a Radd workflow state + its category.
-
-    The category is what analytics, boards and rollover key off, and spec 90 could
-    only reach it through an English `CATEGORY_MAP` plus a literal test for
-    "cancelled"/"canceled" — so "Rejected", "Won't Do" and "Abandoned" all landed
-    in `todo`. Jira's own `statusCategory.key` seeds the suggestion; the admin has
-    the final say, which is the only way to express "Rejected means canceled".
-    """
+    """A Jira status → a state + category. Jira files "Rejected"/"Won't Do" under
+    done; only the admin can say they mean canceled."""
 
     action: VocabAction = VocabAction.CREATE
     state_name: str = Field(default="", max_length=100)
@@ -66,15 +44,13 @@ class StatusMapping(VocabMapping):
 
 
 class PriorityMapping(VocabMapping):
-    """A Jira priority → one of Radd's four. Replaces a fixed English table that
-    silently sent anything unrecognised — P1, Urgent, Showstopper — to `normal`."""
+    """A Jira priority → one of Radd's four."""
 
     priority: Priority = Priority.NORMAL
 
 
 class LinkTypeMapping(VocabMapping):
-    """A Jira issue-link type → a Radd link type (spec 91 makes these definable).
-    Spec 90 knew three names and defaulted everything else to `relates`."""
+    """A Jira issue-link type → a Radd link type (existing or created)."""
 
     action: VocabAction = VocabAction.MAP
     key: str = Field(default="", max_length=30)
@@ -83,12 +59,8 @@ class LinkTypeMapping(VocabMapping):
 
 
 class UserMapping(BaseModel):
-    """One person Jira names, and what to do about them.
-
-    Identity is Jira's username/key, NOT an email: Jira frequently exposes no
-    address, and spec 90's answer was to synthesize one on a hardcoded company
-    domain and write it into a real `users` row.
-    """
+    """One person Jira names, and what to do about them. Identity is Jira's
+    username/key, NOT an email: Jira frequently exposes no address."""
 
     jira_key: str = Field(min_length=1, max_length=200)
     display_name: str = Field(default="", max_length=200)
@@ -120,7 +92,7 @@ class SprintMapping(VocabMapping):
 
 
 class VersionMapping(VocabMapping):
-    """A Jira fix version → a Radd release. Not imported at all before spec 100."""
+    """A Jira fix version → a Radd release."""
 
     action: VocabAction = VocabAction.CREATE
     release_id: uuid.UUID | None = None

@@ -1,17 +1,6 @@
-"""Undoing an import (spec 100).
-
-Spec 90 had no way back: a bad import was unwound with hand-written SQL, which is
-literally what its own tests did. Here every write is in the ledger, and rollback
-replays it in reverse — deleting what was created, restoring the before-image of
-what was updated.
-
-Two scopes, because they are different decisions: undo the ISSUES and keep the
-project and its fields (so you can fix the mapping and re-import), or undo
-everything including the provisioned schema.
-
-A pre-flight reports anything a human has touched since the import, so destroying
-someone's later edits is a choice rather than a surprise.
-"""
+"""Undo an import by replaying its ledger in reverse (delete what was created,
+restore before-images). Two scopes: content only, or content + provisioned schema;
+a pre-flight names anything a human edited since, which is then left alone."""
 
 from __future__ import annotations
 
@@ -187,12 +176,8 @@ async def _delete(session: AsyncSession, entity: LedgerEntity, entity_id: str) -
                 f"{remaining} issue(s) were kept (edited since the import), so the "
                 "project was kept too"
             )
-        # RADD-1174: the projects module owns the teardown. This used to walk
-        # `registries.project_purge_tables()` itself, which covered the tables
-        # a `DELETE … WHERE project_id` can reach and nothing else — comments,
-        # attachments, scoped settings and the fields scoped only to this
-        # project all survived an undo. Now an import's undo is the same
-        # deletion the admin surface performs, blockers included.
+        # The projects module owns project teardown (comments, attachments, scoped
+        # settings included) — the same deletion the admin surface performs.
         from radd.modules.projects import service as projects_service
 
         project = await projects_service.get_project(session, typed)

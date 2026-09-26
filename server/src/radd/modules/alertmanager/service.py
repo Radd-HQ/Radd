@@ -1,12 +1,7 @@
-"""Alertmanager intake (spec 47, rebuilt RADD-1317): receivers as rows, and a
-receiver that creates the alert's issue, maps the fingerprint, and fires
-`alertmanager.alert.firing|repeated|resolved` with the alert's facts.
-
-Beyond that a receiver does only what its own settings say (RADD-1370, after a
-day as automation templates): label the issues it creates, comment internally
-when an alert repeats or resolves, and move a resolved alert's issue to a state
-of its project. Each is off until someone sets it on Settings → Alertmanager.
-"""
+"""Alertmanager intake (RADD-1317): receivers as rows; a delivery creates the alert's
+issue, maps the fingerprint and fires `alertmanager.alert.*`. Beyond that a receiver
+does only what its settings say (RADD-1370, off by default): label, internal
+comment, resolve move."""
 
 import hmac
 import logging

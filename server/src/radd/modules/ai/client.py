@@ -1,11 +1,7 @@
-"""The AI network seam (spec 101): five role-addressed calls other modules use.
-
-`complete` / `complete_structured` / `complete_choice` / `embed` / `stream` all
-resolve a ROLE through the registry (AiDisabledError -> 404-dormant when
-unconfigured) and work from the ResolvedModel value object. Any transport
-error, non-2xx status, or malformed body raises AiUpstreamError (-> clean 502).
-`complete_choice` + AiRole.VISION is the spec-102 storage-router contract.
-"""
+"""The AI network seam: role-addressed `complete` / `complete_structured` /
+`complete_choice` / `embed` / `stream`. An unconfigured role raises
+AiDisabledError (404-dormant); any transport, status or body failure raises
+AiUpstreamError (a clean 502)."""
 
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
@@ -34,8 +30,8 @@ def _completion_payload(
     stream: bool = False,
 ) -> dict[str, Any]:
     if resolved.wire_shape is AiWireShape.LOCAL:
-        # Unreachable through the registry (LOCAL holds only the embeddings
-        # role), kept as a hard stop for any future caller.
+        # LOCAL only embeds. `set_role` refuses it a chat role, but a provider's
+        # shape can still change after assignment, so this stays a hard stop.
         raise AiConfigError("the built-in local backend only embeds")
     if resolved.wire_shape is AiWireShape.OPENAI:
         response_format = provider.json_schema_format(json_schema) if json_schema else None
@@ -159,7 +155,11 @@ async def complete_choice(
     case-insensitive match of the plain reply against the choices.
     """
     resolved = await registry.require_role(session, role)
-    content = provider.user_content(resolved.wire_shape, prompt, image_bytes, image_media_type)
+    content = provider.user_content_parts(
+        resolved.wire_shape,
+        prompt,
+        [(image_bytes, image_media_type or "image/png")] if image_bytes is not None else (),
+    )
     system = "Answer with exactly one of the allowed values."
     data = await _completion_data(
         resolved, system, content, max_tokens=None, json_schema=provider.choice_schema(choices)

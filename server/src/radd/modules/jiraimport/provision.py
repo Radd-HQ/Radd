@@ -1,14 +1,6 @@
-"""Creating the real Radd targets a plan names (spec 100), before any issue moves.
-
-This is the "create the schema locally before importing, so I have real targets I
-can commit to" step. Spec 90 only ever VALIDATED a create-mapping; the field did
-not exist until the import was already running, so there was nothing to look at
-and nothing to change your mind about.
-
-Idempotent and re-runnable: everything is find-or-create, so provisioning twice
-is a no-op and a plan can be edited and re-provisioned. Every creation is
-ledgered, so rollback can remove the schema too.
-"""
+"""Creating the real Radd targets a plan names, before any issue moves, so there
+is something to look at before committing. Find-or-create throughout (running it
+twice is a no-op) and ledgered, so rollback can remove the schema too."""
 
 from __future__ import annotations
 
@@ -312,6 +304,68 @@ def _colour_for(name: str) -> str:
     return _TYPE_COLOURS[sum(ord(c) for c in name) % len(_TYPE_COLOURS)]
 
 
+async def _vocab(
+    session: AsyncSession,
+    entries,
+    existing,
+    ids: dict[str, uuid.UUID],
+    *,
+    name_of,
+    create,
+    noun: str,
+    section: str,
+    counter: str,
+    entity: LedgerEntity,
+    failure: str,
+    run_id: uuid.UUID | None,
+    commit: bool,
+    out: Provisioned,
+) -> None:
+    """One project-scoped Radd row per mapped Jira value, found by name or created."""
+    by_name = {row.name.strip().lower(): row for row in existing}
+    for entry in entries:
+        if entry.action is VocabAction.IGNORE:
+            continue
+        name = (name_of(entry) or entry.jira).strip()
+        if not name:
+            continue
+        found = by_name.get(name.lower())
+        if found is not None:
+            ids[entry.jira] = found.id
+            continue
+        if entry.action is VocabAction.MAP:
+            out.problems.append(Problem(
+                kind=ProblemKind.PROVISION_FAILED,
+                message=f"the selected existing {noun} is not in the target project; select one or choose Create",
+                subject=entry.jira, section=section, mapping_key=entry.jira,
+            ))
+            continue
+        if not commit:
+            # A dry run must still RESOLVE, or every issue would report a missing
+            # state/type and the preview would be a wall of false failures. A
+            # synthetic id stands in for the row that would be created.
+            ids[entry.jira] = uuid.uuid4()
+            out._bump(counter)
+            continue
+        try:
+            created = await create(entry, name)
+            await session.flush()
+            if run_id:
+                ledger.created(session, run_id, entity, created.id, subject=entry.jira)
+            by_name[name.lower()] = created
+            ids[entry.jira] = created.id
+            out._bump(counter)
+        except Exception as exc:  # noqa: BLE001
+            out.problems.append(
+                Problem(
+                    kind=ProblemKind.PROVISION_FAILED,
+                    message=failure,
+                    subject=entry.jira,
+                    detail=str(exc),
+                )
+            )
+
+
 async def _states(
     session: AsyncSession,
     mappings: PlanMappings,
@@ -321,55 +375,25 @@ async def _states(
     out: Provisioned,
 ) -> None:
     """One Radd state per mapped Jira status, in the CATEGORY the plan chose —
-    which is how "Rejected" finally lands in `canceled` instead of `todo`."""
-    states = await workflow_service.list_states(session, project_id)
-    by_name = {s.name.strip().lower(): s for s in states}
-    for entry in mappings.statuses:
-        if entry.action is VocabAction.IGNORE:
-            continue
-        name = (entry.state_name or entry.jira).strip()
-        if not name:
-            continue
-        existing = by_name.get(name.lower())
-        if existing is not None:
-            out.state_ids[entry.jira] = existing.id
-            continue
-        if entry.action is VocabAction.MAP:
-            out.problems.append(Problem(
-                kind=ProblemKind.PROVISION_FAILED,
-                message="the selected existing state is not in the target project; select one or choose Create",
-                subject=entry.jira, section="statuses", mapping_key=entry.jira,
-            ))
-            continue
-        if not commit:
-            # A dry run must still RESOLVE, or every issue would report "no state"
-            # and the preview would be a wall of false failures. A synthetic id
-            # stands in for the row that would be created.
-            out.state_ids[entry.jira] = uuid.uuid4()
-            out._bump("states")
-            continue
-        try:
-            created = await workflow_service.create_state(
-                session,
-                StateCreate(project_id=project_id, name=name[:100], category=entry.category),
-            )
-            await session.flush()
-            if run_id:
-                ledger.created(
-                    session, run_id, LedgerEntity.STATE, created.id, subject=entry.jira
-                )
-            by_name[name.lower()] = created
-            out.state_ids[entry.jira] = created.id
-            out._bump("states")
-        except Exception as exc:  # noqa: BLE001
-            out.problems.append(
-                Problem(
-                    kind=ProblemKind.PROVISION_FAILED,
-                    message="a workflow state could not be created",
-                    subject=entry.jira,
-                    detail=str(exc),
-                )
-            )
+    which is how "Rejected" lands in `canceled` instead of `todo`."""
+    await _vocab(
+        session,
+        mappings.statuses,
+        await workflow_service.list_states(session, project_id),
+        out.state_ids,
+        name_of=lambda entry: entry.state_name,
+        create=lambda entry, name: workflow_service.create_state(
+            session, StateCreate(project_id=project_id, name=name[:100], category=entry.category)
+        ),
+        noun="state",
+        section="statuses",
+        counter="states",
+        entity=LedgerEntity.STATE,
+        failure="a workflow state could not be created",
+        run_id=run_id,
+        commit=commit,
+        out=out,
+    )
 
 
 async def _issue_types(
@@ -380,57 +404,26 @@ async def _issue_types(
     commit: bool,
     out: Provisioned,
 ) -> None:
-    types = await itemtypes_service.list_types(session, project_id)
-    by_name = {t.name.strip().lower(): t for t in types}
-    for entry in mappings.issue_types:
-        if entry.action is VocabAction.IGNORE:
-            continue
-        name = (entry.type_name or entry.jira).strip()
-        if not name:
-            continue
-        existing = by_name.get(name.lower())
-        if existing is not None:
-            out.type_ids[entry.jira] = existing.id
-            continue
-        if entry.action is VocabAction.MAP:
-            out.problems.append(Problem(
-                kind=ProblemKind.PROVISION_FAILED,
-                message="the selected existing type is not in the target project; select one or choose Create",
-                subject=entry.jira, section="issue_types", mapping_key=entry.jira,
-            ))
-            continue
-        if not commit:
-            out.type_ids[entry.jira] = uuid.uuid4()
-            out._bump("issue_types")
-            continue
-        try:
-            created = await itemtypes_service.create_type(
-                session,
-                IssueTypeCreate(
-                    project_id=project_id,
-                    name=name[:100],
-                    # A stable colour per name, so re-provisioning is idempotent and
-                    # two projects imported from the same Jira agree on the chip.
-                    color=_colour_for(name),
-                ),
-            )
-            await session.flush()
-            if run_id:
-                ledger.created(
-                    session, run_id, LedgerEntity.ISSUE_TYPE, created.id, subject=entry.jira
-                )
-            by_name[name.lower()] = created
-            out.type_ids[entry.jira] = created.id
-            out._bump("issue_types")
-        except Exception as exc:  # noqa: BLE001
-            out.problems.append(
-                Problem(
-                    kind=ProblemKind.PROVISION_FAILED,
-                    message="an issue type could not be created",
-                    subject=entry.jira,
-                    detail=str(exc),
-                )
-            )
+    await _vocab(
+        session,
+        mappings.issue_types,
+        await itemtypes_service.list_types(session, project_id),
+        out.type_ids,
+        name_of=lambda entry: entry.type_name,
+        # A stable colour per name, so re-provisioning is idempotent and two
+        # projects imported from the same Jira agree on the chip.
+        create=lambda entry, name: itemtypes_service.create_type(
+            session, IssueTypeCreate(project_id=project_id, name=name[:100], color=_colour_for(name))
+        ),
+        noun="type",
+        section="issue_types",
+        counter="issue_types",
+        entity=LedgerEntity.ISSUE_TYPE,
+        failure="an issue type could not be created",
+        run_id=run_id,
+        commit=commit,
+        out=out,
+    )
 
 
 async def _link_types(
@@ -488,13 +481,9 @@ async def _users(
     commit: bool,
     out: Provisioned,
 ) -> None:
-    """Resolve every person to a real Radd user id, per the plan's decision.
-
-    Spec 90 had exactly one behaviour — invent an address on a hardcoded domain
-    and create the account. Here MATCH/FALLBACK reuse an existing user, SKIP
-    leaves the work unattributed, and PLACEHOLDER creates an account at an address
-    the admin has already seen on the Users step.
-    """
+    """Resolve every person to a real Radd user id, per the plan's decision:
+    MATCH/FALLBACK reuse an existing user, SKIP leaves the work unattributed,
+    PLACEHOLDER creates an account at the address shown on the Users step."""
     by_email = {u.email.lower(): u.id for u in await auth_service.list_users(session)}
     for entry in mappings.users:
         if entry.action is UserAction.SKIP:

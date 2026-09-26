@@ -1,26 +1,10 @@
-"""The pictures a summary may look at (RADD-1275).
-
-A page or issue that carries screenshots, diagrams or photos was summarised
-from its text alone: `prose()` turns an inline image into `[image] alt` (so a
-base64 screenshot cannot eat the budget — RADD-1232) and attachments were
-never sent at all. When the instance has a VISION role, the summary can see
-the pictures too — a screenshot of a stack trace is often the whole point of
-the page.
-
-Rules, in the order they are applied:
-  1. only when the vision role resolves — with no vision model the text-only
-     path is byte-identical to before;
-  2. only the entity's attachments whose media type the role accepts
-     (`VISION_IMAGE_TYPES`), stored, at or under `ai_vision_max_image_bytes`,
-     newest first, at most `ai_vision_max_images`;
-  3. only the ones the READER may open (`acl.attachment_readable`, the spec-102
-     chokepoint) — an image someone cannot download is not shown to a model on
-     their behalf;
-  4. downscaled to `ai_vision_image_width` where the type allows, so a 4 MB
-     photo is a few hundred kilobytes of tokens.
-
-Video and audio are out of scope: no role exists for them. Inline data-URI
-images in the body stay out too (unbounded; RADD-1232 removed them on purpose).
+"""The pictures a summary may show the VISION role (RADD-1275), in rule order:
+  1. only when the vision role resolves (else the text-only path is unchanged);
+  2. only stored attachments of a `VISION_IMAGE_TYPES` type, at most
+     `ai_vision_max_image_bytes`, newest first, at most `ai_vision_max_images`;
+  3. only those THIS reader may open (`acl.attachment_readable`);
+  4. downscaled to `ai_vision_image_width` where the type allows.
+Inline data-URI images stay out (unbounded; `prose()` drops them).
 """
 
 from __future__ import annotations
@@ -91,6 +75,20 @@ def images_note(parts: Sequence[ImagePart]) -> str:
         return ""
     names = ", ".join(part.filename for part in parts)
     return f"Images attached ({len(parts)}), in order: {names}. Refer to them by filename."
+
+
+def with_images(user_prompt: str, pictures: Sequence[ImagePart]) -> tuple[AiRole, str]:
+    """Which role answers and what the text part says: the vision role and a
+    filename roster when pictures ride along, the chat role and the prompt
+    untouched when none do (pure)."""
+    if not pictures:
+        return AiRole.CHAT, user_prompt
+    return AiRole.VISION, f"{user_prompt}\n\n{images_note(pictures)}"
+
+
+def wire(pictures: Sequence[ImagePart]) -> list[tuple[bytes, str]]:
+    """The (bytes, media type) pairs `client` sends."""
+    return [(picture.data, picture.media_type) for picture in pictures]
 
 
 async def vision_available(session: AsyncSession) -> bool:

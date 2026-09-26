@@ -229,7 +229,6 @@ class PlanOptions(BaseModel):
     #: Notify/webhooks/automations skip the import; search and history do not.
     quiet: bool = True
     include_history: bool = False
-    history_limit: int | None = None
     import_comments: bool = True
     import_attachments: bool = True
     import_restrictions: bool = True

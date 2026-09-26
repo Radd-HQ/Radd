@@ -1,10 +1,5 @@
-"""Walk a repository's existing history and link what the webhook never saw (RADD-1129).
-
-A webhook is deaf to everything before it was registered. Idempotence comes from
-the write seam: `vcs.upsert_vcs_link` finds-or-creates by (item, provider,
-external_id), and the ids here are the same ones parsing.py produces for the
-webhook — running a backfill twice, or after a push, links nothing twice.
-"""
+"""Walk a repository's history and link what the webhook never saw. Idempotent:
+links upsert by `vcs.ids` external ids."""
 
 import logging
 from dataclasses import dataclass, field
@@ -141,11 +136,8 @@ async def run(
     max_commits: int | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> BackfillReport:
-    """RADD-1314: the backfill runs QUIET. It replays history — every old branch,
-    commit, merge request and mirrored worklog — and before RADD-1308 the only
-    thing keeping that out of automations was the system actor. Quiet is the
-    importers' answer (jiraimport, confluenceimport): history is recorded and
-    indexed, and nothing reacts to it — no automation, webhook or notification."""
+    """Runs QUIET (`events.quiet`, RADD-1314): recorded and indexed, and no
+    automation, webhook or notification reacts to it."""
     if not connection.active or not repo.enabled:
         from radd.exceptions import ConflictError
         raise ConflictError("repository", reason="Enable the connection and repository before importing history")

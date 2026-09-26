@@ -1,10 +1,4 @@
-"""The unauthenticated GitHub webhook receiver (RADD-1129).
-
-Auth = HMAC-SHA256 of the RAW body against `X-Hub-Signature-256`, verified with
-the secret of the CONNECTION this payload came from. The write path is the vcs
-connector seam, attributed to the system actor. Mirrors the Forgejo receiver
-(specs 47, 111) with GitHub's event names and payload shapes.
-"""
+"""The GitHub webhook receiver. Auth: HMAC-SHA256 of the RAW body (`X-Hub-Signature-256`)."""
 
 import json
 import logging
@@ -28,8 +22,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["github"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
-
-verify_signature = service.verify_signature
 
 #: GitHub's trigger vocabulary (RADD-1309) — registered by the plugin, fired here.
 TRIGGERS = triggers.ConnectorTriggers(

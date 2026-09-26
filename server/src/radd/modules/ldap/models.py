@@ -14,7 +14,7 @@ from radd.db import Base
 class DirectorySyncState(Base):
     """Last-run record for one periodic directory sync (spec 85). `kind` is a
     SyncKind value; `last_result` is the run's summary payload — user_sync:
-    {provisioned, updated, deactivated, errors}, group_sync: {teams, added,
+    {provisioned, updated, deactivated, errors}, group_sync: {groups, added,
     removed, errors}."""
 
     __tablename__ = "directory_sync_state"

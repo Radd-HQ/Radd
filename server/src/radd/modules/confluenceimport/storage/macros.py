@@ -1,16 +1,6 @@
-"""Confluence macros → Radd page extensions (spec 117).
-
-Five of the seven first-party `radd:*` extensions already existed before this
-importer did, which is why most of the common Confluence vocabulary has a landing
-site on day one: `toc`, `children`/`pagetree`, the four note macros, `include`
-and `contentbylabel`. Three more ship with the importer — `expand`,
-`unsupported-macro`, and `items`.
-
-The default for anything unmapped is UNSUPPORTED, never STRIP: a page whose
-content WAS the macro must not import as an empty page. An unsupported block keeps
-the name and parameters, so building the renderer later upgrades every instance in
-place on the next conversion — no re-download, because the raw body is cached.
-"""
+"""Confluence macros → Radd page extensions. Anything unmapped defaults to
+UNSUPPORTED (a card keeping name + params), never STRIP: a page whose content was
+the macro must not import empty, and a later renderer upgrades it on re-convert."""
 
 from __future__ import annotations
 
@@ -19,11 +9,8 @@ from typing import Callable
 
 from ..types import MacroAction
 
-#: The extension names this maps onto. Strings, not the `PageExtensionName` enum:
-#: `pages` owns that enum and this module must not import it to read six values —
-#: but they are the same wire format, and `tests/test_confluence_macros.py`
-#: asserts every name here is one the kernel actually registers, so a typo is a
-#: failing build rather than an "unknown extension" card on every imported page.
+#: Extension names (strings: `pages` owns the enum). Plan validation checks the
+#: plan's rows against the registry; this built-in table is not checked.
 EXT_TOC = "toc"
 EXT_CHILDREN = "children"
 EXT_CALLOUT = "callout"
@@ -46,20 +33,18 @@ class MacroSpec:
     note: str = ""
 
 
-def _toc_params(p: dict[str, str], body: str) -> dict:
-    out: dict = {}
-    depth = p.get("maxLevel") or p.get("maxlevel")
-    if depth and depth.isdigit():
-        out["depth"] = max(1, min(6, int(depth)))
-    return out
+def _depth_params(*keys: str) -> Callable[[dict[str, str], str], dict]:
+    """A `depth` (clamped 1–6) from the first of `keys` the macro sets."""
+
+    def build(p: dict[str, str], body: str) -> dict:
+        depth = next((p[key] for key in keys if p.get(key)), "")
+        return {"depth": max(1, min(6, int(depth)))} if depth.isdigit() else {}
+
+    return build
 
 
-def _children_params(p: dict[str, str], body: str) -> dict:
-    out: dict = {}
-    depth = p.get("depth") or p.get("maxLevel")
-    if depth and depth.isdigit():
-        out["depth"] = max(1, min(6, int(depth)))
-    return out
+_toc_params = _depth_params("maxLevel", "maxlevel")
+_children_params = _depth_params("depth", "maxLevel")
 
 
 #: Confluence's four note macros are one Radd callout with a `kind`. `panel` joins
@@ -134,18 +119,12 @@ BUILTIN_MACROS: dict[str, MacroSpec] = {
     "contentbylabel": MacroSpec(MacroAction.EXTENSION, EXT_LABEL_LIST, _label_list_params),
     "expand": MacroSpec(MacroAction.EXTENSION, EXT_EXPAND, _expand_params),
     # Native markdown — no extension involved.
-    # INLINE macros. These must never become a `radd:*` fence: fences are
-    # block-level, and one emitted inside a table cell ends the table. `status` is
-    # the lossy one — its colour has no inline equivalent in markdown, and adding
-    # an inline extension seam to the kernel for a coloured lozenge is not
-    # proportionate. Recorded as a deliberate degrade, not an oversight.
+    # INLINE macros never become a `radd:*` fence (block-level: one inside a table
+    # cell ends the table). `status` loses its colour, deliberately.
     "status": MacroSpec(MacroAction.NATIVE, note="inline code — the colour is lost"),
     # `details` and `excerpt` are containers: what matters is their body.
     "details": MacroSpec(MacroAction.NATIVE, note="its body, inlined"),
-    # Confluence's `multimedia` embeds an attached video or audio file with a
-    # player. It is the whole point of the macro, so it maps to a real player
-    # rather than a card: a meeting recording that imports as "unsupported" is
-    # the page's content, missing.
+    # A real player, not a card: the recording IS the page's content.
     "multimedia": MacroSpec(
         MacroAction.NATIVE, EXT_MEDIA, note="a playable video or audio attachment"
     ),
@@ -155,10 +134,8 @@ BUILTIN_MACROS: dict[str, MacroSpec] = {
     "widget": MacroSpec(
         MacroAction.NATIVE, EXT_MEDIA, note="an embedded external video"
     ),
-    # The Confluence mermaid apps, all of which carry the diagram source as their
-    # body. None appear in the corpus this was built against, but they cost three
-    # lines and the wiki renders ```mermaid natively now, so an instance that has
-    # them loses nothing.
+    # The Confluence mermaid apps carry the diagram source as their body; the wiki
+    # renders ```mermaid natively.
     "mermaid": MacroSpec(MacroAction.NATIVE, note="a rendered mermaid diagram"),
     "mermaid-cloud": MacroSpec(MacroAction.NATIVE, note="a rendered mermaid diagram"),
     "mermaid-diagram": MacroSpec(MacroAction.NATIVE, note="a rendered mermaid diagram"),
@@ -205,17 +182,8 @@ def spec_for(name: str, overrides: dict[str, MacroSpec] | None = None) -> MacroS
 
 
 def overrides_from(rows) -> dict[str, MacroSpec]:
-    """The plan's macro decisions, as converter overrides.
-
-    Without this the Macros tab was decorative: `ConvertContext.macro_overrides`
-    was read on every macro and populated by nobody, so the built-in table always
-    won and every choice an admin made was silently discarded — the exact failure
-    the census exists to prevent.
-
-    A row that AGREES with the built-in contributes nothing, so the built-in keeps
-    its parameter builder (which knows how to turn `maxLevel` into `depth`); a row
-    that changes the action or the extension overrides it.
-    """
+    """The plan's macro rows as converter overrides; a row that agrees with the
+    built-in contributes nothing, so the built-in keeps its param builder."""
     out: dict[str, MacroSpec] = {}
     for row in rows or ():
         name = getattr(row, "name", "")

@@ -9,7 +9,7 @@ from datetime import datetime
 
 import pytest
 
-from radd.modules.ai import prompts, provider, service, similar
+from radd.modules.ai import nlslq, prompts, provider, similar, summarize
 from radd.modules.ai.types import (
     ANTHROPIC_VERSION,
     NL_MAX_ATTEMPTS,
@@ -215,10 +215,10 @@ def test_summarize_prompt_omits_time_tracking_when_project_logs_none():
 def test_take_recent_keeps_newest_within_budget():
     entries = ["old", "middle-sized", "newest"]
     # Budget fits the last two only — the oldest is dropped, order kept.
-    assert service.take_recent(entries, 18, len) == ["middle-sized", "newest"]
+    assert summarize.take_recent(entries, 18, len) == ["middle-sized", "newest"]
     # The newest entry survives even when it alone overflows the budget.
-    assert service.take_recent(["a" * 50], 10, len) == ["a" * 50]
-    assert service.take_recent([], 10, len) == []
+    assert summarize.take_recent(["a" * 50], 10, len) == ["a" * 50]
+    assert summarize.take_recent([], 10, len) == []
 
 
 def test_similar_prompt_lists_candidates():
@@ -242,65 +242,65 @@ def test_history_line_formats():
         type="item.updated",
         changes=[{"field": "state", "from": "Todo", "to": "Done"}, {"field": "description"}],
     )
-    assert service.history_line(changed) == (
+    assert summarize.history_line(changed) == (
         "2026-07-01 Hussein: state: Todo -> Done; description changed"
     )
     related = HistoryEntry(id=2, at=at, actor=None, type="comment.created")
-    assert service.history_line(related) == "2026-07-01 someone: comment.created"
+    assert summarize.history_line(related) == "2026-07-01 someone: comment.created"
 
 
 # --- lenient JSON extraction ---
 
 
 def test_extract_json_array_lenient():
-    assert service.extract_json_array('[{"key": "TD-1", "score": 0.9}]') == [
+    assert provider.first_json('[{"key": "TD-1", "score": 0.9}]', list) == [
         {"key": "TD-1", "score": 0.9}
     ]
     fenced = 'Sure! Here are the scores:\n```json\n[{"key": "TD-1", "score": 1}]\n```\nDone.'
-    assert service.extract_json_array(fenced) == [{"key": "TD-1", "score": 1}]
+    assert provider.first_json(fenced, list) == [{"key": "TD-1", "score": 1}]
     # A non-JSON '[' earlier in the reply is skipped, the first PARSEABLE array wins.
-    assert service.extract_json_array("[see note] then [1, 2]") == [1, 2]
-    assert service.extract_json_array("no arrays here") is None
-    assert service.extract_json_array("[broken") is None
+    assert provider.first_json("[see note] then [1, 2]", list) == [1, 2]
+    assert provider.first_json("no arrays here", list) is None
+    assert provider.first_json("[broken", list) is None
 
 
 def test_extract_json_object_lenient():
-    assert service.extract_json_object('{"slq": "state != Done", "explanation": "open"}') == {
+    assert provider.first_json('{"slq": "state != Done", "explanation": "open"}', dict) == {
         "slq": "state != Done",
         "explanation": "open",
     }
     fenced = 'Answer:\n```json\n{"slq": "assignee = me"}\n```'
-    assert service.extract_json_object(fenced) == {"slq": "assignee = me"}
-    assert service.extract_json_object("{oops") is None
-    assert service.extract_json_object("nothing") is None
+    assert provider.first_json(fenced, dict) == {"slq": "assignee = me"}
+    assert provider.first_json("{oops", dict) is None
+    assert provider.first_json("nothing", dict) is None
 
 
 def test_parse_stream_objects_incremental():
     # An object split across chunks stays pending until its brace closes.
-    found, offset = service.parse_stream_objects('[{"key": "TD-1", "sco', 0)
+    found, offset = similar.parse_stream_objects('[{"key": "TD-1", "sco', 0)
     assert found == []
     buffer = '[{"key": "TD-1", "score": 1}, {"key": "TD-2"'
-    found, offset = service.parse_stream_objects(buffer, offset)
+    found, offset = similar.parse_stream_objects(buffer, offset)
     assert found == [{"key": "TD-1", "score": 1}]
     buffer += ', "reason": "same {curly} trap"}]'
-    found, offset = service.parse_stream_objects(buffer, offset)
+    found, offset = similar.parse_stream_objects(buffer, offset)
     assert found == [{"key": "TD-2", "reason": "same {curly} trap"}]
     # Fully consumed: nothing new on a repeat call.
-    assert service.parse_stream_objects(buffer, offset) == ([], len(buffer))
+    assert similar.parse_stream_objects(buffer, offset) == ([], len(buffer))
 
 
 def test_clean_reason_entry_filters_and_clamps():
     seen: set[str] = set()
     allowed = {"TD-1", "TD-2"}
-    assert service.clean_reason_entry(
+    assert similar.clean_reason_entry(
         {"key": "TD-1", "score": 1.7, "reason": "dup"}, allowed, seen
     ) == {"key": "TD-1", "score": 1.0, "reason": "dup"}
     # Duplicate key, unknown key, boolean/absent score all drop.
-    assert service.clean_reason_entry({"key": "TD-1", "score": 0.5}, allowed, seen) is None
-    assert service.clean_reason_entry({"key": "XX-9", "score": 0.5}, allowed, seen) is None
-    assert service.clean_reason_entry({"key": "TD-2", "score": True}, allowed, seen) is None
+    assert similar.clean_reason_entry({"key": "TD-1", "score": 0.5}, allowed, seen) is None
+    assert similar.clean_reason_entry({"key": "XX-9", "score": 0.5}, allowed, seen) is None
+    assert similar.clean_reason_entry({"key": "TD-2", "score": True}, allowed, seen) is None
     # Empty reason -> None (the row keeps its base "semantic match" line).
-    assert service.clean_reason_entry({"key": "TD-2", "score": 0.4, "reason": ""}, allowed, seen)[
+    assert similar.clean_reason_entry({"key": "TD-2", "score": 0.4, "reason": ""}, allowed, seen)[
         "reason"
     ] is None
 
@@ -322,24 +322,18 @@ def _hit(key: str, title: str = "t"):
 
 
 def test_fts_candidates_normalizes_ranks():
-    candidates = service.fts_candidates([(_hit("TD-1"), 0.8), (_hit("TD-2"), 0.4)])
+    candidates = similar.fts_candidates([(_hit("TD-1"), 0.8), (_hit("TD-2"), 0.4)])
     assert [c.score for c in candidates] == [1.0, 0.5]
     assert all(c.reason == "text match" for c in candidates)
-    assert service.fts_candidates([(_hit("TD-1"), 0.0)])[0].score == 0.0
-    assert service.fts_candidates([]) == []
+    assert similar.fts_candidates([(_hit("TD-1"), 0.0)])[0].score == 0.0
+    assert similar.fts_candidates([]) == []
 
 
 async def test_similar_to_seed_is_semantic_first(monkeypatch):
     """When the vector pool answers, the OR-ed FTS pool must not
     even run — one shared common token was enough to surface an unrelated
     issue as a top 'text match'. FTS remains the fallback when semantic is
-    off/empty.
-
-    Patched on `similar` (RADD-902: `_semantic_pool`/`search_service`/
-    `similar_to_seed` all live in `radd.modules.ai.similar` now — `service.py`
-    only re-exports them, and a monkeypatch on the facade's re-exported
-    attribute would not reach the call site running in `similar`'s own
-    globals)."""
+    off/empty."""
     semantic = [
         SimilarCandidate(item_key="TD-9", title="nine", score=0.8, reason="semantic match")
     ]
@@ -374,7 +368,7 @@ def _candidate(key: str, score: float = 0.5) -> SimilarCandidate:
 
 def test_apply_rerank_merges_scores_and_filters():
     candidates = [_candidate("TD-1"), _candidate("TD-2"), _candidate("TD-3")]
-    merged = service.apply_rerank(
+    merged = similar.apply_rerank(
         candidates,
         [
             {"key": "TD-2", "score": 0.9, "reason": "same stack trace"},
@@ -390,11 +384,11 @@ def test_apply_rerank_merges_scores_and_filters():
 
 
 def test_apply_rerank_clamps_and_rejects_unusable():
-    clamped = service.apply_rerank([_candidate("TD-1")], [{"key": "TD-1", "score": 3.7}])
+    clamped = similar.apply_rerank([_candidate("TD-1")], [{"key": "TD-1", "score": 3.7}])
     assert clamped[0].score == 1.0
     # Nothing usable -> None, so the caller falls back to FTS order (reranked: false).
-    assert service.apply_rerank([_candidate("TD-1")], [{"key": "TD-9", "score": 1}]) is None
-    assert service.apply_rerank([_candidate("TD-1")], ["junk"]) is None
+    assert similar.apply_rerank([_candidate("TD-1")], [{"key": "TD-9", "score": 1}]) is None
+    assert similar.apply_rerank([_candidate("TD-1")], ["junk"]) is None
 
 
 # --- request options (RADD-1273) ---
@@ -463,7 +457,7 @@ def test_request_params_cannot_replace_the_request_itself():
 
 
 def test_nl_retry_decision():
-    assert service.decide(0, None) is NlOutcome.ACCEPT
-    assert service.decide(0, "unknown field 'foo'") is NlOutcome.RETRY
-    assert service.decide(NL_MAX_ATTEMPTS - 1, None) is NlOutcome.ACCEPT
-    assert service.decide(NL_MAX_ATTEMPTS - 1, "still bad") is NlOutcome.REJECT
+    assert nlslq.decide(0, None) is NlOutcome.ACCEPT
+    assert nlslq.decide(0, "unknown field 'foo'") is NlOutcome.RETRY
+    assert nlslq.decide(NL_MAX_ATTEMPTS - 1, None) is NlOutcome.ACCEPT
+    assert nlslq.decide(NL_MAX_ATTEMPTS - 1, "still bad") is NlOutcome.REJECT

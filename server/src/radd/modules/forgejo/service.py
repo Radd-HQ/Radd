@@ -1,10 +1,5 @@
-"""Connection + repository CRUD, env seeding, and webhook connection resolution (spec 111).
-
-The interesting function here is `resolve_for_payload`: which host signed this
-body. Spec 47 had one secret and one answer. With rows, the payload names its
-repository, so the answer is a lookup — with a fallback that keeps a hook working
-before anyone records its repository.
-"""
+"""Connection + repository CRUD, env seeding, webhook resolution. A body must verify
+against exactly ONE active connection; a named repository must be recorded and enabled."""
 
 from radd.modules.vcs import setup as vcs_setup
 import hashlib
@@ -338,15 +333,8 @@ async def refresh_connection_snapshot(session: AsyncSession) -> None:
 
 
 async def seed_from_env() -> None:
-    """Turn spec 47's `RADD_FORGEJO_WEBHOOK_SECRET` into a connection row, ONCE,
-    then warm the capability snapshot.
-
-    Seeding runs only when the table is empty, so an admin who deletes or renames
-    the seeded row never has it reappear. The base URL is unknown to the env
-    config (spec 47 only ever needed the secret), so it is left blank for an
-    admin to fill in — the row exists so that webhooks keep verifying across the
-    upgrade.
-    """
+    """Seed one connection from `RADD_FORGEJO_WEBHOOK_SECRET` (base URL left blank for
+    the admin) once, then warm the capability snapshot."""
     secret = settings.forgejo_webhook_secret.strip()
     async with SessionLocal() as session:
         rows = await session.execute(select(func.count()).select_from(ForgejoConnection))

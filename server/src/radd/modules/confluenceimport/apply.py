@@ -37,8 +37,6 @@ class PageOutcome:
     action: UpsertAction = UpsertAction.CREATE
     page_id: uuid.UUID | None = None
     problems: list[Problem] = field(default_factory=list)
-    page_refs: set[str] = field(default_factory=set)
-    attachment_refs: set[str] = field(default_factory=set)
 
 
 async def upsert_page(
@@ -65,8 +63,6 @@ async def upsert_page(
     outcome = PageOutcome()
     converted = convert(body_storage, context)
     outcome.problems.extend(converted.problems)
-    outcome.page_refs = converted.page_refs
-    outcome.attachment_refs = converted.attachment_refs
 
     existing = await pages_service.find_by_external(session, external_source, external_id)
     outcome.action = UpsertAction.UPDATE if existing is not None else UpsertAction.CREATE

@@ -24,10 +24,8 @@ plugin = RaddPlugin(
         nav=(NavItemSpec(key="directory", label="Directory", path="/settings/directory",
                          section="settings", group="Server", icon="folder-tree", order=55, requires_admin=True),),
     ),
-    # Per-plugin deps (§14): AD/LDAP bind needs ldap3. Maps to the `radd[ldap]` extra.
-    # RADD-891: the connection + sync tunables (RADD-846/848: env is seed-only,
-    # each key matches its `config.Settings` attribute so an existing deploy
-    # keeps working) — moved off `settings.types`'s old hardcoded dict.
+    # The connection + sync tunables. Env is seed-only: each key matches its
+    # `config.Settings` attribute.
     settings_keys=(
         SettingSpec(
             key="ldap_url",
@@ -88,7 +86,7 @@ plugin = RaddPlugin(
             description=(
                 "Comma-separated directory group CNs whose (transitive) members "
                 "sign in as instance admins. Empty = the directory carries no "
-                "role opinion (the spec-110 rule)."
+                "role opinion."
             ),
         ),
         SettingSpec(
@@ -150,11 +148,7 @@ plugin = RaddPlugin(
             label="Skip disabled directory accounts",
             description=(
                 "Exclude accounts disabled in the directory (the AD ACCOUNTDISABLE bit) "
-                "from imports and sync. ON by default: on a real directory most entries "
-                "are leavers — one live instance held roughly two disabled accounts per active "
-                "one — and importing them fills Radd with dead users. Turning it "
-                "OFF does NOT lose the history of people who have left: their existing "
-                "issues, comments and worklogs keep their attribution either way."
+                "from imports and sync. Turning it off does not lose leavers' history."
             ),
         ),
         SettingSpec(

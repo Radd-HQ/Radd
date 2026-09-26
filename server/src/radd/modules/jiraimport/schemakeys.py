@@ -1,26 +1,8 @@
-"""Jira's own stable field-type keys (spec 100) — how the importer stops being
-hardcoded to one Jira.
+"""Jira's stable field-type keys (`schema.custom`, e.g. `…greenhopper.jira:gh-sprint`).
 
-Every custom field in Jira's `/field` catalog carries `schema.custom`: the type
-key of the plugin that defines it, e.g. `com.pyxis.greenhopper.jira:gh-sprint`.
-Unlike a field ID, that key is IDENTICAL on every Jira instance on earth. Spec 90
-threw it away and identified fields by literal ID instead, which is how the
-importer ended up with:
-
-    NOISE_JIRA_FIELDS = {"customfield_10002", "customfield_13400", "customfield_10007",
-                         "customfield_10009", "customfield_13701", "customfield_51604"}
-    def sprints(fields): return _sprints_from(fields.get("customfield_10002"))
-
-Both are replaced by lookups through this table. Checked against a live Jira DC
-instance on 2026-07-28: `gh-sprint` → customfield_10002, `gh-epic-link` →
-customfield_10003, `gh-lexo-rank` → customfield_10007 AND customfield_13701,
-`devsummary` → customfield_13400 — i.e. every ID that list hardcoded, discovered
-rather than assumed. (customfield_51604 was not present at all: the hardcoded
-list had already gone stale against the very instance it was written for.)
-
-Identification here is a SUGGESTION, never a silent decision. Everything it finds
-is shown in the mapping step with the reason, and can be overridden — a field
-this table has never heard of is an unknown to be mapped by hand, not a failure.
+Unlike a field id, a type key is identical on every Jira instance, so Sprint,
+Epic Link, board rank and friends are found by key, never by literal id. A match
+is a suggestion shown in the mapping step with its reason, always overridable.
 """
 
 from __future__ import annotations
@@ -63,22 +45,9 @@ NATIVE_BY_SCHEMA_KEY: dict[str, BuiltinTarget] = {
     JiraSchemaKey.REQUEST_PARTICIPANTS.value: BuiltinTarget.WATCHERS,
 }
 
-# Type keys that are pure machinery: board ordering, the dev-panel blob, colour
-# swatches. Collapsed by default in the mapping step — visible, with the reason,
-# and overridable. Spec 90 hid these behind a blocklist of literal IDs, so on any
-# other instance it hid the wrong fields and showed the noise.
-NOISE_SCHEMA_KEYS: frozenset[str] = frozenset(
-    {
-        JiraSchemaKey.LEXO_RANK.value,
-        JiraSchemaKey.GLOBAL_RANK.value,
-        JiraSchemaKey.DEV_SUMMARY.value,
-        JiraSchemaKey.EPIC_COLOUR.value,
-        JiraSchemaKey.EPIC_STATUS.value,
-    }
-)
-
-# Why a field was flagged, in words the mapping step shows verbatim. A reason the
-# admin can read is what makes overriding it a decision rather than a guess.
+# Type keys that are pure machinery (board ordering, the dev-panel blob, colour
+# swatches), with the reason the mapping step shows verbatim. Collapsed by
+# default — visible and overridable.
 NOISE_REASONS: dict[str, str] = {
     JiraSchemaKey.LEXO_RANK.value: "Jira board ordering key — position data, not ticket data",
     JiraSchemaKey.GLOBAL_RANK.value: "Jira board ordering key — position data, not ticket data",
@@ -112,15 +81,27 @@ def noise_reason(schema_key: str) -> str:
 def find_by_schema_key(
     catalog: dict[str, dict], key: JiraSchemaKey | str
 ) -> list[str]:
-    """Every field ID on THIS instance with the given type key.
-
-    A list, not a single ID: a real instance can carry several. The live check on
-    2026-07-28 found two `gh-lexo-rank` fields — "Rank" and "Queue Order" — which
-    spec 90 could only cover by hardcoding both IDs.
-    """
+    """Every field id with this type key — a list, because an instance can carry
+    several (two `gh-lexo-rank` fields is common)."""
     wanted = key.value if isinstance(key, JiraSchemaKey) else key
     return sorted(
         field_id
         for field_id, meta in (catalog or {}).items()
         if (meta or {}).get("schema_key") == wanted
+    )
+
+
+def sprint_field_ids(catalog: dict[str, dict]) -> tuple[str, ...]:
+    return tuple(find_by_schema_key(catalog, JiraSchemaKey.SPRINT))
+
+
+def epic_link_field_id(catalog: dict[str, dict]) -> str:
+    """The Epic Link field: by type key, else by its English name (an instance
+    whose catalog carries no `gh-epic-link` key)."""
+    found = find_by_schema_key(catalog, JiraSchemaKey.EPIC_LINK)
+    if found:
+        return found[0]
+    return next(
+        (fid for fid, meta in (catalog or {}).items() if (meta.get("name") or "").lower() == "epic link"),
+        "",
     )

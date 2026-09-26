@@ -12,24 +12,9 @@ from ..types import SnapshotStage
 
 
 class JiraSnapshot(Base, TimestampMixin):
-    """A cached download of one JQL result set (spec 100).
-
-    The snapshot is what makes the importer usable. Spec 90 re-paged the whole
-    result set from Jira on every run, so fixing one mapping mistake meant
-    downloading tens of thousands of issues again. Everything downstream —
-    profiling, the dry run, the import, a re-import, relinking — reads THESE rows
-    and never touches Jira, which is what makes those steps fast, deterministic
-    and repeatable.
-
-    The row is also the progress bar, the house idiom: `stage`, `counts` and
-    `problems` are rewritten and committed as work proceeds.
-
-    `catalogs` holds the instance's own vocabularies (fields, issue types,
-    statuses, priorities, link types, versions, components) captured at download
-    time. Keeping them WITH the issues is what lets the mapping step stay honest
-    offline — and what keeps identification instance-agnostic, since Jira's field
-    catalog carries the stable `schema.custom` type key for every custom field.
-    """
+    """A cached download of one JQL result set. Everything downstream reads these rows,
+    never Jira; the row is the progress bar; `catalogs` holds the instance
+    vocabularies (incl. the field catalog's stable `schema.custom` keys)."""
 
     __tablename__ = "jira_snapshots"
 
@@ -103,8 +88,7 @@ class JiraSnapshotBlob(Base):
     jira_attachment_id: Mapped[str] = mapped_column(String(30), primary_key=True)
     jira_key: Mapped[str] = mapped_column(String(100), default="")
     storage_name: Mapped[str] = mapped_column(String(64))
-    # Which storage host holds the bytes (spec 102 blob API); NULL = the rows
-    # predate multi-host storage and live on the default host.
+    # Which storage host holds the bytes (NULL = the default host).
     storage_host_id: Mapped[uuid.UUID | None] = mapped_column()
     filename: Mapped[str] = mapped_column(String(300))
     content_type: Mapped[str] = mapped_column(String(120), default="")

@@ -84,11 +84,8 @@ VISION_IMAGE_TYPES: frozenset[str] = frozenset(
 # Payload keys an admin's `request_params` may not touch: they ARE the request.
 RESERVED_REQUEST_PARAMS: frozenset[str] = frozenset({"messages", "stream"})
 
-# Digest caps for the summarize prompt — keep the context small and predictable.
-# Summarize digest budgets: each section keeps its NEWEST entries whole until
-# the section's char budget runs out (`take_recent`), so long dogfood threads
-# contribute their recent hundred comments, not their last twelve. Still far
-# under any chat model's context window.
+# Summarize digest budgets: each section keeps its NEWEST entries whole until its
+# budget runs out (`take_recent`).
 SUMMARY_MAX_DESCRIPTION_CHARS = 4000
 SUMMARY_MAX_COMMENT_CHARS = 2000
 SUMMARY_COMMENTS_BUDGET_CHARS = 32_000
@@ -139,7 +136,6 @@ class NlOutcome(StrEnum):
 
 
 class AiEntity(StrEnum):
-    AI = "ai"
     PROVIDER = "ai_provider"
     ROLE = "ai_role"
     PRESET = "ai_preset"

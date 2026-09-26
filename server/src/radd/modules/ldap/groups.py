@@ -1,13 +1,7 @@
-"""Directory GROUP operations (spec 84) — all on the SERVICE-ACCOUNT bind
-(spec 49): paged group search for the pickers, one-group lookup by DN, and the
-transitive (nested-membership, LDAP_MATCHING_RULE_IN_CHAIN) member resolution
-the team↔group sync and the group import run on. The ldap3 wire calls are
-synchronous and wrapped in asyncio.to_thread, exactly as the login bind.
-
-Spec 85: search bases resolve through the settings cascade — the async
-wrappers take a session, resolve the base (group search → the GROUPS base,
-member resolution → the USERS base, since member entries are user objects),
-and pass it to the sync wire functions as a plain parameter."""
+"""Directory group operations on the service-account bind: group search, lookup by
+DN, and TRANSITIVE member resolution (LDAP_MATCHING_RULE_IN_CHAIN). Async wrappers
+resolve the search base through the cascade (groups → the GROUPS base, members →
+the USERS base) and run the blocking ldap3 call in a thread."""
 
 import asyncio
 import logging
@@ -72,14 +66,8 @@ def transitive_group_members_filter(group_dn: str, exclude_disabled: bool = True
     )
 
 
-def _first(value: object) -> str:
-    if isinstance(value, (list, tuple)):
-        value = value[0] if value else ""
-    return str(value or "").strip()
-
-
 def _entry_to_group(dn: str, attributes: dict) -> DirectoryGroup | None:
-    cn = _first(attributes.get("cn"))
+    cn = service.first_value(attributes.get("cn"))
     if not cn or not dn:
         return None
     member = attributes.get("member") or []
@@ -91,31 +79,18 @@ def _entry_to_group(dn: str, attributes: dict) -> DirectoryGroup | None:
     return DirectoryGroup(
         cn=cn,
         dn=dn,
-        description=_first(attributes.get("description")),
+        description=service.first_value(attributes.get("description")),
         member_count=len(member),
         member_of=tuple(str(parent).strip() for parent in member_of if str(parent).strip()),
     )
 
 
 def _search_groups_sync(q: str, base: str) -> list[DirectoryGroup]:
-    conn = service.service_connection()
     groups: list[DirectoryGroup] = []
-    try:
-        entries = conn.extend.standard.paged_search(
-            search_base=base,
-            search_filter=group_query_filter(q),
-            attributes=list(_GROUP_ATTRIBUTES),
-            paged_size=settings.ldap_page_size,
-            generator=True,
-        )
-        for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            group = _entry_to_group(str(entry.get("dn") or ""), entry.get("attributes") or {})
-            if group:
-                groups.append(group)
-    finally:
-        conn.unbind()
+    for dn, attrs in service.paged_attributes(base, group_query_filter(q), list(_GROUP_ATTRIBUTES)):
+        group = _entry_to_group(dn, attrs)
+        if group:
+            groups.append(group)
     logger.info("ldap group search %r under %s: %d groups", q, base, len(groups))
     return sorted(groups, key=lambda g: g.cn.lower())
 
@@ -177,34 +152,20 @@ def _search_group_members_sync(
 ) -> list[DirectoryUser]:
     """TRANSITIVE members of one group, as DirectoryUsers (username required;
     email falls back to the synthesized UPN — matching is by email/UPN)."""
-    conn = service.service_connection()
     members: list[DirectoryUser] = []
-    try:
-        entries = conn.extend.standard.paged_search(
-            search_base=base,
-            search_filter=transitive_group_members_filter(group_dn, exclude_disabled),
-            attributes=[
-                "sAMAccountName",
-                settings.ldap_email_attribute,
-                settings.ldap_name_attribute,
-            ],
-            paged_size=settings.ldap_page_size,
-            generator=True,
-        )
-        seen: set[str] = set()
-        for entry in entries:
-            attrs = entry.get("attributes") if isinstance(entry, dict) else None
-            if not attrs:
-                continue
-            username = _first(attrs.get("sAMAccountName"))
-            if not username:
-                continue
-            user = service.directory_user_from_entry(username, attrs, is_admin=False)
-            if user.email not in seen:
-                seen.add(user.email)
-                members.append(user)
-    finally:
-        conn.unbind()
+    seen: set[str] = set()
+    for _dn, attrs in service.paged_attributes(
+        base,
+        transitive_group_members_filter(group_dn, exclude_disabled),
+        ["sAMAccountName", settings.ldap_email_attribute, settings.ldap_name_attribute],
+    ):
+        username = service.first_value(attrs.get("sAMAccountName"))
+        if not username:
+            continue
+        user = service.directory_user_from_entry(username, attrs, is_admin=False)
+        if user.email not in seen:
+            seen.add(user.email)
+            members.append(user)
     logger.info("ldap transitive members of %s: %d", group_dn, len(members))
     return members
 

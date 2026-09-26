@@ -23,12 +23,6 @@ router = APIRouter(tags=["forgejo"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 
 
-# Signature verification moved to service.verify_signature in spec 111 — the
-# receiver no longer knows which secret to use until it has resolved the
-# connection, so the check belongs next to that lookup. Re-exported because
-# tests/test_connectors.py imports it from here.
-verify_signature = service.verify_signature
-
 #: Forgejo's trigger vocabulary (RADD-1309) — registered by the plugin, fired here.
 TRIGGERS = triggers.ConnectorTriggers(
     host="Forgejo",
@@ -55,10 +49,7 @@ async def forgejo_webhook(
     x_forgejo_event: Annotated[str, Header()] = "",
     x_gitea_event: Annotated[str, Header()] = "",
 ) -> dict[str, Any]:
-    """Forgejo/Gitea webhook receiver (specs 47, 111). Auth = HMAC-SHA256 of the
-    RAW body vs the signature header, checked against the secret of the CONNECTION
-    this payload came from; the write path is the vcs connector seam, attributed
-    to the system actor. Mirrors the gitlab connector (spec 31)."""
+    """Forgejo/Gitea receiver: HMAC-SHA256 of the RAW body against the signing connection's secret."""
     raw_body = await request.body()
     signature = x_forgejo_signature or x_gitea_signature
     try:

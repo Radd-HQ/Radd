@@ -1,14 +1,6 @@
-"""Closest-value matching for NL→SLQ repair (spec 103 addendum) — pure.
-
-"jimmy" must find "Jimmy Lee Barlow". Short proper names are a LEXICAL
-problem, not a semantic one, so this is deterministic token-aware string
-similarity (stdlib difflib), not embeddings: no model warm-up, no drift, works
-with the AI embeddings role off, and trivially unit-testable. Diacritics fold
-("rené" finds "René") and matching is case-insensitive.
-
-The scorer prefers, in order: the whole string, an exact word, a word prefix
-("jim" → "Jimmy …"), then fuzzy ratios — so a first name beats a vaguely
-similar full string.
+"""Closest-value matching for NL→SLQ repair — pure, lexical (difflib), not
+embeddings: "jimmy" finds "Jimmy Lee Barlow". Case- and diacritic-insensitive;
+prefers the whole string, an exact word, a word prefix, then fuzzy ratios.
 """
 
 from __future__ import annotations

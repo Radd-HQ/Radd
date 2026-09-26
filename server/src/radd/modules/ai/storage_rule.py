@@ -1,20 +1,7 @@
-"""The `llm` storage routing rule — this plugin's provider on the kernel's
-STORAGE_ROUTING_RULE socket (spec 102; moved out of `attachments`, RADD-1387).
-
-An admin-authored filtering prompt plus ENUMERATED answers, each mapped to a
-storage host: structured output means the model cannot invent an unmapped
-answer, and any failure — timeout, refusal, the feature switched off — falls
-through to the next rule. A rule can only NARROW where an upload goes, never
-error one out.
-
-It used to live in `attachments` and import this module lazily, guarded by
-`plugin_loaded()`. Now the rule TYPE is this plugin's registration: with `ai`
-disabled it is not offered for new rules, and a stored one has no provider, so
-the chain skips it exactly as it skips any rule whose type is gone.
-
-Duck-typed on the routing context (`content_type`, `content`) and returning a
-host id, so it needs nothing from `attachments` but the socket's contract.
-"""
+"""The `llm` storage routing rule, this plugin's provider on STORAGE_ROUTING_RULE
+(spec 102). An admin prompt plus ENUMERATED answers mapped to hosts: the model
+cannot invent an unmapped answer, and any failure falls through to the next rule.
+Duck-typed on the routing context (`content_type`, `content`)."""
 
 import asyncio
 import logging

@@ -1,26 +1,14 @@
-"""Mirroring time logged on a merge/pull request into the linked issue (RADD-1258).
-
-The provider-neutral seam every connector calls. A connector fetches the time
-entries for one ref in the host's own shape and hands them here as
-`SourceEntry` rows; this module decides
-
-- **which issue** each entry lands on — the first key in the ref's texts, in
-  the order the connector supplies them (source branch, title, description),
-  unless the entry's own summary names a key, which wins for that entry;
-- **who** logged it — the provider account matched to a Radd user by email,
-  else by the per-connection identity map (`vcs_user_links`), else NOBODY: the
-  entry is parked in `vcs_pending_worklogs` and surfaces in Settings as an
-  unmatched author, because a worklog on the wrong person makes the timesheet
-  lie (CLAUDE.md: never invented data);
-- **what category** — the repository's default, else the instance's
-  `Development`, else none.
-
-Then `timelogging.external.reconcile_external_worklogs` makes the rows match,
-which is where "never twice" and "removal follows the source" live.
+"""Mirror time logged on a merge/pull request into the linked issue (RADD-1258).
+Connectors hand one ref's entries here as `SourceEntry` rows; this decides
+- which issue: the first key in the ref's texts (branch, title, description),
+  unless the entry's own note names one;
+- who: an identity-map row, else an email match (recorded), else NOBODY — parked
+  in `vcs_pending_worklogs`, never logged against the wrong person;
+- which category: the repository's, else `Development`, else none.
+`timelogging.external.reconcile_external_worklogs` then makes the rows match.
 """
 
 import logging
-import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
@@ -37,14 +25,11 @@ from radd.modules.timelogging import categories as timelog_categories
 from radd.modules.timelogging import external as timelog_external
 from radd.modules.timelogging.types import DEFAULT_WORK_CATEGORIES
 
+from .keys import extract_keys
 from .models import VcsPendingWorklog, VcsUserLink
 from .types import VcsEntity, VcsMatchedBy, VcsProvider, VcsUserLinkEvent
 
 logger = logging.getLogger(__name__)
-
-# The same key grammar every connector's parsing.py uses: TD-123, word-bounded.
-KEY_RE = re.compile(r"\b([A-Za-z][A-Za-z0-9]{0,9}-\d+)\b")
-
 
 @dataclass(frozen=True)
 class SourceEntry:
@@ -89,16 +74,6 @@ class MirrorReport:
             "no_item": self.no_item,
             "unmatched_authors": sorted(self.unmatched_authors),
         }
-
-
-def extract_keys(*texts: str | None) -> list[str]:
-    seen: list[str] = []
-    for text in texts:
-        for match in KEY_RE.finditer(text or ""):
-            key = match.group(1).upper()
-            if key not in seen:
-                seen.append(key)
-    return seen
 
 
 async def target_item_id(session: AsyncSession, *texts: str | None) -> uuid.UUID | None:

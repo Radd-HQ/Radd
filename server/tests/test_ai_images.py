@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
-from radd.modules.ai import client, images, provider, registry, summarize
+from radd.modules.ai import client, images, provider, registry
 from radd.modules.ai.images import ImagePart, pick_images
 from radd.modules.ai.schemas import AiProviderCreate, AiRoleAssign
 from radd.modules.ai.types import AiRole, AiWireShape
@@ -80,8 +80,8 @@ def test_user_content_parts_puts_pictures_before_the_text_on_both_shapes():
 
 
 def test_with_images_picks_the_vision_role_and_names_the_files():
-    assert summarize.with_images("PROMPT", []) == (AiRole.CHAT, "PROMPT")
-    role, text = summarize.with_images(
+    assert images.with_images("PROMPT", []) == (AiRole.CHAT, "PROMPT")
+    role, text = images.with_images(
         "PROMPT", [ImagePart(b"x", "image/png", "crash.png"), ImagePart(b"y", "image/jpeg", "board.jpg")]
     )
     assert role is AiRole.VISION

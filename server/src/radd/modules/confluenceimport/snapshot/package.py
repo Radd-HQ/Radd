@@ -1,22 +1,7 @@
-"""A downloaded snapshot's files, on disk (spec 117).
-
-Attachments used to go through the spec-102 blob API and out to the object
-store. That is the right home for a page's attachments and the wrong one for a
-DOWNLOAD: one real section pushed **49 GB** through Garage's S3 API to cache
-bytes that might never be imported, and the download crawled.
-
-A snapshot is a working file, not durable content. So it is a plain directory:
-
-    <confluence_snapshot_dir>/<snapshot_id>/
-        manifest.json                 what this package is
-        attachments/<id>/<filename>   the bytes, under their real names
-
-Which buys three things the object store could not. Deleting a snapshot is one
-`rmtree` rather than N delete calls that can half-fail. An operator can look at
-what was downloaded, copy a package between machines, or hand it to someone
-else. And the bytes only reach the object store when a RUN imports them — the
-point at which they stop being a cache and become attachments someone will read.
-"""
+"""A snapshot's files on disk: `<confluence_snapshot_dir>/<id>/{manifest.json,
+attachments/<id>/<filename>}`. Not the object store: caching 49 GB of bytes that
+may never be imported through S3 made downloads crawl; bytes reach the store
+only when a run imports them. Delete is one rmtree; the manifest is for humans."""
 
 from __future__ import annotations
 
@@ -87,16 +72,6 @@ def write_manifest(snapshot_id: uuid.UUID, manifest: dict) -> None:
     directory = package_dir(snapshot_id)
     directory.mkdir(parents=True, exist_ok=True)
     (directory / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2, default=str))
-
-
-def read_manifest(snapshot_id: uuid.UUID) -> dict:
-    path = package_dir(snapshot_id) / MANIFEST_NAME
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text())
-    except ValueError:
-        return {}
 
 
 def size_bytes(snapshot_id: uuid.UUID) -> int:

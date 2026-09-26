@@ -8,11 +8,13 @@ importer — both worth pinning.
 
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.modules.fields.types import FieldType
-from radd.modules.jiraimport.mapping import FieldMapping, slug, suggest_mappings, validate_mappings
+from radd.modules.jiraimport.mapping import slug, suggest_mappings, validate_mappings
+from radd.modules.jiraimport.schemas import FieldMappingEntry
 from radd.modules.jiraimport.types import (
     BuiltinTarget,
     FieldAction,
@@ -36,6 +38,10 @@ def _field(jira_id, name, **kw) -> InferredField:
         schema_key=kw.get("schema_key", ""),
         distinct_values=kw.get("distinct_values"),
     )
+
+
+def _entry(jira_id, jira_name, action, **kw) -> FieldMappingEntry:
+    return FieldMappingEntry(jira_id=jira_id, jira_name=jira_name, action=action, **kw)
 
 
 # --- pure suggestion ---
@@ -82,13 +88,11 @@ def test_suggest_recognizes_epic_link_and_watchers_as_native():
     assert by_id["customfield_10001"].action is FieldAction.CREATE
 
 
-def test_validate_native_needs_a_target():
-    from radd.modules.jiraimport.types import BuiltinTarget
-
-    good = [FieldMapping("j1", "Domain", FieldAction.NATIVE, builtin_target=BuiltinTarget.TEAM)]
+def test_native_needs_a_target():
+    good = [_entry("j1", "Domain", FieldAction.NATIVE, builtin_target=BuiltinTarget.TEAM)]
     assert validate_mappings(good, {}) == []
-    bad = [FieldMapping("j2", "Domain", FieldAction.NATIVE)]  # no builtin_target
-    assert validate_mappings(bad, {})[0].jira_id == "j2"
+    with pytest.raises(ValidationError):
+        _entry("j2", "Domain", FieldAction.NATIVE)  # no builtin_target
 
 
 def test_suggest_maps_to_existing_else_creates():
@@ -118,14 +122,14 @@ def test_suggest_maps_to_existing_else_creates():
 def test_validate_catches_the_real_mistakes():
     existing = {"story_points": FieldType.NUMBER}
     bad = [
-        FieldMapping("j1", "Maps to nothing", FieldAction.MAP, target_key="missing"),
-        FieldMapping("j2", "Bad key", FieldAction.CREATE, target_key="Not A Key",
+        _entry("j1", "Maps to nothing", FieldAction.MAP, target_key="missing"),
+        _entry("j2", "Bad key", FieldAction.CREATE, target_key="Not A Key",
                      create_type=FieldType.TEXT),
-        FieldMapping("j3", "Dup", FieldAction.CREATE, target_key="dupe", create_type=FieldType.TEXT),
-        FieldMapping("j4", "Dup2", FieldAction.CREATE, target_key="dupe", create_type=FieldType.TEXT),
-        FieldMapping("j5", "No opts", FieldAction.CREATE, target_key="sel",
+        _entry("j3", "Dup", FieldAction.CREATE, target_key="dupe", create_type=FieldType.TEXT),
+        _entry("j4", "Dup2", FieldAction.CREATE, target_key="dupe", create_type=FieldType.TEXT),
+        _entry("j5", "No opts", FieldAction.CREATE, target_key="sel",
                      create_type=FieldType.SELECT, create_options=None),
-        FieldMapping("j6", "Clobber", FieldAction.CREATE, target_key="story_points",
+        _entry("j6", "Clobber", FieldAction.CREATE, target_key="story_points",
                      create_type=FieldType.NUMBER),
     ]
     problems = {p.jira_id: p.message for p in validate_mappings(bad, existing)}
@@ -139,11 +143,11 @@ def test_validate_catches_the_real_mistakes():
 def test_validate_passes_a_clean_set():
     existing = {"story_points": FieldType.NUMBER}
     good = [
-        FieldMapping("j1", "Points", FieldAction.MAP, target_key="story_points"),
-        FieldMapping("j2", "Domain", FieldAction.CREATE, target_key="domain",
+        _entry("j1", "Points", FieldAction.MAP, target_key="story_points"),
+        _entry("j2", "Domain", FieldAction.CREATE, target_key="domain",
                      create_type=FieldType.SELECT, create_options=["A", "B"]),
-        FieldMapping("j3", "Skip", FieldAction.IGNORE),
-        FieldMapping("j4", "Native", FieldAction.BUILTIN),
+        _entry("j3", "Skip", FieldAction.IGNORE),
+        _entry("j4", "Native", FieldAction.BUILTIN),
     ]
     assert validate_mappings(good, existing) == []
 

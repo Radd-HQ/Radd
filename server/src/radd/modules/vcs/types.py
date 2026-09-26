@@ -24,7 +24,14 @@ class VcsEvent(StrEnum):
 class VcsEntity(StrEnum):
     VCS_LINK = "vcs_link"
     USER_LINK = "vcs_user_link"
-    PENDING_WORKLOG = "vcs_pending_worklog"
+
+
+class RefStatus(StrEnum):
+    """Status recorded on a merge/pull-request link."""
+
+    OPEN = "open"
+    MERGED = "merged"
+    CLOSED = "closed"
 
 
 class VcsMatchedBy(StrEnum):

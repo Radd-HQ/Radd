@@ -121,8 +121,6 @@ CATALOGS = {
         {"id": "1", "name": "Blocks", "inward": "is blocked by", "outward": "blocks"},
         {"id": "2", "name": "Implements", "inward": "is implemented by", "outward": "implements"},
     ],
-    "resolutions": [],
-    "option_sets": {},
     "versions": [{"id": "1", "name": "1.4.0"}],
     "components": [{"id": "1", "name": "API"}],
 }

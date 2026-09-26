@@ -1,12 +1,5 @@
-"""The half of a webhook receiver every connector shares (RADD-1309).
-
-Parsing stays per connector — the payload shapes differ and the connectors are
-independently disableable. What does NOT differ is what happens after parsing:
-resolve each planned key to an issue, upsert the link through the seam, and fire
-the connector's triggers once per linked issue. That loop existed three times,
-each ending in its own private "move merged work to waiting-for-release"; now it
-exists once and ends in events.
-"""
+"""What every receiver does after parsing: resolve planned keys to issues, upsert the
+links, and fire the connector's triggers once per issue."""
 
 import uuid
 import hashlib
@@ -42,7 +35,7 @@ async def claim_delivery(session, *, provider, connection_id, delivery_id, event
 
 
 class Planned(Protocol):
-    """The shape every connector's `parsing.PlannedLink` already has."""
+    """The shape of `keys.PlannedLink` (the backfills build SimpleNamespace ones)."""
 
     item_key: str
     ref_type: VcsRefType

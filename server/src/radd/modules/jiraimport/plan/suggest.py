@@ -18,7 +18,7 @@ import uuid
 from radd.modules.items.enums import ItemKind, Priority
 from radd.modules.workflow.types import StateCategory
 
-from ..mapping import FieldMapping, slug, suggest_mappings
+from ..mapping import slug, suggest_mappings
 from ..profile import InboundProfile, PersonEntry, VocabEntry
 from ..schemas import FieldMappingEntry
 from ..types import ComponentAction, FieldAction, FieldBand, UserAction, VocabAction
@@ -107,9 +107,9 @@ def _fields(
 
 
 def _field(
-    mapping: FieldMapping, field, existing_field_options: dict[str, list[str]]
+    mapping: FieldMappingEntry, field, existing_field_options: dict[str, list[str]]
 ) -> FieldMappingEntry:
-    """The pure suggester deals in dataclasses; the plan stores wire models."""
+    """The suggestion plus the evidence behind it."""
     observed = list(field.distinct_values or []) if field else []
     # Mapping into an existing select whose options do not cover the data: suggest
     # ADDING them. The alternative is silently dropping real values, which is what
@@ -119,24 +119,14 @@ def _field(
     if mapping.action is FieldAction.MAP and target_options is not None and observed:
         known = {v.casefold() for v in target_options}
         extend = any(v.casefold() not in known for v in observed)
-    return FieldMappingEntry(
-        jira_id=mapping.jira_id,
-        jira_name=mapping.jira_name,
-        action=mapping.action,
-        target_key=mapping.target_key,
-        create_type=mapping.create_type,
-        create_name=mapping.create_name,
-        create_options=mapping.create_options,
-        create_scope=mapping.create_scope,
-        builtin_target=mapping.builtin_target,
-        value_map=dict(mapping.value_map),
-        band=field.band if field else FieldBand.IN_USE,
-        band_reason=field.band_reason if field else "",
-        populated=field.populated if field else 0,
-        samples=list(field.samples[:3]) if field else [],
-        extend_options=extend,
-        observed_values=observed,
-    )
+    return mapping.model_copy(update={
+        "band": field.band if field else FieldBand.IN_USE,
+        "band_reason": field.band_reason if field else "",
+        "populated": field.populated if field else 0,
+        "samples": list(field.samples[:3]) if field else [],
+        "extend_options": extend,
+        "observed_values": observed,
+    })
 
 
 # --- issue types --------------------------------------------------------------
@@ -148,12 +138,8 @@ _EPIC_HINTS = {"epic"}
 
 
 def _issue_type(entry: VocabEntry) -> IssueTypeMapping:
-    """A Jira issue type → the hierarchy kind + a Radd issue type.
-
-    Spec 90 collapsed this to `"epic" in name` / `"sub" in name`, so "Initiative",
-    "Milestone" and any renamed or translated type silently became a plain issue
-    with no way to correct it. Both axes are now editable rows.
-    """
+    """Subtask by Jira's `subtask` flag (or a "sub…" name), epic by the reserved
+    name, else issue; both axes stay editable rows."""
     lowered = entry.value.strip().lower()
     if entry.meta.get("subtask") or lowered.replace("-", " ").startswith("sub"):
         kind = ItemKind.SUBTASK
@@ -176,13 +162,8 @@ def _issue_type(entry: VocabEntry) -> IssueTypeMapping:
 
 
 def _status(entry: VocabEntry) -> StatusMapping:
-    """A Jira status → a Radd state + category, seeded from Jira's own category key.
-
-    Note what is NOT guessed: `canceled`. Jira has no cancelled category — it
-    files "Rejected", "Won't Do" and "Abandoned" under `done` — so spec 90 tested
-    the literal names "cancelled"/"canceled" and got everything else wrong. The
-    suggestion follows Jira, and the admin retargets the ones that mean cancelled.
-    """
+    """Seeded from Jira's `statusCategory.key`; `canceled` is never guessed (Jira
+    files "Rejected"/"Won't Do" under done — the admin retargets those)."""
     category = JIRA_STATUS_CATEGORY.get(
         str(entry.meta.get("category_key", "")).lower(), StateCategory.TODO
     )
@@ -236,14 +217,8 @@ def _int_or_max(raw: object) -> int:
 
 
 def _link_type(entry: VocabEntry, existing_keys: set[str]) -> LinkTypeMapping:
-    """A Jira link type → a Radd one, matched on Jira's OUTWARD phrase.
-
-    The outward phrase is the stable part of a Jira link type ("blocks",
-    "duplicates", "clones"); the display NAME is free text an admin renamed. Spec
-    90 matched the name against three literals and defaulted the rest to
-    `relates`, so "Implements", "Issue split" and "Problem/Incident" all silently
-    became the same relationship.
-    """
+    """Matched on Jira's OUTWARD phrase (stable), not its name (renameable); an
+    unknown used type is proposed as a new link type rather than `relates`."""
     outward = str(entry.meta.get("outward", "")).strip().lower()
     key = _LINK_BY_OUTWARD.get(outward, "")
     if not key:
@@ -278,17 +253,9 @@ def _user(
     placeholder_domain: str,
     inactive_user_ids: set[uuid.UUID],
 ) -> UserMapping:
-    """Match a Jira person to a Radd user, or say plainly that we could not.
-
-    An exact email match is the account, full stop (the spec-88 rule). A display
-    name match is offered too, but as a *suggestion with its reason shown*, since
-    two people can share a name.
-
-    Where nothing matches, the default is a placeholder — but the synthesized
-    address is put in the row for the admin to see BEFORE anything is created.
-    Spec 90 invented it on a hardcoded company domain and created the account
-    silently.
-    """
+    """Exact email = the account; a display-name match is a suggestion with its
+    reason (two people can share a name); otherwise a placeholder whose address is
+    shown before creation."""
     email = person.email.strip().lower()
     if email and (matched := users_by_email.get(email)):
         return UserMapping(

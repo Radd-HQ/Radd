@@ -1,19 +1,8 @@
-"""Tracked time on a Forgejo pull request, mirrored into the linked issue (RADD-1260).
-
-Forgejo/Gitea tracks time on issues AND pull requests (a PR is an issue) and
-exposes the entries as `GET /repos/{owner}/{repo}/issues/{index}/times` →
-`{id, created, time (seconds), user_id, user_name}`, paged. There is no webhook
-for tracked time and the `pull_request` payload carries no total, so the
-connector reconciles on EVERY pull_request delivery for that PR and on the
-backfill — one paged GET each, idempotent by the seam.
-
-Two things Forgejo lacks that GitLab has: a "spent on" date (only `created`,
-the moment the entry was added — the note says so) and a summary per entry.
-Author email comes from `GET /api/v1/users/{username}`, visible when the user
-shows it or the token is an admin's; otherwise the identity map in Settings.
-
-Everything after fetching is the provider-neutral seam `vcs.timemirror`.
-"""
+"""Tracked time on a Forgejo/Gitea PR, mirrored into the linked issue (RADD-1260).
+No tracked-time webhook and no total on the PR payload, so every pull_request
+delivery (and the backfill) reconciles that PR via `/issues/{index}/times`.
+Entries carry only `created` (the note admits it), no summary; emails come from
+`GET /users/{name}` when visible, else the identity map."""
 
 import logging
 from datetime import date, datetime

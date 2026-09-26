@@ -1,7 +1,7 @@
 """RADD-1259: time logged on a GitLab merge request mirrored into the linked issue.
 
-GraphQL and REST are stood in for by an httpx.MockTransport carrying the 18.4
-shapes verified against Cinesite's GitLab on 2026-09-19 (`Timelog{id, timeSpent,
+GraphQL and REST are stood in for by an httpx.MockTransport carrying the shapes
+verified against a production GitLab 18.4 instance on 2026-09-19 (`Timelog{id, timeSpent,
 spentAt, summary, user{id, username, publicEmail}}`, `GET /users/:id` → `email`
 for an admin token). The seam's own invariants live in test_time_mirror.py;
 this file covers the GitLab-specific half: fetching, paging, the email lookup,

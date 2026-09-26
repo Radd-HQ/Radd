@@ -46,9 +46,6 @@ async def build(session: AsyncSession, snapshot: JiraSnapshot) -> InboundProfile
     profile.priorities = merge_catalog(
         profile.priorities, store.catalog(snapshot, SnapshotCatalog.PRIORITIES)
     )
-    profile.resolutions = merge_catalog(
-        profile.resolutions, store.catalog(snapshot, SnapshotCatalog.RESOLUTIONS)
-    )
     profile.link_types = merge_catalog(
         profile.link_types, store.catalog(snapshot, SnapshotCatalog.LINK_TYPES)
     )

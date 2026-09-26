@@ -1,20 +1,8 @@
-"""`/spend` comments on a GitHub pull request, mirrored into the linked issue (RADD-1261).
-
-GitHub has no time tracking, so the entry lives in a comment (`spend.py` reads
-it). Two delivery shapes feed this module:
-
-- **one comment at a time** — the `issue_comment` / `pull_request_review_comment`
-  / `pull_request_review` webhooks: `reconcile_comment` mirrors THAT comment's
-  lines, with deletion narrowed to that comment's ids (`id_prefix`), so the
-  PR's other comments are untouched; `remove_comment` drops them;
-- **every comment of a PR** — the backfill: `reconcile_pull_request` walks the
-  PR's issue comments and review comments and reconciles the whole scope.
-
-Authors: GitHub hides emails, so the mapping comes from the identity map —
-filled by hand in Settings, or automatically from a push's commit-author emails
-(`record_commit_authors`). With a token, `GET /users/{login}` adds the public
-email when the user set one.
-"""
+"""`/spend` comments on a GitHub PR, mirrored into the linked issue (RADD-1261).
+Webhooks deliver one comment: `reconcile_comment` narrows deletion to its ids
+(`id_prefix`), `remove_comment` drops them; the backfill reconciles a whole PR.
+GitHub hides emails, so authors map via the identity map (by hand, or from a
+push's commit-author emails — `record_commit_authors`)."""
 
 import logging
 from datetime import date, datetime

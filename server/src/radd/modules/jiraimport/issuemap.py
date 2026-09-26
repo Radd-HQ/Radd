@@ -1,12 +1,6 @@
-"""Jira issue JSON → a Radd item draft (spec 90) — PURE, so the whole
-translation is unit-tested without a live Jira or a DB.
-
-The field shapes are Jira REST v2's, and the decoding rules (obfuscated emails,
-status categories, priority names, sprint beans, custom-field value shapes) live
-here as the one definition of what a Jira issue means. The runner takes a draft
-and calls the item/comment services; nothing here touches the network or the
-session.
-"""
+"""Jira issue JSON → a decoded draft — PURE. The one definition of Jira REST v2's
+value shapes (obfuscated emails, sprint beans, custom-field values, comments,
+worklogs, links); every judgement is `transform`'s, from the plan."""
 
 from __future__ import annotations
 
@@ -21,35 +15,22 @@ from .markup import jira_to_markdown
 from .schemas import FieldMappingEntry
 from .types import BuiltinTarget, FieldAction
 
-# Spec 100 DELETED the hardcoded `FALLBACK_EMAIL_DOMAIN` — one company's domain,
-# in source, written into real `users` rows on every instance that ran this. The
-# domain is now passed in by the caller (derived from the Jira host, or set
-# explicitly per import), and an absent domain synthesizes NOTHING: a person Jira
-# gave no address for is surfaced for the admin to resolve, not silently invented.
-USERNAME_RE = re.compile(r"[a-z0-9._-]+")
 TITLE_MAX = 500
 
+# The PRIORITY native target's English names (see `_apply_native`).
 PRIORITY_MAP = {
     "blocker": "blocker", "critical": "blocker", "highest": "high", "high": "high",
     "major": "high", "medium": "normal", "normal": "normal", "low": "low",
     "minor": "low", "lowest": "low", "trivial": "low",
 }
-# Jira statusCategory.key (new|indeterminate|done) or a legacy category name.
-CATEGORY_MAP = {
-    "to do": "todo", "in progress": "in_progress", "done": "done",
-    "new": "todo", "indeterminate": "in_progress", "complete": "done",
-}
-# Jira issue-link type name → Radd ItemLinkType (only these three exist).
+# Jira issue-link type name → Radd link key; transform's fallback when the plan
+# has no row for the type.
 LINK_TYPE_MAP = {"blocks": "blocks", "duplicate": "duplicates", "cloners": "duplicates"}
-SPRINT_FIELD_RE = re.compile(
-    r"name=(?P<name>[^,]+?),startDate=(?P<start>[^,]+?),endDate=(?P<end>[^,]+?),"
-)
-# One attribute inside a greenhopper Sprint bean toString: `key=value` up to the
-# next comma or the closing bracket. `<null>` / empty read as absent.
-_SPRINT_BEAN_ATTR = "com.atlassian.greenhopper"
 
 
 def _bean_attr(blob: str, key: str) -> str | None:
+    """One attribute inside a greenhopper Sprint bean toString: `key=value` up to
+    the next comma or the closing bracket. `<null>` / empty read as absent."""
     m = re.search(rf"[\[,]{re.escape(key)}=(?P<v>[^,\]]*)", blob)
     if not m:
         return None
@@ -89,33 +70,17 @@ def decode_email(raw: str | None) -> str | None:
     return email if "@" in email else None
 
 
-def person_email(person: dict | None, fallback_domain: str = "") -> str | None:
-    """Best email for a Jira user object: the address Jira exposed, else
-    `<username>@<fallback_domain>` when a domain was supplied.
-
-    The synthesized form is what lets a later AD import match on email and adopt
-    the placeholder's work (spec 88). Without a domain it returns None rather than
-    guessing — an invented address on the wrong domain is worse than no address,
-    because it looks real and never matches anyone.
-    """
+def person_email(person: dict | None) -> str | None:
+    """The address Jira exposed for a user object, or None — never synthesized
+    (the plan's Users step decides placeholder addresses)."""
     if not person:
         return None
-    email = decode_email(person.get("emailAddress") or person.get("email"))
-    if email:
-        return email
-    if not fallback_domain:
-        return None
-    username = (person.get("name") or person.get("key") or "").strip().lower()
-    if username and USERNAME_RE.fullmatch(username):
-        return f"{username}@{fallback_domain}"
-    return None
+    return decode_email(person.get("emailAddress") or person.get("email"))
 
 
 def person_key(person: dict | None) -> str:
-    """Jira's stable identity for a person — username on DC, accountId on Cloud.
-
-    The key the spec-100 users table is indexed by, because an email is exactly
-    what Jira often does NOT give us."""
+    """Jira's stable identity for a person — username on DC, accountId on Cloud —
+    which the plan's users table is keyed by, since Jira often exposes no email."""
     if not person:
         return ""
     return str(person.get("name") or person.get("key") or person.get("accountId") or "").strip()
@@ -125,27 +90,6 @@ def person_name(person: dict | None) -> str:
     if not person:
         return ""
     return person.get("displayName") or person.get("name") or ""
-
-
-def map_priority(fields: dict) -> str:
-    return PRIORITY_MAP.get(((fields.get("priority") or {}).get("name") or "normal").lower(), "normal")
-
-
-def map_kind(fields: dict) -> str:
-    name = ((fields.get("issuetype") or {}).get("name") or "").lower()
-    if "epic" in name:
-        return "epic"
-    if "sub" in name:
-        return "subtask"
-    return "issue"
-
-
-def map_category(fields: dict) -> str:
-    status = fields.get("status") or {}
-    if (status.get("name") or "").lower() in {"cancelled", "canceled"}:
-        return "canceled"
-    key = (status.get("statusCategory") or {}).get("key") or status.get("category") or ""
-    return CATEGORY_MAP.get(key.lower(), "todo")
 
 
 def comment_is_internal(comment: dict) -> bool:
@@ -159,9 +103,8 @@ def comment_is_internal(comment: dict) -> bool:
 
 @dataclass
 class SprintDraft:
-    """One Jira sprint an issue belongs to (spec 90 follow-up) → a Radd cycle. We
-    keep the sprint's dates and completion so the cycle imports with the RIGHT
-    derived status (a CLOSED sprint → a completed cycle), not as a dateless draft."""
+    """One Jira sprint an issue belongs to → a Radd cycle, with dates and completion
+    so a CLOSED sprint imports as a completed cycle, not a dateless draft."""
 
     name: str
     state: str | None = None  # jira: future | active | closed (lower-cased)
@@ -215,16 +158,9 @@ def _sprints_from(raw: Any) -> list[SprintDraft]:
 
 
 def sprints(fields: dict, sprint_field_ids: tuple[str, ...] = ()) -> list[SprintDraft]:
-    """Sprint beans → Radd cycles, from the field(s) that ARE Jira's sprint field.
-
-    Spec 90 read the literal `customfield_10002` unconditionally. That is Sprint on
-    exactly one instance; elsewhere it is something else, and its values were parsed
-    as sprint beans — and `_sprint_from_bean` accepts any string under 200 chars, so
-    arbitrary field values silently became cycles. Spec 100 passes the ids resolved
-    from Jira's stable `gh-sprint` type key instead (`schemakeys.find_by_schema_key`).
-
-    With no ids resolved, this returns nothing rather than guessing.
-    """
+    """Sprint beans from the field(s) Jira's `gh-sprint` type key names. No ids =
+    no sprints: `_sprint_from_bean` accepts any short string, so parsing a guessed
+    field would turn arbitrary values into cycles."""
     out: list[SprintDraft] = []
     for field_id in sprint_field_ids:
         out.extend(_sprints_from(fields.get(field_id)))
@@ -289,10 +225,7 @@ class CommentDraft:
     body: str
     author_email: str | None
     created: str | None
-    # Jira's own comment id. Spec 100 stores it so a RE-import can recognise a
-    # comment it already wrote instead of duplicating it — spec 90 could only
-    # avoid duplicates by skipping comments on a re-import entirely.
-    jira_id: str = ""
+    jira_id: str = ""  # so a re-import recognises a comment it already wrote
     author_key: str = ""  # Jira username, the stable identity the plan maps
     # RADD-1180: Jira was hiding this comment from somebody, so Radd must too.
     internal: bool = False
@@ -329,11 +262,6 @@ class IssueDraft:
     number: int  # Radd item number = the Jira number (1:1)
     title: str
     description: str  # already markdown
-    kind: str
-    priority: str
-    status_category: str
-    assignee_email: str | None
-    reporter_email: str | None
     created: str | None
     labels: list[str]
     parent_jira_key: str | None
@@ -343,31 +271,21 @@ class IssueDraft:
     comments: list[CommentDraft] = field(default_factory=list)
     worklogs: list[WorklogDraft] = field(default_factory=list)
     links: list[LinkDraft] = field(default_factory=list)
-    # Native-target mappings (spec 90): values routed into Radd features rather
-    # than custom fields. Resolved by the runner (teams/states/users need the DB).
+    # Native-target mappings: values routed into Radd features rather than custom
+    # fields, resolved by transform. `native_status_name`, `assignee_email` and
+    # `priority` are decoded but not yet read (the STATUS/ASSIGNEE/PRIORITY targets).
     native_team: str | None = None  # a team NAME → find-or-create
     native_status_name: str | None = None  # a workflow STATE name → find-or-create
+    assignee_email: str | None = None
+    priority: str | None = None
     native_watcher_emails: list[str] = field(default_factory=list)
     start_date: str | None = None  # YYYY-MM-DD
     target_date: str | None = None
     #: Story points (spec 70) — Radd's own column, not a custom field.
     estimate_points: float | None = None
-    #: Jira's `updated` — when the issue was LAST TOUCHED. Without it every
-    #: imported issue reads as untouched since its creation date, which makes
-    #: `ORDER BY updated`, SLQ `updated > …` and every recently-updated view lie
-    #: (spec 90 follow-up).
+    #: Jira's `updated`; without it every imported issue reads as untouched since
+    #: creation, and every recently-updated view lies.
     updated: str | None = None
-    #: email -> Jira display name for EVERY person this issue names (assignee,
-    #: reporter, comment/worklog authors, watchers). The runner provisions a
-    #: placeholder account for anyone Radd does not know, so authored records are
-    #: attributed to the person who wrote them rather than to whoever ran the
-    #: import (spec 90 follow-up).
-    people: dict[str, str] = field(default_factory=dict)
-
-    @property
-    def sprint_names(self) -> list[str]:
-        """The names of the issue's sprints (its cycle history), current last."""
-        return [s.name for s in self.sprints]
 
 
 def jira_number(key: str) -> int:
@@ -400,10 +318,9 @@ def _custom_field_values(
                 rendered = None
         if rendered is None:
             continue
-        # Per-value remap (spec 90): translate the kept values through value_map so
-        # an import can rename options (Jira "P1" → Radd "Critical"); the created
-        # field's options are rebuilt from these targets in the runner. Unmapped
-        # values pass through unchanged.
+        # Per-value remap through value_map (Jira "P1" → Radd "Critical"); the
+        # created field's options are rebuilt from these targets. Unmapped values
+        # pass through unchanged.
         if m.value_map:
             if isinstance(rendered, list):
                 rendered = [m.value_map.get(v, v) for v in rendered]
@@ -413,16 +330,14 @@ def _custom_field_values(
     return out
 
 
-def _users_from(raw: Any, fallback_domain: str = "") -> list[str]:
+def _users_from(raw: Any) -> list[str]:
     """Jira user field value(s) → emails. Handles a single user object, an array
     of them, or a bare username string."""
     items = raw if isinstance(raw, list) else [raw]
     emails: list[str] = []
     for element in items:
         if isinstance(element, dict):
-            email = person_email(element, fallback_domain)
-        elif isinstance(element, str) and element.strip():
-            email = person_email({"name": element.strip()}, fallback_domain)
+            email = person_email(element)
         else:
             email = None
         if email and email not in emails:
@@ -461,7 +376,6 @@ def _apply_native(
     draft: IssueDraft,
     mappings: list[FieldMappingEntry],
     fields: dict,
-    fallback_domain: str = "",
 ) -> None:
     """Route NATIVE-mapped Jira fields into the draft's native slots (spec 90).
     Team/watchers resolve against the DB later (they carry names/emails here)."""
@@ -478,16 +392,14 @@ def _apply_native(
             # unmapped status leaves native_status_name None → category fallback.
             draft.native_status_name = m.value_map.get(name) if name else None
         elif target is BuiltinTarget.WATCHERS:
-            draft.native_watcher_emails = _users_from(raw, fallback_domain)
+            draft.native_watcher_emails = _users_from(raw)
         elif target is BuiltinTarget.PARENT:
             key = _scalar(raw)
             if key:  # an explicit parent mapping wins over the epic-link heuristic
                 draft.parent_jira_key = draft.parent_jira_key or key.upper()
                 draft.epic_jira_key = key.upper()
         elif target is BuiltinTarget.ASSIGNEE:
-            draft.assignee_email = (
-                person_email(raw, fallback_domain) if isinstance(raw, dict) else None
-            ) or draft.assignee_email
+            draft.assignee_email = person_email(raw) if isinstance(raw, dict) else None
         elif target is BuiltinTarget.LABELS:
             extra = render_value(raw, FieldType.MULTI_SELECT) or []
             draft.labels = list(dict.fromkeys([*draft.labels, *extra]))
@@ -517,7 +429,6 @@ def map_issue(
     *,
     epic_link_field: str | None = None,
     sprint_field_ids: tuple[str, ...] = (),
-    fallback_domain: str = "",
 ) -> IssueDraft:
     """One Jira `/search` issue → an IssueDraft (pure).
 
@@ -535,7 +446,7 @@ def map_issue(
     comments = [
         CommentDraft(
             body=jira_to_markdown(c.get("body") or ""),
-            author_email=person_email(c.get("author"), fallback_domain),
+            author_email=person_email(c.get("author")),
             created=to_utc_naive(c.get("created")),
             jira_id=str(c.get("id") or ""),
             author_key=person_key(c.get("author")),
@@ -548,7 +459,7 @@ def map_issue(
         WorklogDraft(
             time_spent=w.get("timeSpent") or "",
             worked_on=(to_utc_naive(w.get("started")) or "")[:10] or None,
-            author_email=person_email(w.get("author"), fallback_domain),
+            author_email=person_email(w.get("author")),
             note=(w.get("comment") or "")[:2000],
             created=to_utc_naive(w.get("created")),
             jira_id=str(w.get("id") or ""),
@@ -578,11 +489,6 @@ def map_issue(
         number=jira_number(key),
         title=(fields.get("summary") or key)[:TITLE_MAX],
         description=jira_to_markdown(fields.get("description") or ""),
-        kind=map_kind(fields),
-        priority=map_priority(fields),
-        status_category=map_category(fields),
-        assignee_email=person_email(fields.get("assignee"), fallback_domain),
-        reporter_email=person_email(fields.get("reporter"), fallback_domain),
         created=to_utc_naive(fields.get("created")),
         updated=to_utc_naive(fields.get("updated")),
         labels=[str(x) for x in (fields.get("labels") or [])],
@@ -594,26 +500,5 @@ def map_issue(
         worklogs=worklogs,
         links=links,
     )
-    _apply_native(draft, mappings, fields, fallback_domain)
-    _collect_people(draft, fields, fallback_domain)
+    _apply_native(draft, mappings, fields)
     return draft
-
-
-def _collect_people(draft: IssueDraft, fields: dict, fallback_domain: str = "") -> None:
-    """Every person the issue names, keyed by the same email the runner resolves
-    users by. The display name comes along so a placeholder account reads as a
-    person rather than as an email local part."""
-
-    def remember(person: dict | None) -> None:
-        email = person_email(person, fallback_domain)
-        if email:
-            draft.people.setdefault(email.lower(), person_name(person) or "")
-
-    remember(fields.get("assignee"))
-    remember(fields.get("reporter"))
-    for comment in (fields.get("comment") or {}).get("comments") or []:
-        remember(comment.get("author"))
-    for worklog in (fields.get("worklog") or {}).get("worklogs") or []:
-        remember(worklog.get("author"))
-    for watcher_email in draft.native_watcher_emails:
-        draft.people.setdefault(watcher_email.lower(), "")

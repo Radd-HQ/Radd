@@ -1,24 +1,16 @@
-"""Field-mapping logic for the import wizard (spec 90) — PURE, so the smart
-defaults and validation are unit-tested without a DB or a live Jira.
-
-A mapping is one decision per inbound Jira field: ignore it, write it into an
-EXISTING Radd custom field, or CREATE a new one (then write into it). Built-in
-Jira fields (summary/status/…) feed native columns and are never a custom-field
-target — they carry the `builtin` action for display only.
-
-`suggest_mappings` produces the pre-filled grid the wizard opens with: the admin
-adjusts, they don't start from a blank sheet of 300 fields.
-"""
+"""Field-mapping suggestion + validation — PURE. One decision per inbound field:
+ignore, map into an existing field, create one, or route into a native concept."""
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field as fdataclass_field
+from dataclasses import dataclass
 
 from radd.modules.fields.types import SELECT_TYPES, FieldType
 
 from . import schemakeys
-from .types import BuiltinTarget, FieldAction, FieldScope, InferredField, InferredType
+from .schemas import FieldMappingEntry
+from .types import BuiltinTarget, FieldAction, InferredField, InferredType
 
 # InferredType → the Radd FieldType a "create" defaults to. UNKNOWN degrades to
 # text (the lossless catch-all) rather than guessing a structured type.
@@ -53,23 +45,6 @@ def slug(name: str) -> str:
     return lowered[:_KEY_MAX]
 
 
-@dataclass(frozen=True)
-class FieldMapping:
-    """One resolved mapping decision (spec 90). Mirrors the wire schema; the run
-    worker consumes exactly this."""
-
-    jira_id: str
-    jira_name: str
-    action: FieldAction
-    target_key: str = ""  # map/create: the Radd custom-field key written into
-    create_type: FieldType | None = None  # create: the new field's type
-    create_name: str = ""  # create: the new field's display label
-    create_options: list[str] | None = None  # create select/multi_select: options
-    create_scope: FieldScope = FieldScope.GLOBAL  # create: global vs project field
-    builtin_target: BuiltinTarget | None = None  # native: the Radd feature fed
-    value_map: dict[str, str] = fdataclass_field(default_factory=dict)  # per-value translation
-
-
 # Jira custom fields whose NAME means a native Radd concept — suggested as a
 # native-target mapping rather than a text custom field. The admin can override.
 _NATIVE_BY_NAME: dict[str, BuiltinTarget] = {
@@ -86,47 +61,41 @@ _NATIVE_BY_NAME: dict[str, BuiltinTarget] = {
 
 def suggest_mappings(
     fields: list[InferredField], existing_keys: set[str]
-) -> list[FieldMapping]:
-    """The grid the wizard opens with (spec 90).
+) -> list[FieldMappingEntry]:
+    """The grid the wizard opens with:
 
     - built-in Jira fields → `builtin` (handled natively, shown for context),
-    - a field Jira's own type key marks as a native concept → `native`,
-    - anything outside the IN_USE band (unused, or machinery) → `ignore`, so the
-      grid opens on the fields that actually carry data (spec 100),
-    - a field whose slug already names an existing Radd field → `map` to it,
-    - everything else worth keeping → `create`, defaulting to the inferred type
-      and (for selects) the sampled option set.
+    - a native concept by type key, else by name → `native`,
+    - anything outside the IN_USE band → `ignore`,
+    - a slug that names an existing Radd field → `map` to it,
+    - everything else → `create`, with the inferred type and the observed options.
     """
-    suggestions: list[FieldMapping] = []
+    suggestions: list[FieldMappingEntry] = []
+
+    def entry(f: InferredField, action: FieldAction, **kw) -> FieldMappingEntry:
+        return FieldMappingEntry(jira_id=f.jira_id, jira_name=f.name, action=action, **kw)
+
     for f in fields:
         if f.is_builtin:
-            suggestions.append(FieldMapping(f.jira_id, f.name, FieldAction.BUILTIN))
+            suggestions.append(entry(f, FieldAction.BUILTIN))
             continue
-        # Spec 100: Jira's stable `schema.custom` key first (works on any
-        # instance, any language); the English name table is only the fallback for
-        # DC's Story Points, which has no distinguishing key.
         native = schemakeys.native_target(f.schema_key, f.name) or _NATIVE_BY_NAME.get(
             f.name.strip().lower()
         )
         if native is not None:
-            suggestions.append(
-                FieldMapping(f.jira_id, f.name, FieldAction.NATIVE, builtin_target=native)
-            )
+            suggestions.append(entry(f, FieldAction.NATIVE, builtin_target=native))
             continue
         if f.ignored_by_default:  # UNUSED or NOISE — collapsed in the grid too
-            suggestions.append(FieldMapping(f.jira_id, f.name, FieldAction.IGNORE))
+            suggestions.append(entry(f, FieldAction.IGNORE))
             continue
         key = slug(f.name)
         radd_type = radd_type_for(f.inferred_type)
         if key in existing_keys:
-            suggestions.append(
-                FieldMapping(f.jira_id, f.name, FieldAction.MAP, target_key=key)
-            )
+            suggestions.append(entry(f, FieldAction.MAP, target_key=key))
             continue
         suggestions.append(
-            FieldMapping(
-                f.jira_id,
-                f.name,
+            entry(
+                f,
                 FieldAction.CREATE,
                 target_key=key,
                 create_type=radd_type,
@@ -147,25 +116,19 @@ class MappingProblem:
 
 
 def validate_mappings(
-    mappings: list[FieldMapping],
+    mappings: list[FieldMappingEntry],
     existing: dict[str, FieldType],
 ) -> list[MappingProblem]:
     """Check a mapping set against the live custom-field catalog (`existing`:
-    key → its Radd type). Returns problems; empty = ready to run.
+    key → its Radd type). Returns problems; empty = ready to run. A missing target
+    key or native target cannot reach here: `FieldMappingEntry` refuses both.
 
-    Two `create`s claiming the same key, or two mappings targeting the same
-    existing field, would collide — caught here rather than mid-import."""
+    Two `create`s claiming the same key would collide — caught here rather than
+    mid-import."""
     problems: list[MappingProblem] = []
     claimed_new: dict[str, str] = {}  # new key → the jira_id that first claimed it
     for m in mappings:
-        if m.action in (FieldAction.IGNORE, FieldAction.BUILTIN):
-            continue
-        if m.action is FieldAction.NATIVE:
-            if m.builtin_target is None:
-                problems.append(MappingProblem(m.jira_id, "choose a Radd feature to map into"))
-            continue
-        if not m.target_key:
-            problems.append(MappingProblem(m.jira_id, "a target field key is required"))
+        if m.action in (FieldAction.IGNORE, FieldAction.BUILTIN, FieldAction.NATIVE):
             continue
         if not re.fullmatch(r"[a-z][a-z0-9_]{0,49}", m.target_key):
             problems.append(

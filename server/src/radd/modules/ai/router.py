@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import commit_before_streaming, get_session
 from radd.modules.auth.deps import CurrentUser
 
-from . import service
+from . import features, nlslq, similar, sse, summarize
 from .types import (
     SIMILAR_DEFAULT_LIMIT,
     SIMILAR_MAX_LIMIT,
@@ -35,7 +35,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def ai_status(session: Session, user: CurrentUser) -> AiStatus:
     """Whether AI is configured (any authenticated member) — the frontend gates
     its AI affordances on `enabled` and per-feature on `features`."""
-    return await service.status(session)
+    return await features.status(session)
 
 
 @router.post("/items/{item_id}/ai/summarize", response_model=SummarizeResponse)
@@ -44,7 +44,7 @@ async def summarize_item(
 ) -> SummarizeResponse:
     """Hand-off-style summary of the item (item.read): description + recent
     comments + history digest. Not stored — returned to the caller."""
-    return await service.summarize_item(session, item_id, user)
+    return await summarize.summarize_item(session, item_id, user)
 
 
 @router.post("/items/{item_id}/ai/summarize/stream")
@@ -54,13 +54,13 @@ async def summarize_item_stream(
     """The same summary, streamed as SSE (the Stream-AI-responses instance
     setting). Gates + the digest build run before the stream starts, so a
     dormant feature or unreadable item fails as ordinary JSON."""
-    user_prompt = await service.summarize_prompt(session, item_id, user)
+    user_prompt = await summarize.summarize_prompt(session, item_id, user)
     # RADD-1275: the pictures are read here, with the actor, before the
     # response starts — the body generator has no caller to check against.
-    pictures = await service.summarize_images(session, item_id, user)
+    pictures = await summarize.summarize_images(session, item_id, user)
     await commit_before_streaming(session)  # RADD-845: no idle tx behind the SSE
     return StreamingResponse(
-        service.summarize_stream_frames(session, user_prompt, pictures),
+        summarize.summarize_stream_frames(session, user_prompt, pictures),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
@@ -74,11 +74,11 @@ async def similar_reasons(
     `{key, score, reason}` frame per candidate. Split from /similar so the
     candidate rows render instantly and the chat-model round trip never blocks
     them (similar_rerank feature; 404-dormant)."""
-    user_prompt = await service.similar_reasons_prompt(session, item_id, user, data.keys)
+    user_prompt = await similar.similar_reasons_prompt(session, item_id, user, data.keys)
     frames = (
-        service.similar_reason_frames(session, user_prompt, data.keys)
+        similar.similar_reason_frames(session, user_prompt, data.keys)
         if user_prompt is not None
-        else service.done_only_frames()
+        else sse.done_only_frames()
     )
     await commit_before_streaming(session)  # RADD-845: no idle tx behind the SSE
     return StreamingResponse(frames, media_type="text/event-stream", headers=SSE_HEADERS)
@@ -91,9 +91,9 @@ async def similar_items(
     user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=SIMILAR_MAX_LIMIT)] = SIMILAR_DEFAULT_LIMIT,
 ) -> SimilarResponse:
-    """Candidate duplicates (item.read): FTS-ranked always; scored/filtered by
-    the LLM when AI is enabled (`reranked` says which you got)."""
-    return await service.similar_items(session, item_id, user, limit=limit)
+    """Candidate duplicates (item.read): semantic-first, FTS fallback; scored/
+    filtered by the LLM when enabled (`reranked` says which you got)."""
+    return await similar.similar_items(session, item_id, user, limit=limit)
 
 
 @router.post("/ai/similar", response_model=SimilarResponse)
@@ -106,7 +106,7 @@ async def similar_to_text(
     """Candidate issues for a text seed (read-mode AI menu on a comment):
     fused FTS + vector pools scoped to the caller's readable projects, never
     reranked — there is no source issue to compare against."""
-    return await service.similar_to_seed(
+    return await similar.similar_to_seed(
         session, data.text, user, exclude_item_id=data.exclude_item_id, limit=limit
     )
 
@@ -116,6 +116,6 @@ async def nl_to_slq(data: NlQueryRequest, session: Session, user: CurrentUser) -
     """Natural language -> SLQ (item.read). The query is compile-validated
     server-side; invalid -> one self-correcting retry, then 422 with the bad
     query + error."""
-    return await service.nl_to_slq(
+    return await nlslq.nl_to_slq(
         session, question=data.question, actor=user, dialect=data.dialect
     )

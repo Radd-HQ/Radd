@@ -1,9 +1,5 @@
-"""Plan lifecycle (spec 100) — create from a snapshot, read, edit, validate.
-
-Creating a plan PROFILES the snapshot and pre-fills every mapping table, so the
-admin opens on suggestions rather than a blank sheet. Re-suggesting is a separate
-action that keeps the choices already made.
-"""
+"""Plan lifecycle — create from a snapshot, read, edit, validate. Creating a plan
+PROFILES the snapshot and pre-fills every mapping table with suggestions."""
 
 from __future__ import annotations
 

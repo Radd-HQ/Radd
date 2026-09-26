@@ -1,31 +1,10 @@
-"""An AI quality check for intake drafts (spec 119).
+"""`ai.validate`: check an intake draft against the admin's quality bar (spec 119).
 
-Sibling to `automation_node.py`, and the split is the point. `ai.classify`
-ROUTES: it is constrained to an enumerated set of answers precisely so it cannot
-invent a branch, and it says nothing in its own words. This one WRITES: the admin
-gives a quality bar in prose, and the model answers with findings — sentences a
-person reads and acts on, each optionally aimed at the field it is about.
-
-Keeping them apart rather than adding a "free text" mode to the classifier is
-what stops each being worse at its job. A router that can also produce prose has
-to decide, per call, which it is doing; a checker constrained to enumerated
-answers can only ever say "no" without saying why, which is precisely the
-canned-message version this rejected.
-
-**It only ROUTES (RADD-1329).** It used to be drawn as a gate and ALSO write
-the findings, so what refused a submission was the node plus a graph-wide mode
-applied after the walk — nothing on the canvas said so. Now the model grades
-each problem `blocking` or `minor`, the node leaves by:
-
-* `pass` — nothing wrong;
-* `fail` — at least one blocking problem;
-* `warn` — only minor ones;
-* `unavailable` ("can't check") — the provider is down, dormant, or out of time;
-
-and it PUBLISHES what it found (`ctx.publish_findings`) for a "Block submission"
-or "Warn submitter" node downstream to relay. What happens to the submission is
-whichever of those someone wired — including what an outage does, which used to
-be the hidden `on_unavailable` param.
+Separate from `ai.classify`, which routes on enumerated answers and says nothing
+in its own words; this model writes findings a person reads. It only ROUTES
+(RADD-1329): pass, fail (any blocking finding), warn (minor only), or unavailable
+(provider down, dormant, out of time), and publishes the findings
+(`ctx.publish_findings`) for a downstream Block/Warn node to relay.
 """
 
 from __future__ import annotations
@@ -34,6 +13,9 @@ import logging
 from typing import Any, Mapping
 
 from radd.kernel import AutomationNodeSpec
+
+from .automation_context import ask_structured, include_schema, preflight
+from .types import AiFeature
 
 logger = logging.getLogger(__name__)
 
@@ -50,12 +32,7 @@ WARN_PORT = "warn"
 #: failure the node does not catch itself still lands somewhere sensible.
 FALLBACK_PORT = "unavailable"
 
-#: FIXED, unlike `ai.classify`'s. The answers here are prose, not branches — what
-#: varies is what the model SAYS, not how many ways the packet can go. Declared
-#: as the spec's static `ports` rather than computed by a `ports_for` that
-#: ignores its argument (RADD-1064): a client drawing this node's handles has to
-#: know the set before it has any params to ask about, and one that could only
-#: guess drew a gate's TRUE/FALSE instead.
+#: Static ports, not `ports_for`: a client draws handles before it has params (RADD-1064).
 PORTS: tuple[str, ...] = (PASS_PORT, FAIL_PORT, WARN_PORT, FALLBACK_PORT)
 
 #: How the model grades a problem (RADD-1329).
@@ -107,28 +84,14 @@ PARAMS_SCHEMA: dict[str, Any] = {
             "maximum": MAX_FINDINGS_CEILING,
             "default": DEFAULT_MAX_FINDINGS,
         },
-        "include": {
-            "type": "object",
-            "title": "What the model sees",
-            "description": (
-                "Which parts of the draft are sent. Reads run as the "
-                "automation's identity, which is usually wider than the "
-                "submitter's — and the findings are shown to whoever submitted, "
-                "including a portal visitor. Anything an upstream node puts in "
-                "front of the model can end up quoted back in a finding, so "
-                "treat what you include as readable by the person submitting."
-            ),
-            "properties": {
-                "fields": {
-                    "type": "boolean",
-                    "default": True,
-                    "title": "Fields (type, state, priority, assignee, labels, custom fields)",
-                },
-                "description": {"type": "boolean", "default": True, "title": "Description (in full)"},
-                "comments": {"type": "boolean", "default": False, "title": "Comments (all)"},
-                "worklogs": {"type": "boolean", "default": False, "title": "Logged time"},
-            },
-        },
+        "include": include_schema(
+            "Which parts of the draft are sent. Reads run as the "
+            "automation's identity, which is usually wider than the "
+            "submitter's — and the findings are shown to whoever submitted, "
+            "including a portal visitor. Anything an upstream node puts in "
+            "front of the model can end up quoted back in a finding, so "
+            "treat what you include as readable by the person submitting."
+        ),
     },
 }
 
@@ -160,12 +123,7 @@ FINDINGS_SCHEMA: dict[str, Any] = {
 
 
 def max_findings(params: Mapping[str, Any]) -> int:
-    """The cap, clamped into the schema's own range.
-
-    `or DEFAULT` would be wrong here: a stored `0` is falsy, and treating an
-    explicit "report none" as "report five" is the opposite of what it says.
-    Absent means the default; present-but-out-of-range is clamped.
-    """
+    """Clamped into the schema's range; not `or DEFAULT` — a stored 0 is falsy."""
     raw = params.get("max_findings")
     if raw is None:
         return DEFAULT_MAX_FINDINGS
@@ -178,34 +136,9 @@ def max_findings(params: Mapping[str, Any]) -> int:
 
 async def plan(ctx: Any) -> str:
     """Check the draft, publish what it found, and name the port it leaves by.
-
-    Never raises: every failure is the `unavailable` port, which the graph
-    decides the meaning of by what is wired to it.
-    """
-    from .features import feature_enabled
-    from .types import AiFeature
-
+    Never raises: every failure is the `unavailable` port."""
     params = dict(ctx.node.params)
-    if not str(params.get("prompt") or "").strip():
-        # A check with no bar has nothing to measure against. Quiet rather than
-        # blocking: an unfinished node must not refuse every submission.
-        logger.info("ai.validate: node %s has no prompt; routing to %s", ctx.node.id, FALLBACK_PORT)
-        return FALLBACK_PORT
-
-    if _out_of_time(ctx):
-        # The walk's wall-clock budget is spent (spec 119). Asked BEFORE the
-        # feature gate: being out of time is a reason not to do any of the
-        # remaining work. It is "can't check", which the graph decides the
-        # meaning of by what it wired to that port (RADD-1329).
-        logger.info("ai.validate: node %s ran out of time; taking %s", ctx.node.id, FALLBACK_PORT)
-        return FALLBACK_PORT
-
-    try:
-        live = await feature_enabled(ctx.session, AiFeature.VALIDATION)
-    except Exception:
-        logger.exception("ai.validate: could not resolve the feature gate")
-        live = False
-    if not live:
+    if not await preflight(ctx, AiFeature.VALIDATION, NODE_KEY):
         return FALLBACK_PORT
 
     try:
@@ -230,28 +163,9 @@ async def plan(ctx: Any) -> str:
     return FAIL_PORT if any(blocking for _m, _f, blocking in findings) else WARN_PORT
 
 
-def _out_of_time(ctx: Any) -> bool:
-    """Whether the walk says to stop spending time.
-
-    Read through `getattr` because this module is written against the executor's
-    node context as a DUCK TYPE — `ai` contributes this node through the kernel
-    and imports nothing from `automations`, so a context that predates the
-    budget (or a plugin host that never had one) simply has all the time in the
-    world rather than crashing.
-    """
-    ask = getattr(ctx, "out_of_time", None)
-    return bool(ask()) if callable(ask) else False
-
-
 def _findings_of(answer: Mapping[str, Any], params: Mapping[str, Any]) -> list[tuple[str, str, bool]]:
-    """`(message, field, blocking)` from the model's answer, trimmed and capped.
-    A finding with no grade (or a grade the schema does not know) BLOCKS — the
-    cautious reading of a model that forgot to say.
-
-    `passed` is consulted only when there is nothing to report — a model that
-    listed problems and then said it passed has told us about the problems, and
-    honouring the flag would throw away the part with information in it.
-    """
+    """(message, field, blocking), capped; an ungraded finding BLOCKS; findings
+    beat `passed` (a model that listed problems has told us about them)."""
     raw = answer.get("findings")
     found: list[tuple[str, str, bool]] = []
     for entry in raw if isinstance(raw, list) else []:
@@ -266,14 +180,7 @@ def _findings_of(answer: Mapping[str, Any], params: Mapping[str, Any]) -> list[t
 
 
 async def _field_vocabulary(ctx: Any) -> set[str]:
-    """Field keys a finding may legitimately name: the builtin names plus
-    `cf.<key>` for every custom field in the draft's project.
-
-    Resolved against the LIVE registry rather than a static list, so a project's
-    own fields are addressable and a model naming something that does not exist
-    is caught rather than passed to a client that will look for a control by
-    that name and find none.
-    """
+    """Builtin field names plus `cf.<key>` for the draft's project (live registry)."""
     from radd.modules.fields import service as fields_service
     from radd.modules.fields.types import BuiltinItemField
     from radd.modules.projects.models import Project
@@ -305,20 +212,16 @@ CUSTOM_FIELD_PREFIX = "cf."
 
 
 async def _ask(ctx: Any, params: Mapping[str, Any]) -> Mapping[str, Any]:
-    from . import client as ai_client
-    from .automation_context import ContextOptions, build_context
-    from .types import AiRole
-
-    context = await build_context(
-        ctx.session, tuple(ctx.packet.item_ids), ctx.actor, ContextOptions.from_params(dict(params))
-    )
-    user = (
-        f"The administrator's quality bar for this intake:\n{params.get('prompt', '')}\n\n"
-        f"Report at most {max_findings(params)} findings.\n\n"
-        f"The submission:\n{context}"
-    )
-    return await ai_client.complete_structured(
-        ctx.session, AiRole.CHAT, system=SYSTEM_PROMPT, user=user, json_schema=FINDINGS_SCHEMA
+    return await ask_structured(
+        ctx,
+        params,
+        system=SYSTEM_PROMPT,
+        user=lambda context: (
+            f"The administrator's quality bar for this intake:\n{params.get('prompt', '')}\n\n"
+            f"Report at most {max_findings(params)} findings.\n\n"
+            f"The submission:\n{context}"
+        ),
+        schema=FINDINGS_SCHEMA,
     )
 
 
@@ -339,10 +242,7 @@ SPEC = AutomationNodeSpec(
     #: A check about nothing has nothing to say — and an empty packet in a
     #: validation walk means an upstream filter excluded this draft.
     needs_items=True,
-    # Fixed SET: a validation walk carries exactly one draft, and the item
-    # reading would be the same call with a loop around it. Offering the choice
-    # would invite dropping it into a scheduled run over a broad query, which is
-    # one model round trip per item with nobody reading the results.
+    # SET only: a validation walk carries one draft.
     arity="set",
     plan=plan,
 )

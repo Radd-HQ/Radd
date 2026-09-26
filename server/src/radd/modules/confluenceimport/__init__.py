@@ -1,11 +1,6 @@
-"""The Confluence importer (spec 117) — the wiki half of the migration.
-
-Spec 100's machine, pointed at Confluence and writing into `pages` instead of
-`items`: connections → a snapshot downloaded once → a plan of editable mappings →
-a staged, silent, reversible run.
-
-Server/DC only. Cloud would be a second `client.py` behind the same `service.py`.
-"""
+"""The Confluence importer (spec 117), Server/DC: connections → a snapshot
+downloaded once → a plan of editable mappings → a staged, silent, reversible run
+into `pages`."""
 
 from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec, NavItemSpec, PluginUiManifest, RaddPlugin
@@ -56,8 +51,6 @@ plugin = RaddPlugin(
         "projects",
     ),
     on_startup=(
-        # Carry an environment configuration into a real connection row so an
-        # existing deploy keeps working after the move to DB-managed connections.
         connections.seed_from_env,
         # A download or a run executes as an in-process asyncio task; a restart
         # abandons it, so anything left mid-flight is failed rather than sitting
@@ -66,8 +59,7 @@ plugin = RaddPlugin(
         runs.mark_interrupted,
     ),
     routers=(router, pipeline_router),
-    # RADD-1382: the page is this plugin's own remote, and its nav entry sits in
-    # the settings nav's "Import" group — disabling the plugin withdraws both.
+    # The page is this plugin's remote, its link in the settings "Import" group.
     ui=PluginUiManifest(
         remote="/plugins/confluenceimport/remoteEntry.js", ui_api_version="1.14.0",
         nav=(NavItemSpec(key="confluenceimport", label="Confluence", path="/settings/confluence-import",

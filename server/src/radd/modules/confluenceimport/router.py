@@ -1,19 +1,5 @@
-"""Confluence import — connections and discovery (spec 117).
-
-Instance-admin only: importing creates spaces, provisions users and writes
-restrictions, and the connection speaks for a service account. No new permission
-atoms — an importer is an admin tool, and inventing `confluenceimport.*` atoms
-nobody grants is exactly the dead-atom problem spec 87 audited.
-
-A 409 (not 403) means no connection exists: the caller is allowed, a piece of the
-SETUP is missing.
-
-Route order matters. Starlette matches in DECLARATION order, so every literal
-segment here is declared before any `/{id}` route that could swallow it — a
-literal written afterwards registers, appears at /docs, and answers a 422 about
-parsing the word as a UUID (RADD-761). `tests/test_route_shadowing.py` asserts it
-for the whole app.
-"""
+"""Confluence import — connections and discovery. Instance-admin only; 409 (not
+403) when no connection exists: the caller is allowed, setup is missing."""
 
 from __future__ import annotations
 
@@ -126,10 +112,7 @@ async def space_tree(
     connection_id: uuid.UUID | None = None,
     parent_id: str = "",
 ) -> list[PageNode]:
-    """ONE level of the remote tree — the space's roots, or one page's children.
-
-    Lazy on purpose: fetching a real 6000-page space up front took 61 requests and
-    over two minutes, which is a hang rather than a picker.
-    """
+    """ONE level of the remote tree — the space's roots, or one page's children
+    (lazy: see `client.root_pages`)."""
     _admin(user)
     return await service.space_tree(session, space_key, connection_id, parent_id)

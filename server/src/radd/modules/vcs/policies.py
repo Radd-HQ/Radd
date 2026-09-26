@@ -1,22 +1,10 @@
-"""What a repository's own switches do (RADD-1369).
-
-Every delivery links refs and fires the connector's triggers; that part never
-changes anything else (RADD-1309). These two behaviours run only for a
-repository someone switched them on for in Settings → Version control:
-
-* **Move merged issues to waiting for release** — every issue a merged change
-  names moves to its project's waiting state (spec 112: the from-state of the
-  first on-release transition). A project that does not ship through releases
-  has no waiting state and is skipped; an issue already in a done category is
-  left alone, so a late merge never reopens shipped work.
-* **Publish version on release** — a published release/tag records the version
-  in the repository's default project and sweeps what is waiting into it,
-  through the same seam the "Publish version and sweep" node uses.
-
-Both act as the actor the receiver passes (the system actor, like the rest of
-a delivery). They are not automations, so automations with an "Issue updated"
-trigger see the moves.
-Shared by GitLab, GitHub and Forgejo, whose repository rows carry the switches.
+"""A repository's own switches (RADD-1369, off by default), shared by the connectors.
+* Move merged issues: each issue a merged change names moves to its project's
+  waiting state (spec 112); no waiting state → skipped; already done → left
+  alone, so a late merge never reopens shipped work.
+* Publish version on release: record the version in the default project and sweep.
+Both act as the delivery's actor and are not automations, so "Issue updated"
+triggers see the moves.
 """
 
 from __future__ import annotations

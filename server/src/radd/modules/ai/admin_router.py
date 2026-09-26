@@ -112,12 +112,11 @@ async def embeddings_coverage(session: Session, user: CurrentUser) -> EmbeddingC
     """How much of the corpus the active embedding model has indexed — the
     backfill's progress bar (spec 103)."""
     from .embeddings import service as embeddings_service
-    from .types import AiRole as _AiRole
 
     _require_instance_admin(user)
     if not await embeddings_service.vector_available(session):
         return EmbeddingCoverage(enabled=False)
-    resolved = await registry.resolve_role(session, _AiRole.EMBEDDINGS)
+    resolved = await registry.resolve_role(session, AiRole.EMBEDDINGS)
     if resolved is None:
         return EmbeddingCoverage(enabled=False)
     from .embeddings import embedder as embeddings_embedder

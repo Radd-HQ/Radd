@@ -27,7 +27,6 @@ from radd.modules.auth.models import User
 from . import client, connections, service, snapshot
 from .models import JiraConnection, JiraSnapshot
 from .schemas import (
-    InferredFieldRead,
     JiraConnectionCreate,
     JiraConnectionRead,
     JiraConnectionStatus,
@@ -146,40 +145,15 @@ async def jira_projects(
 async def jira_preview(
     data: JiraPreviewRequest, session: Session, user: CurrentUser
 ) -> JiraPreviewResponse:
-    """Load a JQL slice and infer the inbound schema — the 'once the query is
-    loaded, create an inbound schema' step. A bad JQL is a 422 (ValueError), an
-    unreachable Jira a 409."""
+    """How many issues a JQL matches — the download dialog's "Test JQL". A bad JQL
+    is a 422 (ValueError), an unreachable Jira a 409."""
     _require_instance_admin(user)
     connection = await connections.require_connection(session, data.connection_id)
     try:
-        total, fields = await service.preview(
-            connections.creds_of(connection), data.jql, data.sample_size, data.project_key
-        )
+        total = await service.preview(connections.creds_of(connection), data.jql)
     except client.JiraUnavailable as exc:
         raise ConflictError(JiraEntity.JIRA, reason=str(exc)) from exc
-    return JiraPreviewResponse(
-        total=total,
-        sampled=min(total, data.sample_size),
-        fields=[
-            InferredFieldRead(
-                jira_id=f.jira_id,
-                name=f.name,
-                inferred_type=f.inferred_type,
-                populated=f.populated,
-                sample_count=f.sample_count,
-                populate_rate=f.populate_rate,
-                is_builtin=f.is_builtin,
-                distinct_count=f.distinct_count,
-                dominant_ratio=f.dominant_ratio,
-                band=f.band,
-                band_reason=f.band_reason,
-                schema_key=f.schema_key,
-                samples=f.samples,
-                distinct_values=f.distinct_values,
-            )
-            for f in fields
-        ],
-    )
+    return JiraPreviewResponse(total=total)
 
 
 # --- snapshots (spec 100) -----------------------------------------------------

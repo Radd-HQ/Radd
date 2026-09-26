@@ -1,12 +1,6 @@
-"""Editor AI actions (spec 103): the menu, prompt resolution, and the SSE stream.
+"""Editor AI actions (spec 103): the menu (ids + labels; prompts stay server-side),
+prompt resolution, and the SSE stream of replacement markdown (`sse.py` framing)."""
 
-The contract with the frontend (Crepe's AI feature): the menu carries ids and
-labels only — prompt text stays server-side; the client streams back replacement
-markdown for the selection. Frames are JSON (`data: {"t": "..."}`) so newlines
-survive SSE framing; failures after headers are in-band `event: error` frames.
-"""
-
-import json
 import uuid
 from collections.abc import AsyncIterator, Sequence
 
@@ -14,15 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
 
-from . import client, registry
+from . import registry, sse
 from .schemas import EditorActionRead, EditorStreamRequest
-from .images import ImagePart, images_note
+from .images import ImagePart
 from .types import (
     EDITOR_MAX_TOKENS,
-    AiDisabledError,
     AiEntity,
-    AiRole,
-    AiUpstreamError,
     EditorAction,
     EditorActionKind,
 )
@@ -118,40 +109,18 @@ def user_prompt(document: str, selection: str, instruction: str) -> str:
     return "\n".join(parts)
 
 
-def sse_frame(data: dict, event: str | None = None) -> str:
-    """One SSE frame; JSON payloads so text chunks survive framing (pure)."""
-    frame = f"data: {json.dumps(data)}\n\n"
-    return f"event: {event}\n{frame}" if event else frame
-
-
-async def stream_frames(
+def stream_frames(
     session: AsyncSession,
     data: EditorStreamRequest,
     instruction: str,
     pictures: Sequence[ImagePart] = (),
 ) -> AsyncIterator[str]:
-    """The SSE body. Headers are already sent when this runs, so every failure
-    is an in-band `event: error` frame, never an exception to the handler.
-
-    `pictures` (RADD-1275) are the entity's images the ROUTER read with the
-    actor before the stream; with any, the vision role answers instead of chat.
-    """
-    prompt = user_prompt(data.document, data.selection, instruction)
-    role = AiRole.CHAT
-    if pictures:
-        role = AiRole.VISION
-        prompt = f"{prompt}\n\n{images_note(pictures)}"
-    try:
-        async for chunk in client.stream(
-            session,
-            role,
-            EDITOR_SYSTEM,
-            prompt,
-            max_tokens=EDITOR_MAX_TOKENS,
-            images=[(picture.data, picture.media_type) for picture in pictures],
-        ):
-            yield sse_frame({"t": chunk})
-    except (AiUpstreamError, AiDisabledError) as exc:
-        yield sse_frame({"detail": str(exc)}, event="error")
-        return
-    yield sse_frame({}, event="done")
+    """The SSE body; `pictures` (RADD-1275), read by the ROUTER with the actor
+    before the stream, switch the answer to the vision role."""
+    return sse.completion_frames(
+        session,
+        EDITOR_SYSTEM,
+        user_prompt(data.document, data.selection, instruction),
+        pictures,
+        max_tokens=EDITOR_MAX_TOKENS,
+    )

@@ -1,34 +1,22 @@
-"""What the classifier node actually sends the model (spec 116).
+"""What the AI automation nodes send the model (spec 116), and the plumbing the
+three nodes share.
 
-The first version sent `"3 item(s)"` — the COUNT and nothing else — while its
-docstring and its form hint both promised "the item summaries". A prompt asking
-"is this a bug report or a feature request?" against a bare count can only
-produce noise, and nothing in the run report would have shown why.
+* Only the sections the node's checkboxes ask for (comments/worklogs are a
+  privacy cost when the question is about titles).
+* Budget WHOLE items, never fields: a truncated description can cut the line
+  that decides the answer.
+* The budget is `ai_automation_context_chars`, sized to the model's context.
+* What was cut is stated IN THE PROMPT, so the model knows it saw a sample.
 
-So the payload is built here, explicitly, and the node's form says which parts
-are included. Three rules shape it:
-
-* **Include only what was asked for.** Every section is a checkbox on the node.
-  Sending comments and worklogs to a provider when the question is about titles
-  is a privacy cost with no benefit, and on a self-hosted instance the admin is
-  the one who gets to weigh that.
-* **Budget WHOLE items, never fields.** The first version capped descriptions at
-  600 characters and comments at five per item — numbers invented here with a
-  justification written after the fact. Truncating a description mid-sentence can
-  cut the exact line that decides "bug or feature", and no budget arithmetic makes
-  that a good trade. An item is included entirely or not at all.
-* **The limit is a setting, not a constant.** The real constraint is the
-  configured model's context window, which the provider registry does not record —
-  so `ai_automation_context_chars` is a tunable you size to your model rather than
-  a number this file pretends to know.
-* **Say what was cut.** A digest that quietly omits half the items produces a
-  confident answer about evidence the model never saw, so the omission is stated
-  IN THE PROMPT.
+The nodes read their context as a DUCK TYPE (`getattr`): `ai` contributes them
+through the kernel and imports nothing from `automations`.
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -37,8 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.modules.auth.models import User
 
+from . import client, features
 from .prose import prose
 from .summarize import _worklog_digest
+from .types import AiFeature, AiRole
+
+logger = logging.getLogger(__name__)
 
 #: Hard ceiling on how many items are even considered, independent of the
 #: character budget — a 200-item scheduled run should not build a 200-item string
@@ -58,13 +50,8 @@ class ContextOptions:
 
     @classmethod
     def from_params(cls, params: dict[str, Any]) -> "ContextOptions":
-        # A stored `include` that is not a mapping falls back to the defaults
-        # rather than raising (RADD-1064). The generated form used to render this
-        # object property as a free-text input, so instances hold nodes whose
-        # `include` is a STRING someone typed — and `"…".get` is an
-        # AttributeError inside `_ask`, which the node catches as "the provider
-        # is unavailable". A misdrawn form would have become a permanently
-        # dormant AI check with an outage's error message.
+        # A non-mapping `include` (old nodes stored a typed STRING, RADD-1064) falls
+        # back to the defaults instead of raising inside `_ask` as a fake outage.
         raw = params.get("include")
         include: dict[str, Any] = raw if isinstance(raw, dict) else {}
         return cls(
@@ -162,6 +149,68 @@ async def build_context(
             f"your model has room.)"
         )
     return "\n".join(blocks)
+
+
+def include_schema(description: str) -> dict[str, Any]:
+    """The node form's "What the model sees" checkboxes — `ContextOptions`' fields."""
+    return {
+        "type": "object",
+        "title": "What the model sees",
+        "description": description,
+        "properties": {
+            "fields": {
+                "type": "boolean",
+                "default": True,
+                "title": "Fields (type, state, priority, assignee, labels, custom fields)",
+            },
+            "description": {"type": "boolean", "default": True, "title": "Description (in full)"},
+            "comments": {"type": "boolean", "default": False, "title": "Comments (all)"},
+            "worklogs": {"type": "boolean", "default": False, "title": "Logged time"},
+        },
+    }
+
+
+def out_of_time(ctx: Any) -> bool:
+    """Whether the walk's wall-clock budget is spent; a context without one has
+    all the time in the world."""
+    ask = getattr(ctx, "out_of_time", None)
+    return bool(ask()) if callable(ask) else False
+
+
+async def preflight(ctx: Any, feature: AiFeature, node_key: str) -> bool:
+    """Whether an AI node may ask the model now: it has a prompt, the walk has
+    time left (checked BEFORE the gate — out of time means no more work), and the
+    feature is live. Never raises; False = take the `unavailable` port."""
+    if not str(ctx.node.params.get("prompt") or "").strip():
+        # Quiet rather than blocking: an unfinished node must not refuse anything.
+        logger.info("%s: node %s has no prompt; taking unavailable", node_key, ctx.node.id)
+        return False
+    if out_of_time(ctx):
+        logger.info("%s: node %s ran out of time; taking unavailable", node_key, ctx.node.id)
+        return False
+    try:
+        return await features.feature_enabled(ctx.session, feature)
+    except Exception:
+        logger.exception("%s: could not resolve the feature gate", node_key)
+        return False
+
+
+async def ask_structured(
+    ctx: Any,
+    params: Mapping[str, Any],
+    *,
+    system: str,
+    user: Callable[[str], str],
+    schema: dict[str, Any],
+) -> Mapping[str, Any]:
+    """One structured chat answer about the packet's items; `user(context)` frames
+    the digest `params`' checkboxes select."""
+    context = await build_context(
+        ctx.session, tuple(ctx.packet.item_ids), ctx.actor, ContextOptions.from_params(dict(params))
+    )
+    return await client.complete_structured(
+        ctx.session, AiRole.CHAT, system=system, user=user(context), json_schema=schema
+    )
 
 
 async def _worklog_line(session: AsyncSession, item_id: uuid.UUID, read: Any) -> str | None:

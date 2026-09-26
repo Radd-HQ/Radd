@@ -1,12 +1,5 @@
-"""The identity map and unmatched authors, per connection (RADD-1258).
-
-Provider-neutral on purpose: Settings → Version control renders the same
-section under a Forgejo, a GitHub and a GitLab connection, and this router does
-not know which connector's table the `connection_id` lives in — the mapping is
-keyed by (provider, connection id), which is all the reconcile needs.
-
-Gated on the `vcsconn.*` atoms the connectors' own administration uses.
-"""
+"""Identity map + unmatched authors per (provider, connection) (RADD-1258);
+provider-neutral, gated on the `vcsconn.*` atoms."""
 
 import uuid
 from typing import Annotated

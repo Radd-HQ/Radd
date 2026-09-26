@@ -1,10 +1,4 @@
-"""Summarize: the digest prompt + one-shot/streaming completions, split out of
-`service.py` (RADD-902) along its own "summarize" marker.
-
-Shares almost nothing with `similar.py`/`nlslq.py` — that's why the split was
-marker-separated rather than by size. `service.py` re-exports everything here
-under its own name.
-"""
+"""Summarize: the item digest prompt and its one-shot/streamed completion."""
 
 import uuid
 from collections.abc import AsyncIterator, Callable, Sequence
@@ -19,10 +13,9 @@ from radd.modules.items import service as items_service
 from radd.modules.items.history import item_history
 from radd.modules.items.schemas import HistoryEntry
 
-from . import client, features, images, prompts
-from .images import ImagePart
+from . import client, features, images, prompts, sse
+from .images import ImagePart, wire, with_images
 from .prose import prose
-from .editor import sse_frame
 from .types import (
     SUMMARY_COMMENTS_BUDGET_CHARS,
     SUMMARY_HISTORY_BUDGET_CHARS,
@@ -30,10 +23,7 @@ from .types import (
     SUMMARY_MAX_DESCRIPTION_CHARS,
     SUMMARY_MAX_WORKLOG_NOTE_CHARS,
     SUMMARY_WORKLOG_BUDGET_CHARS,
-    AiDisabledError,
     AiFeature,
-    AiRole,
-    AiUpstreamError,
     SummarizeResponse,
 )
 
@@ -86,11 +76,9 @@ async def _worklog_digest(
     the prompt section simply never appears (deferred feature-detected import,
     the deflect precedent).
     """
-    try:
-        from radd.modules.timelogging import enablement
-        from radd.modules.timelogging import service as timelog_service
-    except ImportError:
-        return []
+    from radd.modules.timelogging import enablement
+    from radd.modules.timelogging import service as timelog_service
+
     try:
         if not await enablement.is_enabled(session, project_id):
             return []
@@ -181,15 +169,6 @@ async def summarize_images(
     return await images.entity_images(session, actor, AttachmentParentType.ITEM.value, item_id)
 
 
-def with_images(user_prompt: str, pictures: Sequence[ImagePart]) -> tuple[AiRole, str]:
-    """Which role answers and what the text part says: the vision role and a
-    filename roster when pictures ride along, the chat role and the prompt
-    untouched when none do (pure)."""
-    if not pictures:
-        return AiRole.CHAT, user_prompt
-    return AiRole.VISION, f"{user_prompt}\n\n{images.images_note(pictures)}"
-
-
 async def summarize_item(
     session: AsyncSession, item_id: uuid.UUID, actor: User
 ) -> SummarizeResponse:
@@ -198,7 +177,7 @@ async def summarize_item(
     pictures = await summarize_images(session, item_id, actor)
     role, text = with_images(user_prompt, pictures)
     summary = await client.complete(
-        session, role, prompts.SUMMARIZE_SYSTEM, text, images=_wire(pictures)
+        session, role, prompts.SUMMARIZE_SYSTEM, text, images=wire(pictures)
     )
     return SummarizeResponse(summary=summary.strip())
 
@@ -206,32 +185,5 @@ async def summarize_item(
 def summarize_stream_frames(
     session: AsyncSession, user_prompt: str, pictures: Sequence[ImagePart] = ()
 ) -> AsyncIterator[str]:
-    """SSE body for the streaming summarize (the editor's frame contract)."""
-    role, text = with_images(user_prompt, pictures)
-    return _chat_stream_frames(session, prompts.SUMMARIZE_SYSTEM, text, role=role, pictures=pictures)
-
-
-def _wire(pictures: Sequence[ImagePart]) -> list[tuple[bytes, str]]:
-    return [(picture.data, picture.media_type) for picture in pictures]
-
-
-async def _chat_stream_frames(
-    session: AsyncSession,
-    system: str,
-    user_prompt: str,
-    *,
-    role: AiRole = AiRole.CHAT,
-    pictures: Sequence[ImagePart] = (),
-) -> AsyncIterator[str]:
-    """One chat completion as SSE frames — `data: {"t": …}` per token batch,
-    then `event: done`; provider failures are in-band `event: error` frames
-    (headers are already sent when the body generator runs)."""
-    try:
-        async for chunk in client.stream(
-            session, role, system, user_prompt, images=_wire(pictures)
-        ):
-            yield sse_frame({"t": chunk})
-    except (AiUpstreamError, AiDisabledError) as exc:
-        yield sse_frame({"detail": str(exc)}, event="error")
-        return
-    yield sse_frame({}, event="done")
+    """SSE body for the streaming summarize."""
+    return sse.completion_frames(session, prompts.SUMMARIZE_SYSTEM, user_prompt, pictures)

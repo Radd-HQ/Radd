@@ -221,7 +221,7 @@ async def test_projects_lists(monkeypatch):
 
 
 async def test_preview_bad_jql_is_422(monkeypatch):
-    async def fake_preview(creds, jql, sample_size, project_key=None):
+    async def fake_preview(creds, jql):
         raise ValueError("Field 'nope' does not exist")
 
     monkeypatch.setattr(service, "preview", fake_preview)
@@ -234,7 +234,7 @@ async def test_preview_bad_jql_is_422(monkeypatch):
 
 
 async def test_preview_unreachable_is_409(monkeypatch):
-    async def fake_preview(creds, jql, sample_size, project_key=None):
+    async def fake_preview(creds, jql):
         raise client.JiraUnavailable("could not reach Jira: timeout")
 
     monkeypatch.setattr(service, "preview", fake_preview)
@@ -245,31 +245,18 @@ async def test_preview_unreachable_is_409(monkeypatch):
     assert response.status_code == 409
 
 
-async def test_preview_returns_inferred_schema(monkeypatch):
-    from radd.modules.jiraimport.types import InferredField, InferredType
+async def test_preview_returns_the_match_count(monkeypatch):
+    """The download dialog's "Test JQL": the UI still posts `sample_size` and
+    `project_key`, which are ignored; the answer is the full match count."""
 
-    async def fake_preview(creds, jql, sample_size, project_key=None):
-        return 1280, [
-            InferredField(
-                jira_id="customfield_10001",
-                name="Team",
-                inferred_type=InferredType.SELECT,
-                populated=48,
-                sample_count=50,
-                is_builtin=False,
-                samples=["Platform", "Pipeline"],
-                distinct_values=["Pipeline", "Platform"],
-            )
-        ]
+    async def fake_preview(creds, jql):
+        return 1280
 
     monkeypatch.setattr(service, "preview", fake_preview)
     async with _client_for(_app()) as http:
         response = await http.post(
-            f"{settings.api_prefix}/jira/preview", json={"jql": "project = TD", "sample_size": 50}
+            f"{settings.api_prefix}/jira/preview",
+            json={"jql": "project = TD", "sample_size": 1, "project_key": "TD"},
         )
     assert response.status_code == 200
-    body = response.json()
-    assert body["total"] == 1280 and body["sampled"] == 50
-    field = body["fields"][0]
-    assert field["jira_id"] == "customfield_10001"
-    assert field["distinct_values"] == ["Pipeline", "Platform"]
+    assert response.json() == {"total": 1280}

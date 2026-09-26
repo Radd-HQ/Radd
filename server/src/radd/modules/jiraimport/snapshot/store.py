@@ -28,7 +28,7 @@ def catalog(snapshot: JiraSnapshot, key: SnapshotCatalog) -> Any:
     stored = (snapshot.catalogs or {}).get(key.value)
     if stored is not None:
         return stored
-    return {} if key in (SnapshotCatalog.FIELDS, SnapshotCatalog.OPTION_SETS) else []
+    return {} if key is SnapshotCatalog.FIELDS else []
 
 
 async def iter_issues(

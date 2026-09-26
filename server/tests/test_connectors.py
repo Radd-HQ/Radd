@@ -24,7 +24,8 @@ from radd.modules.alertmanager import planner, service as alert_service
 from radd.modules.alertmanager.router import router as alertmanager_router
 from radd.modules.alertmanager.types import AlertAction
 from radd.modules.forgejo import parsing as forgejo_parsing, service as forgejo_service
-from radd.modules.forgejo.router import router as forgejo_router, verify_signature
+from radd.modules.forgejo.router import router as forgejo_router
+from radd.modules.forgejo.service import verify_signature
 from radd.modules.mailintake.parsing import extract_reply_key, parse_email
 from radd.modules.mailintake.types import BODY_MAX_CHARS
 from radd.modules.vcs.triggers import RefAction

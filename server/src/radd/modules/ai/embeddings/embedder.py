@@ -46,8 +46,7 @@ _PAGE_DELETE = "page.deleted"
 
 
 class EmbedTaskKind(StrEnum):
-    """What one embed task does (RADD-898) — was a comment-defined vocabulary
-    compared as bare literals in five places."""
+    """What one embed task does."""
 
     ITEM = "item"
     DOC = "doc"
@@ -226,57 +225,59 @@ async def _sweep() -> int:
 async def _embed_items(session: AsyncSession, resolved, rows) -> int:
     if not rows:
         return 0
-    texts = [embed_text(r.key, r.title, r.description) for r in rows]
-    hashes = [content_hash(t) for t in texts]
-    fresh = await _fresh_indexes(
-        session, store.ITEM_TABLE, "item_id", [r.item_id for r in rows], hashes, resolved.model
-    )
-    if not fresh:
-        return 0
-    vectors = await client.embed(
-        session, AiRole.EMBEDDINGS, [texts[index] for index in fresh]
-    )
-    dim = len(vectors[0]) if vectors and vectors[0] else 0
-    if not dim:
-        return 0
-    await store.sync_index(session, store.ITEM_TABLE, model=resolved.model, dim=dim)
-    for position, index in enumerate(fresh):
+
+    async def upsert(index: int, digest: str, vector: list[float]) -> None:
         row = rows[index]
         await store.upsert_item(
             session,
             item_id=row.item_id,
             project_id=row.project_id,
             model=resolved.model,
-            content_hash=hashes[index],
-            embedding=vectors[position],
+            content_hash=digest,
+            embedding=vector,
         )
-    return len(fresh)
+
+    texts = [embed_text(r.key, r.title, r.description) for r in rows]
+    return await _embed(
+        session, resolved, store.ITEM_TABLE, "item_id", [r.item_id for r in rows], texts, upsert
+    )
 
 
 async def _embed_docs(session: AsyncSession, resolved, pages) -> int:
     if not pages:
         return 0
+
+    async def upsert(index: int, digest: str, vector: list[float]) -> None:
+        await store.upsert_doc(
+            session,
+            page_id=pages[index][0],
+            model=resolved.model,
+            content_hash=digest,
+            embedding=vector,
+        )
+
     texts = [embed_text("", title, body) for _, title, body in pages]
-    hashes = [content_hash(t) for t in texts]
-    fresh = await _fresh_indexes(
-        session, store.PAGE_TABLE, "page_id", [p[0] for p in pages], hashes, resolved.model
+    return await _embed(
+        session, resolved, store.PAGE_TABLE, "page_id", [p[0] for p in pages], texts, upsert
     )
+
+
+async def _embed(
+    session: AsyncSession, resolved, table: str, id_column: str, ids, texts, upsert
+) -> int:
+    """Embed the texts whose (id, hash) is new under the active model and store
+    each through `upsert(index, hash, vector)`; returns how many."""
+    hashes = [content_hash(t) for t in texts]
+    fresh = await _fresh_indexes(session, table, id_column, ids, hashes, resolved.model)
     if not fresh:
         return 0
     vectors = await client.embed(session, AiRole.EMBEDDINGS, [texts[i] for i in fresh])
     dim = len(vectors[0]) if vectors and vectors[0] else 0
     if not dim:
         return 0
-    await store.sync_index(session, store.PAGE_TABLE, model=resolved.model, dim=dim)
+    await store.sync_index(session, table, model=resolved.model, dim=dim)
     for position, index in enumerate(fresh):
-        page_id, _, _ = pages[index]
-        await store.upsert_doc(
-            session,
-            page_id=page_id,
-            model=resolved.model,
-            content_hash=hashes[index],
-            embedding=vectors[position],
-        )
+        await upsert(index, hashes[index], vectors[position])
     return len(fresh)
 
 

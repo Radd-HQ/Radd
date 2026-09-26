@@ -9,19 +9,8 @@ from ..types import ConfluenceAuthMode, ConnectionSource
 
 
 class ConfluenceConnection(Base, TimestampMixin):
-    """One Confluence instance Radd can import from (spec 117).
-
-    The `JiraConnection` shape verbatim, deliberately: copying it means the
-    exactly-one-default invariant, the redacted-credential read and the env
-    seeding all behave identically across the two importers, and an admin who has
-    configured one already knows how the other works. Inventing a second
-    connection idiom would buy nothing.
-
-    The credential is stored as-is — a PAT must be replayable to sign every
-    request, so it cannot be hashed — matching the webhook-signing-secret
-    precedent and carrying the same caveat: encrypt at rest when the secrets layer
-    lands. It is never returned over the API; reads expose `has_credential`.
-    """
+    """One Confluence instance to import from. The credential is replayed per
+    request, so it is stored recoverably and never returned (`has_credential`)."""
 
     __tablename__ = "confluence_connections"
     __table_args__ = (UniqueConstraint("name"),)

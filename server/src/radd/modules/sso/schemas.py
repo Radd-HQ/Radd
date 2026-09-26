@@ -13,12 +13,7 @@ from .types import SsoKind
 
 
 class SsoDefaultGrant(BaseModel):
-    """One role a new account receives, at one scope (RADD-780).
-
-    Mirrors `global_role_grants`: `project_id` null = instance-wide. The same
-    (role, scope) pair the Grant Role dialog produces everywhere else, because
-    these are a template for exactly those rows.
-    """
+    """One role a new account receives; `project_id` null = instance-wide."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -27,11 +22,7 @@ class SsoDefaultGrant(BaseModel):
 
 
 class SsoProvisioningRule(BaseModel):
-    """One "who gets what" rule on a provider (RADD-782).
-
-    EMPTY `domains` matches every address — the catch-all. Every rule whose
-    domains match is applied, so rules compose by union rather than racing.
-    """
+    """One "who gets what" rule on a provider (see `models.SsoProvisioningRule`)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,8 +44,7 @@ class SsoProviderBase(BaseModel):
     require_verified_email: bool = True
     group_claim: str = "groups"
     admin_groups: str = ""
-    #: What a NEW account gets, per matching rule (RADD-782). A rule with no
-    #: domains matches everyone; every matching rule is applied.
+    #: What a NEW account gets, per matching rule.
     provisioning_rules: list["SsoProvisioningRule"] = Field(default_factory=list)
 
 

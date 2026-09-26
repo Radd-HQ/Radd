@@ -9,29 +9,16 @@ class GitlabEventKind(StrEnum):
     configured to send every event, and an unknown one is not an error."""
 
     PUSH = "push"
-    TAG_PUSH = "tag_push"
     MERGE_REQUEST = "merge_request"
     # RADD-1255: CI state + the CI trigger, and the deployment trigger.
     PIPELINE = "pipeline"
     DEPLOYMENT = "deployment"
     # RADD-1309: `create` fires the release-published trigger.
     RELEASE = "release"
-    NOTE = "note"
-    BUILD = "build"
-
-
-class MrStatus(StrEnum):
-    """Status recorded on the merge_request-type vcs link."""
-
-    OPEN = "open"
-    MERGED = "merged"
-    CLOSED = "closed"
 
 
 class GitlabTrigger(StrEnum):
-    """RADD-1309: GitLab's OWN automation triggers. The connector links refs and
-    does nothing else; what a merge or a release should cause is an automation.
-    Registered by this plugin, so disabling GitLab removes them from the palette."""
+    """GitLab's own automation triggers (RADD-1309), registered by this plugin."""
 
     MR_OPENED = "gitlab.merge_request.opened"
     MR_MERGED = "gitlab.merge_request.merged"

@@ -9,20 +9,9 @@ from radd.db import Base, TimestampMixin
 
 
 class JiraImportRecord(Base, TimestampMixin):
-    """The provenance ledger (spec 100) — what an import did, so it can be undone.
-
-    Spec 90 had no equivalent: a bad import was unwound by hand-written SQL (which
-    is literally what its own tests did). Every write records here, and rollback
-    replays it in reverse.
-
-    `before` is the crux. For a CREATED entity it is empty and rollback deletes
-    the row; for an UPDATED one it holds a snapshot of JUST the fields the import
-    touched, so rollback restores them without clobbering anything a human changed
-    elsewhere on the same record.
-
-    A monotonic `id` rather than a timestamp: rollback order has to be the exact
-    reverse of write order, and two writes in the same millisecond are common.
-    """
+    """What an import wrote. `before` holds only the columns it touched (a restore
+    cannot clobber anything else); the monotonic id makes undo order the exact
+    reverse of write order (two writes in one millisecond are common)."""
 
     __tablename__ = "jira_import_records"
     __table_args__ = (Index("ix_jira_import_records_run", "run_id", "id"),)
@@ -43,13 +32,7 @@ class JiraImportRecord(Base, TimestampMixin):
 
 
 class JiraPendingRef(Base, TimestampMixin):
-    """A cross-project reference that could not be resolved yet (spec 100).
-
-    The answer to "I import DEV first, but it links to TD which I haven't imported".
-    Spec 90 dropped a dead web link and never looked again; relinking is now a
-    repeatable pass over these rows, run after every import and on demand, which
-    turns the placeholder into a real link the moment its target arrives.
-    """
+    """A reference whose target is not imported yet; relink resolves it later."""
 
     __tablename__ = "jira_pending_refs"
     __table_args__ = (

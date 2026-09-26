@@ -40,8 +40,7 @@ plugin = RaddPlugin(
     # than somebody submitting a request.
     weak_depends=("automations",),
     on_startup=(
-        # Carry a spec-90 environment configuration into a real connection row so
-        # an existing deploy keeps working after the move to DB-managed connections.
+        # Seed a connection row from RADD_JIRA_* once (env is seed-only).
         connections.seed_from_env,
         # A run/download executes as an in-process asyncio task; a restart abandons
         # it, so anything left mid-flight is failed on startup rather than sitting
@@ -50,9 +49,8 @@ plugin = RaddPlugin(
         snapshot.download.mark_interrupted,
     ),
     routers=(router, pipeline_router),
-    # RADD-1382: the importer's page is this plugin's own remote, and its link
-    # sits in the settings "Import" group that importers contribute to — there
-    # is no host hub naming them. Disabling the plugin withdraws both.
+    # The page is this plugin's remote; its link sits in the settings "Import"
+    # group. Disabling the plugin withdraws both.
     ui=PluginUiManifest(
         remote="/plugins/jiraimport/remoteEntry.js", ui_api_version="1.14.0",
         nav=(NavItemSpec(key="jiraimport", label="Jira", path="/settings/jira-import",

@@ -1,12 +1,11 @@
-"""LDAP/AD sign-in (spec 42): direct bind as <username>@<domain> — the user's
-own credentials authenticate the connection, so no service/bind account is
-stored. Email, display name, and admin-group membership (transitive, so nested
-groups count) are read from the user's own entry on that same connection.
-Provisioning + role sync mirror OIDC (spec 40): `password_hash NULL` marks the
-account SSO-only, and the workspace role re-syncs on every login."""
+"""LDAP/AD sign-in by direct bind as <username>@<domain> (email, name and
+transitive admin-group membership read on that same connection), plus
+service-account enumeration for imports and sync. The connection resolves
+through the settings cascade (env is the fallback) at every async boundary."""
 
 import asyncio
 import logging
+from collections.abc import Iterator
 from dataclasses import replace, dataclass
 
 import ldap3
@@ -127,18 +126,19 @@ def transitive_member_filter(username: str, group_dn: str) -> str:
     )
 
 
+def first_value(value: object) -> str:
+    """An LDAP attribute's first value, stripped ("" when absent)."""
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else ""
+    return str(value or "").strip()
+
+
 def directory_user_from_entry(username: str, attributes: dict, is_admin: bool) -> DirectoryUser:
     """Entry attributes → DirectoryUser, with the documented fallbacks: no
     mail attribute → the UPN (email-shaped by construction), no display
     name → the username."""
-
-    def first(value: object) -> str:
-        if isinstance(value, (list, tuple)):
-            value = value[0] if value else ""
-        return str(value or "").strip()
-
-    email = first(attributes.get(settings.ldap_email_attribute))
-    name = first(attributes.get(settings.ldap_name_attribute))
+    email = first_value(attributes.get(settings.ldap_email_attribute))
+    name = first_value(attributes.get(settings.ldap_name_attribute))
     return DirectoryUser(
         username=username,
         email=(email or f"{username}@{_conn.user_domain}").lower(),
@@ -178,21 +178,14 @@ def _entry_to_directory_user(attributes: dict) -> DirectoryUser | None:
     """A directory entry (from the service-account search) → DirectoryUser.
     is_admin is left False for bulk import — a user's real role syncs on their
     first interactive (direct-bind) login. Entries without an email are skipped."""
-    username_attr = attributes.get("sAMAccountName")
-    if isinstance(username_attr, (list, tuple)):
-        username_attr = username_attr[0] if username_attr else ""
-    username = str(username_attr or "").strip()
+    username = first_value(attributes.get("sAMAccountName"))
     if not username:
         return None
-    user = directory_user_from_entry(username, attributes, is_admin=False)
     # directory_user_from_entry falls back to a synthesized UPN; for bulk import we
     # only want entries that carry a real mail attribute.
-    email_attr = attributes.get(settings.ldap_email_attribute)
-    if isinstance(email_attr, (list, tuple)):
-        email_attr = email_attr[0] if email_attr else ""
-    if not str(email_attr or "").strip():
+    if not first_value(attributes.get(settings.ldap_email_attribute)):
         return None
-    return user
+    return directory_user_from_entry(username, attributes, is_admin=False)
 
 
 def service_connection() -> ldap3.Connection:
@@ -212,6 +205,25 @@ def service_connection() -> ldap3.Connection:
         auto_bind=True,
         receive_timeout=_timeout(),
     )
+
+
+def paged_attributes(
+    base: str, search_filter: str, attributes: list[str]
+) -> Iterator[tuple[str, dict]]:
+    """(dn, attributes) per entry of a paged SERVICE-ACCOUNT search; unbinds when done."""
+    conn = service_connection()
+    try:
+        for entry in conn.extend.standard.paged_search(
+            search_base=base,
+            search_filter=search_filter,
+            attributes=attributes,
+            paged_size=settings.ldap_page_size,
+            generator=True,
+        ):
+            if isinstance(entry, dict):
+                yield str(entry.get("dn") or ""), entry.get("attributes") or {}
+    finally:
+        conn.unbind()
 
 
 # AD's userAccountControl ACCOUNTDISABLE bit, via the bitwise-AND matching rule.
@@ -254,29 +266,18 @@ def search_directory_users(
     via asyncio.to_thread or a script. `base` (spec 85) is the cascade-resolved
     search base from `resolved_user_base()` — every caller resolves through the
     settings cascade, so Settings → Directory is the one source of truth."""
-    search_base = base
-    conn = service_connection()
     users: list[DirectoryUser] = []
-    try:
-        entries = conn.extend.standard.paged_search(
-            search_base=search_base,
-            search_filter=user_query_filter(q, exclude_disabled),
-            attributes=["sAMAccountName", settings.ldap_email_attribute, settings.ldap_name_attribute],
-            paged_size=settings.ldap_page_size,
-            generator=True,
-        )
-        seen: set[str] = set()
-        for entry in entries:
-            attrs = entry.get("attributes") if isinstance(entry, dict) else None
-            if not attrs:
-                continue
-            user = _entry_to_directory_user(attrs)
-            if user and user.email not in seen:
-                seen.add(user.email)
-                users.append(user)
-    finally:
-        conn.unbind()
-    logger.info("ldap directory enumeration: %d users under %s", len(users), search_base)
+    seen: set[str] = set()
+    for _dn, attrs in paged_attributes(
+        base,
+        user_query_filter(q, exclude_disabled),
+        ["sAMAccountName", settings.ldap_email_attribute, settings.ldap_name_attribute],
+    ):
+        user = _entry_to_directory_user(attrs) if attrs else None
+        if user and user.email not in seen:
+            seen.add(user.email)
+            users.append(user)
+    logger.info("ldap directory enumeration: %d users under %s", len(users), base)
     return users
 
 
@@ -362,11 +363,8 @@ async def authenticate(
 async def find_or_create_user(
     session: AsyncSession, directory_user: DirectoryUser
 ) -> tuple[User, bool]:
-    """The spec-42 provision core, shared with the explicit imports (spec 84):
-    find by email or create an SSO-only account (`password_hash NULL`,
-    source=ldap)."""
-    # RADD-1320: through auth's own seam, so the account's creation is a
-    # `user.created` event like every other door into Radd.
+    """Find by email or create an SSO-only ldap-source account — through auth's own
+    seam, so a creation is a `user.created` event like every other door."""
     return await auth_service.ensure_imported_user(
         session, email=directory_user.email, name=directory_user.name, source=UserSource.LDAP
     )

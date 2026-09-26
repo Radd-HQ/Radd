@@ -20,18 +20,8 @@ from ..types import SnapshotStage
 
 
 class ConfluenceSnapshot(Base):
-    """One download of one selection — the cache everything else reads (spec 117).
-
-    Cache-first is the spec-100 lesson: a selection is fetched ONCE and every later
-    step (profiling, the macro census, planning, a dry run, the real run, a re-run
-    after fixing a mapping) reads these rows. Nothing after the download touches
-    the network, which is what makes iterating on mappings free.
-
-    This row IS the progress bar. `stage`, `counts` and `problems` are rewritten as
-    the download proceeds and polled by the UI — there is no separate job table and
-    no event stream, because a download is one in-process asyncio task with exactly
-    one observer.
-    """
+    """One download of one selection, fetched once; every later step reads these
+    rows, never the network. The row is the progress bar (polled by the UI)."""
 
     __tablename__ = "confluence_snapshots"
 
@@ -128,13 +118,8 @@ class ConfluenceSnapshotComment(Base):
 
 
 class ConfluenceSnapshotAttachment(Base):
-    """A cached attachment. The BYTES live on DISK inside the snapshot's package
-    (see `snapshot/package.py`); this row is the manifest entry pointing at them.
-
-    Not the object store: a download caches bytes that may never be imported, and
-    pushing 49 GB of them through S3 to find that out made the download crawl.
-    They reach the object store when a RUN imports them.
-    """
+    """A cached attachment: the manifest entry for bytes that live on DISK in the
+    snapshot's package, not the object store (see `snapshot/package.py`)."""
 
     __tablename__ = "confluence_snapshot_attachments"
     __table_args__ = (

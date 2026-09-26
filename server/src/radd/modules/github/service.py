@@ -1,11 +1,5 @@
-"""Connection + repository CRUD, env seeding, and webhook connection resolution (RADD-1129).
-
-`resolve_for_payload` decides which host signed a body: a recorded repository
-names its connection and only that connection's secret is tried, so two hosts
-with different secrets are unambiguous; an unrecorded repository falls back to
-every active connection so a webhook registered before its repository row
-still works.
-"""
+"""Connection + repository CRUD, env seeding, webhook resolution. A body must verify
+against exactly ONE active connection; a named repository must be recorded and enabled."""
 
 from radd.modules.vcs import setup as vcs_setup
 import hashlib
@@ -340,10 +334,7 @@ async def refresh_connection_snapshot(session: AsyncSession) -> None:
 
 
 async def seed_from_env() -> None:
-    """Turn `RADD_GITHUB_WEBHOOK_SECRET` (+ optional `RADD_GITHUB_API_TOKEN`,
-    `RADD_GITHUB_REPO`) into a connection row ONCE, when the table is empty, then
-    warm the capability snapshot. An admin who deletes the seeded row never has
-    it reappear."""
+    """Seed one connection from `RADD_GITHUB_*` once, then warm the capability snapshot."""
     secret = settings.github_webhook_secret.strip()
     async with SessionLocal() as session:
         rows = await session.execute(select(func.count()).select_from(GithubConnection))

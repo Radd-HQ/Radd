@@ -1,17 +1,8 @@
-"""Confluence storage format → Radd markdown (spec 117).
-
-Pure: no DB, no network, no session. Everything that needs the world — resolving
-an attachment to its imported URL, a page id to a Radd page, a Jira key to an
-imported item — arrives as a callable on `ConvertContext`, each with a degradation
-that is honest rather than empty. That is what lets the converter run repeatedly
-over a cached body as the plan's mappings change, which is the whole workflow.
-
-Block vs inline is the shape that matters. `radd:*` fences are BLOCK-level, so a
-macro that Confluence renders inline (a `status` lozenge, a single-key `jira`
-reference, a user mention) cannot become one. Two of those three have native
-markdown equivalents Radd already renders; the lozenge degrades to inline code,
-which is lossy and deliberately so — there is no inline extension seam in the
-kernel and inventing one for a coloured lozenge is not proportionate.
+"""Confluence storage format → Radd markdown — PURE. Everything that needs the
+world arrives as a callable on `ConvertContext`, so a cached body re-converts as
+the plan changes. `radd:*` fences are BLOCK-level; inline macros (status, a
+single-key jira ref, a mention) degrade to inline markdown — the status lozenge
+to inline code, deliberately (there is no inline extension seam).
 """
 
 from __future__ import annotations
@@ -43,11 +34,7 @@ _INLINE_TAGS = (
     | _INLINE_STRONG | _INLINE_EM | _INLINE_DEL
 )
 
-#: `/download/attachments/<pageId>/<filename>?version=…` — the src a plain `<img>`
-#: carries. Confluence writes BOTH forms: `<ac:image><ri:attachment>` from the
-#: editor's insert, and a bare `<img>` with an absolute URL from a paste or an
-#: older editor. A converter that only knows the first silently drops every image
-#: on the pages that use the second, which on a real corpus is most of them.
+#: The bare-`<img>` form (paste/older editor) — most images on a real corpus.
 _DOWNLOAD_SRC_RE = re.compile(r"/download/attachments/\d+/([^?#]+)")
 
 #: Extensions that get an <audio> player rather than a <video> one. Everything
@@ -55,13 +42,8 @@ _DOWNLOAD_SRC_RE = re.compile(r"/download/attachments/\d+/([^?#]+)")
 #: recordings that dominate a real wiki.
 _AUDIO_EXTENSIONS = frozenset({"mp3", "wav", "ogg", "oga", "m4a", "aac", "flac"})
 
-#: Confluence's `language` parameter → the token a markdown fence should carry.
-#:
-#: Confluence writes file extensions and its own spellings (`py`, `js`, `sh`);
-#: markdown renderers key off the language NAME. Radd's own picker resolves both,
-#: but the body is portable markdown that GitHub and every other renderer also
-#: reads, so it should say `python` rather than `py`. Only the tokens that
-#: actually differ are listed — anything else passes through unchanged.
+#: Confluence language tokens → markdown fence names, where they differ (the body
+#: is portable markdown, so `python`, not `py`).
 _FENCE_LANGUAGE = {
     "py": "python",
     "js": "javascript",
@@ -115,8 +97,7 @@ def _md_url(url: str) -> str:
 class ConvertResult:
     markdown: str
     problems: list[Problem] = field(default_factory=list)
-    #: Foreign page ids this body links to — the run turns unresolved ones into
-    #: pending refs rather than dropping the link.
+    #: Foreign page ids this body links to.
     page_refs: set[str] = field(default_factory=set)
     attachment_refs: set[str] = field(default_factory=set)
     jira_keys: set[str] = field(default_factory=set)
@@ -135,7 +116,7 @@ class ConvertContext:
     page_url_by_title: Callable[[str, str], str] = lambda title, space: ""
     #: username → (display name, Radd user id) — "" id means unresolved.
     user_ref: Callable[[str], tuple[str, str]] = lambda username: (username, "")
-    #: Jira key → True when spec 100 imported it into Radd under the same key.
+    #: Jira key → True when the Jira importer brought it across under the same key.
     item_exists: Callable[[str], bool] = lambda key: False
     #: Base URL for the external fallback when a reference cannot be resolved.
     jira_base_url: str = ""
@@ -358,31 +339,13 @@ class _Renderer:
             return f"![{alt}]({_md_url(url_node.attrs.get('ri:value', ''))})"
         if attachment is None:
             return ""
-        filename = attachment.attrs.get("ri:filename", "")
-        self.result.attachment_refs.add(filename)
-        url = self.ctx.attachment_url(filename)
-        if not url:
-            self._problem(
-                ProblemKind.ATTACHMENT,
-                f"image {filename!r} has no imported attachment",
-                subject=filename,
-            )
-            return f"![{alt or filename}]({_md_url(filename)})"
-        # RADD-751: the width rides in the URL as ?w=, so the endpoint serves fewer
-        # bytes than the original when the document asks for a smaller image.
-        width = node.attrs.get("ac:width", "")
-        if width.isdigit():
-            url = f"{url}{'&' if '?' in url else '?'}w={width}"
-        return f"![{alt or filename}]({_md_url(url)})"
+        return self._attached_image(
+            attachment.attrs.get("ri:filename", ""), alt, node.attrs.get("ac:width", "")
+        )
 
     def html_image(self, node: Node) -> str:
-        """A plain `<img>`, which on a real corpus is the COMMON form.
-
-        Its `src` is an absolute `/download/attachments/<pageId>/<file>` URL. The
-        filename is what identifies the attachment, so it routes through exactly
-        the same resolver as `<ac:image>`; an image from somewhere else keeps its
-        URL, since an external image is still an image.
-        """
+        """A plain `<img>`; a `/download/attachments/…` src resolves by filename like
+        `<ac:image>`, any other src is kept (an external image is still an image)."""
         src = node.attrs.get("src", "")
         alt = node.attrs.get("alt", "")
         match = _DOWNLOAD_SRC_RE.search(src)
@@ -390,7 +353,11 @@ class _Renderer:
             return f"![{alt}]({_md_url(src)})" if src else ""
         from urllib.parse import unquote
 
-        filename = unquote(match.group(1))
+        return self._attached_image(unquote(match.group(1)), alt, node.attrs.get("width", ""))
+
+    def _attached_image(self, filename: str, alt: str, width: str) -> str:
+        """An attachment image. The width rides in the URL as `?w=` (RADD-751), so
+        the endpoint serves fewer bytes when the document shows it smaller."""
         self.result.attachment_refs.add(filename)
         url = self.ctx.attachment_url(filename)
         if not url:
@@ -400,7 +367,6 @@ class _Renderer:
                 subject=filename,
             )
             return f"![{alt or filename}]({_md_url(filename)})"
-        width = node.attrs.get("width", "")
         if width.isdigit():
             url = f"{url}{'&' if '?' in url else '?'}w={width}"
         return f"![{alt or filename}]({_md_url(url)})"
@@ -450,9 +416,9 @@ class _Renderer:
         base = self.ctx.confluence_base_url.rstrip("/")
         if not base:
             return "#"
-        space_part = f"spaceKey={space}&" if space else ""
-        return f"{base}/display/{space}/{title.replace(' ', '+')}" if space else \
-            f"{base}/pages/viewpage.action?{space_part}title={title.replace(' ', '+')}"
+        if space:
+            return f"{base}/display/{space}/{title.replace(' ', '+')}"
+        return f"{base}/pages/viewpage.action?title={title.replace(' ', '+')}"
 
     # --- macros ---
 
@@ -525,19 +491,10 @@ class _Renderer:
         self, name: str, params: dict[str, str], rich: Node | None,
         node: Node | None = None,
     ) -> str:
-        """A playable attachment.
-
-        `multimedia` IS the content of the pages that use it — a meeting recording
-        carded as "unsupported" is the page missing its point. The filename is
-        resolved through the same attachment resolver images use, so the player
-        points at the imported file rather than at Confluence.
-        """
+        """A playable attachment. The file often sits in an ELEMENT inside the
+        parameter (`<ri:attachment ri:filename="x.mp4"/>`), so search the whole
+        macro for it."""
         filename = params.get("name", "") or params.get("file", "")
-        # The real markup puts the file in an ELEMENT inside the parameter:
-        #   <ac:parameter ac:name="name"><ri:attachment ri:filename="x.mp4"/></ac:parameter>
-        # so reading parameters as text found an empty string and carded the macro
-        # while the video sat right there. Search the whole macro for the
-        # reference rather than guessing which shape this instance writes.
         if not filename:
             for scope in (node, rich):
                 found = _find_attachment(scope)
@@ -566,17 +523,9 @@ class _Renderer:
         )
 
     def jira_macro(self, params: dict[str, str], *, inline: bool) -> str:
-        """The join between the two halves of the migration.
-
-        A single-key reference becomes a real Radd issue mention when spec 100
-        already imported that key — which makes it render as a live chip and feeds
-        `item_page_links` for free, because `pages/mentions.py` reconciles derived
-        links from body text. A key that was not imported keeps an honest external
-        link rather than becoming a stub item nobody filed.
-
-        A JQL-shaped `jira` macro is a QUERY, not a reference, so it goes the same
-        way `jiraissues` does — through `radd:items`.
-        """
+        """A single key → an issue mention when the Jira importer brought it across
+        (a live chip, and `item_page_links` via `pages/mentions.py`), else an
+        external link; a JQL `jira` macro → `radd:items`."""
         key = params.get("key", "").strip()
         if not key:
             jql = params.get("jqlQuery", "") or params.get("jql", "")
@@ -588,14 +537,8 @@ class _Renderer:
         return f"[{key}]({base}/browse/{key})" if base else key
 
     def items_fence(self, jql: str) -> str:
-        """A JQL table becomes an SLQ table.
-
-        Translation is best effort, and a failure is NOT an import failure: the
-        block keeps the original JQL and marks itself unsupported, so the page
-        shows what the query was and a person fixes it. A silently mistranslated
-        query that returns plausible rows is far worse than one that admits it
-        needs a human.
-        """
+        """JQL → SLQ, best effort; a failed translation keeps the JQL and marks the
+        block unsupported rather than guessing."""
         slq, ok = translate_jql(jql)
         if ok:
             return self.fence(macro_table.EXT_ITEMS, {"query": slq, "source_jql": jql})
@@ -694,10 +637,8 @@ def translate_jql(jql: str) -> tuple[str, bool]:
         field = match.group("field").lower()
         if field not in _JQL_FIELDS:
             return "", False
-        value = match.group("value").strip()
-        if "(" in value and ")" in value:
-            value = value  # an IN list survives as-is; SLQ shares the syntax
-        elif value.lower() in ("currentuser()", "currentuser"):
+        value = match.group("value").strip()  # an IN list passes as-is: SLQ shares it
+        if value.lower() in ("currentuser()", "currentuser"):
             value = "me"
         elif value.lower() == "empty":
             value = "EMPTY"

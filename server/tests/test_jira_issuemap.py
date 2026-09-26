@@ -1,9 +1,8 @@
-"""Jira issue JSON → Radd item draft (spec 90) — the pure translation.
+"""Jira issue JSON → a decoded draft — the pure translation.
 
 Every decoding rule that could silently corrupt an import lives here: obfuscated
-emails, status categories, priority/kind mapping, number preservation, mapped
-custom-field value rendering (with select option filtering), comments/worklogs,
-and issue-link typing.
+emails, number preservation, mapped custom-field value rendering (with select
+option filtering), comments/worklogs, and issue-link typing.
 """
 
 from radd.modules.fields.types import FieldType
@@ -17,16 +16,7 @@ from radd.modules.jiraimport.issuemap import (
 from radd.modules.jiraimport.schemas import FieldMappingEntry
 from radd.modules.jiraimport.types import BuiltinTarget, FieldAction
 
-# Spec 100: the domain for synthesizing an address Jira did not expose is supplied
-# by the CALLER (the runner derives it from the connection's host). A neutral one
-# here — the point of the change is that no domain is baked into the source.
-DOMAIN = "example.com"
-
-
-def map_issue(issue, mappings, catalog, **kwargs):
-    """`issuemap.map_issue` with the domain the runner would pass."""
-    kwargs.setdefault("fallback_domain", DOMAIN)
-    return issuemap.map_issue(issue, mappings, catalog, **kwargs)
+map_issue = issuemap.map_issue
 
 
 def test_decode_obfuscated_email():
@@ -35,11 +25,9 @@ def test_decode_obfuscated_email():
     assert decode_email("no-at-sign") is None
 
 
-def test_person_email_falls_back_to_username():
+def test_person_email_is_only_what_jira_exposed():
     assert person_email({"emailAddress": "a at b dot com"}) == "a@b.com"
-    # Spec 100: the domain is supplied by the caller (derived from the Jira host),
-    # never baked into source. With no domain, nothing is invented.
-    assert person_email({"name": "jsmith"}, "example.com") == "jsmith@example.com"
+    # Nothing is invented: placeholder addresses are the plan's Users step's.
     assert person_email({"name": "jsmith"}) is None
     assert person_email({}) is None
 
@@ -68,28 +56,14 @@ def _issue(**fields):
 def test_map_issue_core_fields():
     issue = _issue(
         summary="Investigate the farm",
-        priority={"name": "Major"},
-        assignee={"emailAddress": "pierre at example dot com"},
-        reporter={"name": "olmossa"},
         created="2026-07-24T10:48:33.000-0400",
         labels=["farm", "urgent"],
     )
     draft = map_issue(issue, [], {})
     assert draft.number == 15885 and draft.jira_key == "DEV-15885"
     assert draft.title == "Investigate the farm"
-    assert draft.priority == "high"  # major → high
-    assert draft.status_category == "todo"  # statusCategory new → todo
-    assert draft.assignee_email == "pierre@example.com"
-    assert draft.reporter_email == "olmossa@example.com"
     assert draft.created == "2026-07-24T14:48:33"
     assert draft.labels == ["farm", "urgent"]
-
-
-def test_kind_and_canceled_category():
-    assert map_issue(_issue(issuetype={"name": "Epic"}), [], {}).kind == "epic"
-    assert map_issue(_issue(issuetype={"name": "Sub-task"}), [], {}).kind == "subtask"
-    canceled = _issue(status={"name": "Cancelled", "statusCategory": {"key": "done"}})
-    assert map_issue(canceled, [], {}).status_category == "canceled"
 
 
 def test_mapped_custom_fields_render_and_filter_options():
@@ -138,7 +112,7 @@ def test_parent_epic_comments_worklogs_links():
     )
     draft = map_issue(issue, [], {})
     assert draft.parent_jira_key == "DEV-100"
-    assert draft.comments[0].body == "**bold** note" and draft.comments[0].author_email == "jsmith@example.com"
+    assert draft.comments[0].body == "**bold** note" and draft.comments[0].author_key == "jsmith"
     assert draft.worklogs[0].time_spent == "2h" and draft.worklogs[0].worked_on == "2026-01-02"
     assert draft.links[0].target_key == "DEV-200" and draft.links[0].link_type == "blocks"
     assert draft.links[1].target_key == "DEV-300" and draft.links[1].link_type == "duplicates"
@@ -172,9 +146,7 @@ def test_jira_number_extraction():
     assert issuemap.jira_number("TD-1") == 1
 
 
-# --- native-target mappings (spec 90 follow-up) ---
-
-from radd.modules.jiraimport.types import BuiltinTarget  # noqa: E402
+# --- native-target mappings ---
 
 
 def _native(jira_id, target):
@@ -194,7 +166,7 @@ def test_native_team_and_watchers_and_dates():
     ]
     draft = map_issue(issue, mappings, {})
     assert draft.native_team == "CFX"
-    assert draft.native_watcher_emails == ["olmossa@example.com", "a@b.com"]
+    assert draft.native_watcher_emails == ["a@b.com"]  # only addresses Jira exposed
     assert draft.start_date == "2026-02-01"
     # A native-mapped field is NOT also written as a custom field.
     assert "customfield_domain" not in draft.custom_fields
@@ -260,8 +232,9 @@ def test_native_cycle_extracts_sprint_name_not_the_bean_blob():
     m = FieldMappingEntry(jira_id="customfield_10002", action=FieldAction.NATIVE,
                           builtin_target=BuiltinTarget.CYCLE)
     draft = map_issue(issue, [m], {})
-    assert "PIPE - 116" in draft.sprint_names
-    assert all(len(n) < 100 for n in draft.sprint_names)  # never the blob
+    names = [s.name for s in draft.sprints]
+    assert "PIPE - 116" in names
+    assert all(len(n) < 100 for n in names)  # never the blob
 
 
 def test_scalar_never_stringifies_a_list():

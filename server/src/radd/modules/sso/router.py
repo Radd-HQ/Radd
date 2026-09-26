@@ -39,8 +39,7 @@ async def public_providers(session: Session) -> list[SsoProviderPublic]:
     rows, and only their label/kind: never a client id, issuer or policy."""
     return [
         SsoProviderPublic(id=p.id, name=p.name, kind=p.kind)
-        for p in await registry.list_providers(session)
-        if p.enabled and registry.configured(p)
+        for p in registry.usable(await registry.list_providers(session))
     ]
 
 
@@ -48,7 +47,7 @@ async def _resolve_provider(session: AsyncSession, provider_id: uuid.UUID | None
     """Pick the provider to start a flow with. A missing id resolves to the only
     configured provider, which keeps single-IdP instances (and spec 40's bare
     `/auth/oidc/login` link) working untouched."""
-    usable = [p for p in await registry.list_providers(session) if p.enabled and registry.configured(p)]
+    usable = registry.usable(await registry.list_providers(session))
     if not usable:
         raise ForbiddenError("no sign-in provider is configured")
     if provider_id is None:

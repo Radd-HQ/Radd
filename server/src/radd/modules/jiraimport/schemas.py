@@ -10,7 +10,6 @@ from .types import (
     FieldAction,
     FieldScope,
     FieldBand,
-    InferredType,
     JiraAuthMode,
     SnapshotStage,
 )
@@ -136,44 +135,17 @@ class SnapshotRead(BaseModel):
 
 
 class JiraPreviewRequest(BaseModel):
-    """POST /jira/preview — load a JQL slice to infer the schema (spec 90)."""
+    """POST /jira/preview — count a JQL's matches before downloading them."""
 
     jql: str = Field(min_length=1, max_length=5000)
-    sample_size: int = Field(default=50, ge=1, le=200)
     connection_id: uuid.UUID | None = None  # omitted = the default connection
-    # The picked Jira project — used to pull the full field OPTION SETS (the field
-    # spec) so select values aren't limited to what the sample happened to use.
-    project_key: str | None = Field(default=None, max_length=100)
-
-
-class InferredFieldRead(BaseModel):
-    jira_id: str
-    name: str
-    inferred_type: InferredType
-    populated: int
-    sample_count: int
-    populate_rate: float
-    is_builtin: bool
-    distinct_count: int = 0
-    dominant_ratio: float = 0.0  # 1.0 = one value everywhere (an org-wide default)
-    # Spec 100: one ordered band replaces the old `likely_noise` boolean, which
-    # could not express "unused" — so a field nothing fills in scored as ordinary
-    # data and sat at the top of the grid. Everything outside `in_use` is collapsed
-    # AND defaults to `ignore`; `band_reason` is shown so it can be overruled.
-    band: FieldBand = FieldBand.IN_USE
-    band_reason: str = ""
-    schema_key: str = ""  # Jira's stable `schema.custom` type key
-    samples: list[str] = Field(default_factory=list)
-    distinct_values: list[str] | None = None
 
 
 class JiraPreviewResponse(BaseModel):
-    total: int  # full JQL match count (not just the sampled page)
-    sampled: int  # how many issues the inference actually looked at
-    fields: list[InferredFieldRead] = Field(default_factory=list)
+    total: int  # the full JQL match count
 
 
-# --- field mappings + import plans (spec 90, phase 2) ------------------------
+# --- field mappings -----------------------------------------------------------
 
 
 class FieldMappingEntry(BaseModel):
@@ -219,6 +191,3 @@ class FieldMappingEntry(BaseModel):
         if self.action is FieldAction.NATIVE and self.builtin_target is None:
             raise ValueError("action 'native' requires builtin_target")
         return self
-
-
-# --- import runs (spec 90, phase 3) ------------------------------------------

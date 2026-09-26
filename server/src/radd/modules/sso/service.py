@@ -1,21 +1,11 @@
-"""OIDC single sign-on (spec 40 → spec 110).
+"""OIDC/OAuth2 single sign-on: authorization code + PKCE, then the kind's profile
+strategy (`idp.py`).
 
-The flow is unchanged and standards-plain: authorization code + PKCE, then the
-kind's profile strategy (`idp.py`: an `id_token` verified against the issuer's
-JWKS, or — GitHub, spec 121 — a profile API called with the access token). What
-spec 110 changed is that the provider is a database ROW rather than the
-environment, so several IdPs coexist, and that provisioning is now explicit
-about the two questions the env design left implicit:
-
-  WHO IS THIS?    A (provider, subject) identity, pinned on first login. Email is
-                  used ONCE, to find the account this person already has — and
-                  only when the IdP says it verified that address. Subsequent
-                  logins ignore email entirely, so a rename in AD doesn't fork
-                  the account and a recycled address can't inherit a leaver's.
-
-  MAY THEY IN?    An existing account: yes (the domain list gates CREATION, not
-                  sign-in). A new account: only if the provider auto-provisions
-                  AND the email's domain is on that provider's allowlist.
+WHO IS THIS? A (provider, subject) identity pinned on first login. Email is used
+  once, and only when verified, to find an existing account; later logins ignore
+  it, so a mailbox rename cannot fork the account.
+MAY THEY IN? An existing account: yes. A new one: only if the provider
+  auto-provisions AND the domain is on its allowlist.
 """
 
 import base64
@@ -118,13 +108,8 @@ def _is_admin(provider: SsoProvider, claims: dict) -> bool:
 
 
 def _syncs_roles(provider: SsoProvider) -> bool:
-    """Whether this provider has any opinion about instance roles.
-
-    A provider with no admin groups configured carries NO role information, so it
-    must leave `instance_role` untouched. Spec 40 wrote the role unconditionally,
-    which meant an AD-provisioned admin signing in through Google — which ships no
-    group claim at all — was silently demoted to member on every login.
-    """
+    """A provider with no admin groups carries no role opinion and must not touch
+    `instance_role` — a Google login ships no group claim and would demote an AD admin."""
     return bool(provider.admin_groups.strip())
 
 
@@ -153,14 +138,8 @@ async def _identity_for(
 
 
 def _rule_matches(domains: list[str], email: str) -> bool:
-    """Does this rule apply to that address? (RADD-782)
-
-    Empty domains = the catch-all, matching everyone. Otherwise an exact match
-    on the lowercased domain, the same normalization `allowed_signup_domains`
-    uses — deliberately not a regex and not a subdomain wildcard, both of which
-    are ways to write a rule that matches more than its author believed. This
-    decides what a stranger gets on arrival.
-    """
+    """Empty domains = catch-all; otherwise an exact, lowercased domain match
+    (see `SsoProvisioningRule`)."""
     if not domains:
         return True
     _, _, domain = email.partition("@")
@@ -170,23 +149,9 @@ def _rule_matches(domains: list[str], email: str) -> bool:
 async def _apply_provisioning_template(
     session: AsyncSession, provider: SsoProvider, user: User
 ) -> None:
-    """Give a freshly created account the access its rules say it gets, once.
-
-    EVERY matching rule applies, so a catch-all and a domain rule compose rather
-    than race. Grants are additive rows, so a union is the only composition that
-    cannot surprise — adding a rule can widen access but never silently remove
-    another's.
-
-    Roles become `global_role_grants` rows and teams become memberships:
-    additive facts nothing reconciles. That is what makes "this must never undo
-    an admin's later change" a property of the data rather than a rule someone
-    has to remember — no code path reads these rules again for this account.
-
-    Every failure here is swallowed to a log line, deliberately. Each application owns a savepoint so a stale target or database refusal
-    cannot poison the account/identity transaction or discard other valid rules.
-    Teams may contain direct users and directory groups; provisioning adds a
-    direct membership without changing inherited membership.
-    """
+    """Apply every matching rule to a NEW account, once (see SsoProvisioningRule).
+    Each grant/team gets its own savepoint and a failure is logged, never raised: a
+    stale rule must not block a login or discard the other rules."""
     from radd.modules.auth import grants
     from radd.modules.teams import service as teams_service
 
@@ -264,13 +229,8 @@ async def provision(session: AsyncSession, provider: SsoProvider, claims: dict) 
                 session, email=email, name=name, source=UserSource.OIDC
             )
             created = True
-            # The provider's starting grant (RADD-777) — HERE and nowhere else.
-            #
-            # This branch is the only one that CREATES an account. The `linked`
-            # branch below is an existing account gaining another door, and a
-            # returning login reaches neither. Putting the grant on any of the
-            # others would re-apply it, which is spec 40's demotion bug in a new
-            # costume: an admin revokes it, the person signs in, it is back.
+            # Only account CREATION applies the template; re-applying it on a linked
+            # or returning login would undo an admin's later revocation.
             await _apply_provisioning_template(session, provider, user)
         else:
             # The account already exists under another sign-in method (usually AD).

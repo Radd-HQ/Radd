@@ -1,20 +1,7 @@
-"""Confluence page restrictions → Radd access grants (spec 117, RADD-1017).
-
-**The mapping is identity, by DN.** Radd already mirrors AD: `groups` holds `dn`
-uniquely with real nesting via `group_parents`, and `GrantSubject.GROUP` is a
-first-class access-grant subject that `pages`' `_PAGE_SPEC` already accepts,
-matched THROUGH nesting (RADD-832). So a restriction naming an AD group becomes a
-grant naming the same AD group. No translation layer, no new concept — the
-assumption is that one directory sits behind both systems, and it is checkable.
-
-The plan's `groups` table is the FALLBACK, for principals that do not resolve: a
-group predating the current directory, a deleted user, an instance whose AD was
-never connected.
-
-**An unresolved principal with no fallback fails its page.** A wiki import that
-silently opens a restricted page is a data leak, and it is the failure nobody
-notices — the page looks perfectly fine.
-"""
+"""Page restrictions → access grants, by IDENTITY: an AD group becomes a grant to
+the same mirrored group (DN first, then CN, then a same-named team). The plan's
+`groups` table is the fallback for principals that do not resolve; with no
+fallback the page FAILS — importing it open would leak it."""
 
 from __future__ import annotations
 
@@ -48,30 +35,25 @@ PAGE_RESOURCE = "page"
 _OPERATION_ACCESS = {"read": Access.READ.value, "update": Access.WRITE.value}
 
 
-def principals_of(restrictions: dict) -> list[str]:
-    """Every user and group a page's restrictions actually NAME.
-
-    Confluence always returns the envelope — `read` and `update` keys, each with
-    empty `user`/`group` result lists — so the payload is truthy for every page
-    whether or not anything is restricted. Taking that at face value reported
-    "5787 restricted pages" for a space with 34, and made the import resolve
-    principals 5787 times to find none.
-
-    Walks defensively: a shape this does not recognise yields NO principals, and
-    the run's FAIL default then refuses the page rather than importing it open.
-    """
-    found: list[str] = []
-    for operation in _OPERATION_ACCESS:
-        block = (restrictions or {}).get(operation) or {}
-        inner = block.get("restrictions") or {}
+def _named(restrictions: dict):
+    """(access, is_user, name) for each principal the envelope names. Walks
+    defensively: an unrecognised shape yields none."""
+    for operation, access in _OPERATION_ACCESS.items():
+        inner = ((restrictions or {}).get(operation) or {}).get("restrictions") or {}
         for raw in ((inner.get("user") or {}).get("results") or []):
-            name = raw.get("username") or raw.get("displayName") or ""
-            if name:
-                found.append(f"user:{name}")
+            yield access, True, raw.get("username") or raw.get("displayName") or ""
         for raw in ((inner.get("group") or {}).get("results") or []):
-            if raw.get("name"):
-                found.append(f"group:{raw['name']}")
-    return found
+            yield access, False, raw.get("name") or ""
+
+
+def _key(is_user: bool, name: str) -> str:
+    return f"{'user' if is_user else 'group'}:{name}"
+
+
+def principals_of(restrictions: dict) -> list[str]:
+    """Principals a restriction actually names. Confluence always returns the empty
+    envelope, so a truthy payload is not "restricted"."""
+    return [_key(is_user, name) for _, is_user, name in _named(restrictions) if name]
 
 
 def is_restricted(restrictions: dict) -> bool:
@@ -99,21 +81,11 @@ async def resolve(
 ) -> Resolution:
     """Turn one page's restriction payload into grants to write."""
     out = Resolution()
-    for operation, access in _OPERATION_ACCESS.items():
-        block = (restrictions or {}).get(operation) or {}
-        inner = block.get("restrictions") or {}
-        for raw in ((inner.get("user") or {}).get("results") or []):
-            name = raw.get("username") or raw.get("displayName") or ""
-            await _principal(
-                session, out, f"user:{name}", name, access,
-                options=options, overrides=overrides, page_title=page_title, is_user=True,
-            )
-        for raw in ((inner.get("group") or {}).get("results") or []):
-            name = raw.get("name") or ""
-            await _principal(
-                session, out, f"group:{name}", name, access,
-                options=options, overrides=overrides, page_title=page_title, is_user=False,
-            )
+    for access, is_user, name in _named(restrictions):
+        await _principal(
+            session, out, _key(is_user, name), name, access,
+            options=options, overrides=overrides, page_title=page_title, is_user=is_user,
+        )
     return out
 
 

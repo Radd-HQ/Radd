@@ -1,14 +1,6 @@
-"""Semantic candidate retrieval (spec 103) over ai's own embedding tables.
-
-`search` reaches it through the kernel SEMANTIC_CANDIDATES socket
-(`SemanticCandidates`, registered on this plugin's manifest — RADD-1384), never
-an import, so disabling ai withdraws meaning from search in the same breath;
-ai's own features (similar issues) call the functions directly.
-
-Every function degrades to empty rather than raising — the callers fuse with
-FTS and must keep working verbatim when semantic is off, unconfigured, or the
-provider is down.
-"""
+"""Semantic candidate retrieval over ai's embedding tables. `search` reaches it only
+through the SEMANTIC_CANDIDATES socket; ai's own features call it directly. Every
+function degrades to empty rather than raising (callers fuse it with FTS)."""
 
 import logging
 import uuid

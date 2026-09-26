@@ -23,6 +23,14 @@ from .types import (
 )
 
 
+def _toggle(key: str, label: str, description: str) -> SettingSpec:
+    """An instance-wide on/off switch on Settings → AI."""
+    return SettingSpec(
+        key=key, section="ai", page_scopes=("instance",), type="bool", scopes=("instance",),
+        label=label, description=description,
+    )
+
+
 def _admin_event(event_type: AiEvent, label: str, entity_type: str, *, diff: bool = False):
     """Spec 123: registry administration is audited, never a trigger."""
     return EventTypeSpec(
@@ -92,14 +100,8 @@ from . import automation_node_validate as ai_automation_node_validate  # noqa: E
 from . import automation_node_generate as ai_automation_node_generate  # noqa: E402
 
 plugin = RaddPlugin(
-    # RADD-1325: this plugin's automation-node inspectors ship in its own UI
-    # remote (./ui), registered through `automation.node.inspector`. RADD-1379:
-    # Settings → AI is that remote's page too (it edits the `ai` settings section
-    # through the SDK's ScopedSettings); disabling the plugin withdraws the page
-    # and its nav entry with it. RADD-1395: every editor, read-mode, issue and
-    # submission-form AI surface is that remote's too, through the editor's
-    # extension points (UI API 1.16.0). RADD-1400: so are the command palette's
-    # Ask and the query bar's natural language, as contributed modes (1.18.0).
+    # Every AI surface (Settings → AI, node inspectors, editor/read-mode actions,
+    # the palette's Ask, the query bar's NL mode) is this remote's.
     ui=PluginUiManifest(
         remote="/plugins/ai/remoteEntry.js", ui_api_version="1.18.0",
         nav=(NavItemSpec(key="ai", label="AI", path="/settings/ai", section="settings",
@@ -140,154 +142,74 @@ plugin = RaddPlugin(
         "timelogging",
         "attachments",  # RADD-1275: a summary may show a vision model the entity's pictures
     ),
-    # The classifier node (spec 116 phase 2). Contributed, not hardcoded in
-    # `automations` — which is the whole point of the node registry: a module
-    # adds a node type to the canvas without the automations module learning it
-    # exists, and disabling this plugin removes it from the palette in the same
-    # breath. No dependency edge is needed either way: the node ships a spec and
-    # a planner, and imports nothing from `automations` — the kernel is the only
-    # thing both sides touch, which is what makes the seam a seam.
-    # Spec 119 adds the second: `ai.validate`. Kept a separate module rather
-    # than a mode on the classifier — one ROUTES (enumerated answers, cannot
-    # invent a branch, says nothing in its own words) and one WRITES (prose
-    # findings a person acts on), and a node that does both has to decide which
-    # it is doing on every call.
-    # Spec 120 adds the third: `ai.generate`. Kept separate from both for the
-    # same reason they are separate from each other — one ROUTES on an
-    # enumerated answer, one WRITES PROSE at a person, and this one FILLS IN
-    # named values the rest of the graph reads. A node that did two of those
-    # would have to decide which it was doing on every call.
+    # Contributed automation nodes (specs 116/119/120): the node registry runs them
+    # without `automations` importing `ai`, and disabling this plugin removes them.
     automation_nodes=(
         ai_automation_node.SPEC,
         ai_automation_node_validate.SPEC,
         ai_automation_node_generate.SPEC,
     ),
-    # RADD-891: the feature toggles (Settings → AI) — moved off `settings.types`'s
-    # old hardcoded dict. Every `AiFeature` member needs a row here AND both dicts
-    # in `features.py`; `test_ai_features.py` asserts all three agree, because a
-    # feature that reaches `feature_enabled` with no setting registered raises
-    # KeyError at its call site (RADD-989: `mail_routing` shipped that way and every
-    # llm mail rule fell through silently for a release).
+    # Every AiFeature needs a row here and in features.py; test_ai_features.py enforces it.
     settings_keys=(
-        SettingSpec(key="ai_mail_signature", section="ai", page_scopes=("instance",), type="bool", scopes=("instance",), label="AI email signature detection", description="Identify trailing signatures when domain rules and built-in detection do not match. Uses the configured chat provider; email text is sent to that provider."),
-        SettingSpec(
-            key="ai_editor_actions",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="Editor AI actions",
-            description=(
-                "AI writing actions in the rich editor (/refine, /format, preset and "
-                "freeform prompts) with streamed results and diff review. Also needs "
-                "the chat role assigned; users can additionally opt out per profile."
-            ),
+        _toggle("ai_mail_signature", "AI email signature detection", "Identify trailing signatures when domain rules and built-in detection do not match. Uses the configured chat provider; email text is sent to that provider."),
+        _toggle(
+            "ai_editor_actions",
+            "Editor AI actions",
+            "AI writing actions in the rich editor (/refine, /format, preset and "
+            "freeform prompts) with streamed results and diff review. Also needs "
+            "the chat role assigned; users can additionally opt out per profile.",
         ),
-        SettingSpec(
-            key="ai_semantic_search",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="Semantic search",
-            description=(
-                "Meaning-based retrieval fused into search, similar-issues, and the "
-                "palette Ask mode. Needs the embeddings role assigned and the pgvector "
-                "extension installed in Postgres."
-            ),
+        _toggle(
+            "ai_semantic_search",
+            "Semantic search",
+            "Meaning-based retrieval fused into search, similar-issues, and the "
+            "palette Ask mode. Needs the embeddings role assigned and the pgvector "
+            "extension installed in Postgres.",
         ),
-        SettingSpec(
-            key="ai_storage_routing",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="LLM storage routing",
-            description=(
-                "Lets LLM-type storage routing rules classify uploads (Settings → "
-                "Storage). Needs the vision role assigned; rules fall through to the "
-                "next rule while this is off."
-            ),
+        _toggle(
+            "ai_storage_routing",
+            "LLM storage routing",
+            "Lets LLM-type storage routing rules classify uploads (Settings → "
+            "Storage). Needs the vision role assigned; rules fall through to the "
+            "next rule while this is off.",
         ),
-        SettingSpec(
-            key="ai_mail_routing",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="LLM mail routing",
-            description=(
-                "Lets AI-type mail routing rules pick the project a new message "
-                "opens in from its content (Settings → Email). Needs the chat role "
-                "assigned; rules fall through to the next rule while this is off."
-            ),
+        _toggle(
+            "ai_mail_routing",
+            "LLM mail routing",
+            "Lets AI-type mail routing rules pick the project a new message "
+            "opens in from its content (Settings → Email). Needs the chat role "
+            "assigned; rules fall through to the next rule while this is off.",
         ),
-        SettingSpec(
-            key="ai_summarize",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="Issue summarize",
-            description="The Summarize action on issues (chat role).",
+        _toggle("ai_summarize", "Issue summarize", "The Summarize action on issues (chat role)."),
+        _toggle(
+            "ai_nl_slq",
+            "Natural language → SLQ",
+            "The Ask-AI bar that turns plain language into an SLQ filter (chat role).",
         ),
-        SettingSpec(
-            key="ai_nl_slq",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="Natural language → SLQ",
-            description="The Ask-AI bar that turns plain language into an SLQ filter (chat role).",
+        _toggle(
+            "ai_similar_rerank",
+            "Similar-issues LLM rerank",
+            "Rescore duplicate candidates with the chat model and explain why "
+            "each looks related. Off by default — it costs a chat-model round "
+            "trip per similar-issues open; similar issues keep working without "
+            "it (FTS/vector candidates only).",
         ),
-        SettingSpec(
-            key="ai_similar_rerank",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="Similar-issues LLM rerank",
-            description=(
-                "Rescore duplicate candidates with the chat model and explain why "
-                "each looks related. Off by default — it costs a chat-model round "
-                "trip per similar-issues open; similar issues keep working without "
-                "it (FTS/vector candidates only)."
-            ),
+        _toggle(
+            "ai_validation",
+            "AI intake checks",
+            "Lets the AI check step in an automation review a submission against your quality bar and say what falls short. Needs a chat model under Settings → AI. It does nothing until an automation uses it, so this switch is for turning it off everywhere at once.",
         ),
-        SettingSpec(
-            key="ai_validation",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="AI intake checks",
-            description=(
-                "Lets the AI check step in an automation review a submission against your quality bar and say what falls short. Needs a chat model under Settings → AI. It does nothing until an automation uses it, so this switch is for turning it off everywhere at once."
-            ),
+        _toggle(
+            "ai_generation",
+            "AI value generation",
+            "Lets the Generate with AI step in an automation work out values about an issue — a priority, a team, a sentence of advice — for later steps to use. Needs a chat model under Settings → AI. It does nothing until an automation uses it, so this switch is for turning it off everywhere at once.",
         ),
-        SettingSpec(
-            key="ai_generation",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="AI value generation",
-            description=(
-                "Lets the Generate with AI step in an automation work out values about an issue — a priority, a team, a sentence of advice — for later steps to use. Needs a chat model under Settings → AI. It does nothing until an automation uses it, so this switch is for turning it off everywhere at once."
-            ),
-        ),
-        SettingSpec(
-            key="ai_stream_responses",
-            section="ai",
-            page_scopes=("instance",),
-            type="bool",
-            scopes=("instance",),
-            label="Stream AI responses",
-            description=(
-                "Deliver issue summaries progressively and similar-issue candidates "
-                "immediately with reasoning filled in as the model produces it. Off = "
-                "each AI answer arrives complete, in one go."
-            ),
+        _toggle(
+            "ai_stream_responses",
+            "Stream AI responses",
+            "Deliver issue summaries progressively and similar-issue candidates "
+            "immediately with reasoning filled in as the model produces it. Off = "
+            "each AI answer arrives complete, in one go.",
         ),
     ),
     routers=(router, admin_router, editor_router),
@@ -300,12 +222,8 @@ plugin = RaddPlugin(
     on_startup=(_startup,),
     on_shutdown=(_shutdown,),
     capabilities=(CapabilitySpec("ai", "AI features", "ai", check=_chat_capability),),
-    # RADD-1384: meaning-ranked candidates for search (hybrid /search,
-    # deflection, Ask mode), served on the kernel socket — search imports
-    # nothing from here, and disabling this plugin leaves it full-text only.
-    # RADD-1387: the `llm` storage routing rule is this plugin's provider on the
-    # socket `attachments` reads — so `attachments` never imports `ai`, and
-    # disabling this plugin withdraws the rule type (stored rules fall through).
+    # Sockets, so `search`/`attachments` never import `ai`; disabled, search is
+    # FTS-only and the `llm` storage rule type is withdrawn.
     integrations=(
         IntegrationSpec(Socket.SEMANTIC_CANDIDATES, "ai_embeddings", impl=SemanticCandidates()),
         IntegrationSpec(

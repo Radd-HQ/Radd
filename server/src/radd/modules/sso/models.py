@@ -87,26 +87,10 @@ class SsoProvider(Base, TimestampMixin):
 
 
 class SsoProvisioningRule(Base, TimestampMixin):
-    """Who gets what when this provider creates an account (RADD-782).
-
-    One provider serves several populations — `@acme.example` and
-    `@radd-hq.com` sign in through the same Google button and should not land
-    with the same access. RADD-780/781 gave a provider ONE template; this puts a
-    rule between them, and the grants and teams hang off the rule.
-
-    **Every matching rule applies.** Not first-match-wins: grants are additive
-    rows, so a union is the only composition that cannot surprise — adding a
-    rule can widen access but never silently remove another's. It is also what
-    makes a catch-all useful ("everyone gets Viewer, Acme additionally gets
-    Member") instead of forcing every rule to restate the common part. The
-    spec-102 storage chain picks ONE host because a file lands in one place;
-    access is a union, and borrowing that ordering would let a catch-all at the
-    top disable everything below it.
-
-    An EMPTY `domains` list matches every address. That is what makes the
-    migration behaviour-free: each provider's existing flat template becomes one
-    unnamed catch-all rule.
-    """
+    """Who gets what when this provider CREATES an account. Every rule whose
+    `domains` match applies (a union, so a catch-all and a domain rule compose);
+    empty `domains` matches everyone. Exact, lowercased domain match only — no regex,
+    no subdomain wildcard: this decides what a stranger gets on arrival."""
 
     __tablename__ = "sso_provisioning_rules"
 
@@ -117,35 +101,15 @@ class SsoProvisioningRule(Base, TimestampMixin):
     #: Admin-facing label. "" is fine — the domains say what it does.
     name: Mapped[str] = mapped_column(String(200), default="")
     position: Mapped[int] = mapped_column(Integer, default=0)
-    #: Lowercased bare domains ("acme.example"). EMPTY = matches everyone.
-    #:
-    #: Exact match on the address's domain, the same normalization
-    #: `allowed_signup_domains` uses. Deliberately not a regex and not a
-    #: subdomain wildcard: both are ways to write a rule that matches more than
-    #: its author believed, and this decides what a stranger gets on arrival.
+    #: Lowercased bare domains. EMPTY = matches everyone.
     domains: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
 
 
 class SsoProviderDefaultGrant(Base, TimestampMixin):
-    """One role a NEW account gets from this provider, at one scope (RADD-780).
-
-    Deliberately the same shape as `global_role_grants` — (role, project_id
-    NULL = global) — because these rows ARE the template the provisioner copies
-    into that table. RADD-777 shipped a single `default_role_id` instead, which
-    could say "everyone gets Member everywhere" and nothing else; a grant is
-    (role, scope), and dropping the scope made the setting unable to express the
-    thing it existed for.
-
-    Real foreign keys, both CASCADE: a deleted role or project takes its
-    template row with it. The alternative considered was a JSONB list on the
-    provider, which stores ids nothing enforces — and a template that mints a
-    grant to a role that no longer exists is a login-time failure caused by an
-    admin tidying a list weeks earlier.
-
-    Applied at account CREATION only and never reconciled; see
-    `service.provision`. That property is what makes "this must never undo an
-    admin's later change" free rather than enforced.
-    """
+    """One (role, scope) a new account gets — the template for a `global_role_grants`
+    row (project_id NULL = instance-wide). Real FKs, CASCADE, so a deleted role or
+    project cannot mint a failing grant at login. Applied at creation only, never
+    reconciled."""
 
     __tablename__ = "sso_provider_default_grants"
     __table_args__ = (
@@ -164,16 +128,7 @@ class SsoProviderDefaultGrant(Base, TimestampMixin):
 
 
 class SsoProviderDefaultTeam(Base, TimestampMixin):
-    """A team a NEW account from this provider joins (RADD-781).
-
-    Sibling of `SsoProviderDefaultGrant` and deliberately a separate table: a
-    team membership is not a (role, scope) pair, and folding both into one row
-    shape would mean a nullable column that is meaningful for exactly half the
-    rows.
-
-    All teams support direct user memberships alongside directory groups.
-    Provisioning adds a direct membership; directory sync does not remove it.
-    """
+    """A team a new account joins (direct membership; directory sync never removes it)."""
 
     __tablename__ = "sso_provider_default_teams"
     __table_args__ = (UniqueConstraint("rule_id", "team_id", name="uq_sso_default_team"),)

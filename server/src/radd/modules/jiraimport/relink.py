@@ -1,13 +1,7 @@
-"""Resolving cross-project references after the fact (spec 100).
-
-The answer to "I import DEV first, but its issues link to TD, which I haven't
-imported yet". Spec 90 dropped a dead web link at that point and never looked
-again, so importing TD later left every DEV→TD link permanently broken.
-
-Anything unresolved is recorded as a `jira_pending_ref` with a stand-in web link.
-This pass retries them against the CURRENT database, replaces the stand-in with a
-real parent or link, and clears the row. It runs automatically at the end of
-every import — so importing TD fixes DEV immediately — and on demand.
+"""Resolving cross-project references after the fact ("DEV links to TD, which
+is not imported yet"). An unresolved reference is a `jira_pending_ref` with a
+stand-in web link; this pass retries them against the CURRENT database, swaps in
+the real parent or link, and clears the row. Runs after every import and on demand.
 """
 
 from __future__ import annotations

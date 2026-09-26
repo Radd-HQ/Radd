@@ -81,7 +81,7 @@ async def test_ai_status_answers_for_every_feature(db):
     KeyError took editor actions, summarize, semantic search and NL→SLQ down with
     it for any instance running the ai plugin.
     """
-    from radd.modules.ai import service as ai_service
+    from radd.modules.ai import features
 
-    result = await ai_service.status(db)
+    result = await features.status(db)
     assert set(result.features) == {feature.value for feature in AiFeature}

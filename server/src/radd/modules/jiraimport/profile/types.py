@@ -1,12 +1,6 @@
-"""What a cached snapshot actually contains (spec 100) — the profile the mapping
-step is built from.
-
-Every vocabulary carries a USE COUNT taken from the snapshot itself, not from the
-instance catalog. That is what makes "unused" a fact rather than a guess, and it
-is what makes the mapping tables usable: a live Jira exposes 59 issue types and
-83 statuses instance-wide, of which one project uses a handful. The unused rest
-are hidden and ignored by default, with the reason shown.
-"""
+"""What a cached snapshot contains — the profile the mapping step is built from.
+Every vocabulary carries a USE COUNT from the snapshot itself, which makes
+"unused" (hidden and ignored by default) a fact rather than a guess."""
 
 from __future__ import annotations
 
@@ -35,12 +29,8 @@ class VocabEntry:
 
 @dataclass
 class PersonEntry:
-    """One person the snapshot names, and where they were named.
-
-    Identity is Jira's stable username/key, NOT the email: Jira often exposes no
-    address at all, and inventing one is how spec 90 wrote a hardcoded company
-    domain into real user rows.
-    """
+    """One person the snapshot names, and where. Identity is Jira's stable
+    username/key, NOT the email: Jira often exposes no address at all."""
 
     key: str  # Jira username / accountId — the stable identity
     display_name: str = ""
@@ -57,18 +47,12 @@ class PersonEntry:
 class InboundProfile:
     """Everything the mapping step needs, derived from the cache in one pass."""
 
-    total_issues: int = 0
     fields: list[InferredField] = field(default_factory=list)
     issue_types: list[VocabEntry] = field(default_factory=list)
     statuses: list[VocabEntry] = field(default_factory=list)
     priorities: list[VocabEntry] = field(default_factory=list)
-    resolutions: list[VocabEntry] = field(default_factory=list)
     link_types: list[VocabEntry] = field(default_factory=list)
     sprints: list[VocabEntry] = field(default_factory=list)
     versions: list[VocabEntry] = field(default_factory=list)
     components: list[VocabEntry] = field(default_factory=list)
-    labels: list[VocabEntry] = field(default_factory=list)
     people: list[PersonEntry] = field(default_factory=list)
-    # Field ids resolved from Jira's stable type keys, for the transform to use.
-    sprint_field_ids: tuple[str, ...] = ()
-    epic_link_field_id: str = ""

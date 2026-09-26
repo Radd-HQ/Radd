@@ -86,12 +86,10 @@ class RunStage(StrEnum):
 
     PENDING = "pending"
     PROVISION = "provision"
-    SPACES = "spaces"
     PAGES = "pages"
     BODIES = "bodies"
     ATTACHMENTS = "attachments"
     COMMENTS = "comments"
-    RESTRICTIONS = "restrictions"
     VERSIONS = "versions"
     RELINK = "relink"
     DONE = "done"
@@ -104,7 +102,6 @@ TERMINAL_RUN_STAGES = frozenset({RunStage.DONE, RunStage.FAILED, RunStage.CANCEL
 
 class RunKind(StrEnum):
     IMPORT = "import"
-    ROLLBACK = "rollback"
 
 
 class ProblemKind(StrEnum):
@@ -116,8 +113,6 @@ class ProblemKind(StrEnum):
     PARENT = "parent"  # an ancestor outside the selection
     LINK = "link"  # a link target not imported (yet)
     ATTACHMENT = "attachment"
-    PERMISSION = "permission"  # fidelity degraded — see _check_fidelity
-    CONVERT = "convert"
     FAILED = "failed"
 
 
@@ -229,7 +224,6 @@ class ConfluenceSpace:
     name: str
     id: str = ""
     description: str = ""
-    homepage_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,10 +236,6 @@ class ConfluencePage:
     parent_id: str | None = None
     position: int = 0
     version: int = 1
-    created_at: str = ""
-    updated_at: str = ""
-    author: str = ""
-    author_email: str = ""
     labels: tuple[str, ...] = ()
     #: Whether this page has children, so a lazy picker knows what can expand
     #: WITHOUT a probe request per row.
@@ -283,15 +273,6 @@ class Scope:
     root_page_id: str = ""
     page_ids: list[str] = field(default_factory=list)
     max_depth: int | None = None
-
-    def as_dict(self) -> dict:
-        return {
-            "kind": self.kind.value,
-            "space_key": self.space_key,
-            "root_page_id": self.root_page_id,
-            "page_ids": list(self.page_ids),
-            "max_depth": self.max_depth,
-        }
 
     @classmethod
     def from_dict(cls, raw: dict | None) -> "Scope":

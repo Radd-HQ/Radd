@@ -1,13 +1,6 @@
-"""Connection + project CRUD, env seeding, and webhook connection resolution (RADD-1253).
-
-`resolve_for_payload` decides which host sent a body: a recorded project names
-its connection and only that connection's token is compared, so two hosts with
-different secrets are unambiguous; an unrecorded project falls back to every
-active connection so a hook registered before its project row still works.
-
-GitLab does not sign bodies. It sends the hook's "Secret token" back verbatim in
-`X-Gitlab-Token`, so verification is a constant-time string comparison.
-"""
+"""Connection + project CRUD, env seeding, webhook resolution. A body must verify
+against exactly ONE active connection; a named project must be recorded and enabled.
+GitLab does not sign bodies: `X-Gitlab-Token` is compared constant-time."""
 
 from radd.modules.vcs import setup as vcs_setup
 import hmac
@@ -340,11 +333,7 @@ async def refresh_connection_snapshot(session: AsyncSession) -> None:
 
 
 async def seed_from_env() -> None:
-    """Turn `RADD_GITLAB_WEBHOOK_SECRET` (+ optional `RADD_GITLAB_BASE_URL`,
-    `RADD_GITLAB_API_TOKEN`, `RADD_GITLAB_REPO`) into a connection row ONCE,
-    when the table is empty, then warm the capability snapshot. An admin who
-    deletes the seeded row never has it reappear — and an instance that ran
-    spec 31 from the environment keeps verifying its hook across the upgrade."""
+    """Seed one connection from `RADD_GITLAB_*` once, then warm the capability snapshot."""
     secret = settings.gitlab_webhook_secret.strip()
     async with SessionLocal() as session:
         rows = await session.execute(select(func.count()).select_from(GitlabConnection))

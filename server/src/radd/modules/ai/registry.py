@@ -214,14 +214,8 @@ async def list_roles(session: AsyncSession) -> list[tuple[AiModelRole, AiProvide
 
 
 def _check_local_model(model: str) -> None:
-    """Refuse a model the built-in backend cannot load (RADD-723).
-
-    `BAA/bge-small-en-v1.5` — one character short of `BAAI/…` — was accepted,
-    and then raised on EVERY embedder iteration for the life of the instance
-    while every dashboard read healthy. The supported list is already published
-    for the admin UI; checking against it one step earlier turns a permanent
-    silent outage into a 422 naming the valid models.
-    """
+    """Refuse a model the built-in backend cannot load — a typo was accepted and then
+    failed every embedder iteration while dashboards read healthy (RADD-723)."""
     from . import localembed
 
     if not model or not localembed.available():
@@ -429,11 +423,8 @@ async def delete_preset(
 
 # --- capability snapshot ------------------------------------------------------
 
-# CapabilitySpec.check is sync; it cannot query. This process-local snapshot of
-# {role: {"provider": name, "model": model}} is write-through on admin edits +
-# startup and TTL'd (RADD-899), so a second web replica converges within
-# settings.snapshot_ttl_seconds instead of at its next restart. Real work paths
-# still resolve from the DB.
+# CapabilitySpec.check is sync: a TTL'd, write-through snapshot (RADD-899); work
+# paths read the DB.
 
 
 def _roles_of(pairs) -> dict[str, dict[str, str]]:
@@ -465,11 +456,8 @@ async def refresh_snapshot(session: AsyncSession) -> None:
 
 
 async def seed_from_env() -> None:
-    """Turn a spec-46 environment configuration into a provider row + chat role, ONCE.
-
-    Runs only when the table is empty, so an admin who deletes the seeded row
-    never has it silently reappear. Seeded rows are ordinary editable providers.
-    """
+    """Seed a provider row + chat role from the environment when the table is EMPTY
+    (so deleting every provider re-seeds while RADD_AI_* is set)."""
     async with SessionLocal() as session:
         existing = await session.execute(select(AiProviderRow.id).limit(1))
         if existing.first() is None:

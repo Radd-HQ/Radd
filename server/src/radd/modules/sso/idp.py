@@ -30,11 +30,8 @@ logger = logging.getLogger(__name__)
 # without a network (None = httpx's real transport). The ai/client.py idiom.
 transport: httpx.AsyncBaseTransport | None = None
 
-# Per-provider caches — an instance runs several issuers now, so a single
-# module-level cache would have served Google's metadata for Okta's flow.
-# Metadata entries carry a fetch time and expire (RADD-899): an IdP that moves
-# its endpoints used to keep failing until a Radd restart. Key rotation was
-# never the problem — PyJWKClient refreshes keys itself.
+# Per-provider caches; metadata expires after METADATA_TTL_SECONDS (an IdP may
+# move its endpoints); PyJWKClient refreshes keys itself.
 METADATA_TTL_SECONDS = 3600.0
 _metadata_cache: dict[uuid.UUID, tuple[float, dict]] = {}
 _jwks_clients: dict[uuid.UUID, PyJWKClient] = {}

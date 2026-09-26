@@ -14,21 +14,9 @@ class ForgejoEventKind(StrEnum):
     PULL_REQUEST = "pull_request"
     # `published` fires the release-published trigger (RADD-1309).
     RELEASE = "release"
-    # Branch/tag lifecycle: a deleted branch's link is marked stale rather than
-    # left pointing at a ref that no longer exists.
-    CREATE = "create"
-    DELETE = "delete"
     # Forgejo Actions, where the host emits them.
     WORKFLOW_RUN = "workflow_run"
     WORKFLOW_JOB = "workflow_job"
-
-
-class PrStatus(StrEnum):
-    """Status recorded on the merge_request-type vcs link (spec 47: open/merged/closed)."""
-
-    OPEN = "open"
-    MERGED = "merged"
-    CLOSED = "closed"
 
 
 class CiState(StrEnum):
@@ -43,9 +31,7 @@ class CiState(StrEnum):
 
 
 class ForgejoTrigger(StrEnum):
-    """RADD-1309: Forgejo's OWN automation triggers. The connector links refs and
-    does nothing else; what a merge or a published release should cause is an
-    automation. Registered by this plugin, so disabling Forgejo removes them."""
+    """Forgejo's own automation triggers (RADD-1309), registered by this plugin."""
 
     PR_OPENED = "forgejo.pull_request.opened"
     PR_MERGED = "forgejo.pull_request.merged"

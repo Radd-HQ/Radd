@@ -150,13 +150,9 @@ async def _selected_directory_users(session: AsyncSession, emails: list[str]) ->
 
 
 _PREVIEW_DOC = (
-    "Dry run of an AD user import (spec 88): classifies each selected directory user against "
-    "the accounts that already exist — `new`, `linked` (the exact email is already here), or "
-    "`conflict` (this looks like an existing person under a DIFFERENT email, matched on the AD "
-    "username vs. an email local part, or an identical display name). Radd has no username "
-    "column — identity is the email — which is why a username can only be compared that way. "
-    "Nothing is written; the returned `suggested` resolution is a hint, and the admin's choices "
-    "come back on the import call. Name matches especially are a heuristic, never auto-applied."
+    "Dry run of an AD user import: classifies each selected user as new, linked (exact email) "
+    "or conflict (AD username vs an email local part, or an identical display name). Writes "
+    "nothing; `suggested` is a hint."
 )
 
 
@@ -205,16 +201,8 @@ async def preview_ldap_directory_user_import(
 async def import_ldap_directory_users(
     data: DirectoryUserImportRequest, session: Session, actor: CurrentUser
 ) -> list[DirectoryUserImportResult]:
-    """Provision the selected directory users ahead of their first login
-    (spec 84; the spec-42 path: SSO-only account, source=ldap — a new active
-    user holds the global member floor).
-
-    Spec 88: each entry may carry a `resolution` from the preview above —
-    `overwrite` gives an existing account AD's email/name (keeping its id, so the
-    person's history follows), `merge` folds a look-alike into the AD-identified
-    account, `skip` does nothing. An email with no resolution keeps the pre-88
-    behavior: create-or-link, existing accounts untouched.
-    """
+    """Provision the selected directory users; per-email `resolution` from the
+    preview (overwrite / merge / skip); none = create-or-link."""
     _require_instance_admin(actor)
     await groups.require_bind_account(session)
     selected, missing = await _selected_directory_users(session, data.emails)
@@ -281,9 +269,9 @@ def _state_read(row: DirectorySyncState | None) -> DirectorySyncStateRead | None
 
 @admin_router.get("/sync-status", response_model=DirectorySyncStatusRead)
 async def directory_sync_status(session: Session, actor: CurrentUser) -> DirectorySyncStatusRead:
+    """Both `directory_sync_state` rows — instance admin. Readable without a bind
+    account (a de-configured deploy can still see history)."""
     await service.refresh_conn(session)  # RADD-846
-    """Both `directory_sync_state` rows (spec 85) — instance admin. Readable
-    without a bind account (a de-configured deploy can still see history)."""
     _require_instance_admin(actor)
     states = await state.all_states(session)
     return DirectorySyncStatusRead(

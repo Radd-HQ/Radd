@@ -1,22 +1,7 @@
-"""Directory-group reconcile + group import (spec 84 → RADD-829).
-
-GROUPS are the sync surface now, not linked teams: the directory's truth lives
-in `groups` rows, whose membership is wholly sync-owned (no manual path, so no
-MemberSource bookkeeping — the planner's job collapsed into a set replace).
-Teams reach the directory by holding a group as a member; the sync never
-touches team_members again.
-
-Three consumers share the reconcile: the login-time per-user sync (direct
-bind, no service account needed), the on-demand import, and the
-`ldap.groupsync` PeriodicLoop (bind account + run_workers gated). Unknown
-directory members are NEVER auto-provisioned by a reconcile — provisioning is
-the explicit import path only.
-
-The spec-87 two-path invariant moved here with the health flag: the periodic
-loop refuses removals while a group's DN stops resolving (a renamed/deleted
-group must not read as "everyone left"), and the login path holds removals for
-flagged groups while still applying joins.
-"""
+"""Directory-group reconcile + group import. `groups` rows are wholly sync-owned;
+teams reach the directory by holding a group. Reconcile never auto-provisions
+unknown members (only the explicit import does). A group whose DN stops
+resolving is flagged and keeps its members — removals are held, never inferred."""
 
 import logging
 import uuid
@@ -56,24 +41,11 @@ class StaleDirectoryGroup(Exception):
 async def reconcile_group(
     session: AsyncSession, group: Group
 ) -> tuple[int, int]:
-    """Full reconcile of ONE group against the directory (service account):
-    resolve the group's TRANSITIVE people in AD, replace the `group_members`
-    rows, and mirror its DIRECT parent edges (RADD-831 — the structure the old
-    sync resolved transitively and threw away). Returns (added, removed).
-
-    Spec 87 stale-group guard: an empty transitive search is ambiguous — the
-    group may genuinely be empty, or renamed/deleted (exactly the DNs that
-    change in a domain reorg). Confirm the group still resolves before
-    believing an empty answer; `get_group` raises DirectoryUnreachable on an
-    outage so it propagates rather than flagging a healthy group.
-
-    Edge semantics (the RADD-831 invariant): edges are written only from a
-    SUCCESSFUL read of the child's own `memberOf` — an unreadable directory
-    raises before any edge write, so a missing PARENT in a nested chain can
-    never read as "the children have no parent". A parent that is not
-    mirrored simply has no representable edge (mirroring is opt-in via the
-    import); a parent deleted in AD drops out of the child's memberOf, which
-    is the honest answer."""
+    """Reconcile ONE group (service account): replace its members with AD's
+    transitive set and mirror its DIRECT parent edges; returns (added, removed).
+    An empty member search is ambiguous, so the group is re-read first: gone →
+    flag + StaleDirectoryGroup, unreachable → DirectoryUnreachable propagates.
+    Edges are written only from a successful read of the group's own `memberOf`."""
     found = await directory.get_group(group.dn)
     if found is None:
         await groups_service.mark_missing(session, group, missing=True)
@@ -99,19 +71,10 @@ async def reconcile_group(
 async def sync_login_membership(
     session: AsyncSession, user: User, groups: list[Group], member_dns: frozenset[str]
 ) -> None:
-    """The direct-bind connection already answered which mirrored groups the
-    user is transitively in (`member_dns`); join/leave only THIS user's rows.
-    Removals are held for flagged groups — "not a member" is what a
-    non-existent DN always answers, and believing it would drain the group one
-    login at a time.
-
-    DECISION (RADD-831): the login path keeps the per-user PROBE
-    (memberOf:IN_CHAIN against each mirrored DN on the user's own connection)
-    rather than walking the mirrored edge graph. The probe asks AD the
-    transitive question directly — always current, needs no service account —
-    while an edge walk is only as fresh as the last periodic sync, and a login
-    must not depend on it. The edges exist for provenance (the inspector's
-    path) and the ancestors closure, not for authentication."""
+    """Join/leave only THIS user's rows, from the transitive probe the direct-bind
+    connection already ran (always current, no service account — unlike the
+    mirrored edges, which are only as fresh as the last sync). Removals are held
+    for flagged groups: a missing DN answers "not a member" for everyone."""
     for group in groups:
         if group.dn in member_dns:
             await groups_service.replace_members(
@@ -147,6 +110,11 @@ class GroupImportOutcome:
     users_provisioned: int
     error: str | None = None
 
+    @classmethod
+    def failed(cls, group_dn: str, error: str) -> "GroupImportOutcome":
+        return cls(group_dn=group_dn, cn="", team_id=None, created=False,
+                   members_added=0, users_provisioned=0, error=error)
+
 
 async def import_groups(
     session: AsyncSession,
@@ -164,32 +132,11 @@ async def import_groups(
         try:
             found = await directory.get_group(group_dn)
         except DirectoryUnreachable as exc:
-            # Spec 87: distinct from "no such group" — reporting an outage as a
-            # missing group would tell the admin their AD is wrong when it isn't.
-            outcomes.append(
-                GroupImportOutcome(
-                    group_dn=group_dn,
-                    cn="",
-                    team_id=None,
-                    created=False,
-                    members_added=0,
-                    users_provisioned=0,
-                    error=str(exc),
-                )
-            )
+            # Distinct from "no such group": an outage must not read as a wrong AD.
+            outcomes.append(GroupImportOutcome.failed(group_dn, str(exc)))
             continue
         if found is None:
-            outcomes.append(
-                GroupImportOutcome(
-                    group_dn=group_dn,
-                    cn="",
-                    team_id=None,
-                    created=False,
-                    members_added=0,
-                    users_provisioned=0,
-                    error="group not found in the directory",
-                )
-            )
+            outcomes.append(GroupImportOutcome.failed(group_dn, "group not found in the directory"))
             continue
         group = await groups_service.upsert_group(session, dn=found.dn, name=found.cn)
         # Mirror the nesting edges representable at this point (RADD-831):

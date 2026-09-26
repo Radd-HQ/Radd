@@ -1,17 +1,7 @@
-"""Turn a page of Jira issues into an inbound schema (spec 90) — PURE, so it is
-unit-tested without a live Jira.
-
-Jira `/search` returns each issue's `fields` as `{field_id: value}`, where the
-value shape depends on the field's Jira type: a scalar, a `{value|name}` option
-object, an array of those, a user object, a date string. This walks a sample of
-issues, and for every field id decides:
-
-  - does it carry data often enough to be worth importing (populate rate),
-  - what Radd type it most resembles (the create-default the wizard proposes),
-  - and, for anything option-like, the distinct value set (the select options).
-
-It never talks to the network and never guesses beyond the sample — the wizard
-shows the guess and the admin has the final say.
+"""The per-field judgement behind the inbound profile — PURE. Jira returns each
+issue's `fields` as `{field_id: value}`, the value's shape depending on the field's
+type (scalar, `{value|name}` option, array, user, date string). These decide how
+to render a value, which Radd type a field resembles, and which band it falls in.
 """
 
 from __future__ import annotations
@@ -21,12 +11,9 @@ from typing import Any
 
 from . import schemakeys
 from .types import (
-    BUILTIN_JIRA_FIELDS,
     DOMINANCE_NOISE,
     DOMINANCE_NOISE_REASON,
-    FIELD_BAND_ORDER,
     FieldBand,
-    InferredField,
     InferredType,
 )
 
@@ -141,101 +128,3 @@ def classify(
     if not distinct:
         return InferredType.UNKNOWN
     return InferredType.SELECT if len(distinct) <= SELECT_MAX_DISTINCT else InferredType.TEXT
-
-
-def infer_schema(
-    issues: list[dict[str, Any]], catalog: dict[str, dict[str, Any]]
-) -> list[InferredField]:
-    """Sample issues × the Jira field catalog → one InferredField per field seen.
-
-    Built-in fields (summary/status/assignee/…) are flagged, not dropped: the
-    wizard needs to show they are handled natively rather than leave the admin
-    wondering where 'status' went.
-    """
-    sample_count = len(issues)
-    populated: Counter[str] = Counter()
-    array_seen: dict[str, bool] = {}
-    samples: dict[str, list[str]] = {}
-    distinct: dict[str, Counter[str]] = {}
-
-    for issue in issues:
-        fields = issue.get("fields") or {}
-        for fid, value in fields.items():
-            rendered = render_value(value)
-            if rendered is None:
-                continue
-            populated[fid] += 1
-            array_seen[fid] = array_seen.get(fid, False) or isinstance(value, list)
-            bucket = samples.setdefault(fid, [])
-            if len(bucket) < MAX_SAMPLES and rendered not in bucket:
-                bucket.append(rendered)
-            counter = distinct.setdefault(fid, Counter())
-            for token in scalar_values(value):
-                counter[token] += 1
-
-    # Include every field the sample touched, plus every populated catalog field.
-    seen_ids = set(populated) | {fid for issue in issues for fid in (issue.get("fields") or {})}
-    results: list[InferredField] = []
-    for fid in sorted(seen_ids):
-        meta = catalog.get(fid, {})
-        counter = distinct.get(fid, Counter())
-        inferred = classify(
-            meta.get("schema_type", ""),
-            meta.get("schema_items", ""),
-            array_seen.get(fid, False),
-            counter,
-        )
-        name = meta.get("name", fid)
-        is_builtin = fid in BUILTIN_JIRA_FIELDS and not meta.get("is_custom", False)
-        # Only offer an option set when it is bounded — a "select" whose sample
-        # already shows >SELECT_MAX_DISTINCT values is really text the catalog
-        # mislabelled, so don't hand the wizard a 200-option list.
-        option_set = (
-            sorted(counter)
-            if inferred in (InferredType.SELECT, InferredType.MULTI_SELECT)
-            and 0 < len(counter) <= SELECT_MAX_DISTINCT
-            else None
-        )
-        total_tokens = sum(counter.values())
-        dominant_ratio = (counter.most_common(1)[0][1] / total_tokens) if total_tokens else 0.0
-        # Spec 100: one ordered band per field, decided from Jira's own STABLE type
-        # key (board rank, the dev-panel blob) or measured from the data (unused,
-        # or a near-constant org-wide default). Never by literal field id or
-        # English name — those two lists were what tied spec 90 to one instance.
-        band, band_reason = band_of(
-            meta.get("schema_key", ""),
-            is_builtin,
-            populated.get(fid, 0),
-            sample_count,
-            dominant_ratio,
-        )
-        results.append(
-            InferredField(
-                jira_id=fid,
-                name=name,
-                inferred_type=inferred,
-                populated=populated.get(fid, 0),
-                sample_count=sample_count,
-                is_builtin=is_builtin,
-                distinct_count=len(counter),
-                dominant_ratio=dominant_ratio,
-                schema_key=meta.get("schema_key", ""),
-                band=band,
-                band_reason=band_reason,
-                native_target=schemakeys.native_target(meta.get("schema_key", ""), name),
-                samples=samples.get(fid, []),
-                distinct_values=option_set,
-            )
-        )
-    # Order for the mapping grid: the fields that carry real data first, then the
-    # machinery, then the empties, then the natively-handled columns. Within a
-    # band, the more-populated and more-varied rise.
-    results.sort(
-        key=lambda f: (
-            FIELD_BAND_ORDER[f.band],
-            -f.populated,
-            -f.distinct_count,
-            f.name.lower(),
-        )
-    )
-    return results

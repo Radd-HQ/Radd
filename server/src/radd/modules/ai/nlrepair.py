@@ -1,25 +1,12 @@
-"""NL→SLQ value repair (spec 103 addendum): make generated queries name REAL things.
+"""NL→SLQ value repair: make generated queries name REAL things.
 
-The model writes `assignee = jimmy`; the actual account is Jimmy Lee Barlow.
-SLQ itself must stay EXACT — a typo in a saved view must never silently match
-someone else — so the forgiveness lives HERE, in the NL layer only: a
-pre-compile AST walk that resolves every entity value against the live
-candidates the autocomplete seam already serves (users, states, labels,
-projects, teams, cycles, releases, issue types, custom select options), swaps
-in the closest real value, and reports every substitution.
-
-Proactive by necessity: for most entity fields an unknown value COMPILES —
-into a correlated subquery that matches nothing — so there is no error to
-catch (the silent-empty-result hole this closes). Repaired values are always
-re-emitted QUOTED, which both survives spaces and guarantees the replacement
-is never re-read as a grammar sentinel.
-
-States get one more step (RADD-1140): a `state = Fixed` with no lexical
-neighbour among the real states is not a typo but a CATEGORY spoken as a
-state — it is rewritten to `category = done` through the `STATE_WORDS`
-table; a state word that is neither is left alone but REPORTED, so the
-explanation says the state does not exist instead of the query quietly
-returning nothing.
+SLQ stays EXACT (a typo in a saved view must never match someone else), so the
+forgiveness lives here only: a pre-compile AST walk resolves each entity value
+against the autocomplete candidates, swaps in the closest real one, and reports
+it. Proactive by necessity — for most fields an unknown value COMPILES into a
+query matching nothing. Repaired values are re-emitted QUOTED (spaces; never a
+sentinel). A state word with no real neighbour (RADD-1140) becomes the category
+comparison via `STATE_WORDS`; outside the table it is left and reported.
 """
 
 from __future__ import annotations
@@ -258,17 +245,13 @@ async def repair_query(
 async def category_candidates(
     session: AsyncSession, cache: dict[str, list[Candidate]] | None = None
 ) -> list[Candidate]:
-    """Work-category names (worklog dialect) — deferred import, [] when the
-    timelogging module is absent. Public: the NL prompt enumerates these too."""
+    """Work-category names (worklog dialect). Public: the NL prompt enumerates these too."""
     if cache is None:
         cache = {}
     key = "__worklog_category__"
     if key not in cache:
-        try:
-            from radd.modules.timelogging import service as timelogging_service
-        except ImportError:
-            cache[key] = []
-        else:
-            names = await timelogging_service.category_names(session)
-            cache[key] = [Candidate(name, label=None, detail="") for name in names]
+        from radd.modules.timelogging import service as timelogging_service
+
+        names = await timelogging_service.category_names(session)
+        cache[key] = [Candidate(name, label=None, detail="") for name in names]
     return cache[key]

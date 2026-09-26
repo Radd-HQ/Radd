@@ -1,16 +1,6 @@
-"""The ONE spelling of a connector's external ids (RADD-1124).
-
-`item_vcs_links` is unique on (item, provider, connection_id, external_id), and every path that
-touches a ref — a webhook, a backfill walk, a CI stamp — has to produce the same
-string for the same ref or the panel grows twins and CI lands on none of them.
-The Forgejo webhook once wrote a commit as its bare SHA while the backfill wrote
-`commit:<repo>:<sha>`, so a backfill after a webhook duplicated every commit and
-a workflow run never found the webhook's row. GitHub and Forgejo now share these
-three functions; a connector that needs a fourth shape adds it HERE.
-
-The repository segment is LOWERCASED: a host reports `Radd-HQ/Radd` in a payload
-while an admin types `radd-hq/radd` into the repository row, and both hosts treat
-the two as the same repository.
+"""The ONE spelling of a connector's external ids (RADD-1124): webhook, backfill and
+CI stamp must produce the same id or the panel grows twins and CI lands on neither.
+The repository segment is lowercased (hosts treat `Radd-HQ/Radd` = `radd-hq/radd`).
 """
 
 

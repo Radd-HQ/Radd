@@ -1,13 +1,6 @@
-"""The plan: profiling, the macro census, and the six mapping tables (spec 117).
-
-This is the step that turns "Confluence has hundreds of macros" into a handful of
-decisions somebody can actually make. Jira's 337 fields became 14 decisions
-because the profile said which 14 mattered; a decade of Confluence is the same
-problem, and the answer is the same — COUNT first, then decide.
-
-Profiling reads only the snapshot cache. It is therefore free to re-run, which is
-what makes "fix a mapping and try again" a loop rather than a download.
-"""
+"""The plan: profiling, the macro census, and the six mapping tables. COUNT
+first, then decide — hundreds of macros become a handful of decisions. Reads only
+the snapshot cache, so "fix a mapping and try again" is a loop, not a download."""
 
 from __future__ import annotations
 

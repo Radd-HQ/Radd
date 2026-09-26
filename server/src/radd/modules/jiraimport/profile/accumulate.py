@@ -1,6 +1,6 @@
 """Walking a snapshot's issues into an inbound profile (spec 100) — PURE.
 
-One pass, feeding every counter at once: fields, the eight vocabularies, and the
+One pass, feeding every counter at once: fields, the vocabularies, and the
 people. Streaming rather than list-in-memory, because a real import is tens of
 thousands of issues.
 
@@ -14,7 +14,7 @@ from collections import Counter
 from typing import Any
 
 from .. import inference, issuemap, schemakeys
-from ..types import BUILTIN_JIRA_FIELDS, InferredField, InferredType
+from ..types import BUILTIN_JIRA_FIELDS, FIELD_BAND_ORDER, InferredField, InferredType
 from .types import InboundProfile, PersonEntry, VocabEntry
 
 # Where a person can be named on an issue. Everything an import will need to
@@ -34,8 +34,8 @@ class ProfileAccumulator:
     def __init__(self, catalog: dict[str, dict[str, Any]]):
         self.catalog = catalog or {}
         self.total = 0
-        # Field statistics, mirroring what `inference.infer_schema` computes but
-        # accumulated incrementally so the whole snapshot never sits in memory.
+        # Field statistics, accumulated incrementally so the whole snapshot never
+        # sits in memory.
         self._populated: Counter[str] = Counter()
         self._array_seen: dict[str, bool] = {}
         self._samples: dict[str, list[str]] = {}
@@ -46,26 +46,13 @@ class ProfileAccumulator:
         self._statuses: Counter[str] = Counter()
         self._status_meta: dict[str, dict] = {}
         self._priorities: Counter[str] = Counter()
-        self._resolutions: Counter[str] = Counter()
         self._link_types: Counter[str] = Counter()
         self._sprints: Counter[str] = Counter()
         self._sprint_meta: dict[str, dict] = {}
         self._versions: Counter[str] = Counter()
         self._components: Counter[str] = Counter()
-        self._labels: Counter[str] = Counter()
         self._people: dict[str, PersonEntry] = {}
-        # Resolved once from the catalog's stable type keys.
-        self.sprint_field_ids = tuple(
-            schemakeys.find_by_schema_key(self.catalog, schemakeys.JiraSchemaKey.SPRINT)
-        )
-        epic_ids = schemakeys.find_by_schema_key(
-            self.catalog, schemakeys.JiraSchemaKey.EPIC_LINK
-        ) or [
-            fid
-            for fid, meta in self.catalog.items()
-            if (meta.get("name") or "").lower() == "epic link"
-        ]
-        self.epic_link_field_id = epic_ids[0] if epic_ids else ""
+        self.sprint_field_ids = schemakeys.sprint_field_ids(self.catalog)
 
     # --- one issue ---
 
@@ -105,8 +92,6 @@ class ProfileAccumulator:
             )
         if name := _named(fields.get("priority")):
             self._priorities[name] += 1
-        if name := _named(fields.get("resolution")):
-            self._resolutions[name] += 1
         for link in fields.get("issuelinks") or []:
             if name := ((link.get("type") or {}).get("name") or "").strip():
                 self._link_types[name] += 1
@@ -116,12 +101,7 @@ class ProfileAccumulator:
         for component in fields.get("components") or []:
             if name := _named(component):
                 self._components[name] += 1
-        for label in fields.get("labels") or []:
-            if text := str(label).strip():
-                self._labels[text] += 1
-        # Sprints come from the field(s) Jira's own `gh-sprint` type key names —
-        # never a hardcoded id, which is what made spec 90 parse arbitrary values
-        # as sprint beans on any other instance.
+        # Sprints come from the field(s) Jira's `gh-sprint` type key names.
         for sprint in issuemap.sprints(fields, self.sprint_field_ids):
             self._sprints[sprint.name] += 1
             self._sprint_meta.setdefault(
@@ -173,28 +153,22 @@ class ProfileAccumulator:
 
     def profile(self) -> InboundProfile:
         return InboundProfile(
-            total_issues=self.total,
             fields=self._field_profiles(),
             issue_types=_entries(self._issue_types),
             statuses=_entries(self._statuses, self._status_meta),
             priorities=_entries(self._priorities),
-            resolutions=_entries(self._resolutions),
             link_types=_entries(self._link_types),
             sprints=_entries(self._sprints, self._sprint_meta),
             versions=_entries(self._versions),
             components=_entries(self._components),
-            labels=_entries(self._labels),
             people=sorted(
                 self._people.values(), key=lambda p: (-p.count, p.display_name.lower())
             ),
-            sprint_field_ids=self.sprint_field_ids,
-            epic_link_field_id=self.epic_link_field_id,
         )
 
     def _field_profiles(self) -> list[InferredField]:
-        """Same judgement as `inference.infer_schema`, over the WHOLE snapshot
-        rather than a 50-issue sample — which is what makes an `unused` verdict a
-        fact instead of "not in the ones we looked at"."""
+        """Per-field judgement over the WHOLE snapshot, which makes an `unused`
+        verdict a fact."""
         results: list[InferredField] = []
         # Catalog fields the issues never mentioned are still offered — hidden in
         # the unused band, not dropped, so nothing is invisible.
@@ -244,7 +218,7 @@ class ProfileAccumulator:
             )
         results.sort(
             key=lambda f: (
-                inference.FIELD_BAND_ORDER[f.band],
+                FIELD_BAND_ORDER[f.band],
                 -f.populated,
                 -f.distinct_count,
                 f.name.lower(),

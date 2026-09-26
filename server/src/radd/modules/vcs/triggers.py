@@ -1,21 +1,8 @@
-"""Per-connector automation triggers (RADD-1309).
-
-A connector LINKS refs and mirrors time. It does nothing else on its own: what
-happens when a merge request is merged, a branch is pushed, CI finishes or a
-release is published is an automation someone switches on. Before this, every
-receiver ended by moving the issues a merged MR named to the waiting-for-release
-state, and GitHub/Forgejo swept a published release — with no switch.
-
-Each connector OWNS its trigger vocabulary (its own StrEnum, registered by its
-own plugin), so disabling GitLab removes GitLab's triggers from the automation
-palette. What they share lives here, so the three agree on the payload an
-automation reads: the `EventTypeSpec`s are built from one `ConnectorTriggers`,
-and every emit goes through `emit_ref` / `emit_release`.
-
-Ref events are emitted ONCE PER LINKED ISSUE with the item as subject, which is
-what lets an item action (`set_state`, `add_comment`, …) act on the issue the
-merge request names. The release event is itemless; its subject is the
-repository's default project when one is set, so `gate.project` works on it.
+"""Per-connector automation triggers (RADD-1309). Each connector owns its trigger
+enum (so disabling it removes them); `ConnectorTriggers` builds their catalog
+entries with one wording, and every emit goes through `emit_ref`/`emit_release`.
+Ref events fire ONCE PER LINKED ISSUE with the item as subject; the release event
+is itemless, with the repository's default project as subject when set.
 """
 
 import uuid
@@ -34,9 +21,7 @@ from .types import VcsEntity
 
 
 class RefAction(StrEnum):
-    """What happened to a merge/pull request, as the trigger names it. RADD-1330
-    added UPDATED: an edit (`update`/`edited`) or new commits (`synchronize`),
-    carrying WHICH fields changed in the payload's `changes`."""
+    """What happened to a merge/pull request; UPDATED = an edit or new commits (`changes`)."""
 
     OPENED = "opened"
     MERGED = "merged"
@@ -122,8 +107,7 @@ class ConnectorTriggers:
     updated: StrEnum
     pushed: StrEnum
     release_published: StrEnum
-    #: None for a host whose CI the connector does not read yet (GitLab: RADD-1255).
-    ci_completed: StrEnum | None = None
+    ci_completed: StrEnum
 
     def for_action(self, action: RefAction) -> StrEnum:
         return {
@@ -175,27 +159,24 @@ class ConnectorTriggers:
                     commits={"type": "array", "description": "The pushed commits naming this issue"},
                 ),
             ),
-        ]
-        if self.ci_completed is not None:
-            out.append(
-                item_event(
-                    self.ci_completed,
-                    "workflow / pipeline finished",
-                    _schema(
-                        ref=_REF_SCHEMA,
-                        ci={
-                            "type": "object",
-                            "properties": {
-                                "state": {"type": "string", "enum": [o.value for o in CiOutcome]},
-                                "url": {"type": "string"},
-                                "name": {"type": "string", "description": "Workflow or pipeline name; this event is one run, not required-check approval"},
-                                "sha": {"type": "string"},
-                                "run_id": {"type": "integer"},
-                            },
+            item_event(
+                self.ci_completed,
+                "workflow / pipeline finished",
+                _schema(
+                    ref=_REF_SCHEMA,
+                    ci={
+                        "type": "object",
+                        "properties": {
+                            "state": {"type": "string", "enum": [o.value for o in CiOutcome]},
+                            "url": {"type": "string"},
+                            "name": {"type": "string", "description": "Workflow or pipeline name; this event is one run, not required-check approval"},
+                            "sha": {"type": "string"},
+                            "run_id": {"type": "integer"},
                         },
-                    ),
-                )
-            )
+                    },
+                ),
+            ),
+        ]
         out.append(
             EventTypeSpec(
                 self.release_published, f"{self.host}: release published", self.host,
@@ -338,14 +319,8 @@ async def emit_release(
 
 
 def version_from_tag(tag: str) -> str:
-    """`v0.6.1` -> `0.6.1` (RADD-707).
-
-    A git tag and a release VERSION are not the same string: tags are `vX.Y.Z`
-    by convention, while every release recorded in the tracker is bare. Release
-    lookup is by exact version, so taking the tag verbatim once minted a second
-    `v0.6.1` release beside `0.6.1` and swept waiting work into it. Only a
-    leading `v` before a digit is stripped — a tag genuinely named something
-    else is left alone rather than guessed at. One copy for every connector
-    since RADD-1309 (there were three)."""
+    """`v0.6.1` -> `0.6.1`: releases are stored bare and looked up exactly, so a
+    verbatim tag once minted a duplicate release (RADD-707). Only a leading v/V
+    before a digit is stripped."""
     tag = tag.strip()
     return tag[1:] if len(tag) > 1 and tag[0] in "vV" and tag[1].isdigit() else tag

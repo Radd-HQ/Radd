@@ -1,54 +1,15 @@
-"""Pure GitLab webhook → planned vcs-link parsing (spec 31, rebuilt RADD-1253/1254).
-No I/O: key resolution and writes happen in the router.
+"""Pure GitLab webhook → planned vcs-link parsing. No I/O; external ids come from
+`vcs.ids` (a merge request is `pr:<namespace/project>:<iid>` like the other hosts'
+pull requests — the ref TYPE says which)."""
 
-Deliberately mirrors forgejo/parsing.py and github/parsing.py (same key grammar,
-same PlannedLink shape) without importing them — the connectors are independent
-modules and any may be disabled without the others.
-
-RADD-1254: every external id is spelled by `vcs/ids.py` — a commit is
-`commit:<namespace/project>:<sha>`, never the bare SHA the spec-31 receiver
-wrote, and a merge request is `pr:<namespace/project>:<iid>` like the other
-hosts' pull requests (the ref TYPE says which it is). That is what lets the
-backfill, the webhook and a CI stamp land on ONE row.
-"""
-
-import re
 from dataclasses import dataclass
 
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
+from radd.modules.vcs.keys import PlannedLink, extract_keys
 from radd.modules.vcs.triggers import COMMITS_CHANGE, RefAction, diff_entries
-from radd.modules.vcs.types import VcsRefType
+from radd.modules.vcs.types import RefStatus, VcsRefType
 
-from .types import MrAction, MrStatus
-
-# An item key referenced in text: TD-123 (project keys are 1-10 alnum starting
-# with a letter). Word-bounded so sha1-2abc doesn't match.
-KEY_RE = re.compile(r"\b([A-Za-z][A-Za-z0-9]{0,9}-\d+)\b")
-
-#: GitLab sends at most this many commits in one push payload; a bigger push
-#: reports `total_commits_count` above it and the rest is the backfill's job.
-PUSH_COMMIT_LIMIT = 20
-
-
-@dataclass(frozen=True)
-class PlannedLink:
-    item_key: str  # upper-cased "TD-123"
-    ref_type: VcsRefType
-    external_id: str
-    title: str
-    url: str
-    status: str = ""
-
-
-def extract_keys(*texts: str | None) -> list[str]:
-    """Upper-cased, deduped, order-preserving item keys found in the texts."""
-    seen: list[str] = []
-    for text in texts:
-        for match in KEY_RE.finditer(text or ""):
-            key = match.group(1).upper()
-            if key not in seen:
-                seen.append(key)
-    return seen
+from .types import MrAction
 
 
 def project_path(payload: dict) -> str:
@@ -94,15 +55,15 @@ def plan_push(payload: dict) -> list[PlannedLink]:
     return planned
 
 
-def mr_status(attributes: dict) -> MrStatus:
+def mr_status(attributes: dict) -> RefStatus:
     """`opened`/`locked` → open, `merged` → merged, `closed` → closed."""
     # GitLab's `state` values `merged`/`closed` spell the same as our statuses.
     state = str(attributes.get("state") or "")
-    if state == MrStatus.MERGED or attributes.get("action") == MrAction.MERGE:
-        return MrStatus.MERGED
-    if state == MrStatus.CLOSED:
-        return MrStatus.CLOSED
-    return MrStatus.OPEN
+    if state == RefStatus.MERGED or attributes.get("action") == MrAction.MERGE:
+        return RefStatus.MERGED
+    if state == RefStatus.CLOSED:
+        return RefStatus.CLOSED
+    return RefStatus.OPEN
 
 
 def mr_title(attributes: dict) -> str:
@@ -159,9 +120,8 @@ def mr_changes(payload: dict) -> list[dict]:
 
 
 def mr_action(payload: dict) -> RefAction | None:
-    """What this delivery DID to the merge request, by its `action` — never by
-    its state, which every later edit of a merged MR repeats (RADD-1309). None =
-    an edit, an approval, a time change: no trigger."""
+    """What the delivery DID, by `action` — never by state, which every later edit
+    repeats (RADD-1309). None = no trigger (an approval, a time change, …)."""
     action = str((payload.get("object_attributes") or {}).get("action") or "")
     return _MR_ACTIONS.get(action)
 

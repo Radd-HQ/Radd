@@ -1,16 +1,5 @@
-"""The unauthenticated GitLab webhook receiver (spec 31, rebuilt RADD-1253).
-
-Auth = the hook's secret token, sent back verbatim as `X-Gitlab-Token`, compared
-constant-time against the secret of the CONNECTION this payload's project
-belongs to. The write path is the vcs connector seam, attributed to the system
-actor. Mirrors the Forgejo (specs 47/111) and GitHub (RADD-1129) receivers with
-GitLab's event names and payload shapes.
-
-RADD-1309: the receiver links refs, mirrors MR time, and fires GitLab's own
-triggers (`GitlabTrigger`). Anything else is a switch on the repository row
-(RADD-1369, `vcs.policies`: move merged issues to waiting for release, publish
-a version on release) or an automation on those triggers.
-"""
+"""The GitLab webhook receiver. Auth: the hook's secret token, echoed verbatim as
+`X-Gitlab-Token`, compared constant-time against each active connection's."""
 
 import json
 import logging

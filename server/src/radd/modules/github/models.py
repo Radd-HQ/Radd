@@ -1,11 +1,5 @@
-"""GitHub hosts and their repositories as rows (RADD-1129).
-
-Same shape as the Forgejo connector (spec 111): connections are rows so a
-credential rotates in the UI without a redeploy, and a repository row carries
-the DEFAULT project its releases create versions in. The token is stored as-is
-because it must be replayable to sign every API request; reads expose
-`has_token` / `has_secret`, never the values.
-"""
+"""GitHub hosts and their repositories as rows; the env secret only seeds one.
+Credentials are stored as-is (replayed on every call); reads expose has_token/has_secret."""
 
 import uuid
 from datetime import datetime

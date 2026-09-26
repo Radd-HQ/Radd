@@ -1,16 +1,5 @@
-"""NL -> SLQ: prompt the model for a query, validate by compiling it
-server-side, retry once on failure — split out of `service.py` (RADD-902)
-along its own "NL -> SLQ" marker.
+"""NL -> SLQ: prompt, repair values, compile-validate server-side, retry once."""
 
-`extract_json_object` lives here rather than in `similar.py` even though it
-sits physically inside the original file's "similar" section — its only
-caller, `nl_to_slq` below, is in this section; `similar_items` uses
-`extract_json_array`, a distinct function that stays in `similar.py`.
-`service.py` re-exports everything here under its own name.
-"""
-
-import json
-import re
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +10,7 @@ from radd.modules.fields import service as fields_service
 from radd.modules.fields.models import FieldDefinition
 from radd.modules.items import slq
 
-from . import client, features, nlrepair, prompts
+from . import client, features, nlrepair, prompts, provider
 from .types import (
     NL_MAX_ATTEMPTS,
     AiFeature,
@@ -33,19 +22,6 @@ from .types import (
 )
 
 _NO_QUERY_ERROR = "the reply contained no JSON object with a non-empty 'slq' string"
-
-
-def extract_json_object(text: str) -> dict | None:
-    """First JSON object in an LLM reply, same leniency as `similar.extract_json_array` (pure)."""
-    decoder = json.JSONDecoder()
-    for match in re.finditer(r"\{", text):
-        try:
-            value, _ = decoder.raw_decode(text[match.start() :])
-        except ValueError:
-            continue
-        if isinstance(value, dict):
-            return value
-    return None
 
 
 def decide(attempt: int, error: str | None) -> NlOutcome:
@@ -68,11 +44,8 @@ async def _compile_error(
     compiler; the SlqError message when invalid, None when it compiles."""
     try:
         if dialect is SlqDialect.WORKLOG:
-            # Deferred: timelogging is optional; without it the dialect is too.
-            try:
-                from radd.modules.timelogging.slq import compiler as worklog_compiler
-            except ImportError:
-                return "the timesheet query surface is not available on this instance"
+            from radd.modules.timelogging.slq import compiler as worklog_compiler
+
             await worklog_compiler.compile_worklog_query(
                 session, slq.parse(slq_text), current_user_id=actor_id
             )
@@ -133,7 +106,7 @@ async def nl_to_slq(
     last_slq, last_error = "", _NO_QUERY_ERROR
     for attempt in range(NL_MAX_ATTEMPTS):
         reply = await client.complete(session, AiRole.CHAT, system, user_prompt)
-        parsed = extract_json_object(reply) or {}
+        parsed = provider.first_json(reply, dict) or {}
         candidate = parsed.get("slq")
         explanation = parsed.get("explanation")
         repair_notes: list[str] = []

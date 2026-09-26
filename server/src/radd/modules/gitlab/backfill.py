@@ -1,15 +1,6 @@
-"""Walk a GitLab project's history and link what the webhook never saw (RADD-1253/1259).
-
-A webhook is deaf to everything before it was registered. Idempotence comes from
-the write seams: `vcs.upsert_vcs_link` finds-or-creates by (item, provider,
-external_id) with the ids `parsing.py` spells, and the timelog mirror upserts by
-GitLab's own timelog id — running a backfill twice, or after a push, writes
-nothing twice.
-
-Merge requests are walked in full, and each one that REPORTS time
-(`time_stats.total_time_spent > 0` on the REST object) has its per-user
-entries fetched and mirrored — the historical import Hussein asked for.
-"""
+"""Walk a repository's history and link what the webhook never saw. Idempotent:
+links upsert by `vcs.ids` external ids (and time by GitLab's timelog id; only merge
+requests reporting `time_stats.total_time_spent > 0` are fetched)."""
 
 import logging
 from dataclasses import dataclass, field
@@ -159,11 +150,8 @@ async def run(
     max_commits: int | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> BackfillReport:
-    """RADD-1314: the backfill runs QUIET. It replays history — every old branch,
-    commit, merge request and mirrored worklog — and before RADD-1308 the only
-    thing keeping that out of automations was the system actor. Quiet is the
-    importers' answer (jiraimport, confluenceimport): history is recorded and
-    indexed, and nothing reacts to it — no automation, webhook or notification."""
+    """Runs QUIET (`events.quiet`, RADD-1314): recorded and indexed, and no
+    automation, webhook or notification reacts to it."""
     if not connection.active or not repo.enabled:
         from radd.exceptions import ConflictError
         raise ConflictError("repository", reason="Enable the connection and repository before importing history")

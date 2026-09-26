@@ -9,19 +9,8 @@ from ..types import JiraAuthMode, JiraConnectionSource
 
 
 class JiraConnection(Base, TimestampMixin):
-    """One Jira instance Radd can import from (spec 100).
-
-    Connections moved out of the environment and into the database because the
-    env-only design could point at exactly one instance and needed a redeploy to
-    change — including to fix a typo in the URL. Snapshots record which connection
-    produced them, so an import always knows where its data came from.
-
-    The credential is stored as-is: a PAT must be replayable to sign every request,
-    so it cannot be hashed. That matches the existing precedent for webhook signing
-    secrets (`webhooks/models.py`) and carries the same caveat — encrypt at rest
-    when the secrets layer lands. It is never returned over the API; reads expose
-    `has_credential` instead.
-    """
+    """One Jira instance to import from. The credential is replayed per request, so it
+    is stored recoverably and never returned (reads expose `has_credential`)."""
 
     __tablename__ = "jira_connections"
     __table_args__ = (UniqueConstraint("name"),)

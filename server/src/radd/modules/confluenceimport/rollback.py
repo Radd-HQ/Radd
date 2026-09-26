@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from . import ledger
 from .ledger import CONTAINER_ENTITIES, UNDO_ORDER, LedgerAction, LedgerEntity
 from .models import ConfluenceImportRecord, ConfluencePendingRef, ConfluenceRun
 from .schemas import RollbackPreflight
@@ -33,15 +34,7 @@ _TABLES = {
 
 
 async def preflight(session: AsyncSession, run: ConfluenceRun) -> RollbackPreflight:
-    records = list(
-        (
-            await session.execute(
-                select(ConfluenceImportRecord).where(
-                    ConfluenceImportRecord.run_id == run.id
-                )
-            )
-        ).scalars()
-    )
+    records = await ledger.records_for(session, run.id)
     by_entity: dict[str, int] = {}
     for record in records:
         by_entity[record.entity_type] = by_entity.get(record.entity_type, 0) + 1
@@ -79,15 +72,7 @@ async def execute(
 ) -> dict:
     """Undo, children first. Keeping the SPACE by default is the useful behaviour:
     it lets you fix a mapping and re-import without rebuilding the space."""
-    records = list(
-        (
-            await session.execute(
-                select(ConfluenceImportRecord).where(
-                    ConfluenceImportRecord.run_id == run.id
-                )
-            )
-        ).scalars()
-    )
+    records = await ledger.records_for(session, run.id)
     order = {entity: index for index, entity in enumerate(UNDO_ORDER)}
     records.sort(
         key=lambda r: (order.get(LedgerEntity(r.entity_type), 99), -r.id)

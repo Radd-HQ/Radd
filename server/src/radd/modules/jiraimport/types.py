@@ -26,18 +26,9 @@ class JiraEntity(StrEnum):
 
 
 class SnapshotStage(StrEnum):
-    """Where a download is (spec 100). The order IS the pipeline.
-
-    CATALOGS first because everything downstream identifies fields by Jira's own
-    schema keys, and because knowing the instance's issue types / statuses /
-    priorities / link types up front is what lets the mapping step present real
-    vocabularies instead of guesses scraped from a sample.
-
-    COMMENTS/WORKLOGS/HISTORY are BACKFILL passes: `/search` inlines only the
-    first page of each per issue and reports the true count alongside. Spec 90
-    took the inline list at face value, so an issue with 87 comments imported 20
-    and nothing said so.
-    """
+    """Download stages, in order. CATALOGS first: everything downstream identifies
+    fields by Jira's schema keys. COMMENTS/WORKLOGS/HISTORY backfill what `/search`
+    truncates (it inlines only the first page per issue)."""
 
     PENDING = "pending"
     CATALOGS = "catalogs"  # /field, /issuetype, /status, /priority, /issueLinkType, …
@@ -62,23 +53,20 @@ class SnapshotCatalog(StrEnum):
     captured once at download time so every later step is offline and repeatable."""
 
     FIELDS = "fields"  # {id: {name, schema_type, schema_items, schema_key, is_custom}}
-    OPTION_SETS = "option_sets"  # {field_id: [configured option, …]}
     ISSUE_TYPES = "issue_types"
     STATUSES = "statuses"
     PRIORITIES = "priorities"
     LINK_TYPES = "link_types"
-    RESOLUTIONS = "resolutions"
     VERSIONS = "versions"  # the project's fix versions
     COMPONENTS = "components"
 
 
 class RunKind(StrEnum):
-    """What a run over a snapshot is doing (spec 100). All three share one row and
-    one progress surface because they are the same pipeline."""
+    """What a run over a snapshot is doing: one pipeline, with or without writes.
+    (A rollback updates the import's own row; it is not a run kind.)"""
 
     DRY_RUN = "dry_run"  # build every operation, write nothing, report
     IMPORT = "import"  # build the same operations and apply them
-    ROLLBACK = "rollback"  # walk the ledger backwards
 
 
 class RunStage(StrEnum):
@@ -91,8 +79,6 @@ class RunStage(StrEnum):
     ITEMS = "items"
     PARENTS = "parents"
     LINKS = "links"
-    COMMENTS = "comments"
-    WORKLOGS = "worklogs"
     ATTACHMENTS = "attachments"
     HISTORY = "history"
     RELINK = "relink"  # resolve anything now importable
@@ -197,22 +183,17 @@ class Problem:
 
 
 class JiraAuthMode(StrEnum):
-    """How Radd authenticates to a Jira instance (spec 100).
-
-    Jira DC accepts both. A PAT is the idiom and a read-only one is enough; basic
-    auth is the fallback for instances where tokens are disabled."""
+    """How Radd authenticates to Jira DC: a (read-only) PAT is the idiom; basic
+    auth is the fallback where tokens are disabled."""
 
     PAT = "pat"  # personal access token, sent as `Authorization: Bearer`
     BASIC = "basic"  # username + password
 
 
 class JiraConnectionSource(StrEnum):
-    """Where a connection row came from (spec 100) — display only.
-
-    An ENV-seeded row is a normal editable connection, not a locked one: the whole
-    point of moving connections into the database is that fixing a typo'd URL must
-    not need a redeploy. The source is recorded so the UI can say where it came
-    from, and so seeding knows never to re-create a row the admin deleted."""
+    """Where a connection row came from — display only. An ENV row is an ordinary
+    editable connection; the source also tells seeding never to re-create a row
+    the admin deleted."""
 
     ENV = "env"  # seeded once from RADD_JIRA_* at startup
     USER = "user"  # created through the API
@@ -255,13 +236,6 @@ class BuiltinTarget(StrEnum):
     POINTS = "points"  # value = a number → estimate_points
 
 
-# Native targets whose per-value translation (`value_map`) names an ENTITY to
-# find-or-create (a team, a workflow state) rather than a scalar value.
-ENTITY_VALUE_TARGETS: frozenset[BuiltinTarget] = frozenset(
-    {BuiltinTarget.TEAM, BuiltinTarget.STATUS}
-)
-
-
 class VocabAction(StrEnum):
     """What to do with one value of a Jira vocabulary (spec 100).
 
@@ -283,11 +257,7 @@ class ComponentAction(StrEnum):
 
 
 class UserAction(StrEnum):
-    """What to do about a person Jira names that Radd may not know (spec 100).
-
-    Spec 90 had exactly one behaviour — invent an address on a hardcoded company
-    domain and create an account — and no way to say otherwise.
-    """
+    """What to do about a person Jira names."""
 
     MATCH = "match"  # an existing Radd user (auto-matched or picked)
     PLACEHOLDER = "placeholder"  # create a password-less account for them
@@ -304,18 +274,8 @@ class FieldScope(StrEnum):
 
 
 class FieldBand(StrEnum):
-    """How much attention an inbound Jira field deserves (spec 100).
-
-    One ordered band per field replaces spec 90's two loose booleans
-    (`is_builtin` + `likely_noise`), which could not express "unused" at all — so
-    a field no issue has ever filled in scored as ordinary data and sat at the top
-    of the mapping grid. On a real instance that is most of the catalog: 337
-    fields, of which a couple of dozen carry anything.
-
-    Only IN_USE is shown expanded. The rest are collapsed AND default to `ignore`,
-    so the mapping step opens on the handful of fields that actually matter — and
-    nothing is hidden without a reason you can read and overrule.
-    """
+    """How much attention a field deserves. Only IN_USE is expanded; the rest
+    collapse AND default to ignore, each with a reason shown so it can be overruled."""
 
     IN_USE = "in_use"  # has values, and is real ticket data
     NOISE = "noise"  # has values, but is machinery or an org-wide default
@@ -362,14 +322,6 @@ BUILTIN_JIRA_FIELDS: frozenset[str] = frozenset(
     }
 )
 
-# Spec 100 DELETED the two lists that used to live here — a frozenset of literal
-# `customfield_*` ids and a frozenset of English field names. Both encoded one
-# Jira instance: the ids mean something different (or nothing) elsewhere, and the
-# names only match an English-language Jira. A live check on found the
-# id list had even gone stale against its OWN instance — `customfield_51604` was
-# no longer there. Both are replaced by `schemakeys`, which identifies fields by
-# Jira's stable `schema.custom` type key, plus the dominance heuristic below.
-
 # When the single most common value covers at least this fraction of populated
 # issues, the field is an org-wide default (HR/travel junk), not real ticket data.
 # This one IS instance-independent: it measures the data, not a name.
@@ -414,31 +366,23 @@ class JiraProject:
 
 @dataclass
 class InferredField:
-    """One field seen while sampling a JQL result set (spec 90)."""
+    """One inbound Jira field, profiled over a snapshot's issues."""
 
     jira_id: str  # e.g. "customfield_10002" or "priority"
     name: str  # human label from Jira's field catalog
     inferred_type: InferredType
-    populated: int  # sample issues where it had a value
-    sample_count: int  # sample issues examined
+    populated: int  # issues where it had a value
+    sample_count: int  # issues examined
     is_builtin: bool  # feeds a native column → not a mapping candidate
-    distinct_count: int = 0  # distinct scalar values across the sample
+    distinct_count: int = 0  # distinct scalar values
     dominant_ratio: float = 0.0  # share of the single most common value (1.0 = constant)
     samples: list[str] = field(default_factory=list)  # a few example rendered values
     distinct_values: list[str] | None = None  # for SELECT-like fields: the option set
-    # Spec 100. `schema_key` is Jira's own `schema.custom` — the same on every
-    # instance — which is what identifies Sprint/Epic Link/rank without hardcoding
-    # ids. `band` decides whether the field is shown or collapsed-and-ignored, and
-    # `band_reason` is shown verbatim so a collapsed field can be argued with.
-    schema_key: str = ""
+    schema_key: str = ""  # Jira's `schema.custom`, the same on every instance
     band: FieldBand = FieldBand.IN_USE
-    band_reason: str = ""
+    band_reason: str = ""  # shown verbatim, so a collapsed field can be argued with
     native_target: "BuiltinTarget | None" = None  # the concept this field suggests
 
     @property
     def ignored_by_default(self) -> bool:
         return self.band in IGNORED_BANDS
-
-    @property
-    def populate_rate(self) -> float:
-        return (self.populated / self.sample_count) if self.sample_count else 0.0

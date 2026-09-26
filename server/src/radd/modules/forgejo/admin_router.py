@@ -139,9 +139,6 @@ async def delete_repo(repo_id: uuid.UUID, session: Session, user: CurrentUser) -
     await service.delete_repo(session, repo_id, actor_id=user.id)
 
 
-__all__ = ["router", "settings"]
-
-
 @router.post("/repos/{repo_id}/backfill")
 async def backfill_repo(
     repo_id: uuid.UUID,

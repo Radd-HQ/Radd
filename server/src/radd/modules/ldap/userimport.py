@@ -1,25 +1,8 @@
-"""Reconciling an AD user import against accounts that already exist (spec 88).
-
-The problem this solves: Radd identifies people by EMAIL, but accounts arrive
-from several places — the Jira importer, local signup, an older domain — so the
-same human is often already present under a different address. Importing from AD
-blindly then mints a second account and splits their history in two.
-
-So the import is two steps. `plan_user_import` (pure, unit-tested) classifies
-every incoming directory user against the existing roster; the admin resolves
-each conflict; `apply_resolution` executes the choice. Both write verbs end with
-the DIRECTORY as the source of truth — they differ only in how many Radd
-accounts are involved:
-
-- OVERWRITE — one account. Its email/name become AD's and its `id` is preserved,
-  so every issue, comment and worklog stays attached to the same person.
-- MERGE — two accounts. The look-alike is folded into the AD-identified one via
-  the existing `merge_users`, then the survivor takes AD's values.
-
-Matching deliberately never happens automatically: a name collision is a
-heuristic ("James Smith" is two people often enough), and silently rewriting an
-account's email address is not something to infer.
-"""
+"""AD user import reconciled against existing accounts. Identity is the EMAIL, so
+the same person often already exists under another address. `plan_user_import`
+(pure) classifies; the admin resolves; `apply_resolution` executes. OVERWRITE
+keeps one account (id preserved, AD's email/name adopted); MERGE folds a
+look-alike into the AD account. Nothing is matched automatically."""
 
 import uuid
 from collections.abc import Iterable

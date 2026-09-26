@@ -34,8 +34,7 @@ def _require_instance_admin(actor: User) -> None:
 
 
 async def _read(session: AsyncSession, provider: SsoProvider) -> SsoProviderRead:
-    """Async now (RADD-780/781): the starting-access template lives in two child
-    tables, so a read has to fetch them rather than reflect off the row."""
+    """The row plus its provisioning rules, which live in child tables."""
     return SsoProviderRead.model_validate(provider).model_copy(
         update={
             "configured": registry.configured(provider),

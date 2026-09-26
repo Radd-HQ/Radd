@@ -1,8 +1,4 @@
-"""Snapshots, plans, runs and rollback — HTTP (spec 117).
-
-Instance-admin only, as `router.py` explains. Literal segments are declared before
-any `/{id}` route that could swallow them (RADD-761).
-"""
+"""Snapshots, plans, runs and rollback — HTTP. Instance-admin only."""
 
 from __future__ import annotations
 

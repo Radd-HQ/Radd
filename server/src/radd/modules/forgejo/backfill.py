@@ -1,13 +1,5 @@
-"""Walk a repository's existing history and link what the webhook never saw (spec 111).
-
-A webhook is deaf to everything that happened before it was registered. This
-project's own issues were reconstructed from five months of commits that exist in
-a repository we can read — so the integration has to be able to look backwards.
-
-Idempotence comes free from the write seam: `vcs.upsert_vcs_link` finds-or-creates
-by (item, provider, external_id), and the external ids here are the same ones the
-webhook parser produces. Running a backfill twice links nothing twice.
-"""
+"""Walk a repository's history and link what the webhook never saw. Idempotent:
+links upsert by `vcs.ids` external ids."""
 
 import logging
 from dataclasses import dataclass, field
@@ -22,12 +14,11 @@ from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.items import service as items_service
 from radd.modules.vcs import receiving
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
-from radd.modules.vcs.types import VcsProvider, VcsRefType
+from radd.modules.vcs.types import RefStatus, VcsProvider, VcsRefType
 
 from . import timelogs
 from .models import ForgejoConnection, ForgejoRepo
 from .parsing import extract_keys
-from .types import PrStatus
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +130,8 @@ async def run(
     max_commits: int | None = None,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> BackfillReport:
-    """RADD-1314: the backfill runs QUIET. It replays history — every old branch,
-    commit, merge request and mirrored worklog — and before RADD-1308 the only
-    thing keeping that out of automations was the system actor. Quiet is the
-    importers' answer (jiraimport, confluenceimport): history is recorded and
-    indexed, and nothing reacts to it — no automation, webhook or notification."""
+    """Runs QUIET (`events.quiet`, RADD-1314): recorded and indexed, and no
+    automation, webhook or notification reacts to it."""
     if not connection.active or not repo.enabled:
         from radd.exceptions import ConflictError
         raise ConflictError("repository", reason="Enable the connection and repository before importing history")
@@ -190,9 +178,9 @@ async def _run(
             report.pull_requests += 1
             number = pull.get("number")
             status = (
-                PrStatus.MERGED
+                RefStatus.MERGED
                 if pull.get("merged")
-                else (PrStatus.CLOSED if pull.get("state") == "closed" else PrStatus.OPEN)
+                else (RefStatus.CLOSED if pull.get("state") == "closed" else RefStatus.OPEN)
             )
             head_ref = ((pull.get("head") or {}).get("ref")) or ""
             await _link(

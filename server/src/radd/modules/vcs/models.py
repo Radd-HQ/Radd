@@ -9,9 +9,8 @@ from radd.db import Base, TimestampMixin
 
 
 class ItemVcsLink(Base, TimestampMixin):
-    """A version-control reference (branch, commit, MR/PR) linked to a work item — the
-    "Version control / Development" panel. Added manually now; populated by connectors
-    (GitLab/GitHub/Forgejo) later via the upsert write-seam in service.py."""
+    """A branch/commit/MR linked to an item — the Development panel. Connectors write
+    via `service.upsert_vcs_link`; a person can add one by hand."""
 
     __tablename__ = "item_vcs_links"
     __table_args__ = (
@@ -65,14 +64,8 @@ class VcsDelivery(Base):
 
 
 class VcsUserLink(Base, TimestampMixin):
-    """A provider account → Radd user mapping (RADD-1258).
-
-    Filled two ways: AUTOMATICALLY when a provider user's email matches a Radd
-    account (`matched_by = email`), and BY HAND in Settings → Version control
-    when the host hides emails (GitHub does) or the token cannot read them
-    (`matched_by = manual`). Keyed per connection: the same username on two
-    GitLab hosts may be two people.
-    """
+    """Provider account → Radd user (RADD-1258): by email match or by hand (hosts that
+    hide emails); keyed per connection — one username on two hosts may be two people."""
 
     __tablename__ = "vcs_user_links"
     __table_args__ = (
@@ -95,16 +88,10 @@ class VcsUserLink(Base, TimestampMixin):
 
 
 class VcsPendingWorklog(Base, TimestampMixin):
-    """A time entry whose author has no Radd account yet (RADD-1258).
-
-    Held here instead of logged against the wrong person or a system account —
-    a worklog on the wrong author makes the timesheet lie. The "unmatched
-    authors" list in Settings is DERIVED from these rows (GROUP BY username);
-    mapping the username replays them into real worklogs and deletes them.
-    Keyed by the provider's own entry id, so a re-delivery updates in place,
-    and scoped by the ref (`external_scope`) so a reconcile can drop the ones
-    the source no longer has.
-    """
+    """A time entry whose author has no Radd account yet — parked, never logged to the
+    wrong person. Unmatched authors are DERIVED from these rows; mapping replays them.
+    Keyed by the provider's entry id; scoped by ref (`external_scope`) so a reconcile
+    can drop what the source no longer has."""
 
     __tablename__ = "vcs_pending_worklogs"
     __table_args__ = (

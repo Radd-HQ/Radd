@@ -1,8 +1,5 @@
-"""Pure Alertmanager webhook → planned actions (spec 47). No I/O: `existing`
-carries the known fingerprints so the firing-new / firing-again / resolved
-decision stays a pure function. Since RADD-1317 a plan carries the alert itself
-— its facts are what the trigger events carry — and no comment text: what a
-repeat or a resolution does to the issue is an automation's business."""
+"""Pure Alertmanager payload → planned actions; `existing` carries the known
+fingerprints, so the firing-new / firing-again / resolved decision stays pure."""
 
 from dataclasses import dataclass, field
 from typing import Any

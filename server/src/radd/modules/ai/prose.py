@@ -1,17 +1,10 @@
-"""What of a markdown body is PROSE — the part a language model should read.
+"""What of a markdown body is PROSE — the part a language model should read
+(RADD-1232): the one place every prompt and the embedding text decide it.
 
-RADD-1232: a description with three screenshots is three `![image](…)` lines
-whose targets are attachment URLs (or, pasted from a clipboard, base64 data
-URIs of tens of kilobytes). Every prompt this module builds — the summary, the
-similar-issues rerank, the automation context, the embedding text — was
-handing those to the model verbatim: a token budget spent on opaque strings,
-slower answers, and a model that "sees" an image URL and invents what is in
-it. None of it is prose. This is the one place that decides what is.
-
-Kept: words, code (a stack trace IS the report), link TEXT (the words someone
-chose, not the address). Dropped: image references, data URIs, HTML tags,
-bare URLs longer than a few words, and the `radd:*` extension fences whose
-body is configuration, not text. Pure and cheap — it runs on every embed.
+Kept: words, code (a stack trace IS the report), link TEXT. Dropped: image
+references, data URIs (tens of kilobytes of budget a model would "see" and
+invent from), HTML tags, long bare URLs, and `radd:*` fences (configuration,
+not text). Pure and cheap — it runs on every embed.
 """
 
 from __future__ import annotations

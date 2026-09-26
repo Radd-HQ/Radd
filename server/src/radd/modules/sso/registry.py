@@ -31,26 +31,19 @@ from radd.snapshot import Snapshot
 
 logger = logging.getLogger(__name__)
 
-# [(id, name, kind)] for every ENABLED, fully-configured provider — what the
-# login page renders buttons from. Write-through on admin edits + startup, and
-# TTL'd (RADD-899) so a second web replica converges without a restart.
-
 
 async def _load_snapshot() -> list[dict]:
-    from radd.db import SessionLocal
-
     async with SessionLocal() as session:
         return _snapshot_rows(await list_providers(session))
 
 
 def _snapshot_rows(rows) -> list[dict]:
-    return [
-        {"id": str(p.id), "name": p.name, "kind": p.kind}
-        for p in rows
-        if p.enabled and configured(p)
-    ]
+    return [{"id": str(p.id), "name": p.name, "kind": p.kind} for p in usable(rows)]
 
 
+# [(id, name, kind)] for every usable provider — what the login page renders
+# buttons from. Write-through on admin edits + startup, and TTL'd (RADD-899) so a
+# second web replica converges without a restart.
 _snapshot: Snapshot[list[dict]] = Snapshot("sso.providers", _load_snapshot, initial=[])
 
 
@@ -61,6 +54,11 @@ def snapshot() -> list[dict]:
 def configured(provider: SsoProvider) -> bool:
     """A row only reaches the login page once it can actually complete a flow."""
     return bool(provider.client_id and provider.client_secret and issuer_of(provider))
+
+
+def usable(rows) -> list[SsoProvider]:
+    """The enabled, fully-configured providers — the only ones a flow may start with."""
+    return [p for p in rows if p.enabled and configured(p)]
 
 
 def issuer_of(provider: SsoProvider) -> str:
@@ -168,11 +166,8 @@ async def create_provider(
         allowed_signup_domains=_clean_domains(data.allowed_signup_domains),
         require_verified_email=data.require_verified_email,
         group_claim=(data.group_claim or "groups").strip(),
-        # RADD-777. An explicit field list means a new column is silently
-        # dropped on create until it is added here — which is exactly what
-        # happened, and what made two of the new tests pass VACUOUSLY: they
-        # asserted "no grant" against a provider that had never stored a role.
-
+        # Explicit field list: a new column must be added here or it is silently
+        # dropped on create.
         admin_groups=(data.admin_groups or "").strip(),
         source=source.value,
     )
@@ -269,11 +264,6 @@ async def update_provider(
     for field in ("enabled", "position", "auto_provision", "require_verified_email"):
         if field in patch:
             setattr(provider, field, patch[field])
-    # An explicit null CLEARS it (RADD-777) — the house PATCH semantics, and the
-    # only way to say "new accounts get nothing extra" once a role was chosen.
-    # `exclude_unset` is what makes that expressible: an omitted key leaves the
-    # value alone, a key set to None removes it. Left out of the loop above only
-    # because these fields all coerce and this one must not.
     if data.provisioning_rules is not None:
         await _replace_rules(session, provider, data.provisioning_rules)
     if "allowed_signup_domains" in patch:

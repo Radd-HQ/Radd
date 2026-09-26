@@ -1,12 +1,5 @@
-"""The snapshot download (spec 117).
-
-Cache-first, as spec 100 established: a selection is fetched ONCE and every later
-step reads these rows. Nothing after this touches the network, which is what makes
-iterating on mappings free — fix a macro mapping and re-convert, no re-download.
-
-The snapshot ROW is the progress bar. There is no job table and no event stream,
-because a download is one in-process asyncio task with exactly one observer.
-"""
+"""The snapshot download: a selection fetched ONCE; nothing after it touches the
+network. The snapshot row is the progress bar (one in-process task, one observer)."""
 
 from __future__ import annotations
 

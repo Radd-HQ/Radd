@@ -1,24 +1,10 @@
 """Time logged on a GitLab merge request, mirrored into the linked issue (RADD-1259).
 
-GitLab has native time tracking (`/spend 1h`, `/spend 30m 2026-09-18 summary`)
-and no webhook for it. Two facts make the mirror possible:
-
-- the `merge_request` webhook's `changes` object carries `total_time_spent`
-  on the delivery that added or removed time (`parsing.time_spent_changed`),
-  which is WHEN to look;
-- GraphQL exposes the per-entry `Timelog` rows (`id`, `timeSpent`, `spentAt`,
-  `summary`, `user`) under `project.mergeRequest.timelogs`, which is WHAT to
-  copy. REST has only totals.
-
-GitLab REMOVES time by appending a negative entry (`/remove_time_spent` writes
-one equal to the total), never by deleting rows — `net_entries` folds those into
-the entries they cancel, so the mirror sums to GitLab's own total.
-
-Author email: `user.publicEmail` when set; otherwise `GET /api/v4/users/:id`,
-which returns `email` for an ADMIN's token (Cinesite's is) and nothing useful
-for anyone else's — the identity map in Settings covers that case.
-
-Everything after fetching is the provider-neutral seam `vcs.timemirror`.
+No timelog webhook: the `merge_request` delivery's `changes` carries
+`total_time_spent` when time changed (`parsing.time_spent_changed`), and GraphQL
+`mergeRequest.timelogs` has the per-entry rows (REST has only totals). Removal is
+a NEGATIVE entry, folded in by `net_entries`. Author email: `publicEmail`, else
+`GET /users/:id` (answered only for an admin's token), else the identity map.
 """
 
 import logging
@@ -149,18 +135,11 @@ def _node_order(node: dict[str, Any]) -> int:
 
 
 def net_entries(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Fold GitLab's removal bookkeeping into NET entries (found live, 2026-09-19).
-
-    GitLab never deletes a timelog on `/remove_time_spent` (or the REST
-    `reset_spent_time`): it appends a NEGATIVE entry equal to the total, and
-    `add_spent_time -30m` appends a partial negative. Dropping the negatives
-    would mirror 2h35m onto an MR GitLab itself reports as 0 — which is what
-    the first live run did. So a negative entry consumes the most recent live
-    positive entries before it (LIFO), reducing their seconds; an entry consumed
-    to zero disappears. Entries after a reset stand. The result sums to GitLab's
-    own `totalTimeSpent`, and each surviving entry keeps its own id, so the
-    mirror's upsert-by-id still holds.
-    """
+    """Fold GitLab's removals into NET entries: `/remove_time_spent` appends a
+    NEGATIVE entry equal to the total (`-30m` a partial one), never deletes. Each
+    negative consumes the most recent live positives before it (LIFO); an entry
+    consumed to zero disappears; survivors keep their ids, so the mirror still
+    upserts by id and sums to GitLab's `totalTimeSpent` (found live, 2026-09-19)."""
     live: list[dict[str, Any]] = []
     for node in sorted(nodes, key=_node_order):
         seconds = int(node.get("timeSpent") or 0)
@@ -213,11 +192,7 @@ async def reconcile_merge_request(
     description: str,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> timemirror.MirrorReport:
-    """Fetch the MR's timelogs and make the linked issue's worklogs match them.
-
-    `repo` may be None for a project with no row yet (the hook was registered
-    first); the category then falls back to the instance default.
-    """
+    """Fetch the MR's timelogs and make the linked issue's worklogs match."""
     async with GitlabTimelogClient(connection, transport) as client:
         nodes = await client.timelogs(project_path, iid)
         emails: dict[str, str] = {}

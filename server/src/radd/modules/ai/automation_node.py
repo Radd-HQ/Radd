@@ -1,36 +1,11 @@
-"""An AI classifier node for automation graphs (spec 116 phase 2).
+"""`ai.classify`: route items by the model's answer (spec 116).
 
-The first node type contributed by a module OTHER than `automations`, which is
-the point of it: it proves the `AutomationNodeSpec` seam carries a real feature
-across a module boundary, not just a hello-world.
-
-It is the storage router's trick (spec 102) applied to workflow: an admin writes
-a prompt, enumerates the answers it may give, and each answer becomes an OUTPUT
-PORT. "Is this a bug report, a feature request, or a question?" routes items down
-three branches with no rules to maintain.
-
-Why the answers must be enumerated rather than free text: `complete_choice`
-constrains the model to exactly one of them, so a hallucinated fourth answer is
-impossible by construction. A free-text classifier would need a fallback branch
-for "the model said something else", which is a branch nobody would ever wire.
-
-**Both arities (RADD-918).** "Is this batch urgent?" and "which of these are
-bugs?" are different questions, and only the second one is usually what someone
-means by an AI classifier:
-
-* **Once for the whole set** — one question with a digest of every item
-  appended, one answer, the whole packet down one port.
-* **Once per item** — each item classified on its own and leaving by the port
-  its OWN answer names. This is a partition, not a loop: the ports are the same,
-  only the granularity of the answer moves.
-
-Per item is the expensive mode and is bounded here rather than by the executor's
-action budget, because the cost is model round trips: `ai_automation_max_classifications`
-caps how many run, and everything past it takes the fallback port. `plan_items`
-exists on the node spec for exactly this — the executor shares one session across
-the walk and cannot parallelise a plugin's calls on its behalf, so the node that
-knows its work is I/O-bound does it itself: contexts are built sequentially on
-that session, then only the provider calls overlap.
+The admin enumerates the answers; each is an output PORT, and `complete_choice`
+constrains the model to one of them, so it cannot invent a branch. SET arity asks
+once about the whole packet; ITEM (RADD-918) classifies each item and partitions
+by its own answer, capped by `ai_automation_max_classifications` (overflow takes
+the fallback port). The walk shares one session, so `plan_items` builds contexts
+sequentially and overlaps only the provider calls.
 """
 
 from __future__ import annotations
@@ -42,6 +17,8 @@ from typing import Any, Mapping
 
 from radd.config import settings
 from radd.kernel import AutomationNodeSpec, OutputField, OutputKind
+
+from .automation_context import include_schema
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +46,7 @@ def answers_of(params: Mapping[str, Any]) -> list[str]:
 
 
 def ports_for(params: Mapping[str, Any]) -> tuple[str, ...]:
-    """One port per answer, plus the fallback.
-
-    This is why ports had to become a property of the node TYPE rather than of
-    its kind: the set is a function of what someone typed into the form.
-    """
+    """One port per answer, plus the fallback."""
     return (*answers_of(params), FALLBACK_PORT)
 
 
@@ -85,12 +58,8 @@ ANSWER_OUTPUT = "answer"
 
 
 def outputs_for(params: Mapping[str, Any]) -> tuple[OutputField, ...]:
-    """One ENUM output whose choices are the configured answers.
-
-    Dynamic for the same reason the ports are: the vocabulary is what someone
-    typed. Declaring the choices (rather than calling it free text) is what lets
-    the write path refuse `{{triage.answer}}` compared against a value this
-    classifier can never produce."""
+    """One ENUM output whose choices are the configured answers, so the write path
+    can refuse a comparison against a value this classifier never produces."""
     return (
         OutputField(
             name=ANSWER_OUTPUT,
@@ -125,31 +94,16 @@ PARAMS_SCHEMA: dict[str, Any] = {
             "minItems": 2,
             "maxItems": MAX_ANSWERS,
         },
-        "include": {
-            "type": "object",
-            "title": "What the model sees",
-            "description": (
-                "Which parts of each item are sent. Reads run as the automation's "
-                "identity, so the prompt can only contain what it could already see."
-            ),
-            "properties": {
-                "fields": {"type": "boolean", "default": True, "title": "Fields (type, state, priority, assignee, labels, custom fields)"},
-                "description": {"type": "boolean", "default": True, "title": "Description (in full)"},
-                "comments": {"type": "boolean", "default": False, "title": "Comments (all)"},
-                "worklogs": {"type": "boolean", "default": False, "title": "Logged time"},
-            },
-        },
+        "include": include_schema(
+            "Which parts of each item are sent. Reads run as the automation's "
+            "identity, so the prompt can only contain what it could already see."
+        ),
     },
 }
 
 
 async def plan(ctx: Any) -> str:
-    """Classify the whole packet, and return the port it leaves by.
-
-    Returns the fallback port rather than raising: one unreachable provider must
-    not stop a graph that has other branches, and the run report records which
-    port was taken either way.
-    """
+    """Classify the packet; return its port (the fallback, never a raise)."""
     answers = answers_of(ctx.node.params)
     if len(answers) < 2:
         return FALLBACK_PORT
@@ -165,25 +119,15 @@ async def plan(ctx: Any) -> str:
 
 
 def _publish(ctx: Any, answer: str) -> None:
-    """Make the answer addressable, where the executor offers the seam.
-
-    `getattr` because this module is written against the node context as a DUCK
-    TYPE — `ai` contributes through the kernel and imports nothing from
-    `automations` — so a host that predates the variable bag simply publishes
-    nothing rather than crashing a classification."""
+    """`set_output` via getattr: `ai` imports nothing from `automations`."""
     publish = getattr(ctx, "set_output", None)
     if callable(publish):
         publish(ANSWER_OUTPUT, answer)
 
 
 async def plan_items(ctx: Any) -> dict[uuid.UUID, str]:
-    """Classify each item on its own — the partition mode.
-
-    Two phases on purpose. The contexts are built FIRST, one after another,
-    because they read through the walk's single `AsyncSession` and SQLAlchemy's
-    async session is not safe for concurrent use. Only the provider calls, which
-    touch no session at all, overlap.
-    """
+    """Per-item partition; contexts built sequentially on the walk's one session
+    (an AsyncSession is not safe for concurrent use), provider calls overlap."""
     answers = answers_of(ctx.node.params)
     item_ids = tuple(ctx.packet.item_ids)
     if len(answers) < 2:
@@ -219,9 +163,7 @@ async def plan_items(ctx: Any) -> dict[uuid.UUID, str]:
 
 
 async def _context_for(ctx: Any, item_ids: tuple[uuid.UUID, ...]) -> str:
-    """The REAL digest — fields, description and optionally comments/time. The
-    first version sent only a count while saying it sent summaries, which made
-    every answer noise."""
+    """The digest the node's checkboxes select."""
     from radd.modules.ai.automation_context import ContextOptions, build_context
 
     return await build_context(

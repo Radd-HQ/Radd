@@ -1,22 +1,6 @@
-"""Similar: semantic-first candidate retrieval with an FTS fallback + optional
-LLM rerank, split out of `service.py` (RADD-902) along its own "similar
-(semantic-first; degrades, never disappears)" marker.
-
-`extract_json_object` travelled to `nlslq.py` instead of staying here even
-though it sits physically inside the original "similar" section — its only
-caller is `nl_to_slq`, never anything in this file (`similar_items` uses
-`extract_json_array`, a different function). Private helpers move with their
-consumer, not with the section they happened to be typed under.
-
-`service.py` re-exports everything here — including `_semantic_pool` and
-`search_service` — under its own name; `tests/test_ai.py` monkeypatches THIS
-module directly (`similar._semantic_pool`, `similar.search_service`) since a
-patch on the facade's re-exported attribute would not reach the code running
-in this module's own globals.
-"""
+"""Similar issues: semantic-first candidates, FTS fallback, optional LLM rerank."""
 
 import json
-import re
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
@@ -30,9 +14,9 @@ from radd.modules.search.service import SearchHit
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey
 
-from . import client, features, prompts
+from . import client, features, prompts, provider
 from .prose import prose
-from .editor import sse_frame
+from .sse import sse_frame
 from .types import (
     FTS_MATCH_REASON,
     SIMILAR_CANDIDATE_POOL,
@@ -60,22 +44,6 @@ def fts_candidates(hits: Sequence[tuple[SearchHit, float]]) -> list[SimilarCandi
     ]
 
 
-def extract_json_array(text: str) -> list | None:
-    """First JSON array in an LLM reply, tolerant of prose/code fences (pure).
-
-    Tries every '[' as a start offset until one parses; None when nothing does.
-    """
-    decoder = json.JSONDecoder()
-    for match in re.finditer(r"\[", text):
-        try:
-            value, _ = decoder.raw_decode(text[match.start() :])
-        except ValueError:
-            continue
-        if isinstance(value, list):
-            return value
-    return None
-
-
 def parse_stream_objects(buffer: str, offset: int) -> tuple[list[dict], int]:
     """Complete top-level JSON objects in `buffer[offset:]` plus the resume
     offset (pure). The similar-reasons stream feeds the GROWING reply through
@@ -100,8 +68,8 @@ def parse_stream_objects(buffer: str, offset: int) -> tuple[list[dict], int]:
 
 def clean_reason_entry(entry: dict, allowed: set[str], seen: set[str]) -> dict | None:
     """One streamed model entry -> the {key, score, reason} SSE payload, or
-    None for unusable entries (pure; mirrors apply_rerank's tolerance: unknown
-    or duplicate keys and non-numeric scores are dropped). Mutates `seen`."""
+    None for unusable entries (pure: unknown or duplicate keys and non-numeric
+    scores are dropped). Mutates `seen`. `apply_rerank` shares it."""
     key = entry.get("key") or entry.get("item_key")
     score = entry.get("score")
     if not isinstance(key, str) or key not in allowed or key in seen:
@@ -127,25 +95,17 @@ def apply_rerank(
     descending. None when nothing usable survives -> caller keeps FTS order.
     """
     by_key = {candidate.item_key: candidate for candidate in candidates}
+    allowed = set(by_key)
     merged: list[SimilarCandidate] = []
     seen: set[str] = set()
     for entry in parsed:
-        if not isinstance(entry, dict):
+        cleaned = clean_reason_entry(entry, allowed, seen) if isinstance(entry, dict) else None
+        if cleaned is None:
             continue
-        key = entry.get("key") or entry.get("item_key")
-        score = entry.get("score")
-        if not isinstance(key, str) or key not in by_key or key in seen:
-            continue
-        if not isinstance(score, (int, float)) or isinstance(score, bool):
-            continue
-        seen.add(key)
-        reason = entry.get("reason")
+        candidate = by_key[cleaned["key"]]
         merged.append(
-            by_key[key].model_copy(
-                update={
-                    "score": round(min(max(float(score), 0.0), 1.0), 3),
-                    "reason": reason if isinstance(reason, str) and reason else by_key[key].reason,
-                }
+            candidate.model_copy(
+                update={"score": cleaned["score"], "reason": cleaned["reason"] or candidate.reason}
             )
         )
     if not merged:
@@ -169,10 +129,8 @@ async def _semantic_pool(
     search is off — the FTS pool always stands on its own. Seeded by an item's
     stored vector when `item_id` is given (its neighbors exclude it), else by
     embedding `text_seed` on the fly (read-mode AI menu on comments)."""
-    try:
-        from radd.modules.ai.embeddings import candidates as semantic
-    except ImportError:
-        return []
+    from radd.modules.ai.embeddings import candidates as semantic
+
     try:
         if not await semantic.semantic_enabled(session):
             return []
@@ -292,7 +250,7 @@ async def similar_items(
             ],
         ),
     )
-    parsed = extract_json_array(reply)
+    parsed = provider.first_json(reply, list)
     if parsed is None:  # unparseable reply -> degrade to FTS order, flagged
         return SimilarResponse(candidates=candidates[:limit], reranked=False)
     if not parsed:  # an empty array is a real answer: nothing looks like a dup
@@ -371,9 +329,4 @@ async def similar_reason_frames(
     except (AiUpstreamError, AiDisabledError) as exc:
         yield sse_frame({"detail": str(exc)}, event="error")
         return
-    yield sse_frame({}, event="done")
-
-
-async def done_only_frames() -> AsyncIterator[str]:
-    """The empty stream (no readable candidates): headers, `done`, nothing else."""
     yield sse_frame({}, event="done")

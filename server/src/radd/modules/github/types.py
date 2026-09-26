@@ -19,9 +19,6 @@ class GithubEventKind(StrEnum):
     CHECK_RUN = "check_run"
     CHECK_SUITE = "check_suite"
     WORKFLOW_RUN = "workflow_run"
-    # Branch/tag lifecycle — accepted, not acted on (parity with forgejo).
-    CREATE = "create"
-    DELETE = "delete"
     # RADD-1261: the `/spend` convention rides PR comments and reviews.
     ISSUE_COMMENT = "issue_comment"
     PULL_REQUEST_REVIEW_COMMENT = "pull_request_review_comment"
@@ -38,29 +35,8 @@ class CommentAction(StrEnum):
     SUBMITTED = "submitted"
 
 
-class PrStatus(StrEnum):
-    """Status recorded on the pull_request-type vcs link (open/merged/closed)."""
-
-    OPEN = "open"
-    MERGED = "merged"
-    CLOSED = "closed"
-
-
-class CiState(StrEnum):
-    """Latest run state for a ref. Not a check-run history — the panel answers
-    "is this green", and a ref with two workflows shows the last to report."""
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    RUNNING = "running"
-    CANCELLED = "cancelled"
-    UNKNOWN = "unknown"
-
-
 class GithubTrigger(StrEnum):
-    """RADD-1309: GitHub's OWN automation triggers. The connector links refs and
-    does nothing else; what a merge or a published release should cause is an
-    automation. Registered by this plugin, so disabling GitHub removes them."""
+    """GitHub's own automation triggers (RADD-1309), registered by this plugin."""
 
     PR_OPENED = "github.pull_request.opened"
     PR_MERGED = "github.pull_request.merged"
@@ -72,8 +48,7 @@ class GithubTrigger(StrEnum):
 
 
 class PrAction(StrEnum):
-    """`action` values of a pull_request delivery that fire a trigger. A merge
-    arrives as `closed` with `merged: true`; `edited`/`synchronize` fire nothing."""
+    """Pull-request actions that fire a trigger; a merge is `closed` with `merged: true`."""
 
     OPENED = "opened"
     REOPENED = "reopened"

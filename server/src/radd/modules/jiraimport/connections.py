@@ -1,10 +1,6 @@
-"""Jira connections (spec 100) — CRUD, default resolution, and env seeding.
-
-Replaces the env-only configuration of spec 90, which could name exactly one
-instance and needed a restart to change. Everything downstream (discovery,
-snapshot downloads) resolves a connection through here and then works from a
-`JiraCreds` value object, never the ORM row — REST calls run in worker threads.
-"""
+"""Jira connections — CRUD, default resolution, and env seeding. Everything
+downstream resolves a connection here, then works from a `JiraCreds` value
+object, never the ORM row (REST calls run in worker threads)."""
 
 from __future__ import annotations
 
@@ -26,25 +22,11 @@ from .types import JiraEvent, JiraAuthMode, JiraConnectionSource, JiraCreds, Jir
 
 logger = logging.getLogger(__name__)
 
-# Update payloads leave the credential alone when this is what came in — a form
-# that round-trips a redacted read must not blank the stored token.
-UNCHANGED_CREDENTIAL = ""
-
 
 def placeholder_email_domain(connection: JiraConnection) -> str:
-    """The domain for synthesizing an address when Jira exposes none (spec 100).
-
-    An explicit setting wins; otherwise it is DERIVED from the connection's own
-    host — `jira.internal.example.com` → `example.com` — because a Jira instance
-    almost always lives under the organisation's own domain, which is the domain
-    the directory uses. That is what lets a later AD import match on email and
-    adopt the placeholder's work (spec 88).
-
-    Spec 90 hardcoded one company's domain in source and wrote it into real user
-    rows on every deploy. Deriving it is right far more often, and wrong visibly
-    rather than silently — the Users step shows the address before anything is
-    created.
-    """
+    """Domain for a synthesized address: the configured one, else derived from the
+    connection host (`jira.x.example.com` → `example.com`), so a later AD import
+    matches it. Wrong visibly, not silently: the Users step shows the address."""
     configured = settings.jira_placeholder_email_domain.strip().lstrip("@")
     if configured:
         return configured.lower()

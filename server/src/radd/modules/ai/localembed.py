@@ -1,20 +1,8 @@
-"""Built-in CPU embeddings (spec 101 addendum): the ai plugin ships its own
-embedding backend, so semantic search needs NO external model server.
-
-Backed by `fastembed` (Apache-2.0: ONNX Runtime + quantized models — no torch,
-no GPU). Optional extra `radd[localembed]`; everything here degrades to
-"unavailable" when it isn't installed. A provider row with wire shape LOCAL
-carries only a model name; the embeddings role is the only role it can hold.
-
-This is the zero-infra FALLBACK tier (~20 texts/s on a desktop CPU — fine for
-small instances, not for bulk imports). Heavier corpora and GPUs belong to the
-optional `embeddings` compose service (TEI), which Radd talks to as an ordinary
-OpenAI-shape provider — docs/deploy.md.
-
-Model weights download from Hugging Face on FIRST use into
-RADD_AI_LOCAL_EMBED_CACHE (pre-seed that directory on air-gapped deploys —
-docs/deploy.md). Loading is seconds-slow, so instances are cached per model
-and inference runs in a worker thread.
+"""Built-in CPU embeddings (`fastembed`/ONNX, extra `radd[localembed]`): semantic
+search with no model server. A LOCAL provider holds only a model name and only
+the embeddings role. ~20 texts/s on a desktop CPU; bigger corpora belong on TEI
+(docs/deploy.md). Weights download on first use into RADD_AI_LOCAL_EMBED_CACHE
+(pre-seed it air-gapped); instances are cached per model, inference runs in a thread.
 """
 
 from __future__ import annotations
@@ -36,12 +24,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LOCAL_MODEL = "BAAI/bge-small-en-v1.5"  # 384d, fastembed's own default
 
-#: Texts per ONNX forward pass (RADD-724). The CALLER's batch is tuned for a GPU
-#: model server — `ai_embed_batch` defaults to 256 — and ONNX activations for
-#: that many sequences are gigabytes, which OOM-killed the worker within seconds
-#: of the model finally loading. The in-process backend chunks to a size a CPU
-#: can hold regardless of what it is handed; throughput barely changes, because
-#: CPU inference is compute-bound rather than batch-bound.
+#: Texts per ONNX pass. The caller's batch (`ai_embed_batch`, 256) is GPU-sized and
+#: OOM-killed the worker on CPU (RADD-724).
 LOCAL_BATCH = 32
 
 _models: dict[str, Any] = {}
@@ -74,18 +58,9 @@ def supported_models() -> list[dict[str, Any]]:
 
 
 def cache_dir() -> str:
-    """A writable directory for downloaded weights (RADD-722).
-
-    The configured path is RESOLVED and created here rather than handed to
-    fastembed as-is. The default is relative, and in the container the working
-    directory belongs to root while the process runs as an unprivileged user —
-    so `var/models` raised PermissionError on every single iteration and the
-    built-in backend could never work in the shipped image.
-
-    A model cache is an optimisation. Being unable to write one must degrade to
-    "download again next boot", never to a crash loop — so an unusable path
-    falls back to a temp dir with a warning.
-    """
+    """A writable weights directory. The default is relative and the container's
+    cwd is root-owned (RADD-722), so an unwritable path falls back to a temp dir
+    with a warning — a cache miss, never a crash loop."""
     configured = Path(settings.ai_local_embed_cache).expanduser()
     try:
         configured.mkdir(parents=True, exist_ok=True)

@@ -1,25 +1,9 @@
-"""The snapshot download job (spec 100).
-
-Pulls a JQL result set out of Jira ONCE, into `jira_snapshot_issues`, so that
-profiling, mapping, the dry run, the import, a re-import and relinking are all
-offline, fast and repeatable. Spec 90 re-paged Jira on every run; fixing one
-mapping mistake meant downloading tens of thousands of issues again.
+"""The snapshot download: one JQL result set fetched once into `jira_snapshot_issues`.
 
 Stages: CATALOGS → ISSUES → COMMENTS → WORKLOGS → HISTORY → ATTACHMENTS.
-
-Two things spec 90 got wrong are fixed here:
-
-- **Truncated child lists.** `/search` inlines only the first page of comments and
-  worklogs per issue and reports the true count next to it. Taking the inline list
-  at face value silently dropped 67 of an issue's 87 comments. Every issue whose
-  inline container is short of `total` is backfilled from its own endpoint.
-- **A new TCP+TLS handshake per call.** One `JiraClient` is held open for the
-  whole download instead of one per request.
-
-The snapshot row is the progress bar (the house idiom): stage, counts and
-problems are committed as work proceeds. Cancellation is cooperative — the stage
-is re-read between pages, so a stop lands on a page boundary with everything
-already downloaded intact.
+`/search` inlines only the first page of comments/worklogs/changelog and reports
+the true `total`; any short list is backfilled from the issue's own endpoint.
+The row is the progress bar; cancel is cooperative (stage re-read between pages).
 """
 
 from __future__ import annotations
@@ -48,7 +32,6 @@ from ..types import (
     TERMINAL_SNAPSHOT_STAGES,
     JiraCreds,
     Problem,
-    RunStage,
     ProblemKind,
     SnapshotCatalog,
     SnapshotStage,
@@ -61,17 +44,14 @@ logger = logging.getLogger(__name__)
 PAGE_RETRIES = 4  # a large download spans hundreds of pages — survive a blip
 PAGE_RETRY_DELAY = 3.0
 CHILD_PAGE = 100  # comments/worklogs/changelog page size
-MAX_RECORDED_PROBLEMS = 500  # far above spec 90's 50; grouped in the UI anyway
+MAX_RECORDED_PROBLEMS = 500  # grouped in the UI
 
-# Jira's instance-wide vocabularies. Captured so the mapping step can offer the
-# REAL issue types / statuses / priorities / link types instead of the English
-# lookup tables spec 90 hardcoded.
+# Jira's instance-wide vocabularies, so the mapping step offers the real ones.
 _VOCABULARIES: tuple[tuple[SnapshotCatalog, str], ...] = (
     (SnapshotCatalog.ISSUE_TYPES, "/issuetype"),
     (SnapshotCatalog.STATUSES, "/status"),
     (SnapshotCatalog.PRIORITIES, "/priority"),
     (SnapshotCatalog.LINK_TYPES, "/issueLinkType"),
-    (SnapshotCatalog.RESOLUTIONS, "/resolution"),
 )
 
 
@@ -134,7 +114,6 @@ def _fetch_catalogs(creds: JiraCreds, project_key: str) -> dict[str, Any]:
                 catalogs[key.value] = []
                 failures.append((path, str(exc)))
         if project_key:
-            catalogs[SnapshotCatalog.OPTION_SETS.value] = jira.field_option_sets(project_key)
             for key, fetch in (
                 (SnapshotCatalog.VERSIONS, jira.project_versions),
                 (SnapshotCatalog.COMPONENTS, jira.project_components),
@@ -166,10 +145,10 @@ def _fetch_children(creds: JiraCreds, jobs: list[tuple[str, str, int]]) -> dict[
             collected: list = []
             start_at = 0
             while True:
-                if kind == RunStage.COMMENTS.value:
+                if kind == SnapshotStage.COMMENTS.value:
                     page = jira.issue_comments(key, start_at=start_at, max_results=CHILD_PAGE)
                     items = page.get("comments") or []
-                elif kind == RunStage.WORKLOGS.value:
+                elif kind == SnapshotStage.WORKLOGS.value:
                     page = jira.issue_worklogs(key, start_at=start_at, max_results=CHILD_PAGE)
                     items = page.get("worklogs") or []
                 else:
@@ -315,12 +294,8 @@ _CHILD_SHAPES: dict[str, tuple[str, str]] = {
 async def _run_child_backfill(
     session: AsyncSession, snapshot: JiraSnapshot, creds: JiraCreds, kind: str
 ) -> None:
-    """Re-fetch any issue whose inline child list was truncated by `/search`.
-
-    THIS is the silent data loss in spec 90: Jira returns `{"comments": [...20],
-    "total": 87}` and the old importer imported 20.
-    """
-    stage = SnapshotStage.COMMENTS if kind == RunStage.COMMENTS.value else SnapshotStage.WORKLOGS
+    """Re-fetch every issue whose inline child list is shorter than its `total`."""
+    stage = SnapshotStage.COMMENTS if kind == SnapshotStage.COMMENTS.value else SnapshotStage.WORKLOGS
     await _advance(session, snapshot, stage)
     container, item_key = _CHILD_SHAPES[kind]
 
@@ -357,7 +332,7 @@ async def _apply_child_batch(
                 snapshot,
                 Problem(
                     kind=ProblemKind.COMMENTS_FETCH
-                    if kind == RunStage.COMMENTS.value
+                    if kind == SnapshotStage.COMMENTS.value
                     else ProblemKind.WORKLOGS_FETCH,
                     message=f"could not read the full {kind} list — only the first page is cached",
                     subject=key,
@@ -446,11 +421,7 @@ async def _apply_history_batch(
 async def _run_attachments(
     session: AsyncSession, snapshot: JiraSnapshot, creds: JiraCreds
 ) -> None:
-    """Download attachment binaries into the ordinary attachment store.
-
-    Binaries do not belong in JSONB, so the bytes go to the filesystem/S3 backend
-    and `jira_snapshot_blobs` indexes them. Spec 90 imported no attachments at all.
-    """
+    """Attachment bytes → the attachment store; `jira_snapshot_blobs` indexes them."""
     await _advance(session, snapshot, SnapshotStage.ATTACHMENTS)
     have = set((await store.blobs_by_attachment(session, snapshot.id)).keys())
     batch: list[dict[str, str]] = []
@@ -580,15 +551,8 @@ async def execute(snapshot_id: uuid.UUID) -> None:
 
 
 async def _fail(session: AsyncSession, snapshot_id: uuid.UUID, message: str) -> None:
-    """Record why a download stopped, and make sure the row says so.
-
-    Takes an ID, not the instance: the rollback below expires every object in the
-    session, so touching an attribute of one afterwards would trigger a lazy load
-    from async context. Rolling back first is the point — a failure part-way
-    through a page leaves the session poisoned, and then the commit recording the
-    failure raises too, which is how spec 90 left runs stuck mid-flight until the
-    next restart.
-    """
+    """Record why the download stopped. Takes an id and rolls back FIRST: the failed
+    page may have poisoned the session, and `rollback()` expires every loaded instance."""
     await session.rollback()
     fresh = await session.get(JiraSnapshot, snapshot_id)
     if fresh is None:

@@ -1,14 +1,6 @@
-"""Recording what an import did, so it can be undone (spec 100).
-
-Every write goes through here. Rollback replays the ledger in reverse `id` order,
-which is why the id is a monotonic sequence rather than a timestamp: undo order
-has to be the exact inverse of write order, and two writes land in the same
-millisecond constantly.
-
-A CREATED row records only the identity — rollback deletes it. An UPDATED row
-records a `before` image of JUST the columns the import touched, so restoring it
-cannot clobber a change someone made to a different column of the same record.
-"""
+"""Recording what an import did, so it can be undone (see `JiraImportRecord`): a
+CREATED row records the identity, an UPDATED row a before-image of JUST the
+columns the import touched."""
 
 from __future__ import annotations
 

@@ -1,14 +1,5 @@
-"""Forgejo/Gitea hosts and their repositories as rows (spec 111).
-
-Spec 47 configured this connector with a single environment secret, which could
-name exactly one host and needed a redeploy to rotate. Connections follow the
-jiraimport (spec 100) and ai_providers (spec 101) precedent instead: rows, with
-the env key demoted to a one-time seed.
-
-The credential is stored as-is for the same reason Jira's is — a token must be
-replayable to sign every request, so it cannot be hashed. Reads expose
-`has_token` / `has_secret` rather than the values.
-"""
+"""Forgejo/Gitea hosts and their repositories as rows; the env secret only seeds one.
+Credentials are stored as-is (replayed on every call); reads expose has_token/has_secret."""
 
 import uuid
 from datetime import datetime
@@ -40,11 +31,9 @@ class ForgejoConnection(Base, TimestampMixin):
 class ForgejoRepo(Base, TimestampMixin):
     """A repository on a connection, and the project its releases belong to.
 
-    `project_id` is the DEFAULT project — the one a release tag creates a version
-    in (spec 112) and the one the UI groups under. It is deliberately NOT a filter
-    on linking: project keys are unique instance-wide, so `RADD-412` in any
-    repository resolves to the same item. Making the map authoritative would mean
-    a reference from a shared repository silently failing to link.
+    `project_id` is the DEFAULT project — the one a published release creates a
+    version in. When link_all_projects is false, it also bounds issue linking
+    and mirrored time; otherwise issue keys can link across projects.
     """
 
     __tablename__ = "forgejo_repos"

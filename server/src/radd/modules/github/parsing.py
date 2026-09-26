@@ -1,49 +1,14 @@
-"""Pure GitHub webhook → planned vcs-link parsing (RADD-1129). No I/O: key
-resolution and writes happen in the router.
+"""Pure GitHub webhook → planned vcs-link parsing. No I/O; external ids come from
+`vcs.ids`."""
 
-Deliberately mirrors forgejo/parsing.py (same key grammar, same PlannedLink
-shape) without importing it — the connectors are independent modules and either
-may be disabled without the other.
-
-One deliberate difference from the Forgejo receiver: commit links carry the
-canonical `commit:<owner/repo>:<sha>` external id in BOTH the webhook and the
-backfill paths, so CI state finds them and a backfill after a push never writes
-a second row (the Forgejo split is RADD-1124).
-"""
-
-import re
 from dataclasses import dataclass
 
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
+from radd.modules.vcs.keys import PlannedLink, extract_keys
 from radd.modules.vcs.triggers import COMMITS_CHANGE, RefAction, diff_entries
-from radd.modules.vcs.types import VcsRefType
+from radd.modules.vcs.types import RefStatus, VcsRefType
 
-from .types import PrAction, PrStatus
-
-# An item key referenced in text: TD-123 (project keys are 1-10 alnum starting
-# with a letter). Word-bounded so sha1-2abc doesn't match.
-KEY_RE = re.compile(r"\b([A-Za-z][A-Za-z0-9]{0,9}-\d+)\b")
-
-
-@dataclass(frozen=True)
-class PlannedLink:
-    item_key: str  # upper-cased "TD-123"
-    ref_type: VcsRefType
-    external_id: str
-    title: str
-    url: str
-    status: str = ""
-
-
-def extract_keys(*texts: str | None) -> list[str]:
-    """Upper-cased, deduped, order-preserving item keys found in the texts."""
-    seen: list[str] = []
-    for text in texts:
-        for match in KEY_RE.finditer(text or ""):
-            key = match.group(1).upper()
-            if key not in seen:
-                seen.append(key)
-    return seen
+from .types import PrAction
 
 
 def plan_push(payload: dict) -> list[PlannedLink]:
@@ -86,12 +51,12 @@ def plan_push(payload: dict) -> list[PlannedLink]:
     return planned
 
 
-def pr_status(pull_request: dict) -> PrStatus:
+def pr_status(pull_request: dict) -> RefStatus:
     if pull_request.get("merged") or pull_request.get("merged_at"):
-        return PrStatus.MERGED
-    if pull_request.get("state") == PrStatus.CLOSED.value:
-        return PrStatus.CLOSED
-    return PrStatus.OPEN
+        return RefStatus.MERGED
+    if pull_request.get("state") == RefStatus.CLOSED.value:
+        return RefStatus.CLOSED
+    return RefStatus.OPEN
 
 
 def plan_pull_request(payload: dict) -> list[PlannedLink]:
@@ -125,7 +90,7 @@ def pr_action(payload: dict) -> RefAction | None:
     if action in (PrAction.OPENED, PrAction.REOPENED):
         return RefAction.OPENED
     if action == PrAction.CLOSED:
-        merged = pr_status(payload.get("pull_request") or {}) is PrStatus.MERGED
+        merged = pr_status(payload.get("pull_request") or {}) is RefStatus.MERGED
         return RefAction.MERGED if merged else RefAction.CLOSED
     if action in (PrAction.EDITED, PrAction.SYNCHRONIZE):
         return RefAction.UPDATED

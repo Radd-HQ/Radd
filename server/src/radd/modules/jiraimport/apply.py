@@ -1,12 +1,5 @@
-"""Writing an item draft into Radd (spec 100), or counting what it would write.
-
-ONE code path serves the dry run and the real import: `commit=False` resolves
-everything and reports, `commit=True` does the same work and writes. That is what
-makes the dry run trustworthy — it cannot disagree with the import, because it IS
-the import with the writes turned off.
-
-Every write is ledgered, so rollback can undo it.
-"""
+"""Writing an item draft into Radd, or (`commit=False`) counting what it would
+write — the dry run IS the import with the writes off. Every write is ledgered."""
 
 from __future__ import annotations
 
@@ -152,12 +145,9 @@ async def apply_item(
             await items_service.update_item(session, existing.id, _update_of(draft), actor)
             outcome.item_id = existing.id
         else:
-            # An import is HISTORY, not intake (spec 119). Validating a
-            # five-year-old ticket would refuse exactly the badly-filled-in
-            # issues the checks exist to stop being created TODAY, and would
-            # skip them one by one with a "problem" nobody can act on.
-            # `events.quiet` already says this — but only when the plan asked
-            # for quiet, so the skip has to be said in its own right.
+            # History, not intake: skip intake validation even when the plan is not
+            # quiet (validating a five-year-old ticket refuses exactly the ones the
+            # checks exist to stop TODAY).
             with _not_intake():
                 created = await items_service.create_item(
                     session, _create_of(draft, project_id), actor
@@ -281,12 +271,8 @@ async def _comments(
     seen: set[str],
     outcome: Outcome,
 ) -> int:
-    """Comments, deduplicated by Jira's own comment id.
-
-    Spec 90 could not do this — it stored no Jira ids, so a re-import would have
-    duplicated every comment, and its answer was to skip comments on re-import
-    entirely (silently leaving them stale forever).
-    """
+    """Comments, deduplicated by Jira's own comment id, so a re-import neither
+    duplicates nor skips them."""
     written = 0
     for comment in draft.comments:
         if comment.restriction:

@@ -1,47 +1,16 @@
-"""An AI node that PRODUCES named values for the rest of the graph (spec 120).
+"""`ai.generate`: an AI node that PRODUCES named values for the graph (spec 120).
 
-The third AI node, and the one the other two make sense of by contrast:
+The three AI nodes differ by output: `ai.classify` ROUTES (its answers are the
+ports), `ai.validate` WRITES PROSE at a person, this one FILLS IN FIELDS — each
+declared value is `{{<node>.<field>}}` downstream, so "AI triage" is a straight
+line instead of a branch per answer per field.
 
-* `ai.classify` ROUTES. Its answers are the ports, so the graph branches on what
-  the model said and nothing downstream can read the answer as a value.
-* `ai.validate` WRITES PROSE at a person — findings, shown to whoever submitted.
-* this one FILLS IN FIELDS. The admin names the values they want and the shape
-  of each, the model answers all of them in one call, and every value becomes
-  addressable as `{{<node name>.<field>}}` in any action downstream.
-
-That is what collapses "AI triage" from a decision tree into a straight line:
-`item.created -> generate(priority, team, state, advice) -> set_priority ->
-set_team -> set_state -> add_comment`. The classifier version of the same thing
-needed one branch per answer, per field, multiplied together.
-
-**Enumerated fields cannot be hallucinated.** A field declared `enum` becomes a
-JSON-Schema enum in the request, so the model literally cannot emit a value
-outside it — the same property that makes the classifier safe, applied per field
-instead of per node. A `text` field is free prose and is treated as such.
-
-**Unavailability is a PORT, not a policy.** There is no `on_unavailable` here
-because there is nothing to decide: the model did not answer, so no values were
-produced, so every token that would have read one misses and its action records
-a skip. A graph that wants to do something about that wires the `unavailable`
-port. That is strictly more expressive than a setting, and it is why this node is
-worth its second output.
-
-**A GATE kind, and the reason is the executor.** By what it DOES this is an
-action — it decides nothing about where the packet goes on the happy path. But a
-contributed ACTION node cannot name the port it leaves by: `executor._run_action`
-returns what it created and `_run_node` emits `out` unconditionally, so an
-`unavailable` port on an action would be a handle wired to a branch that never
-fires. A gate's `plan` returns its port, which is exactly the mechanism this
-needs, and `ai.validate` already sits there for the same reason. Teaching the
-executor to let an action route is the better long-run answer and a change to the
-heart of the walk; it is not this issue.
-
-**Prompt injection.** Whatever the model writes here is influenced by text a
-submitter wrote — a description, a comment. A generated comment posts as an
-ordinary comment, unmarked, because marking it would be a lie in the other
-direction on an instance where the admin wrote the prompt and trusts it. The help
-copy says so where the prompt is written, which is the only place the person
-choosing can act on it.
+An `enum` field is a JSON-Schema enum in the request, so the model cannot answer
+outside it. Unavailability is the `unavailable` PORT, not a setting: nothing is
+published, downstream tokens miss and their actions record a skip. It is a GATE
+only because a contributed ACTION cannot name its port (`_run_node` emits `out`
+unconditionally). Prompt injection: output is influenced by submitter text and a
+generated comment posts unmarked, by decision; the prompt's help copy says so.
 """
 
 from __future__ import annotations
@@ -50,6 +19,9 @@ import logging
 from typing import Any, Mapping
 
 from radd.kernel import AutomationNodeSpec, OutputField, OutputKind, valid_output_name
+
+from .automation_context import ask_structured, include_schema, preflight
+from .types import AiFeature
 
 logger = logging.getLogger(__name__)
 
@@ -92,13 +64,8 @@ SYSTEM_PROMPT = (
 
 
 def fields_of(params: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The declared fields, cleaned: usable names only, de-duplicated, capped.
-
-    A field whose name could never appear in `{{…}}` is DROPPED rather than
-    stored-and-broken. That is what makes the chain self-consistent: the node
-    declares only outputs it can really produce, so the write path's token check
-    refuses `{{gen.Team Name}}` by saying what this node actually produces.
-    """
+    """Declared fields, cleaned and capped; a name that can never be a token is
+    DROPPED, so the node declares only outputs it can really produce."""
     seen: list[dict[str, Any]] = []
     names: set[str] = set()
     for raw in params.get("fields") or []:
@@ -133,12 +100,7 @@ def fields_of(params: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def outputs_for(params: Mapping[str, Any]) -> tuple[OutputField, ...]:
-    """`text`, plus one output per declared field.
-
-    Dynamic because the outputs ARE the params — the fields someone typed. This
-    is the case `outputs_for` exists for, exactly as an AI classifier's answers
-    are the case `ports_for` exists for.
-    """
+    """`text` plus one output per declared field."""
     return (
         OutputField(
             name=TEXT_OUTPUT,
@@ -196,44 +158,20 @@ PARAMS_SCHEMA: dict[str, Any] = {
                 },
             },
         },
-        "include": {
-            "type": "object",
-            "title": "What the model sees",
-            "description": (
-                "Which parts of the item are sent. Reads run as the automation's "
-                "identity, so the prompt can only contain what it could already "
-                "see. Note that the text you include was written by other people: "
-                "a generated comment posts unmarked, so treat what comes back as "
-                "influenced by whatever the submitter wrote."
-            ),
-            "properties": {
-                "fields": {
-                    "type": "boolean",
-                    "default": True,
-                    "title": "Fields (type, state, priority, assignee, labels, custom fields)",
-                },
-                "description": {"type": "boolean", "default": True, "title": "Description (in full)"},
-                "comments": {"type": "boolean", "default": False, "title": "Comments (all)"},
-                "worklogs": {"type": "boolean", "default": False, "title": "Logged time"},
-            },
-        },
+        "include": include_schema(
+            "Which parts of the item are sent. Reads run as the automation's "
+            "identity, so the prompt can only contain what it could already "
+            "see. Note that the text you include was written by other people: "
+            "a generated comment posts unmarked, so treat what comes back as "
+            "influenced by whatever the submitter wrote."
+        ),
     },
 }
 
 
 def answer_schema(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The JSON Schema the model is decoded against.
-
-    `additionalProperties: False` and every field REQUIRED — asking for all of
-    them is the only way to get all of them, and an unasked-for key is a question
-    nobody put.
-
-    What comes BACK is not all-or-nothing, and `_publish` is honest about that: a
-    field the model left blank simply is not published, the rest are, and the
-    actions reading the missing one record a skip naming it. That is the right
-    degradation — three good values and one refused write beats discarding the
-    call — and it is why "required" here is a request rather than a guarantee.
-    """
+    """All fields REQUIRED and no extras; a blank answer is simply not published
+    (see `_publish`), so "required" is a request, not a guarantee."""
     properties: dict[str, Any] = {
         TEXT_OUTPUT: {"type": "string", "description": "A short explanation of the answers."}
     }
@@ -253,35 +191,9 @@ def answer_schema(params: Mapping[str, Any]) -> dict[str, Any]:
 
 
 async def plan(ctx: Any) -> str:
-    """Generate the values, publish them, and name the port.
-
-    Never raises. Every failure takes `unavailable` and publishes nothing, which
-    is what makes an outage safe downstream: the tokens that would have read
-    these values miss and their actions record a skip, rather than resolving to
-    something stale or half-written.
-    """
-    from .features import feature_enabled
-    from .types import AiFeature
-
+    """Never raises; any failure takes `unavailable` and publishes nothing."""
     params = dict(ctx.node.params)
-    if not str(params.get("prompt") or "").strip():
-        logger.info("ai.generate: node %s has no prompt; taking %s", ctx.node.id, FALLBACK_PORT)
-        return FALLBACK_PORT
-
-    if _out_of_time(ctx):
-        # The walk's wall-clock budget is spent (spec 119's seam). Asked BEFORE
-        # the feature gate, because being out of time is a reason not to do any
-        # of the remaining work, and a model round trip is the only work here
-        # measured in seconds.
-        logger.info("ai.generate: node %s ran out of time; taking %s", ctx.node.id, FALLBACK_PORT)
-        return FALLBACK_PORT
-
-    try:
-        live = await feature_enabled(ctx.session, AiFeature.GENERATION)
-    except Exception:
-        logger.exception("ai.generate: could not resolve the feature gate")
-        live = False
-    if not live:
+    if not await preflight(ctx, AiFeature.GENERATION, NODE_KEY):
         return FALLBACK_PORT
 
     try:
@@ -301,21 +213,8 @@ async def plan(ctx: Any) -> str:
     return OUT_PORT
 
 
-def _out_of_time(ctx: Any) -> bool:
-    """Whether the walk says to stop spending time. Read through `getattr`
-    because this module is written against the executor's node context as a DUCK
-    TYPE — `ai` imports nothing from `automations`."""
-    ask = getattr(ctx, "out_of_time", None)
-    return bool(ask()) if callable(ask) else False
-
-
 def _publish(ctx: Any, answer: Mapping[str, Any], params: Mapping[str, Any]) -> bool:
-    """File every DECLARED value in the packet's bag; returns whether any landed.
-
-    Only the declared ones. A model that volunteers an extra key is answering a
-    question nobody asked, and publishing it would put a token in the bag that
-    the editor never offered and the write path never checked.
-    """
+    """Publish only DECLARED values; returns whether any landed."""
     publish = getattr(ctx, "set_output", None)
     if not callable(publish):
         return False
@@ -331,39 +230,18 @@ def _publish(ctx: Any, answer: Mapping[str, Any], params: Mapping[str, Any]) -> 
 
 
 async def _ask(ctx: Any, params: Mapping[str, Any]) -> Mapping[str, Any]:
-    from . import client as ai_client
-    from .automation_context import ContextOptions, build_context
-    from .types import AiRole
-
-    context = await build_context(
-        ctx.session, tuple(ctx.packet.item_ids), ctx.actor, ContextOptions.from_params(dict(params))
-    )
-    user = (
-        f"Instruction:\n{params.get('prompt', '')}\n\n"
-        f"The item:\n{context}"
-    )
-    return await ai_client.complete_structured(
-        ctx.session,
-        AiRole.CHAT,
+    return await ask_structured(
+        ctx,
+        params,
         system=SYSTEM_PROMPT,
-        user=user,
-        json_schema=answer_schema(params),
+        user=lambda context: f"Instruction:\n{params.get('prompt', '')}\n\nThe item:\n{context}",
+        schema=answer_schema(params),
     )
 
 
 def check(params: Mapping[str, Any]) -> None:
-    """This node's own write-time refusals (spec 120), raised as `ValueError`.
-
-    Everything here is invisible to the generic checker, which reads the schema
-    at top level only — and every one of them is otherwise a silent truncation:
-    a 20-field node stored fine, ran with 8, and then refused the tokens for the
-    other twelve with a message saying this node "does not produce" them.
-
-    `fields_of` stays LENIENT for the same reason node names do: a stored row
-    that predates this, or one edited around the API, degrades to the fields it
-    can use rather than making the automation unloadable. Strict on write,
-    lenient on read.
-    """
+    """Write-time refusals (spec 120) the generic schema check cannot see, as
+    `ValueError`; `fields_of` stays lenient on read."""
     raw = params.get("fields") or []
     if not isinstance(raw, list):
         raise ValueError("'fields' must be a list of values to produce")
@@ -416,11 +294,7 @@ SPEC = AutomationNodeSpec(
     shape_params=("fields",),
     #: A generation about no item has nothing to describe.
     needs_items=True,
-    # Fixed SET, unlike the classifier. Per item there would be one answer per
-    # issue and the packet's variable bag has one slot per node, so the values
-    # would be produced and then dropped — a node that looks configured and
-    # whose every downstream token misses. When a per-item bag exists this can
-    # gain the option; until then the honest arity is the one that works.
+    # SET only: the variable bag has one slot per node.
     arity="set",
     check=check,
     plan=plan,

@@ -1,13 +1,5 @@
-"""GitLab hosts and their projects as rows (RADD-1253).
-
-Spec 31 configured this connector with a single environment secret, which could
-name exactly one host and needed a redeploy to rotate — and gave the connector
-no API token at all, so nothing could ever be read back (no backfill, no time
-entries). Same shape as the Forgejo (spec 111) and GitHub (RADD-1129)
-connectors: rows, with the env key demoted to a one-time seed. The token is
-stored as-is because it must be replayable to sign every request; reads expose
-`has_token` / `has_secret`, never the values.
-"""
+"""GitLab hosts and their projects as rows; the env secret only seeds one.
+Credentials are stored as-is (replayed on every call); reads expose has_token/has_secret."""
 
 import uuid
 from datetime import datetime
@@ -54,11 +46,10 @@ class GitlabConnection(Base, TimestampMixin):
 class GitlabRepo(Base, TimestampMixin):
     """A project on a connection, and the Radd project its releases belong to.
 
-    `full_name` is GitLab's `path_with_namespace` (`group/subgroup/project`) —
-    named like the other connectors' column so the settings page shares one wire
-    shape. `project_id` is the DEFAULT project — the one a release trigger
-    creates a version in (spec 112). It is deliberately NOT a filter on linking:
-    project keys are unique instance-wide.
+    `full_name` is GitLab's `path_with_namespace` (`group/subgroup/project`),
+    named like the other connectors' column. `project_id` is the DEFAULT project
+    — the one a release creates a version in. When link_all_projects is false, it
+    also bounds issue linking and mirrored time.
     """
 
     __tablename__ = "gitlab_repos"

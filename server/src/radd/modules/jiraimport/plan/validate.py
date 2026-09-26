@@ -43,9 +43,7 @@ def _fields(mappings: PlanMappings, existing: dict[str, FieldType]) -> list[Plan
         PlanProblem(section="fields", subject=p.jira_id, message=p.message)
         for p in validate_mappings(mappings.fields, existing)
     ]
-    # A create that lost its options is spec 90's dead end: switching a field to
-    # `select` left `create_options` null, validation refused it, and the wizard
-    # had no editor to supply them. Say what to do rather than just refusing.
+    # A select create with no options: say what to do rather than just refusing.
     for entry in mappings.fields:
         if (
             entry.action is FieldAction.CREATE

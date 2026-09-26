@@ -32,11 +32,7 @@ def _whoami(creds: ConfluenceCreds) -> str:
 
 
 def _tree(creds: ConfluenceCreds, space_key: str, parent_id: str) -> list[PageNode]:
-    """ONE level of the tree — the roots of a space, or one page's children.
-
-    Deliberately not the whole space: fetching every page of a real one took 61
-    requests and over two minutes, so the picker browses the way a person does.
-    """
+    """ONE level of the tree — the roots of a space, or one page's children."""
     with ConfluenceClient(creds) as client:
         pages = (
             client.children(parent_id) if parent_id else client.root_pages(space_key)
@@ -89,11 +85,8 @@ async def space_tree(
     connection_id: uuid.UUID | None = None,
     parent_id: str = "",
 ) -> list[PageNode]:
-    """One level of the remote tree, for the scope picker.
-
-    Roots when `parent_id` is empty, that page's children otherwise — so opening
-    the picker on a 6000-page space costs one request, not sixty.
-    """
+    """One level of the remote tree for the scope picker: roots when `parent_id`
+    is empty, that page's children otherwise."""
     connection = await connections.require_connection(session, connection_id)
     return await asyncio.to_thread(
         _tree, connections.creds_of(connection), space_key, parent_id

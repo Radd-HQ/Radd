@@ -1,15 +1,12 @@
-"""Pure wire-shape builders (specs 46/101): payloads, headers, URLs, response
-extractors, and SSE stream-line parsers for the two supported shapes.
-
-No network in this file — `client.py` owns the calls. Everything here is a pure
-function over plain data, which is the unit-test surface: OpenAI-compatible
-`{base_url}/chat/completions` (covers LiteLLM/Ollama/vLLM/OpenAI) and native
-Anthropic `{base_url}/v1/messages`. Structured output rides `response_format`
-json_schema on the OpenAI shape and a forced tool call on Anthropic.
+"""Pure wire-shape builders for OpenAI-compatible `/chat/completions` and native
+Anthropic `/v1/messages`: payloads, headers, URLs, response extractors, SSE line
+parsers. Structured output is `response_format` json_schema on OpenAI and a
+forced tool call on Anthropic. No network here — `client.py` owns the calls.
 """
 
 import base64
 import json
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -33,6 +30,21 @@ _OPENAI_DONE = "[DONE]"
 
 # User-message content: a plain string, or a content-part list (vision).
 UserContent = str | list[dict[str, Any]]
+
+
+def first_json(text: str, kind: type[list] | type[dict]) -> Any:
+    """The first JSON array/object (`kind`) in an LLM reply, tolerant of prose and
+    code fences: every opening bracket is tried until one parses; None when none
+    does (pure)."""
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\[" if kind is list else r"\{", text):
+        try:
+            value, _ = decoder.raw_decode(text[match.start() :])
+        except ValueError:
+            continue
+        if isinstance(value, kind):
+            return value
+    return None
 
 
 # --- payloads -----------------------------------------------------------------
@@ -175,40 +187,11 @@ def finish_payload(
 # --- vision content parts -----------------------------------------------------
 
 
-def openai_user_content(text: str, image_bytes: bytes, media_type: str) -> list[dict[str, Any]]:
-    encoded = base64.b64encode(image_bytes).decode("ascii")
-    return [
-        {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{encoded}"}},
-        {"type": "text", "text": text},
-    ]
-
-
-def anthropic_user_content(text: str, image_bytes: bytes, media_type: str) -> list[dict[str, Any]]:
-    encoded = base64.b64encode(image_bytes).decode("ascii")
-    return [
-        {
-            "type": "image",
-            "source": {"type": "base64", "media_type": media_type, "data": encoded},
-        },
-        {"type": "text", "text": text},
-    ]
-
-
-def user_content(
-    shape: AiWireShape, text: str, image_bytes: bytes | None, media_type: str | None
-) -> UserContent:
-    if image_bytes is None:
-        return text
-    builder = openai_user_content if shape is AiWireShape.OPENAI else anthropic_user_content
-    return builder(text, image_bytes, media_type or "image/png")
-
-
 def user_content_parts(
     shape: AiWireShape, text: str, images: Sequence[tuple[bytes, str]]
 ) -> UserContent:
-    """RADD-1275: `text` after any number of pictures — the one-image builders
-    generalised. No pictures = the plain string, so a text-only call's payload
-    is byte-identical to what it was before pictures existed."""
+    """`text` after any number of pictures. No pictures = the plain string, so a
+    text-only call's payload is byte-identical to one with no vision at all."""
     if not images:
         return text
     parts: list[dict[str, Any]] = []

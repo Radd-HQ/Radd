@@ -1,13 +1,6 @@
-"""The import run (spec 117, RADD-1018).
-
-Provision, write, record, reverse. The stage order carries two decisions worth
-naming: BODIES follows PAGES because a link can only be rewritten once its
-target's Radd id exists, and ATTACHMENTS precedes COMMENTS because a comment can
-embed an image.
-
-The whole pipeline runs inside `events.quiet`, so notify, webhooks and automations
-skip the import while search and history still consume it.
-"""
+"""The import run: provision, write pages, then attachments → re-convert →
+comments → history (stage order: `types.RunStage`), all inside `events.quiet`
+(notify/webhooks/automations skip it; search and history do not)."""
 
 from __future__ import annotations
 
@@ -293,21 +286,14 @@ def _context(
 def _nearest_imported(
     row: ConfluenceSnapshotPage, by_external: dict[str, uuid.UUID]
 ) -> uuid.UUID | None:
-    """A hand-picked selection has holes in its lineage. Attaching to the nearest
-    ancestor that DID import keeps the shape; the download already recorded a
-    problem naming the gap, so this is not a silent flatten."""
+    """The parent when it imported, else the space root. Only the DIRECT parent is
+    checked; the download already recorded a problem naming the gap."""
     return by_external.get(row.parent_id) if row.parent_id else None
 
 
 def _attachment_url(attachment_id: uuid.UUID) -> str:
-    """The endpoint that serves an attachment's bytes.
-
-    `/attachments/{id}` — there is NO `/download` suffix, and inventing one
-    produced URLs that 404. A wire constant with no compiler behind it: the fence
-    type-checked, the page rendered a player, and the player showed
-    SRC_NOT_SUPPORTED because the source was a 404 page. `apiAttachmentPath` in
-    the SPA is the same string; these two must agree.
-    """
+    """`/attachments/{id}` — no `/download` suffix (it 404s); must match the SPA's
+    `apiAttachmentPath`."""
     return f"/api/v1/attachments/{attachment_id}"
 
 
@@ -319,20 +305,10 @@ def _author_of(row: ConfluenceSnapshotPage) -> str:
 async def _people(
     session: AsyncSession, mappings, *, email_domain: str = ""
 ) -> dict[str, uuid.UUID]:
-    """Confluence person → Radd user, keyed by whatever the body actually wrote.
-
-    Three signals, tried in order, because Server/DC withholds email:
-
-    1. an explicit mapping — a person decided, and that always wins;
-    2. **`username@domain`** — the AD sAMAccountName against the UPN address the
-       `ldap` module synthesises when a directory entry has no `mail`
-       (`directory_user_from_entry`), which is the same shape from both ends;
-    3. the **display name** against `users.name`, since that is what an AD import
-       stores and what Confluence returns beside the username.
-
-    The key is the raw token from the body — a user key or a username — so a
-    mention resolves whichever form the page used.
-    """
+    """Confluence person → Radd user, keyed by the raw token the body wrote (user
+    key or username). Server/DC withholds email, so, in order: an explicit
+    mapping; `username@domain` (the UPN `ldap` synthesises when an entry has no
+    `mail`); the display name against `users.name`."""
     from sqlalchemy import func
 
     out: dict[str, uuid.UUID] = {}
@@ -433,11 +409,8 @@ async def _attachments(
             if not commit:
                 _bump(run, "attachments")
                 continue
-            # A re-import must not duplicate the file. Pages upsert through their
-            # external identity; attachments have none, so the page's existing
-            # files ARE the identity — same name and same size is the same file.
-            # Without this a second run doubled the storage, which on a wiki of
-            # meeting recordings is measured in gigabytes.
+            # Same name + same size = the same file (attachments have no external
+            # id), so a re-import does not duplicate storage.
             existing = next(
                 (
                     a for a in await attachments_service.list_for_entity(

@@ -15,7 +15,7 @@ from radd.modules.gitlab.parsing import (
     plan_push,
     time_spent_changed,
 )
-from radd.modules.gitlab.types import MrStatus
+from radd.modules.vcs.types import RefStatus
 from radd.modules.vcs.triggers import RefAction, version_from_tag
 from radd.modules.vcs.types import VcsRefType
 
@@ -106,11 +106,11 @@ def test_mr_action_reads_the_action_never_the_state():
 
 
 def test_mr_status_maps_gitlab_states():
-    assert mr_status({"state": "opened"}) is MrStatus.OPEN
-    assert mr_status({"state": "locked"}) is MrStatus.OPEN
-    assert mr_status({"state": "closed"}) is MrStatus.CLOSED
-    assert mr_status({"state": "merged"}) is MrStatus.MERGED
-    assert mr_status({"state": "opened", "action": "merge"}) is MrStatus.MERGED
+    assert mr_status({"state": "opened"}) is RefStatus.OPEN
+    assert mr_status({"state": "locked"}) is RefStatus.OPEN
+    assert mr_status({"state": "closed"}) is RefStatus.CLOSED
+    assert mr_status({"state": "merged"}) is RefStatus.MERGED
+    assert mr_status({"state": "opened", "action": "merge"}) is RefStatus.MERGED
 
 
 def test_time_spent_changed_reads_the_changes_object():

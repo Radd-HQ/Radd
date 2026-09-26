@@ -49,17 +49,6 @@ def test_choice_schema_enumerates_answers():
     assert schema["required"] == ["choice"]
 
 
-def test_vision_content_parts_both_shapes():
-    openai = provider.user_content(AiWireShape.OPENAI, "what is it", b"\x89PNG", "image/png")
-    assert openai[0]["type"] == "image_url"
-    assert openai[0]["image_url"]["url"].startswith("data:image/png;base64,")
-    anthropic = provider.user_content(AiWireShape.ANTHROPIC, "what is it", b"\x89PNG", "image/png")
-    assert anthropic[0]["type"] == "image"
-    assert anthropic[0]["source"]["media_type"] == "image/png"
-    # No image -> plain string content.
-    assert provider.user_content(AiWireShape.OPENAI, "t", None, None) == "t"
-
-
 def test_extract_structured_both_shapes():
     openai = {"choices": [{"message": {"content": '{"choice": "content"}'}}]}
     assert provider.extract_structured(AiWireShape.OPENAI, openai) == {"choice": "content"}
@@ -242,10 +231,10 @@ async def test_stream_http_error_raises_upstream(db, chat_role, mock_transport):
 
 
 def test_editor_sse_frame_shapes():
-    from radd.modules.ai import editor
+    from radd.modules.ai import sse
 
-    assert editor.sse_frame({"t": "hi\nthere"}) == 'data: {"t": "hi\\nthere"}\n\n'
-    assert editor.sse_frame({}, event="done") == "event: done\ndata: {}\n\n"
+    assert sse.sse_frame({"t": "hi\nthere"}) == 'data: {"t": "hi\\nthere"}\n\n'
+    assert sse.sse_frame({}, event="done") == "event: done\ndata: {}\n\n"
 
 
 def test_editor_system_prompt_carries_the_placeholder_rule():

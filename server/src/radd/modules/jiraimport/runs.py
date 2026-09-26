@@ -1,4 +1,4 @@
-"""Executing a plan over a snapshot (spec 100) — dry run, import, rollback.
+"""Executing a plan over a snapshot (spec 100) — dry run and import.
 
 ONE pipeline, one `commit` flag. The dry run resolves everything and writes
 nothing; the import does identical work and writes. They cannot disagree about
@@ -33,7 +33,7 @@ from radd.modules.releases import service as releases_service
 from radd.modules.releases.schemas import ReleaseCreate
 from radd.clock import utcnow
 
-from . import apply, connections, ledger, provision, relink, transform
+from . import apply, connections, ledger, provision, relink, schemakeys, transform
 from .client import browse_url
 from .models import JiraConnection, JiraPlan, JiraRun, JiraSnapshot
 from .plan import service as plan_service
@@ -47,6 +47,7 @@ from .types import (
     ProblemKind,
     RunStage,
     SnapshotCatalog,
+    VocabAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,8 +124,7 @@ async def _pipeline(
     options = plan_service.options(plan)
     commit = not run.dry_run
 
-    # Timestamp and authorship fidelity is gated on project.manage, and spec 90
-    # let it be lost SILENTLY when the actor lacked it. Say so instead.
+    # Timestamp and authorship fidelity is gated on project.manage: say so when lost.
     await _check_fidelity(session, run, actor)
 
     run.stage = RunStage.PROVISION.value
@@ -162,14 +162,15 @@ async def _pipeline(
 
     definitions = await fields_service.list_fields(session)
     catalog_types = {d.key: FieldType(d.type) for d in definitions}
+    field_catalog = store.catalog(snapshot, SnapshotCatalog.FIELDS)
     vocab = transform.Vocab.of(
         mappings,
         state_ids=provisioned.state_ids,
         type_ids=provisioned.type_ids,
         user_ids=provisioned.user_ids,
         team_ids=provisioned.team_ids,
-        sprint_field_ids=_sprint_fields(snapshot),
-        epic_link_field_id=_epic_field(snapshot),
+        sprint_field_ids=schemakeys.sprint_field_ids(field_catalog),
+        epic_link_field_id=schemakeys.epic_link_field_id(field_catalog),
         # So a value the target select will not accept is dropped from the field
         # rather than costing the whole issue.
         field_options={
@@ -187,10 +188,8 @@ async def _pipeline(
     parents: dict[str, str] = {}
     links: list[tuple[str, transform.LinkDraft]] = []
     report_rows: list[dict] = []
-    # Dedupe across RUNS, not just within one: the ledger is the record of which
-    # Jira comment/worklog ids this importer has already written, so a re-import
-    # recognises them instead of duplicating. Spec 90 stored no ids at all, so its
-    # only defence was to skip comments on a re-import entirely.
+    # Dedupe across RUNS: the ledger records which Jira comment/worklog ids this
+    # importer already wrote, so a re-import recognises them instead of duplicating.
     seen_comments = await _already_imported(session, plan.id, LedgerEntity.COMMENT)
     seen_worklogs = await _already_imported(session, plan.id, LedgerEntity.WORKLOG)
     processed = 0
@@ -336,27 +335,51 @@ async def _check_fidelity(session: AsyncSession, run: JiraRun, actor: User) -> N
         )
 
 
-def _sprint_fields(snapshot: JiraSnapshot) -> tuple[str, ...]:
-    from . import schemakeys
-
-    return tuple(
-        schemakeys.find_by_schema_key(
-            store.catalog(snapshot, SnapshotCatalog.FIELDS), schemakeys.JiraSchemaKey.SPRINT
-        )
-    )
-
-
-def _epic_field(snapshot: JiraSnapshot) -> str:
-    from . import schemakeys
-
-    catalog = store.catalog(snapshot, SnapshotCatalog.FIELDS)
-    found = schemakeys.find_by_schema_key(catalog, schemakeys.JiraSchemaKey.EPIC_LINK)
-    if found:
-        return found[0]
-    return next(
-        (fid for fid, meta in catalog.items() if (meta.get("name") or "").lower() == "epic link"),
-        "",
-    )
+async def _find_or_create(
+    session: AsyncSession,
+    run: JiraRun,
+    entries,
+    existing: dict[str, uuid.UUID],
+    *,
+    chosen,
+    create,
+    entity: LedgerEntity,
+    counter: str,
+    failure: str,
+    commit: bool,
+) -> dict[str, uuid.UUID]:
+    """Jira value → Radd row id: the plan's pick, else a same-named row, else a new
+    one (counted, not written, in a dry run)."""
+    out: dict[str, uuid.UUID] = {}
+    for entry in entries:
+        if entry.action is VocabAction.IGNORE:
+            continue
+        if (picked := chosen(entry)) is not None:
+            out[entry.jira] = picked
+            continue
+        if (found := existing.get(entry.jira.strip().lower())) is not None:
+            out[entry.jira] = found
+            continue
+        if not commit:
+            _bump(run, counter)
+            continue
+        try:
+            created_id = await create(entry)
+            ledger.created(session, run.id, entity, created_id, subject=entry.jira)
+            existing[entry.jira.strip().lower()] = created_id
+            out[entry.jira] = created_id
+            _bump(run, counter)
+        except Exception as exc:  # noqa: BLE001
+            _problem(
+                run,
+                Problem(
+                    kind=ProblemKind.PROVISION_FAILED,
+                    message=failure,
+                    subject=entry.jira,
+                    detail=str(exc),
+                ),
+            )
+    return out
 
 
 async def _cycles(
@@ -364,101 +387,67 @@ async def _cycles(
 ) -> dict[str, uuid.UUID]:
     """Sprints → cycles, carrying dates and completion so a CLOSED sprint imports
     as a completed cycle rather than a dateless draft."""
-    out: dict[str, uuid.UUID] = {}
-    existing = {c.name.strip().lower(): c.id for c in await cycles_service.list_cycles(session)}
-    for entry in mappings.sprints:
-        from .types import VocabAction
 
-        if entry.action is VocabAction.IGNORE:
-            continue
-        if entry.cycle_id is not None:
-            out[entry.jira] = entry.cycle_id
-            continue
-        if (found := existing.get(entry.jira.strip().lower())) is not None:
-            out[entry.jira] = found
-            continue
-        if not commit:
-            _bump(run, "cycles_created")
-            continue
-        try:
-            created = await cycles_service.create_cycle(
-                session,
-                CycleCreate(
-                    name=entry.jira[:200],
-                    start_date=_as_date(entry.start_date),
-                    end_date=_as_date(entry.end_date),
-                ),
-                today=utcnow().date(),
-            )
-            await session.flush()
-            if entry.complete_date and (stamp := _as_datetime(entry.complete_date)):
-                created_row = await cycles_service.get_cycle(session, created.id)
-                created_row.completed_at = stamp
-            ledger.created(session, run.id, LedgerEntity.CYCLE, created.id, subject=entry.jira)
-            existing[entry.jira.strip().lower()] = created.id
-            out[entry.jira] = created.id
-            _bump(run, "cycles_created")
-        except Exception as exc:  # noqa: BLE001
-            _problem(
-                run,
-                Problem(
-                    kind=ProblemKind.PROVISION_FAILED,
-                    message="a sprint could not become a cycle",
-                    subject=entry.jira,
-                    detail=str(exc),
-                ),
-            )
-    return out
+    async def create(entry) -> uuid.UUID:
+        created = await cycles_service.create_cycle(
+            session,
+            CycleCreate(
+                name=entry.jira[:200],
+                start_date=_as_date(entry.start_date),
+                end_date=_as_date(entry.end_date),
+            ),
+            today=utcnow().date(),
+        )
+        await session.flush()
+        if entry.complete_date and (stamp := _as_datetime(entry.complete_date)):
+            created_row = await cycles_service.get_cycle(session, created.id)
+            created_row.completed_at = stamp
+        return created.id
+
+    return await _find_or_create(
+        session,
+        run,
+        mappings.sprints,
+        {c.name.strip().lower(): c.id for c in await cycles_service.list_cycles(session)},
+        chosen=lambda entry: entry.cycle_id,
+        create=create,
+        entity=LedgerEntity.CYCLE,
+        counter="cycles_created",
+        failure="a sprint could not become a cycle",
+        commit=commit,
+    )
 
 
 async def _releases(
     session: AsyncSession, run: JiraRun, mappings, project_id: uuid.UUID | None, commit: bool
 ) -> dict[str, uuid.UUID]:
-    """Fix versions → releases. Not imported at all before spec 100."""
-    out: dict[str, uuid.UUID] = {}
+    """Fix versions → releases."""
     if project_id is None:
-        return out
-    from .types import VocabAction
+        return {}
 
-    existing = {
-        r.version.strip().lower(): r.id
-        for r in await releases_service.list_releases(session, project_id)
-    }
-    for entry in mappings.versions:
-        if entry.action is VocabAction.IGNORE:
-            continue
-        if entry.release_id is not None:
-            out[entry.jira] = entry.release_id
-            continue
-        if (found := existing.get(entry.jira.strip().lower())) is not None:
-            out[entry.jira] = found
-            continue
-        if not commit:
-            _bump(run, "releases_created")
-            continue
-        try:
-            created = await releases_service.create_release(
-                session,
-                ReleaseCreate(
-                    project_id=project_id, name=entry.jira[:200], version=entry.jira[:100]
-                ),
-            )
-            await session.flush()
-            ledger.created(session, run.id, LedgerEntity.RELEASE, created.id, subject=entry.jira)
-            existing[entry.jira.strip().lower()] = created.id
-            out[entry.jira] = created.id
-            _bump(run, "releases_created")
-        except Exception as exc:  # noqa: BLE001
-            _problem(
-                run,
-                Problem(
-                    kind=ProblemKind.PROVISION_FAILED,
-                    message="a fix version could not become a release",
-                    subject=entry.jira,
-                    detail=str(exc),
-                ),
-            )
-    return out
+    async def create(entry) -> uuid.UUID:
+        created = await releases_service.create_release(
+            session,
+            ReleaseCreate(project_id=project_id, name=entry.jira[:200], version=entry.jira[:100]),
+        )
+        await session.flush()
+        return created.id
+
+    return await _find_or_create(
+        session,
+        run,
+        mappings.versions,
+        {
+            r.version.strip().lower(): r.id
+            for r in await releases_service.list_releases(session, project_id)
+        },
+        chosen=lambda entry: entry.release_id,
+        create=create,
+        entity=LedgerEntity.RELEASE,
+        counter="releases_created",
+        failure="a fix version could not become a release",
+        commit=commit,
+    )
 
 
 async def _attach_cycle_release(
@@ -639,8 +628,7 @@ def _as_datetime(raw: str):
 
 async def _fail(session: AsyncSession, run_id: uuid.UUID, message: str) -> None:
     """Rolling back FIRST: a failure mid-page poisons the session, and then the
-    commit recording the failure raises too — which is how spec 90 left runs
-    stuck mid-flight until the next restart."""
+    commit recording the failure raises too, leaving the run stuck mid-flight."""
     await session.rollback()
     run = await session.get(JiraRun, run_id)
     if run is None:

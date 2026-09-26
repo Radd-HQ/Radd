@@ -62,9 +62,7 @@ class ImportResolutionEntry(BaseModel):
 class DirectoryUserImportRequest(BaseModel):
     # The enumeration's dedupe key is the email — select-by-email round-trips it.
     emails: list[str] = Field(min_length=1, max_length=500)
-    # Spec 88: per-person conflict decisions. An email with no entry keeps the
-    # pre-88 behavior (create-or-link, existing accounts untouched), so the
-    # endpoint stays backward compatible.
+    # Per-email conflict decisions; an email with none is create-or-link.
     resolutions: list[ImportResolutionEntry] = Field(default_factory=list, max_length=500)
 
 
@@ -122,7 +120,7 @@ class UserSyncResultRead(BaseModel):
 class DirectorySyncStateRead(BaseModel):
     """One `directory_sync_state` row (spec 85). `last_result` is the run's
     summary payload — user_sync: {provisioned, updated, deactivated, errors},
-    group_sync: {teams, added, removed, errors}."""
+    group_sync: {groups, added, removed, errors}."""
 
     kind: str  # SyncKind
     last_run_at: UtcDatetime

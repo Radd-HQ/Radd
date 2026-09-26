@@ -1,16 +1,8 @@
-"""Automatic directory USER sync (spec 85): search the cascade-resolved users
-base and mirror it — PROVISION unknown users (the spec-84 in-app import path:
-SSO-only `source=ldap` accounts + a default-workspace member seat), UPDATE
-changed display names on ldap-source users, and — only when the
-`ldap_user_sync_deactivate_missing` toggle is on — DEACTIVATE ldap-source users
-that vanished from the directory (session-revoking, never local/oidc accounts).
-
-Directory identity is the EMAIL (the enumeration's dedupe key), so a changed
-mail attribute reads as leaver+joiner, not a rename — documented in the spec-85
-as-built notes. One pass, two consumers: the `ldap-usersync` PeriodicLoop
-(run_workers + bind account gated; the enable toggle is re-resolved per tick)
-and the on-demand `POST /ldap/sync/users`. Runs are recorded in
-`directory_sync_state` (kind=user_sync) for GET /ldap/sync-status."""
+"""Automatic user sync: provision unknown directory users (SSO-only, ldap source),
+rename ldap-source users, and (only with `ldap_user_sync_deactivate_missing`)
+deactivate ldap-source users gone from the directory. Identity is the email, so a
+changed mail attribute reads as leaver + joiner. Shared by the periodic loop and
+POST /ldap/sync/users; runs are recorded in `directory_sync_state`."""
 
 import asyncio
 import logging

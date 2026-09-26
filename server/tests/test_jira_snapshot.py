@@ -130,8 +130,6 @@ def stub_catalogs(monkeypatch):
         SnapshotCatalog.LINK_TYPES.value: [
             {"id": "1", "name": "Blocks", "inward": "is blocked by", "outward": "blocks"}
         ],
-        SnapshotCatalog.RESOLUTIONS.value: [],
-        SnapshotCatalog.OPTION_SETS.value: {},
         SnapshotCatalog.VERSIONS.value: [{"id": "1", "name": "1.4.0"}],
         SnapshotCatalog.COMPONENTS.value: [{"id": "1", "name": "API"}],
         "_failures": [],

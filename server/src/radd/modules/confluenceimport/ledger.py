@@ -23,7 +23,6 @@ class LedgerEntity(StrEnum):
     ATTACHMENT = "attachment"
     GRANT = "access_grant"
     VERSION = "page_version"
-    LABEL = "page_label"
 
 
 class LedgerAction(StrEnum):
@@ -36,7 +35,6 @@ class LedgerAction(StrEnum):
 #: reverse of write order, which is why the record id is a monotonic integer.
 UNDO_ORDER: tuple[LedgerEntity, ...] = (
     LedgerEntity.GRANT,
-    LedgerEntity.LABEL,
     LedgerEntity.VERSION,
     LedgerEntity.ATTACHMENT,
     LedgerEntity.COMMENT,

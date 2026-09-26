@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import NotFoundError
 from radd.kernel import changes
 from radd.modules.events import service as events
-from radd.modules.items import service as items_service
-from radd.modules.projects import service as projects_service
 
 from .models import ItemVcsLink
 from .schemas import VcsLinkCreate
@@ -23,7 +21,6 @@ async def link_vcs(
     item_id: uuid.UUID,
     data: VcsLinkCreate,
     actor_id: uuid.UUID | None = None,
-    connection_id: uuid.UUID | None = None,
 ) -> ItemVcsLink:
     return await _insert_link(
         session,
@@ -74,16 +71,10 @@ async def upsert_vcs_link(
     actor_id: uuid.UUID | None = None,
     connection_id: uuid.UUID | None = None,
 ) -> ItemVcsLink:
-    """The CONNECTOR SEAM: the write-path GitLab/GitHub/Forgejo connectors call to keep an
-    item's dev panel in sync. When `external_id` is set, find the existing row matched by
-    (item_id, provider, connection_id, external_id) and update it in place (title/url/status/ref_type);
-    otherwise create a fresh link. Emits vcs.updated on update, vcs.linked on create.
-
-    The reference identity is UNIQUE by index (RADD-1124), and that index — not the lookup —
-    is what guarantees one row: two deliveries of the same push racing each other
-    both miss the lookup, one insert wins, and the loser's conflict is caught here
-    and turned into the update it should have been.
-    """
+    """The connector write seam: update the row matching (item, provider, connection,
+    external_id) or create one; emits vcs.updated / vcs.linked. The unique index
+    (RADD-1124), not the lookup, guarantees one row — a racing insert's
+    IntegrityError becomes the update it should have been."""
     existing = await _find_link(session, item_id, provider, external_id, connection_id) if external_id else None
     if existing is None:
         try:
@@ -165,8 +156,6 @@ async def _emit(
     actor_id: uuid.UUID | None,
     diff: list[dict] | None = None,
 ) -> None:
-    item = await items_service.require_item(session, link.item_id)
-    await projects_service.get_project(session, item.project_id)
     await events.emit(
         session,
         event_type=event_type,
