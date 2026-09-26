@@ -1,24 +1,7 @@
 import { useContext } from "react";
 import { ChartHeightContext } from "./ChartHeightContext";
+import type { StackedBarChartProps } from "../report-contract";
 import { CHART_GRID, CHART_MUTED_TEXT, niceScale, sampledIndices } from "./chart-utils";
-
-export interface StackSegment {
-  key: string;
-  label: string;
-  value: number;
-  color: string;
-}
-
-export interface StackedBar {
-  label: string;
-  segments: StackSegment[];
-}
-
-interface StackedBarChartProps {
-  bars: StackedBar[];
-  height?: number;
-  ariaLabel: string;
-}
 
 const VIEW_WIDTH = 640;
 const PAD = { top: 14, right: 12, bottom: 28, left: 32 };

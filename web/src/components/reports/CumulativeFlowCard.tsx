@@ -3,11 +3,8 @@ import { errorMessage } from "../../lib/api";
 import { CATEGORY_CHART_COLORS, CATEGORY_META, CATEGORY_ORDER } from "../../lib/meta";
 import { cumulativeFlowQuery } from "../../lib/queries";
 import type { ReportIntervalValue } from "../../lib/types";
-import { ChartLegend } from "../charts/ChartLegend";
-import { ReportCard } from "../charts/ReportCard";
-import { StackedBarChart, type StackedBar } from "../charts/StackedBarChart";
+import { CardBody, ChartLegend, ReportCard, StackedBarChart, type StackedBar } from "@radd-plugin-ui/reporting/charts";
 import { shortDate } from "@radd/plugin-sdk";
-import { CardBody } from "./report-state";
 
 /** Cumulative flow: the category mix at each bucket's end, as stacked bars (spec 19). */
 export function CumulativeFlowCard({

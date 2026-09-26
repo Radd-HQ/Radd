@@ -1,6 +1,5 @@
 /** Service desk: canned responses, SLA policies/timers, builtin-field write rules, rollups (specs 30/36/63/76/78). */
 import type { PriorityValue } from "./items";
-import type { ReportScope } from "./reporting";
 // ---------------------------------------------------------------------------
 // Service desk (canned + slas modules — spec 30)
 // ---------------------------------------------------------------------------
@@ -174,24 +173,3 @@ export interface ItemTimelogBatchEntry {
 /** POST /items/timelog/batch — readable requested items only (spec 78). */
 export type TimelogBatchResponse = Record<string, ItemTimelogBatchEntry>;
 
-/** GET /reports/sla — weekly service-desk outcomes (spec 63). */
-export interface SlaReportBucket {
-  week: string;
-  items: number;
-  response_met: number;
-  response_breached: number;
-  resolution_met: number;
-  resolution_breached: number;
-  breach_rate: number;
-  avg_response_seconds: number | null;
-  avg_resolution_seconds: number | null;
-  /** Spec 65 — bucketed by the week the RESPONSE arrived, not item creation. */
-  csat_avg: number | null;
-  csat_count: number;
-}
-
-/** GET /reports/sla — the weekly buckets plus the scope they cover (RADD-789). */
-export interface SlaReport {
-  buckets: SlaReportBucket[];
-  scope: ReportScope;
-}

@@ -53,3 +53,8 @@ class SlaMetOn(StrEnum):
 
 REPLY_MODES = frozenset({SlaMetOn.FIRST_REPLY, SlaMetOn.REPLY_BY_TEAMS, SlaMetOn.REPLY_BY_ASSIGNED_TEAM})
 STATE_MODES = frozenset({SlaMetOn.ENTERS_STATES, SlaMetOn.LEAVES_STATES})
+
+#: The csat plugin's registry name. The SLA report folds satisfaction ratings in
+#: only while csat is LOADED (RADD-1386: `weak_depends=("csat",)`, checked at
+#: request time, so a runtime disable drops the ratings without a restart).
+CSAT_PLUGIN_ID = "csat"

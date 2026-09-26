@@ -1,21 +1,25 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { errorMessage } from "../../lib/api";
-import { SLA_REPORT_DEFAULT_WEEKS, SLA_REPORT_WEEKS_OPTIONS } from "../../lib/constants";
-import { SLA_BREACHED_COLOR, SLA_MET_COLOR } from "../../lib/meta";
-import { slaReportQuery } from "../../lib/queries";
-import type { SlaReportBucket } from "../../lib/types";
-import { BarChart } from "../charts/BarChart";
-import { ChartLegend } from "../charts/ChartLegend";
-import { ReportCard } from "../charts/ReportCard";
-import { Select } from "../Select";
-import { StackedBarChart, type StackedBar } from "../charts/StackedBarChart";
-import { shortDate } from "@radd/plugin-sdk";
-import { CardBody, ScopeNote } from "./report-state";
+import { errorMessage, SelectField, shortDate, Slot, useHasPlugin } from "@radd/plugin-sdk";
+import {
+  BAR_CHART_SLOT,
+  CHART_LEGEND_SLOT,
+  REPORT_CARD_SLOT,
+  STACKED_BAR_CHART_SLOT,
+  type StackedBar,
+} from "@radd-plugin-ui/reporting/report-contract";
+import {
+  CSAT_PLUGIN,
+  SLA_REPORT_DEFAULT_WEEKS,
+  SLA_REPORT_WEEKS_OPTIONS,
+  slaReportQuery,
+  type SlaReportBucket,
+} from "./report";
 
-/** CSAT (spec 65) renders amber — the star color, distinct from met/breached.
- * The warning fill IS star-amber per theme (RADD-900), so the bars follow the
- * theme instead of pinning dark-tuned amber-400 onto white. */
+/** Met reads green and breached red, the traffic-light workflow colours; CSAT renders amber — the
+ * star colour, which the warning fill is per theme (RADD-900). */
+const MET_COLOR = "var(--status-success)";
+const BREACHED_COLOR = "var(--status-danger)";
 const CSAT_COLOR = "var(--status-warning)";
 
 function formatSeconds(seconds: number | null): string {
@@ -61,7 +65,7 @@ function totals(buckets: SlaReportBucket[]) {
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-subtle bg-surface/40 px-3.5 py-2.5">
+    <div className="rounded-lg border border-subtle bg-surface/40 px-3.5 py-2.5" data-sla-tile={label}>
       <p className="text-[11px] uppercase tracking-wide text-fg-muted">{label}</p>
       <p className="mt-0.5 text-lg font-semibold tabular-nums text-heading">{value}</p>
     </div>
@@ -70,10 +74,11 @@ function Tile({ label, value }: { label: string; value: string }) {
 
 /**
  * Service desk SLA card (spec 63): summary tiles over the window (breach rate,
- * avg first response, avg resolution) + a weekly met/breached trend, bucketed
- * by the week each item was created.
+ * avg first response, avg resolution, CSAT while the csat plugin is loaded) + a
+ * weekly met/breached trend, bucketed by the week each item was created.
+ * Rendered on the reports pages and as the "Service desk SLA" dashboard widget.
  */
-export function SlaCard({
+export function SlaReportCard({
   projectId,
   initialWeeks,
   q,
@@ -81,84 +86,86 @@ export function SlaCard({
   projectId?: string;
   /** Starting window (spec 75 — dashboard widgets pin it from config). */
   initialWeeks?: number;
-  /** Extra SLQ ANDed into the item universe (dashboard-wide filter). */
+  /** Extra SLQ ANDed into the item universe (page- or dashboard-wide filter). */
   q?: string;
 }) {
   const [weeks, setWeeks] = useState(initialWeeks ?? SLA_REPORT_DEFAULT_WEEKS);
   const query = useQuery(slaReportQuery(projectId ?? null, weeks, q));
-  // RADD-789: the buckets plus the projects they were computed over.
+  // RADD-1386: the server folds ratings in only while csat is loaded; say nothing about them otherwise.
+  const csat = useHasPlugin(CSAT_PLUGIN);
   const buckets = query.data?.buckets ?? [];
   const window = totals(buckets);
 
   const bars: StackedBar[] = buckets.map((bucket) => ({
     label: shortDate(bucket.week),
     segments: [
-      {
-        key: "met",
-        label: "Met",
-        value: bucket.response_met + bucket.resolution_met,
-        color: SLA_MET_COLOR,
-      },
+      { key: "met", label: "Met", value: bucket.response_met + bucket.resolution_met, color: MET_COLOR },
       {
         key: "breached",
         label: "Breached",
         value: bucket.response_breached + bucket.resolution_breached,
-        color: SLA_BREACHED_COLOR,
+        color: BREACHED_COLOR,
       },
     ],
   }));
 
   return (
-    <ReportCard
-      title="Service desk"
-      description="SLA targets met vs breached, by the week the issue was raised"
-      note={<ScopeNote scope={query.data?.scope} />}
-      controls={
-        <label className="flex items-center gap-1.5 text-xs text-fg-muted">
-          Last
-          <Select
-            aria-label="Report window in weeks"
-            value={String(weeks)}
-            onChange={(value) => setWeeks(Number(value))}
-            size="sm"
-            options={SLA_REPORT_WEEKS_OPTIONS.map((option) => ({
-              value: String(option),
-              label: `${option} weeks`,
-            }))}
-          />
-        </label>
-      }
-    >
-      <CardBody
-        pending={query.isPending}
+    <div data-sla-report>
+      <Slot
+        id={REPORT_CARD_SLOT}
+        title="Service desk"
+        description="SLA targets met vs breached, by the week the issue was raised"
+        scope={query.data?.scope}
+        controls={
+          <label className="flex items-center gap-1.5 text-xs text-fg-muted">
+            Last
+            <SelectField
+              label=""
+              ariaLabel="Report window in weeks"
+              value={String(weeks)}
+              onChange={(event) => setWeeks(Number(event.target.value))}
+            >
+              {SLA_REPORT_WEEKS_OPTIONS.map((option) => (
+                <option key={option} value={String(option)}>
+                  {option} weeks
+                </option>
+              ))}
+            </SelectField>
+          </label>
+        }
+        loading={query.isPending}
         error={query.isError ? errorMessage(query.error) : null}
         empty={window.items === 0 && window.csatCount === 0}
         emptyMessage="No SLA activity in this window — timers appear once a policy applies to issues."
       >
-        <div className="mb-4 grid grid-cols-4 gap-3">
+        <div className={`mb-4 grid gap-3 ${csat ? "grid-cols-4" : "grid-cols-3"}`}>
           <Tile label="Breach rate" value={`${Math.round(window.breachRate * 100)}%`} />
           <Tile label="Avg first response" value={formatSeconds(window.avgResponse)} />
           <Tile label="Avg resolution" value={formatSeconds(window.avgResolution)} />
-          <Tile
-            label={`CSAT (${window.csatCount})`}
-            value={window.csatAvg === null ? "—" : `${window.csatAvg.toFixed(1)} ★`}
-          />
+          {csat && (
+            <Tile
+              label={`CSAT (${window.csatCount})`}
+              value={window.csatAvg === null ? "—" : `${window.csatAvg.toFixed(1)} ★`}
+            />
+          )}
         </div>
-        <StackedBarChart bars={bars} ariaLabel="SLA targets met vs breached per week" />
+        <Slot id={STACKED_BAR_CHART_SLOT} bars={bars} ariaLabel="SLA targets met vs breached per week" />
         <div className="mt-3">
-          <ChartLegend
+          <Slot
+            id={CHART_LEGEND_SLOT}
             entries={[
-              { label: "Met", color: SLA_MET_COLOR },
-              { label: "Breached", color: SLA_BREACHED_COLOR },
+              { label: "Met", color: MET_COLOR },
+              { label: "Breached", color: BREACHED_COLOR },
             ]}
           />
         </div>
-        {window.csatCount > 0 && (
+        {csat && window.csatCount > 0 && (
           <div className="mt-5">
             <p className="mb-2 text-[11px] uppercase tracking-wide text-fg-muted">
               CSAT trend — avg rating by the week the response arrived
             </p>
-            <BarChart
+            <Slot
+              id={BAR_CHART_SLOT}
               data={buckets.map((bucket) => ({
                 label: shortDate(bucket.week),
                 value: bucket.csat_avg ?? 0, // no responses = no bar
@@ -173,7 +180,7 @@ export function SlaCard({
             />
           </div>
         )}
-      </CardBody>
-    </ReportCard>
+      </Slot>
+    </div>
   );
 }

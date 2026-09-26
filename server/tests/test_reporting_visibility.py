@@ -137,7 +137,7 @@ async def test_http_the_world_reads_a_public_projects_reports(db, world):
         assert r.status_code == 200, r.text
         assert sum(row["count"] for row in r.json()) == 1
         assert (await client.get("/api/v1/reports/time-in-state", params={"project_id": str(project.id)})).status_code == 200
-        assert (await client.get("/api/v1/reports/sla", params={"project_id": str(project.id)})).status_code == 200
+        assert (await client.get("/api/v1/sla-report", params={"project_id": str(project.id)})).status_code == 200
         assert (await client.get("/api/v1/reports/velocity")).status_code == 200
         refused = await client.get("/api/v1/reports/throughput", params={"project_id": str(private.id), **window})
         assert refused.status_code in (403, 404), refused.text

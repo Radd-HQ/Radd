@@ -16,12 +16,11 @@ from . import service
 from .schemas import (
     BurnupSeries,
     CumulativeFlowBucket,
-    SlaReport,
     ThroughputBucket,
     TimeInStateRow,
     VelocityReport,
 )
-from .service import DEFAULT_WINDOW_DAYS, SLA_REPORT_DEFAULT_WEEKS, SLA_REPORT_MAX_WEEKS
+from .service import DEFAULT_WINDOW_DAYS
 from .types import ReportInterval, ReportMeasure
 
 router = APIRouter(prefix="/reports", tags=["reporting"])
@@ -108,20 +107,3 @@ async def burnup(
     await cycles_service.get_cycle(session, cycle_id)
     await authz.require_member(session, user)
     return await service.burnup(session, cycle_id, measure, actor=user, q=q)
-
-
-@router.get("/sla", response_model=SlaReport)
-async def sla(
-    session: Session,
-    user: Actor,
-    project_id: uuid.UUID | None = None,
-    weeks: Annotated[int, Query(ge=1, le=SLA_REPORT_MAX_WEEKS)] = SLA_REPORT_DEFAULT_WEEKS,
-    q: str | None = None,
-) -> SlaReport:
-    """Service-desk SLA outcomes per item-created week (spec 63)."""
-    if project_id is not None:
-        project = await projects_service.get_project(session, project_id)
-        await authz.require(session, user, authz.Permission.ITEM_READ, project=project)
-    else:
-        await authz.require_member(session, user)
-    return await service.sla_report(session, project_id, weeks, actor=user, q=q)

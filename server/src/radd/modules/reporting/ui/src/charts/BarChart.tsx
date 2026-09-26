@@ -7,20 +7,7 @@ import {
   niceScale,
   sampledIndices,
 } from "./chart-utils";
-
-export interface BarDatum {
-  label: string;
-  value: number;
-  /** Hover title (defaults to `label: value`). */
-  title?: string;
-}
-
-interface BarChartProps {
-  data: BarDatum[];
-  color: string;
-  height?: number;
-  ariaLabel: string;
-}
+import type { BarChartProps } from "../report-contract";
 
 const VIEW_WIDTH = 640;
 const PAD = { top: 14, right: 12, bottom: 28, left: 32 };

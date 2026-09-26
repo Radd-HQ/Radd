@@ -1,5 +1,6 @@
 from radd.kernel import EntityLinkSpec
 from radd.kernel import EventTypeSpec
+from radd.kernel import PluginUiManifest
 from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
 
@@ -31,7 +32,13 @@ plugin = RaddPlugin(
         # RADD-1299: reporter-team filter + team reply modes (effective membership).
         "teams",
     ),
+    # RADD-1386: the SLA report folds CSAT ratings in while csat is loaded —
+    # checked against the plugin registry per request (report.ratings).
+    weak_depends=("csat",),
     routers=(router,),
+    # RADD-1386: the SLA report's UI (a reports-page section and the
+    # "Service desk SLA" dashboard widget) is this plugin's own remote.
+    ui=PluginUiManifest(remote="/plugins/slas/remoteEntry.js", ui_api_version="1.14.0"),
     on_startup=(engine.start,),
     on_shutdown=(engine.stop,),
     event_types=(

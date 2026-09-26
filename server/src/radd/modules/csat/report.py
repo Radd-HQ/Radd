@@ -1,10 +1,8 @@
 """Read seam for the service-desk report (spec 65): answered surveys joined to
-their items, optionally scoped to one project. Consumed by the reporting
-module's `/reports/sla` (csat_avg/csat_count on the weekly buckets).
-
-Deliberately imports ONLY models (the slas/report.py precedent): reporting loads
-BEFORE csat in RADD_MODULES, so reporting cannot declare csat in depends_on —
-a models-only read keeps the edge safe."""
+their items, optionally scoped to one project. Consumed by the slas plugin's
+`GET /sla-report` (csat_avg/csat_count on the weekly buckets) through a WEAK
+edge (RADD-1386): slas loads before csat, so it checks the plugin registry and
+imports this module only while csat is loaded."""
 
 import uuid
 from dataclasses import dataclass

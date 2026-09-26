@@ -15,6 +15,7 @@ import itemtypes from "@radd-plugin-ui/itemtypes";
 import labels from "@radd-plugin-ui/labels";
 import projects from "@radd-plugin-ui/projects";
 import releases from "@radd-plugin-ui/releases";
+import reporting from "@radd-plugin-ui/reporting";
 import teams from "@radd-plugin-ui/teams";
 import timelogging from "@radd-plugin-ui/timelogging";
 import vcs from "@radd-plugin-ui/vcs";
@@ -34,6 +35,7 @@ export const STATIC_PLUGINS: Record<string, PluginModule> = {
   "labels": labels,
   "projects": projects,
   "releases": releases,
+  "reporting": reporting,
   "teams": teams,
   "timelogging": timelogging,
   "vcs": vcs,

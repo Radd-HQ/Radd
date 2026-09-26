@@ -15,7 +15,9 @@ class WidgetType(StrEnum):
     REPORT_TIME_IN_STATE = "report_time_in_state"  # GET /reports/time-in-state
     REPORT_VELOCITY = "report_velocity"  # GET /reports/velocity
     REPORT_BURNUP = "report_burnup"  # GET /reports/burnup
-    REPORT_SLA = "report_sla"  # GET /reports/sla
+    # GET /sla-report — rendered by the slas plugin's UI through the
+    # dashboard.widget slot; without slas the widget reads as unavailable.
+    REPORT_SLA = "report_sla"
     SLQ_COUNT = "slq_count"  # GET /items/count — a big-number card
     SLQ_LIST = "slq_list"  # GET /items?q=&limit= — compact item rows
     VIEW_COUNT = "view_count"  # POST /views/counts — a saved view's badge

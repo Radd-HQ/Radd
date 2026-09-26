@@ -308,7 +308,7 @@ async def test_cross_project_reports_cover_only_readable_projects(client, world)
     assert scope["covered"] == [world["granted_key"]], "velocity reached past the grant"
     assert scope["total"] > len(scope["covered"]), "the fixture needs an unreadable project"
 
-    sla = await client.get("/api/v1/reports/sla", headers=_auth(world["member_token"]))
+    sla = await client.get("/api/v1/sla-report", headers=_auth(world["member_token"]))
     assert sla.status_code == 200
     assert sla.json()["scope"]["covered"] == [world["granted_key"]]
 

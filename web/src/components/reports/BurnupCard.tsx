@@ -7,12 +7,10 @@ import {
   ReportMeasure,
   type ReportMeasureValue,
 } from "../../lib/types";
-import { ChartLegend } from "../charts/ChartLegend";
-import { LineChart } from "../charts/LineChart";
-import { ReportCard } from "../charts/ReportCard";
+import { CardBody, ChartLegend, LineChart, ReportCard, ScopeNote } from "@radd-plugin-ui/reporting/charts";
 import { CycleSelect } from "../cycles/CycleSelect";
 import { shortDate } from "@radd/plugin-sdk";
-import { CardBody, ScopeNote, Segmented } from "./report-state";
+import { Segmented } from "./report-state";
 import { MEASURE_OPTIONS } from "./measure";
 
 /** Burnup: daily scope vs completed (items or points, spec 70) for a chosen cycle. */

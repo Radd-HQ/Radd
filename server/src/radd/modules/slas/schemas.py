@@ -5,9 +5,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .types import SlaKind, SlaMetOn
 from radd.apitypes import UtcDatetime
 from radd.modules.items.enums import Priority
+from radd.modules.reporting.schemas import ReportScope
 
 # The batch endpoint caps one request at a page of list/board chips (spec 63).
 SLA_BATCH_MAX_ITEMS = 200
+
+# GET /sla-report's window, in ISO weeks (spec 63).
+SLA_REPORT_DEFAULT_WEEKS = 12
+SLA_REPORT_MAX_WEEKS = 26
 
 BUSINESS_MINUTE_MAX = 24 * 60 - 1  # last valid minute-from-midnight (23:59)
 
@@ -140,3 +145,30 @@ class BatchTimerRead(BaseModel):
     breached: bool
     paused: bool
     remaining_seconds: float | None
+
+
+class SlaReportBucket(BaseModel):
+    """Service-desk SLA outcomes for items CREATED in one ISO week (spec 63).
+
+    Averages are wall-clock seconds from item creation to the engine's met
+    stamps. The csat fields (spec 65) bucket by the week the RESPONSE arrived —
+    responded_at, NOT the item-created week the SLA counters use — and stay
+    empty (None / 0) while the csat plugin is not loaded (RADD-1386).
+    """
+
+    week: str  # the Monday of the ISO week (ISO date)
+    items: int  # distinct items with SLA bookkeeping in the bucket
+    response_met: int
+    response_breached: int
+    resolution_met: int
+    resolution_breached: int
+    breach_rate: float  # items with any breach / items (0 when items == 0)
+    avg_response_seconds: float | None  # None = nothing met in the bucket
+    avg_resolution_seconds: float | None
+    csat_avg: float | None  # mean rating of responses landing in the week (spec 65)
+    csat_count: int  # responses landing in the week
+
+
+class SlaReport(BaseModel):
+    buckets: list[SlaReportBucket]
+    scope: ReportScope

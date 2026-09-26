@@ -2,11 +2,15 @@
 
 Each report is a small, mostly-pure fold over the reconstructed item timelines
 (`timeline.py`). Nothing is persisted.
+
+The bucketing (`bucket_start`/`bucket_starts`), the reader's item universe
+(`matching_ids`) and the scope a figure covers (`report_scope`) are public: a
+plugin's own report — the SLA report in `slas` (RADD-1386) — folds the same way
+instead of restating them.
 """
 
 import statistics
 import uuid
-from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,17 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
-# Submodule with model-only imports (the slas/report.py idiom) — csat loads
-# AFTER reporting in RADD_MODULES, so this must never touch its service layer.
-from radd.modules.csat import report as csat_responses
 from radd.modules.cycles import service as cycles_service
 from radd.modules.cycles.types import CycleEntity
 from radd.modules.items import bulk as items_bulk
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemKind
-# Submodule with model-only imports — safe against the slas↔reporting cycle
-# (slas/service.py imports reporting/timeline.py); see slas/report.py.
-from radd.modules.slas import report as sla_states
 from radd.modules.workflow.types import StateCategory
 
 from . import timeline
@@ -35,8 +33,6 @@ from .schemas import (
     CycleBrief,
     CycleWindow,
     ReportScope,
-    SlaReport,
-    SlaReportBucket,
     ThroughputBucket,
     TimeInStateRow,
     VelocityReport,
@@ -45,23 +41,21 @@ from .schemas import (
 from .types import ReportInterval, ReportMeasure
 
 DEFAULT_WINDOW_DAYS = 30
-SLA_REPORT_DEFAULT_WEEKS = 12
-SLA_REPORT_MAX_WEEKS = 26
 
 
-# --- bucketing ---
+# --- bucketing — public: a plugin's own report buckets the same way (RADD-1386) ---
 
 
-def _bucket_start(day: date, interval: ReportInterval) -> date:
+def bucket_start(day: date, interval: ReportInterval) -> date:
     """The date that labels `day`'s bucket (the Monday of its week, or the day itself)."""
     if interval is ReportInterval.WEEK:
         return day - timedelta(days=day.weekday())
     return day
 
 
-def _bucket_starts(start: date, end: date, interval: ReportInterval) -> list[date]:
+def bucket_starts(start: date, end: date, interval: ReportInterval) -> list[date]:
     step = timedelta(weeks=1) if interval is ReportInterval.WEEK else timedelta(days=1)
-    cursor = _bucket_start(start, interval)
+    cursor = bucket_start(start, interval)
     buckets: list[date] = []
     while cursor <= end:
         buckets.append(cursor)
@@ -86,7 +80,7 @@ def _end_of(day: date) -> datetime:
 # tracker picks. An uncompilable q raises SlqError → the usual 422.
 
 
-async def _matching_ids(
+async def matching_ids(
     session: AsyncSession,
     actor: User | None,
     q: str | None,
@@ -97,7 +91,7 @@ async def _matching_ids(
 
     This used to return None whenever `q` was absent, which meant the ONLY thing
     narrowing a cross-project report was the dashboard query — and without one,
-    `sla_report(project_id=None)` folded every project's bookkeeping rows into
+    the cross-project SLA report folded every project's bookkeeping rows into
     the average (RADD-789). The global `item.read` gate was all that stood in
     front of it, and RADD-788 relaxed that gate, so the two land together.
 
@@ -115,7 +109,7 @@ async def _matching_ids(
     )
 
 
-async def _scope_of(session: AsyncSession, actor: User | None) -> ReportScope:
+async def report_scope(session: AsyncSession, actor: User | None) -> ReportScope:
     """What a cross-project figure was computed over, for the header (RADD-789)."""
     from radd.modules.projects import service as projects_service
 
@@ -145,15 +139,15 @@ async def throughput(
     q: str | None = None,
 ) -> list[ThroughputBucket]:
     """Per bucket, the number of items that ENTERED a done-category state in it."""
-    matches = await _matching_ids(session, actor, q, project_id)
+    matches = await matching_ids(session, actor, q, project_id)
     item_ids = _keep(await timeline.item_ids_for_project(session, project_id), matches)
     timelines = await timeline.build_item_timelines(session, item_ids)
-    counts = {bucket: 0 for bucket in _bucket_starts(start, end, interval)}
+    counts = {bucket: 0 for bucket in bucket_starts(start, end, interval)}
     for item in timelines.values():
         for entry in item.done_entries:
             day = entry.at.date()
             if start <= day <= end:
-                bucket = _bucket_start(day, interval)
+                bucket = bucket_start(day, interval)
                 if bucket in counts:
                     counts[bucket] += 1
     return [
@@ -173,12 +167,12 @@ async def cumulative_flow(
     q: str | None = None,
 ) -> list[CumulativeFlowBucket]:
     """Per bucket, how many items sat in each StateCategory at the bucket's end."""
-    matches = await _matching_ids(session, actor, q, project_id)
+    matches = await matching_ids(session, actor, q, project_id)
     item_ids = _keep(await timeline.item_ids_for_project(session, project_id), matches)
     timelines = await timeline.build_item_timelines(session, item_ids)
     step = timedelta(weeks=1) if interval is ReportInterval.WEEK else timedelta(days=1)
     result: list[CumulativeFlowBucket] = []
-    for bucket in _bucket_starts(start, end, interval):
+    for bucket in bucket_starts(start, end, interval):
         moment = _end_of(bucket + step - timedelta(days=1))
         counts = {category.value: 0 for category in StateCategory}
         for item in timelines.values():
@@ -198,7 +192,7 @@ async def time_in_state(
     q: str | None = None,
 ) -> list[TimeInStateRow]:
     """Avg + median hours items spent in each category (completed segments only)."""
-    matches = await _matching_ids(session, actor, q, project_id)
+    matches = await matching_ids(session, actor, q, project_id)
     item_ids = _keep(await timeline.item_ids_for_project(session, project_id), matches)
     timelines = await timeline.build_item_timelines(session, item_ids)
     durations: dict[StateCategory, list[float]] = {category: [] for category in StateCategory}
@@ -260,11 +254,11 @@ async def velocity(
         # Like the cycle directory, return an empty collection when the
         # catalog atom is absent. Project-only readers still receive their
         # report scope without disclosure of cycle names or timeline data.
-        return VelocityReport(rows=[], scope=await _scope_of(session, actor))
+        return VelocityReport(rows=[], scope=await report_scope(session, actor))
     recent = await cycles_service.recent_completed_cycles(session, actor=actor, limit=last, today=date.today())
     if not recent:
         # Keep SLQ/field-access validation even for an empty cycle directory.
-        await _matching_ids(session, actor, q, candidate_ids=[])
+        await matching_ids(session, actor, q, candidate_ids=[])
     # A draft can be explicitly completed without planned dates. Use its actual
     # completion day for ordering, then creation as the final legacy fallback.
     def finished_on(cycle):
@@ -273,7 +267,7 @@ async def velocity(
     rows: list[VelocityRow] = []
     for cycle in sorted(recent, key=lambda cycle: (cycle.start_date or finished_on(cycle), cycle.id)):
         candidates = await timeline.item_ids_for_cycle(session, cycle.id)
-        matches = await _matching_ids(session, actor, q, candidate_ids=candidates)
+        matches = await matching_ids(session, actor, q, candidate_ids=candidates)
         item_ids = _keep(candidates, matches)
         timelines = await timeline.build_item_timelines(session, item_ids)
         points = await _points_measure(session, measure, item_ids)
@@ -288,7 +282,7 @@ async def velocity(
                 completed=_measure_of(done_ids, points),
             )
         )
-    return VelocityReport(rows=rows, scope=await _scope_of(session, actor))
+    return VelocityReport(rows=rows, scope=await report_scope(session, actor))
 
 
 async def burnup(
@@ -312,7 +306,7 @@ async def burnup(
             CycleEntity.CYCLE, reason="burnup needs a scheduled cycle (set start and end dates)"
         )
     candidates = await timeline.item_ids_for_cycle(session, cycle.id)
-    matches = await _matching_ids(session, actor, q, candidate_ids=candidates)
+    matches = await matching_ids(session, actor, q, candidate_ids=candidates)
     item_ids = _keep(candidates, matches)
     timelines = await timeline.build_item_timelines(session, item_ids)
     points = await _points_measure(session, measure, item_ids)
@@ -345,137 +339,5 @@ async def burnup(
             id=cycle.id, name=cycle.name, start_date=cycle.start_date, end_date=cycle.end_date
         ),
         series=series,
-        scope=await _scope_of(session, actor),
-    )
-
-
-# --- service desk (spec 63) ---
-
-
-@dataclass
-class _SlaWeekFold:
-    """Mutable per-week accumulator for the service-desk report (specs 63+65)."""
-
-    items: int = 0
-    response_met: int = 0
-    response_breached: int = 0
-    resolution_met: int = 0
-    resolution_breached: int = 0
-    breached_items: int = 0
-    response_seconds: list[float] = field(default_factory=list)
-    resolution_seconds: list[float] = field(default_factory=list)
-    csat_ratings: list[int] = field(default_factory=list)  # spec 65
-
-    def to_bucket(self, week: date) -> SlaReportBucket:
-        return SlaReportBucket(
-            week=week.isoformat(),
-            items=self.items,
-            response_met=self.response_met,
-            response_breached=self.response_breached,
-            resolution_met=self.resolution_met,
-            resolution_breached=self.resolution_breached,
-            breach_rate=round(self.breached_items / self.items, 4) if self.items else 0.0,
-            avg_response_seconds=(
-                round(statistics.mean(self.response_seconds), 1) if self.response_seconds else None
-            ),
-            avg_resolution_seconds=(
-                round(statistics.mean(self.resolution_seconds), 1)
-                if self.resolution_seconds
-                else None
-            ),
-            csat_avg=(
-                round(statistics.mean(self.csat_ratings), 2) if self.csat_ratings else None
-            ),
-            csat_count=len(self.csat_ratings),
-        )
-
-
-async def sla_report(
-    session: AsyncSession,
-    project_id: uuid.UUID | None,
-    weeks: int,
-    *,
-    actor: User | None = None,
-    q: str | None = None,
-) -> SlaReport:
-    """Weekly SLA outcomes over the engine's bookkeeping rows, bucketed by the
-    week each ITEM was created. "Met" = met without a breach stamp ("met late"
-    counts as breached); averages are wall-clock from item creation to the met
-    stamp (business-time-adjusted averages are a later refinement)."""
-    first_week = _bucket_start(date.today(), ReportInterval.WEEK) - timedelta(weeks=weeks - 1)
-    rows = await sla_states.state_rows(
-        session, project_id, since=datetime.combine(first_week, time.min)
-    )
-    matches = await _matching_ids(session, actor, q, project_id,
-                                  candidate_ids=list({row.item_id for row in rows}))
-    if matches is not None:
-        rows = [row for row in rows if row.item_id in matches]
-    # An item may carry several bookkeeping rows (pre-spec-63 evaluate-all era):
-    # fold per item first — earliest met stamps, any breach stamp counts.
-    per_item: dict[uuid.UUID, sla_states.SlaStateRow] = {}
-    for row in rows:
-        seen = per_item.get(row.item_id)
-        if seen is None:
-            per_item[row.item_id] = row
-            continue
-        per_item[row.item_id] = sla_states.SlaStateRow(
-            item_id=row.item_id,
-            item_created_at=row.item_created_at,
-            response_met_at=min(
-                (at for at in (seen.response_met_at, row.response_met_at) if at is not None),
-                default=None,
-            ),
-            response_breached_at=seen.response_breached_at or row.response_breached_at,
-            resolution_met_at=min(
-                (at for at in (seen.resolution_met_at, row.resolution_met_at) if at is not None),
-                default=None,
-            ),
-            resolution_breached_at=seen.resolution_breached_at or row.resolution_breached_at,
-        )
-
-    folds = {week: _SlaWeekFold() for week in _bucket_starts(first_week, date.today(), ReportInterval.WEEK)}
-    for row in per_item.values():
-        week = _bucket_start(row.item_created_at.date(), ReportInterval.WEEK)
-        fold = folds.get(week)
-        if fold is None:
-            continue
-        fold.items += 1
-        if row.response_breached_at is not None:
-            fold.response_breached += 1
-        elif row.response_met_at is not None:
-            fold.response_met += 1
-        if row.resolution_breached_at is not None:
-            fold.resolution_breached += 1
-        elif row.resolution_met_at is not None:
-            fold.resolution_met += 1
-        if row.response_breached_at is not None or row.resolution_breached_at is not None:
-            fold.breached_items += 1
-        if row.response_met_at is not None:
-            fold.response_seconds.append(
-                (row.response_met_at - row.item_created_at).total_seconds()
-            )
-        if row.resolution_met_at is not None:
-            fold.resolution_seconds.append(
-                (row.resolution_met_at - row.item_created_at).total_seconds()
-            )
-
-    # CSAT (spec 65) — NOTE the deliberate asymmetry: the SLA counters above
-    # bucket by the week the ITEM was created; ratings bucket by the week the
-    # RESPONSE arrived (responded_at). A rating landing weeks after the item was
-    # raised counts in the week it was given, so the trend shows sentiment as it
-    # actually arrives.
-    csat_rows = await csat_responses.responded_rows(
-        session, project_id, since=datetime.combine(first_week, time.min)
-    )
-    for csat_row in csat_rows:
-        # Same visibility intersection as the SLA counters above (RADD-789) — a
-        # rating is as project-scoped as the item it was given about.
-        if matches is not None and csat_row.item_id not in matches:
-            continue
-        fold = folds.get(_bucket_start(csat_row.responded_at.date(), ReportInterval.WEEK))
-        if fold is not None:
-            fold.csat_ratings.append(csat_row.rating)
-    return SlaReport(
-        buckets=[fold.to_bucket(week) for week, fold in sorted(folds.items())],
-        scope=await _scope_of(session, actor),
+        scope=await report_scope(session, actor),
     )

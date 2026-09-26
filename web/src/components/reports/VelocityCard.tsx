@@ -5,10 +5,9 @@ import { VELOCITY_DEFAULT_LAST, VELOCITY_LAST_OPTIONS } from "../../lib/constant
 import { CHART_ACCENT_COLOR } from "../../lib/meta";
 import { velocityQuery } from "../../lib/queries";
 import { ReportMeasure, type ReportMeasureValue } from "../../lib/types";
-import { BarChart } from "../charts/BarChart";
-import { ReportCard } from "../charts/ReportCard";
+import { BarChart, CardBody, ReportCard, ScopeNote } from "@radd-plugin-ui/reporting/charts";
 import { Select } from "../Select";
-import { CardBody, ScopeNote, Segmented } from "./report-state";
+import { Segmented } from "./report-state";
 import { MEASURE_OPTIONS } from "./measure";
 
 /** Velocity: completed items (or story points, spec 70) per finished cycle. */

@@ -1,4 +1,4 @@
-import { ChartHeightContext } from "../charts/ChartHeightContext";
+import { ChartHeightContext } from "@radd-plugin-ui/reporting/charts";
 import { useEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil, Trash2 } from "lucide-react";
 import type { DashboardWidget } from "../../lib/types";

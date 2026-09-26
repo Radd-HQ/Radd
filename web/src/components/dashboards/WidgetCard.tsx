@@ -17,7 +17,6 @@ import { Spinner } from "../Spinner";
 import { ItemKeyLink } from "../items/ItemBadges";
 import { BurnupCard } from "../reports/BurnupCard";
 import { CumulativeFlowCard } from "../reports/CumulativeFlowCard";
-import { SlaCard } from "../reports/SlaCard";
 import { ThroughputCard } from "../reports/ThroughputCard";
 import { TimeInStateCard } from "../reports/TimeInStateCard";
 import { VelocityCard } from "../reports/VelocityCard";
@@ -66,14 +65,6 @@ export function WidgetBody({
       return <VelocityWidget widget={widget} filterQuery={filterQuery} />;
     case WidgetType.reportBurnup:
       return <BurnupWidget widget={widget} filterQuery={filterQuery} />;
-    case WidgetType.reportSla:
-      return (
-        <SlaCard
-          projectId={widget.config.project_id ?? undefined}
-          initialWeeks={widget.config.weeks}
-          q={filterQuery}
-        />
-      );
     case WidgetType.slqCount:
       return <SlqCountCard widget={widget} filterQuery={filterQuery} />;
     case WidgetType.slqList:
@@ -81,7 +72,8 @@ export function WidgetBody({
     case WidgetType.viewCount:
       return <ViewCountCard widget={widget} filterQuery={filterQuery} />;
     default:
-      // A non-builtin type: a live plugin widget renders it; otherwise it's turned off (still in the
+      // A plugin draws it: a plugin-contributed type, or a builtin whose renderer belongs to a plugin
+      // (report_sla is the slas plugin's, RADD-1386). Otherwise it's turned off (still in the
       // manifest) or its plugin is gone entirely — the notice distinguishes the two.
       return pluginWidget ? (
         <>{pluginWidget.contribution.render({ config: widget.config, widget, filterQuery })}</>

@@ -1,16 +1,18 @@
 import { BarChart3 } from "lucide-react";
+import { Slot } from "@radd/plugin-sdk";
+import { REPORT_SECTION_SLOT } from "@radd-plugin-ui/reporting/report-contract";
 import { usePointsEnabled } from "../lib/hooks";
 import { TopBarQuery } from "../components/shell/TopBarSlot";
 import { QueryBar } from "../components/views/QueryBar";
 import { useSlqQueryState } from "../lib/slq-filter";
 import { BurnupCard } from "../components/reports/BurnupCard";
-import { SlaCard } from "../components/reports/SlaCard";
 import { VelocityCard } from "../components/reports/VelocityCard";
 
 /**
  * Global reporting (spec 19): cross-cycle delivery — velocity across finished
- * cycles and a burnup for any chosen cycle. Project-scoped reports
- * (throughput, CFD, time-in-state) live on each project's Reports tab.
+ * cycles and a burnup for any chosen cycle, then whatever reports plugins
+ * contribute (REPORT_SECTION_SLOT). Project-scoped reports (throughput, CFD,
+ * time-in-state) live on each project's Reports tab.
  */
 export function GlobalReportsPage() {
   // Story points (spec 70): this page follows the INSTANCE-resolved default
@@ -38,8 +40,8 @@ export function GlobalReportsPage() {
         <div className="space-y-4 px-6 py-5">
           <VelocityCard showPoints={pointsEnabled} q={q} />
           <BurnupCard showPoints={pointsEnabled} q={q} />
-          {/* Service desk (spec 63): server-wide SLA outcomes. */}
-          <SlaCard q={q} />
+          {/* Plugins' reports across every readable project — the SLA report among them (RADD-1386). */}
+          <Slot id={REPORT_SECTION_SLOT} q={q} />
         </div>
       </div>
     </div>

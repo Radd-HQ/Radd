@@ -7,7 +7,8 @@ Postgres in a rolled-back transaction (test_public_forms idiom):
   shape assumption (changes diff + state embed w/ category) stays verified.
 - public flow: unknown token 404, rating bounds 422, responded_at stamped once,
   re-submits allowed (latest wins), csat.responded emitted.
-- report: csat_avg/csat_count ride the /reports/sla buckets by responded week.
+- report: csat_avg/csat_count on the SLA report (slas's GET /sla-report) are
+  pinned in tests/test_sla_depth.py, csat loaded and unloaded (RADD-1386).
 
 Send paths never touch the network: `radd.smtp.send_message` is monkeypatched.
 """
@@ -35,7 +36,6 @@ from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.mailintake import service as mail_service, threading as mail_threading
 from radd.modules.mailintake.models import MailMessage, MailSender
 from radd.modules.mailintake.types import MailDirection, MailEvent, MailSenderKind
-from radd.modules.reporting import service as reporting
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.types import SettingKey, SettingScope
 from radd.modules.workflow import service as workflow_service
@@ -439,24 +439,3 @@ def test_public_submit_rating_bounds_and_comment_cap():
     with pytest.raises(ValidationError):
         PublicCsatSubmit(rating=3, comment="x" * 2001)
     assert PublicCsatSubmit(rating=3, comment="x" * 2000).rating == 3
-
-
-# --- report aggregation ---
-
-
-async def test_sla_report_carries_csat_by_responded_week(db, admin, project):
-    for rating in (5, 3):
-        item = await _item(db, admin, project)
-        survey = await csat_service.create_survey(
-            db, item_id=item.id, item_key=item.key
-        )
-        await csat_service.record_response(db, survey.token, PublicCsatSubmit(rating=rating))
-
-    buckets = (await reporting.sla_report(db, None, weeks=2)).buckets
-    assert sum(b.csat_count for b in buckets) == 2
-    week = next(b for b in buckets if b.csat_count)
-    assert week.csat_avg == pytest.approx(4.0)
-    # Weeks without responses stay None/0, and other projects see nothing.
-    assert all(b.csat_avg is None for b in buckets if b.csat_count == 0)
-    empty = (await reporting.sla_report(db, uuid.uuid4(), weeks=2)).buckets
-    assert sum(b.csat_count for b in empty) == 0

@@ -7,14 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
-from radd.modules.auth.deps import CurrentUser
+from radd.modules.auth.deps import Actor, CurrentUser
 from radd.modules.items import service as items_service
 from radd.modules.projects import service as projects_service
 
-from . import evaluation, service
+from . import evaluation, report, service
 from .queue import queue_items
 from radd.modules.items.schemas import ItemRead
 from .schemas import (
+    SLA_REPORT_DEFAULT_WEEKS,
+    SLA_REPORT_MAX_WEEKS,
     BatchTimerRead,
     ItemSlaEntry,
     ItemSlaRead,
@@ -22,6 +24,7 @@ from .schemas import (
     PolicyRead,
     PolicyUpdate,
     SlaBatchRequest,
+    SlaReport,
     TimerRead,
 )
 
@@ -115,3 +118,23 @@ async def item_sla(item_id: uuid.UUID, session: Session, user: CurrentUser) -> I
 async def queue_page(session: Session, user: CurrentUser, project_id: uuid.UUID | None = None,
                      q: str = "", limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     return await queue_items(session, user, project_id=project_id, q=q, limit=limit, offset=offset)
+
+
+@router.get("/sla-report", response_model=SlaReport)
+async def sla_report(
+    session: Session,
+    user: Actor,
+    project_id: uuid.UUID | None = None,
+    weeks: Annotated[int, Query(ge=1, le=SLA_REPORT_MAX_WEEKS)] = SLA_REPORT_DEFAULT_WEEKS,
+    q: str | None = None,
+) -> SlaReport:
+    """Service-desk SLA outcomes per item-created week (spec 63), with CSAT per
+    responded week while the csat plugin is loaded (spec 65). One project, or
+    every project the reader can see (the figure carries its scope, RADD-789).
+    Moved here from reporting's `/reports/sla` (RADD-1386)."""
+    if project_id is not None:
+        project = await projects_service.get_project(session, project_id)
+        await authz.require(session, user, Permission.ITEM_READ, project=project)
+    else:
+        await authz.require_member(session, user)
+    return await report.sla_report(session, project_id, weeks, actor=user, q=q)

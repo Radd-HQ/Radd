@@ -273,6 +273,15 @@ test('the host has no automation editor, transport or catalog lifecycle knowledg
   }
 });
 
+test('the SLA report is the slas plugin\'s and the chart kit is reporting\'s (RADD-1386)',()=>{
+  for(const file of ['web/src/components/reports/SlaCard.tsx','web/src/components/charts']) assert(!existsSync(file),file);
+  const violations=[];
+  for (const file of files('web/src')) for (const node of nodes(file)) {
+    if (node.type==='StringLiteral' && /^\/(?:reports\/sla|sla-report)(?:\/|$)/.test(node.value)) violations.push(`${file}:${node.loc.start.line}: ${node.value}`);
+  }
+  assert.deepEqual(violations,[]);
+});
+
 test('VCS settings and connector transport are owned by plugins',()=>{
   const violations=[];
   for (const file of files('web/src')) for (const node of nodes(file)) {

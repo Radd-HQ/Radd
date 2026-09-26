@@ -83,29 +83,3 @@ class BurnupSeries(BaseModel):
     cycle: CycleWindow
     series: list[BurnupPoint]
     scope: ReportScope
-
-
-class SlaReportBucket(BaseModel):
-    """Service-desk SLA outcomes for items CREATED in one ISO week (spec 63).
-
-    Averages are wall-clock seconds from item creation to the engine's met
-    stamps. The csat fields (spec 65) bucket by the week the RESPONSE arrived —
-    responded_at, NOT the item-created week the SLA counters use.
-    """
-
-    week: str  # the Monday of the ISO week (ISO date)
-    items: int  # distinct items with SLA bookkeeping in the bucket
-    response_met: int
-    response_breached: int
-    resolution_met: int
-    resolution_breached: int
-    breach_rate: float  # items with any breach / items (0 when items == 0)
-    avg_response_seconds: float | None  # None = nothing met in the bucket
-    avg_resolution_seconds: float | None
-    csat_avg: float | None  # mean rating of responses landing in the week (spec 65)
-    csat_count: int  # responses landing in the week
-
-
-class SlaReport(BaseModel):
-    buckets: list[SlaReportBucket]
-    scope: ReportScope

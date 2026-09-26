@@ -28,9 +28,8 @@ export type TimesheetGroupByValue = (typeof TimesheetGroupBy)[keyof typeof Times
 export const VELOCITY_LAST_OPTIONS: readonly number[] = [3, 5, 8, 12];
 export const VELOCITY_DEFAULT_LAST = 5;
 
-/** SLA report window in weeks (spec 63; backend caps at 26). */
+/** The "Service desk SLA" dashboard widget's window choices, in weeks (spec 63; GET /sla-report caps at 26). */
 export const SLA_REPORT_WEEKS_OPTIONS: readonly number[] = [4, 8, 12, 26];
-export const SLA_REPORT_DEFAULT_WEEKS = 12;
 /** List/board SLA chips re-poll cadence — timers tick server-side (spec 63). */
 export const SLA_BATCH_REFETCH_MS = 60_000;
 /** Backend cap on one batch request — surfaces slice their visible ids to it. */

@@ -155,14 +155,13 @@ export const ApiPath = {
   slqNl: "/slq/nl",
 } as const;
 
-/** Reporting endpoints (spec 19; sla — spec 63) — all under `/reports`. */
+/** Reporting endpoints (spec 19) — all under `/reports`. The SLA report is the slas plugin's own (RADD-1386). */
 export const ApiReportPath = {
   throughput: "/reports/throughput",
   cumulativeFlow: "/reports/cumulative-flow",
   timeInState: "/reports/time-in-state",
   velocity: "/reports/velocity",
   burnup: "/reports/burnup",
-  sla: "/reports/sla",
 } as const;
 
 /** How the api client reacts to a 401 response. */

@@ -3,10 +3,8 @@ import { errorMessage } from "../../lib/api";
 import { CHART_ACCENT_COLOR } from "../../lib/meta";
 import { throughputQuery } from "../../lib/queries";
 import type { ReportIntervalValue } from "../../lib/types";
-import { BarChart } from "../charts/BarChart";
-import { ReportCard } from "../charts/ReportCard";
+import { BarChart, CardBody, ReportCard } from "@radd-plugin-ui/reporting/charts";
 import { shortDate } from "@radd/plugin-sdk";
-import { CardBody } from "./report-state";
 
 /** Throughput: items entering a done state per bucket, as a bar chart (spec 19). */
 export function ThroughputCard({

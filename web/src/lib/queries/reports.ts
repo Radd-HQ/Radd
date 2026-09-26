@@ -13,7 +13,6 @@ import type {
   ItemKindValue,
   ReportIntervalValue,
   ReportMeasureValue,
-  SlaReport,
   ThroughputBucket,
   TimeInStateRow,
   VelocityReport,
@@ -92,18 +91,6 @@ export const burnupQuery = (cycleId: string, measure: ReportMeasureValue, q?: st
       api.get<BurnupSeries>(ApiReportPath.burnup, {
         signal,
         query: { cycle_id: cycleId, measure, q: q || undefined },
-      }),
-    staleTime: REPORT_STALE_MS,
-  });
-
-/** Weekly service-desk SLA outcomes (spec 63) — server-wide, optional project. */
-export const slaReportQuery = (projectId: string | null, weeks: number, q?: string) =>
-  queryOptions({
-    queryKey: queryKeys.reportSla(projectId, weeks, q),
-    queryFn: ({ signal }) =>
-      api.get<SlaReport>(ApiReportPath.sla, {
-        signal,
-        query: { project_id: projectId ?? undefined, weeks: String(weeks), q: q || undefined },
       }),
     staleTime: REPORT_STALE_MS,
   });

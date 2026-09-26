@@ -99,7 +99,8 @@ ANONYMOUS_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/v1/reports/time-in-state"),
         ("GET", "/api/v1/reports/velocity"),
         ("GET", "/api/v1/reports/burnup"),
-        ("GET", "/api/v1/reports/sla"),
+        # The SLA report is the slas plugin's own since RADD-1386; same fold.
+        ("GET", "/api/v1/sla-report"),
         ("GET", "/api/v1/search"),
         ("GET", "/api/v1/search/deflect"),
         ("GET", "/api/v1/search/entities"),  # RADD-1327: each owner applies its own read gate

@@ -375,10 +375,6 @@ export const BURNUP_COMPLETED_COLOR = "var(--status-success)";
 /** Accent for single-series bar charts (throughput, velocity). */
 export const CHART_ACCENT_COLOR = "var(--accent-fill)";
 
-/** SLA trend colors (spec 63): targets met vs breached per week. */
-export const SLA_MET_COLOR = "var(--status-success)";
-export const SLA_BREACHED_COLOR = "var(--status-danger)";
-
 // ---------------------------------------------------------------------------
 // Automations + intake forms (spec 20)
 // ---------------------------------------------------------------------------

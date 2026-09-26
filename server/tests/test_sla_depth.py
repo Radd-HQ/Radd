@@ -1,5 +1,6 @@
 """SLA depth (spec 63): first-match resolution against the DB, the list/board
-batch compute (shape + permission filtering), and the weekly SLA report.
+batch compute (shape + permission filtering), and the weekly SLA report — the
+slas plugin's own since RADD-1386, with CSAT folded in only while csat is loaded.
 
 Live Postgres inside a rolled-back transaction, like tests/test_reporting.py.
 The pure timer/first-match math lives in tests/test_sla.py.
@@ -13,13 +14,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
 from radd.exceptions import ConflictError
+from radd.kernel.registry import registries
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import Priority
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.reporting import service as reporting
-from radd.modules.slas import evaluation, service as slas
+from radd.modules.slas import evaluation, report as sla_report, service as slas
 from radd.modules.slas.models import SlaItemState
 from radd.modules.slas.schemas import PolicyCreate, PolicyUpdate
 from radd.modules.slas.types import SlaKind
@@ -264,9 +265,16 @@ async def test_batch_sla_shape_and_permission_filtering(db, admin):
         assert timer.due_at is not None and timer.remaining_seconds > 0
 
 
-async def test_sla_report_smoke(db, admin):
-    run = uuid.uuid4().hex[:6]
-    project = await _project(db, run, "SLR")
+async def test_sla_report_pins_outcomes_and_folds_csat_only_while_csat_is_loaded(db, admin):
+    """One item met both targets, one breached its response target; each got a
+    rating (5 and 3). The report pins every counter for their week, an unrelated
+    project sees an all-zero window, and with the csat plugin unregistered at
+    runtime the ratings drop out while the SLA counters stay exactly as they were
+    (RADD-1386: a weak edge, checked per request)."""
+    from radd.modules.csat import plugin as csat_plugin, service as csat_service
+    from radd.modules.csat.schemas import PublicCsatSubmit
+
+    project = await _project(db, uuid.uuid4().hex[:6], "SLR")
     policy = await slas.create_policy(
         db,
         PolicyCreate(
@@ -291,22 +299,46 @@ async def test_sla_report_smoke(db, admin):
             response_breached_at=late.created_at + timedelta(minutes=61),
         )
     )
+    for item, rating in ((met, 5), (late, 3)):
+        survey = await csat_service.create_survey(
+            db, item_id=item.id, item_key=f"{project.key}-{item.number}"
+        )
+        await csat_service.record_response(db, survey.token, PublicCsatSubmit(rating=rating))
     await db.flush()
 
-    # Spec 86: project_id=None is now truly global — scope to this test's project.
-    buckets = (await reporting.sla_report(db, project.id, weeks=2)).buckets
-    assert len(buckets) == 2
-    assert sum(b.items for b in buckets) == 2
-    assert sum(b.response_met for b in buckets) == 1
-    assert sum(b.response_breached for b in buckets) == 1
-    assert sum(b.resolution_met for b in buckets) == 1
-    week = next(b for b in buckets if b.items)
-    assert week.breach_rate == pytest.approx(0.5)
-    assert week.avg_response_seconds == pytest.approx(30 * 60)
-    assert week.avg_resolution_seconds == pytest.approx(4 * 3600)
-    # Project scoping: an unrelated project sees an all-zero window.
-    empty = (await reporting.sla_report(db, uuid.uuid4(), weeks=2)).buckets
-    assert sum(b.items for b in empty) == 0
+    def week_of_activity(buckets):
+        quiet = [b for b in buckets if b.items == 0 and b.csat_count == 0]
+        active = [b for b in buckets if b not in quiet]
+        assert len(buckets) == 2 and len(active) == 1
+        assert all(b.csat_avg is None and b.avg_response_seconds is None for b in quiet)
+        return active[0]
+
+    week = week_of_activity((await sla_report.sla_report(db, project.id, weeks=2)).buckets)
+    assert week.model_dump(exclude={"week"}) == {
+        "items": 2,
+        "response_met": 1,
+        "response_breached": 1,
+        "resolution_met": 1,
+        "resolution_breached": 0,
+        "breach_rate": 0.5,
+        "avg_response_seconds": 30 * 60,
+        "avg_resolution_seconds": 4 * 3600,
+        "csat_avg": 4.0,
+        "csat_count": 2,
+    }
+    elsewhere = (await sla_report.sla_report(db, uuid.uuid4(), weeks=2)).buckets
+    assert sum(b.items + b.csat_count for b in elsewhere) == 0
+
+    registries.unregister_plugin(csat_plugin)
+    try:
+        assert "csat" not in registries.plugins
+        without = week_of_activity((await sla_report.sla_report(db, project.id, weeks=2)).buckets)
+    finally:
+        registries.register_plugin(csat_plugin)
+    assert (without.csat_avg, without.csat_count) == (None, 0)
+    assert without.model_dump(exclude={"csat_avg", "csat_count"}) == week.model_dump(
+        exclude={"csat_avg", "csat_count"}
+    )
 
 
 def _raw(*, sender, subject, body, message_id, in_reply_to=None) -> bytes:

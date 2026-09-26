@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { CalendarRange } from "lucide-react";
 import { REPORT_DEFAULT_RANGE_DAYS } from "../lib/constants";
-import { isoDaysAgo } from "@radd/plugin-sdk";
+import { isoDaysAgo, Slot } from "@radd/plugin-sdk";
+import { REPORT_SECTION_SLOT } from "@radd-plugin-ui/reporting/report-contract";
 import { useProjectByKey, usePointsEnabled } from "../lib/hooks";
 import { REPORT_INTERVAL_LABELS, REPORT_INTERVAL_ORDER } from "../lib/meta";
 import { ReportInterval, type ReportIntervalValue } from "../lib/types";
@@ -13,7 +14,6 @@ import { useSlqQueryState } from "../lib/slq-filter";
 import { BurnupCard } from "../components/reports/BurnupCard";
 import { CumulativeFlowCard } from "../components/reports/CumulativeFlowCard";
 import { Segmented } from "../components/reports/report-state";
-import { SlaCard } from "../components/reports/SlaCard";
 import { ThroughputCard } from "../components/reports/ThroughputCard";
 import { TimeInStateCard } from "../components/reports/TimeInStateCard";
 import { VelocityCard } from "../components/reports/VelocityCard";
@@ -29,8 +29,9 @@ const dateInputClasses =
 
 /**
  * Project reporting dashboard (spec 19): throughput, cumulative flow, time in
- * state, velocity, and a cycle burnup. Throughput + CFD share the date-range
- * and interval controls; the other cards own their own controls.
+ * state, velocity, and a cycle burnup, then whatever reports plugins contribute
+ * (REPORT_SECTION_SLOT). Throughput + CFD share the date-range and interval
+ * controls; the other cards own their own controls.
  */
 export function ReportsPage() {
   const { projectKey = "" } = useParams({ strict: false });
@@ -113,8 +114,8 @@ export function ReportsPage() {
             <TimeInStateCard projectId={project.id} q={q} />
             <VelocityCard showPoints={pointsEnabled} q={q} />
           </div>
-          {/* Service desk (spec 63): weekly SLA outcomes for this project. */}
-          <SlaCard projectId={project.id} q={q} />
+          {/* Plugins' reports on this project — the slas plugin's SLA report among them (RADD-1386). */}
+          <Slot id={REPORT_SECTION_SLOT} projectId={project.id} q={q} />
         </div>
       </div>
     </div>

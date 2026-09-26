@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, model_validator
 
 from radd.apitypes import UtcDatetime
 from radd.modules.items.enums import ItemKind
-from radd.modules.reporting.service import SLA_REPORT_MAX_WEEKS
 from radd.modules.reporting.types import ReportInterval, ReportMeasure
 from radd.modules.views.schemas import ShareGroupRef, ShareTeamRef, ShareUserRef
 
@@ -20,6 +19,9 @@ WIDGET_MAX_WIDTH = 12
 SLQ_LIST_MAX_LIMIT = 20
 # Mirrors the /reports/velocity `last` bound.
 VELOCITY_MAX_LAST = 50
+# Mirrors GET /sla-report's `weeks` bound. The report is the slas plugin's
+# (RADD-1386), an optional plugin dashboards cannot import.
+SLA_MAX_WEEKS = 26
 DASHBOARD_MAX_SHARES = 50
 
 _width_field = Field(default=4, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
@@ -61,7 +63,7 @@ class ReportSlaConfig(BaseModel):
     """report_sla — {project_id?, weeks?} (spec 86: global scope)."""
 
     project_id: uuid.UUID | None = None
-    weeks: int = Field(default=12, ge=1, le=SLA_REPORT_MAX_WEEKS)
+    weeks: int = Field(default=12, ge=1, le=SLA_MAX_WEEKS)
 
 
 class SlqCountConfig(BaseModel):
