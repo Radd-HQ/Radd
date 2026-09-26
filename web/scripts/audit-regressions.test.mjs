@@ -23,7 +23,7 @@ const pageQueries = evaluate(pagesSource("queries.ts"), {
 let factories = source("queries/shared.ts");
 for (const [file, names] of [
   ["items", ["commentsQuery"]], ["activity", ["linkSearchQuery"]],
-  ["ai-search", ["searchQuery"]],
+  ["search", ["searchQuery"]],
 ]) {
   const code = source(`queries/${file}.ts`);
   for (const name of names) {

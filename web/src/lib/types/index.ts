@@ -31,6 +31,5 @@ export * from "./attachments";
 export * from "./storage";
 export * from "./service-desk";
 export * from "./search";
-export * from "./ai";
 export * from "./sso";
 export * from "./webhooks";

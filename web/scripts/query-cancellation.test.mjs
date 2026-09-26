@@ -28,13 +28,13 @@ const {api,abortAccountRequests}=evaluate(source('api.ts'),{
   API_BASE:'/api/v1',On401:{redirect:'redirect'},RoutePath:{login:'/login'},pushToast(){},FORBIDDEN_FALLBACK_MESSAGE:'Denied',
 },['api','abortAccountRequests']);
 const imports={api,Entity,entityMeta,projectEntityMeta,queryKeys,queryOptions:x=>x,keepPreviousData:undefined,
- ApiPath:{search:'/search',searchSemantic:'/search/semantic',searchDeflect:'/search/deflect',items:'/items'},
+ ApiPath:{search:'/search',searchDeflect:'/search/deflect',items:'/items'},
  DEFLECT_MIN_QUERY_CHARS:2,
  apiItemLinkSearchPath:()=>'/items/link-search',apiItemHistoryPath:id=>'/items/'+id+'/history',
  apiItemVcsLinksPath:()=>'',apiItemWebLinksPath:()=>'',
  ITEMS_PAGE_LIMIT:200,ROADMAP_MEMBERS_LIMIT:200,ROADMAP_TRAY_PAGE_LIMIT:50,VIEW_COUNTS_MAX_VIEWS:50,VIEW_COUNTS_REFETCH_MS:60000,
 };
-const ai=evaluate(source('queries/ai-search.ts'),imports,['searchQuery','semanticSearchQuery','deflectQuery']);
+const search=evaluate(source('queries/search.ts'),imports,['searchQuery','deflectQuery']);
 // Similar issues for a text seed are the ai plugin's own read (RADD-1395).
 const aiPlugin=evaluate(readFileSync(new URL('../../server/src/radd/modules/ai/ui/src/queries.ts',import.meta.url),'utf8'),
   {...imports,AiEndpoint:{similar:'/ai/similar'},AiEntity:{},itemSimilarPath:id=>'/items/'+id+'/similar'},['similarToTextQuery']);
@@ -55,10 +55,9 @@ try {
     ['form share recipient form',q=>formSharing.formShareCandidatesQuery(q,'team','',0),true],
     ['team references',q=>teams.teamReferencesQuery([q])],
     ['team counts',q=>teams.teamReferencesQuery([q],true)],
-    ['text search',q=>ai.searchQuery(q,20)],
-    ['semantic search',q=>ai.semanticSearchQuery(q)],
+    ['text search',q=>search.searchQuery(q,20)],
     ['similarity POST',q=>aiPlugin.similarToTextQuery('comment',q,'issue')],
-    ['deflection',q=>ai.deflectQuery(q,'project')],
+    ['deflection',q=>search.deflectQuery(q,'project')],
     ['link picker',q=>activity.linkSearchQuery('project',q)],
     ['provisioning references',q=>provisioning.provisioningReferencesQuery([q],[],[])],
     ['service account directory',q=>serviceAccounts.serviceAccountDirectoryQuery(q,0),true],
@@ -90,6 +89,29 @@ try {
     stop();
     assert(closing.signal.aborted,name+' must abort on last reader removal');
   }
+  // The palette's Ask is the ai remote's contributed mode (RADD-1400): the SDK keys ONE query per
+  // (mode, query) and hands its signal to the mode's answer, which forwards it to the request.
+  const palette=evaluate(readFileSync(new URL('../packages/plugin-sdk/src/palette-modes.ts',import.meta.url),'utf8'),
+    {queryOptions:x=>x,keepPreviousData:undefined},['paletteAnswerQuery']);
+  const ask=evaluate(readFileSync(new URL('../../server/src/radd/modules/ai/ui/src/palette/ask.ts',import.meta.url),'utf8'),
+    {api,paletteMode:x=>x,BookOpen:'BookOpen',Sparkles:'Sparkles',useAiStatus(){},AiEndpoint:{searchSemantic:'/search/semantic'},AiFeature:{}},['semanticAnswer']);
+  const askMode={plugin:'ai',generation:1,id:'ai.ask',answer:ask.semanticAnswer};
+  {
+    const observer=new QueryObserver(client,palette.paletteAnswerQuery(askMode,'before',()=>{}));
+    const stop=observer.subscribe(()=>{});
+    await tick();const old=pending.at(-1);
+    assert(old.url.includes('/search/semantic') && old.signal instanceof AbortSignal,'the palette Ask must reach fetch with a signal');
+    observer.setOptions(palette.paletteAnswerQuery(askMode,'after',()=>{}));
+    await tick();const latest=pending.at(-1);
+    assert(old.signal.aborted,'the palette Ask must abort superseded requests');
+    latest.resolve(new Response(JSON.stringify({enabled:true,items:[{item_id:'i',project_id:'p',key:'TD-1',title:'Current',score:0.5}],docs:[]}),{headers:{'Content-Type':'application/json'}}));
+    await tick();await tick();
+    assert.deepEqual(observer.getCurrentResult().data.rows.map(row=>[row.badge,row.href,row.hint]),[['TD-1','/issues/TD-1','50%']]);
+    observer.setOptions(palette.paletteAnswerQuery(askMode,'closing',()=>{}));
+    await tick();const closing=pending.at(-1);
+    stop();
+    assert(closing.signal.aborted,'the palette Ask must abort when the palette stops reading it');
+  }
   const grantObserver=new QueryObserver(client,resourceGrants.resourceGrantsPageQuery('field','first','',0));
   const stopGrant=grantObserver.subscribe(()=>{});await tick();
   pending.at(-1).resolve(new Response(JSON.stringify([{id:'first-grant'}]),{headers:{'X-Total-Count':'126'}}));
@@ -101,8 +123,8 @@ try {
   assert(pageRequest.signal.aborted);
   assert.equal(grantObserver.getCurrentResult().data,undefined,'a different resource never receives the previous resource grant rows');
   stopGrant();
-  const sharedA=new QueryObserver(client,ai.searchQuery('shared',20));
-  const sharedB=new QueryObserver(client,ai.searchQuery('shared',20));
+  const sharedA=new QueryObserver(client,search.searchQuery('shared',20));
+  const sharedB=new QueryObserver(client,search.searchQuery('shared',20));
   const stopA=sharedA.subscribe(()=>{});const stopB=sharedB.subscribe(()=>{});await tick();
   const shared=pending.at(-1);stopA();
   assert(!shared.signal.aborted,'one departing reader must not cancel another active reader');

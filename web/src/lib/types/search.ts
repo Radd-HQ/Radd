@@ -16,33 +16,6 @@ export interface SearchResponse {
   results: SearchResult[];
 }
 
-// ---------------------------------------------------------------------------
-// Semantic search (spec 103) — GET /search/semantic, the palette's Ask mode
-// ---------------------------------------------------------------------------
-
-export interface SemanticItem {
-  item_id: string;
-  project_id: string;
-  key: string;
-  title: string;
-  /** 1 − cosine distance, 0..1. */
-  score: number;
-}
-
-export interface SemanticDoc {
-  page_id: string;
-  space_id: string;
-  title: string;
-  score: number;
-}
-
-export interface SemanticResponse {
-  /** False = semantic search isn't configured here — hide the Ask affordance. */
-  enabled: boolean;
-  items: SemanticItem[];
-  docs: SemanticDoc[];
-}
-
 /** RADD-1327: one hit from any registered searchable type (a plugin's too). */
 export interface EntityHit {
   entity_type: string;

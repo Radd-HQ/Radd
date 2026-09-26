@@ -8,7 +8,8 @@
  *   3. the provider form opens (read-only: it is closed with Cancel);
  *   4. a real save round-trips: a throwaway preset is created, switched off and deleted from the
  *      page, each step confirmed through the API;
- *   5. the host's AI gate carries the entity tags the plugin invalidates;
+ *   5. the plugin's AI gate — the query bar's and the palette's Ask read it (RADD-1400) — carries
+ *      the entity tags its settings page invalidates;
  *   6. Server status and the Plugins page link to the plugin's page.
  *
  * Nothing the instance already had is changed: providers and roles are only read.
@@ -142,10 +143,20 @@ try {
   check("Delete removes it", gone);
   check("the page drops the row", await waitFor(session, `!document.querySelector('[data-ai-preset=${JSON.stringify(tag)}]')`));
 
-  // 5. the host's gate is tagged with what the plugin invalidates.
+  // 5. the plugin's gate (the query bar's and palette's Ask read it since RADD-1400) is tagged
+  // with what its settings page invalidates. This page has no query bar: opening the palette
+  // mounts its modes' gates, which read the status; closing it leaves the query unobserved.
+  for (const type of ["rawKeyDown", "keyUp"]) {
+    await session.send("Input.dispatchKeyEvent", { type, key: "k", code: "KeyK", windowsVirtualKeyCode: 75, modifiers: 2 });
+  }
+  await waitFor(session, `window.__RADD_QUERY_CLIENT__.getQueryData(["ai", "status"]) !== undefined`);
+  for (const type of ["rawKeyDown", "keyUp"]) {
+    await session.send("Input.dispatchKeyEvent", { type, key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+  }
+  await waitFor(session, `!document.querySelector('[role=dialog][aria-label="Command palette"]')`);
   const gate = await session.eval(`(async () => {
     const qc = window.__RADD_QUERY_CLIENT__;
-    const status = qc.getQueryCache().find({ queryKey: ["aiStatus"] });
+    const status = qc.getQueryCache().find({ queryKey: ["ai", "status"], exact: true });
     if (!status) return { cached: false };
     const before = { at: status.state.dataUpdatedAt, stale: status.state.isInvalidated };
     // What the plugin's invalidateEntities(queryClient, "aiRole") does. Off the pages that use it the
@@ -155,7 +166,7 @@ try {
     return { cached: true, entities: status.meta?.entities, staleBefore: before.stale,
       reached: status.state.isInvalidated || status.state.dataUpdatedAt > before.at };
   })()`);
-  check("the host's /ai/status read declares aiProvider + aiRole, and their invalidation reaches it",
+  check("the ai plugin's /ai/status gate declares aiProvider + aiRole, and their invalidation reaches it",
     gate.cached && gate.entities?.includes("aiProvider") && gate.entities?.includes("aiRole") && !gate.staleBefore && gate.reached,
     JSON.stringify(gate));
 

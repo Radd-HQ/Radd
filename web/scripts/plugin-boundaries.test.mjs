@@ -491,22 +491,18 @@ test('editor, read-mode, issue and draft AI are the ai plugin\'s: the host and t
     'web/src/components/editor/AiRunPanel.tsx','web/src/components/editor/AiSelectionToolbar.tsx','web/src/components/editor/AiActionPicker.tsx',
     'web/src/components/editor/AiReadMenu.tsx','web/src/components/items/AiResultsPanel.tsx','web/src/components/items/AiResultsPane.tsx',
     'web/src/components/items/AiSection.tsx','web/src/components/items/ai-results.ts','web/src/lib/sse.ts']) assert(!existsSync(file),file);
-  // The palette's Ask mode and the query bar's natural-language ask are the host's last AI surfaces:
-  // each needs a contribution point of its own. What they read is listed here and may not grow.
-  const residue=new Set(['web/src/components/CommandPalette.tsx','web/src/components/views/QueryBar.tsx','web/src/lib/ai.ts',
-    'web/src/lib/queries/ai-search.ts','web/src/lib/types/ai.ts','web/src/lib/types/index.ts','web/src/lib/cache.ts',
-    'web/src/lib/queries/shared.ts','web/src/lib/constants/api.ts']);
-  const residueNames=new Set(['aiStatusQuery','aiStatus','AiStatus','AiFeature','AiFeatureValue','aiProvider','aiRole','isAiGone','aiErrorText']);
-  const residueStrings=new Set(['/ai/status','../../lib/ai','./ai']);
-  const vocabulary=/(?:^|[a-z])Ai(?:[A-Z]|$)|^ai[A-Z]|^data-ai-/;
+  // Since RADD-1400 the palette's Ask and the query bar's natural language are contributed modes too:
+  // the host, the SDK and the bundled pages package name no AI at all — no identifier, no endpoint,
+  // not even the semantic search and natural-language routes the ai remote asks.
+  const vocabulary=/(?:^|[a-z])Ai(?:[A-Z]|$)|^ai[A-Z]|^data-ai-|^[Ss]emantic(?:[A-Z]|$)|^[Nn]l[A-Z]/;
+  const endpoints=/\/ai(?:\/|$)|\/search\/semantic|\/slq\/nl/;
   const violations=[];
   for (const file of [...files('web/src'),...files('web/packages/plugin-sdk/src'),...files('server/src/radd/modules/pages/ui/src')]) {
-    const allowed=residue.has(file);
     for (const node of nodes(file)) {
       const name=node.type==='Identifier'||node.type==='JSXIdentifier'?node.name:null;
-      if (name!==null && vocabulary.test(name) && !(allowed && residueNames.has(name))) violations.push(`${file}:${node.loc.start.line}: ${name}`);
+      if (name!==null && vocabulary.test(name)) violations.push(`${file}:${node.loc.start.line}: ${name}`);
       const text=node.type==='StringLiteral'?node.value:node.type==='TemplateElement'?node.value.raw:null;
-      if (text!==null && /\/ai(?:\/|$)/.test(text) && !(allowed && residueStrings.has(text))) violations.push(`${file}:${node.loc.start.line}: ${text}`);
+      if (text!==null && endpoints.test(text)) violations.push(`${file}:${node.loc.start.line}: ${text}`);
     }
   }
   assert.deepEqual(violations,[]);
@@ -528,4 +524,27 @@ test('editor, read-mode, issue and draft AI are the ai plugin\'s: the host and t
   const transform=readFileSync('server/src/radd/modules/ai/ui/src/editor/transform.ts','utf8');
   assert.match(transform,/maskProtected\(input\.document\)/);
   assert.match(transform,/restoreProtected\(text, kept\)/);
+});
+
+test('the palette and the query bar take contributed modes, and the ai remote contributes Ask to both (RADD-1400)',()=>{
+  for (const file of ['web/src/lib/ai.ts','web/src/lib/types/ai.ts','web/src/lib/queries/ai-search.ts']) assert(!existsSync(file),file);
+  const calls=file=>new Set(nodes(file).filter(n=>n.type==='CallExpression'&&n.callee.type==='Identifier').map(n=>n.callee.name));
+  // The host asks for modes where it offers them, and draws them itself.
+  assert(calls('web/src/components/CommandPalette.tsx').has('usePaletteModes'),'the palette asks for its modes');
+  assert(calls('web/src/components/CommandPalette.tsx').has('usePaletteAnswer'),'the palette runs a mode\'s answer');
+  assert(calls('web/src/components/views/QueryBar.tsx').has('useQueryInputModes'),'the query bar asks for its input modes');
+  // With none contributed the bar is plain SLQ: the toggle is drawn only over available modes.
+  assert.match(readFileSync('web/src/components/views/QueryBar.tsx','utf8'),/\{modes\.length > 0 && \(\s*<div\s+role="group"/);
+  // The ai remote contributes both, built with the SDK's helpers, over the endpoints the host no longer names.
+  const root='server/src/radd/modules/ai/ui/src';
+  const listed=nodes(`${root}/index.tsx`).filter(n=>n.type==='ObjectProperty'&&n.key.name==='contributions')
+    .flatMap(n=>n.value.elements??[]).filter(e=>e.type==='Identifier').map(e=>e.name);
+  assert.deepEqual(listed.filter(name=>['askPaletteMode','naturalLanguageMode'].includes(name)).sort(),['askPaletteMode','naturalLanguageMode']);
+  assert(calls(`${root}/palette/ask.ts`).has('paletteMode'),'Ask is a palette mode');
+  assert(calls(`${root}/query-bar/natural-language.ts`).has('queryInputMode'),'natural language is a query-bar input mode');
+  const strings=new Set(nodes(`${root}/transport.ts`).filter(n=>n.type==='StringLiteral').map(n=>n.value));
+  for (const endpoint of ['/search/semantic','/slq/nl','/ai/status']) assert(strings.has(endpoint),`the ai remote owns ${endpoint}`);
+  const members=file=>new Set(nodes(file).filter(n=>n.type==='MemberExpression'&&n.object.name==='AiEndpoint').map(n=>n.property.name));
+  assert(members(`${root}/palette/ask.ts`).has('searchSemantic'));
+  assert(members(`${root}/query-bar/natural-language.ts`).has('nlQuery'));
 });

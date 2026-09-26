@@ -98,9 +98,10 @@ plugin = RaddPlugin(
     # through the SDK's ScopedSettings); disabling the plugin withdraws the page
     # and its nav entry with it. RADD-1395: every editor, read-mode, issue and
     # submission-form AI surface is that remote's too, through the editor's
-    # extension points (UI API 1.16.0).
+    # extension points (UI API 1.16.0). RADD-1400: so are the command palette's
+    # Ask and the query bar's natural language, as contributed modes (1.18.0).
     ui=PluginUiManifest(
-        remote="/plugins/ai/remoteEntry.js", ui_api_version="1.16.0",
+        remote="/plugins/ai/remoteEntry.js", ui_api_version="1.18.0",
         nav=(NavItemSpec(key="ai", label="AI", path="/settings/ai", section="settings",
                          group="Server", icon="sparkles", order=25, requires_admin=True),),
     ),

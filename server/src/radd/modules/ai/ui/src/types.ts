@@ -1,5 +1,6 @@
 /** The ai plugin's reading-side wire shapes (specs 46/101/103): its status gate, editor actions,
- *  summaries and similar issues. Settings → AI's registry shapes live in `settings/types.ts`. */
+ *  summaries, similar issues, the palette's Ask (semantic search) and the query bar's natural
+ *  language (RADD-1400). Settings → AI's registry shapes live in `settings/types.ts`. */
 
 /** Per-feature keys of `AiStatus.features` (spec 101). */
 export const AiFeature = {
@@ -78,4 +79,39 @@ export type AiResultRequest =
 export interface ImagesOf {
   entity_type: string;
   entity_id: string;
+}
+
+/** GET /search/semantic (spec 103) — the palette's Ask: one probe by meaning over items + pages. */
+export interface SemanticItem {
+  item_id: string;
+  project_id: string;
+  key: string;
+  title: string;
+  /** 1 − cosine distance, 0..1. */
+  score: number;
+}
+
+export interface SemanticDoc {
+  page_id: string;
+  space_id: string;
+  title: string;
+  score: number;
+}
+
+export interface SemanticResponse {
+  /** False = semantic search isn't configured here (no live provider) — never an error. */
+  enabled: boolean;
+  items: SemanticItem[];
+  docs: SemanticDoc[];
+}
+
+/** POST /slq/nl (spec 46) — natural language → a validated SLQ query in a dialect (spec 98). */
+export interface NlQueryRequest {
+  question: string;
+  dialect?: string;
+}
+
+export interface NlQueryResponse {
+  slq: string;
+  explanation: string;
 }

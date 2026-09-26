@@ -78,8 +78,6 @@ export const ApiPath = {
   searchEntities: "/search/entities",
   // KB deflection for the new-issue flow (spec 66).
   searchDeflect: "/search/deflect",
-  // Semantic "Ask" search for the palette (spec 103).
-  searchSemantic: "/search/semantic",
   // Service desk (spec 30).
   cannedResponses: "/canned-responses",
   // Spec 113 — service accounts and their scoped keys.
@@ -118,9 +116,6 @@ export const ApiPath = {
   // Builtin-field write rules (spec 36).
   // The wiki's endpoints are the pages plugin's `PageApi` (RADD-1392).
   webhooks: "/webhooks",
-  // The query bar's Ask mode and the palette's semantic search still gate on it (RADD-1395
-  // moved every other AI surface to the ai plugin).
-  aiStatus: "/ai/status",
   // UNAUTHENTICATED — the login page's buttons (label + kind only). The
   // provider registry's admin paths are the sso plugin's own (RADD-1380).
   ssoPublicProviders: "/auth/sso/providers",
@@ -137,7 +132,6 @@ export const ApiPath = {
   storageUploadContext: "/storage/upload-context",
   // The signed-in user's server-side preferences dict (spec 94; shallow-merge PUT).
   mePreferences: "/auth/me/preferences",
-  slqNl: "/slq/nl",
 } as const;
 
 /** Reporting endpoints (spec 19) — all under `/reports`. The SLA report is the slas plugin's own (RADD-1386). */

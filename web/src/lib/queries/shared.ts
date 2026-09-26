@@ -114,7 +114,6 @@ export const queryKeys = {
   itemWatchers: (itemId: string) => ["itemWatchers", { itemId }] as const,
   deflect: (q: string, projectId: string) => ["deflect", { q, projectId }] as const,
   totp: ["auth", "totp"] as const,
-  aiStatus: ["aiStatus"] as const,
   // Storage host registry + routing chain + move jobs (spec 102).
   storageHosts: ["storageHosts"] as const,
   storageRules: ["storageRules"] as const,
@@ -122,8 +121,6 @@ export const queryKeys = {
   storageUploadContext: ["storageUploadContext"] as const,
   storageMoveJobs: ["storageMoveJobs"] as const,
   storageMoveJob: (jobId: string) => ["storageMoveJob", { jobId }] as const,
-  // Semantic "Ask" search (spec 103) — the palette's second mode.
-  searchSemantic: (q: string) => ["searchSemantic", { q }] as const,
   // The signed-in user's server-side preferences dict (spec 94).
   mePreferences: ["auth", "me", "preferences"] as const,
 } as const;

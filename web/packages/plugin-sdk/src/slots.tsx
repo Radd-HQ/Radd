@@ -111,6 +111,15 @@ export const SlotId = {
    *  contribution with `itemAttribute(spec)`; the host reads its `meta` for the column and renders it
    *  through `ItemAttributeCell` with { item, value, surface }. */
   itemAttribute: "item.attribute",
+  // --- the command palette and the query bar (RADD-1400) ---
+  /** A MODE of the command palette, keyed by `match` = the mode's id. Build it with
+   *  `paletteMode(spec)`: its `meta` is the mode, its render the gate the palette mounts while open
+   *  (props: { report }). The palette draws the mode's entry row and its answer's rows. */
+  paletteMode: "palette.mode",
+  /** An INPUT MODE of the query bar — free text in, SLQ out — keyed by `match` = the mode's id.
+   *  Build it with `queryInputMode(spec)`; the bar draws the toggle and owns mod+I and the
+   *  empty-bar default. Props: { report } (the gate). */
+  queryInputMode: "query.input.mode",
   // --- automations (RADD-1325) ---
   /** The inspector form for ONE automation node type (matched by `match` = the node type, e.g.
    *  "ai.classify"). Props: { node, params, onChange } — `params` is the node's stored params,

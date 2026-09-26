@@ -54,10 +54,6 @@ export const Entity = {
   docSpace: "docSpace",
   page: "page",
   dashboard: "dashboard",
-  // The ai plugin's settings page invalidates these (RADD-1379); the host's AI
-  // status gate (the query bar's Ask mode, the palette's semantic search) declares them.
-  aiProvider: "aiProvider",
-  aiRole: "aiRole",
 } as const;
 
 export type EntityTag = (typeof Entity)[keyof typeof Entity];

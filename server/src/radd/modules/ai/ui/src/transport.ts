@@ -13,6 +13,10 @@ export const AiEndpoint = {
   editorActions: "/ai/editor/actions",
   editorStream: "/ai/editor/stream",
   mePreferences: "/auth/me/preferences",
+  /** The palette's Ask (RADD-1400): search's route, answered from this plugin's vectors. */
+  searchSemantic: "/search/semantic",
+  /** The query bar's natural language → SLQ (RADD-1400). */
+  nlQuery: "/slq/nl",
 } as const;
 
 export const itemSummarizePath = (itemId: string) => `/items/${itemId}/ai/summarize`;

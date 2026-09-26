@@ -13,10 +13,17 @@ import {
   Plus,
   Search,
   Settings,
-  Sparkles,
   SquareKanban,
   GanttChartSquare,
 } from "lucide-react";
+import {
+  errorMessage,
+  isPaletteText,
+  usePaletteAnswer,
+  usePaletteModes,
+  type PaletteMode,
+  type PaletteRow,
+} from "@radd/plugin-sdk";
 import type { LucideIcon } from "lucide-react";
 import { useNavFacts } from "../lib/nav-facts";
 import { PALETTE_SEARCH_LIMIT, RoutePath, SEARCH_DEBOUNCE_MS } from "../lib/constants";
@@ -24,8 +31,8 @@ import { usePermissions } from "../lib/hooks";
 import { PageRoute, pagePermalink } from "@radd-plugin-ui/pages/links";
 import { pageSearchQuery } from "@radd-plugin-ui/pages/queries";
 import type { PageSearchResult } from "@radd-plugin-ui/pages/types";
-import { aiStatusQuery, searchQuery, semanticSearchQuery, entitySearchQuery } from "../lib/queries";
-import { AiFeature, Permission, type EntityHit, type SearchResult, type SemanticDoc, type SemanticItem } from "../lib/types";
+import { searchQuery, entitySearchQuery } from "../lib/queries";
+import { Permission, type EntityHit, type SearchResult } from "../lib/types";
 import { NewItemModal } from "./items/NewItemModal";
 import { listRecentItems } from "../lib/recent";
 import { projectsQuery, projectByKeyQuery } from "@radd-plugin-ui/projects/directory-queries";
@@ -35,16 +42,10 @@ import type { Project } from "@radd-plugin-ui/projects/types";
  * Cmd-K command palette (spec 28): quick-open issues via the search module +
  * client-side "Go to" navigation. Opened with Cmd/Ctrl-K anywhere, or
  * programmatically via `openCommandPalette()` (the sidebar Search row).
- * Spec 103 adds an Ask mode — "search by meaning" over GET /search/semantic —
- * entered from a trailing palette row and left with Esc/back, never by closing.
+ * Plugins give it more faces (RADD-1400): a contributed MODE is entered from a
+ * trailing palette row and left with Esc/back, never by closing, and answers
+ * what is typed with rows (drawn and navigated like the palette's own) or text.
  */
-
-/** The palette's two faces: keyword search vs the semantic Ask results. */
-const PaletteMode = {
-  search: "search",
-  ask: "ask",
-} as const;
-type PaletteModeValue = (typeof PaletteMode)[keyof typeof PaletteMode];
 
 type Listener = () => void;
 const openListeners = new Set<Listener>();
@@ -61,7 +62,7 @@ interface GotoEntry {
 }
 
 /** A selectable palette row: an issue/doc hit, a navigation target, an action,
- * the Ask-mode entry point, or a semantic match. */
+ * a contributed mode's entry point, or a row of that mode's answer. */
 type PaletteEntry =
   | { kind: "issue"; result: SearchResult }
   | { kind: "doc"; result: PageSearchResult }
@@ -69,9 +70,8 @@ type PaletteEntry =
   | { kind: "entity"; hit: EntityHit; group: string }
   | { kind: "goto"; entry: GotoEntry }
   | { kind: "action"; label: string; project: Project }
-  | { kind: "ask" }
-  | { kind: "semantic-item"; result: SemanticItem }
-  | { kind: "semantic-doc"; result: SemanticDoc };
+  | { kind: "mode"; mode: PaletteMode }
+  | { kind: "answer"; row: PaletteRow };
 
 const STATIC_GOTOS: GotoEntry[] = [
   { label: "My Work", icon: House, to: RoutePath.home },
@@ -108,7 +108,8 @@ export function renderSnippet(snippet: string): ReactNode[] {
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<PaletteModeValue>(PaletteMode.search);
+  // null = the keyword search face; else the id of the contributed mode in use.
+  const [modeId, setModeId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [selected, setSelected] = useState(0);
@@ -130,32 +131,31 @@ export function CommandPalette() {
       ? [...(projectList ?? []), currentProject] : projectList),
     [projectList, currentProject],
   );
+  // The contributed modes the palette may offer; their gates run only while it is open. A mode
+  // withdrawn while in use hands the palette back to search.
+  const { modes, gates } = usePaletteModes(open);
+  const mode = modes.find((candidate) => candidate.id === modeId) ?? null;
+  const searching = open && mode === null;
   const { data: searchData } = useQuery(
-    searchQuery(open && mode === PaletteMode.search ? debounced : "", PALETTE_SEARCH_LIMIT),
+    searchQuery(searching ? debounced : "", PALETTE_SEARCH_LIMIT),
   );
   // Doc results merged in (spec 43) — a second query, section-headed "Pages".
   const { data: docsData } = useQuery(
-    pageSearchQuery(open && mode === PaletteMode.search ? debounced : "", PALETTE_SEARCH_LIMIT),
+    pageSearchQuery(searching ? debounced : "", PALETTE_SEARCH_LIMIT),
   );
   // RADD-1327: every other registered searchable type (a plugin's entities),
   // each answered and ACL-filtered by its owner. Issues and pages keep their
   // dedicated queries above, so they are excluded here.
   const { data: entityData } = useQuery(
-    entitySearchQuery(open && mode === PaletteMode.search ? debounced : "", {
+    entitySearchQuery(searching ? debounced : "", {
       exclude: "item,page",
       limit: PALETTE_SEARCH_LIMIT,
     }),
   );
-  // Ask mode (spec 103): the affordance gates on the semantic_search feature
-  // flag; the response's own `enabled` catches it going dormant mid-session.
-  const { data: aiStatus } = useQuery({ ...aiStatusQuery, enabled: open });
-  const askAvailable = Boolean(aiStatus?.enabled && aiStatus.features[AiFeature.semanticSearch]);
-  const semantic = useQuery(
-    semanticSearchQuery(open && mode === PaletteMode.ask ? debounced : ""),
-  );
+  const answered = usePaletteAnswer(open ? mode : null, debounced);
 
   const backToSearch = () => {
-    setMode(PaletteMode.search);
+    setModeId(null);
     setSelected(0);
     inputRef.current?.focus();
   };
@@ -194,7 +194,7 @@ export function CommandPalette() {
   // Reset + focus on open; debounce the search text while typing.
   useEffect(() => {
     if (open) {
-      setMode(PaletteMode.search);
+      setModeId(null);
       setQuery("");
       setDebounced("");
       setSelected(0);
@@ -265,27 +265,22 @@ export function CommandPalette() {
         result: { item_id: "", project_id: "", key: recent.key, title: recent.title, snippet: null },
       }));
   const gotoEntries: PaletteEntry[] = gotos.map((entry) => ({ kind: "goto", entry }));
-  // The Ask entry point trails the search-mode list whenever there's a query.
-  const askEntries: PaletteEntry[] =
-    askAvailable && query.trim() !== "" ? [{ kind: "ask" }] : [];
-  const semanticItemEntries: PaletteEntry[] = (semantic.data?.items ?? []).map((result) => ({
-    kind: "semantic-item",
-    result,
-  }));
-  const semanticDocEntries: PaletteEntry[] = (semantic.data?.docs ?? []).map((result) => ({
-    kind: "semantic-doc",
-    result,
-  }));
+  // Each mode's entry point trails the search-face list whenever there's a query.
+  const modeEntries: PaletteEntry[] =
+    query.trim() !== "" ? modes.map((candidate) => ({ kind: "mode" as const, mode: candidate })) : [];
+  const answer = answered.answer;
+  const answerRows = answer && !isPaletteText(answer) ? answer.rows : [];
+  const answerEntries: PaletteEntry[] = answerRows.map((row) => ({ kind: "answer", row }));
   const entries: PaletteEntry[] =
-    mode === PaletteMode.ask
-      ? [...semanticItemEntries, ...semanticDocEntries]
-      : [...recentEntries, ...issueEntries, ...docEntries, ...entityEntries, ...actionEntries, ...gotoEntries, ...askEntries];
+    mode !== null
+      ? answerEntries
+      : [...recentEntries, ...issueEntries, ...docEntries, ...entityEntries, ...actionEntries, ...gotoEntries, ...modeEntries];
   const clamped = Math.min(selected, Math.max(entries.length - 1, 0));
 
   const choose = (entry: PaletteEntry) => {
-    // Ask switches the palette's face; it never closes it.
-    if (entry.kind === "ask") {
-      setMode(PaletteMode.ask);
+    // A mode's entry switches the palette's face; it never closes it.
+    if (entry.kind === "mode") {
+      setModeId(entry.mode.id);
       setSelected(0);
       inputRef.current?.focus();
       return;
@@ -293,11 +288,10 @@ export function CommandPalette() {
     setOpen(false);
     if (entry.kind === "issue") {
       void navigate({ to: RoutePath.issue, params: { itemKey: entry.result.key } });
-    } else if (entry.kind === "semantic-item") {
-      void navigate({ to: RoutePath.issue, params: { itemKey: entry.result.key } });
+    } else if (entry.kind === "answer") {
+      // The mode's own site-relative address, followed by the router (no reload).
+      void navigate({ href: entry.row.href });
     } else if (entry.kind === "doc") {
-      void navigate(pagePermalink(entry.result.page_id));
-    } else if (entry.kind === "semantic-doc") {
       void navigate(pagePermalink(entry.result.page_id));
     } else if (entry.kind === "entity") {
       // The owner's own site-relative address — a plugin route the host
@@ -326,9 +320,10 @@ export function CommandPalette() {
       aria-modal="true"
       aria-label="Command palette"
     >
+      {gates}
       <div className="animate-menu-in w-full max-w-xl overflow-hidden rounded-lg border border-subtle bg-surface shadow-pop">
         <div className="flex items-center gap-2 border-b border-subtle px-4">
-          {mode === PaletteMode.ask ? (
+          {mode !== null ? (
             <button
               type="button"
               onClick={backToSearch}
@@ -349,9 +344,9 @@ export function CommandPalette() {
               setSelected(0);
             }}
             onKeyDown={(event) => {
-              // Esc backs out of Ask mode first; only search mode closes.
+              // Esc backs out of a mode first; only the search face closes.
               if (event.key === "Escape") {
-                if (mode === PaletteMode.ask) backToSearch();
+                if (mode !== null) backToSearch();
                 else setOpen(false);
               } else if (event.key === "ArrowDown") {
                 event.preventDefault();
@@ -363,9 +358,7 @@ export function CommandPalette() {
                 choose(entries[clamped]);
               }
             }}
-            placeholder={
-              mode === PaletteMode.ask ? "Search by meaning…" : "Search issues, or jump to…"
-            }
+            placeholder={mode?.placeholder ?? "Search issues, or jump to…"}
             aria-label="Search"
             className="w-full bg-transparent py-3 text-sm text-heading placeholder:text-fg-faint focus:outline-none"
           />
@@ -375,63 +368,37 @@ export function CommandPalette() {
         </div>
 
         <div className="max-h-[50vh] overflow-y-auto py-1">
-          {mode === PaletteMode.ask ? (
+          {mode !== null ? (
             <>
-              {entries.length > 0 && <SectionLabel>Semantic matches</SectionLabel>}
-              {semanticItemEntries.map((entry, index) => (
-                <PaletteRow
-                  key={entry.kind === "semantic-item" ? entry.result.item_id : index}
-                  active={index === clamped}
-                  onClick={() => choose(entry)}
-                  onHover={() => setSelected(index)}
-                >
-                  {entry.kind === "semantic-item" && (
-                    <>
-                      <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary">
-                        {entry.result.key}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-fg">
-                        {entry.result.title}
-                      </span>
-                      <span className="shrink-0 text-[10px] text-fg-faint">
-                        {Math.round(entry.result.score * 100)}%
-                      </span>
-                    </>
-                  )}
-                </PaletteRow>
-              ))}
-              {semanticDocEntries.map((entry, index) => {
-                const flatIndex = semanticItemEntries.length + index;
-                return (
+              {answer?.heading && (entries.length > 0 || answered.text) && <SectionLabel>{answer.heading}</SectionLabel>}
+              {answerEntries.map((entry, index) =>
+                entry.kind === "answer" ? (
                   <PaletteRow
-                    key={entry.kind === "semantic-doc" ? entry.result.page_id : flatIndex}
-                    active={flatIndex === clamped}
+                    key={entry.row.id}
+                    active={index === clamped}
                     onClick={() => choose(entry)}
-                    onHover={() => setSelected(flatIndex)}
+                    onHover={() => setSelected(index)}
                   >
-                    {entry.kind === "semantic-doc" && (
-                      <>
-                        <BookOpen size={14} className="shrink-0 text-fg-muted" aria-hidden />
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-fg">
-                          {entry.result.title}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-fg-faint">
-                          {Math.round(entry.result.score * 100)}%
-                        </span>
-                      </>
-                    )}
+                    <AnswerRow row={entry.row} />
                   </PaletteRow>
-                );
-              })}
-              {entries.length === 0 && (
+                ) : null,
+              )}
+              {answered.text && entries.length === 0 && (
+                <p className="whitespace-pre-wrap px-4 py-3 text-[13px] text-fg" data-palette-answer-text>
+                  {answered.text}
+                </p>
+              )}
+              {entries.length === 0 && !answered.text && (
                 <p className="px-4 py-6 text-center text-sm text-fg-muted">
-                  {semantic.isFetching
-                    ? "Searching…"
-                    : semantic.data && !semantic.data.enabled
-                      ? "Semantic search isn't available."
-                      : query.trim()
-                        ? "Nothing similar found."
-                        : "Type to search by meaning."}
+                  {answered.fetching
+                    ? (mode.busyLabel ?? "Searching…")
+                    : answered.error
+                      ? errorMessage(answered.error)
+                      : query.trim() && answer && !isPaletteText(answer)
+                        ? (answer.empty ?? "No matches.")
+                        : query.trim()
+                          ? "No matches."
+                          : (mode.prompt ?? "Type to search.")}
                 </p>
               )}
             </>
@@ -556,21 +523,23 @@ export function CommandPalette() {
             );
           })}
 
-          {/* Ask mode entry point (spec 103) — trails the list so keyword hits stay first. */}
-          {askEntries.map((entry) => {
+          {/* Each contributed mode's entry point — trails the list so keyword hits stay first. */}
+          {modeEntries.map((entry, index) => {
+            if (entry.kind !== "mode") return null;
             const flatIndex =
-              issueEntries.length + docEntries.length + entityEntries.length + actionEntries.length + gotoEntries.length;
+              issueEntries.length + docEntries.length + entityEntries.length + actionEntries.length + gotoEntries.length + index;
+            const Icon = entry.mode.icon;
             return (
               <PaletteRow
-                key="ask"
+                key={`mode:${entry.mode.id}`}
                 active={flatIndex === clamped}
                 onClick={() => choose(entry)}
                 onHover={() => setSelected(flatIndex)}
               >
-                <Sparkles size={14} className="shrink-0 text-accent-text" aria-hidden />
+                {Icon ? <Icon size={14} className="shrink-0 text-accent-text" aria-hidden /> : null}
                 <span className="truncate text-[13px] text-fg">
-                  Ask: “{query.trim()}”{" "}
-                  <span className="text-fg-muted">— search by meaning</span>
+                  {entry.mode.label}: “{query.trim()}”{" "}
+                  <span className="text-fg-muted">— {entry.mode.hint}</span>
                 </span>
               </PaletteRow>
             );
@@ -586,6 +555,28 @@ export function CommandPalette() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** A row of a mode's answer, in the palette's own row anatomy. */
+function AnswerRow({ row }: { row: PaletteRow }) {
+  const Icon = row.icon;
+  return (
+    <>
+      {Icon ? <Icon size={14} className="shrink-0 text-fg-muted" aria-hidden /> : null}
+      {row.badge ? (
+        <span className="shrink-0 rounded bg-elevated px-1.5 font-mono text-[11px] text-fg-secondary">{row.badge}</span>
+      ) : null}
+      {row.subtitle ? (
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] text-fg">{row.title}</span>
+          <span className="block truncate text-xs text-fg-muted">{row.subtitle}</span>
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{row.title}</span>
+      )}
+      {row.hint ? <span className="shrink-0 text-[10px] text-fg-faint">{row.hint}</span> : null}
+    </>
   );
 }
 

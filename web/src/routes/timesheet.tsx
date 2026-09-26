@@ -1,4 +1,4 @@
-import { usePluginData, type TimesheetAnnotation, EmptyState, Table, TBody, Td, THead, Th, ErrorText, formatIso, todayIso } from "@radd/plugin-sdk";
+import { QueryDialect, usePluginData, type TimesheetAnnotation, EmptyState, Table, TBody, Td, THead, Th, ErrorText, formatIso, todayIso } from "@radd/plugin-sdk";
 import { Fragment, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, ChevronLeft, ChevronRight, Plus, Tag } from "lucide-react";
@@ -154,8 +154,7 @@ export function TimesheetPage() {
       <TopBarQuery>
         <QueryBar
           filter={slqFilter}
-          dialect={ApiPath.timesheet}
-          nlDialect="worklog"
+          dialect={QueryDialect.worklog}
           placeholder={"Filter worklogs: author = me AND issue.assignee != me"}
         />
       </TopBarQuery>

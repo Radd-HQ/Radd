@@ -21,6 +21,6 @@ export * from "./activity";
 export * from "./notifications";
 export * from "./service-desk";
 export * from "./batches";
-export * from "./ai-search";
+export * from "./search";
 export * from "./storage-admin";
 export * from "./integrations";

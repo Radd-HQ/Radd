@@ -148,6 +148,17 @@ export { copyText } from "./clipboard";
 export { useListFilter } from "./list-filter";
 export { useDebounced } from "./debounced";
 
+// Modes (RADD-1400): the command palette's faces and the query bar's input modes are contributions.
+export { type ModeIcon, type ModeSpec, type ContributedMode } from "./contributed-modes";
+export {
+  paletteMode, usePaletteModes, usePaletteAnswer, paletteAnswerQuery, isPaletteText,
+  type PaletteRow, type PaletteRows, type PaletteText, type PaletteAnswer, type PaletteModeSpec, type PaletteMode,
+} from "./palette-modes";
+export {
+  QueryDialect, queryInputMode, useQueryInputModes,
+  type QueryDialectValue, type QueryDraft, type QueryInputModeSpec, type QueryInputMode,
+} from "./query-modes";
+
 export { registerCommandSource, unregisterCommandSources, useContributedCommands, invalidatePluginCommands, type Command, type CommandContext, type CommandSource, type ContributedCommand } from "./commands";
 export { positionedErrorOf, type PositionedError } from "./positioned-error";
 

@@ -14,6 +14,8 @@ import { AiDraftSimilar } from "./forms/DraftSimilar";
 import { ClassifyInspector, GenerateInspector } from "./inspectors";
 import { AiRailSection } from "./issue/RailSection";
 import { EditorAiPreference } from "./profile/EditorAiPreference";
+import { askPaletteMode } from "./palette/ask";
+import { naturalLanguageMode } from "./query-bar/natural-language";
 import { AiReadMenu } from "./read/ReadMenu";
 import { AiSettingsPage } from "./settings/AiSettingsPage";
 
@@ -22,8 +24,10 @@ import { AiSettingsPage } from "./settings/AiSettingsPage";
  * through `automation.node.inspector`, so the host's automation editor carries no AI node type
  * (RADD-1325); Settings → AI is its page (RADD-1379). And since RADD-1395 every AI surface a reader
  * or writer meets is its too, through the editor's extension points and the issue slots — the
- * host's editor, issue page, comments, wiki and submission form name no AI. Disabling the plugin
- * withdraws all of it live, and `deactivate` stops any run in flight.
+ * host's editor, issue page, comments, wiki and submission form name no AI. Since RADD-1400 the
+ * command palette's Ask and the query bar's natural language are its contributed MODES, so the
+ * host names no AI at all. Disabling the plugin withdraws all of it live, and `deactivate` stops
+ * any run in flight.
  */
 export default definePlugin({
   contributions: [
@@ -44,6 +48,9 @@ export default definePlugin({
     // The submission form: similar open issues beside the draft.
     { id: "draft-similar", slot: SlotId.itemDraftAssist, label: "Similar issues while filing",
       render: (props) => <AiDraftSimilar {...(props as unknown as ItemDraftAssistProps)} /> },
+    // The command palette's Ask (search by meaning) and the query bar's natural language → SLQ.
+    askPaletteMode,
+    naturalLanguageMode,
     // Profile: the personal opt-out for the editor's AI menu.
     { id: "profile", slot: SlotId.profileSection, toggleable: false, render: () => <EditorAiPreference /> },
   ],

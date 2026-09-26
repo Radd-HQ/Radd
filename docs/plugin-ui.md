@@ -56,6 +56,8 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `dashboardWidget` | A dashboard widget type | `{config, widget, filterQuery}` | `match` = the widget-type key; pair with a `widget_types=` manifest entry; `filterQuery` = the dashboard-wide SLQ filter (plugin widgets decide how to honor it); a `personal=True` type lands on My Work instead (RADD-1393) | `modules/dashboards/ui/src/WidgetBody.tsx` |
 | `itemAction` | An item's action menu | `{item}` | | *menu host* |
 | `itemAttribute` | A list COLUMN and a board-card CELL (RADD-1394) | `{item, value, surface}` | `match` = the attribute id; build it with `itemAttribute(spec)` — see "Item attributes" below | `components/views/ColumnCells.tsx`, `components/board/card-cells.tsx` |
+| `paletteMode` | A face of the command palette (RADD-1400) | `{report}` (the gate) | build it with `paletteMode(spec)`; the palette draws its entry row and its answer — see "Modes" below | `components/CommandPalette.tsx` |
+| `queryInputMode` | An input mode of the query bar: free text in, SLQ out (RADD-1400) | `{report}` (the gate) | build it with `queryInputMode(spec)`; the bar draws the toggle — see "Modes" below | `components/views/QueryBar.tsx` |
 | `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `{node, params, schema, onChange}` | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `components/automations/GraphInspector.tsx` |
 
 **Host components (RADD-1325).** An inspector should look and behave like the host's own forms
@@ -344,7 +346,8 @@ export default definePlugin({
 The ai plugin is the worked example (`modules/ai/ui`): the toolbar button and Ask AI over a
 selection (`editor/`), the read menu (`read/`), answers in the reading pane (`results/`), the issue
 rail's card (`issue.rail.top`), Similar issues beside a draft (`item.draft.assist`) and its Profile
-opt-out. Disabling it withdraws every one of them live — from an open editor too — and its
+opt-out — and, since RADD-1400, the palette's Ask and the query bar's natural language (see "Modes"
+below), so the host names no AI at all. Disabling it withdraws every one of them live — from an open editor too — and its
 `deactivate()` stops any run in flight. Remotes that use these declare `ui_api_version="1.16.0"`.
 
 ## Live documents and editor bindings (SDK 1.17)
@@ -400,6 +403,83 @@ in a chunk you import when binding. Libraries on top (y-prosemirror) bundle norm
 shared modules through the import map. Anything that never crosses into the editor stays private to
 the plugin: collab's yjs is its own, because no host code ever touches a Y.Doc. Remotes that use
 this declare `ui_api_version="1.17.0"`.
+
+## Modes: the command palette and the query bar (SDK 1.18)
+
+Two host surfaces take MODES a plugin contributes (RADD-1400): the command palette (another face,
+answering what is typed) and the query bar (another way to fill the SLQ editor). Each is a slot
+contribution built by an SDK helper — plugin tagging, withdrawal, the per-contribution toggles and
+the error boundary come with it. The ai plugin is the worked example: the palette's Ask
+(`modules/ai/ui/src/palette/ask.ts`) and the bar's natural language (`query-bar/natural-language.ts`).
+
+```tsx
+import { Sparkles } from "lucide-react";
+import { api, definePlugin, paletteMode, queryInputMode } from "@radd/plugin-sdk";
+
+export default definePlugin({
+  contributions: [
+    paletteMode({
+      id: "notes.find", label: "Notes", hint: "search my notes", icon: Sparkles,
+      placeholder: "Search notes…", prompt: "Type to search your notes.",
+      useAvailable: () => useNotesEnabled(),          // a HOOK; absent = always offered
+      answer: async (query, { signal }) => ({          // or { text } — see below
+        heading: "Notes",
+        rows: (await api.get<Note[]>("/notes", { signal, query: { q: query } }))
+          .map((n) => ({ id: n.id, title: n.title, hint: n.when, href: `/issues/${n.item_key}` })),
+        empty: "No note says that.",
+      }),
+    }),
+    queryInputMode({
+      id: "notes.title", label: "Title", hint: "issues whose title says it", icon: Sparkles,
+      placeholder: "Words from a title — the answer lands as SLQ",
+      dialects: ["items"],                             // default: every dialect
+      toQuery: async (text) => ({ query: `title ~ ${JSON.stringify(text)}`, explanation: "Issues whose title mentions it." }),
+    }),
+  ],
+});
+```
+
+**What every mode declares** (`ModeSpec`): `id` — `<plugin>.<name>` of the registering plugin, any
+other prefix is refused; `label` and `hint`, which the host draws; an optional `icon` (a component —
+any lucide icon — the host sizes and colours); and `useAvailable`, a React HOOK. The surface mounts
+each mode's GATE (the contribution's `render`) while it is open and the gate calls the hook, so it
+may read queries and preferences like any component: a mode is offered only while its gate says so.
+A withdrawn plugin's gate unmounts and its mode disappears; a gate that throws is quarantined and
+its mode is never offered. The host draws every trigger itself, because it owns the keyboard.
+
+**`palette.mode`** — `paletteMode(spec)`. With something typed, each available mode trails the
+palette's list as "`label`: “query” — `hint`"; choosing it switches the palette's FACE (it never
+closes), Esc or the back arrow return to search. In the mode, `placeholder` is the input's,
+`prompt` is said while nothing is typed, and the debounced, trimmed query goes to
+`answer(query, { signal, onText })`:
+- **rows** — `{ rows, heading?, empty? }`, each `PaletteRow { id, title, href, badge?, icon?,
+  subtitle?, hint? }`. The palette draws them as its own rows (a `badge` in the key pill, a trailing
+  faint `hint`), moves through them with the arrows and follows `href` — a site-relative address —
+  through the router, no reload. `empty` is said when there are none.
+- **text** — `{ text, heading? }`. Call `onText(textSoFar)` while it streams (the whole text so far,
+  not a chunk); the palette shows it as it grows.
+- `signal` aborts when the query changes, the palette closes or the plugin is withdrawn; a rejection's
+  message is shown (`busyLabel` is said while the first answer is on its way). The answer is ONE
+  query per (mode, query), keyed under the owner's name, so withdrawal drops it; while the next
+  answer loads the previous one stays — only the same mode's.
+
+**`query.input.mode`** — `queryInputMode(spec)`. The query bar's own mode is SLQ. With any mode
+available for the bar's dialect it shows a `SLQ | label…` toggle, mod+I cycles SLQ → each mode →
+SLQ, and an EMPTY bar opens on the first available mode; a bar that arrives with a query (the URL
+carries the committed one) opens in SLQ, so the applied query stays visible, and an explicit switch
+sticks. With none, the bar is plain SLQ and has no toggle. In the mode the input shows
+`placeholder` (named `ariaLabel`), and Enter calls `toQuery(text, { dialect, signal })`:
+- `dialect` is the SLQ dialect the bar queries — `QueryDialect.items`, or `QueryDialect.worklog` on
+  the timesheet (spec 98: a worklog query reaches issue fields through `issue.`). `dialects` lists
+  the ones a mode can write; it is not offered elsewhere.
+- Resolve `{ query, explanation }`: the bar puts the query in its SLQ editor and APPLIES it, and
+  shows the explanation under the bar until the query is edited — every answer is visible SLQ. There
+  is no auto-detection: a mistyped query fails as SLQ, it never becomes a mode's input.
+- Reject with a presentable error (its message is shown under the bar; `busyLabel` while waiting).
+  `signal` aborts when the bar goes away or the plugin is withdrawn, and a draft that arrives after
+  either is dropped.
+
+Remotes that use these declare `ui_api_version="1.18.0"`.
 
 ## Logic & data access — where computation goes and what a plugin can see
 
