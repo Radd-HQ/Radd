@@ -1,23 +1,10 @@
-"""Walking an automation graph (spec 116).
+"""Walking an automation graph (spec 116): what each node MEANS. `graph.py`
+decides legality and order; this module has the I/O.
 
-`graph.py` says whether a graph is legal and in what order its nodes run. This
-module says what each node MEANS: a gate evaluates event conditions, a filter
-compiles SLQ and splits the item set, an action plans and applies.
-
-The split matters because the walk is the part with I/O — sessions, the SLQ
-compiler, the target services — and keeping it out of `graph.py` is what lets the
-structure rules be unit-tested without a database.
-
-Two invariants live here rather than in the caller:
-
-* **Budget.** A linear rule cost `items x actions`; a graph costs
-  `items x nodes x fan-out`. `RunBudget` caps node executions and item-actions,
-  and a run that hits a cap **records what it dropped**. A cap that truncates
-  silently makes a run that did less look identical to a run that had less to do.
-* **Best-effort per action.** Each action still runs inside a SAVEPOINT, so one
-  failing action rolls back only itself and the walk continues — the behaviour
-  `_run_rule_actions` had before graphs, kept because the alternative is one bad
-  webhook URL stopping every downstream branch.
+* Budget: `RunBudget` caps node runs and item-actions and RECORDS what it
+  dropped — a silent cap makes "did less" look like "had less to do".
+* Best-effort: each action runs in a SAVEPOINT, so one failure rolls back only
+  itself and the walk continues.
 """
 
 from __future__ import annotations
@@ -45,12 +32,7 @@ from . import graph
 from .nodes import arity_of, needs_items, output_name, ports_of, spec_for
 from .graph import Edge, Node, Packet
 from .templating import MissingTemplateOutput
-# Node-type keys live in `types.py` — the schemas and the arity table name them
-# too, and a type spelled differently in two places is a wire constant with no
-# compiler behind it. Imported (not redefined) so `executor.ACTION_TYPE_PREFIX`
-# keeps resolving for existing callers.
-from .types import (  # noqa: F401 — re-exported for callers importing them here
-    ACTION_TYPE_PREFIX,
+from .types import (
     AutomationNodeKind,
     AutomationTrigger,
     NodeArity,
@@ -90,10 +72,6 @@ class RunBudget:
         self.item_actions_run += allowed
         return allowed
 
-    @property
-    def exhausted(self) -> bool:
-        return self.nodes_run >= self.max_nodes or self.item_actions_run >= self.max_item_actions
-
 
 def new_budget() -> RunBudget:
     return RunBudget(
@@ -104,27 +82,16 @@ def new_budget() -> RunBudget:
 
 @dataclass(frozen=True)
 class Finding:
-    """One thing wrong with the draft a validation walk is inspecting (spec 119).
-
-    `field` names the control the person should go and fix — a builtin field name
-    (`title`, `description`, `assignee`) or `cf.<key>` — and is empty for a
-    finding about the submission as a whole. It is validated LOOSELY and against
-    nothing here: a graph written when a custom field existed keeps producing
-    readable advice after it is deleted, it just stops highlighting a control.
-    `node_id` is kept so the run report can say which check spoke.
-
-    `mode` says whether THIS finding blocks (`required`) or only advises
-    (`advisory`). Since RADD-1329 it is set by the node that spoke — a "Block
-    submission" node records blocking findings, a "Warn submitter" node advisory
-    ones — rather than stamped from a graph-wide mode afterwards. It rides on the
-    finding because a draft is routinely governed by several graphs at once, and
-    one graph may now both block on one problem and warn about another.
-    """
+    """One problem with the draft a validation walk inspects (spec 119). `field`
+    names the control to fix (builtin name or `cf.<key>`), empty for the whole
+    submission, validated loosely so a deleted field degrades to plain advice.
+    `mode` is set by the verdict node that spoke (RADD-1329): one draft may be
+    both blocked and warned."""
 
     node_id: str
     message: str
+    mode: str  # a `ValidationMode` value
     field: str = ""
-    mode: str = ""
 
 
 @dataclass
@@ -180,21 +147,10 @@ class RunReport:
     #: run should show, and hiding its output would leave "why does my token not
     #: resolve" unanswerable from the report.
     produced: dict[str, dict[str, str]] = field(default_factory=dict)
-    #: THE WALK'S OWN SETTINGS, carried on the report because every node handler
-    #: already receives it and threading a second object through nine signatures
-    #: would buy nothing.
-    #:
-    #: `collecting` is true exactly when the graph was entered through a
-    #: `validate` trigger. Findings are that trigger's whole output; anywhere
-    #: else there is nobody to show them to, so `add_finding` is a no-op and
-    #: `validation.fail` stays quiet — which is what makes `ai.validate` a pure
-    #: pass/fail router on an ordinary event walk, as the spec has always
-    #: claimed and the code did not do. A validate-trigger graph run MANUALLY or
-    #: previewed still collects: same trigger, same question, and the rule test
-    #: panel exists to show the answer.
-    #: What check nodes published, by node id (RADD-1329). See
-    #: `_NodeContext.publish_findings`.
+    #: What check nodes published, by node id (RADD-1329); read by verdict nodes.
     published: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    #: True when the walk entered through a `validate` trigger (manual runs and
+    #: previews of one included); elsewhere `add_finding` is a no-op.
     collecting: bool = False
     draft_id: uuid.UUID | None = None
     #: `time.monotonic()` past which a check that costs real time (a model round
@@ -221,10 +177,6 @@ class RunReport:
 #: through, small enough that a 200-item scheduled run does not build a report
 #: bigger than the work it describes — the count beside it is always exact.
 SAMPLE_ITEMS = 10
-
-#: What a `validation.fail` node with no message says. Only reachable from a
-#: hand-edited row — the write path requires one.
-UNSPOKEN_FINDING = "This submission did not pass a check (the check has no message set)."
 
 
 async def walk(
@@ -261,16 +213,9 @@ async def walk(
     #: second — and so two saves of the same graph cannot merge differently.
     rank = {node.id: index for index, node in enumerate(order)}
 
-    #: (node id, port) -> what that port emitted. One key space, so a node id can
-    #: never be confused with a port of the same name.
-    #:
-    #: A port MISSING from this map is not the same as one that emitted an empty
-    #: packet, and the difference is the whole of branch semantics: a gate emits
-    #: only the port it took, so the branch it did not take never runs, while a
-    #: filter emits both because an empty subset is a real answer ("nothing
-    #: matched — tell me"). Before RADD-918 a gate emitted an empty packet on the
-    #: untaken port, so a `send_email` wired to `false` fired on every run where
-    #: the gate PASSED — universal actions ignore emptiness by design.
+    #: (node id, port) -> what it emitted. A MISSING port = branch not taken (a gate
+    #: emits only its choice); an EMPTY packet = ran and matched nothing (a filter
+    #: emits both). Branch semantics depend on that difference.
     emitted: dict[tuple[str, str], Packet] = {}
 
     for node in order:
@@ -353,7 +298,7 @@ async def _run_node(
         }
 
     if node.kind in (AutomationNodeKind.GATE, AutomationNodeKind.FILTER):
-        return await _run_router(session, node, packet, system_user, report, automation_name)
+        return await _run_router(session, node, packet, system_user, report)
 
     planned_before = len(report.plans)
     created, produced = await _run_action(
@@ -399,17 +344,9 @@ async def _run_node(
 def _stamp(
     node: Node, packet: Packet, produced: dict[str, str], report: RunReport
 ) -> Packet:
-    """The packet a producing node emits: its input, plus what it produced under
-    the node's NAME (spec 120).
-
-    On EVERY port it emits, not only on one. `create_item`'s `out` carries the
-    items that caused the new issue and `created` carries the new issue itself —
-    both are places someone legitimately wants `{{followup.key}}`, and a rule
-    that put the values on one of them would make which one a thing to remember.
-
-    Recorded in the report either way; stamped only when the node has a usable
-    name, because a bag keyed by node id would be a token nobody wrote.
-    """
+    """The packet a producing node emits: its input plus what it produced, under
+    the node's NAME, on every port it emits (spec 120). Recorded in the report
+    either way."""
     if not produced:
         return packet
     report.produced[node.id] = dict(produced)
@@ -456,7 +393,6 @@ async def _run_router(
     packet: Packet,
     actor: User,
     report: RunReport,
-    automation_name: str = "",
 ) -> dict[str, Packet]:
     """Send the packet down one port, or split it across all of them.
 
@@ -490,51 +426,45 @@ async def _run_router(
 async def _route(
     session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
 ) -> tuple[str, dict[str, str]]:
-    """The single port a SET-arity router sends its packet down, and whatever it
-    produced on the way (spec 120).
-
-    A pair rather than a port, because a routing node is exactly where values are
-    produced: `ai.classify` names the answer it chose, `ai.generate` names every
-    field it filled in. A built-in gate produces nothing and says so with an
-    empty mapping.
-    """
+    """Ask a gate which port the packet leaves by, plus what it produced. Any
+    failure takes the spec's LAST port (every router's fallback) and produces
+    nothing, so downstream tokens miss rather than reading stale values."""
     spec = spec_for(node)
-    if spec is not None and spec.plan is not None:
-        return await _run_registered_gate(session, node, packet, actor, report)
-    # A router this build does not know — most often a plugin that has been
-    # uninstalled. Its LAST port (every router declares its fallback there, a
-    # gate's `false`), rather than a guess, and said out loud.
-    logger.error("automations: node %s: unknown router type %r", node.id, node.type)
-    ports = ports_of(node)
-    return (ports[-1] if ports else NodePort.FALSE.value), {}
+    if spec is None or spec.plan is None:
+        # A router this build does not know — most often an uninstalled plugin's.
+        logger.error("automations: node %s: unknown router type %r", node.id, node.type)
+        ports = ports_of(node)
+        return (ports[-1] if ports else NodePort.FALSE.value), {}
+    ports = spec.ports_at(node.params)
+    if not ports:
+        return "", {}
+    if packet.is_empty and needs_items(node):
+        # The node said it has nothing to say about no items.
+        return ports[-1], {}
+    ctx = _context(report, session=session, node=node, packet=packet, actor=actor)
+    try:
+        chosen = await spec.plan(ctx)
+    except Exception:
+        logger.exception("automations: node %s (%s) failed; taking its fallback port", node.id, node.type)
+        return ports[-1], {}
+    if str(chosen) not in ports:
+        return ports[-1], {}
+    return str(chosen), dict(ctx.outputs)
 
 
 async def _partition(
     session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
 ) -> dict[uuid.UUID, str]:
-    """subject id -> the port it leaves by, for an ITEM-arity router — over the
-    router's declared SUBJECT (RADD-1322), so a plugin filter partitions its
-    own entities, not only issues."""
+    """subject id -> the port it leaves by, for an ITEM-arity router, over its
+    declared SUBJECT (RADD-1322). `plan_items` when the node has one (the executor
+    shares one session, so only the node may batch or parallelise), else `plan`
+    once per single-item packet."""
     spec = spec_for(node)
     if spec is None:
         logger.error("automations: node %s (%s) cannot run per item", node.id, node.type)
         return {}
     if not packet.ids_of(spec.subject or graph.ITEM_SUBJECT):
         return {}
-    return await _partition_registered(session, node, packet, actor, spec, report)
-
-
-async def _partition_registered(
-    session: AsyncSession, node: Node, packet: Packet, actor: User, spec, report: RunReport
-) -> dict[uuid.UUID, str]:
-    """Ask a CONTRIBUTED router for each item's port.
-
-    `plan_items` when the node has one — a node that knows its per-item work
-    batches or parallelises should say so itself, because the executor shares one
-    session across the walk and cannot safely run those calls concurrently on its
-    behalf. Otherwise `plan` once per single-item packet, which is correct for
-    any node and is the whole feature for a cheap one.
-    """
     ports = spec.ports_at(node.params)
     if not ports:
         return {}
@@ -567,9 +497,7 @@ async def _partition_registered(
     # some other item's answer is a wrong write nobody would notice.
     return {
         item_id: (
-            await _run_registered_gate(
-                session, node, packet.with_subject(subject, (item_id,)), actor, report
-            )
+            await _route(session, node, packet.with_subject(subject, (item_id,)), actor, report)
         )[0]
         for item_id in ids
     }
@@ -593,39 +521,6 @@ async def _load(
     return [by_id[i] for i in item_ids if i in by_id]
 
 
-async def _run_registered_gate(
-    session: AsyncSession, node: Node, packet: Packet, actor: User, report: RunReport
-) -> tuple[str, dict[str, str]]:
-    """Ask a contributed gate which port the packet leaves by, and collect
-    whatever it produced (spec 120).
-
-    Failures return the spec's LAST port — every contributed gate declares a
-    fallback as its final port for exactly this — rather than raising, so one
-    unreachable provider cannot stop a graph that has other branches. A failure
-    also produces NOTHING, which is what makes an outage safe downstream: the
-    tokens that would have read its values miss and their actions skip, rather
-    than resolving to whatever the previous run left behind.
-    """
-    spec = spec_for(node)
-    ports = spec.ports_at(node.params) if spec else ()
-    if not spec or not spec.plan or not ports:
-        return "", {}
-    if packet.is_empty and needs_items(node):
-        # The node said it has nothing to say about no items. Its fallback port
-        # rather than a guess, and rather than an unanswerable question sent to
-        # whatever service it wraps.
-        return ports[-1], {}
-    ctx = _context(report, session=session, node=node, packet=packet, actor=actor)
-    try:
-        chosen = await spec.plan(ctx)
-    except Exception:
-        logger.exception("automations: node %s (%s) failed; taking its fallback port", node.id, node.type)
-        return ports[-1], {}
-    if str(chosen) not in ports:
-        return ports[-1], {}
-    return str(chosen), dict(ctx.outputs)
-
-
 @dataclass
 class _NodeContext:
     """What a contributed node's planner is handed. Deliberately small: a session
@@ -634,15 +529,8 @@ class _NodeContext:
     session: AsyncSession
     node: Node
     packet: Packet
-    #: Who the automation runs as. A contributed node reads THROUGH this, so its
-    #: prompt can only contain what that identity could already see, and an
-    #: action applies with exactly that identity's rights.
-    #:
-    #: That bounds the INPUT and says nothing about the output, which matters
-    #: since spec 119: this actor is the automation's, usually wider than the
-    #: submitter's, and a finding is shown to whoever submitted — a portal
-    #: visitor included. A node that reads widely and then writes what it read
-    #: into a finding has crossed a boundary the identity alone does not close.
+    #: Who the automation runs as; nodes read THROUGH it. It bounds the input, not
+    #: the output: a finding is shown to the submitter (spec 119's leak rule).
     actor: User
     #: The ids of the node's DECLARED subject this invocation is for (RADD-923):
     #: one id per call at item arity, the whole set at set arity. A node acting
@@ -753,18 +641,9 @@ class _NodeContext:
         self.created.setdefault(str(subject), []).append(entity_id)
 
     def set_output(self, name: str, value: Any) -> None:
-        """A contributed node's seam for saying what it PRODUCED (spec 120).
-
-        The executor files these under the node's name, so a downstream action
-        can write `{{triage.priority}}`. A METHOD, like `add_finding`, so a node
-        never constructs the vocabulary: it says what it produced and the
-        executor decides whether the invocation is one that can be addressed at
-        all (a per-item run is not — see `_partition_registered`).
-
-        Names outside the identifier rule are DROPPED rather than stored: a
-        value nothing could ever reference is not a value, and storing it would
-        put an unreachable row in the dry-run report.
-        """
+        """File a produced value under this node's name (spec 120) for
+        `{{name.field}}` downstream. Names that are not legal identifiers are
+        dropped — nothing could reference them."""
         key = str(name or "").strip()
         if not valid_output_name(key):
             logger.warning(
@@ -806,15 +685,8 @@ class _NodeContext:
     def add_finding(
         self, message: str, field: str = "", *, blocking: bool = False, source: str = ""
     ) -> None:
-        """A contributed node's seam for saying what is wrong with the draft.
-
-        A METHOD rather than a mutable list a node appends dicts to, because the
-        `Finding` type belongs to `automations` and the nodes contributing
-        findings live in other modules (`ai.validate` is the first). A node calls
-        this; it never constructs the vocabulary. Blank messages are dropped —
-        an empty finding fails a submission while explaining nothing, which is
-        the worst possible refusal.
-        """
+        """A node's seam for a finding on the draft; blank messages are dropped
+        (an empty finding refuses while explaining nothing)."""
         text = str(message or "").strip()
         if self.findings is None or not text:
             return
@@ -884,32 +756,20 @@ async def _run_action(
     apply: bool,
     report: RunReport,
 ) -> tuple[dict[str, list[uuid.UUID]], dict[str, str]]:
-    """Fire an action once, or once per subject id, per its arity — ONE path for
-    every action, built-in or contributed (RADD-1322; RADD-923 for plugins).
+    """Fire an action once, or once per subject id, per its arity — one path for
+    every action. It acts on its DECLARED subject's ids; `plan` runs on every
+    walk (so the dry run is free); `apply` runs inside a savepoint, the budget
+    and `events.automated()`, as the `act_as` actor (else the author).
 
-    Contained by construction, and every clause here is one of the containments:
-
-    * it acts on the ids of its DECLARED subject, so a milestone action never has
-      to know how an item-shaped packet is assembled;
-    * `plan` runs on every walk including a dry run, which is what makes the
-      report free and identical to the real thing;
-    * `apply` runs inside a SAVEPOINT, inside the `RunBudget`, and inside
-      `events.automated()` — so an action cannot spin the engine, cannot escape
-      the budget, and cannot take the branch down when it raises;
-    * it runs as the `act_as` actor (else the automation's author), so it cannot
-      escalate past whoever the automation is allowed to act as.
-
-    Returns what it CREATED, per subject (for the `created` port), and the named
-    values it PRODUCED (spec 120) — a SET-arity property: per item there are N
-    answers and the variable bag has one slot per node.
+    Returns what it CREATED per subject (the `created` port) and, at SET arity,
+    the values it PRODUCED (spec 120).
     """
     spec = spec_for(node)
     if spec is None or spec.plan is None:
         # An unknown action type halts THIS node loudly rather than being skipped
         # in silence — most often a plugin that has been uninstalled.
         logger.error("automations: %s: unknown action node type %r", automation_name, node.type)
-        report.plans.append(PlannedAction(node_id=node.id, action_type=node.type,
-            params=dict(node.params), item_id=None, resolves=False, failed=True,
+        report.plans.append(_planned(node, (), resolves=False, failed=True,
             detail=f"node {node.id!r} — unknown action type {node.type!r}"))
         return {}, {}
 
@@ -948,11 +808,8 @@ async def _run_action(
                     continue
                 resolves = bool(getattr(plan, "resolves", True))
                 report.plans.append(
-                    PlannedAction(
-                        node_id=node.id,
-                        action_type=node.type,
-                        params=dict(node.params),
-                        item_id=batch[0] if len(batch) == 1 else None,
+                    _planned(
+                        node, batch,
                         resolves=resolves,
                         detail=str(getattr(plan, "detail", plan)),
                         resolved={**ctx.resolved, **dict(getattr(plan, "resolved", None) or {})},
@@ -979,19 +836,18 @@ async def _run_action(
         # rolled back; `report.plans` is a plain list and survives, so the entry
         # is rewritten in place.
         except MissingTemplateOutput as missing:
-            report.plans.append(PlannedAction(
-                node_id=node.id, action_type=node.type, params=dict(node.params),
-                item_id=batch[0] if len(batch) == 1 else None, resolves=False,
+            report.plans.append(_planned(
+                node, batch, resolves=False,
                 detail=f"{node.type}: skipped — {missing}", resolved=dict(ctx.resolved),
             ))
         except TransitionError as refusal:
             # A WORKFLOW GUARD said no. Not an engine failure: the project's
             # transition rules apply to automations too, deliberately.
-            _record_refusal(
+            _rewrite_last(
                 report,
                 f"refused by the workflow: {'; '.join(refusal.errors) or refusal} "
                 f"(from {refusal.from_state} to {refusal.to_state})",
-                since=recorded,
+                since=recorded, refused=True,
             )
             logger.info(
                 "automations: %s node %s refused by the workflow: %s",
@@ -1001,46 +857,48 @@ async def _run_action(
             # The FIELD REGISTRY said no — most often a rendered value that is
             # not one of a select's options. The validator's own sentences,
             # recorded against the action that would have written them.
-            _record_refusal(report, f"refused: {'; '.join(invalid.errors) or invalid}", since=recorded)
+            _rewrite_last(
+                report, f"refused: {'; '.join(invalid.errors) or invalid}", since=recorded, refused=True
+            )
             logger.info(
                 "automations: %s node %s refused by field validation: %s",
                 automation_name, node.id, invalid,
             )
         except Exception as exc:
             logger.exception("automations: action %s of %s failed", node.id, automation_name)
-            # Said in the report, not only the log (RADD-1269): an action that
-            # raised used to leave its plan entry reading "resolves", so the run
-            # history called it applied.
-            if len(report.plans) > recorded:
-                planned = report.plans[-1]
-                report.plans[-1] = replace(
-                    planned, resolves=False, failed=True, detail=f"{planned.detail} — failed: {exc}"
-                )
-            else:
-                report.plans.append(
-                    PlannedAction(
-                        node_id=node.id, action_type=node.type, params=dict(node.params),
-                        item_id=batch[0] if len(batch) == 1 else None, resolves=False, failed=True,
-                        detail=f"{node.type}: failed before planning — {exc}",
-                    )
-                )
+            # Said in the report, not only the log (RADD-1269): a raised action
+            # must not read "resolves", or the run history calls it applied.
+            if not _rewrite_last(report, f"failed: {exc}", since=recorded, failed=True):
+                report.plans.append(_planned(
+                    node, batch, resolves=False, failed=True,
+                    detail=f"{node.type}: failed before planning — {exc}",
+                ))
     return created, produced
 
 
-def _record_refusal(report: RunReport, reason: str, *, since: int) -> None:
-    """Turn the plan just recorded into the skip a validator made it.
+def _planned(node: Node, batch: tuple[uuid.UUID, ...], **fields: Any) -> PlannedAction:
+    """A report entry for one invocation of `node` over `batch`."""
+    return PlannedAction(
+        node_id=node.id, action_type=node.type, params=dict(node.params),
+        item_id=batch[0] if len(batch) == 1 else None, **fields,
+    )
 
-    The plan is appended BEFORE the apply — that is what makes a dry run free —
-    so by the time anything refuses, the report already says the action would
-    apply. Rewriting the last entry keeps one record per invocation instead of
-    two that contradict each other.
+
+def _rewrite_last(report: RunReport, reason: str, *, since: int, **flags: bool) -> bool:
+    """Turn the plan just recorded into the skip/failure the apply ended in; False
+    when nothing was recorded since `since`.
+
+    The plan is appended BEFORE the apply (that is what makes a dry run free), so
+    rewriting the last entry keeps one record per invocation instead of two that
+    contradict each other.
     """
-    if len(report.plans) <= since:  # pragma: no cover — an apply always follows a plan
-        return
+    if len(report.plans) <= since:
+        return False
     planned = report.plans[-1]
     report.plans[-1] = replace(
-        planned, resolves=False, refused=True, detail=f"{planned.detail} — {reason}"
+        planned, resolves=False, detail=f"{planned.detail} — {reason}", **flags
     )
+    return True
 
 
 def _with_spec_kind(node: Node) -> Node:

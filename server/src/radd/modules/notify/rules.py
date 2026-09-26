@@ -1,64 +1,19 @@
 """Pure channel resolution — no I/O, unit-tested in `tests/test_notify_rules.py`.
 
-Given one recipient's rule rows, the kind of thing that happened, and how that
-person is CONNECTED to it, decide whether it reaches their inbox, their mailbox,
-both, or neither. The consumer supplies the connection; this file supplies the
-policy, on the same split `planner.py` already uses for who-gets-told.
+Given one recipient's rule rows, the kind, and how that person is CONNECTED to
+the subject, decide inbox / email / both / neither.
 
-## Most specific wins, with sparse fall-through
+Scopes are consulted most-specific first, skipping any that does not apply:
+own > participating > TEAM subscription > my-teams > PROJECT > SPACE.
+The first row with an opinion about the kind decides; rows are sparse, so a
+project subscription never overwrites what you said about your own work. With
+no opinion anywhere, the FIRST applicable scope's default answers.
 
-The scopes are consulted in this order, skipping any that does not apply:
-
-    own  >  participating  >  a subscription to the item's TEAM
-         >  my-teams  >  a subscription to its PROJECT  >  … to its SPACE
-
-The first rule row that has an OPINION about this kind decides. A row is sparse
-on purpose: subscribing to a project to hear about new issues should not also
-overwrite what you had said about comments on your own work.
-
-If nobody has an opinion, the FIRST APPLICABLE scope's default answers — not the
-last, and not a global default. That is what makes "I subscribed to a project"
-mean "and everything else about my own issues is unchanged".
-
-## The defaults reproduce RADD-686's CHANNELS exactly. The AUDIENCE is wider.
-
-Two claims live here, and only one of them is "nothing changed". Stating them
-together as one is how a parity promise becomes false without anybody editing it.
-
-**Channels — exact, for the audience that was already reachable.**
-`DEFAULT_MATRIX` is the acceptance bar of this whole spec: for anyone the old
-fan-out already reached, a user with ZERO rule rows resolves to precisely what
-RADD-686 gave them — every pre-existing kind in the inbox, the
-personally-directed five also mailed as they happen, the rest left to the digest.
-That is asserted kind by kind rather than described, because "we did not change
-anything for people who did not ask" is the promise a preferences rewrite is most
-likely to break and least likely to be caught breaking.
-
-**Audience — deliberately widened, by the `own` scope.** Before spec 118 the
-ambient recipient set was watchers ∪ participant-team members and nothing else,
-so an assignee or a reporter who was not watching heard nothing ambient at all.
-`planner.Audience.own` now holds them unconditionally, because "my own items" is
-the scope that was asked for and a column claiming to name them has to contain
-them. Two consequences, stated because each reads as a bug when it is met
-undocumented:
-
-* **Unwatch no longer silences an assignee.** It removes the PARTICIPATING
-  relation only. `own` still applies, and the control for it is the `own` column
-  — set its cells `off` and they are silent again. The old model had one answer
-  per type for the whole instance, so Unwatch was the only lever there was; that
-  is the thing this spec replaced.
-* **On an instance built by IMPORT this is genuinely new mail.** A bulk import
-  emits `silent` events, which the consumer skips, so imported items carry no
-  auto-watch rows: their assignees and reporters were reachable by nothing
-  ambient, and `commented` defaults to `both` in `own`. They now get the comment
-  mail an assignee on a natively-created item has always got.
-
-`tests/test_notify_scoped_fanout.py` pins all three of those deliberately, so the
-widening cannot be walked back or widened further by accident.
-
-The three kinds spec 118 ADDED (`created`, `updated`, `page_created`) are `off`
-in every relationship scope, and every subscription scope defaults to `off`
-outright. So the only way to receive a new KIND is to have asked for it.
+Defaults reproduce RADD-686's channels for everyone the old fan-out reached.
+The audience is deliberately wider: `own` holds assignee + reporter whether or
+not they watch, so Unwatch no longer silences an assignee, and imported items
+(no auto-watch rows) now reach their assignees. `test_notify_scoped_fanout.py`
+pins both. Spec 118's new kinds and every subscription scope default to `off`.
 """
 
 from __future__ import annotations
@@ -67,23 +22,14 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from .kinds import SUBSCRIPTION_ONLY_KINDS, every_kind, is_personal, spec_for
-from .types import (
-    DEFAULT_EMAIL_TYPES,
-    RELATIONSHIP_SCOPES,
-    Channel,
-    RuleScope,
-)
+from .kinds import every_kind, is_personal, spec_for
+from .types import RELATIONSHIP_SCOPES, Channel, RuleScope
 
 
 @dataclass(frozen=True)
 class RuleRow:
-    """One `notification_rules` row, flattened so the resolver stays pure.
-
-    A projection rather than the ORM object: `resolve` is called once per planned
-    notification inside the consumer's batch, and a dataclass with a plain dict
-    cannot lazy-load anything against a session that may already have moved on.
-    """
+    """One `notification_rules` row, flattened: a plain projection cannot
+    lazy-load against a session that has moved on."""
 
     scope: RuleScope
     scope_id: uuid.UUID | None
@@ -92,12 +38,8 @@ class RuleRow:
 
 @dataclass(frozen=True)
 class Subject:
-    """What the event was ABOUT — the ids a subscription can name.
-
-    Shared by every recipient of one event, which is why it is separate from
-    `Relation`: the consumer resolves it once per event and the per-person part
-    stays three booleans.
-    """
+    """What the event was ABOUT — the ids a subscription can name. Resolved once
+    per event; `Relation` is the per-person part."""
 
     project_id: uuid.UUID | None = None
     team_id: uuid.UUID | None = None
@@ -106,13 +48,9 @@ class Subject:
 
 @dataclass(frozen=True)
 class Relation:
-    """How ONE person is connected to that subject.
-
-    `is_participating` is deliberately broad — a watcher, a direct participant,
-    a member of a participant team, or someone the text named. They are one
-    thing from the reader's point of view ("I am in this conversation") and
-    splitting them would mean four columns nobody could tell apart.
-    """
+    """How ONE person is connected to that subject. `is_participating` is
+    deliberately broad: watcher, participant, participant-team member or someone
+    the text named are one thing to the reader ("I am in this conversation")."""
 
     is_own: bool = False
     is_participating: bool = False
@@ -120,18 +58,14 @@ class Relation:
     in_my_teams: bool = False
 
 
-#: The relation a producer means when it addresses a person directly — an
-#: automation's `notify_user`, or any future caller of `create_notification`
-#: that has a recipient rather than an audience. Every such kind is personal, so
-#: this is what `create_notification` assumes when nobody says otherwise.
+#: The relation a producer means when it addresses a person directly (an
+#: automation's `notify_user`) — `create_notification`'s default.
 OWN = Relation(is_own=True)
 
 
 @dataclass(frozen=True)
 class Verdict:
-    """The answer, plus WHERE it came from — the settings page shows the source
-    under an inherited cell, and "why am I getting this" is the question a
-    notification preference exists to answer."""
+    """The answer, plus WHERE it came from ("why am I getting this")."""
 
     channel: Channel
     #: The scope that decided, or None when nothing applied at all.
@@ -156,20 +90,15 @@ SILENT = Verdict(Channel.OFF, None, inherited=True)
 
 
 def _relationship_default(kind: str) -> Channel:
-    """RADD-686's behaviour, stated as a cell value — and since RADD-1326 read
-    off the kind's own spec (`default_channel`), so a plugin's kind carries its
-    default with it. Core: inbox for everything that existed then, email as
-    well for the personally-directed set, off for spec 118's ambient additions.
-    An undeclared kind degrades to the old rule."""
+    """The kind's own `default_channel` (RADD-1326), so a plugin's kind carries
+    its default with it; an undeclared kind degrades to the inbox."""
     spec = spec_for(kind)
     if spec is not None:
         try:
             return Channel(spec.default_channel)
         except ValueError:
             return Channel.INBOX
-    if kind in SUBSCRIPTION_ONLY_KINDS:
-        return Channel.OFF
-    return Channel.BOTH if kind in DEFAULT_EMAIL_TYPES else Channel.INBOX
+    return Channel.INBOX
 
 
 def _all_off() -> dict[str, Channel]:
@@ -177,23 +106,10 @@ def _all_off() -> dict[str, Channel]:
 
 
 def default_matrix() -> dict[RuleScope, dict[str, Channel]]:
-    """Per-scope defaults for every kind — total, so the fall-through always lands.
-
-    A FUNCTION since RADD-1326 (it was a module constant): the kinds come from
-    the registry, which plugins fill after this module is imported.
-
-    `own` and `participating` are identical, and that is not laziness: RADD-686's
-    preference was per-TYPE with no notion of relation, so the mailer gave a
-    watcher and an assignee the same answer. Splitting them here would change
-    behaviour for people who never asked for anything, which is the one thing
-    this rewrite promised not to do. The columns exist so they CAN be told apart
-    from now on.
-
-    `teams` is off: a member of the team an issue is filed against received
-    nothing before, and migrating everyone into a live subscription to their
-    whole team's traffic is a way to make a notification system hated in one
-    deploy.
-    """
+    """Per-scope defaults for every kind (a function: plugin kinds register after
+    import). `own` == `participating` on purpose — RADD-686 had no relation, so
+    a split would change behaviour nobody asked for. `teams` and every
+    subscription scope default to `off`."""
     relationship = {kind: _relationship_default(kind) for kind in every_kind()}
     return {
         RuleScope.OWN: dict(relationship),
@@ -206,28 +122,10 @@ def default_matrix() -> dict[RuleScope, dict[str, Channel]]:
 
 
 def _default_for(scope: RuleScope, kind: str) -> Channel:
-    """This scope's default for this kind, degrading for a kind nobody declared.
-
-    `DEFAULT_MATRIX` is built from the vocabulary, so a `NotificationType` with
-    no `NOTIFICATION_KINDS` entry is not in it — and a bare `[kind]` here raised
-    KeyError inside `create_notification`, which the consumer runs inside a
-    per-event SAVEPOINT that logs and skips. The notification would simply never
-    arrive, with nothing but a log line to say why: RADD-978 and RADD-1056 are
-    both that failure, and both survived for months.
-
-    `kinds.is_personal` already promises the conservative answer for an unknown
-    kind — treat it as own-directed, so it still reaches the person the producer
-    addressed. This is the other half of that promise; without it the promise was
-    a comment above a crash. `test_notify_rules` asserts the vocabulary covers
-    the enum exactly, so this path is unreachable in a correct build — it exists
-    for the version where somebody adds a member and forgets the row.
-
-    A relationship scope answers as it would for a pre-existing kind; a
-    subscription scope stays silent, since every one of them defaults to `off`
-    and an unasked-for kind is exactly what a subscriber did not ask for. (In
-    practice only `own` is reachable: `is_personal` routed the unknown kind
-    there before the order was built.)
-    """
+    """This scope's default for `kind`, degrading instead of raising for a kind
+    with no vocabulary row (RADD-978/1056: a KeyError inside the consumer's
+    SAVEPOINT silently dropped the notification). Unreachable while
+    `test_notify_rules` holds the vocabulary equal to the enum."""
     known = default_matrix()[scope]
     if str(kind) in known:
         return known[str(kind)]
@@ -258,13 +156,9 @@ def applicable_scopes(
     rules: RuleSet, relation: Relation, subject: Subject
 ) -> tuple[tuple[RuleScope, uuid.UUID | None], ...]:
     """The scopes that reach this person for this event, most specific first.
-
-    A relationship scope applies when the relationship holds. A SUBSCRIPTION
-    scope applies only when the person actually holds a row naming that project,
-    space or team — an unsubscribed project is not a scope with an empty
-    opinion, it is not a scope at all, which is what keeps its `off` default
-    from swallowing the `participating` answer underneath it.
-    """
+    A subscription scope applies only when the person holds a row naming it —
+    an unsubscribed project is not a scope at all, or its `off` default would
+    swallow the `participating` answer underneath it."""
     order: list[tuple[RuleScope, uuid.UUID | None]] = []
     if relation.is_own:
         order.append((RuleScope.OWN, None))
@@ -287,11 +181,8 @@ def resolve(
     relation: Relation = OWN,
     subject: Subject = Subject(),
 ) -> Verdict:
-    """Which channels this kind reaches this person through.
-
-    Personal kinds ignore `relation` entirely — the event chose the recipient,
-    so the `own` column is the only one that could be asked.
-    """
+    """Which channels this kind reaches this person through. Personal kinds
+    ignore `relation`: the event chose the recipient, so only `own` is asked."""
     order: tuple[tuple[RuleScope, uuid.UUID | None], ...]
     if is_personal(kind):
         order = ((RuleScope.OWN, None),)
@@ -307,17 +198,10 @@ def resolve(
         try:
             return Verdict(Channel(stored), scope)
         except ValueError:
-            # A channel value the enum does not know: a hand-written API call or
-            # a member removed in a later version. Fall through to the next
-            # scope rather than 500 in a background consumer — a preference that
-            # cannot be parsed is a preference that was not expressed.
+            # An unknown channel value falls through to the next scope rather
+            # than 500 in a background consumer: unparseable = not expressed.
             continue
     if not order:
         return SILENT
     scope = order[0][0]
     return Verdict(_default_for(scope, kind), scope, inherited=True)
-
-
-# `default_channels`/`relationship_defaults` were a second, narrower wire
-# projection of DEFAULT_MATRIX that nothing called — `prefs._defaults` serves it,
-# for every scope, because a SUBSCRIPTION's unset cell needs a default too.

@@ -1,9 +1,5 @@
-"""Attachment endpoints (spec 102): polymorphic canonical routes.
-
-Permission checks delegate to the parent binding (parents.py): item parents ->
-project-scoped item perms; page parents -> the global doc atoms. Delete
-keeps the comments mirror: uploaders remove their own, admins remove anyone's.
-"""
+"""Attachment endpoints (spec 102). Permission checks delegate to the parent
+binding (`parents.py`)."""
 
 import uuid
 from typing import Annotated
@@ -18,7 +14,8 @@ from radd.modules.auth.deps import Actor, CurrentUser
 
 from radd.exceptions import ForbiddenError
 
-from . import acl, parents, service
+from . import acl, hosts, parents, service
+from .models import Attachment
 from .schemas import AttachmentRead, UploadContextRead, UploadOption
 from .types import AttachmentParentType
 
@@ -29,6 +26,12 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 async def too_large_handler(request: Request, exc: service.AttachmentTooLarge) -> JSONResponse:
     return JSONResponse(status_code=413, content={"detail": str(exc)})
+
+
+def _read(attachment: Attachment, names: dict[uuid.UUID, str], **update) -> AttachmentRead:
+    return AttachmentRead.model_validate(attachment).model_copy(
+        update={"storage_host_name": names.get(attachment.storage_host_id, ""), **update}
+    )
 
 
 # --- canonical polymorphic routes ---------------------------------------------
@@ -55,12 +58,7 @@ async def upload_attachment(
         chosen_host_id=chosen_host_id,
         source_ip=getattr(request.state, "client_ip", None),
     )
-    from . import hosts
-
-    names = await hosts.name_map(session)
-    return AttachmentRead.model_validate(attachment).model_copy(
-        update={"storage_host_name": names.get(attachment.storage_host_id, "")}
-    )
+    return _read(attachment, await hosts.name_map(session))
 
 
 @router.get("/attachments", response_model=list[AttachmentRead])
@@ -74,16 +72,9 @@ async def list_attachments(
     await binding.require_read(session, user, entity_id)
     attachments = await service.list_for_entity(session, entity_type.value, entity_id)
     verdicts = await acl.readable_map(session, user, attachments)
-    from . import hosts
-
     names = await hosts.name_map(session)
     return [
-        AttachmentRead.model_validate(attachment).model_copy(
-            update={
-                "restricted": verdicts[attachment.id][1],
-                "storage_host_name": names.get(attachment.storage_host_id, ""),
-            }
-        )
+        _read(attachment, names, restricted=verdicts[attachment.id][1])
         for attachment in attachments
         if verdicts[attachment.id][0]  # unreadable rows are filtered, not flagged
     ]
@@ -98,15 +89,9 @@ async def download_attachment(
 ) -> Response:
     """Bytes for proxy-delivery hosts; a 307 to a short presigned URL otherwise.
 
-    THE ACL chokepoint (spec 102): both delivery modes mint here, so a deny
-    means no bytes AND no presigned URL ever exist for this caller.
-
-    `w` is the image-width convention of RADD-751 — markdown has nowhere to put
-    a size, so `![alt](…?w=640)` is how a document says how big to draw it, and
-    honouring it here is what makes a resized screenshot ship fewer bytes rather
-    than merely look smaller. It is ADVISORY: anything that cannot be resized
-    (a PDF, an animated GIF, a width at or above the original) serves the
-    original, because a picture that cannot be resized must still arrive.
+    THE ACL chokepoint: both delivery modes mint here, so a deny means no bytes
+    AND no presigned URL. `w` (RADD-751) is advisory: anything that cannot be
+    resized serves the original.
     """
     attachment = await service.get_attachment(session, attachment_id)
     if not await acl.attachment_readable(session, user, attachment):
@@ -127,17 +112,14 @@ async def delete_attachment(
     project_id = await binding.project_id_of(session, attachment.entity_id)
     if project_id is None:
         # Page attachments: the space's write/admin rule — no project scope for
-        # the attachment atoms to resolve against (recorded in RADD-816's
-        # disposition; page-side relations are a later adoption).
+        # the attachment atoms to resolve against (RADD-816).
         if attachment.created_by == user.id:
             await binding.require_write(session, user, attachment.entity_id)
         else:
             await binding.require_admin(session, user, attachment.entity_id)
     else:
-        # RADD-816: `attachment.delete` means ANYONE's, uniformly; the old
-        # uploader-own right is the Baseline's `attachment.delete@own` grant,
-        # relation-resolved against this row. Parent readability first — the
-        # child inherits the item's relation through the seam-backed binding.
+        # RADD-816: `attachment.delete` = ANYONE's; uploader-own is the Baseline's
+        # `attachment.delete@own`, resolved against this row after parent read.
         await binding.require_read(session, user, attachment.entity_id)
         from radd.modules.projects import service as projects_service
 
@@ -168,15 +150,12 @@ async def upload_context(
     user: CurrentUser,
     content_type: Annotated[list[str] | None, Query()] = None,
 ) -> UploadContextRead:
-    """What the SPA's upload seam needs to know BEFORE any upload: whether to
-    pop the storage prompt, and the options to offer. The prompt only shows
-    when the answer can MATTER (spec 102): callers pass the gesture's content
-    types, and the chain is simulated — an earlier rule that would capture
-    these files (an LLM rule covering image/*, a CIDR rule matching this IP)
-    suppresses the ask and is named in `preempted_by`. Exactly one selectable
-    host -> no prompt, the SPA auto-sends it; the chain still arbitrates
-    server-side either way."""
-    from . import hosts, routing
+    """Whether to show the storage prompt before an upload, and its options. It
+    shows only when the answer can MATTER: the chain is simulated for the
+    gesture's content types, and a rule that would capture them first suppresses
+    it (named in `preempted_by`). One selectable host = no prompt; the chain
+    still arbitrates server-side either way."""
+    from . import routing
 
     reachable, preempted_by = await routing.engine.choice_reachable(
         session,

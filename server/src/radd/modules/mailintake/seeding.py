@@ -1,13 +1,6 @@
-"""Env → the first mail rows, exactly once (RADD-958).
-
-**The spec-101 rule:** env seeds the first source/sender on an EMPTY database
-and is never read again. Editing `RADD_SMTP_*` on an instance that already has a
-sender row does nothing, deliberately — two sources of truth for one setting is
-how a screen ends up disagreeing with the running system.
-
-Split out of `registry` (RADD-969), which is now purely rows in / rows out. This
-is startup behaviour, runs once in the life of a database, and reads a config
-object nothing else here touches.
+"""Env → the first mail rows, exactly once (RADD-958). The spec-101 rule: env
+seeds the first source/sender on an EMPTY database and is never read again, so
+editing `RADD_SMTP_*` later deliberately does nothing — one source of truth.
 """
 
 from __future__ import annotations
@@ -29,12 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 async def seed_from_env() -> None:
-    """Create the first source/sender from env, exactly once.
-
-    Runs at startup. Anything already in the table means the operator has taken
-    ownership through the UI, and env is not consulted again — including when it
-    changes, which is the property that stops the two disagreeing.
-    """
+    """Create the first source/sender from env at startup, exactly once."""
     async with SessionLocal() as session:
         try:
             await seed(session)
@@ -46,13 +34,8 @@ async def seed_from_env() -> None:
 
 
 async def seed(session: AsyncSession) -> None:
-    """Env seeds an SMTP sender and an IMAP/webhook source — never a preset kind.
-
-    Deliberate (RADD-969): `RADD_SMTP_HOST` names a host, and a row that names
-    its host IS the custom kind. Guessing "this looks like Gmail, make it a
-    preset row" would rewrite an operator's explicit configuration into
-    something that resolves elsewhere later.
-    """
+    """Env seeds an SMTP sender and an IMAP/webhook source — never a preset kind
+    (RADD-969): an env-named host IS the custom kind."""
     if settings.mail_imap_host and not (await session.execute(select(MailSource.id))).first():
         session.add(
             MailSource(

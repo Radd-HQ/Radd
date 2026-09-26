@@ -1,21 +1,7 @@
-"""The request-path half of intake validation (spec 119).
-
-`validation.py` answers "what governs this draft and what did the checks say".
-This is what a caller actually does with that: create inside a savepoint, ask,
-and either let the savepoint stand or take it back.
-
-**Auto-create on pass, one round trip.** The rejected alternative was a
-pre-flight endpoint that validates and returns a signed receipt the real create
-then presents. It needs two requests, a signature scheme, and a window in which
-the thing that was validated and the thing that gets created can differ — for a
-check that is cheap to simply run again. Creating first and rolling back is the
-same work with none of the ceremony, and the row that was validated IS the row
-that survives.
-
-**Why the savepoint is safe.** `items.create_item` is pure DB: search, realtime,
-webhooks and notifications are all outbox consumers reading committed rows, and
-the `item.created` event is itself a row that rolls back with everything else.
-Nothing outside the transaction can observe a draft that did not survive.
+"""The request-path half of intake validation (spec 119): create inside a
+savepoint, validate the real row, keep it or roll it back — one round trip, and
+the row validated is the row that survives. Safe because `items.create_item` is
+pure DB; everything downstream is an outbox consumer of committed rows.
 """
 
 from __future__ import annotations
@@ -48,34 +34,16 @@ logger = logging.getLogger(__name__)
 
 
 class IntakeCommit(StrEnum):
-    """What the caller wants done with the draft once the checks have spoken.
+    """What to do with the draft once the checks have spoken."""
 
-    Three, not a boolean, because "create it if it passes" and "create it
-    regardless" and "tell me but create nothing" are three different asks and
-    the middle one is what a "create anyway" button means.
-    """
-
-    #: Keep it when the checks pass, roll it back when they do not. The default,
-    #: and the one that makes an ordinary Submit a single round trip.
-    PASS = "pass"
-    #: Keep it whatever they say — the advisory "create anyway". Refused with a
-    #: 409 when any governing binding is REQUIRED: a mode the admin chose is not
-    #: something a request parameter gets to override.
+    PASS = "pass"  # keep it only when the checks pass (the ordinary Submit)
+    #: Keep it regardless — the advisory "create anyway"; 409 where a check is required.
     ALWAYS = "always"
-    #: Create nothing. A pure pre-flight, for a caller that wants the findings
-    #: before it commits to anything.
-    NEVER = "never"
+    NEVER = "never"  # create nothing: a pure pre-flight
 
 
 class ValidationBlocked(RaddError):
-    """Intake validation refused a creation (-> 422).
-
-    The THIRD 422 vocabulary alongside the field registry's `{detail, errors}`
-    and the workflow guards' `{detail, errors, from_state, to_state}`. It carries
-    `findings` rather than `errors` deliberately: an error names a value the API
-    could not accept, a finding names something a person should go and fix, and
-    the client renders them differently — one against a control, one in a panel.
-    """
+    """Intake validation refused a creation (→ 422 with `findings`, see the handler)."""
 
     def __init__(self, verdict: IntakeVerdict):
         self.verdict = verdict
@@ -103,25 +71,11 @@ def is_suppressed() -> bool:
 
 @contextmanager
 def suppressed() -> Iterator[None]:
-    """Turn the `item.creating` hook off for the duration — THE PUBLIC SEAM for
-    a caller whose writes are not intake.
-
-    Two kinds of caller need it, and they are the same need:
-
-    * **the savepoint flow's own inner create**, which goes through the SAME
-      `items.create_item` every other caller uses — that is the whole point of
-      it — so without this the hook would run the required checks a second time
-      on the same draft in the same transaction;
-    * **machines and history** — an importer replaying old issues, the mail
-      poller, the Alertmanager receiver. Each of them creates an item, and none
-      of them is a person submitting a request through a form. `events.quiet()`
-      covers the importer only when the plan asked for quiet, and it is the
-      wrong lever for the other two: they WANT their notifications.
-
-    A ContextVar rather than a parameter for the reason `events.quiet` is one:
-    the dispatch happens deep inside a service that must stay ignorant of who is
-    calling it. Reached by other modules deferred and feature-detected, so an
-    instance without `automations` behaves identically.
+    """Turn the `item.creating` hook off for the duration — the seam for writes
+    that are not intake: the savepoint flow's own inner create (else the checks
+    run twice), and machine/history writers (importer, mail poller,
+    Alertmanager), which still want notifications, so `events.quiet()` is the
+    wrong lever. A ContextVar because the dispatch happens deep inside items.
     """
     token = _suppressed.set(True)
     try:

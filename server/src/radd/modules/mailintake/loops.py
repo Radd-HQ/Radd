@@ -1,24 +1,12 @@
-"""Mail-loop guards (RADD-957).
+"""Mail-loop guards (RADD-957): Radd mails someone, their autoresponder writes
+back to `help@`, which opens a ticket that mails them again.
 
-The failure this prevents: Radd mails a participant, their out-of-office replies
-to `help@`, that opens a ticket, the ticket mails the participants, one of whom
-is also away. It runs at the speed of two mail servers and looks like ordinary
-traffic while it does.
+  Auto-Submitted   RFC 3834's marker — set by well-behaved autoresponders only
+  self-addressed   the direct loop, and the cheapest check
+  rate limit       catches the ones setting no header at all
 
-Three guards, because each alone has a hole:
-
-  Auto-Submitted   RFC 3834's own marker. Every well-behaved autoresponder sets
-                   it — and the badly-behaved ones are the majority.
-  self-addressed   the direct loop, and the cheapest check there is.
-  rate limit       what actually catches the ones setting no header at all.
-
-`Precedence: bulk`/`list` and `List-Id` are deliberately NOT triggers. Plenty of
-legitimate ticket traffic arrives from list addresses, and silently dropping a
-customer's mail is worse than the loop it would prevent.
-
-**Every drop is an acceptance, never a rejection.** The caller answers 202: the
-message was received and deliberately discarded. Bouncing at a loop puts another
-message into the loop.
+`Precedence: bulk`/`List-Id` are NOT triggers: legitimate ticket mail arrives
+from lists. Every drop is an ACCEPTANCE (202) — bouncing feeds the loop.
 """
 
 from __future__ import annotations
@@ -42,8 +30,7 @@ AUTO_SUBMITTED_HUMAN = "no"
 
 @dataclass(frozen=True)
 class LoopVerdict:
-    """Why a message was dropped, or that it was not. `reason` is logged — a
-    silent drop and a bug are indistinguishable from the outside."""
+    """Why a message was dropped, or that it was not. `reason` is logged."""
 
     drop: bool
     reason: str = ""
@@ -60,9 +47,8 @@ def check(
     envelope_from: str | None,
     own_addresses: set[str],
 ) -> LoopVerdict:
-    """The pure decision. `own_addresses` are every address Radd sends AS —
-    lower-cased, from the sender rows, so an instance that changes its From does
-    not need a code change."""
+    """The pure decision. `own_addresses`: every address Radd sends AS, lower-cased
+    (`registry.own_addresses`)."""
     marker = (auto_submitted or "").strip().lower()
     if marker and marker != AUTO_SUBMITTED_HUMAN:
         return LoopVerdict(True, f"Auto-Submitted: {marker}")
@@ -78,14 +64,9 @@ def check(
 
 
 class RateLimiter:
-    """Per-sender sliding window, in process memory.
-
-    In memory on purpose. A loop is a burst measured in seconds, every web
-    replica is behind the same endpoint, and a per-replica cap of 20 still stops
-    it — while a database-backed counter would put a write on the hot path of
-    the endpoint most likely to be under a flood. It is a circuit breaker, not
-    an accounting record.
-    """
+    """Per-sender sliding window, in process memory on purpose: a loop is a burst
+    of seconds, a per-replica cap still stops it, and a DB counter would put a
+    write on the hot path of the endpoint most likely to be flooded."""
 
     def __init__(
         self, *, limit: int = RATE_LIMIT_MAX, window: float = RATE_LIMIT_WINDOW_SECONDS
@@ -107,9 +88,8 @@ class RateLimiter:
         if len(hits) >= self._limit:
             return False
         hits.append(moment)
-        # Bound the map: a flood from thousands of forged senders must not become
-        # a memory leak. Dropping the coldest entry only loses a count nobody was
-        # near the limit on.
+        # Bound the map against forged-sender floods; the coldest entry was not
+        # near the limit.
         if len(self._seen) > 10_000:
             coldest = min(self._seen, key=lambda key: self._seen[key][-1])
             self._seen.pop(coldest, None)
@@ -119,10 +99,3 @@ class RateLimiter:
 #: The process-wide limiter the ingest endpoint consults.
 limiter = RateLimiter()
 
-# `own_addresses` is NOT here. It was, from RADD-959 until RADD-970, reading the
-# environment — and by then `registry.own_addresses` was building the same set
-# from `mail_sources` / `mail_senders` rows and was what both transports called.
-# Two definitions of "us" is the exact failure RADD-959 collapsed one pair for:
-# the guard stops firing on whichever path reads the stale one, silently. This
-# file states the DECISION (above) and the registry answers what the addresses
-# are — which is a row question, and this module has no session.

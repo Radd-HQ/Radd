@@ -29,10 +29,8 @@ def available(template: AutomationTemplateSpec) -> bool:
     return True
 
 
-#: RADD-1319: what the retired `googlechat` plugin did from the environment —
-#: post new issues and SLA breaches to one chat space — as a rule someone
-#: switches on, pointed at a webhook they paste. Google Chat and Slack-style
-#: incoming webhooks both take the `{"text": …}` Post to chat sends.
+#: What the retired googlechat plugin did from the environment (RADD-1319), as an
+#: opt-in template. Chat and Slack incoming webhooks both take `{"text": …}`.
 POST_TO_CHAT = AutomationTemplateSpec(
     key="automations.post_to_chat",
     name="Post new issues and SLA breaches to chat",
@@ -57,7 +55,4 @@ POST_TO_CHAT = AutomationTemplateSpec(
     ),
 )
 
-#: RADD-1387: "Tell the reporter when their issue is done" moved to `mailintake`
-#: with the send_email node it is built on — a template offered by the plugin
-#: that owns its action is withdrawn with it, rather than filtered out here.
 TEMPLATES: tuple[AutomationTemplateSpec, ...] = (POST_TO_CHAT,)

@@ -20,29 +20,11 @@ class FormField(BaseModel):
 
 
 class FormDefaults(BaseModel):
-    """Values applied to the item a submission creates (RADD-801).
-
-    Addressed by NAME, not id — a form is authored once against a project's
-    vocabulary and its targets resolve at submit, so renaming a state does not
-    silently break every form pointing at it. An unknown assignee is rejected on
-    write; the rest are stored and resolved later.
-
-    ## Why the field list is checked rather than trusted
-
-    This was a hand-maintained subset of `ItemCreate` and it drifted. Spec 51
-    added issue TYPES, wired `ItemCreate.type_id`, and nobody came back here — so
-    a form could not set the one axis a service desk cares most about. Spec 70's
-    points and spec 24's flag went the same way.
-
-    The confusion was worse than a plain omission: the form DID offer `kind`, the
-    epic/issue/subtask ladder, which reads as "type" in the UI. The control you
-    reached for was present, named almost right, and set a different axis.
-
-    `DEFAULTS_COVERAGE` below states, for every `ItemCreate` field, either which
-    key here carries it or why it is deliberately absent — and
-    `tests/test_form_defaults.py` walks `ItemCreate` and fails when a new field
-    matches neither. Adding an item attribute and forgetting the form is now a
-    failing test rather than a gap somebody notices a year later.
+    """Values applied to the item a submission creates (RADD-801), addressed by
+    NAME and resolved at submit so a renamed state does not break the form; an
+    unknown assignee is refused on write. `DEFAULTS_COVERAGE` accounts for every
+    `ItemCreate` field and `tests/test_form_defaults.py` fails on a new one, so
+    a form cannot silently miss an item attribute again.
     """
 
     model_config = ConfigDict(from_attributes=True, extra="forbid")
@@ -124,7 +106,7 @@ class FormUpdate(BaseModel):
     description_prompt: str | None = Field(default=None, min_length=1, max_length=200)
     description_required: bool | None = None
     team_picker_enabled: bool | None = None
-    # Spec 62: toggle the tokened no-login submit path (token minted on first enable).
+    # Portal visibility: every signed-in user may see and submit (spec 73).
     allow_public: bool | None = None
 
 
@@ -199,44 +181,32 @@ class FormRead(BaseModel):
     # Portal shares (spec 73) — populated on the form.manage surfaces (list/
     # update/sharing) for the builder; empty on the plain submit render.
     shares: list[FormShareRead] = Field(default_factory=list)
-    #: Spec 119 — whether intake validation governs submissions through this
-    #: form, populated on the SUBMIT render (`render_form`) and left null on the
-    #: list, which would otherwise pay a resolution per row for nobody. Null and
-    #: `{governed: false}` mean the same to a submit page and different things
-    #: to a reader: "not asked" versus "asked, nothing governs it".
+    #: Spec 119 context, filled on the SUBMIT render only; null = "not asked".
     validation: FormValidationContext | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
 
 class FormSubmit(BaseModel):
-    """A public-shaped submission: a title plus the exposed fields' values."""
+    """A submission: a title plus the exposed fields' values."""
 
     title: str = Field(min_length=1, max_length=500)
     description: str = ""  # ignored unless the form's description area is enabled
     values: dict[str, Any] = Field(default_factory=dict)
-    #: RADD-798 — share this request with one of MY teams. Membership is checked
-    #: server-side at submit: the picker is UI, and UI is not enforcement.
-    team_id: uuid.UUID | None = None
-    #: RADD-800 — staged attachments this submission is CLAIMING. Named rather
-    #: than swept wholesale, so a second tab's uploads are not dragged in; each
-    #: is verified to sit on the caller's own staging area before it moves.
+    team_id: uuid.UUID | None = None  # RADD-798: share with one of MY teams (re-checked)
+    #: RADD-800: staged attachments this submission CLAIMS (named, so other tabs keep theirs).
     attachment_ids: list[uuid.UUID] = Field(default_factory=list)
-    #: Spec 119 — what to do when intake validation has something to say.
-    #: `"pass"` (the default) creates only a clean submission; `"always"` is the
-    #: advisory "submit anyway" and is refused with a 409 where the checks are
-    #: required. A plain string rather than the automations enum: forms must not
-    #: import an optional module's vocabulary to describe its own request body,
-    #: and the value is handed straight back to that module to interpret.
+    #: Spec 119: "pass" (default) or "always" (create anyway; 409 where a check is
+    #: required). A plain string — forms does not import automations' enum.
     commit: str = "pass"
 
 
-# --- public, unauthenticated path (spec 62) ---
+# --- portal render and submit shapes (the trimmed public face of a form) ---
 
 
 class PublicFormField(BaseModel):
-    """One exposed field with the definition bits the submit widgets need —
-    a deliberately trimmed FieldDefinitionRead (no ids/grants leak publicly)."""
+    """One exposed field with the definition bits the submit widgets need — a
+    deliberately trimmed FieldDefinitionRead (no ids or grants)."""
 
     field_key: str
     label: str  # label_override else the definition name
@@ -249,9 +219,7 @@ class PublicFormField(BaseModel):
 
 
 class PublicFormRead(BaseModel):
-    """GET /public/forms/{token} — the render payload (FormRead's public face):
-    fields carry their definitions inline since the registry isn't reachable
-    without a login."""
+    """The trimmed render payload: field definitions inlined (no registry access)."""
 
     name: str
     description: str
@@ -263,7 +231,7 @@ class PublicFormRead(BaseModel):
 
 
 class PublicSubmitResult(BaseModel):
-    """What an anonymous submitter learns: the created issue key, nothing more."""
+    """What a submitter learns: the created issue's key and title."""
 
     key: str
     title: str
@@ -293,14 +261,8 @@ class PortalGroup(BaseModel):
 
 
 class PortalRequestRead(BaseModel):
-    """One request the actor filed, as a requester may see it (RADD-785).
-
-    Deliberately narrow. A requester is scoped by their RELATIONSHIP to the row
-    (`reporter_id`), not by `item.read`, so this must not become a back door
-    into an issue's contents: no description, no comments, no assignee, no
-    labels, no custom fields. What is here is what "where has my request got to"
-    needs — its key, its title, and the state it is in.
-    """
+    """One request as its requester may see it (RADD-785): key, title, where it is
+    — never a back door into the issue's contents."""
 
     key: str
     title: str
@@ -367,9 +329,7 @@ class PortalTeamOption(BaseModel):
 
 
 class PortalFormRead(PublicFormRead):
-    """GET /portal/forms/{id} — the spec-62 public trimming plus the ids an
-    AUTHED page needs: the form id and the project ref (header chip + the KB
-    deflection panel's project scope)."""
+    """GET /portal/forms/{id}: the trimmed form plus the ids an authed page needs."""
 
     id: uuid.UUID
     project: PortalProjectRef

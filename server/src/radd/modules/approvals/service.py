@@ -1,22 +1,8 @@
-"""Approval request/vote lifecycle on workflow transitions (spec 71).
-
-Workflow reaches this module ONLY through the kernel's TRANSITION_CHECK socket
-(RADD-1383): `gate.ApprovalGate` serves `require_approval`, answering from
-`approved_target_state_ids` (does the item hold a consumable unlock for a
-target state?) and `consume` (spend the unlock after a successful move, which
-workflow reports on items' behalf). Everything else is ordinary request-scoped
-service work: flush, never commit; cross-module via public service functions only.
-
-Rule params are SNAPSHOTTED onto the request; only team MEMBERSHIP resolves
-live at vote time (spec 71 known simplification — team edits change the
-electorate mid-flight, entry edits don't).
-
-Spec 107: approvers are PER-ENTRY rules ([{kind, id, name, required?}]) — a
-user entry needs that person's approval, a team entry needs `required`
-approvals from CURRENT members, and the request approves only when EVERY
-entry is satisfied. A team shrunk below its `required` makes the entry
-unsatisfiable (cancel the request / edit the rule) — deliberate: deleting
-people must never quietly lower an approval bar.
+"""Approval request/vote lifecycle on workflow transitions (spec 71/107).
+Workflow reaches this module only through the TRANSITION_CHECK socket
+(`gate.ApprovalGate`). Rule entries are SNAPSHOTTED onto the request; only team
+MEMBERSHIP resolves live, and a team shrunk below its `required` makes the
+entry unsatisfiable — deleting people must never lower an approval bar.
 """
 
 import uuid
@@ -32,13 +18,13 @@ from radd.modules.auth.models import User
 from radd.modules.events import service as events
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEntity
+from radd.modules.items.models import WorkItem
 from radd.modules.items.schemas import ItemUpdate
 from radd.modules.teams import service as teams_service
 from radd.modules.workflow import service as workflow, transitions as workflow_transitions
 from radd.modules.workflow.guards import TransitionError
 from radd.modules.workflow.models import WorkflowTransition
 from radd.modules.projects import service as projects_service
-from radd.modules.projects.models import Project
 
 from .models import ApprovalRequest, ApprovalVote
 from .schemas import (
@@ -118,11 +104,16 @@ async def _get_request(session: AsyncSession, request_id: uuid.UUID) -> Approval
     return request
 
 
-async def _request_project(
-    session: AsyncSession, request: ApprovalRequest
-) -> Project:
+async def _request_for_update(
+    session: AsyncSession, request_id: uuid.UUID, actor: User
+) -> tuple[ApprovalRequest, WorkItem]:
+    """The request and its item, once the actor may update that item."""
+    from radd.modules.items.service.visibility import require_key_item_permission
+
+    request = await _get_request(session, request_id)
     item = await items_service.require_item(session, request.item_id)
-    return await projects_service.get_project(session, item.project_id)
+    await require_key_item_permission(session, actor, item, Permission.ITEM_UPDATE)
+    return request, item
 
 
 async def _entry_electorates(
@@ -156,11 +147,9 @@ def _entry_required(entry: dict) -> int:
     return int(entry.get("required") or 1) if entry.get("kind") == ApproverKind.TEAM.value else 1
 
 
-def _entry_approved(
-    entry: dict, electorate: set[uuid.UUID], votes: Sequence[ApprovalVote]
-) -> int:
-    """Approve verdicts from the entry's CURRENT electorate (a voter whose team
-    membership was since revoked no longer counts)."""
+def _approvals_in(votes: Sequence[ApprovalVote], electorate: set[uuid.UUID]) -> int:
+    """Approve verdicts from a CURRENT electorate (a voter whose team membership
+    was since revoked no longer counts)."""
     return sum(
         1
         for vote in votes
@@ -175,40 +164,32 @@ def _satisfied(
     if not electorates:
         return False
     return all(
-        _entry_approved(entry, electorate, votes) >= _entry_required(entry)
+        _approvals_in(votes, electorate) >= _entry_required(entry)
         for entry, electorate in electorates
     )
+
+
+def _eligible(electorates: Sequence[tuple[dict, set[uuid.UUID]]]) -> set[uuid.UUID]:
+    """The overall electorate (vote gate + notify fan-out): the union of every
+    entry's electorate."""
+    eligible: set[uuid.UUID] = set()
+    for _, electorate in electorates:
+        eligible.update(electorate)
+    return eligible
 
 
 async def _eligible_user_ids(
     session: AsyncSession, request: ApprovalRequest
 ) -> set[uuid.UUID]:
-    """The overall electorate (vote gate + notify fan-out): the union of every
-    entry's electorate."""
-    eligible: set[uuid.UUID] = set()
-    for _, electorate in await _entry_electorates(session, request.approvers or []):
-        eligible.update(electorate)
-    return eligible
+    return _eligible(await _entry_electorates(session, request.approvers or []))
 
 
-def _approved_count(
-    votes: Sequence[ApprovalVote], eligible: set[uuid.UUID]
-) -> int:
-    """Approve verdicts from CURRENTLY-eligible voters — the coarse total shown
-    beside the per-entry progress."""
-    return sum(
-        1
-        for vote in votes
-        if vote.verdict == ApprovalVerdict.APPROVE.value and vote.user_id in eligible
-    )
-
-
-def _approvers_summary(entries: Sequence[dict]) -> str:
-    """Human summary of the entry rules — event payloads + notifications
-    ("Hussein Jarrar; 2 of DevOps")."""
+def approvers_summary(entries: Sequence[dict]) -> str:
+    """Human summary of the entry rules ("Hussein Jarrar; 2 of DevOps") — event
+    payloads, notifications and the gate's failure message."""
     parts: list[str] = []
     for entry in entries:
-        name = entry.get("name") or str(entry.get("id"))
+        name = entry.get("name") or entry.get("id") or "?"
         if entry.get("kind") == ApproverKind.TEAM.value:
             parts.append(f"{_entry_required(entry)} of {name}")
         else:
@@ -259,9 +240,7 @@ async def _reads(
     for request in requests:
         votes = votes_by_request.get(request.id, [])
         electorates = electorates_by_request[request.id]
-        eligible: set[uuid.UUID] = set()
-        for _, electorate in electorates:
-            eligible.update(electorate)
+        eligible = _eligible(electorates)
         state = states.get(request.to_state_id)
         approvers = sorted(
             (users[uid] for uid in eligible if uid in users), key=lambda u: u.name
@@ -272,9 +251,8 @@ async def _reads(
                 id=uuid.UUID(str(entry["id"])),
                 name=str(entry.get("name") or "?"),
                 required=_entry_required(entry),
-                approved_count=_entry_approved(entry, electorate, votes),
-                satisfied=_entry_approved(entry, electorate, votes)
-                >= _entry_required(entry),
+                approved_count=_approvals_in(votes, electorate),
+                satisfied=_approvals_in(votes, electorate) >= _entry_required(entry),
             )
             for entry, electorate in electorates
         ]
@@ -289,7 +267,7 @@ async def _reads(
                 requested_by=ref(request.requested_by),
                 entries=entries,
                 approvers=[ApprovalUserRef(id=u.id, name=u.name) for u in approvers],
-                approved_count=_approved_count(votes, eligible),
+                approved_count=_approvals_in(votes, eligible),
                 votes=[
                     ApprovalVoteRead(
                         user=voter_ref,
@@ -310,7 +288,6 @@ async def _emit(
     session: AsyncSession,
     event_type: ApprovalEvent,
     request: ApprovalRequest,
-    project: Project,
     actor: User,
     *,
     approved_count: int,
@@ -329,9 +306,7 @@ async def _emit(
         "to_state": state.name,
         "requester": auth.user_ref(requester),
         "approved_count": approved_count,
-        # Spec 107: the human summary of the per-entry rules — notifications
-        # render it verbatim ("Hussein Jarrar; 2 of DevOps").
-        "approvers_summary": _approvers_summary(request.approvers or []),
+        "approvers_summary": approvers_summary(request.approvers or []),
     }
     if verdict is not None:
         payload["voter"] = auth.user_ref(actor)
@@ -410,7 +385,6 @@ async def create_request(
         session,
         ApprovalEvent.REQUESTED,
         request,
-        project,
         actor,
         approved_count=0,
         # The notify consumer fans approval.requested out to these ids without
@@ -456,19 +430,13 @@ async def item_approvals(
 async def vote(
     session: AsyncSession, request_id: uuid.UUID, data: ApprovalVoteCreate, actor: User
 ) -> VoteResult:
-    request = await _get_request(session, request_id)
-    project = await _request_project(session, request)
-    from radd.modules.items.service.visibility import require_key_item_permission
-    item_for_key = await items_service.require_item(session, request.item_id)
-    await require_key_item_permission(session, actor, item_for_key, Permission.ITEM_UPDATE)
+    request, _item = await _request_for_update(session, request_id, actor)
     if request.status != ApprovalStatus.PENDING.value:
         raise ConflictError(
             ApprovalEntity.REQUEST, reason=f"request is {request.status}, not pending"
         )
     electorates = await _entry_electorates(session, request.approvers or [])
-    eligible: set[uuid.UUID] = set()
-    for _, electorate in electorates:
-        eligible.update(electorate)
+    eligible = _eligible(electorates)
     if actor.id not in eligible:
         raise ForbiddenError("you are not an approver on this request")
     existing = await session.scalar(
@@ -496,42 +464,29 @@ async def vote(
             )
         ).scalars()
     )
-    approved_count = _approved_count(votes, eligible)
-    await _emit(
-        session,
-        ApprovalEvent.VOTED,
-        request,
-        project,
-        actor,
-        approved_count=approved_count,
-        verdict=data.verdict.value,
-    )
+    approved_count = _approvals_in(votes, eligible)
+
+    async def emit(event_type: ApprovalEvent) -> None:
+        await _emit(
+            session,
+            event_type,
+            request,
+            actor,
+            approved_count=approved_count,
+            verdict=data.verdict.value,
+        )
+
+    await emit(ApprovalEvent.VOTED)
     applied = False
     errors: list[str] = []
     if data.verdict is ApprovalVerdict.DECLINE:
         request.status = ApprovalStatus.DECLINED.value
         await session.flush()
-        await _emit(
-            session,
-            ApprovalEvent.DECLINED,
-            request,
-            project,
-            actor,
-            approved_count=approved_count,
-            verdict=data.verdict.value,
-        )
+        await emit(ApprovalEvent.DECLINED)
     elif _satisfied(electorates, votes):
         request.status = ApprovalStatus.APPROVED.value
         await session.flush()
-        await _emit(
-            session,
-            ApprovalEvent.APPROVED,
-            request,
-            project,
-            actor,
-            approved_count=approved_count,
-            verdict=data.verdict.value,
-        )
+        await emit(ApprovalEvent.APPROVED)
         applied, errors = await _auto_apply(session, request, actor)
     return VoteResult(
         request=(await _reads(session, [request]))[0], applied=applied, errors=errors
@@ -562,16 +517,13 @@ async def _auto_apply(
 async def cancel_request(
     session: AsyncSession, request_id: uuid.UUID, actor: User
 ) -> None:
-    request = await _get_request(session, request_id)
-    project = await _request_project(session, request)
-    from radd.modules.items.service.visibility import require_key_item_permission
-    item_for_key = await items_service.require_item(session, request.item_id)
-    await require_key_item_permission(session, actor, item_for_key, Permission.ITEM_UPDATE)
+    request, item = await _request_for_update(session, request_id, actor)
     if request.status not in _LIVE:
         raise ConflictError(
             ApprovalEntity.REQUEST, reason=f"request is {request.status} — nothing to cancel"
         )
     if request.requested_by != actor.id:
+        project = await projects_service.get_project(session, item.project_id)
         await authz.require(session, actor, Permission.PROJECT_MANAGE, project=project)
     eligible = await _eligible_user_ids(session, request)
     votes = (await _votes_for(session, [request.id])).get(request.id, [])
@@ -581,9 +533,8 @@ async def cancel_request(
         session,
         ApprovalEvent.CANCELED,
         request,
-        project,
         actor,
-        approved_count=_approved_count(votes, eligible),
+        approved_count=_approvals_in(votes, eligible),
     )
 
 

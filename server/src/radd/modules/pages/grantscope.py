@@ -1,11 +1,5 @@
-"""What auth needs to know about a SPACE-scoped role grant (RADD-791, inverted
-in RADD-892).
-
-auth owns the `global_role_grants.space_id` column; it does not own what a space
-is called, whether an id is real, or how many spaces a person can read. It used
-to answer all three by importing `pages.models` — the last non-spine model import
-in the codebase, and an inversion besides: pages loads after auth.
-"""
+"""What auth needs to know about a SPACE-scoped role grant (RADD-892): names,
+existence, reach."""
 
 import uuid
 
@@ -21,6 +15,8 @@ from .models import PageSpace
 async def space_labels(
     session: AsyncSession, space_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, str]:
+    if not space_ids:
+        return {}
     rows = await session.execute(
         select(PageSpace.id, PageSpace.name).where(PageSpace.id.in_(space_ids))
     )

@@ -6,6 +6,7 @@ lives on its automation node.
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -79,8 +80,4 @@ async def run_script(data: RunRequest, session: Session, user: CurrentUser) -> R
     """The inspector's Test box: the body as typed, an optional seed item, the
     real API, as the caller."""
     await _manage(session, user)
-    outcome = await service.run_test(session, data, user)
-    return RunOutcomeRead(
-        ok=outcome.ok, result=outcome.result, stdout=outcome.stdout, stderr=outcome.stderr,
-        error=outcome.error, duration_ms=outcome.duration_ms,
-    )
+    return RunOutcomeRead(**asdict(await service.run_test(session, data, user)))

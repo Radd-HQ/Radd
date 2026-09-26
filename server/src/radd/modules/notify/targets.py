@@ -1,34 +1,12 @@
 """Which subscription targets an actor may NAME (spec 118).
 
-A subscription's `scope_id` is a uuid the client chooses, and two things follow
-from that if nobody checks it.
-
-**A name oracle.** Delivery is safe on its own — every notification still passes
-`consumer._allowed` or its subject provider's `reader_ids`, so a rule pointing
-at a project you cannot read delivers nothing. But the preferences READ
-resolves each target's name for display, because a settings page that renders
-"Subscribed to 3f2a-…" is a page nobody can audit. Store an arbitrary uuid, read
-it back, and that display is a lookup service for the name and key of every
-project, space and team on the instance. On this product that is frequently the
-name of an unannounced customer.
-
-**And a rule set with no gate is a row per uuid somebody cares to send** — the
-`max_length` on the request bounds the count, this bounds what they can point at.
-
-The gate is per family, and it is the same one the PICKER that offers the target
-uses, so the API and the UI cannot disagree about what exists:
-
-* project — `authz.visible_projects`, exactly `GET /projects` (RADD-937/1041);
-* team — `team.read`, exactly `GET /teams`, which is all-or-nothing (RADD-816);
-* space — the `NOTIFICATION_SUBJECT` provider for the scope (the wiki's
-  `readable_spaces`, exactly `GET /page-spaces`, RADD-791), reached through the
-  kernel socket since RADD-1385, so a disabled wiki names no space at all.
-
-It is applied on BOTH sides. The write drops a target the actor may not name; the
-read refuses to label one. Two applications rather than one because a stored row
-outlives the access that created it — someone removed from a project keeps the
-subscription row until their next save, and until then the read must not narrate
-it.
+`scope_id` is client-chosen and the preferences READ turns it into a name, so
+an unchecked uuid is a name oracle for every project, space and team. The gate
+per family is the one its picker uses: project → `authz.visible_projects`;
+team → `team.read` (all-or-nothing, like `GET /teams`); space → the
+`NOTIFICATION_SUBJECT` provider. Applied on BOTH sides — the write drops what
+the actor may not name, the read refuses to label it — because a stored row
+outlives the access that created it.
 """
 
 from __future__ import annotations
@@ -56,11 +34,7 @@ CORE_TARGETS: frozenset[RuleScope] = frozenset({RuleScope.PROJECT, RuleScope.TEA
 def targets_by_scope(
     rows: Iterable[tuple[RuleScope, uuid.UUID | None]],
 ) -> dict[RuleScope, set[uuid.UUID]]:
-    """Group the subscription targets a rule set names, by family.
-
-    Relationship rows are dropped here rather than checked and passed: they have
-    no target, so there is nothing to be entitled to.
-    """
+    """The subscription targets a rule set names, by family (relationship rows name none)."""
     wanted: dict[RuleScope, set[uuid.UUID]] = {}
     for scope, scope_id in rows:
         if scope_id is not None and scope in SUBSCRIPTION_SCOPES:
@@ -71,12 +45,8 @@ def targets_by_scope(
 async def readable_targets(
     session: AsyncSession, user: User, wanted: Mapping[RuleScope, set[uuid.UUID]]
 ) -> ReadableTargets:
-    """Of the targets asked about, the ones this actor may name.
-
-    Nothing is resolved for a family nobody asked about — a matrix-only save
-    costs no extra query at all, which is what keeps this on the write path
-    rather than in a background sweep.
-    """
+    """Of the targets asked about, the ones this actor may name; a family nobody
+    asked about costs no query."""
     readable: ReadableTargets = {}
 
     projects = wanted.get(RuleScope.PROJECT) or set()
@@ -86,19 +56,15 @@ async def readable_targets(
 
     teams = wanted.get(RuleScope.TEAM) or set()
     if teams:
-        # `GET /teams` gates the whole CATALOG on one atom and then serves every
-        # team, so the catalog gate is the target gate. Asking a narrower
-        # question per team would invent an entitlement the surface offering
-        # those teams does not have.
+        # `GET /teams` gates the whole catalog on one atom, so that is the target gate.
         allowed = await authz.holds(session, user, Permission.TEAM_READ)
         readable[RuleScope.TEAM] = set(teams) if allowed else set()
 
     for scope, ids in wanted.items():
         if scope in CORE_TARGETS or not ids:
             continue
-        # A container of a non-item subject (a wiki space): what its provider
-        # lets this actor name. No provider — the plugin disabled — names none,
-        # which is the correct answer: an instance with no wiki has no spaces.
+        # A non-item subject's container (a wiki space): its provider answers;
+        # no provider names none.
         readable[scope] = set(await subjects.scope_names(session, user, scope, set(ids)))
 
     return readable

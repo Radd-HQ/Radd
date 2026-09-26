@@ -1,16 +1,6 @@
-"""The node registry seam (spec 116 phase 2, extended by RADD-918).
-
-`graph.py` stays pure — it takes a resolver rather than importing the kernel — so
-this is where the two meet. Everything that validates or walks a graph asks here
-what a node's outputs are and how it reads its input, and gets the same answer
-whether the node type is built into `automations` or contributed by a plugin.
-
-That "same answer" is the whole point of the module. Ports and arity are each
-resolvable from three places (a registered spec, a built-in table, the kind's
-default), and a second copy of the precedence anywhere would eventually disagree
-with this one — which the graph validator cannot survive, because it rejects
-edges against a port set it has to believe.
-"""
+"""The node registry seam (spec 116): `graph.py` stays pure and takes resolvers;
+everything that validates or walks a graph asks HERE for a node's ports, outputs
+and arity, so the precedence exists once."""
 
 from __future__ import annotations
 
@@ -37,15 +27,7 @@ def ports_of(node: graph.Node) -> tuple[str, ...]:
 
 
 def outputs_of(node: graph.Node) -> tuple[OutputField, ...]:
-    """The named values a node produces (spec 120) — its TYPE's answer when one
-    is registered or tabled, else nothing.
-
-    Ranked exactly like `ports_of`, and for the same reason: the write path
-    refuses a token naming an output its producer cannot emit, so it has to ask
-    one place. "Nothing" is the honest default — most node types produce no
-    values at all, and a fallback that invented some would put tokens in the
-    editor's picker that never resolve.
-    """
+    """The named values a node produces (spec 120) — its spec's answer, else none."""
     spec = registries.automation_nodes.get(node.type)
     if spec is not None:
         return tuple(spec.outputs_at(node.params))
@@ -53,14 +35,8 @@ def outputs_of(node: graph.Node) -> tuple[OutputField, ...]:
 
 
 def output_name(node: graph.Node) -> str:
-    """The name this node can be ADDRESSED by, or "" when it cannot.
-
-    Lenient by design: a stored name that is not a legal identifier makes the
-    node unaddressable rather than making the automation unloadable. The write
-    path is where someone is told; a row edited around the API degrades to a
-    producer nobody can reference, which is visible in the dry run rather than
-    fatal at 3am.
-    """
+    """The name this node can be addressed by, or "" — a stored illegal name makes
+    the node unaddressable, never the automation unloadable."""
     return node.name if valid_output_name(node.name) else ""
 
 
@@ -86,13 +62,8 @@ def arity_rule(node_type: str) -> ArityRule:
 
 
 def arity_of(node: graph.Node) -> NodeArity:
-    """How this node reads its packet.
-
-    The stored param wins ONLY when the type allows it. A node whose type is
-    fixed at ITEM cannot be talked into running once by hand-editing its params
-    — a `set_state` that fired a single time for a set would apply to whichever
-    item happened to be first, which is not a behaviour anyone asked for.
-    """
+    """How this node reads its packet: the stored param only when the type allows
+    it (a hand-edited `set_state` at set arity would hit whichever item came first)."""
     rule = arity_rule(node.type)
     if not rule.configurable:
         return rule.default

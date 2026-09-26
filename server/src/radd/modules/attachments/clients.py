@@ -1,12 +1,7 @@
-"""Per-host storage clients (spec 102) — the request-path implementation of the
-kernel's STORAGE_BACKEND socket.
-
-One client instance per host row, cached on `(host.id, host.updated_at)` so an
-admin edit invalidates it. Both types deal in `storage_name` (uuid hex) and a
-rewindable buffered stream; delivery honors the host's mode (proxy bytes
-through the API, or 307 to a short presigned URL minted with the host's own
-credentials — network reachability then decides who can actually fetch).
-"""
+"""Per-host storage clients (spec 102), the STORAGE_BACKEND socket's impls. One
+client per host row, cached on `(host.id, host.updated_at)` so an edit
+invalidates it. Delivery honours the host's mode: proxy, or a 307 to a presigned
+URL — network reachability then decides who can fetch."""
 
 import asyncio
 import logging

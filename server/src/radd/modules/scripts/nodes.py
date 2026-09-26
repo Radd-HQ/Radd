@@ -1,14 +1,6 @@
-"""The two automation nodes (RADD-1269): run a script, and decide with one.
-
-Contributed through the kernel exactly as the milestone and page actions are —
-nothing here imports `automations`. The executor supplies the savepoint, the
-budget and the loop guard; this module supplies what a script sees and what
-its answer means.
-
-What a script sees is bounded by WHO the automation runs as: the token minted
-for the run is the actor's own, unscoped, so a key can never exceed its
-account (spec 113). The packet's items are read through that actor too.
-"""
+"""`script.run` and `script.decide` (RADD-1269), contributed through the kernel.
+A script sees what the automation's actor may see: its run key is that actor's
+own, and a key never exceeds its account (spec 113)."""
 
 from __future__ import annotations
 
@@ -35,24 +27,21 @@ _MAIN_RE = re.compile(r"^\s*def\s+main\s*\(", re.MULTILINE)
 MAX_OUTPUTS = 20
 MAX_PORTS = 8
 
+_BODY = {"type": "string", "title": "Script", "minLength": 1, "maxLength": 200000, "default": STARTER_SCRIPT}
+_TIMEOUT = {"type": "integer", "title": "Timeout (seconds)", "minimum": 1, "maximum": 600, "default": 60}
+
 RUN_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["body"],
     "properties": {
-        "body": {"type": "string", "title": "Script", "minLength": 1, "maxLength": 200000, "default": STARTER_SCRIPT},
+        "body": _BODY,
         "outputs": {
             "type": "array",
             "title": "Outputs the script returns (keys of the dict main returns)",
             "items": {"type": "string"},
             "default": [],
         },
-        "timeout": {
-            "type": "integer",
-            "title": "Timeout (seconds)",
-            "minimum": 1,
-            "maximum": 600,
-            "default": 60,
-        },
+        "timeout": _TIMEOUT,
     },
 }
 
@@ -60,20 +49,14 @@ DECIDE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["body", "ports"],
     "properties": {
-        "body": {"type": "string", "title": "Script", "minLength": 1, "maxLength": 200000, "default": STARTER_SCRIPT},
+        "body": _BODY,
         "ports": {
             "type": "array",
             "title": "Ports the script may name (it returns one of these)",
             "items": {"type": "string"},
             "default": ["yes", "no"],
         },
-        "timeout": {
-            "type": "integer",
-            "title": "Timeout (seconds)",
-            "minimum": 1,
-            "maximum": 600,
-            "default": 60,
-        },
+        "timeout": _TIMEOUT,
     },
 }
 
@@ -91,17 +74,13 @@ def outputs_for(params: dict[str, Any]) -> tuple[OutputField, ...]:
     return tuple(
         OutputField(name=name, label=name, description=f"`{name}` from the dict the script returns.")
         for name in _names(params.get("outputs"), MAX_OUTPUTS)
-        if _is_identifier(name)
+        if name.isidentifier()
     )
 
 
 def ports_for(params: dict[str, Any]) -> tuple[str, ...]:
     ports = [p for p in _names(params.get("ports"), MAX_PORTS) if p != UNAVAILABLE_PORT]
     return (*ports, UNAVAILABLE_PORT)
-
-
-def _is_identifier(name: str) -> bool:
-    return name.isidentifier()
 
 
 def _check_body(params: dict[str, Any]) -> None:
@@ -115,7 +94,7 @@ def _check_body(params: dict[str, Any]) -> None:
 def check_run(params: dict[str, Any]) -> None:
     _check_body(params)
     for name in _names(params.get("outputs"), MAX_OUTPUTS + 1):
-        if not _is_identifier(name):
+        if not name.isidentifier():
             raise ValueError(f"output {name!r} could never be a token — use letters, digits and underscores")
     if len(_names(params.get("outputs"), MAX_OUTPUTS + 1)) > MAX_OUTPUTS:
         raise ValueError(f"at most {MAX_OUTPUTS} outputs")
@@ -129,7 +108,7 @@ def check_decide(params: dict[str, Any]) -> None:
     if len(ports) > MAX_PORTS:
         raise ValueError(f"at most {MAX_PORTS} ports")
     for port in ports:
-        if not _is_identifier(port):
+        if not port.isidentifier():
             raise ValueError(f"port {port!r} — use letters, digits and underscores")
 
 
@@ -200,10 +179,7 @@ async def plan_run(ctx: Any) -> _Plan:
 async def apply_run(ctx: Any, plan: _Plan) -> None:
     outcome = await _execute(ctx, plan)
     if not outcome.ok:
-        # Raised so the executor's savepoint rolls back whatever the script
-        # wrote through the API in the same transaction (nothing — it went
-        # over HTTP), logs it, and the run report records the failure against
-        # this node rather than calling it applied.
+        # Raised so the executor records the failure against this node.
         raise RuntimeError(outcome.summary)
     if isinstance(outcome.result, dict):
         for name in plan.outputs:

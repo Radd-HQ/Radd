@@ -1,19 +1,7 @@
-"""Page ACTION nodes for automations (RADD-1267): comment on the page an event
-is about, and move it under another page.
-
-Contributed the way `milestones/automation.py` contributes its own (RADD-923):
-the pages plugin declares `subject="page"`, the kernel hands the node the page
-ids the event named, and the executor supplies the savepoint, the budget and
-the loop guard. Nothing here imports `automations`.
-
-Two nodes rather than one "edit page": a comment is a REPLY on the page's
-discussion — the thing a "page went stale" automation wants — and a move is a
-tree operation with its own rules (`pages.service.update_page` refuses a cycle
-and a cross-space parent). Editing the body from an automation is deliberately
-absent: the collaborative editor's write guard (spec 122) owns page bodies, and
-an automation rewriting one under a live session is exactly what that guard
-exists to refuse.
-"""
+"""Page automation contributions (RADD-1267/1322/1324): comment-on-page and
+move-page actions, the "Page is in space" gate and `{{page.*}}` tokens. Editing a
+body is deliberately absent — the co-editing write guard (spec 122) owns page
+bodies. Nothing here imports `automations`."""
 
 from __future__ import annotations
 
@@ -179,16 +167,9 @@ MOVE_NODE = AutomationNodeSpec(
 
 
 def page_space_is(payload: dict[str, Any], params: dict[str, Any]) -> bool:
-    """Is the page this event is about in one of these spaces?
-
-    A page event carries a top-level `page_space` ref; a page comment carries
-    the space inside its `page` ref. Either is the answer; an event about no
-    page answers False.
-
-    A saved value is a space ID (what the space picker stores since RADD-1365,
-    and what survives a rename) or a slug (graphs saved before it, and what
-    people type); the ref carries both, so either matches (RADD-1371).
-    """
+    """Is the event's page in one of these spaces? A page event carries
+    `page_space`, a page comment the space inside `page`; a saved value may be an
+    id or a slug (RADD-1371)."""
     wanted = {str(v).strip().lower() for v in (params.get("spaces") or []) if str(v).strip()}
     if not wanted:
         return False
@@ -234,9 +215,10 @@ def resolve_page_token(field_name: str, payload: dict[str, Any]) -> str | None:
         return str(space.get("slug")) if isinstance(space, dict) and space.get("slug") else None
     if field_name == "url":
         from radd.config import settings
+        from radd.mailrender import page_url
 
         number = page.get("number")
-        return f"{settings.app_base_url.rstrip('/')}/pages?pageId={number}" if number else None
+        return page_url(settings.app_base_url, number) if number else None
     value = page.get(field_name)
     return None if value is None or isinstance(value, dict) else str(value)
 

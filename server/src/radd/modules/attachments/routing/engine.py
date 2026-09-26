@@ -33,16 +33,11 @@ def handler_for(rule_type: str):
 async def choice_reachable(
     session: AsyncSession, *, source_ip: str | None, content_types: list[str]
 ) -> tuple[bool, str | None]:
-    """Would an upload with these content types actually REACH an enabled
-    user-choice rule — or is it captured first (spec 102 "ask only when the
-    answer matters")? Returns (reachable, name of the pre-empting rule).
-
-    Prediction mirrors `decide`, and each rule TYPE answers for itself through
-    the socket's optional `captured_types` (RADD-1387): a CIDR rule matching the
-    caller's IP captures everything; the `ai` plugin's llm rule captures the
-    types its prefixes cover while its feature is live. A type without the
-    method — or with no provider at all, its plugin disabled — is treated as
-    non-capturing: over-asking beats silently discarding an answer.
+    """Would an upload of these types REACH an enabled user-choice rule, or be
+    captured first? Returns (reachable, name of the pre-empting rule). Mirrors
+    `decide`; each rule type answers through its optional `captured_types`
+    (RADD-1387). No method or no provider = non-capturing: over-asking beats
+    silently discarding an answer.
     """
     remaining = set(content_types) or {""}
     for rule in await ordered_rules(session):

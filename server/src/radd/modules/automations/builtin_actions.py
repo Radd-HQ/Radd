@@ -1,21 +1,7 @@
-"""The built-in ACTION nodes, registered as `AutomationNodeSpec`s (RADD-1322).
-
-Until this, built-ins were a separate path from plugin nodes: an `ActionType`
-enum the executor mapped node types back into, arity and ports in side tables,
-and a catalog that served only `contributed_nodes` while the SPA carried the
-built-ins by hand. Spec 116 said they had moved onto the registry; they had
-not. Now every action — `set_state` as much as `page.comment` — is one spec the
-executor runs through ONE path: `plan` records what it would do (so the dry run
-is free), `apply` runs inside the savepoint, the budget and the loop guard.
-
-Twenty-six specs share one planner and one applier: the per-action logic
-still lives in `planning._plan` / `engine._apply_plan`, which is the actions'
-own implementation, not a dispatch the executor has to know about.
-
-Two actions that used to be here are CONTRIBUTED by their owners since
-RADD-1387, under the same keys: `action.send_email` (mailintake) and
-`action.add_participant` (participants). Built in, they imported those optional
-plugins behind a boot-config check that a runtime disable never changed.
+"""The built-in ACTION nodes as `AutomationNodeSpec`s (RADD-1322): one spec per
+`ActionType`, all sharing one planner (`planning._plan`) and one applier
+(`engine._apply_plan`). `send_email` and `add_participant` are contributed by
+mailintake and participants under the same keys.
 """
 
 from __future__ import annotations

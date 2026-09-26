@@ -7,7 +7,6 @@ in-process ASGI runs against the live app.
 import uuid
 
 from radd.modules.pages.core import (
-    build_tsquery,
     page_slugify,
     should_snapshot,
     slugify,
@@ -15,6 +14,7 @@ from radd.modules.pages.core import (
     visible_page_ids,
     would_create_cycle,
 )
+from radd.modules.search.service import build_tsquery
 
 A, B, C, D = (uuid.uuid4() for _ in range(4))
 

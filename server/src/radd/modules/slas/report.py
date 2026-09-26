@@ -1,15 +1,6 @@
-"""The service-desk SLA report (specs 63/65): weekly SLA outcomes over the
-engine's `sla_item_states` bookkeeping, plus CSAT ratings when csat is loaded.
-
-It lived in `reporting` for historical reasons, which made a core module import
-two optional plugins (RADD-1386). It folds with reporting's public machinery —
-the ISO-week buckets, the reader's item universe and the scope note — so the
-dependency runs one way: slas → reporting.
-
-CSAT is a WEAK edge between two optional plugins (`weak_depends=("csat",)`):
-checked against the live plugin registry on every request, so disabling csat at
-runtime drops the ratings without a restart, and imported only after that check.
-"""
+"""The service-desk SLA report (specs 63/65): weekly outcomes over
+`sla_item_states`, plus CSAT ratings while the csat plugin is loaded (a weak
+edge checked per request). Depends one way: slas → reporting."""
 
 import statistics
 import uuid
@@ -42,15 +33,6 @@ class SlaStateRow:
     resolution_breached_at: datetime | None
 
 
-@dataclass(frozen=True)
-class Rating:
-    """One answered survey, as the report needs it."""
-
-    item_id: uuid.UUID
-    responded_at: datetime
-    rating: int
-
-
 async def state_rows(
     session: AsyncSession,
     project_id: uuid.UUID | None,
@@ -75,16 +57,13 @@ async def state_rows(
     return [SlaStateRow(*row) for row in (await session.execute(query)).all()]
 
 
-async def ratings(
-    session: AsyncSession, project_id: uuid.UUID | None, since: datetime
-) -> list[Rating]:
-    """Answered surveys since `since` — none while the csat plugin is not loaded."""
+async def ratings(session: AsyncSession, project_id: uuid.UUID | None, since: datetime) -> list:
+    """csat's `CsatResponseRow`s since `since` — none while csat is not loaded."""
     if CSAT_PLUGIN_ID not in registries.plugins:
         return []
     from radd.modules.csat import report as csat_report
 
-    rows = await csat_report.responded_rows(session, project_id, since=since)
-    return [Rating(row.item_id, row.responded_at, row.rating) for row in rows]
+    return await csat_report.responded_rows(session, project_id, since=since)
 
 
 def _fold_per_item(rows: list[SlaStateRow]) -> list[SlaStateRow]:
@@ -199,13 +178,9 @@ async def sla_report(
         if fold is not None:
             fold.add(row)
 
-    # CSAT (spec 65) — NOTE the deliberate asymmetry: the SLA counters above
-    # bucket by the week the ITEM was created; ratings bucket by the week the
-    # RESPONSE arrived. A rating landing weeks after the item was raised counts
-    # in the week it was given, so the trend shows sentiment as it arrives.
+    # CSAT buckets by the week the RESPONSE arrived (SLA counters by item-created
+    # week), intersected with the same visible item set (RADD-789).
     for rating in await ratings(session, project_id, since=since):
-        # Same visibility intersection as the SLA counters (RADD-789) — a rating
-        # is as project-scoped as the item it was given about.
         if matches is not None and rating.item_id not in matches:
             continue
         fold = folds.get(_week_of(rating.responded_at))

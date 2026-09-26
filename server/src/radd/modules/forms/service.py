@@ -47,12 +47,7 @@ def _read(form: Form, shares: Sequence[FormShare] = ()) -> FormRead:
 
 
 async def _form_shares(session: AsyncSession, form_id: uuid.UUID) -> list[FormShare]:
-    result = await session.execute(
-        select(FormShare)
-        .where(FormShare.form_id == form_id)
-        .order_by(FormShare.created_at, FormShare.id)
-    )
-    return list(result.scalars())
+    return (await _shares_by_form(session, [form_id])).get(form_id, [])
 
 
 async def _shares_by_form(
@@ -133,7 +128,7 @@ async def create_form(session: AsyncSession, data: FormCreate, actor: User) -> F
     )
     session.add(form)
     await session.flush()
-    await _emit(session, FormEvent.CREATED, form, project, actor)
+    await _emit(session, FormEvent.CREATED, form, actor)
     return _read(form)
 
 
@@ -151,15 +146,8 @@ async def list_forms(
 
 
 async def render_form(session: AsyncSession, form_id: uuid.UUID, actor: User) -> FormRead:
-    """Fetch a form for a submitter to render — open to ITEM_CREATE on its project.
-
-    The spec-119 validation context rides on this payload, exactly as it does on
-    the portal's, rather than being fetched separately from the items endpoint.
-    One resolution serves both pages, and it is the only one that can know the
-    form's effective TYPE — which the client cannot, because the submitter never
-    picks one. Computed here and not in `_read`, so the settings LIST does not
-    pay for a resolution nobody on that page reads.
-    """
+    """A form for a submitter to render (ITEM_CREATE). The spec-119 validation
+    context is added here, not in `_read`, so the settings list does not pay for it."""
     form = await get_form(session, form_id)
     project = await projects_service.get_project(session, form.project_id)
     await authz.require(session, actor, Permission.ITEM_CREATE, project=project)
@@ -198,12 +186,10 @@ async def update_form(
     if data.team_picker_enabled is not None:
         form.team_picker_enabled = data.team_picker_enabled
     if data.allow_public is not None:
-        # Spec 62: mint the token on FIRST enable only; disabling keeps it, so
-        # re-enabling restores the same public link.
         form.allow_public = data.allow_public
     await session.flush()
     await _emit(
-        session, FormEvent.UPDATED, form, project, actor,
+        session, FormEvent.UPDATED, form, actor,
         diff=changes.diff_object(form, before, hidden=("fields", "defaults")),
     )
     return _read(form, (await _form_shares(session, form.id)) if include_shares else ())
@@ -243,7 +229,7 @@ async def update_sharing(
     """Replace the form's FULL portal share list (spec 73): delete-then-insert,
     the views-sharing idiom. Presence-only grants — no levels."""
     from .sharing import managed_form
-    form, project = await managed_form(session, form_id, actor, lock=True)
+    form, _project = await managed_form(session, form_id, actor, lock=True)
     await _validate_share_subjects(session, data.shares)
     previous = await share_labels(session, await _form_shares(session, form.id))
     await session.execute(delete(FormShare).where(FormShare.form_id == form.id))
@@ -253,7 +239,7 @@ async def update_sharing(
     current = await share_labels(session, await _form_shares(session, form.id))
     entry = changes.collection_change("shares", previous, current)
     await _emit(
-        session, FormEvent.UPDATED, form, project, actor,
+        session, FormEvent.UPDATED, form, actor,
         extra={"share_count": len(data.shares)},
         diff=[entry] if entry is not None else [],
     )
@@ -279,7 +265,7 @@ async def delete_form(session: AsyncSession, form_id: uuid.UUID, actor: User) ->
     form = await get_form(session, form_id)
     project = await projects_service.get_project(session, form.project_id)
     await authz.require(session, actor, Permission.FORM_DELETE, project=project)
-    await _emit(session, FormEvent.DELETED, form, project, actor)
+    await _emit(session, FormEvent.DELETED, form, actor)
     await session.delete(form)
     await session.flush()
 
@@ -311,18 +297,8 @@ async def _resolve_type_id(
 
 
 async def effective_type_id(session: AsyncSession, form: Form) -> uuid.UUID | None:
-    """The issue TYPE a submission through this form will actually carry.
-
-    Two resolutions, in the order `submit_form` and `create_item` do them: the
-    form's `type_name` default, and — when it names nothing or names something
-    that no longer exists — the PROJECT's default type, which is what
-    `create_item` falls back to.
-
-    It exists because the submitter never picks a type, so nothing on the client
-    can know it. Without this a type-targeted binding was invisible to every
-    form surface: the button said "Submit", the panel promised nothing, and the
-    checks announced themselves for the first time in a 422 (spec 119).
-    """
+    """The issue TYPE a submission will carry: the form's `type_name`, else the
+    project default — the submitter never picks one, so only the server knows."""
     from radd.modules.itemtypes import service as itemtypes_service
 
     project = await projects_service.get_project(session, form.project_id)
@@ -334,20 +310,11 @@ async def effective_type_id(session: AsyncSession, form: Form) -> uuid.UUID | No
 
 
 async def validation_context(session: AsyncSession, form: Form) -> FormValidationContext:
-    """Whether anything validates submissions through this form (spec 119).
-
-    Deferred + feature-detected: `automations` is optional and loads after
-    `forms`, so with it absent every form is simply ungoverned — which is the
-    truth, not a degradation.
-
-    The scope carries the form AND its effective type, because a submission
-    through it carries both and a binding may name either.
-    """
-    try:
-        from radd.modules.automations import intake as automations_intake
-        from radd.modules.automations.validation import DraftScope
-    except ImportError:
-        return FormValidationContext()
+    """Whether intake validation governs submissions through this form (spec 119);
+    the scope carries the form AND its effective type. Deferred: automations
+    loads after forms (`weak_depends`)."""
+    from radd.modules.automations import intake as automations_intake
+    from radd.modules.automations.validation import DraftScope
 
     governed, mode = await automations_intake.context_for(
         session,
@@ -381,9 +348,7 @@ async def _resolve_assignee_id(
     return user.id if user else None
 
 
-async def _resolve_cycle_id(
-    session: AsyncSession, project: Project, cycle_name: str | None
-) -> uuid.UUID | None:
+async def _resolve_cycle_id(session: AsyncSession, cycle_name: str | None) -> uuid.UUID | None:
     if not cycle_name:
         return None
     for cycle in await cycles_service.list_cycles(session):
@@ -416,12 +381,9 @@ async def submit_form(
     team_id: uuid.UUID | None = None,
     origin: ItemOrigin = ItemOrigin.FORM,
 ) -> ItemRead:
-    """Validate the submission against the form's required overrides + the registry, then
-    create a work item in the form's project with the defaults applied.
-
-    ITEM_CREATE on the project is enforced by items.create_item. `reporter_id`
-    (spec 62, the public path): pass a user id — or None to keep the reporter
-    unset — instead of crediting the acting (SYSTEM) user."""
+    """Validate against the form's required overrides and the registry, then
+    create the item with the defaults applied. `reporter_id` overrides the
+    reporter (the portal passes the visitor); None leaves it unset."""
     form = await get_form(session, form_id)
     project = await projects_service.get_project(session, form.project_id)
     await authz.require(session, actor, Permission.ITEM_CREATE, project=project)
@@ -458,7 +420,7 @@ async def submit_form(
         priority=Priority(defaults["priority"]) if defaults.get("priority") else Priority.NORMAL,
         state_id=await _resolve_state_id(session, project, defaults.get("state_name")),
         assignee_id=await _resolve_assignee_id(session, defaults.get("assignee_email")),
-        cycle_id=await _resolve_cycle_id(session, project, defaults.get("cycle_name")),
+        cycle_id=await _resolve_cycle_id(session, defaults.get("cycle_name")),
         release_id=await _resolve_release_id(session, project, defaults.get("release_version")),
         # The submitter's team choice wins over any form default — sharing is
         # theirs to decide (RADD-798); the form only decides whether to ask.
@@ -491,26 +453,10 @@ async def submit_form(
 async def _create_validated(
     session: AsyncSession, form: Form, item: ItemCreate, actor: User, commit: str
 ) -> ItemRead:
-    """Create the item through intake validation (spec 119) when it is available.
-
-    Deferred, a reverse reach declared in `weak_depends`: `automations` is
-    optional and loads AFTER forms, so this module cannot name it at import
-    time. With it absent the submit is exactly what it always was — one
-    `create_item` — rather than a form that stops working because an optional
-    module is not installed.
-
-    The `form_id` is what makes a FORM-targeted binding match; without it a
-    graph bound to this form would silently only ever fire on its project.
-
-    Note the ORDER this sits in relative to `staging.claim` (in `portal.py`):
-    validation raises before the caller reaches the claim, so a rejected draft
-    never takes ownership of the files that were staged for it — they stay
-    unclaimed and are swept later, and a resubmission can claim them again.
-    """
-    try:
-        from radd.modules.automations import intake as automations_intake
-    except ImportError:
-        return await items_service.create_item(session, item, actor=actor)
+    """Create through intake validation (spec 119); `form_id` is what makes a
+    FORM-targeted binding match. Raises before `staging.claim`, so a rejected
+    draft never takes its staged files. Deferred: automations loads after forms."""
+    from radd.modules.automations import intake as automations_intake
 
     try:
         wanted = automations_intake.IntakeCommit(commit)
@@ -528,7 +474,6 @@ async def _emit(
     session: AsyncSession,
     event_type: FormEvent,
     form: Form,
-    project: Project,
     actor: User,
     extra: dict[str, object] | None = None,
     diff: list[dict] | None = None,

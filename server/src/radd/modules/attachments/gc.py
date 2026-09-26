@@ -1,12 +1,7 @@
-"""Orphan GC (spec 102): when a parent dies, its attachments' rows, BYTES, and
-grants go too.
-
-With the polymorphic parent there is no FK cascade — and the old cascade only
-ever deleted rows, orphaning bytes forever (the spec-29 known gap). This
-consumer is therefore the correctness mechanism, not an optimization. It is
-head-seeded (the historical backlog must not replay as deletes) and processes
-`item.deleted` / `page.deleted` events.
-"""
+"""Orphan cleanup (spec 102): a registered kernel CASCADE per parent binding —
+the polymorphic parent has no FK, so this is what removes rows, grants and
+BYTES. Rows and grants go in the planning transaction, bytes best-effort after
+commit."""
 
 import logging
 import uuid
@@ -34,12 +29,8 @@ def cascades() -> tuple["CascadeSpec", ...]:
 
 
 def _cascade_for(binding) -> "CascadeSpec":
-    """The cleanup that ships with a parent binding (RADD-744/745).
-
-    This was a hardcoded map inside this module, which meant a parent registered
-    by a PLUGIN — the seam the binding registry exists for — got no cleanup, and
-    its bytes stayed on a storage host forever with nothing pointing at them.
-    """
+    """The cleanup that ships with a parent binding (RADD-744/745), so a parent a
+    plugin registers is collected too."""
     from radd.kernel import CascadeSpec
 
     entity_type = binding.entity_type
@@ -57,9 +48,11 @@ def _cascade_for(binding) -> "CascadeSpec":
 
 async def _sweep(
     session: AsyncSession, entity_type: str, parent_id: uuid.UUID
-) -> list[tuple[uuid.UUID, uuid.UUID, str]] | None:
-    """Collect (attachment_id, host_id, storage_name), delete rows + grants in
-    the planning transaction (committed with the cursor); bytes go post-commit."""
+) -> list[tuple[uuid.UUID, str]] | None:
+    """Delete the parent's rows + grants in the planning transaction (committed
+    with the cursor); returns the byte refs for after commit."""
+    from .service import purge
+
     rows = list(
         (
             await session.execute(
@@ -71,27 +64,19 @@ async def _sweep(
     )
     if not rows:
         return None
-    from radd.modules.access import service as access_service
-
-    from .acl import ATTACHMENT_RESOURCE
-
-    doomed: list[tuple[uuid.UUID, uuid.UUID, str]] = []
-    for attachment in rows:
-        doomed.append((attachment.id, attachment.storage_host_id, attachment.storage_name))
-        await access_service.clear_resource(session, ATTACHMENT_RESOURCE, str(attachment.id))
-        await session.delete(attachment)
+    doomed = await purge(session, rows)
     logger.info("attachments.gc: parent %s took %d files with it", parent_id, len(doomed))
     return doomed
 
 
-async def _remove_bytes(doomed: list[tuple[uuid.UUID, uuid.UUID, str]]) -> None:
-    """Byte removal, post-commit and best-effort — an unreachable host leaves
-    orphans on that host, never a stuck consumer."""
+async def _remove_bytes(doomed: list[tuple[uuid.UUID, str]]) -> None:
+    """Post-commit and best-effort: an unreachable host leaves orphans on that
+    host, never a stuck consumer."""
     from . import hosts
     from .clients import client_for
 
     async with SessionLocal() as session:
-        for _attachment_id, host_id, storage_name in doomed:
+        for host_id, storage_name in doomed:
             try:
                 host = await hosts.get_host(session, host_id)
                 await client_for(host).remove(storage_name)

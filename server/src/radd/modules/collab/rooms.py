@@ -1,13 +1,9 @@
 """Rooms (spec 122): one live Yjs document per page, in this process.
 
-A `Room` wraps pycrdt-websocket's `YRoom` (the sync/awareness protocol and the
-broadcast loop) and adds what the product needs around it: the sessions that
-may connect and in which role, the ONE seed grant an empty document hands out,
-the debounced persistence tagged with the page version it corresponds to, and
-the idle timer that drops an empty room from memory.
-
-The hub is the module's only state. It is per-process — see docs/deploy.md.
-"""
+A `Room` wraps pycrdt-websocket's `YRoom` with the sessions and their roles, the
+ONE seed grant an empty document hands out, debounced persistence tagged with
+the page version, and the idle drop. The hub is the module's only state, and it
+is per-process (docs/deploy.md)."""
 
 from __future__ import annotations
 
@@ -307,11 +303,9 @@ class CollabHub:
 
 
 async def _seal(room: Room) -> None:
-    """RADD-1244: a session that ended without its final save — a crashed
-    tab, a dropped socket — left autosaved content with no history row and an
-    unmoved version. Write the row and bump, so the number counts what
-    History holds and a stale REST client cannot pass the version check
-    against a body it never saw."""
+    """RADD-1244: a session that ended without its final save left autosaved
+    content with no history row and an unmoved version. Write the row and bump,
+    so a stale REST client cannot pass the version check against it."""
     if not room.unsealed:
         return
     room.unsealed = False

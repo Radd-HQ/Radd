@@ -28,10 +28,8 @@ class PlannedNotification:
     user_id: uuid.UUID
     type: NotificationType
     detail: dict  # merged into the stored payload (excerpt, from/to, source…)
-    #: How this person is connected to the subject (spec 118) — planned here
-    #: because THIS is where the recipient sets are distinguished. The consumer
-    #: knows the ids; only the planner knows which set someone came out of, and
-    #: recovering that afterwards would mean re-deriving what was just decided.
+    #: How this person is connected to the subject (spec 118) — only the planner
+    #: still knows which set someone came out of.
     relation: Relation = OWN
 
 
@@ -52,27 +50,12 @@ class Plan:
         self.notifications.append(PlannedNotification(user_id, type_, detail, relation))
 
     def follow(self, user_id: uuid.UUID | None) -> None:
-        """Auto-watch someone — unless they are not a someone (RADD-996).
+        """Auto-watch someone — never the system actor (RADD-996).
 
-        EVERY watch this file plans goes through here, because the exclusion is a
-        property of the identity rather than of the moment it appears: the system
-        actor can be a creator, an assignee or a reporter, and a guard written at
-        one of those three would be a guard missing at the other two.
-
-        Mail intake creates its items and posts its reply comments AS the system
-        actor, so auto-watching the creator put `automation@radd.system` on the
-        watcher list of every ticket that has ever arrived by email — and each
-        human reply then fanned a `commented` notification out to a robot, which
-        the mailer dutifully tried to deliver to an address that does not
-        receive. `mailintake.outbound` has excluded the same actor from its own
-        recipients since spec 62; this is the other half of that rule.
-
-        The guard is here rather than in `service.add_watchers` on purpose. That
-        function is a dumb idempotent write with two other callers — jiraimport
-        restores a source system's watcher list through it verbatim — and WHO
-        should follow an issue is a planning question. Deciding it in the writer
-        would put policy where two unrelated callers inherit it silently.
-        """
+        Every planned watch goes through here because the exclusion belongs to
+        the identity: mail intake creates items and replies AS the system actor,
+        which can be creator, assignee or reporter. Kept out of
+        `service.add_watchers`, which importers call verbatim."""
         if user_id is None or user_id == SYSTEM_ACTOR_ID:
             return
         self.watch.add(user_id)
@@ -80,18 +63,9 @@ class Plan:
 
 @dataclass(frozen=True)
 class Audience:
-    """Everyone an AMBIENT notification could reach, split by how they got here.
-
-    Three sets, because the three answer differently in the matrix and the only
-    place that still knows which set someone came out of is the fan-out that
-    built them. Flattening this to one recipient list — which is what
-    `recipient_ids` was before spec 118 — is precisely what makes "stop telling
-    me about issues I merely watch, but keep telling me about mine" unsayable.
-
-    A person may be in several: an assignee who also watches is `own` AND
-    `participating`, and the resolver's ordering is what settles which of their
-    answers applies.
-    """
+    """Everyone an AMBIENT notification could reach, split by relation — the
+    fan-out is the only place that still knows which set someone came from. A
+    person may be in several; the resolver's order settles it."""
 
     #: Assignee or reporter — the work is theirs.
     own: frozenset[uuid.UUID] = frozenset()
@@ -110,12 +84,8 @@ class Audience:
         )
 
     def everyone(self) -> list[uuid.UUID]:
-        """All of them, in a STABLE order.
-
-        Sorted rather than set-ordered: `Plan._add` is first-wins, so iteration
-        order decides which type a person in two sets ends up with, and a plan
-        that depends on set iteration is a plan that differs between processes.
-        """
+        """All of them, SORTED: `Plan._add` is first-wins, so set order would make
+        plans differ between processes."""
         return sorted(self.own | self.participating | self.in_my_teams | self.subscribers)
 
 
@@ -199,15 +169,8 @@ def plan_item_updated(
                     detail,
                     audience.relation_of(user_id),
                 )
-    # Spec 118's catch-all: everything else that moved. An edit that changed
-    # neither state nor description reached NOBODY before — a reprioritised,
-    # relabelled, re-estimated issue was silent to everyone watching it.
-    #
-    # Planned last, so `Plan._add`'s first-wins gives the specific type to anyone
-    # a specific type already named. That is also why turning "Any other edit" on
-    # while leaving "State changes" off does not resurrect state changes: one
-    # notification per person per event is the invariant, and the more specific
-    # description of the event is the one that gets it.
+    # Spec 118's catch-all for any other field. Planned last: first-wins gives
+    # anyone already named the more specific type.
     fields = sorted(name for name in changes if name)
     if fields:
         for user_id in audience.everyone():
@@ -244,16 +207,9 @@ def plan_subject_event(
     audience: Audience,
     detail: dict | None = None,
 ) -> Plan:
-    """A non-item subject's own event — a page created or edited (spec 118;
-    generic since RADD-1385, the kind comes from the subject's provider).
-
-    Such events have no personal half — nobody is "assigned" a page — so this is
-    one loop, and the whole of the decision is which scope each recipient stands
-    in. It plans no watch: the provider's module follows on its write path
-    (`pages.update_page` auto-watches the editor, RADD-719), and a second
-    mechanism agreeing by luck is how the two fan-outs spec 118 deleted came to
-    disagree.
-    """
+    """A non-item subject's own event — a page created or edited (spec 118; the
+    kind comes from the subject's provider). No personal half and no watch: the
+    provider's module follows on its own write path (RADD-719)."""
     plan = Plan()
     for user_id in audience.everyone():
         if user_id != actor_id:
@@ -305,18 +261,9 @@ def plan_approval_decided(
 
 
 def plan_participant_added(payload: dict, actor_id: uuid.UUID | None) -> Plan:
-    """RADD-978: being shared into an issue tells the person it happened.
-
-    Exactly ONE recipient — the added USER, from the event's `user` ref. A TEAM
-    add plans nothing: a team row resolves to CURRENT members at fan-out time
-    (that is what makes joining a team join its shared tickets), so there is no
-    stable set to address, and the membership is ambient rather than personally
-    directed. Someone who adds themself hears nothing, like every other type.
-
-    No `watch` entry: `participants.add_participant` already auto-watched the
-    direct user through `notify.add_watchers` on the write path. Adding it here
-    too would be a second mechanism agreeing by luck.
-    """
+    """RADD-978: the added USER only — a team add plans nothing (team rows
+    resolve live and are ambient). No `watch`: `add_participant` already
+    auto-watched."""
     plan = Plan()
     user = payload.get("user") or {}
     user_id = uuid.UUID(user["id"]) if user.get("id") else None
@@ -334,17 +281,9 @@ def plan_comment_created(
     follow_actor: bool = True,
     comment_id: str | None = None,
 ) -> Plan:
-    """A comment on an issue — or, since spec 118, on a PAGE.
-
-    `comment_id` (RADD-1297) rides in every row's detail so the inbox and the
-    mail can link to the COMMENT rather than the top of its issue or page.
-
-    `follow_actor` is off for a page comment: `item_watchers` is keyed by item
-    and a page has none, so auto-watching through this plan would try to write a
-    watcher row against an id that is not an item. Commenting on a page does not
-    subscribe you to it, which is a smaller promise than the issue path makes and
-    the only one this table can keep.
-    """
+    """A comment on an issue or a page (spec 118). `comment_id` rides each row
+    so links land on the comment (RADD-1297); `follow_actor=False` for a page
+    (`item_watchers` is keyed by item)."""
     plan = Plan()
     if follow_actor:
         plan.follow(actor_id)

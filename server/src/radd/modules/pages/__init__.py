@@ -1,10 +1,6 @@
-"""Pages (spec 43; renamed from "docs"/"wiki"/"knowledge base" in RADD-701): page spaces, page trees, markdown bodies, full version
-history, issue↔page links, and live FTS search.
-
-Single-editor concurrency: PATCH carries `expected_version` and 409s when
-stale (the PLAN §9 fallback — CRDT co-editing can land later behind the same
-PATCH contract).
-"""
+"""Pages (spec 43): spaces, page trees, version history, issue↔page links, live
+FTS. A single-writer PATCH carries `expected_version`; live co-editing is the
+`collab` plugin (spec 122)."""
 
 from radd.kernel import EntityLinkSpec
 from radd.kernel import IntegrationSpec
@@ -19,8 +15,8 @@ from . import refs
 from .search_source import PageDocuments
 from .searchable import PAGE_SEARCHABLE
 
-from . import attachments_binding as attachments_binding  # registers the page parent (spec 102)
-from . import comments_binding as comments_binding  # registers the page comment parent (RADD-717)
+from . import attachments_binding as attachments_binding  # registers the page parent
+from . import comments_binding as comments_binding  # registers the page comment parent
 from .extensions import PAGE_EXTENSIONS
 from .grantscope import SPACE_SCOPE
 from .router import router
@@ -30,7 +26,7 @@ from .page_access import _PAGE_SPEC
 
 # After the router chain on purpose: mcptools joins the loaded graph (RADD-889).
 from . import mcptools
-from .automation import COMMENT_NODE, MOVE_NODE, PAGE_TOKENS, SPACE_GATE  # RADD-1267/1322/1324: page nodes + tokens
+from .automation import COMMENT_NODE, MOVE_NODE, PAGE_TOKENS, SPACE_GATE
 from .notifications import PAGE_NOTIFICATIONS
 
 plugin = RaddPlugin(
@@ -42,12 +38,8 @@ plugin = RaddPlugin(
     automation_nodes=(COMMENT_NODE, MOVE_NODE, SPACE_GATE),
     searchables=(PAGE_SEARCHABLE,),  # RADD-1327
     token_providers=(PAGE_TOKENS,),
-    # RADD-791: SPACE-scoped. They were global because a page had no scope to be
-    # checked against, which made per-space access inexpressible.
+    # RADD-791: SPACE-scoped. RADD-1305: manage ⇒ write ⇒ read (transitive).
     permissions=(
-        # RADD-1305: an umbrella implies what it administers — manage ⇒ write ⇒
-        # read (transitive), so a role holding only `page.manage` can see the
-        # space it manages, and a writer can read what they write.
         PermissionSpec(
             "page.read", "space", "Read a wiki space and its pages.", implied_by=("page.write",)
         ),
@@ -76,18 +68,15 @@ plugin = RaddPlugin(
             section="pages",
         ),
     ),
-    # RADD-818: spec-92 resources ride the MANIFEST — the loader's clear()
-    # wipes import-time registration, and the manifest is what survives it.
+    # RADD-818: on the manifest, because the loader's clear() wipes import-time registration.
     access_resources=(_PAGE_SPEC,),
     description=(
         "The wiki: page spaces, page trees, version history and links to issues."
     ),
     depends_on=("events", "projects", "auth", "workflow", "items", "attachments", "labels", "comments", "notify", "access", "groups", "search", "teams", "settings"),
     routers=(router,),
-    # RADD-923: a page and a space are subjects other modules name. Spec 118 is
-    # what forced them — `notify` scopes a wiki subscription to a SPACE id and
-    # links a notification by slug, and it may reach neither through this
-    # module's models (the spine rule) nor by importing it (it loads first).
+    # RADD-923: subjects other modules name (notify scopes a subscription to a
+    # SPACE id and links by slug) without importing this module.
     entity_refs=(
         EntityRefSpec("page", refs.page_ref, label="Page"),
         EntityRefSpec("page_space", refs.space_ref, label="Page space"),
@@ -100,10 +89,8 @@ plugin = RaddPlugin(
         ),
         EventTypeSpec(PageEvent.SPACE_UPDATED, "Page space updated", "Pages", has_changes=True),
         EventTypeSpec(PageEvent.SPACE_DELETED, "Page space deleted", "Pages"),
-        # Every page event carries both refs. Declaring the subject is what makes
-        # the promise checkable: the loader refuses to boot a plugin whose events
-        # name a subject nothing can resolve, so the payload cannot silently lose
-        # the space that a subscription is matched on.
+        # Every page event carries both refs; the loader refuses to boot a subject
+        # nothing can resolve.
         EventTypeSpec(
             PageEvent.PAGE_CREATED, "Page created", "Pages", subjects=("page", "page_space")
         ),
@@ -126,15 +113,10 @@ plugin = RaddPlugin(
     page_extensions=PAGE_EXTENSIONS,
     # RADD-892: a space is a grant scope, and only pages can name/count one.
     grant_scopes=(SPACE_SCOPE,),
-    # RADD-889: the doc tools of the spec-45 MCP catalog live with their owner —
-    # registration replaces the mcp pages_bridge feature probe, so disabling this
-    # plugin removes them from catalog + dispatch together.
+    # RADD-889: disabling this plugin removes its MCP tools from catalog + dispatch.
     mcp_tools=mcptools.MCP_TOOLS,
-    # What the wiki provides on kernel sockets, so neither consumer imports it and
-    # a runtime disable withdraws both with its routes:
-    # - RADD-1384: the documents search shows beside issues (deflection, Ask mode);
-    # - RADD-1385: a page as a notification SUBJECT — watchers, the read gate, the
-    #   space picker and its labels.
+    # Kernel sockets, so a runtime disable withdraws both: documents for search
+    # (RADD-1384) and the page as a notification SUBJECT (RADD-1385).
     integrations=(
         IntegrationSpec(Socket.SEARCH_DOCUMENTS, PageEntity.PAGE.value, impl=PageDocuments()),
         IntegrationSpec(

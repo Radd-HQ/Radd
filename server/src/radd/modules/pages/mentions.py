@@ -1,29 +1,10 @@
-"""Issues a page's text mentions, kept as links (RADD-943).
+"""Issues a page's text mentions, kept as DERIVED `item_page_links` (RADD-943).
 
-A page that names twelve issues in its body and shows "No linked issues yet" is
-keeping the same fact twice and letting one copy rot. This reconciles the
-DERIVED half of `item_page_links` from the body on every save, exactly as
-`backlinks.reindex` reconciles page→page references and
-`items.service.links.sync_mention_links` reconciles item→item ones.
-
-Three rules, and the whole design is in them:
-
-* **Derived rows are owned by the text.** They are replaced wholesale, so
-  removing a mention removes the link. Diffing would leave a phantom link nobody
-  could explain by reading the page.
-* **Manual rows are never touched**, and a key that is both mentioned and
-  manually linked stays manual. Someone typed that key; a body edit must not be
-  able to undo it.
-* **An unresolvable key is dropped, not raised.** Referencing an issue that does
-  not exist (a typo, another instance's key, an issue since hard-deleted) is
-  ordinary text, not a reason to fail the save.
-
-No permission check: this is a derived index, and the READ (`links.linked_items`)
-already filters to the projects the caller may see, which is where the gate
-belongs — a page must index what it says regardless of who saved it.
-
-It lives beside `links.py` rather than in it because `links.py` imports
-`service.get_page`, and `service` is what calls this.
+Reconciled wholesale from the body on every save (like `backlinks.reindex`):
+removing a mention removes the link; MANUAL rows are never touched, and a key
+both mentioned and manually linked stays manual; an unresolvable key is text,
+not an error. No permission check — the read (`links.linked_items`) filters.
+Separate from `links.py` because `links` imports `service`, which calls this.
 """
 
 import uuid
@@ -79,9 +60,7 @@ async def reindex(session: AsyncSession, page: Page) -> None:
 
 
 async def reindex_all(session: AsyncSession) -> int:
-    """Rebuild every live page's derived links. Derived data, so this is always
-    safe; it exists for content that never passed the save path — pages written
-    before RADD-943, and anything an importer created."""
+    """Rebuild every live page's derived links — for content that bypassed the save path."""
     pages = list(
         (await session.execute(select(Page).where(Page.archived_at.is_(None)))).scalars()
     )

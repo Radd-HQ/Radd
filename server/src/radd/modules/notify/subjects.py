@@ -1,24 +1,10 @@
-"""Non-item subjects: what a notification can be about besides an issue (RADD-1385).
+"""Non-item notification subjects (RADD-1385) — a wiki page today.
 
-A wiki page is the one today. Its fan-out was `pageevents.py`, which imported
-the wiki — `pages.refs` for watchers and the read gate, `pages.page_access` in
-the mail re-check, `pages.access`/`pages.service` for the subscription picker
-and its labels — through deferred `try: import` guards. Those guards never
-fired: plugin code is always importable, so a wiki switched off in the plugin
-manager went on being consulted by a core module that could not tell.
-
-Now the subject arrives through the kernel `NOTIFICATION_SUBJECT` socket
-(`sockets.NotificationSubjectProvider`, keyed by entity type) and this file is
-the MECHANISM around it, on the same seams as the item path in `consumer.py`:
-`planner` decides who and what, `rules.resolve` decides the channels, and a
-per-recipient gate decides whether they may hear it. The provider answers only
-what notify cannot know — where the subject lives, who watches it, who may read
-it — and a withdrawn provider means its events notify nobody and its queued
-rows are no longer mailed.
-
-The internal-comment filter is `comments.can_read_comment`, the comments
-module's own answer for any parent: this used to be a hand-rolled space-scoped
-copy of it, which is precisely the drift a second path invites.
+The subject arrives on the kernel `NOTIFICATION_SUBJECT` socket; this file is
+the mechanism around it, on the item path's seams: `planner` decides who and
+what, `rules.resolve` the channels, the provider's `reader_ids` who may hear.
+A withdrawn provider means its events notify nobody and its queued rows are not
+mailed. Internal comments are gated by `comments.can_read_comment`.
 """
 
 from __future__ import annotations
@@ -78,12 +64,8 @@ def _subject(subject: NotificationSubjectProvider, ref: SubjectRef) -> Subject:
 async def _audience(
     session: AsyncSession, subject: NotificationSubjectProvider, ref: SubjectRef
 ) -> Audience:
-    """Watchers (participating) ∪ subscribers to the container.
-
-    No `own`: nobody is assigned a page, and treating its creator as an owner
-    would mean the person who wrote a runbook two years ago inherits a column
-    they never chose. They watch it — editing auto-watches.
-    """
+    """Watchers (participating) ∪ subscribers to the container. No `own`: nobody
+    is assigned a page; its editors watch it."""
     watchers = frozenset(await subject.watcher_ids(session, ref.id))
     container = _subject(subject, ref)
     subscribers = await service.subscriber_ids(session, space_id=container.space_id)
@@ -106,13 +88,8 @@ async def handle_event(session: AsyncSession, event: Event) -> None:
 async def handle_comment(
     session: AsyncSession, event: Event, entity_type: str, *, watch_only: bool
 ) -> None:
-    """A comment whose parent is a non-item subject (RADD-1056).
-
-    Nothing is auto-watched: `item_watchers` is keyed by item, so commenting on
-    a page does not subscribe you to it — a smaller promise than the issue path
-    makes, and the only one the table can keep. So the watch-only bootstrap has
-    nothing to do here, and a parent with no live provider notifies nobody.
-    """
+    """A comment on a non-item subject (RADD-1056). Nothing is auto-watched
+    (`item_watchers` is keyed by item), so the bootstrap has nothing to do here."""
     subject = provider(entity_type)
     if watch_only or subject is None:
         return
@@ -148,19 +125,15 @@ async def _apply(
     subject: NotificationSubjectProvider,
     ref: SubjectRef,
 ) -> None:
-    """Resolve, gate, write — `consumer._apply`'s shape for a non-item subject.
-
-    Channel first, permission second: the provider's read gate is a permission
-    resolution (for a page, a space role plus an ancestor walk) per recipient,
-    and a subscriber whose verdict is `off` should cost neither.
-    """
+    """`consumer._apply`'s shape for a non-item subject: channel first, because
+    the provider's read gate (a space role plus an ancestor walk) is per recipient."""
     if not plan.notifications:
         return
     rules = await service.rules_by_user(session, {planned.user_id for planned in plan.notifications})
     container = _subject(subject, ref)
     wanted = [
         planned for planned in plan.notifications
-        if not service.channels_for(
+        if not notify_rules.resolve(
             planned.type, rules.get(planned.user_id, notify_rules.EMPTY), planned.relation, container
         ).silent
     ]
@@ -193,12 +166,8 @@ async def _apply(
 
 
 async def readable(session: AsyncSession, payload: dict, user: User) -> bool:
-    """May this person still read the subject a queued row is about?
-
-    The mail loops' re-check: a queued row records eligibility at the time of
-    writing, not a lasting grant. A row whose provider is gone — or one written
-    before RADD-1385 stamped the subject — has nobody left to vouch for it.
-    """
+    """The mail loops' re-check: may this person STILL read the row's subject?
+    No provider (or no stamped subject) means nobody vouches for it."""
     subject = provider(payload.get(SUBJECT_TYPE_KEY))
     subject_id = uuid_or_none(payload.get(SUBJECT_ID_KEY))
     if subject is None or subject_id is None:

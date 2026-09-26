@@ -1,19 +1,6 @@
-"""WHO an outbound reply goes to, and WHAT it says (RADD-955, RADD-967, RADD-968).
-
-Split out of `outbound.py`, which is the consumer that ships it: the cursor
-idiom, the sender lookup and the delivery loop have nothing to do with the
-recipient set, and both files were past the point where one screen showed either
-concern whole.
-
-**RADD-968 narrowed this to the requester conversation.** It used to mail
-notify's watcher set as well, which was a SECOND fan-out beside the one that
-decides the inbox — and the two disagreed: the inbox reaches watchers ∪
-participant-team members and re-checks `item.read` per recipient and per row,
-this reached watchers only and re-checked nothing. Users are now mailed by
-notify, through the same permission-gated rows that produce their inbox; what is
-left here is the one recipient notify can never have, because they have no
-account: the external `mail_contact`.
-"""
+"""WHO an outbound reply goes to, and WHAT it says (RADD-955/967/968). Only the
+external contacts: users are mailed by notify through their own permission-gated
+rows, so this leg serves the one recipient notify cannot have."""
 
 from __future__ import annotations
 
@@ -27,27 +14,20 @@ from radd.modules.auth import service as auth
 
 from . import service
 from .transport import MailAttachment
-from .types import REPLY_REASON_TEMPLATES, MailRecipientKind, SentMailKind
+from .types import REPLY_REASON_TEMPLATE, SentMailKind
 
 
 @dataclass(frozen=True)
 class Recipient:
     email: str
     name: str = ""
-    #: Only one kind reaches this file now; the enum stays because the FOOTER is
-    #: what it decides, and notify's watcher wording is the other half of it.
-    kind: MailRecipientKind = MailRecipientKind.REQUESTER
 
 
 @dataclass(frozen=True)
 class OutboundReply:
-    """One planned reply: the comment, and everyone it goes to.
-
-    It carries the INGREDIENTS rather than a finished body, because the body is
-    a function of the recipient (`render`). Threading is NOT among them: the
-    transport seam resolves the chain and the subject from the message store at
-    send time, so nothing here can go stale between planning and delivery.
-    """
+    """One planned reply: the INGREDIENTS (the body is rendered per recipient).
+    Threading is not among them — the transport resolves it at send time, so
+    nothing here can go stale between planning and delivery."""
 
     item_id: uuid.UUID
     comment_id: uuid.UUID
@@ -57,10 +37,8 @@ class OutboundReply:
     item: mailrender.ItemMail
     recipients: tuple[Recipient, ...]
 
-    #: A reply CONTINUES the requester's thread, so the stored subject wins —
-    #: the transport's default. Stated as an attribute since RADD-982 because
-    #: the consumer now ships two kinds of message and reads this off both,
-    #: rather than knowing which one it holds (`outbound.OutboundPlan`).
+    #: A reply CONTINUES the requester's thread, so the stored subject wins
+    #: (read off every `outbound.OutboundPlan`).
     pin_subject: bool = False
     kind: SentMailKind = SentMailKind.REPLY
 
@@ -84,24 +62,11 @@ class OutboundReply:
 
 
 async def recipients_for(session: AsyncSession, item_id: uuid.UUID) -> tuple[Recipient, ...]:
-    """Every external person on this issue's mail thread (RADD-968, RADD-980).
+    """Every external contact on this issue's mail thread (RADD-968/980).
 
-    Users are reached by notify's mailer, off the notification rows that already
-    passed `item.read`, the relation gate, the internal-comment filter and the
-    per-user mute. Mailing them from here as well was the duplicate fan-out
-    RADD-968 deleted.
-
-    **It reads the plural seam since RADD-980.** A customer CCs their colleague,
-    or the colleague replies instead; both are contacts on the item, and
-    answering only the primary meant one of the people who asked never heard
-    back — an outcome nothing surfaced, because a reply that WAS sent looks
-    identical to a reply that was sent to everyone.
-
-    One guard remains, and it is applied PER ADDRESS rather than to the set: an
-    address belonging to an ACTIVE user is skipped, because a staff member who
-    once raised a ticket by email is a contact AND a watcher and would otherwise
-    get the same comment twice, once addressed as a customer. Per address is the
-    part that changed — a single staff contact used to silence the whole reply.
+    Users are notify's to mail. The one guard is PER ADDRESS: an address
+    belonging to an active user is skipped, so a staff member who once emailed
+    in does not get the comment twice (once as a customer).
     """
     contacts = await service.contacts_for_item(session, item_id)
     recipients: list[Recipient] = []
@@ -110,14 +75,14 @@ async def recipients_for(session: AsyncSession, item_id: uuid.UUID) -> tuple[Rec
         user = await auth.get_user_by_email(session, contact.email)
         if user is not None and user.active:
             continue
-        recipients.append(Recipient(contact.email, contact.name, MailRecipientKind.REQUESTER))
+        recipients.append(Recipient(contact.email, contact.name))
     return tuple(recipients)
 
 
 def render(reply: OutboundReply, recipient: Recipient) -> mailrender.RenderedMail:
-    """The text+html THIS recipient sees. Pure — the composition tests call it
-    directly, which is how the outbound path finally got any at all."""
-    reason = REPLY_REASON_TEMPLATES[recipient.kind].format(key=reply.item.key)
+    """The text+html THIS recipient sees. Pure."""
+    del recipient  # one wording for every contact on the thread
+    reason = REPLY_REASON_TEMPLATE.format(key=reply.item.key)
     return mailrender.comment_reply(
         reply.item, author=reply.author, body=reply.body, reason=reason
     )

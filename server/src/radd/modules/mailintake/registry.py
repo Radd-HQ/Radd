@@ -1,18 +1,7 @@
-"""Mail configuration as ROWS (RADD-958).
-
-Email was the last subsystem reading its configuration from the environment on
-every use. Sign-in (spec 110), Storage (102) and AI (101) are all rows seeded
-once from env, and this brings mail in line — which is the difference between
-"an operator edits sops and restarts pods" and "an admin fills in a form".
-
-Rows in, rows out: CRUD, the capability snapshot, and the completeness checks
-the poller and outbound consult. Env seeding lives in `seeding.py`; a row's
-connection details are resolved against its kind's preset in `resolve.py`.
-
-`enabled` is separate from "configured". A source with no host is incomplete; a
-source with a host and `enabled=false` is a deliberate pause. The poller skips
-both, but only the second is a choice someone made.
-"""
+"""Mail configuration as ROWS (RADD-958): CRUD, the capability snapshot, and the
+completeness checks the poller and outbound consult. Env seeding is
+`seeding.py`; preset resolution `resolve.py`. `enabled=false` is a deliberate
+pause, distinct from an incomplete row — the poller skips both."""
 
 from __future__ import annotations
 
@@ -41,18 +30,15 @@ def capability_state() -> dict:
 
 
 def outbound_capability() -> dict:
-    """Outbound email (RADD-1389): an enabled sender ROW exists. The env SMTP
-    host only seeds a row, so reading it here reported Off on an instance whose
-    mail is configured the way the product configures it."""
+    """Outbound email (RADD-1389): an enabled sender ROW exists — the env SMTP host
+    only seeds a row."""
     return {"enabled": _configured["outbound"]}
 
 
 async def refresh_snapshot(session: AsyncSession) -> None:
     sources = await session.execute(select(MailSource).where(MailSource.enabled.is_(True)))
     senders = await session.execute(select(MailSender).where(MailSender.enabled.is_(True)))
-    # Resolved, not raw: a Gmail row stores no host and is nonetheless a working
-    # inbound path (RADD-969). Reading the column here would report mail as
-    # unconfigured on an instance that is happily polling.
+    # Resolved, not raw: a preset row stores no host and still works (RADD-969).
     _configured["inbound"] = any(
         resolve.source_host(s) or s.secret for s in sources.scalars()
     )
@@ -96,17 +82,9 @@ async def get_sender(session: AsyncSession, sender_id: uuid.UUID) -> MailSender:
 
 
 async def polled_sources(session: AsyncSession) -> list[MailSource]:
-    """Enabled polled sources with somewhere to connect — what the poller walks.
-
-    Every IMAP-transported kind is included (RADD-969): Gmail and Outlook are
-    the same poll against a host the preset supplies, so the completeness check
-    reads RESOLVED values — a Gmail row carrying only an address, a username and
-    an app password is complete.
-
-    A source missing its host is skipped silently: half-filled configuration is
-    the normal state of a form someone is still working on, and it must not
-    produce a connection error every 60 seconds.
-    """
+    """Enabled polled sources with somewhere to connect (RESOLVED values, so a
+    preset row is complete — RADD-969). A half-filled row is skipped silently
+    rather than erroring every 60 seconds."""
     rows = await session.execute(
         select(MailSource).where(
             MailSource.kind.in_([k.value for k in POLLED_SOURCE_KINDS]),
@@ -117,12 +95,8 @@ async def polled_sources(session: AsyncSession) -> list[MailSource]:
 
 
 async def source_for_address(session: AsyncSession, address: str) -> MailSource | None:
-    """The webhook source that accepts mail for this envelope recipient.
-
-    Matched case-insensitively on the whole address. A push source with no
-    address configured matches nothing rather than everything — the permissive
-    reading would let any recipient reach any tenant's ingest.
-    """
+    """The webhook source for this envelope recipient, matched case-insensitively.
+    A source with no address matches NOTHING (else any recipient reaches it)."""
     if not address:
         return None
     wanted = address.strip().lower()
@@ -152,17 +126,9 @@ async def default_sender(session: AsyncSession) -> MailSender | None:
 
 
 async def bound_sender(session: AsyncSession, source_id: uuid.UUID) -> MailSender | None:
-    """The sender a source ANSWERS FROM, when it names one that can still send.
-
-    "Send replies from" (RADD-979): the identity a requester should see is the
-    address they wrote to, which is a property of the SOURCE — not of the
-    instance, which is all `default_sender` can express.
-
-    Disabled, deleted or unreachable falls through to None, and the caller's
-    next step is the default sender. That is deliberate: a binding is a
-    preference about which identity is nicer, and pausing a relay must not
-    silently stop the mail on every source pointed at it.
-    """
+    """The sender a source ANSWERS FROM (RADD-979), when it can still send;
+    disabled or deleted falls through to None (then the default sender) — pausing
+    a relay must not stop the mail on every source pointed at it."""
     source = await session.get(MailSource, source_id)
     if source is None or source.sender_id is None:
         return None
@@ -173,14 +139,8 @@ async def bound_sender(session: AsyncSession, source_id: uuid.UUID) -> MailSende
 
 
 async def any_bound_sender(session: AsyncSession) -> bool:
-    """Does ANY source name a sender that could send? — the second half of
-    `transport.outbound_configured` (RADD-979).
-
-    Without it, an instance whose two relays are each bound to their own source
-    reports "nowhere to send from": `default_sender` refuses to guess between
-    two enabled rows, so the loops would plan nothing while every real message
-    had somewhere to go.
-    """
+    """Does ANY source name a sender that could send? The second half of
+    `transport.outbound_configured` (RADD-979)."""
     rows = await session.execute(
         select(MailSender)
         .join(MailSource, MailSource.sender_id == MailSender.id)
@@ -190,23 +150,10 @@ async def any_bound_sender(session: AsyncSession) -> bool:
 
 
 async def own_addresses(session: AsyncSession) -> set[str]:
-    """Every address this instance sends AS or can be reached at — the self-loop
-    guard's comparison set.
-
-    **THE definition, and now the only one** (RADD-959 unified two; RADD-970
-    deleted the env-only copy that had survived in `loops.py`). It was once the
-    webhook building the set from the SMTP from-address plus the ingest address
-    and the poller building it from the from-address plus the IMAP account, so
-    which addresses counted as "us" depended on how the message arrived. The
-    day two such definitions disagree, the guard stops firing on one path with
-    nothing raised anywhere.
-
-    Under the Migadu topology this is `agent@radd-hq.com` (what Radd sends as)
-    ∪ `help@radd-hq.com` (what it polls). Both matter: mail from the first
-    landing in the second is precisely the loop.
-
-    Falls back to the env values so an instance mid-migration, with rows not yet
-    seeded, still has a working guard.
+    """Every address this instance sends AS or is reached at — the self-loop
+    guard's ONE comparison set (RADD-959/970): source addresses and usernames,
+    sender from/reply-to, and the env values as a fallback for an instance whose
+    rows are not seeded yet. Two definitions of "us" would silently disagree.
     """
     found: set[str] = set()
     for source in await list_sources(session):
@@ -223,13 +170,9 @@ async def own_addresses(session: AsyncSession) -> set[str]:
 
 
 def _assert_source_reachable(row: MailSource) -> None:
-    """A hand-configured mailbox needs a host typed; a preset kind does not.
-
-    Refused rather than saved-and-skipped (RADD-969): a source the poller
-    silently ignores is indistinguishable, from the form, from one that works.
-    The silence is right for a row someone is still editing and wrong for the
-    moment they press Save.
-    """
+    """A hand-configured mailbox needs a host; a preset kind does not. Refused on
+    Save (RADD-969): a silently ignored source looks, from the form, like one that
+    works."""
     if resolve.source_needs_host(row):
         raise ConflictError(
             MailEntity.SOURCE,
@@ -256,8 +199,7 @@ async def save_source(session: AsyncSession, row: MailSource) -> MailSource:
 async def save_sender(session: AsyncSession, row: MailSender) -> MailSender:
     _assert_sender_reachable(row)
     if row.is_default:
-        # Exactly one default. Clearing the others here rather than in a
-        # constraint keeps "make this the default" a single API call.
+        # Exactly one default, cleared here so "make default" is one API call.
         others = await session.execute(select(MailSender).where(MailSender.id != row.id))
         for other in others.scalars():
             other.is_default = False

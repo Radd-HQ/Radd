@@ -1,18 +1,6 @@
-"""Person params: an email address, or a `PersonRole` on the target item.
-
-`notify_user` and `add_watcher` take a person as either a literal email or a
-role (`reporter`/`assignee`) resolved against ONE item — which is why a role
-forces per-item arity (RADD-918). A contributed action reads the same grammar
-through `ctx.person` (RADD-1387), so `participants`' Add participant resolves a
-person exactly as the built-ins do without importing this module.
-
-Until RADD-1387 this file was `email_action.py` and also held the send_email
-action's recipient resolution — which meant importing `mailintake` and
-`participants` behind `settings.modules` checks. `settings.modules` is BOOT
-config, so a plugin disabled at runtime kept being called. The email action
-and its `contact` role now live in `mailintake`; this is what is left, and it
-is automations' own grammar.
-"""
+"""Person params: an email address, or a `PersonRole` resolved on the target
+item — which is why a role forces per-item arity (RADD-918). Contributed
+actions read the same grammar through `ctx.person`."""
 
 import uuid
 from dataclasses import dataclass
@@ -35,13 +23,7 @@ class Person:
 
 
 def is_role(value: str) -> bool:
-    """Whether a person param names a ROLE rather than an address.
-
-    Public because arity depends on it (RADD-918): a role resolves against ONE
-    item, so an action addressed to `reporter` only means anything per item. The
-    editor forces per-item mode when a role is chosen instead of letting someone
-    build the version that skip-logs on every multi-item run.
-    """
+    """Whether a person param names a ROLE (resolves on one item) not an address."""
     try:
         PersonRole(value.strip().lower())
     except ValueError:
@@ -49,9 +31,7 @@ def is_role(value: str) -> bool:
     return True
 
 
-async def resolve_user(
-    session: AsyncSession, role: str, item: WorkItem | None
-) -> uuid.UUID | None:
+def resolve_user(role: str, item: WorkItem | None) -> uuid.UUID | None:
     """The USER a role names on `item`, or None (no item, or nobody in it)."""
     if item is None:
         return None
@@ -72,7 +52,7 @@ async def resolve_person(
     means nobody: the caller skip-logs with its own verb in the sentence.
     """
     if is_role(value):
-        user_id = await resolve_user(session, value, item)
+        user_id = resolve_user(value, item)
         return None if user_id is None else Person(user_id, value.strip().lower())
     user = await auth_service.get_user_by_email(session, value.strip())
     return None if user is None else Person(user.id, value.strip())

@@ -1,13 +1,5 @@
-"""Running one script once (RADD-1269): a subprocess of the managed
-interpreter, the packet on stdin, the result on the last stdout line.
-
-Out of process on purpose — crash isolation and package isolation are the
-whole argument for a separate interpreter. The run directory is a fresh
-temporary directory holding the bundled harness and the script body; the
-environment carries the Radd URL and a short-lived token the caller minted for
-the automation's identity; stdout and stderr are captured, tail-capped, and
-the process is killed at the timeout.
-"""
+"""Running one script once: a subprocess of the managed interpreter, packet on
+stdin, result on the last stdout line, killed at the timeout, with a minimal env."""
 
 from __future__ import annotations
 

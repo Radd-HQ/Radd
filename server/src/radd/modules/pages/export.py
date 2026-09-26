@@ -1,21 +1,8 @@
-"""Markdown export (RADD-721).
+"""Markdown export (RADD-721): a zip of `.md` files mirroring the tree.
 
-Content could go in but not out, which is the wrong gap for a tool whose pitch
-includes not being locked in.
-
-Two decisions worth stating.
-
-**Links are rewritten to relative paths.** An export whose links all point back
-at the instance is a folder of dead ends the moment you are offline or the
-instance is gone — which is exactly the situation an export is FOR. Every
-`/pages/<space>/<slug>` that resolves to a page inside the same archive becomes a
-relative `.md` path; one that points outside it is left absolute, because a link
-to a page you did not export is genuinely a link to the instance.
-
-**Extension fences are written out verbatim.** They are markdown to every other
-reader (RADD-709), they degrade to a labelled code block anywhere else, and
-leaving them intact is what lets an export be re-imported without losing them.
-Rendering them to static text here would be a one-way door.
+Links to pages inside the archive are rewritten to relative paths (an export is
+for when the instance is gone); links outside stay absolute. Extension fences
+are kept verbatim so a re-import loses nothing.
 """
 
 from __future__ import annotations
@@ -42,13 +29,10 @@ _PAGE_LINK = re.compile(
 
 
 def safe_name(title: str, fallback: str) -> str:
-    """A file name from a page title. Slug rather than the raw title: a wiki is
-    full of titles containing slashes and colons, and the point of an export is
-    that it survives being copied onto another filesystem."""
+    """A file name from a page title — a slug, so it survives any filesystem."""
     cleaned = _UNSAFE.sub("-", title).strip().strip(".")
-    # `page_slugify` supplies its OWN fallback for an unsluggable title, which
-    # would give every such page the same name and collide them in the archive.
-    # Decide emptiness before handing it over.
+    # Decide emptiness first: `page_slugify`'s own fallback would give every
+    # unsluggable page the same name and collide them in the archive.
     if not any(character.isalnum() for character in cleaned):
         return fallback[:80]
     return (page_slugify(cleaned) or fallback)[:80]
@@ -87,8 +71,7 @@ async def _tree(session: AsyncSession, space_id: uuid.UUID) -> list[Page]:
 
 
 def _paths(pages: list[Page], root_id: uuid.UUID | None) -> dict[uuid.UUID, list[str]]:
-    """Archive path per page, mirroring the tree: a page with children becomes a
-    directory plus an `index.md`, so the shape on disk is the shape in the rail."""
+    """Archive path per page: a page with children becomes a directory plus an `index.md`."""
     by_parent: dict[uuid.UUID | None, list[Page]] = {}
     for page in pages:
         by_parent.setdefault(page.parent_id, []).append(page)
@@ -114,6 +97,9 @@ async def export_zip(
 ) -> tuple[str, bytes]:
     """(filename, zip bytes) for a whole space, or one page's subtree."""
     pages = await _tree(session, space.id)
+    # RADD-1233: a link names the page's PATH, so the archive map is keyed by
+    # it — over the whole tree, since a subtree export links by full address.
+    page_paths = core.page_paths(pages)
     if root is not None:
         # Restrict to the subtree, root included.
         keep: set[uuid.UUID] = {root.id}
@@ -131,17 +117,13 @@ async def export_zip(
         allowed = await readable_page_ids(session, actor, pages)
         pages = [page for page in pages if page.id in allowed]
     paths = _paths(pages, root.parent_id if root is not None else None)
-    # RADD-1233: a link names the page's PATH, so key the archive map by it —
-    # computed over the whole tree, since a subtree export still links by the
-    # page's full address.
-    page_paths = core.page_paths(await _tree(session, space.id))
     by_slug = {
         (space.slug, page_paths.get(page.id, page.slug)): paths[page.id]
         for page in pages
         if page.id in paths
     }
-    # …and, like the resolver's last-segment fallback, a bare slug that names
-    # exactly one exported page: what a pre-1233 link to a nested page is.
+    # …and a bare slug naming exactly one exported page — the shape of a
+    # pre-1233 link to a nested page.
     by_last: dict[str, list[list[str]]] = {}
     for page in pages:
         if page.id in paths:
@@ -157,8 +139,7 @@ async def export_zip(
             if path is None:
                 continue
             body = rewrite_links(page.body, path, by_slug)
-            # The title is the H1 — a bare body loses it, and the file name is a
-            # slug rather than the title it came from.
+            # The title is the H1: the file name is only a slug.
             archive.writestr("/".join(path), f"# {page.title}\n\n{body}\n")
     stem = safe_name(root.title if root else space.name, "export")
     return f"{stem}.zip", buffer.getvalue()

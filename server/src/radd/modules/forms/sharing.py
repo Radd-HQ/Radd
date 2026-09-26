@@ -66,7 +66,7 @@ async def candidates(session: AsyncSession, form_id: uuid.UUID, actor: User, kin
 
 async def add(session: AsyncSession, form_id: uuid.UUID, data: FormShareEntry, actor: User) -> FormShareRead:
     from .service import _emit, _validate_share_subjects, share_labels
-    form, project = await managed_form(session, form_id, actor, lock=True)
+    form, _project = await managed_form(session, form_id, actor, lock=True)
     await _validate_share_subjects(session, [data])
     subject = FormShare.user_id == data.user_id if data.user_id else FormShare.team_id == data.team_id
     existing = await session.scalar(select(FormShare.id).where(FormShare.form_id == form_id, subject))
@@ -77,7 +77,7 @@ async def add(session: AsyncSession, form_id: uuid.UUID, data: FormShareEntry, a
     await session.flush()
     count = await session.scalar(select(func.count()).select_from(FormShare).where(FormShare.form_id == form_id))
     await _emit(
-        session, FormEvent.UPDATED, form, project, actor, extra={"share_count": count},
+        session, FormEvent.UPDATED, form, actor, extra={"share_count": count},
         diff=[{"field": "shares", "added": await share_labels(session, [row]), "removed": []}],
     )
     return FormShareRead.model_validate(row)
@@ -85,7 +85,7 @@ async def add(session: AsyncSession, form_id: uuid.UUID, data: FormShareEntry, a
 
 async def remove(session: AsyncSession, form_id: uuid.UUID, share_id: uuid.UUID, actor: User) -> None:
     from .service import _emit, share_labels
-    form, project = await managed_form(session, form_id, actor, lock=True)
+    form, _project = await managed_form(session, form_id, actor, lock=True)
     row = await session.scalar(select(FormShare).where(FormShare.form_id == form_id, FormShare.id == share_id))
     if row is None:
         raise NotFoundError(FormEntity.FORM, share_id)
@@ -94,6 +94,6 @@ async def remove(session: AsyncSession, form_id: uuid.UUID, share_id: uuid.UUID,
     await session.flush()
     count = await session.scalar(select(func.count()).select_from(FormShare).where(FormShare.form_id == form_id))
     await _emit(
-        session, FormEvent.UPDATED, form, project, actor, extra={"share_count": count},
+        session, FormEvent.UPDATED, form, actor, extra={"share_count": count},
         diff=[{"field": "shares", "added": [], "removed": removed}],
     )

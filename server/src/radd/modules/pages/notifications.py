@@ -1,19 +1,7 @@
-"""The wiki as a notification SUBJECT (RADD-1385; spec 118's page fan-out).
-
-`notify` owns the mechanism — who is planned, the channel matrix, the inbox,
-the mail — and asks this object, on the kernel `NOTIFICATION_SUBJECT` socket,
-only what the wiki knows: where a page lives, who watches it, who may read it,
-and which spaces a person may subscribe to. It used to reach into this module
-for those answers through `try: import` guards that never fired (plugin code is
-always importable), so a wiki switched off in the plugin manager was still
-consulted. Registered on the manifest instead: disabling the plugin withdraws
-the provider, and notify stops notifying about pages rather than asking a
-switched-off module.
-
-A page's visibility is a space role PLUS every restriction on the ancestor path
-(RADD-948) — three layers notify would otherwise have to reimplement and keep in
-step, which is why the read gate is answered here.
-"""
+"""The wiki as a notification SUBJECT (RADD-1385): notify's `NOTIFICATION_SUBJECT`
+provider for `page` — where a page lives, who watches it, who may read it (space
+role + every ancestor restriction, RADD-948), and which spaces a person may
+subscribe to. Disabling pages withdraws it."""
 
 from __future__ import annotations
 
@@ -28,7 +16,7 @@ from radd.modules.comments.types import CommentEvent
 from radd.modules.events.service import Event
 from radd.modules.notify.types import NotificationType, RuleScope, SubjectRef
 
-from . import access, options, page_access, refs, service, watchers
+from . import access, grantscope, options, page_access, refs, watchers
 from .models import Page
 from .types import PageEntity, PageEvent
 
@@ -41,13 +29,9 @@ def _uuid(value) -> uuid.UUID | None:
 
 
 def _payload(page: dict, space: dict) -> dict:
-    """The stored notification payload for anything about a page.
-
-    The keys RADD-719 wrote, and for its reason: an inbox row renders and links
-    from the payload alone (`page_number` is the permalink, RADD-1233), resolved
-    at write time, so a later rename cannot make the entry lie about what it told
-    you at the time.
-    """
+    """The stored payload for anything about a page (RADD-719), resolved at write
+    time: an inbox row renders and links from it alone, and a later rename
+    cannot make it lie."""
     return {
         "page_id": page.get("id"),
         "page_number": page.get("number"),
@@ -69,13 +53,9 @@ class PageNotificationSubject:
     }
 
     async def locate(self, session: AsyncSession, event: Event) -> SubjectRef | None:
-        """The page an event is about, with its space and display payload.
-
-        A page event carries both refs (the kernel writes them from
-        `emit(subjects=…)`), so what the row says is what was true at the edit.
-        A comment names its page only as `entity_id` — `comments` is polymorphic
-        — so that one is looked up; the page ref carries its space (RADD-1248).
-        """
+        """The page an event is about. A page event carries both refs; a comment
+        names its page only as `entity_id`, so that one is looked up (the ref
+        carries its space, RADD-1248)."""
         payload = event.payload or {}
         if event.event_type == CommentEvent.CREATED.value:
             page_id = _uuid(payload.get("entity_id"))
@@ -95,13 +75,8 @@ class PageNotificationSubject:
     async def reader_ids(
         self, session: AsyncSession, subject_id: uuid.UUID, user_ids
     ) -> set[uuid.UUID]:
-        """Which of these ACTIVE people may read this page now.
-
-        Batched per page rather than per person: one edit notifies a handful of
-        watchers and the space permission lookup is the expensive part. A missing
-        page reads as "nobody" — a notification about a page deleted between the
-        edit and the fan-out has nothing to link to anyway.
-        """
+        """Which of these ACTIVE people may read this page now; a missing page =
+        nobody."""
         wanted = list(user_ids)
         page = await session.get(Page, subject_id) if wanted else None
         if page is None:
@@ -128,10 +103,9 @@ class PageNotificationSubject:
     async def scope_names(
         self, session: AsyncSession, actor: User, scope_ids
     ) -> dict[uuid.UUID, str]:
-        """Of these spaces, the ones this actor may read, by name. Narrowed
-        BEFORE the name query, so an unreadable space is never fetched."""
+        """Of these spaces, the readable ones by name — narrowed BEFORE the query."""
         readable = set(await access.readable_spaces(session, actor))
-        return await service.space_names(session, set(scope_ids) & readable)
+        return await grantscope.space_labels(session, set(scope_ids) & readable)
 
 
 PAGE_NOTIFICATIONS = PageNotificationSubject()

@@ -1,12 +1,13 @@
-"""Pure raw-email → EmailPlan parsing (specs 47+62) — tested in
-tests/test_connectors.py with fixture bytes. No I/O: user/item/project
-resolution and writes happen in the poller."""
+"""Pure raw-email → EmailPlan parsing (specs 47+62). No I/O: resolution and
+writes happen in `intake`."""
 
 import re
 from dataclasses import dataclass
 from email import message_from_bytes, policy
 from email.message import EmailMessage
 from email.utils import getaddresses, parseaddr
+
+from radd.mailtypes import MailAttachment
 
 from .html_body import html_to_text
 from .types import ATTACHMENTS_MAX_BYTES, AUTH_METHODS, BODY_MAX_CHARS, MAX_ATTACHMENTS
@@ -26,15 +27,6 @@ PLUS_ADDRESS_HEADERS = ("To", "Cc", "Delivered-To", "X-Original-To")
 
 
 @dataclass(frozen=True)
-class MailAttachment:
-    """One decoded attachment part (RADD-956) — handed to `attachments.save_blob`."""
-
-    filename: str
-    content_type: str
-    content: bytes
-
-
-@dataclass(frozen=True)
 class EmailPlan:
     subject: str
     sender_name: str
@@ -49,26 +41,18 @@ class EmailPlan:
     references: str = ""
     #: RFC 3834's marker. Anything but "no" means a machine sent this (RADD-957).
     auto_submitted: str = ""
-    #: The `From:` header unparsed — the loop guard compares addresses, and the
-    #: item body quotes the display form.
+    #: The `From:` header unparsed (the loop guard compares its address).
     from_header: str = ""
-    #: True when the body came from an HTML part rather than text/plain. Worth
-    #: knowing when a body reads oddly: the converter is lossy by design.
+    #: The body came from an HTML part (a lossy conversion).
     html_derived: bool = False
     attachments: tuple[MailAttachment, ...] = ()
-    #: How many attachment parts a per-message cap dropped (RADD-1035). Non-zero
-    #: earns the sender a receipt: `intake` leaves a note on the item naming the
-    #: count, because a screenshot that silently vanished is a support failure.
+    #: Attachment parts a per-message cap dropped (RADD-1035); `intake` notes them.
     attachments_dropped: int = 0
-    #: Every address this was delivered to, lower-cased (RADD-958). Aliases share
-    #: a mailbox on most hosts, so `pipeline@` vs `help@` is ONLY visible here —
-    #: the IMAP connection cannot tell them apart.
+    #: Every address this was delivered to, lower-cased (RADD-958) — the only place
+    #: `pipeline@` vs `help@` is visible when aliases share a mailbox.
     recipients: tuple[str, ...] = ()
-    #: Every `Authentication-Results` header, verbatim (RADD-1032). A message
-    #: crosses several hosts and each may stamp its own, so this is a tuple; which
-    #: one to TRUST is the source's configured authserv-id, read at ingest. Radd
-    #: is reading its MX's verdict here, not doing crypto — the header is the
-    #: mechanism, `parse_auth_results` the conservative reader.
+    #: Every `Authentication-Results` header, verbatim (RADD-1032); which one to
+    #: trust is the source's configured authserv-id.
     authentication_results: tuple[str, ...] = ()
 
 
@@ -86,10 +70,8 @@ def extract_reply_key(subject: str) -> str | None:
 
 
 def extract_project_key(message: EmailMessage) -> str | None:
-    """The plus-address routing tag (spec 62): the first recipient address of the
-    form `anything+key@…` across To/Cc/Delivered-To/X-Original-To wins. The tag
-    must scan as a project key; whether it names a REAL project is the poller's
-    call (unknown keys fall back to RADD_MAIL_PROJECT_KEY)."""
+    """The plus-address routing tag (spec 62): the first `anything+key@…` across the
+    recipient headers wins; whether it names a REAL project is `intake`'s call."""
     for header in PLUS_ADDRESS_HEADERS:
         values = [str(value) for value in (message.get_all(header) or [])]
         for _, address in getaddresses(values):
@@ -102,35 +84,27 @@ def extract_project_key(message: EmailMessage) -> str | None:
     return None
 
 
+def addresses(header_values: list[str]) -> list[str]:
+    """The addresses in these header values, lower-cased — never the display form
+    (a routing dry run must parse exactly as the live message is parsed)."""
+    return [address.strip().lower() for _, address in getaddresses(header_values) if "@" in address]
+
+
 def extract_recipients(message: EmailMessage) -> tuple[str, ...]:
-    """Every delivery address on the message, deduped and lower-cased (RADD-958).
-
-    The same four headers `extract_project_key` walks — that function reads them
-    for a plus-tag and throws the addresses away, which is why alias routing had
-    nothing to match on.
-
-    This is the ONLY place `pipeline@` and `help@` are distinguishable: on most
-    hosts an alias delivers into a shared mailbox, so the IMAP connection sees
-    one inbox and the alias survives only in the headers.
-    """
+    """Every delivery address on the message (the four recipient headers), deduped
+    and lower-cased (RADD-958)."""
     found: dict[str, None] = {}
     for header in PLUS_ADDRESS_HEADERS:
         values = [str(value) for value in (message.get_all(header) or [])]
-        for _, address in getaddresses(values):
-            if "@" in address:
-                found.setdefault(address.strip().lower(), None)
+        for address in addresses(values):
+            found.setdefault(address, None)
     return tuple(found)
 
 
 def _body(message: EmailMessage) -> tuple[str, bool]:
-    """(text, came_from_html). Prefer `text/plain`; fall back to HTML converted
-    to text (RADD-956).
-
-    An HTML-only message is completely ordinary — Outlook, phones and every
-    marketing system send them — and taking plain-and-stopping turned each one
-    into a blank ticket. The HTML is STRIPPED to text rather than sanitised:
-    nothing survives as markup, so there is no allow-list to get wrong.
-    """
+    """(text, came_from_html): `text/plain`, else the HTML part (HTML-only mail is
+    ordinary, RADD-956) STRIPPED to text rather than sanitised — no allow-list to
+    get wrong."""
     part = message.get_body(preferencelist=("plain",))
     if part is not None:
         try:
@@ -149,20 +123,10 @@ def _body(message: EmailMessage) -> tuple[str, bool]:
 
 
 def _attachments(message: EmailMessage) -> tuple[tuple[MailAttachment, ...], int]:
-    """Every non-body part with content, and how many a cap dropped (RADD-956/1035).
-
-    `iter_attachments` covers the inline-image case too — a screenshot pasted
-    into Outlook arrives as a related part with a Content-ID, and a ticket
-    without it is missing the whole point of the message. Parts that fail to
-    decode are dropped individually: one bad part must not cost the message.
-
-    The second return value is the count dropped by a CAP — the count or the
-    size limit. Once a cap is hit every later part is counted and skipped rather
-    than the loop `break`ing, so `intake` can leave the sender a receipt naming
-    how many were lost. A decode failure or an empty part is NOT counted: that
-    is a property of the one part, not a cap the sender can work around by
-    resending.
-    """
+    """Every non-body part with content (inline images included), and how many a
+    cap dropped (RADD-956/1035). Once a cap fires every LATER part is counted,
+    not `break`-ed past, so the note names how many were lost; a part that fails
+    to decode is skipped and not counted — it is not a cap."""
     found: list[MailAttachment] = []
     dropped = 0
     total = 0
@@ -191,46 +155,32 @@ def _attachments(message: EmailMessage) -> tuple[tuple[MailAttachment, ...], int
             MailAttachment(
                 filename=str(name)[:255],
                 content_type=part.get_content_type() or "application/octet-stream",
-                content=payload,
+                data=payload,
             )
         )
     return tuple(found), dropped
 
 
-# An `Authentication-Results` method verdict: `dkim=pass`, `spf = fail`, etc.
-# The result token is the first word after `=`; properties (`header.d=…`) follow
-# and are ignored — the verdict is all a trusted authserv-id stamp needs to say.
+# An `Authentication-Results` method verdict (`dkim=pass`); properties are ignored.
 AUTH_METHOD_RE = re.compile(
     r"\b(" + "|".join(AUTH_METHODS) + r")\s*=\s*([A-Za-z]+)", re.IGNORECASE
 )
 
 
 def extract_authentication_results(message: EmailMessage) -> tuple[str, ...]:
-    """Every `Authentication-Results` header value, verbatim (RADD-1032).
-
-    A tuple because a message crosses several hosts and each may add its own;
-    only the one whose authserv-id the source TRUSTS is read, at ingest.
-    """
+    """Every `Authentication-Results` header value, verbatim (RADD-1032)."""
     return tuple(str(value) for value in (message.get_all("Authentication-Results") or []))
 
 
 def parse_auth_results(
     headers: tuple[str, ...], authserv_id: str
 ) -> dict[str, str] | None:
-    """The dkim/spf/dmarc verdicts stamped by `authserv_id`, or None if it stamped none.
+    """The dkim/spf/dmarc verdicts stamped by `authserv_id` (RADD-1032) — the first
+    token before `;`, matched case-insensitively; other authserv-ids are ignored.
+    Reads the MX's stamp; no signature is validated here.
 
-    Conservative by construction (RADD-1032): find the `Authentication-Results`
-    block whose authserv-id — the first token, before the first `;` and any
-    version number — matches (case-insensitively), then read each
-    `method=result` token for the methods we care about. A block we cannot make
-    sense of yields `{}` (present but empty), and a header from an authserv-id we
-    do not trust is ignored entirely. Nothing here validates a signature; it
-    reads the MX's stamp, which is the whole point — the crypto happened upstream.
-
-    None vs `{}` matters to the caller: None is "that authserv said nothing about
-    this message" (absent), `{}` is "it spoke but named no dkim/spf/dmarc". Both
-    are treated as unverified, but only the first is the ABSENT case the demotion
-    note calls out.
+    None vs `{}` matters: None = that authserv said nothing (the ABSENT case the
+    demotion note calls out), `{}` = it spoke but named no dkim/spf/dmarc.
     """
     wanted = authserv_id.strip().lower()
     if not wanted:

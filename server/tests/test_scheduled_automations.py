@@ -1,6 +1,6 @@
 """Scheduled automation triggers + SLA due_soon (spec 69).
 
-Pure: next_run math (interval/daily/weekly, TZ, DST-adjacent), ScheduleConfig
+Pure: next_run math (interval/daily/weekly, TZ, DST-adjacent), schedule-shape
 validation, relative-date literals, the due_soon predicate.
 DB-backed (compose Postgres, rolled back at teardown — the db fixture idiom from
 tests/test_bulk.py): schedule-state bookkeeping on rule writes, the scheduled
@@ -11,15 +11,14 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings as config
 from radd.modules.automations import engine, service as automations
 from radd.modules.automations.models import AutomationScheduleState
-from radd.schedule import next_run
-from radd.modules.automations.schemas import RuleCreate, RuleUpdate, ScheduleConfig
+from radd.schedule import next_run, validate_config
+from radd.modules.automations.schemas import RuleCreate, RuleUpdate
 from radd.modules.automations.types import (
     SYSTEM_ACTOR_ID,
     AutomationEntity,
@@ -114,13 +113,13 @@ def test_next_run_weekly_picks_the_next_listed_weekday():
     assert next_run(cfg, datetime(2026, 7, 23, 9, 0), "UTC") == datetime(2026, 7, 30, 9, 0)
 
 
-# --- ScheduleConfig validation (422 shapes) ---
+# --- schedule shape validation (422 shapes) ---
 
 
 def test_schedule_config_shapes():
-    ScheduleConfig.model_validate({"kind": "interval", "minutes": 5})
-    ScheduleConfig.model_validate({"kind": "daily", "time": "09:00"})
-    ScheduleConfig.model_validate({"kind": "weekly", "time": "23:59", "weekdays": [0, 6]})
+    validate_config({"kind": "interval", "minutes": 5})
+    validate_config({"kind": "daily", "time": "09:00"})
+    validate_config({"kind": "weekly", "time": "23:59", "weekdays": [0, 6]})
     for bad in (
         {"kind": "interval"},  # minutes required
         {"kind": "interval", "minutes": 4},  # below the floor
@@ -134,8 +133,8 @@ def test_schedule_config_shapes():
         {"kind": "weekly", "time": "09:00", "weekdays": [1, 1]},  # dup
         {"kind": "sometimes"},  # unknown kind
     ):
-        with pytest.raises(ValidationError):
-            ScheduleConfig.model_validate(bad)
+        with pytest.raises(ValueError):
+            validate_config(bad)
 
 
 # --- relative dates (SLQ, spec 69 §4) ---

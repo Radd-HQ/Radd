@@ -1,6 +1,4 @@
-"""In-process loops (consumer + per-event mail + email digests), mirroring
-webhooks/dispatcher.py. Moves to the dedicated worker entrypoint when that lands
-(single-instance today)."""
+"""In-process loops: consumer, per-event mailer, digest (all gated on `run_workers`)."""
 
 from radd.config import settings
 from radd.worker import PeriodicLoop

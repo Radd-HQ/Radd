@@ -126,7 +126,7 @@ async def test_delete_with_attachments_conflicts(db):
 async def test_update_with_empty_secret_keeps_the_stored_one(db):
     host = await hosts.create_host(db, _s3(secret_key="stored-secret"))
     await hosts.update_host(
-        db, host.id, StorageHostUpdate(secret_key=hosts.UNCHANGED_CREDENTIAL, name="renamed")
+        db, host.id, StorageHostUpdate(secret_key="", name="renamed")
     )
     assert host.secret_key == "stored-secret"
     assert host.name == "renamed"

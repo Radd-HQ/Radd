@@ -51,10 +51,10 @@ async def db():
 def test_milestone_is_an_automation_trigger():
     from radd.modules.automations import catalog
 
-    assert "milestone.created" in catalog.TRIGGERS
-    assert "milestone.updated" in catalog.TRIGGERS
-    assert "milestone.deleted" in catalog.TRIGGERS
-    assert catalog.TRIGGERS["milestone.updated"].has_changes is True
+    assert "milestone.created" in catalog.triggers()
+    assert "milestone.updated" in catalog.triggers()
+    assert "milestone.deleted" in catalog.triggers()
+    assert catalog.triggers()["milestone.updated"].has_changes is True
 
 
 def test_milestone_has_rbac_atoms():

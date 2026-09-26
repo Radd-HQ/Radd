@@ -189,9 +189,8 @@ async def list_pages(
 async def bulk_restore_archived(
     space_id: uuid.UUID, data: PageBulkRequest, session: Session, user: CurrentUser
 ) -> PageBulkResult:
-    """RADD-1249: restore a selection of archived pages. Per-page gate
-    (`page.manage`, the single restore's atom); a refused page is skipped with
-    its reason, never a whole-request 403."""
+    """RADD-1249: per-page gate `page.manage`; a refused page is skipped with its
+    reason, never a whole-request 403."""
     await spaces.get_space(session, space_id)
 
     async def guard(page_id: uuid.UUID):
@@ -205,8 +204,7 @@ async def bulk_restore_archived(
 async def bulk_delete_archived(
     space_id: uuid.UUID, data: PageBulkRequest, session: Session, user: CurrentUser
 ) -> PageBulkResult:
-    """RADD-1249: delete a selection of archived pages permanently — the
-    single delete's atom (`page.delete`, implied by manage) per page."""
+    """RADD-1249: per-page gate `page.delete` (implied by manage)."""
     await spaces.get_space(session, space_id)
 
     async def guard(page_id: uuid.UUID):
@@ -297,17 +295,8 @@ async def delete_template(
 
 @router.get("/pages/extensions", response_model=list[PageExtensionRead])
 async def list_page_extensions(session: Session, user: Actor) -> list[PageExtensionRead]:
-    """What the editor's insert menu offers (RADD-709).
-
-    Registered BEFORE `/pages/{page_id}` for the same reason `by-path` is: a
-    literal segment declared after a UUID path would never be reached.
-
-    Read from the kernel registry rather than a constant, so a plugin's
-    extension appears here the moment it mounts and disappears when it is
-    disabled — which is the whole point of the registry.
-    """
-    # Extension DESCRIPTORS are instance-wide, not a space's content: the floor
-    # is "may read some space at all" (RADD-791).
+    """The editor's insert menu, from the kernel registry (RADD-709); the floor is
+    "may read some space" (RADD-791). Declared before `/pages/{page_id}`."""
     if not await access.readable_spaces(session, user):
         return []
     sources = registries.page_extension_sources
@@ -326,17 +315,8 @@ async def list_page_extensions(session: Session, user: Actor) -> list[PageExtens
 
 @router.post("/pages/reindex")
 async def reindex_pages(session: Session, user: CurrentUser) -> dict[str, int]:
-    """Rebuild both derived indexes over every live page (RADD-943).
-
-    Page→page backlinks and page→issue links are maintained on save, so they
-    only exist for content that passed the save path — a page written before
-    either shipped, or created by an importer, carries neither. This is the one
-    call that fixes that, and it is idempotent: both indexes are derived from
-    the body, so running it twice changes nothing.
-
-    Registered BEFORE `/pages/{page_id}`, or the literal segment would be parsed
-    as a UUID and never reached (RADD-761).
-    """
+    """Rebuild both derived indexes over every live page (RADD-943) — for content
+    that bypassed the save path. Idempotent. Declared before `/pages/{page_id}`."""
     await authz.require(session, user, authz.Permission.PAGE_MANAGE)
     return {
         "backlinks": await backlinks.reindex_all(session),
@@ -348,16 +328,13 @@ async def reindex_pages(session: Session, user: CurrentUser) -> dict[str, int]:
 async def get_page_by_path(
     space_slug: str, path: str, session: Session, user: Actor
 ) -> PageRead:
-    """`/pages/<space>/<slug>/<slug>/…` (RADD-702, RADD-1233). Registered BEFORE
-    `/pages/{page_id}` so `by-path` is never parsed as a UUID. The space segment
-    may be an id; a single page segment may be an id or a number, which is what
-    lets every pre-1233 link resolve and redirect instead of rotting. The
-    answer carries the CANONICAL `path`; a client that arrived by any other
-    address compares and redirects."""
+    """`/pages/<space>/<slug>/…` (RADD-702, RADD-1233). Declared BEFORE
+    `/pages/{page_id}` — Starlette matches in declaration order, so a literal
+    after it parses as a UUID and 422s (RADD-761). A single segment may be an id
+    or a number (pre-1233 links); the answer carries the CANONICAL `path`."""
     space = await spaces.by_slug_or_id(session, space_slug)
-    # Check the space BEFORE resolving inside it — a path is not a permission —
-    # then the page's own restriction (RADD-792): a restricted page 404s rather
-    # than 403ing, so its EXISTENCE stays private.
+    # Space first (a path is not a permission), then the page's own restriction
+    # (RADD-792) — a 404, so a restricted page's EXISTENCE stays private.
     await authz.require(session, user, authz.Permission.PAGE_READ, space_id=space.id)
     page = await paths.resolve(session, space, path)
     if not await page_access.page_access(session, user, page):
@@ -367,8 +344,7 @@ async def get_page_by_path(
 
 @router.get("/pages/by-number/{number}", response_model=PageRead)
 async def get_page_by_number(number: int, session: Session, user: Actor) -> PageRead:
-    """The permalink lookup (RADD-1233): `/pages?pageId=12402` → this. Also
-    before `/pages/{page_id}`, for the same reason as `by-path`."""
+    """The permalink lookup (RADD-1233); before `/pages/{page_id}` like `by-path`."""
     page = await paths.by_key(session, str(number))
     if page is None:
         raise NotFoundError(PageEntity.PAGE, str(number))
@@ -382,17 +358,7 @@ async def get_page_by_number(number: int, session: Session, user: Actor) -> Page
 async def search_docs(
     q: str, session: Session, user: Actor, limit: int = 20
 ) -> PageSearchResponse:
-    """Also BEFORE `/pages/{page_id}`, and for the same reason as `by-path`.
-
-    FastAPI matches in DECLARATION order, so a literal that shares a shape with
-    an earlier `{param}` route is simply never reached. RADD-701 moved this here
-    from `/docs/search` and left it at the bottom of the file, where
-    `/pages/search` parsed as `page_id="search"` and answered 422 — a route that
-    exists, is registered, appears in the OpenAPI schema, and cannot be called
-    (RADD-761). Anything added as `/pages/<literal>` belongs in this block.
-    """
-    # The reader's spaces before the limit, restricted pages dropped (RADD-791/
-    # 792) — the one gate every page search reads.
+    """Declared before `/pages/{page_id}` — see `get_page_by_path`."""
     limit = max(1, min(limit, 50))
     return PageSearchResponse(
         results=await search_source.readable_results(session, user, q, limit=limit)
@@ -418,9 +384,8 @@ async def update_page(
 async def toggle_page_task(
     page_id: uuid.UUID, data: TaskToggle, session: Session, user: CurrentUser
 ) -> PageRead:
-    """Tick or untick one checklist box without opening the editor (RADD-1296).
-    An ordinary versioned save: page.write, `expected_version`, a history row,
-    and the spec-122 guard refuses it while someone is editing the page live."""
+    """Tick one checklist box without the editor (RADD-1296) — an ordinary
+    versioned save, refused while the page is edited live (spec 122)."""
     page = await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_WRITE)
     try:
         body = tasklists.toggle(page.body or "", data)
@@ -478,16 +443,15 @@ def _zip_response(name: str, blob: bytes) -> Response:
 async def pages_by_label(
     name: str, session: Session, user: Actor, space: str = ""
 ) -> list[PageLabelled]:
-    """Every page carrying a label (RADD-718) — the "content by label" pattern
-    that lets an index page maintain itself. Declared before `/pages/{page_id}`
-    so the literal segment is reachable."""
+    """Every page carrying a label (RADD-718), for `radd:label-list`. Trap: the
+    GET `/pages/{page_id}/export` above it shadows a label named `export`."""
     readable = await access.readable_spaces(session, user)
     if not readable:
         return []
     rows = await page_labels.pages_with_label(
         session, name, space_slug=space, space_ids=set(readable)
     )
-    return await service.drop_restricted_labelled(session, user, rows)
+    return await page_access.drop_restricted(session, user, rows, "id")
 
 
 @router.put("/pages/{page_id}/labels", response_model=list[str])
@@ -524,8 +488,7 @@ async def clear_watch(page_id: uuid.UUID, session: Session, user: CurrentUser) -
 async def list_backlinks(
     page_id: uuid.UUID, session: Session, user: Actor
 ) -> list[PageBacklink]:
-    """What links to this page (RADD-713) — read from the index maintained on
-    save, not by scanning every body."""
+    """What links to this page (RADD-713), from the index maintained on save."""
     await page_access.guard_page(session, user, page_id, authz.Permission.PAGE_READ)
     return await backlinks.backlink_reads(session, page_id, actor=user)
 
@@ -587,10 +550,3 @@ async def item_docs(item_id: uuid.UUID, session: Session, user: Actor) -> list[I
     """Pages linked to an item — path-extends the items surface (like timelogging)."""
     await items_service.require_readable_item(session, item_id, user)
     return await links.pages_for_item(session, item_id, actor=user)
-
-
-# --- search ---
-#
-# `/pages/search` is declared UP with the other literal `/pages/<word>` routes,
-# above `/pages/{page_id}` — see the note there. It used to live here, where
-# FastAPI's first-match-wins ordering made it unreachable (RADD-761).

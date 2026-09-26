@@ -1,15 +1,9 @@
-"""Pages as the document source search shows beside issues (RADD-1384).
-
-Registered on the kernel SEARCH_DOCUMENTS socket, so `search` never imports
-this plugin: disabling pages withdraws the provider, and deflection and Ask
-mode stop returning wiki pages whose routes are gone with it.
+"""Pages as the document source search shows beside issues (RADD-1384), on the
+kernel SEARCH_DOCUMENTS socket, so disabling pages withdraws it.
 
 The READER GATE lives here once — the reader's spaces BEFORE the limit
-(RADD-791: filtering afterwards lets unreadable hits eat the budget) and
-per-page restriction after (RADD-792: a restricted page's TITLE is usually the
-sensitive part). `GET /pages/search`, the palette's searchable, the MCP
-`search_pages` tool and this source all read through `readable_results`, so no
-two of them can disagree about what a person may find.
+(RADD-791), per-page restriction after (RADD-792). `GET /pages/search`, the
+palette, MCP `search_pages` and this source all read `readable_results`.
 """
 
 import uuid
@@ -20,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.search.sources import DocumentHit
 
-from . import access, search, service
+from . import access, page_access, search
 from .models import PageSpace
 from .schemas import DocSearchResult
 from .types import PageEntity
@@ -34,7 +28,7 @@ async def readable_results(
     if not readable:
         return []
     results = await search.search_pages(session, q, limit=limit, space_ids=set(readable))
-    return await service.drop_restricted_results(session, actor, results)
+    return await page_access.drop_restricted(session, actor, results, "page_id")
 
 
 async def readable_by_ids(
@@ -45,7 +39,7 @@ async def readable_by_ids(
     if not readable or not page_ids:
         return []
     found = await search.pages_by_ids(session, list(page_ids), space_ids=set(readable))
-    return await service.drop_restricted_results(session, actor, found)
+    return await page_access.drop_restricted(session, actor, found, "page_id")
 
 
 class PageDocuments:

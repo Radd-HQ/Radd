@@ -1,18 +1,7 @@
-"""Pages accept comments (RADD-717).
-
-Registered here rather than in `comments`, so the comments module never learns
-that pages exist — the same inversion `attachments_binding.py` uses for files.
-
-A page has no PROJECT, so `project_of` returns None — but it does have a SPACE,
-and since RADD-791 that is a scope. The checks below resolve against it.
-
-The previous version of this file said the global check "is not a gap in the
-model, it is how page atoms are already granted", and that was wrong in a way
-worth recording: `comment.write` is a PROJECT-scoped atom, so resolving it at
-global scope meant a project-scoped grant never reached it and page commenting
-was dead for everyone but an admin or a holder of a global grant. A gate that
-consults the wrong scope reads exactly like a gate that works.
-"""
+"""Pages accept comments (RADD-717), registered here so `comments` never learns
+pages exist. A page has no PROJECT (`project_of` → None) but its SPACE is a scope
+(RADD-791), and the checks resolve against it — `comment.write` resolved
+globally would never see a scoped grant."""
 
 import uuid
 

@@ -73,7 +73,7 @@ def test_project_gate_reads_the_event_ref_or_the_item_ref():
 
 
 def test_the_missing_triggers_are_now_triggers():
-    triggers = catalog.TRIGGERS
+    triggers = catalog.triggers()
     for event_type in (
         "user.created", "user.updated", "worklog.estimate_changed", "access.granted",
         "access.revoked", "page_space.public_access_changed", "sla_policy.created",

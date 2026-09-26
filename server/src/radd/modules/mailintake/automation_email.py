@@ -1,20 +1,9 @@
-"""The Send email automation action, contributed by the mail module (RADD-1387).
+"""The Send email automation action, this plugin's contribution (RADD-1387) — a
+disabled mail plugin takes the node out of the catalog.
 
-It was built into `automations` (spec 66), which reached this module through a
-`settings.modules` check — BOOT config. A mailintake plugin disabled at runtime
-left the kernel registries, and the action kept sending through it anyway. Now
-the node is this plugin's own contribution: disabled, it leaves the catalog, and
-a stored graph naming it reports the engine's "unknown action type" failure for
-that node instead of quietly mailing.
-
-**The key is a stored contract.** Graphs saved before this move name
-`action.send_email`, so the node keeps that key exactly — no migration, and the
-editor still recognises it as an action with the built-in form.
-
-What it resolves (the `to` param): a literal address, or an `EmailRecipient`
-role — reporter/assignee (that account's address, when `mailable_user` says a
-person reads it) or `contact` (the issue's primary mail contact). A role names
-something about ONE issue, so it forces per-item arity.
+`NODE_KEY` (`action.send_email`) is stored in saved graphs: never rename it.
+`to` is a literal address or an `EmailRecipient` role (reporter/assignee via
+`mailable_user`, or the primary mail contact); a role forces per-item arity.
 """
 
 from __future__ import annotations
@@ -45,22 +34,18 @@ NODE_KEY = f"{ACTION_TYPE_PREFIX}send_email"
 
 
 class SendEmailParams(BaseModel):
-    """What a Send email node stores. Extra keys (`arity`, `act_as`) are the
-    engine's and pass through untouched."""
+    """What a Send email node stores; the engine's keys (`arity`, `act_as`) pass through."""
 
     # A literal address, or an `EmailRecipient` role.
     to: str = Field(min_length=1, max_length=320)
     subject: str = Field(min_length=1, max_length=500)  # template
     body: str = Field(min_length=1, max_length=10_000)  # template
-    #: RADD-1318: send it ON the issue's email thread — the conversation the
-    #: requester's mail opened — so their reply threads back onto the ticket and
-    #: the message reads like the desk. Needs an issue.
+    #: RADD-1318: send ON the issue's email thread, so a reply threads back. Needs an issue.
     thread: bool = False
 
 
 def is_role(value: str) -> bool:
-    """Whether `to` names a ROLE rather than an address — which is what forces
-    per-item arity (RADD-918)."""
+    """Whether `to` names a ROLE (which forces per-item arity, RADD-918)."""
     try:
         EmailRecipient(value.strip().lower())
     except ValueError:
@@ -111,18 +96,9 @@ async def deliver(
     *,
     thread_on: WorkItem | None = None,
 ) -> None:
-    """The send, through the ONE transport (RADD-983): the default sender ROW
-    first, the environment relay as the fallback.
-
-    Itemless unless `thread_on` — the rule's text is not a reply on the ticket,
-    and threading it would file an announcement into the customer's
-    conversation. Opted into (RADD-1318), it goes ON the issue's thread in the
-    desk's shape, subject pinned, so a reply comes back to the issue.
-
-    Loop safety: the executor applies inside `events.automated()`, so the
-    `mail.sent`/`mail.failed` this emits are automation-caused and a rule on
-    "Email sent" cannot be fired by its own email.
-    """
+    """The send, through the one transport. Itemless unless `thread_on` (RADD-1318:
+    then on the issue's thread, subject pinned). Runs inside `events.automated()`,
+    so its own `mail.sent` cannot re-fire the rule."""
     kind = SentMailKind.AUTOMATION
     if thread_on is None:
         sent = await service.send_plain_mail(
@@ -145,8 +121,7 @@ async def deliver(
 
 @dataclass
 class SendEmailPlan:
-    """What one invocation would send — `detail`/`resolves` are the executor's
-    report shape; the rest is what `apply` sends."""
+    """What one invocation would send; `detail`/`resolves` are the executor's report shape."""
 
     detail: str
     resolves: bool = False
@@ -158,13 +133,10 @@ class SendEmailPlan:
 
 
 async def plan_send(ctx: Any) -> SendEmailPlan:
-    """Resolve recipient and text — read-only, so the dry run is the real
-    decision. `ctx.render` gives every token a built-in action gets, including
-    `{{items.list}}` for a digest."""
+    """Resolve recipient and text — read-only, so the dry run is the real decision."""
     params = SendEmailParams.model_validate(ctx.node.params)
     if not await service.outbound_configured(ctx.session):
-        # RADD-1265: asked of the transport, which knows about sender ROWS —
-        # the environment alone said "not configured" on a rows-only instance.
+        # RADD-1265: asked of the transport, which knows about sender ROWS.
         return SendEmailPlan("send_email: no outbound mail sender is configured (Settings → Email)")
     item = await ctx.target_item()
     recipient = await resolve_recipient(ctx.session, await ctx.render(params.to, line=True), item)
@@ -190,9 +162,8 @@ async def apply_send(ctx: Any, plan: SendEmailPlan) -> None:
 
 
 def check(params: dict[str, Any]) -> None:
-    """Write-time: the params model (a pydantic error is the 422 it always
-    was), and a ROLE recipient needs per-item arity — at set arity it resolves
-    no one and skip-logs on every run (RADD-918)."""
+    """Write-time: the params model, and a ROLE recipient needs per-item arity — at
+    set arity it resolves no one (RADD-918)."""
     SendEmailParams.model_validate(params)
     target = str(params.get("to") or "")
     arity = str(params.get(ARITY_PARAM) or NodeArity.SET.value)
@@ -233,10 +204,7 @@ SEND_EMAIL_NODE = AutomationNodeSpec(
 )
 
 
-#: "Tell the reporter when their issue is done" — the kind of behaviour a
-#: tracker might do unasked; here it is a starting point someone chooses. Moved
-#: from `automations` with the node it is built on (RADD-1387), so it is listed
-#: exactly when Send email is.
+#: An opt-in starting point, listed exactly when Send email is (RADD-1387).
 NOTIFY_REPORTER_ON_DONE = AutomationTemplateSpec(
     key="mailintake.notify_reporter_on_done",
     name="Tell the reporter when their issue is done",

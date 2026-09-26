@@ -1,11 +1,7 @@
 """Storage host registry (spec 102) — CRUD, the default invariant, env seeding.
-
-The jiraimport-connections pattern throughout: env config seeds ONE host row
-when the table is empty (a fresh install always gets a working default), rows
-are ordinary and editable afterwards, secrets are redacted on read and an empty
-secret on update means "keep". A process-local snapshot of the default host
-serves the sync capability check.
-"""
+Env seeds ONE row into an empty table; rows are editable afterwards; secrets are
+redacted on read and an empty secret on update means "keep". A snapshot of the
+default host serves the sync capability check."""
 
 from __future__ import annotations
 
@@ -35,9 +31,6 @@ from .types import (
 
 logger = logging.getLogger(__name__)
 
-# An empty credential on update keeps the stored one (reads are redacted).
-UNCHANGED_CREDENTIAL = ""
-
 # Other modules storing bytes through the blob API register a counter so a host
 # they still reference cannot be deleted (jiraimport: snapshot blobs).
 UseCheck = Callable[[AsyncSession, uuid.UUID], Awaitable[int]]
@@ -66,8 +59,7 @@ async def get_host(session: AsyncSession, host_id: uuid.UUID) -> StorageHost:
 
 
 async def require_default(session: AsyncSession) -> StorageHost:
-    """The default host. 409 (not 404) when none exists: the caller is allowed,
-    a piece of the deploy is missing — the ldap/jiraimport convention."""
+    """The default host; 409, not 404, when none exists (a missing piece of the deploy)."""
     result = await session.execute(select(StorageHost).where(StorageHost.is_default))
     host = result.scalar_one_or_none()
     if host is None:
@@ -306,8 +298,7 @@ async def _count(session: AsyncSession) -> int:
 
 # --- capability snapshot ------------------------------------------------------
 
-# CapabilitySpec.check is sync; this mirrors the ai registry's role snapshot —
-# write-through + TTL'd (RADD-899) so extra web replicas converge.
+# CapabilitySpec.check is sync: write-through + TTL'd (RADD-899) so replicas converge.
 
 
 def _default_of(host: "StorageHost | None") -> dict[str, str]:
@@ -317,8 +308,6 @@ def _default_of(host: "StorageHost | None") -> dict[str, str]:
 
 
 async def _load_default_snapshot() -> dict[str, str]:
-    from radd.db import SessionLocal
-
     async with SessionLocal() as session:
         result = await session.execute(select(StorageHost).where(StorageHost.is_default))
         return _default_of(result.scalar_one_or_none())
@@ -342,8 +331,7 @@ async def refresh_default_snapshot(session: AsyncSession) -> None:
 
 
 def seed_values() -> StorageHostCreate:
-    """The host the environment describes (shared by startup seeding; the spec-102
-    migration inlines the same logic for installs with existing attachments)."""
+    """The host the environment describes (the spec-102 migration inlines the same)."""
     if settings.attachment_storage == StorageHostType.S3.value:
         return StorageHostCreate(
             name=settings.s3_bucket or "s3",

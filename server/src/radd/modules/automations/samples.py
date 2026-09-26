@@ -1,21 +1,7 @@
-"""What an event actually carries (RADD-921).
-
-Every condition an automation can write against an event names a path into its
-payload — `{{payload.changes.field}}` in a template, a dotted path in the
-`payload` condition subject, a field name in "field changed". None of that was
-discoverable: you wrote the path, saved, waited for the event to fire, and found
-out from the absence of an effect that you had guessed wrong. The catalog said
-which events EXIST; nothing said what any of them contains.
-
-**Sampled from real events, never synthesized.** A hand-written example per event
-type would be a second copy of a shape defined in twenty modules' `emit` calls,
-and it would drift silently — the failure mode here is precisely a payload that
-looks right and isn't. Reading the outbox is also the only way the answer stays
-correct when a plugin adds a field. The cost is honest and stated: an event type
-that has never fired has no sample, and the UI says so rather than inventing one.
-
-Pure module apart from the query — the flattening is where the decisions are, and
-it is unit-tested without a database.
+"""What an event actually carries (RADD-921): payload paths sampled from REAL
+outbox events, never synthesized — a hand-written example per type would drift
+from twenty modules' `emit` calls. A type that never fired has no sample.
+Pure apart from the query.
 """
 
 from __future__ import annotations
@@ -33,11 +19,8 @@ MAX_EXAMPLES = 5
 
 @dataclass
 class PayloadPath:
-    """One dotted path into a payload, with what has been seen at it.
-
-    `{{payload.<path>}}` and the `payload` condition subject both take exactly
-    this string, so the panel that shows them can insert them verbatim.
-    """
+    """One dotted path into a payload, with what has been seen at it — the string
+    `{{payload.<path>}}` and the "Event value is" gate take verbatim."""
 
     path: str
     examples: list[str] = field(default_factory=list)

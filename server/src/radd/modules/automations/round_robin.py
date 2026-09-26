@@ -1,28 +1,11 @@
-"""Round-robin team assignment for the `assign_round_robin` action (RADD-1044).
+"""Round-robin team assignment for `assign_round_robin` (RADD-1044).
 
-Triage distributes: nothing here picks a FIXED person (that is `set_assignee`) —
-it walks a team's members in a stable order and hands the next ticket to the next
-eligible member, skipping inactive accounts and anyone currently AWAY.
-
-Three decisions live in this file, and each is load-bearing:
-
-* **Stable ordering by user id.** `list_team_members` sorts by NAME, which renames
-  and reorders; the rotation is walked by user id (a total order that never shifts
-  as members join, leave, or are renamed) so the stored cursor stays meaningful.
-  Fairness is identical to join-order — every member is reached once per lap —
-  and the id comparison is what lets "the next member after the cursor" be a plain
-  `id > last` even when the cursor-holder has since left the team.
-* **The cursor advances to the ASSIGNEE, never to a skipped member.** Away and
-  inactive members are passed over on the way to the next eligible one; the cursor
-  lands on whoever the ticket went to. A run with no eligible member leaves the
-  cursor where it was — nothing was assigned, so there is nothing to advance past.
-* **Away is asked, never imported (RADD-1387).** Who is away comes from the
-  kernel's PERSON_AVAILABILITY socket — `leave` provides it — and every
-  provider's answer unions. With none registered (leave disabled at runtime,
-  or never installed) nobody is away and inactive accounts are still skipped.
-  This used to import `leave.service` behind a `settings.modules` check, which
-  reads BOOT config: a leave plugin switched off in the plugin manager kept
-  deciding who got tickets.
+* Members are walked in USER-ID order (not name): a total order that survives
+  renames and leavers, so "next after the cursor" is simply `id > last`.
+* The cursor advances to the ASSIGNEE only; skipped (inactive/away) members
+  never move it, and a run with nobody eligible leaves it alone.
+* Away comes from the PERSON_AVAILABILITY socket (union of providers); with
+  none registered nobody is away. Never imported from `leave`.
 """
 
 import logging

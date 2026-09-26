@@ -12,16 +12,14 @@ from radd.modules.teams import service as teams
 from radd.modules.workflow import service as workflow
 
 from .models import SlaPolicy
-from .types import STATE_MODES, SlaEntity, SlaKind, SlaMetOn
-
-_DEFAULTS = {SlaKind.RESPONSE: SlaMetOn.FIRST_REPLY, SlaKind.RESOLUTION: SlaMetOn.DONE}
+from .types import DEFAULT_MET_ON, STATE_MODES, SlaEntity, SlaKind, SlaMetOn
 
 
 async def validate_rules(session: AsyncSession, policy: SlaPolicy) -> None:
     project_states = {str(state.id) for state in await workflow.list_states(session, policy.project_id)}
     wanted_teams: set[uuid.UUID] = {uuid.UUID(str(t)) for t in policy.reporter_team_ids or []}
     for kind in SlaKind:
-        mode = SlaMetOn(getattr(policy, f"{kind.value}_met_on") or _DEFAULTS[kind])
+        mode = SlaMetOn(getattr(policy, f"{kind.value}_met_on") or DEFAULT_MET_ON[kind])
         state_ids = [str(s) for s in getattr(policy, f"{kind.value}_state_ids") or []]
         team_ids = [str(t) for t in getattr(policy, f"{kind.value}_team_ids") or []]
         label = kind.value

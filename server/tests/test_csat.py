@@ -383,9 +383,7 @@ async def test_a_rows_only_instance_sends_the_survey_through_its_sender_row(
 
 async def test_public_flow_latest_wins_responded_stamped_once(db, admin, project):
     item = await _item(db, admin, project)
-    survey = await csat_service.create_survey(
-        db, item_id=item.id, item_key=item.key
-    )
+    survey = await csat_service.create_survey(db, item_id=item.id)
 
     rendered = await csat_service.public_survey(db, survey.token)
     assert rendered.item_key == item.key and rendered.item_title == item.title

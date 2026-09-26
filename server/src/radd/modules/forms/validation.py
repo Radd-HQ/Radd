@@ -1,10 +1,5 @@
-"""Form-submission validation — the form's own `required` overrides (spec 17).
-
-The registry runs `validate_custom_fields` for type/unknown-key/registry-required checks
-(422 via the fields module). On top of that a form field may be `required` even when the
-underlying registry field is not; that override is checked here. Kept pure so the invariant
-is unit-tested without a DB (mirrors test_field_grants / test_authz).
-"""
+"""Form-submission validation: the form's own `required` overrides (spec 17),
+on top of the registry's checks. Pure."""
 
 from collections.abc import Mapping, Sequence
 from typing import Any

@@ -1,22 +1,6 @@
-"""Concrete condition nodes (spec 116 revision).
-
-`gate.event` was one node holding a nestable all/any/none tree of
-subject/operator/value. It could express anything and taught nothing: opening it
-told you there were "event conditions" and nothing about what they were. It is
-deleted (RADD-1265; a data migration converted stored trees).
-
-These replace it with NAMED single tests — "field changed", "changed by",
-"state category is" — each with a real form. The expressiveness is not lost,
-because the GRAPH already composes booleans:
-
-    AND  -> chain two gates
-    OR   -> fan out from the trigger and merge into the same action
-    NOT  -> take the `false` port
-
-which is more legible than a nested tree and needs no second vocabulary.
-
-Pure module: every evaluator takes `EventFacts` and a params dict and returns a
-bool. No session, no I/O — unit-testable exactly like `conditions.py`.
+"""The built-in named gates (spec 116): each asks one plain question with a real
+form; the graph composes them (chain = AND, fan-out = OR, the `false` port = NOT).
+Pure — every evaluator takes `EventFacts` and params and returns a bool.
 """
 
 from __future__ import annotations
@@ -91,23 +75,6 @@ def changed_by(facts: EventFacts, params: Mapping[str, Any]) -> bool:
     }
     hit = bool(wanted & actual)
     return not hit if params.get("negate") else hit
-
-
-def state_category_is(facts: EventFacts, params: Mapping[str, Any]) -> bool:
-    """Is the item's state category now one of these?
-
-    The category AFTER the event, which is what "did this item just become done"
-    needs — the payload carries it for item events.
-    """
-    wanted = {str(v).lower() for v in (params.get("categories") or [])}
-    if not wanted:
-        return False
-    # `item.state.category` — RADD-922. This read `payload["state_category"]`,
-    # a key NOTHING has ever emitted, so the node could only ever answer false:
-    # configured, saved, and silently inert. `conditions.py` had the right path
-    # (`state.category`) the whole time, which is how it went unnoticed.
-    actual = ((facts.payload.get("item") or {}).get("state") or {}).get("category")
-    return str(actual).lower() in wanted if actual is not None else False
 
 
 #: Operators that take no value; the form hides the value box for them.

@@ -1,14 +1,5 @@
-"""What `approvals` contributes to the kernel's TRANSITION_CHECK socket (RADD-1383).
-
-`require_approval` used to be a workflow enum member that workflow validated,
-evaluated and — through a `try: import approvals` that could never fail, since
-plugin code is always importable — consumed. A plugin disabled at runtime kept
-running from those call sites. Now the check is this object, registered on the
-manifest: disabling the plugin withdraws it, and workflow fails the rules it
-served CLOSED instead of reaching into a module that is switched off.
-
-An adapter over the service, like `leave/holidays.py`: the socket asks four
-questions and the answers live here, next to the lifecycle they belong to.
+"""`require_approval`, served on the TRANSITION_CHECK socket (RADD-1383):
+disabling approvals withdraws the check, and workflow fails its rules closed.
 """
 
 import uuid
@@ -92,14 +83,8 @@ class ApprovalGate:
     ) -> str | None:
         if to_state_id is not None and to_state_id in (prepared or frozenset()):
             return None
-        parts: list[str] = []
-        for entry in params.get("approvers") or []:
-            name = entry.get("name") or entry.get("id") or "?"
-            if entry.get("kind") == ApproverKind.TEAM.value:
-                parts.append(f"{int(entry.get('required') or 1)} of {name}")
-            else:
-                parts.append(str(name))
-        return f"approval required ({'; '.join(parts)})" if parts else "approval required"
+        summary = service.approvers_summary(params.get("approvers") or [])
+        return f"approval required ({summary})" if summary else "approval required"
 
     async def moved(
         self, session: AsyncSession, item_id: uuid.UUID, to_state_id: uuid.UUID

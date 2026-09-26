@@ -102,13 +102,13 @@ def test_should_process_covers_the_catalog_and_nothing_else():
 def test_catalog_is_sane():
     # MANUAL is deliberately NOT in the catalog: manual rules only run on demand via
     # POST /automations/{id}/run — the event engine must never fire them.
-    assert AutomationTrigger.MANUAL.value not in catalog.TRIGGERS
-    assert catalog.TRIGGERS[ItemEvent.UPDATED.value].has_changes is True
-    assert catalog.TRIGGERS[ItemEvent.UPDATED.value].item_scoped is True
-    assert catalog.TRIGGERS["comment.created"].item_scoped is True
-    assert catalog.TRIGGERS["cycle.completed"].item_scoped is False
+    assert AutomationTrigger.MANUAL.value not in catalog.triggers()
+    assert catalog.triggers()[ItemEvent.UPDATED.value].has_changes is True
+    assert catalog.triggers()[ItemEvent.UPDATED.value].item_scoped is True
+    assert catalog.triggers()["comment.created"].item_scoped is True
+    assert catalog.triggers()["cycle.completed"].item_scoped is False
     # every key is the spec's own event_type (dict built from the specs)
-    assert all(key == spec.event_type for key, spec in catalog.TRIGGERS.items())
+    assert all(key == spec.event_type for key, spec in catalog.triggers().items())
 
 
 # --- action-union validation (validated on rule write) ---
@@ -330,7 +330,7 @@ def test_action_union_accepts_universal_actions():
 
 
 def test_item_actions_registry_covers_exactly_the_item_bound_types():
-    from radd.modules.automations.types import ITEM_ACTIONS
+    from radd.modules.automations.types import ACTION_ARITY_DEFAULT, NodeArity
 
     universal = {
         ActionType.CREATE_ITEM,
@@ -338,7 +338,8 @@ def test_item_actions_registry_covers_exactly_the_item_bound_types():
         ActionType.POST_CHAT,
         ActionType.NOTIFY_USER,
     }
-    assert ITEM_ACTIONS == set(ActionType) - universal
+    item_defaults = {a for a, arity in ACTION_ARITY_DEFAULT.items() if arity is NodeArity.ITEM}
+    assert item_defaults == set(ActionType) - universal
 
 
 def test_system_actor_id_is_stable():

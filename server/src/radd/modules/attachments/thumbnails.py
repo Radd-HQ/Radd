@@ -1,24 +1,10 @@
 """Serving an image at the width the document asked for (RADD-751).
 
-Markdown cannot express an image size — `![alt](url)` has nowhere to put one —
-so a resized image is written as a URL convention, `?w=640`. The body stays pure
-markdown, which is what keeps FTS, the embedder, the export, MCP and the public
-surface reading the same thing they always did.
-
-The convention is also the only one of the three options considered that fixes
-the BANDWIDTH problem rather than only the layout one: a 4 MB screenshot shown
-at 600px currently ships 4 MB to every reader. Honouring the width here is what
-makes "a resized image transfers fewer bytes" true instead of aspirational.
-
-Two decisions worth stating:
-
-- **Widths are BUCKETED.** An arbitrary width means a fresh decode-and-encode
-  for every pixel someone drags through, and a cache key per pixel. Nine buckets
-  cover the useful range; a request rounds UP so the image is never upscaled by
-  the browser.
-- **Only ever DOWN.** A width at or above the original returns the original
-  bytes untouched — asking for a bigger image cannot make one, and pretending
-  otherwise would ship more bytes than the original for a worse picture.
+Markdown has nowhere to put a size, so a resize is the URL convention `?w=640`;
+honouring it here is what makes a resized image ship fewer bytes, not just look
+smaller. Widths are BUCKETED (rounded up, so the browser never upscales) to
+bound re-encodes and cache keys, and resizing only ever goes DOWN — a width at
+or above the original serves the original bytes.
 """
 
 from __future__ import annotations
@@ -59,13 +45,8 @@ def can_resize(content_type: str) -> bool:
 
 
 async def resized(data: bytes, content_type: str, width: int) -> tuple[bytes, str] | None:
-    """`(bytes, content_type)` at `width`, or None to serve the original.
-
-    None rather than an exception for every "no" — a picture that cannot be
-    resized must still be DELIVERED, so every failure here falls back to the
-    original bytes. That includes Pillow being unable to read the file, which is
-    a thing users will do.
-    """
+    """`(bytes, content_type)` at `width`, or None to serve the original — every
+    failure (Pillow unable to read the file included) falls back to it."""
     if not can_resize(content_type):
         return None
     bucket = bucket_for(width)
@@ -82,15 +63,13 @@ def _resize(data: bytes, content_type: str, width: int) -> tuple[bytes, str] | N
     from PIL import Image
 
     with Image.open(io.BytesIO(data)) as image:
-        # An animated GIF loses its animation on re-encode, which is a worse
-        # outcome than a large file. Leave it alone.
+        # Re-encoding an animated GIF loses the animation: worse than a big file.
         if getattr(image, "is_animated", False):
             return None
         if image.width <= width:
             return None
         height = max(1, round(image.height * width / image.width))
-        # `thumbnail` would also cap the height; this is a WIDTH convention, so
-        # a tall screenshot keeps its aspect ratio and gets as tall as it needs.
+        # Not `thumbnail`, which would also cap the height: this is a WIDTH convention.
         resized_image = image.resize((width, height), Image.LANCZOS)
 
         fmt = (image.format or "PNG").upper()
@@ -101,7 +80,6 @@ def _resize(data: bytes, content_type: str, width: int) -> tuple[bytes, str] | N
         if fmt == "WEBP":
             resized_image.save(out, "WEBP", quality=QUALITY, method=4)
             return out.getvalue(), "image/webp"
-        # PNG and everything else stay PNG: a screenshot re-encoded as JPEG
-        # gains ringing around text, which is most of what gets pasted here.
+        # Everything else stays PNG: JPEG rings around text, i.e. screenshots.
         resized_image.save(out, "PNG", optimize=True)
         return out.getvalue(), "image/png"

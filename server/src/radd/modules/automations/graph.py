@@ -1,25 +1,11 @@
-"""The automation graph (spec 116): structure, validation and traversal.
+"""The automation graph (spec 116): structure, validation and traversal. Pure —
+no session or I/O; `executor.py` gives nodes their meaning.
 
-An automation is a DAG. A TRIGGER emits a packet of `(event facts, item set)`;
-FILTER narrows the set and splits it across `matched`/`unmatched`; GATE routes the
-whole packet by a boolean over the event, leaving the set untouched; ACTION does
-work and passes its input through so chains continue.
-
-Pure module — no session, no I/O, no service calls. It answers "is this graph
-legal" and "in what order do its nodes run", and the engine supplies the meaning
-of each node. That is the same split `conditions.py` uses, and it is what makes
-both unit-testable without a database.
-
-Two rules that are enforced here rather than hoped for:
-
-* **Cycles are rejected on WRITE.** A cycle found at run time is a hung consumer;
-  found on write it is a validation message next to the edge that caused it.
-* **Empty sets propagate.** A filter matching nothing does not halt its branch —
-  the packet flows on carrying an empty set, and each node decides via
-  `needs_items` whether it runs. Halting would be the simpler rule and was
-  rejected: universal actions (webhook, email, chat) run itemless BY DESIGN
-  today, and "nothing matched, tell me" is a real automation that halting makes
-  inexpressible.
+* Cycles are rejected on WRITE, where the message can name the edge; at run
+  time a cycle would hang the consumer.
+* Empty sets propagate: a filter matching nothing does not halt its branch;
+  each node's `needs_items` decides whether it runs, so "nothing matched —
+  tell me" is expressible.
 """
 
 from __future__ import annotations
@@ -62,27 +48,10 @@ class Node:
     kind: AutomationNodeKind
     type: str  # the node-type key: "filter.slq", "action.create_item", …
     params: dict[str, Any] = field(default_factory=dict)
-    #: What downstream nodes CALL this one (spec 120) — the left half of
-    #: `{{triage.priority}}`. Optional: a node with no name still runs, it just
-    #: cannot be addressed, which is the right answer for the fourteen node types
-    #: that produce nothing.
-    #:
-    #: Separate from `id` on purpose. The id is machinery — `act3`, `gate1` — and
-    #: is what edges are wired to, so renaming it would break every edge; a name
-    #: is prose someone chose and can change freely. Conflating them would make
-    #: "call this triage" a graph-wide rewire.
-    #:
-    #: Held VERBATIM. Whether it is a legal name is `nodes.output_name` /
-    #: the write path's question: a stored name that is not legal degrades to
-    #: unaddressable rather than making the automation unloadable.
+    #: What downstream tokens call this node (spec 120) — prose, freely renamable,
+    #: unlike `id`, which edges wire to. Held verbatim; an illegal name makes the
+    #: node unaddressable, never the graph unloadable.
     name: str = ""
-
-    @property
-    def ports(self) -> tuple[NodePort, ...]:
-        """The KIND's fixed ports. Callers that must honour a node type's own
-        outputs use the resolver passed to `validate` instead — this stays for
-        the kinds whose ports genuinely are fixed."""
-        return PORTS_BY_KIND[self.kind]
 
 
 @dataclass(frozen=True)
@@ -105,47 +74,21 @@ ITEM_SUBJECT = "item"
 
 @dataclass(frozen=True)
 class Packet:
-    """What travels along an edge.
-
-    IDS, never rows — the engine loads them, and a packet carrying ORM objects
-    would tie this module to a session. `facts` rides along because actions
-    template `{{tokens}}` off the event and gates evaluate on it; an ids-only
-    edge would break both.
-
-    **Subjects, plural (RADD-923).** A packet carries ids per ENTITY TYPE, not
-    just items: an event about a deployment can name the deployment, the release
-    and the item at once, and a contributed action node declaring
-    `subject="deployment"` is handed exactly those ids. `item_ids` remains as a
-    property because items are what every built-in node acts on, and reading
-    `packet.subjects["item"]` at ninety call sites would say nothing extra.
-
-    Ordered and deduplicated per subject: fan-in unions two branches, and without
-    an order the actions applied downstream would vary run to run.
-    """
+    """What travels along an edge: event `facts` plus entity IDS per subject
+    (RADD-923) — never ORM rows, which would tie this module to a session.
+    Ordered and deduplicated per subject, because the order side effects apply
+    in is observable (comments, webhook bodies)."""
 
     facts: Any  # conditions.EventFacts — typed there, kept opaque to stay pure
     subjects: Mapping[str, tuple[uuid.UUID, ...]] = field(default_factory=dict)
-    #: The VARIABLE BAG (spec 120): node name -> what that node produced, as
-    #: strings. It rides on the packet rather than on the run because branching
-    #: is what makes it interesting — a value produced on one branch must not be
-    #: readable on a branch that never ran, which a run-wide dict could not
-    #: express.
-    #:
-    #: **Aliasing.** The outer dict is rebuilt on every write (`with_vars`) and
-    #: the inner dicts are only ever REPLACED, never mutated in place — so a
-    #: packet handed to three downstream nodes shares its inner mappings safely
-    #: and copying them would buy nothing. Values are strings because that is
-    #: what a `{{token}}` renders to; a producer stringifies at the seam rather
-    #: than every consumer guessing.
+    #: The VARIABLE BAG (spec 120): node name -> what it produced, as strings.
+    #: On the packet, not the run, so a value from an untaken branch is unreadable.
+    #: Inner dicts are replaced, never mutated, so packets may share them.
     vars: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
 
     @classmethod
     def of(cls, facts: Any, **subjects: Iterable[uuid.UUID]) -> Packet:
-        """`Packet.of(facts, item=[id])` — the constructor for the common case.
-
-        A classmethod rather than an `item_ids=` kwarg because items stopped
-        being the only subject, and a keyword that privileges one entity type is
-        how the rest of them end up second-class."""
+        """`Packet.of(facts, item=[id])`."""
         return cls(facts=facts, subjects={k: _dedupe(v) for k, v in subjects.items()})
 
     @property
@@ -185,18 +128,9 @@ class Packet:
         )
 
     def merge(self, other: Packet) -> Packet:
-        """Fan-in, per subject. Safe to keep `self.facts`: both packets come from
-        the same run, so their facts are identical by construction — there is no
-        reconciling to do, and asserting equality here would be checking the
-        engine, not the graph.
-
-        Variables union with the LATER writer winning, and `walk` feeds the
-        arriving packets in topological order so "later" means "the producer that
-        ran second". Two branches that both name a node `triage` is a graph the
-        write path refuses, so in practice this only unions disjoint bags — the
-        rule exists so the one case that can still collide (the same producer
-        reached twice by different routes) resolves the same way on every run.
-        """
+        """Fan-in, per subject. `facts` are identical by construction (one run).
+        Variables union with the LATER writer winning, and `walk` merges in
+        topological order, so "later" is the producer that ran second."""
         merged = {
             key: _dedupe(self.subjects.get(key, ()) + other.subjects.get(key, ()))
             for key in {*self.subjects, *other.subjects}
@@ -261,18 +195,9 @@ def parse(nodes: Iterable[Mapping[str, Any]], edges: Iterable[Mapping[str, Any]]
 def validate(
     nodes: list[Node], edges: list[Edge], ports_of: PortsResolver = default_ports
 ) -> list[Node]:
-    """Check a graph and return its TRIGGERS. Raises GraphError with a message
-    naming the offending node or edge.
-
-    Several triggers are legal, and zero is too:
-
-    * **Several** — "when an item is created, OR every Monday" is one automation
-      with one set of actions, not two graphs kept in step by hand. A firing
-      event starts the run at the trigger that matched; the others do not emit.
-    * **Zero** — a graph being built is saved before it is wired. It simply never
-      runs, which the editor says out loud rather than the API refusing to store
-      work in progress.
-    """
+    """Check a graph and return its TRIGGERS; raises GraphError naming the node or
+    edge. Several triggers are legal ("on create OR every Monday"), and so is zero
+    (a graph mid-build is saved before it is wired; it simply never runs)."""
     if len(nodes) > MAX_GRAPH_NODES:
         raise GraphError(f"a graph may hold at most {MAX_GRAPH_NODES} nodes ({len(nodes)} given)")
     if len(edges) > MAX_GRAPH_EDGES:
@@ -358,7 +283,7 @@ def inbound(edges: list[Edge]) -> dict[str, list[Edge]]:
     return result
 
 
-def is_reachable(trigger_ids: Iterable[str], nodes: list[Node], edges: list[Edge]) -> set[str]:
+def is_reachable(trigger_ids: Iterable[str], edges: list[Edge]) -> set[str]:
     """Ids reachable from ANY trigger. A node outside this set never runs — the
     editor should say so rather than leave someone waiting on a detached branch.
 

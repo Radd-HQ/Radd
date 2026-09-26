@@ -1,31 +1,14 @@
 """The automation engine: an outbox consumer that walks each matching
-automation's GRAPH and applies what its action nodes plan, as the automation's
-author (or the node's `act_as`; the system actor for rows with no author).
+automation's graph and applies its action nodes' plans, as the automation's
+author (or a node's `act_as`; the system actor for rows with no author).
 
-Loop guard (critical): every engine-applied mutation runs inside
-`events.automated()`, so its events carry the `automated` marker and the run's
-cause — which automation, at what chain depth (RADD-1315). Such an event reaches
-only trigger nodes that opted in to other automations' changes, never the
-automation that caused it, and never past `automation_max_chain_depth` — so an
-automation whose action sets a field it also matches on applies exactly once.
+Loop guard: every applied mutation runs in `events.automated()`, so its events
+carry the `automated` marker and the cause (automation, chain depth —
+RADD-1315). Such an event reaches only triggers that opted in, never the
+automation that caused it, never past `automation_max_chain_depth`.
 
-Best-effort: each action runs inside a SAVEPOINT — a failing action rolls back only
-itself, is logged, and the rest continue; the engine never crashes on bad data.
-
-Spec 116 (RADD-914): the three entry points — event, schedule and manual — all
-build an initial `Packet` and hand it to `run_graph`, so the branching semantics
-live in ONE place (`executor.walk`) rather than being re-implemented per caller.
-That is also why `preview` is now a real dry run: it walks the same graph with
-`apply=False`, so what it shows is what a live run decides, not a second opinion.
-
-RADD-902: trigger classification, condition matching, and the read-only action
-planner (`_plan`/`_Plan`) live in `planning.py` — the planning-vs-applying seam
-the audit named as this file's cleanest cut. Application (`apply_event`/
-`_apply_plan`/`run_graph`), scheduled runs, poll iteration, and the dry-run
-preview stay here, and this module re-exports everything `planning.py` defines
-under its own name — `from radd.modules.automations.engine import _plan,
-condition_matches, should_process, ...` (real callers: `router.py`,
-`dispatcher.py`, and several tests) is unaffected.
+Event, schedule and manual runs all call `run_graph`, so branching lives once
+in `executor.walk`; `preview` is the same walk with `apply=False`.
 """
 
 import hashlib
@@ -33,6 +16,7 @@ import hmac
 import json
 import logging
 from dataclasses import replace
+from functools import partial
 import uuid
 
 import httpx
@@ -60,18 +44,11 @@ from .graph import GraphError, Packet
 from .models import Automation
 from .planning import (
     _Plan,
-    _cycle_by_name as _cycle_by_name,
-    _current_labels as _current_labels,
     _event_facts,
     _is_clear as _is_clear,
-    _item_ctx as _item_ctx,
     _manual_facts as _manual_facts,
     _plan as _plan,
-    _project_by_key as _project_by_key,
-    _project_definitions as _project_definitions,
     _resolve_target_item,
-    _state_by_name as _state_by_name,
-    _team_by_name as _team_by_name,
     condition_matches as condition_matches,
     is_automation_caused as is_automation_caused,
     should_process as should_process,
@@ -182,19 +159,8 @@ async def _apply_plan(
 
 
 async def _notification_item_ref(session: AsyncSession, item: WorkItem | None) -> dict[str, str]:
-    """The `item_key`/`item_title` pair every other item-scoped notification
-    carries (RADD-972) — display values resolved at WRITE time, spec 26's rule.
-
-    The row already had `item_id`, but nothing that composes a line from the
-    payload (the digest, the per-event email) does a lookup — that is the rule,
-    and the automation type was the one exception to it, so its email line
-    could name the rule that fired and not the issue it fired on. Read through
-    `items.item_ref`, the seam every emitter uses for the same pair, rather than
-    joining the project here: the key's spelling is items' to own.
-
-    An itemless rule (a schedule at set arity, a universal action) has no ref
-    and gets none; the renderers' linkless degradation stays for that case.
-    """
+    """`item_key`/`item_title` for the notification payload, resolved at write
+    time through `items.item_ref` (RADD-972); an itemless run gets none."""
     if item is None:
         return {}
     ref = await items.item_ref(session, item.id)
@@ -285,11 +251,7 @@ def _matching_kind(event: Event, rules: list) -> list:
 
 
 async def apply_event(session: AsyncSession, event: Event) -> None:
-    """Run every matching rule's actions for one event, best-effort. Any catalog
-    trigger is subscribable (spec 58): the rule's event conditions gate on the
-    event itself; when a target item resolves, the SLQ condition and the item
-    actions apply to it — a matching rule on an itemless event logs and skips
-    its actions (they are all item-bound today)."""
+    """Run every automation whose trigger matched this event, from that trigger node."""
     if not should_process(event):
         return
     if event.event_type == AutomationEvent.SCHEDULED.value:  # spec 69 scheduler path
@@ -305,29 +267,17 @@ async def apply_event(session: AsyncSession, event: Event) -> None:
     rules = _matching_kind(event, rules)
     if not rules:
         return
-    system_user = await session.get(User, SYSTEM_ACTOR_ID)
+    system_user = await _system_actor(session, event)
     if system_user is None:
-        logger.error(
-            "automations: system actor %s missing — run the migration; skipping event %s",
-            SYSTEM_ACTOR_ID,
-            event.id,
-        )
         return
     item = await _resolve_target_item(session, event)
-    trigger_spec = catalog.TRIGGERS.get(event.event_type)  # None for a trigger KIND's event
+    trigger_spec = catalog.triggers().get(event.event_type)  # None for a trigger KIND's event
     if item is None and trigger_spec is not None and trigger_spec.item_scoped and not _parent_is_not_an_item(event):
         return  # item vanished before the engine caught up
     facts = await _event_facts(session, event)
     subjects = _subjects_of(event)
-    # EVERY subject the event names becomes part of the packet (RADD-923), not
-    # just the item — so an event about a deployment carries the deployment, the
-    # release AND the item, and a contributed action node declaring
-    # `subject="deployment"` is handed exactly those ids.
-    #
-    # An itemless event still runs the graph, carrying an empty item set: gates
-    # evaluate, and universal actions fire. That is spec 116's "empty sets
-    # propagate", and it is what preserves the pre-graph behaviour where a
-    # webhook action ran on an event with no item.
+    # EVERY subject the event names joins the packet (RADD-923), not just the
+    # item. An itemless event still runs: gates evaluate, set-arity actions fire.
     if item is not None:
         subjects["item"] = (item.id,)
     initial = Packet(facts=facts, subjects=subjects)
@@ -363,25 +313,12 @@ async def run_graph(
     source: RunSource = RunSource.EVENT,
     event: Event | None = None,
 ) -> executor.RunReport | None:
-    """Execute one automation's graph over an initial packet.
-
-    An APPLYING walk is RECORDED (RADD-1266): the report the walk builds is
-    stored in the dry run's own shape, in the same transaction as the run, so
-    "what did it do" is answered by the panel that answers "what would it do".
-    A dry run (`apply=False`) writes nothing — a validation walk included. A
-    walk that RAISES is recorded as failed and emits `automation.run_failed`
-    rather than escaping into the consumer loop, so one broken automation does
-    not stall every other rule for the same event.
-
-    Every entry point funnels through here — event, schedule and manual — so the
-    branching semantics are defined once. Returns None when the stored graph will
-    not load, which is a data problem to log rather than an exception to escape
-    into the consumer loop and stall the cursor.
-
-    `deadline` is a wall-clock budget the intake path sets (spec 119): its walk
-    runs inside a request that is holding the project's number lock, so a node
-    waiting on a model has to be told when to stop waiting. The consumer and the
-    scheduler pass none — nothing is blocked on them.
+    """Execute one automation's graph over an initial packet — the single entry
+    for event, schedule and manual runs. An APPLYING walk is recorded in the dry
+    run's shape (RADD-1266); a walk that raises is recorded as failed and emits
+    `automation.run_failed` instead of stalling the consumer. Returns None when
+    the stored graph will not load. `deadline` is the intake path's wall-clock
+    budget (it holds the project's number lock).
     """
     try:
         nodes, edges, triggers = await executor.load_graph(rule)
@@ -415,6 +352,17 @@ async def run_graph(
     # at what chain depth — one deeper than the event that started it, when that
     # event was itself another automation's change.
     depth = (int(getattr(event, "automation_depth", 0) or 0) if getattr(event, "automated", False) else 0) + 1
+    record = partial(
+        runs.record,
+        session,
+        automation_id=rule.id,
+        trigger_node_id=trigger.id,
+        source=source,
+        event_id=getattr(event, "id", None),
+        event_type=getattr(event, "event_type", "") or "",
+        started_at=started_at,
+        actor_id=author.id,
+    )
     try:
         if owner_error:
             raise ValueError("The automation execution account is unavailable; explicitly assign an active owner")
@@ -436,55 +384,48 @@ async def run_graph(
             raise
         logger.exception("automations: %s failed while running", rule.name)
         error = f"{exc.__class__.__name__}: {exc}"
-        await runs.record(
-            session,
-            automation_id=rule.id,
-            trigger_node_id=trigger.id,
-            source=source,
-            event_id=getattr(event, "id", None),
-            event_type=getattr(event, "event_type", "") or "",
-            started_at=started_at,
-            actor_id=author.id,
-            status=RunStatus.FAILED,
-            result=None,
-            error=error,
-        )
-        await events.emit(
-            session,
-            event_type=AutomationEvent.RUN_FAILED,
-            entity_type=AutomationEntity.RULE,
-            entity_id=rule.id,
-            actor_id=SYSTEM_ACTOR_ID,
-            payload={"name": rule.name, "trigger_node_id": trigger.id, "error": error},
-            automated_cause=True,  # the engine's own report, whatever raised
-        )
+        await record(status=RunStatus.FAILED, result=None, error=error)
+        await _emit_run_failed(session, rule, trigger.id, error)
         return None
     if apply:
         result = await _result_of(
             session, rule, nodes, report, trigger, initial.item_ids[0] if initial.item_ids else None
         )
         keys = await _keys_for(session, report)
-        await runs.record(
-            session,
-            automation_id=rule.id,
-            trigger_node_id=trigger.id,
-            source=source,
-            event_id=getattr(event, "id", None),
-            event_type=getattr(event, "event_type", "") or "",
-            started_at=started_at,
-            actor_id=author.id,
+        failures = [p.detail for p in report.plans if p.failed]
+        await record(
             status=runs.status_of(report),
             result=result,
-            error="; ".join(p.detail for p in report.plans if p.failed),
+            error="; ".join(failures),
             item_keys=[keys[i] for i in initial.item_ids if i in keys],
         )
-        failures = [p.detail for p in report.plans if p.failed]
         if failures:
-            await events.emit(session, event_type=AutomationEvent.RUN_FAILED,
-                entity_type=AutomationEntity.RULE, entity_id=rule.id, actor_id=SYSTEM_ACTOR_ID,
-                payload={"name": rule.name, "trigger_node_id": trigger.id, "error": "; ".join(failures)},
-                automated_cause=True)
+            await _emit_run_failed(session, rule, trigger.id, "; ".join(failures))
     return report
+
+
+async def _emit_run_failed(session: AsyncSession, rule, trigger_node_id: str, error: str) -> None:
+    await events.emit(
+        session,
+        event_type=AutomationEvent.RUN_FAILED,
+        entity_type=AutomationEntity.RULE,
+        entity_id=rule.id,
+        actor_id=SYSTEM_ACTOR_ID,
+        payload={"name": rule.name, "trigger_node_id": trigger_node_id, "error": error},
+        automated_cause=True,  # the engine's own report, whatever raised
+    )
+
+
+async def _system_actor(session: AsyncSession, event: Event) -> User | None:
+    """The system actor, or None (logged) when the migration has not seeded it."""
+    system_user = await session.get(User, SYSTEM_ACTOR_ID)
+    if system_user is None:
+        logger.error(
+            "automations: system actor %s missing — run the migration; skipping event %s",
+            SYSTEM_ACTOR_ID,
+            event.id,
+        )
+    return system_user
 
 
 def _scheduled_facts(event: Event) -> conditions.EventFacts:
@@ -517,13 +458,8 @@ async def apply_scheduled(session: AsyncSession, event: Event) -> None:
     rule = await session.get(Automation, rule_id)
     if rule is None or not rule.enabled:
         return  # deleted / disabled between emit and consume
-    system_user = await session.get(User, SYSTEM_ACTOR_ID)
+    system_user = await _system_actor(session, event)
     if system_user is None:
-        logger.error(
-            "automations: system actor %s missing — run the migration; skipping event %s",
-            SYSTEM_ACTOR_ID,
-            event.id,
-        )
         return
     # An empty packet: item actions skip, universal actions fire, which is how
     # "post to chat every Monday" works with no items involved at all, and a
@@ -566,12 +502,8 @@ async def run_manual(
     )
     if report is None:
         return False
-    # "Did it apply?" used to mean "did the one SLQ condition match". A graph has
-    # no single condition, so the honest answer is whether any action node was
-    # actually reached with this item — which is also what the caller shows the
-    # person who pressed the button.
-    # RADD-1323: asked of the plans, not of item counts — a run started from a
-    # page carries no items, and "did anything apply" is the same question.
+    # "Did it apply" = did any action node resolve on this run (RADD-1323: asked of
+    # the plans, since a page-seeded run carries no items).
     actions = _action_node_ids(rule)
     return any(plan.resolves for plan in report.plans if plan.node_id in actions)
 
@@ -617,19 +549,10 @@ async def preview(
     event_payload: dict | None = None,
     project_id: uuid.UUID | None = None,
 ) -> RuleTestResult:
-    """Walk the graph with the appliers off, and report what each node did.
-
-    Preview uses the real planners without applying actions. Unsafe evaluators
-    are skipped explicitly, and branches needing created objects or action
-    outputs are reported as unavailable. Recorded events supply real facts;
-    subject values are read from the current database.
-
-    The seed item is optional (RADD-921). A graph fed by a search node or a
-    schedule trigger has no triggering item, and requiring one made exactly those
-    graphs — the ones with a query worth checking — the ones that could not be
-    dry-run. The walk starts from the given item, or from nothing, and a search
-    node produces what it would on a real run.
-    """
+    """Walk the graph with the appliers off and report what each node did. The
+    seed is optional (RADD-921): search- and schedule-fed graphs have none. Nodes
+    that are not `preview_safe` are skipped, and branches needing created objects
+    are reported as unavailable. Recorded events supply real facts."""
     system_user = await session.get(User, SYSTEM_ACTOR_ID)
     try:
         nodes, _edges, triggers = await executor.load_graph(rule)

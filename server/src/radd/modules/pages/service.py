@@ -32,7 +32,7 @@ from . import (
 )
 from .core import page_slugify
 from .hooks import PageBodyAutosaved, PageBodyWriting, PageHook, PageVersionBumped
-from .models import Page, PagePathHistory, PageSpace, PageVersion
+from .models import Page, PagePathHistory, PageVersion
 
 if TYPE_CHECKING:  # deferred: auth loads before pages
     from radd.modules.auth.models import User
@@ -45,12 +45,8 @@ from .schemas import (
     PageSpaceRead,
 )
 from .spaces import get_space
-from .options import list_options as space_options
 from .types import PageEntity, PageEvent, RestoreKind
 from radd.clock import utcnow
-
-__all__ = ["get_space", "space_options"]  # re-exported: the space half of the module's seam
-
 
 
 async def _emit_page(
@@ -61,14 +57,8 @@ async def _emit_page(
     payload: dict,
     diff: list[dict] | None = None,
 ) -> None:
-    """Every page event names its PAGE and its SPACE as subjects (spec 118).
-
-    The kernel writes both refs from the ids (RADD-923), so a consumer gets the
-    slugs it needs to link and the space id a subscription is matched on without
-    this module handing anyone a shape it built itself. The remaining payload
-    keys are page-event DATA — what changed, and whether a delete was hard —
-    which is the split the subject seam draws.
-    """
+    """Every page event names its PAGE and SPACE as subjects; the kernel writes
+    both refs (RADD-923). The payload keeps only page-event data."""
     await events.emit(
         session,
         event_type=event_type,
@@ -100,18 +90,12 @@ async def list_pages(
     include_archived: bool = False,
     actor: "User | None" = None,
 ) -> list[PageSummary]:
-    """Flat tree rows (client builds the hierarchy). Archived subtrees are
-    pruned unless `include_archived` (the page.manage restore listing).
-
-    `actor` drops the pages they may not read (RADD-792). Optional so internal
-    callers (export, backlinks) keep the unfiltered tree; every ACTOR-facing
-    caller passes one, because a restricted page listed in the rail would leak
-    its title, which is usually the part worth restricting.
-    """
+    """Flat tree rows (the client builds the hierarchy); archived subtrees pruned
+    unless `include_archived`. `actor` drops the pages they may not read
+    (RADD-792) — every actor-facing caller passes one, since a listed title
+    leaks what a restriction hides."""
     rows = await _space_rows(session, space_id)
     if actor is not None:
-        from . import page_access
-
         readable = await page_access.readable_page_ids(session, actor, list(rows))
         rows = [row for row in rows if row.id in readable]
     parent_of = {row.id: row.parent_id for row in rows}
@@ -123,8 +107,7 @@ async def list_pages(
     children: set[uuid.UUID] = {
         row.parent_id for row in rows if row.parent_id is not None and row.id in visible
     }
-    # RADD-718: one query for the whole tree. A query per row is how a 200-page
-    # space becomes slow the moment labels are shown in the rail.
+    # RADD-718: one labels query for the whole tree, not one per row.
     label_names = await page_labels.labels_for_pages(session, [row.id for row in rows])
     # RADD-1233: paths fold over the rows already in hand — no extra query.
     row_paths = core.page_paths(rows)
@@ -177,11 +160,8 @@ async def _free_slug(
     exclude_id: uuid.UUID | None = None,
 ) -> str:
     """`candidate` made unique among the LIVE SIBLINGS under `parent_id`
-    (RADD-1233; per-space before that). The taken set is read per call rather
-    than caught as an IntegrityError: a 409 on 'a page over there already uses
-    this URL' would be a strange thing to show someone who only typed a title.
-    Archived siblings do not count — the name is free the moment its holder is
-    archived, which is the point of keying pages by id."""
+    (RADD-1233) — read per call rather than caught as an IntegrityError, since a
+    409 is a strange answer to typing a title. Archived siblings do not count."""
     query = select(Page.slug).where(
         Page.space_id == space_id, Page.parent_id == parent_id, Page.archived_at.is_(None)
     )
@@ -198,14 +178,12 @@ async def _reslug(
     *,
     parent_id: uuid.UUID | None | object = _SAME_PARENT,
 ) -> bool:
-    """Give `page` the slug `candidate`, made free among its live siblings —
-    under `parent_id` when a move is in flight, since the siblings it must not
-    collide with are the ones it is about to have. True if it changed.
+    """Give `page` the slug `candidate`, free among its live siblings — under
+    `parent_id` when a move is in flight. True if it changed.
 
-    Runs BEFORE the caller assigns a new parent: the taken-set query autoflushes
-    pending changes, and a flushed row with the new parent and the old slug is
-    the unique violation this function exists to avoid. Remembering the old
-    ADDRESS is `_remember_paths`' job, once every change of the write is in."""
+    Runs BEFORE the caller assigns a new parent: the taken-set query autoflushes,
+    and a flushed row with the new parent and the old slug is the unique
+    violation this avoids."""
     under = page.parent_id if parent_id is _SAME_PARENT else parent_id
     slug = await _free_slug(session, page.space_id, under, candidate, exclude_id=page.id)
     if slug == page.slug:
@@ -217,11 +195,9 @@ async def _reslug(
 def _remember_paths(
     session: AsyncSession, rows: list[Page], before: dict[uuid.UUID, str]
 ) -> list[uuid.UUID]:
-    """Write a `page_path_history` row for every page whose address changed
-    between `before` (paths computed over `rows` before the write) and now.
-    `rows` are the space's ORM rows, mutated in place by the write, so the
-    'after' fold costs no query. A renamed or moved ancestor moves its whole
-    subtree's addresses, and every one of them is a link somebody may hold."""
+    """A `page_path_history` row for every page whose path changed since `before`
+    (computed over `rows`, which the write mutates in place — so 'after' costs no
+    query). A moved ancestor moves its whole subtree's addresses."""
     after = core.page_paths(rows)
     changed: list[uuid.UUID] = []
     for row in rows:
@@ -233,28 +209,16 @@ def _remember_paths(
 
 
 def _may_import(permissions: "frozenset" = frozenset()) -> bool:
-    """Spec 117. The import overrides (author, timestamps, external identity) are
-    honored only for a caller that already holds `page.manage` in the space.
-
-    Deferred import: `auth` loads before `pages`, and taking the enum at module
-    scope would invert that. Pages have no project, so `PROJECT_MANAGE` — the atom
-    `comments` gates its own overrides on — is not the right one here.
-    """
-    from radd.modules.auth.types import Permission
-
-    return Permission.PAGE_MANAGE in permissions
+    """Spec 117: import overrides (author, dates, external identity) need
+    `page.manage` in the space."""
+    return authz.Permission.PAGE_MANAGE in permissions
 
 
 async def find_by_external(
     session: AsyncSession, external_source: str, external_id: str
 ) -> Page | None:
-    """The page a previous import made from that foreign row, if any (spec 117).
-
-    This is what makes re-import an upsert instead of a duplicate, and what lets a
-    link resolve to a page some ENTIRELY OTHER run created — the case the run
-    ledger cannot answer, because it is scoped to one run and its rollback
-    deletes it.
-    """
+    """The page a previous import made from that foreign row (spec 117) — what
+    makes re-import an upsert, across runs."""
     if not external_id:
         return None
     return await session.scalar(
@@ -289,16 +253,11 @@ async def create_page(
     )
     body = data.body
     if not body and data.template:
-        # RADD-712. An explicit body wins — naming a template AND supplying a
-        # body means the caller has decided, and silently overwriting it would be
-        # the surprising behaviour.
+        # RADD-712: an explicit body wins over a named template.
         template = await page_templates.by_name(session, data.template, space_id=space.id)
         author = await _actor_name(session, actor_id)
         body = page_templates.render(template.body, title=data.title, author=author)
-    # Spec 117. An import states the author and the dates; everything else is the
-    # actor and `now`. Gated together because they are one act — a page credited
-    # to its real author but stamped today is not more honest than one stamped
-    # correctly and credited wrongly.
+    # Spec 117: an import states the author AND the dates — one act, gated together.
     importing = _may_import(permissions)
     author_id = data.author_id if (importing and data.author_id) else actor_id
     page = Page(
@@ -315,8 +274,7 @@ async def create_page(
         external_source=data.external_source if importing else "",
         external_id=data.external_id if importing else "",
     )
-    # Naive UTC, matching the columns' server defaults — the same conversion
-    # `comments.create_authorized_comment` does for its backdated rows.
+    # Naive UTC, like the columns' server defaults.
     if importing and data.created_at is not None:
         page.created_at = data.created_at.replace(tzinfo=None)
     if importing and (data.updated_at or data.created_at) is not None:
@@ -325,23 +283,25 @@ async def create_page(
     await session.flush()
     await backlinks.reindex(session, page)  # RADD-713
     await page_mentions.reindex(session, page)  # RADD-943
-    # `space_id` is gone from the payload: the `page_space` SUBJECT carries it,
-    # as a ref with a name and a slug rather than a bare uuid string nobody
-    # could render (spec 118).
     await _emit_page(session, PageEvent.PAGE_CREATED, page, actor_id, {"title": page.title})
     return page
 
 
 async def seal_history(session: AsyncSession, page_id: uuid.UUID) -> Page | None:
-    """RADD-1244: close a live editing session whose last autosaves wrote no
-    history row — the tab crashed, the socket dropped, the process stopped —
-    by writing the row for the CURRENT content and bumping the version. Called
-    by the collab room when it drops with unsealed autosaves; a no-op when the
-    page is gone. Every session therefore ends with a bump, by the client's
-    final save or by this."""
+    """RADD-1244: close a live session whose last autosaves wrote no history row —
+    a row for the CURRENT content, and a bump. Called by the collab room when it
+    drops unsealed; a no-op when the page is gone."""
     page = await session.get(Page, page_id)
     if page is None:
         return None
+    _snapshot_current(session, page)
+    page.version += 1
+    await session.flush()
+    return page
+
+
+def _snapshot_current(session: AsyncSession, page: Page) -> None:
+    """A history row for the page's CURRENT content, written before it changes."""
     session.add(
         PageVersion(
             page_id=page.id,
@@ -351,9 +311,6 @@ async def seal_history(session: AsyncSession, page_id: uuid.UUID) -> Page | None
             author_id=page.updated_by,
         )
     )
-    page.version += 1
-    await session.flush()
-    return page
 
 
 async def _history_window_open(session: AsyncSession, page_id: uuid.UUID) -> bool:
@@ -413,9 +370,8 @@ async def update_page(
         "position": page.position,
     }
     body_changes = data.body is not None and data.body != page.body
-    # Spec 122: whoever holds the page's LIVE document gets to refuse a body
-    # write that did not come from it, or to vouch for one that did. `pages`
-    # knows nothing about rooms — with no subscriber this is a no-op.
+    # Spec 122: the live document's holder may refuse a body write not from it, or
+    # vouch for one that is. With no subscriber this is a no-op.
     writing = PageBodyWriting(
         page=page,
         actor_id=actor_id,
@@ -424,8 +380,7 @@ async def update_page(
     )
     if data.body is not None or data.collab_session is not None:
         await hooks.dispatch(session, PageHook.BODY_WRITING, writing)
-    # A save from the room skips the optimistic check: the live document IS the
-    # current version, and the number the client last saw is stale by design.
+    # A save from the room skips the optimistic check: the room IS the current version.
     if (
         not writing.live_editor
         and data.expected_version is not None
@@ -438,9 +393,8 @@ async def update_page(
 
     changed: list[str] = []
     moved = False
-    # RADD-1233: anything that can change the page's ADDRESS — a move, a slug,
-    # or a title that upgrades a placeholder slug — snapshots the space's paths
-    # first, so the old ones can be remembered for stale links afterwards.
+    # RADD-1233: anything that can change the ADDRESS (a move, a slug, a title
+    # upgrading a placeholder slug) snapshots the paths first, for stale links.
     address_may_change = (
         ("parent_id" in data.model_fields_set and data.parent_id != page.parent_id)
         or (data.slug is not None and data.slug != page.slug)
@@ -461,10 +415,8 @@ async def update_page(
             parent_of = {row.id: row.parent_id for row in space_rows}
             if core.would_create_cycle(page.id, data.parent_id, parent_of):
                 raise ConflictError(PageEntity.PAGE, reason="move would create a cycle")
-        # RADD-1233: the slug is unique among SIBLINGS, and the page is about
-        # to change which pages those are. A collision under the new parent
-        # gets the numbered suffix, with the old slug remembered for stale
-        # links. Decided BEFORE the parent moves (see `_reslug`).
+        # RADD-1233: slugs are unique among SIBLINGS, which a move changes — decided
+        # BEFORE the parent moves (see `_reslug`).
         if await _reslug(session, page, page.slug, parent_id=data.parent_id):
             changed.append("slug")
         page.parent_id = data.parent_id
@@ -474,12 +426,9 @@ async def update_page(
         page.position = data.position
         changed.append("position")
         moved = True
-    # RADD-702: the slug changes ONLY when asked. A title edit deliberately does
-    # not touch it — the URL is a promise to whoever already has the link, and
-    # "fixed a typo in the heading" is not a reason to break it.
-    # RADD-860: …except a PLACEHOLDER slug. Every UI-created page is born
-    # "Untitled" → `untitled-N`, and a URL nobody chose protects nobody — the
-    # first REAL title upgrades it. Established slugs stay immovable.
+    # RADD-702: the slug changes only when asked — a URL is a promise to whoever
+    # has the link. RADD-860: except a PLACEHOLDER (`untitled-N`, which every
+    # UI-created page is born with): the first real title upgrades it.
     if data.slug is not None and data.slug != page.slug:
         if await _reslug(session, page, data.slug) and "slug" not in changed:
             changed.append("slug")
@@ -496,32 +445,19 @@ async def update_page(
 
     if core.should_snapshot(page.title, page.body, data.title, data.body):
         importing = _may_import(permissions)
-        # Spec 117: an import writes a page over several passes; those passes are
-        # not edits, and letting them consume version numbers collides with the
-        # page's real imported history.
+        # Spec 117: an import's construction passes must not consume version numbers.
         quiet_write = importing and data.suppress_version
-        # Spec 122: a collaborative session's autosaves coalesce — one history
-        # row per window (or per session, via `final`), never one per pause in
-        # typing. RADD-1244: `version` moves WITH the row, never without it —
-        # the number a person sees counts what History can open. A live
-        # autosave inside the window writes the body and nothing else; the
-        # collab room seals the session (row + bump) if it ends without a
-        # final save, so the concurrency token never lags a saved body.
+        # Spec 122: live autosaves coalesce — one history row per window (or on
+        # `final`). RADD-1244: `version` moves WITH the row; an autosave inside the
+        # window writes only the body, and the room seals the session if it ends
+        # without a final save.
         snapshot = not quiet_write and (
             not writing.live_editor
             or data.final
             or await _history_window_open(session, page.id)
         )
         if snapshot:
-            session.add(
-                PageVersion(
-                    page_id=page.id,
-                    version=page.version,
-                    title=page.title,
-                    body=page.body,
-                    author_id=page.updated_by,
-                )
-            )
+            _snapshot_current(session, page)
         if data.title is not None and data.title != page.title:
             page.title = data.title
             changed.append("title")
@@ -550,9 +486,7 @@ async def update_page(
             page.updated_at = data.updated_at.replace(tzinfo=None)
 
     await session.flush()
-    # RADD-713: only when the body moved. A rename or a reposition cannot change
-    # what this page links to, and reindexing on every save would put a delete +
-    # N inserts behind dragging a page in the tree.
+    # RADD-713: only when the body moved — a rename or a drag cannot change links.
     if "body" in changed:
         await backlinks.reindex(session, page)
         await page_mentions.reindex(session, page)
@@ -562,19 +496,8 @@ async def update_page(
         await _emit_page(session, PageEvent.PAGE_MOVED, page, actor_id, payload, diff)
     if set(changed) - {"parent_id", "position"}:
         await _emit_page(session, PageEvent.PAGE_UPDATED, page, actor_id, payload, diff)
-        # RADD-719. Auto-watch on edit, like items: touching something is the
-        # strongest signal you care what happens to it next, and a watch feature
-        # nobody opts into has no watchers.
-        #
-        # Spec 118 removed the fan-out that used to sit beside this line. It was
-        # synchronous "because page edits are rare and a consumer would mean a
-        # second delivery path to keep correct" — and by the time a space could
-        # be SUBSCRIBED to, that second path was exactly what it had become: it
-        # knew about watchers and nothing about subscribers, and it ran before
-        # the permission gate every item notification passes. The watchers table
-        # and its service stay; who hears about the edit is now decided in the
-        # one place that decides it for issues (`notify.consumer`), off this
-        # event.
+        # RADD-719: editing auto-watches. Who hears about the edit is notify's
+        # decision, off this event (spec 118).
         await page_watchers.watch(session, page.id, actor_id)
     return page
 
@@ -593,31 +516,15 @@ async def archive_page(session: AsyncSession, page_id: uuid.UUID, actor_id: uuid
 async def unarchive_page(
     session: AsyncSession, page_id: uuid.UUID, actor_id: uuid.UUID
 ) -> Page:
-    """Clear `archived_at` on the page — and on every archived ANCESTOR.
-
-    The tree hides a page whose ancestor is archived (`core.visible_page_ids`),
-    so restoring only the page would leave it exactly as invisible as before
-    and the button would read as broken (RADD-1228). Restoring the chain puts
-    the page back at the path it was archived from; re-parenting it to the
-    nearest live ancestor was rejected because that change would outlive both
-    restores. Siblings under a restored ancestor that were archived in their
-    own right stay archived — the chain is the minimum that makes this page
-    reachable.
-    """
+    """Clear `archived_at` on the page AND every archived ancestor — the tree
+    hides a page under an archived ancestor (RADD-1228). Archived siblings stay
+    archived."""
     page = await get_page(session, page_id)
     space_rows = await _space_rows(session, page.space_id)
     paths_before = core.page_paths(space_rows)
     by_id = {row.id: row for row in space_rows}
-    chain: list[Page] = [page]
-    current = page.parent_id
-    for _ in range(len(by_id) + 1):
-        if current is None:
-            break
-        ancestor = by_id.get(current)
-        if ancestor is None:
-            break
-        chain.append(ancestor)
-        current = ancestor.parent_id
+    parent_of = {row.id: row.parent_id for row in space_rows}
+    chain = [page, *(by_id[ancestor] for ancestor in core.ancestor_ids(parent_of, page.id))]
     for row in chain:
         if row.archived_at is not None:
             # RADD-1233: while it was archived a live sibling may have taken
@@ -646,18 +553,13 @@ async def hard_delete_page(
         raise ConflictError(
             PageEntity.PAGE, reason=f"page has {live_children} non-archived child page(s)"
         )
-    # BEFORE the row goes, not after. `_emit_page` names the page as a SUBJECT
-    # and the kernel resolves a subject by READING the row (RADD-923), so
-    # emitting after the delete + flush resolved it to NULL — the one event about
-    # a page nobody can look up afterwards was the one that carried no page. The
-    # order is invisible outside this function: the outbox row and the deletion
-    # commit together or not at all.
+    # BEFORE the row goes: the kernel resolves the page SUBJECT by reading the row
+    # (RADD-923). Outbox row and deletion commit together, so the order is local.
     await _emit_page(
         session, PageEvent.PAGE_DELETED, page, actor_id,
         {"title": page.title, "hard": True},
     )
-    # RADD-717: page comments are polymorphic and carry no FK, so they do not
-    # cascade — remove them with the page rather than orphaning them.
+    # RADD-717: page comments carry no FK, so they go with the page explicitly.
     from radd.modules.comments import service as comments_service
     from radd.modules.comments.types import CommentParentType
 
@@ -668,69 +570,63 @@ async def hard_delete_page(
 
 async def _depths(session: AsyncSession, space_id: uuid.UUID) -> dict[uuid.UUID, int]:
     """Page id -> depth in the space's tree (root = 0)."""
-    by_id = {row.id: row for row in await _space_rows(session, space_id)}
-    depths: dict[uuid.UUID, int] = {}
-    for page_id, row in by_id.items():
-        depth, cursor = 0, row
-        for _ in range(len(by_id) + 1):
-            if cursor.parent_id is None or cursor.parent_id not in by_id:
-                break
-            depth += 1
-            cursor = by_id[cursor.parent_id]
-        depths[page_id] = depth
-    return depths
+    parent_of = {row.id: row.parent_id for row in await _space_rows(session, space_id)}
+    return {page_id: len(core.ancestor_ids(parent_of, page_id)) for page_id in parent_of}
+
+
+async def _bulk(
+    session: AsyncSession,
+    space_id: uuid.UUID,
+    page_ids: list[uuid.UUID],
+    guard,
+    *,
+    deepest_first: bool,
+    live_reason: str,
+    act,
+) -> tuple[list[uuid.UUID], list[tuple[uuid.UUID, str]]]:
+    """RADD-1249: act on a selection of ARCHIVED pages one at a time, in tree
+    order. `guard(page_id)` is the router's per-page gate; a refusal (or a live
+    page, `live_reason`) skips that page with its reason, never the selection."""
+    depths = await _depths(session, space_id)
+    order = -1 if deepest_first else 1
+    done: list[uuid.UUID] = []
+    skipped: list[tuple[uuid.UUID, str]] = []
+    for page_id in sorted(dict.fromkeys(page_ids), key=lambda pid: order * depths.get(pid, 0)):
+        try:
+            page = await guard(page_id)
+            if page.space_id != space_id:
+                raise NotFoundError(PageEntity.PAGE, page_id)
+            if page.archived_at is None:
+                skipped.append((page_id, live_reason))
+                continue
+            await act(page_id)
+            done.append(page_id)
+        except RaddError as error:
+            skipped.append((page_id, str(error)))
+    return done, skipped
 
 
 async def bulk_restore_pages(
     session: AsyncSession, space_id: uuid.UUID, page_ids: list[uuid.UUID], actor, guard
 ) -> tuple[list[uuid.UUID], list[tuple[uuid.UUID, str]]]:
-    """RADD-1249: restore a selection. Ancestors first, so a parent and its
-    child selected together restore once each and a child's chain-restore
-    (RADD-1228) never precedes its parent's own row. `guard(page_id)` is the
-    per-page gate the router supplies; a refusal skips that page with its
-    reason instead of failing the selection."""
-    depths = await _depths(session, space_id)
-    done: list[uuid.UUID] = []
-    skipped: list[tuple[uuid.UUID, str]] = []
-    for page_id in sorted(dict.fromkeys(page_ids), key=lambda pid: depths.get(pid, 0)):
-        try:
-            page = await guard(page_id)
-            if page.space_id != space_id:
-                raise NotFoundError(PageEntity.PAGE, page_id)
-            if page.archived_at is None:
-                skipped.append((page_id, "already live"))
-                continue
-            await unarchive_page(session, page_id, actor.id)
-            done.append(page_id)
-        except RaddError as error:
-            skipped.append((page_id, str(error)))
-    return done, skipped
+    """Ancestors first, so a child's chain-restore (RADD-1228) never precedes its
+    parent's own."""
+    return await _bulk(
+        session, space_id, page_ids, guard, deepest_first=False, live_reason="already live",
+        act=lambda page_id: unarchive_page(session, page_id, actor.id),
+    )
 
 
 async def bulk_delete_pages(
     session: AsyncSession, space_id: uuid.UUID, page_ids: list[uuid.UUID], actor, guard
 ) -> tuple[list[uuid.UUID], list[tuple[uuid.UUID, str]]]:
-    """RADD-1249: delete a selection permanently. Deepest first, so a child
-    selected beside its parent is removed by its own request rather than by
-    the parent's FK cascade a moment later — the identity map would otherwise
-    still hold the child and try to delete a row that is gone. A page with
-    live children is refused per page (the single-page rule) and reported."""
-    depths = await _depths(session, space_id)
-    done: list[uuid.UUID] = []
-    skipped: list[tuple[uuid.UUID, str]] = []
-    for page_id in sorted(dict.fromkeys(page_ids), key=lambda pid: -depths.get(pid, 0)):
-        try:
-            page = await guard(page_id)
-            if page.space_id != space_id:
-                raise NotFoundError(PageEntity.PAGE, page_id)
-            if page.archived_at is None:
-                skipped.append((page_id, "not archived — archive it first"))
-                continue
-            await hard_delete_page(session, page_id, actor.id)
-            done.append(page_id)
-        except RaddError as error:
-            skipped.append((page_id, str(error)))
-    return done, skipped
+    """Deepest first: otherwise the parent's FK cascade removes a selected child
+    the identity map still holds, and its own delete hits a row that is gone."""
+    return await _bulk(
+        session, space_id, page_ids, guard, deepest_first=True,
+        live_reason="not archived — archive it first",
+        act=lambda page_id: hard_delete_page(session, page_id, actor.id),
+    )
 
 
 async def page_read(session: AsyncSession, page: Page) -> PageRead:
@@ -738,24 +634,17 @@ async def page_read(session: AsyncSession, page: Page) -> PageRead:
     space = await get_space(session, page.space_id)
     by_id = {row.id: row for row in await _space_rows(session, page.space_id)}
     row_paths = core.page_paths(by_id.values())
-    trail: list[PageBreadcrumb] = []
-    current = page.parent_id
-    for _ in range(len(by_id) + 1):
-        if current is None:
-            break
-        ancestor = by_id.get(current)
-        if ancestor is None:
-            break
-        trail.append(
-            PageBreadcrumb(
-                id=ancestor.id,
-                number=ancestor.number,
-                title=ancestor.title,
-                slug=ancestor.slug,
-                path=row_paths[ancestor.id],
-            )
+    parent_of = {row_id: row.parent_id for row_id, row in by_id.items()}
+    trail = [
+        PageBreadcrumb(
+            id=ancestor.id,
+            number=ancestor.number,
+            title=ancestor.title,
+            slug=ancestor.slug,
+            path=row_paths[ancestor.id],
         )
-        current = ancestor.parent_id
+        for ancestor in (by_id[ancestor_id] for ancestor_id in core.ancestor_ids(parent_of, page.id))
+    ]
     label_names = [label.name for label in await page_labels.labels_of(session, page.id)]
     return PageRead(
         id=page.id,
@@ -803,19 +692,10 @@ async def write_version(
     created_at: datetime | None = None,
     permissions: "frozenset" = frozenset(),
 ) -> PageVersion:
-    """Insert one historical revision directly (spec 117).
-
-    History normally accretes as a side effect of `update_page`, and for an
-    IMPORT that is the wrong shape: replaying N revisions to reconstruct a history
-    that is by definition already final would fire N `page.updated` events, N
-    watcher fan-outs and 2N reindex passes per page, to arrive at rows this writes
-    in one statement.
-
-    Mind the off-by-one `PageVersion` is built on: a row holds the PREVIOUS
-    content — version N's row is written when N+1 becomes current — so an importer
-    writes revisions 1..N-1 here and revision N as the live `pages` row, with
-    `page.version = N`. Getting it backwards yields a History tab whose newest
-    entry duplicates the current body while revision 1 is silently lost.
+    """Insert one historical revision directly (spec 117; page.manage only) —
+    replaying through `update_page` would fire N events and 2N reindexes.
+    Off-by-one: a row holds the PREVIOUS content, so an importer writes revisions
+    1..N-1 here and N as the live row (`page.version = N`).
     """
     if not _may_import(permissions):
         raise ForbiddenError("page.manage is required to write history directly")
@@ -849,23 +729,13 @@ async def restore_version(
     """Restore = a NEW version whose content is the old one (history is linear)."""
     page = await get_page(session, page_id)
     snapshot = await get_version(session, page_id, version)
-    session.add(
-        PageVersion(
-            page_id=page.id,
-            version=page.version,
-            title=page.title,
-            body=page.body,
-            author_id=page.updated_by,
-        )
-    )
+    _snapshot_current(session, page)
     page.title = snapshot.title
     page.body = snapshot.body
     page.version += 1
     page.updated_by = actor_id
     await session.flush()
-    # A restore replaces the body, so both derived indexes describe the version
-    # that was just superseded. RADD-713 missed this leg — the backlinks index
-    # has been stale after every restore since it shipped.
+    # A restore replaces the body: both derived indexes must follow it.
     await backlinks.reindex(session, page)
     await page_mentions.reindex(session, page)
     await _emit_page(
@@ -881,55 +751,9 @@ async def restore_version(
 
 
 async def _actor_name(session: AsyncSession, actor_id: uuid.UUID) -> str:
-    """For the `{{author}}` placeholder. Falls back to the empty string rather
-    than raising: a template should still render for a service account."""
+    """For `{{author}}`; empty rather than raising, so a template still renders."""
     from radd.modules.auth.models import User
 
     user = await session.get(User, actor_id)
     return user.name if user else ""
 
-
-# --- restricted-row filters for the list surfaces (RADD-792) -----------------
-
-
-async def drop_restricted_results(session: AsyncSession, actor: "User", results: list):
-    """FTS hits the actor may not read, removed. Search is the surface where a
-    restriction leaks most cheaply: the snippet and the title are the content."""
-    if not results:
-        return results
-    from . import page_access
-
-    pages = list(
-        (
-            await session.execute(
-                select(Page).where(Page.id.in_([r.page_id for r in results]))
-            )
-        ).scalars()
-    )
-    readable = await page_access.readable_page_ids(session, actor, pages)
-    return [r for r in results if r.page_id in readable]
-
-
-async def drop_restricted_labelled(session: AsyncSession, actor: "User", rows: list):
-    """The same, for a label index — `radd:label-list` renders these into a page
-    that anyone in the space can open."""
-    if not rows:
-        return rows
-    from . import page_access
-
-    pages = list(
-        (
-            await session.execute(
-                select(Page).where(Page.id.in_([row.id for row in rows]))
-            )
-        ).scalars()
-    )
-    readable = await page_access.readable_page_ids(session, actor, pages)
-    return [row for row in rows if row.id in readable]
-
-
-async def space_names(session: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
-    """Names for a caller-authorized ID set, without space bodies or page counts."""
-    if not ids:
-        return {}
-    return dict((await session.execute(select(PageSpace.id, PageSpace.name).where(PageSpace.id.in_(ids)))).all())

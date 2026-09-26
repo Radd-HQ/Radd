@@ -26,10 +26,8 @@ router = APIRouter(tags=["mailintake"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
-#: `intake.Result` → HTTP status. The Worker turns these into SMTP outcomes, so
-#: this table decides whether a sender's mail bounces or is retried (RADD-953).
-#: An IGNORED message is 202 on purpose: it was received and deliberately
-#: discarded, and bouncing at a mail loop puts another message into the loop.
+#: `intake.Result` → HTTP status, which the Worker turns into SMTP outcomes
+#: (RADD-953). IGNORED is 202: bouncing at a mail loop feeds the loop.
 _RESULT_STATUS = {
     intake.Result.CREATED: 202,
     intake.Result.APPENDED: 202,
@@ -49,37 +47,25 @@ async def ingest_email(
 ) -> dict:
     """Accept one raw RFC822 message from a mail source (RADD-953).
 
-    **The status codes have consequences.** They become SMTP outcomes at the
-    Worker: 4xx bounces to the sender, 5xx queues and retries. So the ONLY
-    failures answered with 4xx are the ones that are genuinely the message's
-    fault — a bad signature, an unparseable body, an oversized one. Anything
-    else propagates and becomes a 5xx, because returning 4xx for a transient
-    database error silently bounces valid mail and tells the sender their
-    message was rejected by policy when it was in fact dropped by an outage.
-
-    Nothing is parsed before the signature is checked.
+    The status becomes an SMTP outcome at the Worker: 4xx bounces, 5xx retries.
+    Only the message's own faults (signature, size, unparseable) answer 4xx;
+    everything else is 5xx. Nothing is parsed before the signature is checked.
     """
     raw = await request.body()
     if len(raw) > MAX_BODY_BYTES:
-        # Cloudflare's own ceiling. Rejecting exactly what the provider would
-        # have rejected beats inventing a second limit.
         return _status(response, 413, {"error": "message too large"})
 
-    # The SOURCE row decides the secret and the routing (RADD-958). Resolved by
-    # envelope recipient, so one instance can serve several ingest addresses with
-    # different secrets — a per-tenant property the single env secret could not
-    # express. Falls back to the env secret while no row exists yet.
+    # The SOURCE row (by envelope recipient) decides the secret and the routing
+    # (RADD-958); the env secret only while no row exists.
     source = await registry.source_for_address(session, x_radd_envelope_to)
     secret = source.secret if source is not None else settings.email_ingest_secret
     if not webhook.verify_signature(raw, x_radd_signature, secret):
-        # Deliberately identical for "no secret configured", "no signature sent"
-        # and "wrong signature": a caller learning WHICH is a caller learning
-        # whether this instance is misconfigured.
+        # Identical for no secret, no signature and a wrong one: which one it was
+        # would tell a caller whether this instance is misconfigured.
         return _status(response, 401, {"error": "bad signature"})
 
     if not loops.limiter.allow(x_radd_envelope_from):
-        # A runaway autoresponder. Dropped, not bounced — and 202, because a 4xx
-        # here would generate exactly the traffic being suppressed (RADD-957).
+        # A runaway autoresponder: 202, because a bounce feeds it (RADD-957).
         logger.warning("mailintake: rate limit hit for envelope sender %r", x_radd_envelope_from)
         return _status(response, 202, {"result": "ignored", "reason": "rate limited"})
 
@@ -89,17 +75,9 @@ async def ingest_email(
         logger.warning("mailintake: unparseable message from %r", x_radd_envelope_from, exc_info=True)
         return _status(response, 400, {"error": "unparseable message"})
 
-    # Past this point every remaining failure is RADD's, not the sender's: the
-    # message has already been authenticated and parsed, so there is nothing
-    # left for it to be wrong about. So the catch is deliberately broad and the
-    # answer is always 5xx — "when in doubt, 5xx", because 5xx queues and
-    # retries while 4xx bounces.
-    #
-    # `ConflictError` is the one that made this necessary rather than
-    # theoretical: an unset or misspelled `mail_project_key` raises it, the
-    # app-wide handler maps it to 409, and the Worker would have told a customer
-    # their mail was permanently rejected because of OUR configuration. Caught
-    # here so it can never reach that handler.
+    # Past here every failure is Radd's, not the sender's — answer 5xx so the
+    # relay retries. ConflictError from a bad default project must not reach the
+    # 409 handler.
     try:
         outcome = await intake.accept(
             session,
@@ -119,9 +97,8 @@ async def ingest_email(
             plan.message_id or "(no Message-ID)",
         )
         return _status(response, 503, {"error": "intake failed; retry later"})
-    # Post-commit: never acknowledge a rolled-back item — and the commit is
-    # what puts the inbound Message-ID in the store before the receipt reads it
-    # back out as In-Reply-To. Both intake paths commit first for this reason.
+    # Post-commit: never acknowledge a rolled-back item, and the receipt's
+    # In-Reply-To reads the committed inbound id.
     if outcome.ack is not None:
         await service.send_ack(outcome.ack)
     response.status_code = _RESULT_STATUS[outcome.result]
@@ -138,12 +115,8 @@ def _status(response: Response, code: int, body: dict) -> dict:
 async def item_mail_contacts(
     item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> list[MailContactRead]:
-    """Everyone external on the item's mail thread, primary first (RADD-980).
-
-    An empty LIST rather than a 404 for an item with none: the answer to "who
-    else is on this thread" is legitimately nobody, and a collection that 404s
-    makes every caller write an error branch for the ordinary case.
-    """
+    """Everyone external on the item's mail thread, primary first (RADD-980); an
+    empty list, never a 404."""
     await items_service.require_readable_item(session, item_id, user)
     return [
         MailContactRead.model_validate(contact)
@@ -155,13 +128,8 @@ async def item_mail_contacts(
 async def item_mail_contact(
     item_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> MailContactRead:
-    """The item's PRIMARY external requester (spec 62) — 404 when it has none.
-
-    Kept singular and 404-quiet exactly as it shipped, because that is a
-    contract with clients this repo does not build. RADD-980 changed only which
-    of several rows it means: the primary, i.e. the person the ticket was raised
-    by. The plural endpoint above is the new surface.
-    """
+    """The item's PRIMARY external requester (spec 62) — 404 when it has none. Kept
+    singular as it shipped: a contract with clients this repo does not build."""
     await items_service.require_readable_item(session, item_id, user)
     contact = await service.contact_for_item(session, item_id)
     if contact is None:
@@ -173,18 +141,8 @@ async def item_mail_contact(
 async def mail_message_raw(
     message_row_id: uuid.UUID, session: Session, user: CurrentUser
 ) -> Response:
-    """Download the retained RAW bytes of one inbound message (RADD-1033).
-
-    Behind the item's own read gate — the same door its attachments use — so the
-    raw mail is reachable by exactly whoever can read the ticket it landed on,
-    and by nobody else. This is what makes retention honest: an over-eager quote
-    strip or a capped attachment is recoverable, without widening who can see the
-    customer's message.
-
-    404 when the id is unknown OR retention kept nothing (off, no Message-ID to
-    key a row off, or no storage host configured at ingest) — the two are
-    deliberately indistinguishable, so a probe learns nothing about which.
-    """
+    """Retained raw bytes of one inbound message (RADD-1033), behind the item's read
+    gate. Unknown id and "nothing retained" are the same 404."""
     row = await session.get(MailMessage, message_row_id)
     if row is None or not row.raw_storage_name:
         raise NotFoundError(MailEntity.MESSAGE, message_row_id)

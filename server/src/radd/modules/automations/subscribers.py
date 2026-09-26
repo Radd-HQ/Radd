@@ -54,30 +54,12 @@ def is_enabled() -> bool:
 async def enforce_required_validation(session: AsyncSession, subject: ItemCreating) -> None:
     """Refuse a creation that fails a REQUIRED check.
 
-    Four skips, and each is a different way of not being intake:
-
-    * **the savepoint flow's own inner create** — it validates the draft itself,
-      one level up, with the advisory bindings included; running again here
-      would duplicate every finding;
-    * **`events.automated()`** — an item the ENGINE created. An automation's own
-      output is not somebody submitting a request, and a required check that
-      refused it would break the automation rather than teach anyone anything;
-    * **`events.quiet()`** — an import. Historical rows are not intake, and
-      validating them would refuse to import exactly the badly-filled-in issues
-      the checks exist to stop being created TODAY. (The importer also asks for
-      `intake.suppressed()` in its own right, because quiet is a plan option and
-      "this is history" is not.)
-    * **machine intake** — the mail poller and the Alertmanager receiver, each
-      of which asks for `intake.suppressed()` around its create. Neither has a
-      channel to answer through: the poller marks the message Seen, so a refusal
-      would drop a customer's request with no issue and no bounce, and the
-      receiver would answer Alertmanager with a 5xx it will retry forever. A
-      check written for a person filling in a form cannot be answered by a
-      monitoring system, and refusing it silently is the worst of the options.
-
-    Only REQUIRED bindings run here. Advisory findings have nowhere to go on
-    this path — there is no one to show them to and nothing they would change —
-    so charging every API create for them would be a cost with no product.
+    Skipped for: the savepoint flow's own inner create (it validates one level
+    up, advisory bindings included); `events.automated()` (an automation's own
+    output is not intake); `events.quiet()` (imports are history); and machine
+    intake wrapped in `intake.suppressed()` (mail poller, Alertmanager — a
+    refusal there drops a request with no bounce, or 5xxs forever).
+    Only REQUIRED bindings run: advisory findings have no one to show them to.
     """
     if not is_enabled():
         return

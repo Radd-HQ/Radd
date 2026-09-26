@@ -1,16 +1,9 @@
 """Collaborative editing (spec 122): one live Yjs document per wiki page.
 
-Clients speak the y-websocket protocol over `WS /collab/pages/{id}` after a
-`POST /collab/pages/{id}/join`; the room persists its state to
-`page_collab_docs` tagged with the page version, and the write guard registered
-on `pages`' hooks refuses any body write that did not come from the room while
-an editor is connected. `pages` never imports this module.
-
-The client is this plugin's UI remote (RADD-1397): it answers the pages' "is a
-live session available?" (the SDK's `liveDocuments`) with a room, and binds the
-host's editor to it through the editor's binding extension point. With the
-plugin disabled the host ships and loads none of it.
-"""
+Join, then the socket; room state persists tagged with the page version; the
+write guard on `pages`' hooks refuses body writes not from the room while an
+editor is connected (`pages` never imports this module). The client is this
+plugin's UI remote (RADD-1397)."""
 
 from radd.kernel import PluginUiManifest, RaddPlugin
 

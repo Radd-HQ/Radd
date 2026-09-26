@@ -11,11 +11,13 @@ from radd.modules.auth.types import UserSource
 from radd.modules.events import service as events
 
 from . import rules as rules_policy
+from .kinds import every_kind
 from .models import ItemWatcher, Notification, NotificationPref, NotificationRule
-from .rules import Relation, RuleRow, RuleSet, Subject, Verdict
+from .rules import Relation, RuleRow, RuleSet, Subject
 from .types import (
     SUBSCRIPTION_SCOPES,
     SYSTEM_ACTOR_ID,
+    Channel,
     NotificationType,
     NotifyEntity,
     NotifyEvent,
@@ -36,14 +38,8 @@ async def add_watchers(
     auto: bool = True,
     actor_id: uuid.UUID | None = None,
 ) -> list[uuid.UUID]:
-    """Idempotent bulk follow — existing rows are left untouched. Returns who
-    was NEWLY added, and emits `item.watched` for each of them (RADD-1320).
-
-    Auto-watch (the reporter, an assignee, a commenter, a participant) used to
-    be silent: only the manual Watch button emitted, so no automation could
-    react to someone starting to follow an issue the way nearly everyone does.
-    `auto` rides the payload so a rule can tell the two apart, and only the
-    INSERTED rows emit, so a repeat pass over the same people stays quiet."""
+    """Idempotent bulk follow; returns who was NEWLY added and emits
+    `item.watched` (payload `auto`) for them only (RADD-1320)."""
     rows = [{"item_id": item_id, "user_id": user_id} for user_id in set(user_ids)]
     if not rows:
         return []
@@ -99,45 +95,21 @@ async def watcher_ids(session: AsyncSession, item_id: uuid.UUID) -> list[uuid.UU
     return list(result.scalars())
 
 
-async def is_watching(session: AsyncSession, item_id: uuid.UUID, user_id: uuid.UUID) -> bool:
-    return await session.get(ItemWatcher, (item_id, user_id)) is not None
-
-
 # --- who has a mailbox ---
 
 
 def mailable_user(user: User | None) -> TypeGuard[User]:
     """Is there a PERSON's mailbox behind this account? (RADD-996)
 
-    Both email loops ask this before composing anything, and both treat a False
-    the way they have always treated an inactive or address-less recipient:
-    stamp the row and move on. That is deliberate — the answer is a property of
-    the ACCOUNT, not of this attempt, so a retry can only produce the same
-    answer more slowly. (A delivery failure is the other case, and it retries;
-    see `retry.py`.)
-
-    Four kinds of account are not a person to mail:
-
-    * inactive, and address-less — the two this predicate absorbed;
-    * `UserSource.SERVICE` — a spec-113 service account. `radd-agent@service.
-      radd.local` does not receive; a key's account carries an address because
-      the column requires one, not because anyone reads it. Live evidence: those
-      accounts have been getting notification mail since v0.29.0, and the relay
-      was rate-limited for repeatedly posting to addresses that bounce;
-    * the system actor — `automation@radd.system`, the identity mail intake and
-      every engine write carry.
-
-    Inbox rows for a service account are left alone: they cost nothing, and a
-    key's owner reading its notifications through the API is a coherent thing to
-    want. Mail is the part with a bill attached. The system actor is refused a
-    row outright — `create_notification` — because nothing reads its inbox.
+    No for inactive, address-less, `UserSource.SERVICE`/`PRINCIPAL` accounts and
+    the system actor. A property of the ACCOUNT, so both loops stamp and move on
+    rather than retry (a delivery failure is the retrying case, `retry.py`).
+    Inbox rows for service accounts are left alone.
     """
     if user is None or not user.active or not user.email:
         return False
     if user.id == SYSTEM_ACTOR_ID:
         return False
-    # Spec 121: the principal rows (Anyone / Signed-in users) are subjects,
-    # not inboxes.
     return user.source not in (UserSource.SERVICE.value, UserSource.PRINCIPAL.value)
 
 
@@ -159,36 +131,13 @@ async def create_notification(
 ) -> Notification | None:
     """Write one notification for one recipient — unless their rules say `off`.
 
-    The channel decision lives here because this is the one function every
-    producer calls (RADD-971). It used to be a mute list checked in the outbox
-    consumer alone, so the two types created by a direct call — `automation`
-    (automations/engine.py) and `page_updated` (pages/watchers.py) — never saw a
-    preference at all. Deciding at the WRITE means a new producer inherits the
-    policy instead of re-implementing it.
-
-    Spec 118 widened what is decided here from "is this type muted" to "which
-    channels does this person receive this kind through, given how they are
-    connected to it". A caller that knows the connection passes `relation` +
-    `subject`; one that has simply picked a recipient (an automation rule's
-    `notify_user`) passes neither and gets own-scope semantics, which is what
-    directly addressing someone means.
-
-    `rules` is an optional PREFETCH for callers fanning out to a known recipient
-    set (`rules_by_user` resolves the whole set in one query, so the loop costs
-    nothing per row). `None` means "look it up" — a caller that forgets it is
-    slower, never wrong. Returns None when the verdict was `off`.
+    The ONE write seam every producer calls (RADD-971), so a new producer
+    inherits the channel policy. Pass `relation` + `subject` when the connection
+    is known; a caller that simply picked a recipient gets own-scope semantics.
+    `rules` is an optional prefetch (`rules_by_user`). Returns None when `off`.
     """
-    # RADD-996: nobody reads the system actor's inbox, so it is not told things.
-    #
-    # This is also what settles the CLEANUP question the same bug raised. The
-    # planner no longer follows the system actor, but `item_watchers` already
-    # holds a row for it on every ticket that has ever arrived by email, and
-    # those rows keep arriving here through the ordinary watcher fan-out. They
-    # are left in place: a watcher row is inert once nothing is planned from it,
-    # and deleting rows in a migration to tidy a list nobody displays is a
-    # destructive write bought for cosmetics. This line is what makes leaving
-    # them cost nothing — the alternative was a DELETE that would have to be
-    # written again the next time something auto-watched a robot.
+    # RADD-996: nobody reads the system actor's inbox. This also makes its
+    # historical auto-watch rows on mailed-in tickets inert, so they stay.
     if user_id == SYSTEM_ACTOR_ID:
         return None
     if rules is None:
@@ -203,20 +152,13 @@ async def create_notification(
         item_id=item_id,
         actor_id=actor_id,
         payload=payload,
-        # Spec 118: the verdict is STAMPED, not re-derived. The mailer used to
-        # ask each row's recipient "do you email this type" on every tick, which
-        # is the only question a row could answer once it had forgotten which
-        # relation produced it — so a project subscriber and an assignee got the
-        # same answer about the same kind, whatever their matrix said.
+        # Spec 118: stamped, not re-derived per tick — only the write knows the relation.
         inbox=verdict.inbox,
         email=verdict.email,
     )
     session.add(notification)
     await session.flush()
-    # The realtime module (spec 27) pushes this so bells update live. `inbox`
-    # rides along so a consumer can tell an email-only row from one that changes
-    # a badge — the badge count itself filters on the column, so an extra
-    # refetch would be harmless, but a receiver should not have to guess.
+    # Realtime pushes this for live bells; `inbox` tells an email-only row apart.
     await events.emit(
         session,
         event_type=NotifyEvent.NOTIFICATION_CREATED,
@@ -241,9 +183,7 @@ async def list_notifications(
     limit: int = 50,
     offset: int = 0,
 ) -> list[Notification]:
-    """The INBOX — `inbox IS TRUE`, since spec 118 made the two channels
-    independent. An email-only row is a real row with a real recipient; it just
-    is not something they asked to see in a list."""
+    """The INBOX: `inbox IS TRUE` — an email-only row is not in the list."""
     stmt = select(Notification).where(
         Notification.user_id == user_id, Notification.inbox.is_(True)
     )
@@ -256,9 +196,7 @@ async def list_notifications(
 
 
 async def unread_count(session: AsyncSession, user_id: uuid.UUID) -> int:
-    """The badge. Same filter as the list it labels — a count that included
-    email-only rows would show a number the inbox cannot account for, which is
-    the one thing a badge must never do."""
+    """The badge — the same filter as the list it labels."""
     result = await session.execute(
         select(func.count())
         .select_from(Notification)
@@ -271,13 +209,8 @@ async def unread_count(session: AsyncSession, user_id: uuid.UUID) -> int:
     return int(result.scalar_one())
 
 
-#: Marking read is an INBOX act, and the filter is load-bearing (spec 118).
-#:
-#: `mailer._pending` selects unread rows — an email is not worth sending about
-#: something you have already opened. An email-ONLY row can never be opened,
-#: because it is not in the list; without this, "mark all read" would silently
-#: cancel every pending email-only send, which is the exact opposite of what the
-#: person clicking it asked for.
+#: Marking read is an INBOX act: the mailer skips read rows, so without this
+#: filter "mark all read" would cancel pending email-only sends.
 _INBOX_ROW = Notification.inbox.is_(True)
 
 
@@ -306,7 +239,7 @@ async def mark_all_read(session: AsyncSession, user_id: uuid.UUID) -> None:
     )
 
 
-# --- per-user rules (no rows = the DEFAULT_MATRIX, i.e. RADD-686's behaviour) ---
+# --- per-user rules (no rows = `rules.default_matrix()`) ---
 
 
 async def get_prefs(session: AsyncSession, user_id: uuid.UUID) -> NotificationPref | None:
@@ -325,21 +258,10 @@ async def set_digest(
     return prefs
 
 
-def _clean_channels(channels: dict[str, str]) -> dict[str, str]:
-    """Keep only (kind, channel) pairs both enums recognise.
-
-    Not the API's validator — `NotificationRuleWrite.channels` validates its
-    keys against the kind registry, so an unknown key or value is a 422 long
-    before this runs, and every HTTP caller sees the loud answer. This is the
-    guard for the OTHER callers: `set_rules` is a service function, and a
-    migration, a script or a future importer handing it a kind this version has
-    dropped should lose that key rather than store one the resolver will ignore
-    forever.
-    """
-    from .types import Channel  # local: the enum, not the policy
-
-    from .kinds import every_kind  # RADD-1326: core and contributed kinds
-
+def clean_channels(channels: dict[str, str]) -> dict[str, str]:
+    """Drop (kind, channel) pairs this version does not know — core and
+    contributed kinds (RADD-1326). The API already 422s them; this guards
+    non-HTTP callers of `set_rules`, and reads of rows whose plugin is gone."""
     known = set(every_kind())
     cleaned: dict[str, str] = {}
     for kind, channel in channels.items():
@@ -357,19 +279,9 @@ async def set_rules(
     user_id: uuid.UUID,
     rows: Sequence[tuple[RuleScope, uuid.UUID | None, dict[str, str]]],
 ) -> list[NotificationRule]:
-    """Full replace of one person's rule set. Returns the NORMALISED rows.
-
-    Full replace rather than per-row PATCH because the matrix is edited as a
-    whole and a partial update has no way to express "I removed a subscription".
-    The normalisation is where the model's one invariant is enforced: a
-    subscription scope MUST name a target and a relationship scope must not, so
-    a row that gets it wrong is dropped rather than stored as something the
-    resolver could never match.
-
-    An EMPTY `channels` map means "no opinion anywhere", which is the same thing
-    as having no row — so those are dropped too, and a user who resets every
-    cell ends up back at zero rows and therefore at the documented defaults.
-    """
+    """Full replace; returns the NORMALISED rows. A subscription scope must name
+    a target and a relationship scope must not — violators are dropped, as are
+    empty `channels` maps (no opinion = no row = defaults)."""
     await session.execute(
         delete(NotificationRule).where(NotificationRule.user_id == user_id)
     )
@@ -382,7 +294,7 @@ async def set_rules(
         key = (scope.value, scope_id)
         if key in seen:
             continue
-        cleaned = _clean_channels(channels)
+        cleaned = clean_channels(channels)
         if not cleaned:
             continue
         seen.add(key)
@@ -404,25 +316,26 @@ async def list_rules(session: AsyncSession, user_id: uuid.UUID) -> list[Notifica
     return list(result.scalars())
 
 
-def _rule_row(row: NotificationRule) -> RuleRow | None:
+def scope_of(row: NotificationRule) -> RuleScope | None:
+    """The row's scope, or None for one this version does not know (it reaches nobody)."""
     try:
-        scope = RuleScope(row.scope)
+        return RuleScope(row.scope)
     except ValueError:
-        return None  # a scope this version does not know: not a scope that reaches anyone
+        return None
+
+
+def _rule_row(row: NotificationRule) -> RuleRow | None:
+    scope = scope_of(row)
+    if scope is None:
+        return None
     return RuleRow(scope=scope, scope_id=row.scope_id, channels=row.channels or {})
 
 
 async def rules_by_user(
     session: AsyncSession, user_ids: Iterable[uuid.UUID]
 ) -> dict[uuid.UUID, RuleSet]:
-    """THE prefetch seam: every recipient's rules in one query.
-
-    Returns an entry for EVERY id asked about — an absent entry would read as
-    `.get(id, ...)` at the call site and the fallback there is easy to get
-    backwards (RADD-686 learned this the hard way with `email_types_by_user`).
-    An empty `RuleSet` is the honest value for someone who has never saved
-    anything, and `resolve` turns it into the documented defaults.
-    """
+    """Every recipient's rules in one query — an entry for EVERY id asked (an
+    empty `RuleSet` = defaults), so no call site guesses a `.get` fallback."""
     ids = set(user_ids)
     if not ids:
         return {}
@@ -444,19 +357,9 @@ async def subscriber_ids(
     space_id: uuid.UUID | None = None,
     team_id: uuid.UUID | None = None,
 ) -> set[uuid.UUID]:
-    """Who SUBSCRIBED to any of these targets (spec 118's fan-out widening).
-
-    One indexed query per event over `ix_notification_rules_target`, not one per
-    scope: an item event can match a project subscription and a team
-    subscription at once, and three round trips per event would be three times
-    the cost for the same answer.
-
-    A row's channels are NOT consulted here. Narrowing by "…and the row turns
-    something on" would be a second copy of the resolver written in SQL, and the
-    two would drift the first time precedence changed. The planner adds these
-    people, `resolve` drops the ones whose rules say `off`, and that decision
-    stays in one place.
-    """
+    """Who subscribed to any of these targets — one indexed query per event.
+    Channels are NOT consulted here (that would be a second resolver in SQL);
+    `resolve` drops the `off` ones."""
     targets = [
         (RuleScope.PROJECT, project_id),
         (RuleScope.SPACE, space_id),
@@ -476,30 +379,13 @@ async def subscriber_ids(
 
 
 async def team_scope_user_ids(session: AsyncSession) -> set[uuid.UUID]:
-    """Everyone with a `teams` (my-teams) rule at all.
-
-    The my-teams column cannot be looked up by target — its rows carry no
-    `scope_id`, because "my teams" is whatever they are today. So fan-out
-    intersects this set with the item team's CURRENT members instead, which is
-    both the correct live semantics and far cheaper than the other direction
-    (every team of every candidate recipient).
-    """
+    """Everyone with a my-teams rule — intersected with the team's CURRENT members at fan-out."""
     result = await session.execute(
         select(NotificationRule.user_id)
         .where(NotificationRule.scope == RuleScope.TEAMS.value)
         .distinct()
     )
     return set(result.scalars())
-
-
-def channels_for(
-    kind: NotificationType,
-    rules: RuleSet,
-    relation: Relation = rules_policy.OWN,
-    subject: Subject = Subject(),
-) -> Verdict:
-    """The resolver, re-exported so callers outside this module have one door."""
-    return rules_policy.resolve(kind, rules, relation, subject)
 
 
 async def digest_disabled_users(

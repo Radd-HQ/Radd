@@ -1,8 +1,4 @@
-"""Automation versions (RADD-1268): writing, reading and restoring.
-
-Kept beside `runs.py` for the same reason it is: the graph's CRUD is one
-concern, and what a save leaves behind is another.
-"""
+"""Automation versions (RADD-1268): writing, reading and restoring."""
 
 from __future__ import annotations
 

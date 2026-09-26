@@ -1,32 +1,16 @@
-"""Intake validation: the same graph engine, run as a question instead of a job.
-
-Spec 119. A `validate` trigger binds a graph to what someone is about to create —
-a form, an issue type, a project — and the graph is walked SYNCHRONOUSLY against
-a real row created inside a savepoint. Nothing it contains applies: the walk runs
-with `apply=False`, and the only thing it produces is a list of `Finding`s.
-
-Two halves live here, and they are deliberately apart:
-
-* **Parsing** a validate trigger's params (`targets`, `mode`) — pure, so the
-  write path and the read path cannot disagree about what a stored node means.
-* **Resolving and running** the graphs that govern one draft.
-
-Why a real row rather than a draft representation: a packet carries entity IDs
-(`graph.Packet`), and every node downstream — `filter.slq` compiling SLQ against
-one item, the AI context builder reading an `ItemRead` — is written against rows
-that exist. Teaching all of that to speak a second, draft-shaped dialect of an
-item is the version where the check that passes at intake is not the check that
-would have run afterwards. A savepoint gives the row for the length of one
-question and takes it back, and `items.create_item` is pure-DB (search, realtime
-and webhooks are outbox consumers), so nothing outside the transaction ever
-learns the draft existed.
+"""Intake validation (spec 119): the graph engine run as a question. A
+`validate` trigger binds a graph to a form, issue type or project; the graph is
+walked synchronously over a real row created in a savepoint, `apply=False`,
+producing only `Finding`s. A real row, not a draft shape, because every node
+(SLQ filters, AI context) reads rows — a second draft dialect would make the
+check at intake differ from the one that runs afterwards.
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from time import monotonic
 
 from sqlalchemy import select, text
@@ -35,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.config import settings
 from radd.exceptions import RaddError
 from radd.modules.auth.models import User
-from radd.modules.items.models import WorkItem
 
 from . import conditions
 from .executor import Finding
@@ -61,16 +44,9 @@ _ALIVE = text("SELECT 1")
 
 
 class ValidationUnavailable(RaddError):
-    """The checks could not be run to completion (-> 503).
-
-    Distinct from a draft that FAILED them, and the distinction is the whole
-    point: a failed check is something the person submitting can act on, and an
-    unavailable one is not their problem at all. It is raised only when the walk
-    itself broke — a query that aborted the transaction, a graph that could not
-    be read — because carrying on after that would either invent a verdict
-    nobody computed or 500 on the release of a savepoint in an aborted
-    transaction, which is what this replaces.
-    """
+    """The checks could not be completed (→ 503) — not the submitter's problem,
+    and deliberately not a verdict: carrying on would invent one or 500 on the
+    savepoint release."""
 
 
 @dataclass(frozen=True)
@@ -103,16 +79,8 @@ class IntakeVerdict:
 
     @property
     def blocks(self) -> bool:
-        """Whether these findings must refuse the creation.
-
-        Read off the FINDINGS, not off the aggregated mode. A draft is routinely
-        governed by more than one graph, and `mode` is the strictest of them all
-        — so "there are findings and something required is watching" refused a
-        submission that satisfied every required graph and only tripped an
-        advisory one. `POST /items` accepted that same draft (its enforcement
-        path runs the required bindings alone), which meant the button and the
-        API disagreed about the same rules.
-        """
+        """Whether these findings refuse the creation — read off the findings, not
+        the aggregated mode (an advisory-only trip under a required graph advises)."""
         return any(finding.mode == ValidationMode.REQUIRED.value for finding in self.findings)
 
 
@@ -120,14 +88,9 @@ class IntakeVerdict:
 
 
 def parse_targets(params: dict) -> list[ValidationTarget]:
-    """`params["targets"]` as typed rows, dropping anything unreadable.
-
-    Loose by construction, and the same choice card layouts made: a target whose
-    id no longer parses is a binding that stops matching, not a graph that
-    refuses to load. The WRITE path is where a malformed target is refused
-    (`service._check_validate_trigger`), and it is strict there — which is what
-    makes this parser's leniency a degradation rather than a hole.
-    """
+    """`params["targets"]` as typed rows, dropping anything unreadable — lenient on
+    read (a stale target stops matching); the WRITE path is strict
+    (`service._check_validate_trigger`)."""
     found: list[ValidationTarget] = []
     seen: set[tuple[str, uuid.UUID]] = set()
     for raw in params.get("targets") or []:
@@ -186,13 +149,8 @@ async def governing_graphs(
     session: AsyncSession, scope: DraftScope, *, required_only: bool = False
 ) -> list[GoverningGraph]:
     """Enabled automations whose validate trigger names any of this draft's
-    targets, deduplicated per (automation, trigger node).
-
-    Deduplicated because one trigger may name the project AND the form the draft
-    came through; without it the graph would run twice and every finding would
-    arrive in pairs. The dedupe keeps the STRICTEST mode among the matched rows,
-    which is the same rule the verdict uses one level up.
-    """
+    targets, deduplicated per (automation, trigger) — a trigger naming both the
+    project and the form would otherwise run twice."""
     pairs = scope.target_pairs()
     stmt = (
         select(Automation, ValidationBinding.node_id, ValidationBinding.mode)
@@ -263,24 +221,15 @@ async def run_graphs(
     scope: DraftScope,
     graphs: list[GoverningGraph],
 ) -> IntakeVerdict:
-    """Walk every governing graph over the draft and concatenate what they found.
-
-    Every graph runs even after one has already produced findings. Stopping at
-    the first would make the list of problems depend on the order automations
-    happen to be positioned in, and someone fixing one issue would be told about
-    the next only on their second attempt.
-    """
+    """Walk every governing graph and concatenate their findings — all of them, so
+    the list does not depend on the order automations are positioned in."""
     if not graphs:
         return IntakeVerdict(governed=False)
 
     system_user = await session.get(User, SYSTEM_ACTOR_ID)
     initial = Packet.of(validate_facts(item_id, scope), item=(item_id,))
     collected = _Collected()
-    # ONE budget for the whole verdict, not one per graph. The walk runs
-    # synchronously inside the create's transaction, which is holding the
-    # project's number lock — so its cost is a queue every other creation in
-    # that project waits in, and "each graph gets 30 seconds" is a budget that
-    # grows with how many rules an admin wrote.
+    # ONE deadline for the whole verdict: the walk holds the project's number lock.
     deadline = monotonic() + settings.intake_validation_budget_seconds
     for governing in graphs:
         collected.modes.append(governing.mode)
@@ -293,10 +242,7 @@ async def run_graphs(
             continue
         # RADD-1329: each finding already says whether it blocks — the verdict
         # node that recorded it decided. Nothing is stamped from a graph mode.
-        collected.findings.extend(
-            finding if finding.mode else replace(finding, mode=ValidationMode.ADVISORY.value)
-            for finding in report.findings
-        )
+        collected.findings.extend(report.findings)
 
     if len(collected.findings) > MAX_INTAKE_FINDINGS:
         dropped = collected.findings[MAX_INTAKE_FINDINGS:]
@@ -308,9 +254,7 @@ async def run_graphs(
                 # The overflow line inherits the strictest mode among what it
                 # stands for, so truncation can never turn a blocking verdict
                 # into a passing one.
-                mode=strictest(
-                    [ValidationMode(f.mode) for f in dropped if f.mode in set(ValidationMode)]
-                ).value,
+                mode=strictest([ValidationMode(f.mode) for f in dropped]).value,
             )
         )
     return IntakeVerdict(
@@ -327,18 +271,10 @@ async def _walk_one(
     system_user: User | None,
     deadline: float,
 ):
-    """One governing graph, walked inside its OWN savepoint.
-
-    The savepoint is not about undoing writes — the walk applies nothing. It is
-    the recovery point for a walk that BROKE the transaction. The executor
-    swallows a contributed node's exception by design (one unreachable provider
-    must not stop a graph with other branches), and a DBAPI error swallowed that
-    way leaves Postgres in an aborted transaction: every later statement fails,
-    the intake savepoint's RELEASE fails, and what the person submitting sees is
-    a 500 from a create that was fine. Rolling back to a point taken before the
-    walk puts the session back in a usable state, and the caller gets a 503 that
-    says the checks could not run.
-    """
+    """One governing graph, walked inside its OWN savepoint — not to undo writes
+    (there are none) but to recover from a walk that aborted the transaction (a
+    swallowed DBAPI error), which would otherwise 500 the whole create. The
+    caller turns that into a 503."""
     # Deferred: `engine` imports this module's siblings, and validation is
     # reached from the request path rather than from the consumer loop.
     from . import engine
@@ -350,21 +286,13 @@ async def _walk_one(
             governing.automation,
             initial,
             system_user,
-            # THE INVARIANT of a validation walk: an action node never applies.
-            # It is `walk`'s existing dry-run switch, not a second walker —
-            # which is what makes "what validation saw" and "what a run would
-            # do" the same code with one thing turned off.
-            apply=False,
+            apply=False,  # the invariant of a validation walk: nothing applies
             start_node_id=governing.node_id,
             deadline=deadline,
         )
-        # Is the transaction still usable? Asked BEFORE releasing the savepoint,
-        # and that order is the whole trick: `ROLLBACK TO SAVEPOINT` is legal in
-        # an aborted transaction and `RELEASE SAVEPOINT` is not, so discovering
-        # the abort by failing to release leaves the connection in a state only
-        # a full rollback can clear — which would take the caller's entire
-        # transaction with it. One cheap round trip per graph buys the ability
-        # to recover to exactly here.
+        # Probe BEFORE releasing: ROLLBACK TO SAVEPOINT works in an aborted
+        # transaction, RELEASE does not (a failed release needs a full rollback,
+        # which would take the caller's whole transaction with it).
         await session.execute(_ALIVE)
     except Exception as exc:
         logger.exception(
@@ -376,8 +304,3 @@ async def _walk_one(
         ) from exc
     await nested.commit()
     return report
-
-
-async def scope_of(session: AsyncSession, item: WorkItem, form_id: uuid.UUID | None) -> DraftScope:
-    """The draft's scope, read off the row that was just created."""
-    return DraftScope(project_id=item.project_id, type_id=item.type_id, form_id=form_id)

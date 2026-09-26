@@ -1,23 +1,11 @@
 """The resolution notice: WHO hears that a ticket is finished, and WHAT it says
-(RADD-982; a setting again since RADD-1368 after a day as a template).
+(RADD-982/1368). Shared by the outbound consumer (`mail_send_resolved`) and the
+`mailintake.notify_resolution` node, so guards and wording cannot drift.
 
-`reply.py`'s sibling. Two callers share it: the outbound consumer, which sends
-the notice when `mail_send_resolved` is on for the item's project, and the
-`mailintake.notify_resolution` automation node, which sends it on a rule's own
-conditions. Both run the same guards and the same wording, so they cannot drift.
-
-Three decisions worth stating, because each rejected something:
-
-* **It announces ENTERING done, not being done.** The guard resolves the diff's
-  FROM state against the project's categories, so a done→done move ("Waiting
-  for release" → "Done", which the release sweep performs on every shipped
-  item) sends nothing. Re-resolving after a reopen announces again: it is a new
-  resolution.
-* **It quotes no closing comment.** A transition carries none, and a public
-  comment was already mailed to this contact by the reply relay. The notice
-  names the STATE, a fact the payload carries.
-* **The subject is pinned**, like the survey's: a resolution opens a topic. The
-  headers a client threads on still come from the message store.
+* It announces ENTERING done: a done→done move (the release sweep's "Waiting
+  for release" → "Done") sends nothing; a re-resolution after a reopen does.
+* It quotes no closing comment: the reply relay already mailed any public one.
+* The subject is pinned, like the survey's: a resolution opens a topic.
 """
 
 from __future__ import annotations
@@ -57,10 +45,7 @@ UNKNOWN_STATE = "resolved"
 
 @dataclass(frozen=True)
 class ResolvedNotice:
-    """One planned resolution notice: the ticket, and everyone outside it.
-
-    Carries the ingredients, not a finished body — `reply.OutboundReply`'s shape,
-    because the footer is a function of the recipient."""
+    """One planned resolution notice — ingredients, like `reply.OutboundReply`."""
 
     item_id: uuid.UUID
     subject: str

@@ -1,47 +1,13 @@
-"""Per-event notification mail: one fan-out, not two (RADD-968).
+"""Per-event notification mail (RADD-968): mails notification ROWS, not events.
 
-**The bug.** `mailintake.outbound` mailed `notify.watcher_ids` minus the author
-on every public comment, while the INBOX fanned out over watchers ∪
-participant-team members through `consumer._allowed` (item.read, the RADD-817
-relation gate, the internal-comment filter). Two fan-outs, disagreeing:
+A row has already passed planner precedence, the channel verdict and
+`consumer._allowed`; re-planning from the event would be a second copy of that
+policy. Only rows whose stamped verdict says `email` are selected; inbox-only
+rows are left for the digest. Sent rows are stamped `emailed_at`, which the
+digest's selection already skips, so the two channels never double-send.
 
-- a participant-TEAM member got an inbox row and no email;
-- a watcher who had since lost `item.read` still got the mail, because the mail
-  path re-checked nothing;
-- `muted_types` was in-app only — you could mute comments and keep getting them;
-- and no event but `comment.created` ever mailed anyone at all.
-
-**The fix is to mail the ROWS.** A notification row has already passed planner
-precedence, the mute check and `_allowed`; re-planning from the event would be a
-second copy of that policy, which is what drifted the first time. So this loop
-reads notifications, not events — and every permission question is answered by
-the row's existence.
-
-**What gets mailed is the ROW's own verdict** (spec 118). RADD-686 filtered each
-candidate in Python against its recipient's `email_types`, arguing the predicate
-was per-user and so could not be SQL. It could not — while the only thing a row
-remembered was its TYPE. That is also why the mailer could never honour a scoped
-preference: it had no way to know whether a row reached its recipient because
-they were assigned the issue or because they had subscribed to the project, so
-"email me about my own work, digest the rest" was unanswerable here. The
-decision is made once, at the write, by the code that still knows which relation
-produced the row; this loop reads `notifications.email` and the whole per-user
-pass is gone.
-
-Rows whose verdict is inbox-only are never selected and stay unstamped, so the
-digest takes them — that is what makes "inbox only" a channel choice rather than
-a mute.
-
-Rows are stamped `emailed_at` on send, so the digest — whose selection is
-already `emailed_at IS NULL` — never repeats what went out here. The two
-channels dedup for free, with no new column.
-
-Transport is the kernel `MAIL_TRANSPORT` socket (RADD-1385 — `mailintake`
-provides it; see `transport.py`). It was a deferred import of
-`mailintake.service`, which a runtime disable could not switch off. With no
-transport registered, email is UNAVAILABLE: the pending rows are stamped as
-undeliverable (`record_undeliverable`) and the inbox is untouched — there is no
-env-relay copy any more, because the relay is the transport's business.
+Delivery is the kernel `MAIL_TRANSPORT` socket (`transport.py`). With no
+transport, pending rows are stamped undeliverable and the inbox is untouched.
 """
 
 from __future__ import annotations
@@ -83,13 +49,8 @@ async def run_once() -> int:
 
 
 async def run_batch(session: AsyncSession) -> int:
-    """Mail one batch of pending immediate-email notifications.
-
-    The caller owns the commit — which is what lets a test drive the whole tick
-    (selection, composition, delivery, stamping) against rows that were never
-    committed, rather than re-implementing the loop's body in the test and
-    proving only that the copy works.
-    """
+    """Mail one batch of pending immediate-email notifications. The caller owns
+    the commit, so a test can drive the whole tick against uncommitted rows."""
     rows = await _pending(session)
     if not rows:
         return 0
@@ -125,10 +86,7 @@ async def run_batch(session: AsyncSession) -> int:
             sent += 1
             stamped.append(row.id)
         elif retry.record_failure(row, now):
-            # RADD-997: a DELIVERY failure is still worth retrying — one relay
-            # blip must not lose the message — but it now costs the row its
-            # place in the queue, and the ladder ends. Before this, "unstamped"
-            # meant "selected again in five seconds", for a day.
+            # RADD-997: a delivery failure retries on the ladder; exhausted, stamp.
             stamped.append(row.id)
     if stamped:
         await session.execute(
@@ -138,26 +96,11 @@ async def run_batch(session: AsyncSession) -> int:
 
 
 async def _pending(session: AsyncSession) -> list[Notification]:
-    """Rows whose own verdict says EMAIL, unemailed, unread and recent.
-
-    UNREAD because a notification you have already opened is not worth an email;
-    RECENT (the digest's own `notify_email_max_age_hours`) because a worker that
-    was down for a week must not empty the backlog into everyone's mailbox one
-    message at a time. Stale rows are left for the digest, which stamps them.
-
-    NOT BACKED OFF (RADD-997): a row that has failed is invisible until its
-    `email_next_try`. In SQL rather than in the loop deliberately — a Python
-    skip would let a handful of failing rows fill `notify_mail_batch` and starve
-    the healthy ones behind them, which is the shape the incident had.
-
-    **`email IS TRUE` replaces a per-recipient Python filter** (spec 118).
-    RADD-686 argued the predicate could not be SQL because it was per-user, so a
-    type filter "could only be the union of everybody's". That was true while the
-    only thing a row remembered was its TYPE — and it is why the mailer could
-    never honour a scoped preference: it had no way to know whether this row
-    reached its recipient because they were assigned it or because they had
-    subscribed to the project. The decision is made once, at the write, by the
-    code that still knows; here it is a column.
+    """Rows whose stamped verdict says EMAIL, unemailed, unread and recent
+    (`notify_email_max_age_hours` — a worker down for a week must not flush its
+    backlog; stale rows are the digest's to stamp), and not backed off. The
+    backoff is in SQL so failing rows cannot fill `notify_mail_batch` and starve
+    healthy ones (RADD-997).
     """
     now = utcnow()
     cutoff = now - timedelta(hours=settings.notify_email_max_age_hours)
@@ -191,16 +134,9 @@ async def _actor_names(
 async def record_undeliverable(
     session: AsyncSession, rows: list[Notification], kind: NotificationMailKind
 ) -> None:
-    """No transport is registered: email is unavailable, and the rows say so.
-
-    Stamped, which is this module's vocabulary for "this channel is finished
-    with this row" (an inactive recipient and an exhausted retry ladder get the
-    same stamp) — not a claim that anything was sent. Leaving them pending would
-    hold a day of mail for whenever a transport returns, and a mail plugin
-    switched back on must not empty that into everyone's mailbox. The INBOX
-    half of each row is untouched: in-app delivery never depended on mail.
-    Public because the digest records its own rows the same way.
-    """
+    """No transport: stamp the rows (the channel is finished with them — not a
+    claim anything was sent) so a returning mail plugin cannot flush a backlog.
+    The inbox half is untouched. Public: the digest records its rows the same way."""
     await session.execute(
         update(Notification)
         .where(Notification.id.in_([row.id for row in rows]))
@@ -222,16 +158,8 @@ async def _send(
     *,
     failure: MailFailureReport = MailFailureReport.REPORT,
 ) -> bool:
-    """Compose and deliver one notification. True when it went out.
-
-    `failure` is passed straight to the transport and is the whole of
-    RADD-997's event half: the transport reports every send's outcome, which is
-    right for its other callers (a reply, an ack and a survey are each sent
-    once), and wrong for a loop that will try the same message again in a
-    minute. The RETRY is what makes a failure uninteresting, and the retry lives
-    here — so the suppression does too, rather than teaching the transport about
-    ladders.
-    """
+    """Compose and deliver one notification; True when it went out. `failure` is
+    the retry ladder's instruction to the transport (RADD-997)."""
     payload = notification.payload or {}
     key = payload.get("item_key") or ""
     item = mailrender.ItemMail(
@@ -241,11 +169,8 @@ async def _send(
         comment=payload.get("comment_id") or None,
     )
     reason = lines.MAIL_REASON_TEMPLATE.format(key=key or "this issue")
-    # RADD-985: every USER-addressed message says how to stop it — a footer link
-    # and the `List-Unsubscribe` header the big providers rank senders on. The
-    # recipient here is always an account holder (a notification row IS the
-    # proof), which is what makes the preferences page the right target; the
-    # requester-facing mail in `mailintake` never carries either.
+    # RADD-985: user-addressed mail says how to stop it (footer + List-Unsubscribe);
+    # requester-facing mail never does.
     preferences = preferences_url()
     entry = lines.entry(notification, actor_names)
     body = (
@@ -274,9 +199,7 @@ async def _send(
         else (entry.subject or entry.headline)
     )
     headers = mailrender.unsubscribe_headers(preferences)
-    # A notification about no item (a page) has nothing to thread on, so it
-    # goes as the digest does. It used to skip the transport for the env relay
-    # — no sender row, no `mail.sent` — which is the RADD-983 shape again.
+    # No item (a page): nothing to thread on, but still through the transport.
     return await transport.send(
         session,
         NotificationMail(
@@ -297,29 +220,16 @@ async def _send(
 
 
 def preferences_url() -> str:
-    """Where this instance's recipients turn notification email off — the one
-    URL both of notify's channels print and put in `List-Unsubscribe`, read
-    off settings HERE so `mailrender` keeps reading none."""
+    """The one URL both channels print and put in `List-Unsubscribe` (read off
+    settings here so `mailrender` reads none)."""
     return mailrender.preferences_url(settings.app_base_url)
 
 
 async def _comment_id(session: AsyncSession, notification: Notification) -> uuid.UUID | None:
-    """The comment this notification is about — or None when it is about none.
-
-    The payload carries only a 200-char excerpt, so the comment has to be found
-    through the outbox row the notification was fanned out from — `event_id` →
-    the `comment.created` event, whose `entity_id` IS the comment.
-
-    **The event-type check is load-bearing** (found by RADD-978). Every event
-    carries an `entity_id`, and for the item family that id is the ITEM, so
-    without it this function returned an item's uuid AS a comment id; the
-    transport then wrote it to `mail_messages.comment_id` and the whole tick died
-    on a foreign-key violation. It had never fired because the only rows anybody
-    had mailed with an `event_id` set came from `comment.created` —
-    `participant_added` is the first type mailed from a different event, and
-    `assigned`, `state_changed` and a description `mentioned` (all reachable from
-    the preference matrix, `assigned`/`mentioned` by default) were one saved
-    preference away from the same crash.
+    """The comment this notification is about, or None — via `event_id` → the
+    `comment.created` event, whose `entity_id` IS the comment. The event-type
+    check is load-bearing (RADD-978): for item events `entity_id` is the ITEM,
+    and passing it on as a comment id kills the tick on a foreign-key violation.
     """
     if notification.event_id is None:
         return None
@@ -333,8 +243,7 @@ async def _comment_id(session: AsyncSession, notification: Notification) -> uuid
 
 
 async def _comment_body(session: AsyncSession, notification: Notification) -> str:
-    """The FULL comment, not the excerpt — the same seam the consumer
-    mention-scans through. Falls back to the excerpt if the comment is gone."""
+    """The FULL comment, falling back to the excerpt if the comment is gone."""
     comment_id = await _comment_id(session, notification)
     body = await comments.comment_body(session, comment_id) if comment_id else None
     return body or (notification.payload or {}).get("excerpt") or ""
@@ -351,19 +260,9 @@ async def send_plain(
     failure: MailFailureReport = MailFailureReport.REPORT,
     headers: Mapping[str, str] | None = None,
 ) -> bool:
-    """One message about NO single item, through the transport (RADD-983).
-
-    The digest's send, shared with this file because "which relay, and is the
-    outcome reported" is one answer for both of notify's email channels and was
-    two before: the per-event mailer had ridden the transport since RADD-968,
-    while the digest still dialled `radd.smtp` off `settings.*` and therefore
-    sent nothing at all on an instance configured only through Settings → Email.
-
-    The CALLER's session goes through, `_send`'s shape and for its reason: the
-    `mail.sent` event belongs in the same transaction as the `emailed_at` stamp
-    it describes. Letting the transport open its own would commit the event
-    while the stamp was still uncommitted — two truths about one message, in the
-    order that makes a rolled-back tick claim to have sent mail.
+    """One message about NO single item, through the transport (RADD-983) — the
+    digest's send. The CALLER's session goes through so `mail.sent` commits with
+    the `emailed_at` stamp it describes, never before it.
     """
     return await transport.send(
         session,

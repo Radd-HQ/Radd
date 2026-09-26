@@ -1,13 +1,5 @@
-"""Settings → Email: a source's ordered ROUTING CHAIN, and its dry run.
-
-Split out of `config_router` (RADD-969), which had grown past the house file
-budget once the kinds catalog landed. The seam is the natural one: sources and
-senders are connection configuration, a rule chain is a decision procedure, and
-the dry run belongs beside the chain it explains.
-
-The preview exists for the reason Settings → Storage already paid for: an
-ordered chain nobody can dry-run makes "why did this land there" unanswerable.
-"""
+"""Settings → Email: a source's ordered ROUTING CHAIN, and its dry run — an
+ordered chain nobody can dry-run makes "why did this land there" unanswerable."""
 
 from __future__ import annotations
 
@@ -24,7 +16,7 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 
-from . import registry, routing
+from . import parsing, registry, routing
 from .config_router import require_mail_admin
 from .config_schemas import (
     MailRuleRead,
@@ -132,9 +124,7 @@ async def delete_rule(rule_id: uuid.UUID, session: Session, user: CurrentUser) -
 async def reorder_rules(
     source_id: uuid.UUID, data: MailRuleReorder, session: Session, user: CurrentUser
 ) -> list[MailRuleRead]:
-    """Rewrite the whole chain's order. Sent whole because a drag is ONE intent —
-    applying it as N updates leaves a half-ordered chain if one fails, and the
-    order is the semantics here."""
+    """Rewrite the whole chain's order — a drag is ONE intent."""
     await require_mail_admin(session, user)
     rows = {row.id: row for row in await registry.list_rules(session, source_id)}
     moved: list[tuple[MailRule, float]] = []
@@ -162,12 +152,9 @@ async def preview_routing(
     """Where would a message like this land? Nothing is created or sent."""
     await require_mail_admin(session, user)
     source = await registry.get_source(session, source_id)
-    # Parse the ADDRESSES out, exactly as `parsing.extract_recipients` does for a
-    # real message. Feeding the raw header text here would make the dry run
-    # disagree with the live chain: `Pipeline Team <PIPELINE@radd-hq.com>` would
-    # not match a rule that does match it in production — the preview would
-    # report a working rule as broken, which is worse than having no preview.
-    from email.utils import getaddresses, parseaddr
+    # Parsed exactly as a live message is, or the dry run would call a working
+    # rule broken.
+    from email.utils import parseaddr
 
     plan = EmailPlan(
         subject=data.subject,
@@ -175,11 +162,7 @@ async def preview_routing(
         sender_email=parseaddr(data.sender)[1].strip().lower(),
         body=data.body,
         item_key=None,
-        recipients=tuple(
-            address.strip().lower()
-            for _, address in getaddresses([data.recipient])
-            if "@" in address
-        ),
+        recipients=tuple(parsing.addresses([data.recipient])),
     )
     decision = await routing.decide(session, plan, source_id=source_id)
     project_id = decision.project_id or source.default_project_id
@@ -194,16 +177,9 @@ async def preview_routing(
         project_key=key,
         matched_rule_id=decision.matched_rule_id,
         matched_rule_name=decision.matched_rule_name,
-        # Verbatim (RADD-994). This used to be recomputed from `project_id`,
-        # which flattened two real answers back into "no rule matched": a
-        # classifier that DECLINED, and a rule that matched while naming no
-        # project. `decide` already knows which of those happened — a second
-        # opinion here can only be a worse one, and it made the dry run disagree
-        # with the line the live path logs.
+        # Verbatim: `decide` knows whether a rule declined or matched with no
+        # project (RADD-994); the per-rule trace shows a CRASHED rule (RADD-989).
         reason=decision.reason,
-        # The per-rule trace (RADD-989). Without it "no rule matched — source
-        # default" is the answer for a chain whose only rule CRASHED, and the
-        # admin's next move is to rewrite a rule that was already correct.
         outcomes=[
             RoutingRuleOutcome(
                 rule_id=outcome.rule_id,

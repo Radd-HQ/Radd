@@ -1,9 +1,4 @@
-"""Run history (RADD-1266): recording, reading and sweeping automation runs.
-
-A separate module from `service.py` for the reason `round_robin.py` is: the
-graph's CRUD is one concern and what its runs left behind is another, and the
-service file was already past nine hundred lines.
-"""
+"""Run history (RADD-1266): recording, reading and sweeping automation runs."""
 
 from __future__ import annotations
 

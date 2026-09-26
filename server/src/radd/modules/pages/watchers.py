@@ -1,25 +1,6 @@
-"""Watching a page (RADD-719).
-
-For a wiki that documents operations, a silently changed runbook is the failure
-mode — the only way to know it moved was to reread it.
-
-**Auto-watch on edit**, matching how items behave: touching something is the
-strongest available signal that you care what happens to it next, and asking
-people to opt in individually is how a watch feature ends up with no watchers.
-
-**Fan-out is NOT here any more** (spec 118). RADD-719 shipped it synchronously,
-inside the request that saved the page, on the argument that page edits are rare
-and "a consumer would mean a second delivery path to keep correct for a volume
-that does not need one". The volume was never the problem: it WAS a second
-delivery path, and it drifted exactly where a second path drifts. It knew about
-watchers and nothing about the space subscribers spec 118 introduced, and it
-wrote notifications without the read gate every item notification passes — so an
-edit told whoever had once clicked Watch, whatever the space said about them
-since.
-
-What is left is the TABLE and its four accessors. Who hears about an edit is
-decided in the one place that decides it for issues, off the `page.updated`
-event, by `notify.consumer`.
+"""Page watchers (RADD-719): the table and its accessors. Editing auto-watches
+(`service.update_page`); who hears about an edit is decided by `notify` off the
+`page.updated` event, through this plugin's NOTIFICATION_SUBJECT provider.
 """
 
 from __future__ import annotations

@@ -6,12 +6,11 @@ the escape hatch. `compare` and `_payload_path` are what give it meaning, so
 the operator cases live here beside it.
 """
 
-from radd.modules.automations.conditions import EventFacts, _change_name, compare, _payload_path
+from radd.modules.automations.conditions import EventFacts, compare, _payload_path
 from radd.modules.automations.gates import (
     changed_by,
     field_changed,
     payload_value_is,
-    state_category_is,
 )
 from radd.modules.automations.types import (
     TYPE_GATE_PAYLOAD,
@@ -142,11 +141,6 @@ def test_payload_path_addresses_list_elements_not_the_list():
 # --- the named gates keep their exactness -------------------------------------
 
 
-def test_state_category_reads_the_post_event_state():
-    assert state_category_is(facts(UPDATE_PAYLOAD), {"categories": ["done"]})
-    assert not state_category_is(facts(UPDATE_PAYLOAD), {"categories": ["in_progress"]})
-
-
 def test_changed_by_matches_id_email_or_name():
     assert changed_by(facts(), {"users": ["hussein@hjarrar.com"]})
     assert changed_by(facts(), {"users": [ACTOR["actor_id"]]})
@@ -162,21 +156,14 @@ def test_field_changed_reads_the_transition_not_the_state():
     assert not field_changed(f, {"field": ""})
 
 
-def test_custom_field_diffs_are_named_by_key():
-    assert _change_name({"field": "custom_field", "key": "severity", "name": "Severity"}) == "severity"
-    assert _change_name({"field": "state"}) == "state"
-
-
 def test_render_template_tokens():
-    from radd.modules.automations.templating import render_template
+    from radd.modules.automations.templating import Renderer
 
     f = facts({"name": "PIPE - 118", "item": {"state": {"category": "done"}}, "labels": ["a", "b"]})
-    out = render_template(
-        "{{event_type}} on {{payload.name}} by {{actor.name}}: {{payload.labels}} {{nope}}",
-        f,
-        {"key": "TD-1", "title": "t"},
+    out = Renderer(f, {"key": "TD-1", "title": "t"})(
+        "{{event_type}} on {{payload.name}} by {{actor.name}}: {{payload.labels}} {{nope}}"
     )
     assert out == "item.updated on PIPE - 118 by Hussein Jarrar: a, b {{nope}}"
-    assert render_template("{{item.key}}: {{item.title}}", f, {"key": "TD-1", "title": "t"}) == "TD-1: t"
+    assert Renderer(f, {"key": "TD-1", "title": "t"})("{{item.key}}: {{item.title}}") == "TD-1: t"
     # no item context → item tokens stay verbatim
-    assert render_template("{{item.key}}", f, None) == "{{item.key}}"
+    assert Renderer(f, None)("{{item.key}}") == "{{item.key}}"

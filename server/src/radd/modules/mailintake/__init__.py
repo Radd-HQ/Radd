@@ -28,33 +28,21 @@ plugin = RaddPlugin(
     consumer_resume=((OUTBOUND_CONSUMER_NAME, ConsumerResume.HEAD),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Email in and out: turns incoming mail into issues and comments, and replies to requesters.",
-    # attachments: mail parts become item attachments through the spec-102
-    # polymorphic seam (RADD-956).
-    # notify (RADD-1385): this plugin SERVES notify's `MAIL_TRANSPORT` socket
-    # (`notify_transport.py`) in notify's vocabulary (`NotificationMail`,
-    # `MailFailureReport`), so the edge points from the optional plugin to the
-    # core module. RADD-968 had removed it when outbound stopped mailing
-    # notify's watcher set; notify then reached in here by a deferred import a
-    # runtime disable could not switch off — the direction this reverses.
+    # attachments: mail parts become item attachments (RADD-956).
+    # notify (RADD-1385): this plugin serves notify's MAIL_TRANSPORT socket in
+    # notify's vocabulary, so the edge points here → core.
     depends_on=(
         "projects", "auth", "items", "comments", "automations", "events",
         "attachments", "settings", "workflow", "notify",
     ),
-    # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
-    # the module is optional and disableable, and a missing one must fall through
-    # to the next rule rather than cost a customer their email. (The LLM
-    # STORAGE rule took the other road in RADD-1387: `ai` provides it on a
-    # socket, so `attachments` has no edge to `ai` at all.)
-    # csat (RADD-982/1368): it depends_on THIS module, so the resolution
-    # notice's "yield to the survey" question can only be asked the deferred
-    # way — and a disabled csat answering by absence is exactly right.
+    # ai (RADD-961): the AI routing rule reaches it deferred, gated on
+    # `feature_enabled`, so a disabled ai falls through to the next rule.
+    # csat (RADD-982/1368): it depends_on THIS module, so "yield to the survey" is
+    # asked deferred — a disabled csat answers by absence.
     weak_depends=("ai", "csat"),
     routers=(router, config_router, rules_router, signature_router),
-    # The resolution notice as a node too, for rules that want it on their own
-    # conditions; it shares `resolved.py`'s guards and wording.
-    # RADD-1387: Send email is this plugin's node (key `action.send_email`, kept
-    # from when it was built in, so stored graphs load unchanged) — disabled,
-    # the action and its template leave the catalog with the plugin.
+    # RADD-1387: Send email is this plugin's node (key `action.send_email`, kept so
+    # stored graphs load unchanged); disabled, it leaves the catalog.
     automation_nodes=(RESOLUTION_NODE, SEND_EMAIL_NODE),
     automation_templates=(NOTIFY_REPORTER_ON_DONE,),
     # RADD-1385: notification email rides this plugin through the kernel socket;
@@ -62,10 +50,8 @@ plugin = RaddPlugin(
     integrations=(
         IntegrationSpec(Socket.MAIL_TRANSPORT, MAIL_TRANSPORT_NAME, impl=NotificationMailTransport()),
     ),
-    # RADD-1368: what the desk sends a requester on its own. Settings on the
-    # Email page, run by this module, OFF until someone switches them on.
-    # `section="email"` lands them on Settings → Email (RADD-930); the project
-    # scope renders on a project's General page.
+    # RADD-1368: what the desk sends a requester on its own — OFF by default, on
+    # Settings → Email (the project scope renders on a project's General page).
     settings_keys=(
         SettingSpec(
             key="mail_send_ack",
@@ -105,8 +91,7 @@ plugin = RaddPlugin(
             page_scopes=("instance",),
         ),
     ),
-    # Seed rows from env BEFORE the poller starts, or the first tick finds
-    # no sources on a fresh instance (RADD-958).
+    # Seed rows from env BEFORE the poller starts (RADD-958).
     on_startup=(seeding.seed_from_env, dispatcher.start),
     on_shutdown=(dispatcher.stop,),
     capabilities=(
@@ -114,18 +99,14 @@ plugin = RaddPlugin(
             "email_intake",
             "Email-to-issue intake",
             "connector",
-            # Rows, not env — the sync check reads the snapshot the registry
-            # refreshes on seed and on every write.
+            # Rows, not env: the snapshot the registry refreshes on every write.
             check=registry.capability_state,
         ),
         # RADD-1389: whoever owns the senders reports whether mail can go out.
         CapabilitySpec("outbound_mail", "Outbound email", "infra", check=registry.outbound_capability),
     ),
-    # RADD-960: the mail channel's own events, so a rule can tell a customer's
-    # REPLY from an agent typing in the UI. `item_scoped` is what makes SLQ
-    # conditions and item actions apply — "reopen when the customer replies"
-    # becomes one rule. `mail.dropped` is not item-scoped because by definition
-    # there is no item.
+    # RADD-960: the mail channel's own events. `item_scoped` lets item actions
+    # apply ("reopen when the customer replies"); `mail.dropped` has no item.
     event_types=(
         EventTypeSpec(
             MailEvent.RECEIVED, "Email received", "Email", item_scoped=True,
@@ -158,10 +139,8 @@ plugin = RaddPlugin(
             )
         ),
     ),
-    # Federated UI (spec 94, `ui/`): Settings → Email (RADD-1378 — the page and
-    # this nav entry withdraw with the plugin), the Monitoring mail card, the
-    # external-requester chip in the issue rail, and (RADD-1401) how a mailed
-    # body reads: a `content.body` claim folds its signature away — UI API 1.19.0.
+    # Federated UI: Settings → Email, the Monitoring mail card, the requester chip
+    # in the issue rail, and a `content.body` claim folding signatures (RADD-1401).
     ui=PluginUiManifest(
         remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.19.0",
         nav=(NavItemSpec(key="email", label="Email", path="/settings/email", section="settings",

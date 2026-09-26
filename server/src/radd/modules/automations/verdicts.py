@@ -1,26 +1,10 @@
-"""The validation VERDICT nodes: "Block submission" and "Warn submitter"
-(RADD-1329).
+"""The validation VERDICT nodes (RADD-1329): "Block submission" and "Warn
+submitter", the only nodes that produce findings — checks only route and
+publish, so the graph reads literally (`check → fail → Block submission`).
 
-Before this, a check node both decided and spoke: `ai.validate` was drawn as a
-gate but wrote the findings itself, and whether they refused the submission was
-the trigger's graph-wide `mode`, applied after the walk. Nothing on the canvas
-said what blocked. The badges and the capped port explaining it were patches.
-
-Now a check only ROUTES (and publishes what it found), and these two terminal
-nodes are the only thing that can produce a finding:
-
-* **Block submission** — its findings refuse the submission.
-* **Warn submitter** — its findings are shown, and the person can submit again
-  to create anyway.
-
-So the graph reads literally — `check → fail → Block submission` — and what
-blocks is visible from the node alone. Both have no output port and no apply
-half: they record identically on a dry run and a live one.
-
-A verdict node either says a fixed `message` (optionally aimed at a `field`), or
-RELAYS the findings a named check published (`relay: <node id>`). A relayed
-finding keeps the check's own grading on a Block node — a model-graded "minor"
-problem advises even there — and never blocks on a Warn node.
+Terminal: no output port, no apply. A verdict says a fixed `message` (optionally
+aimed at a `field`) or RELAYS a named check's published findings; a relayed
+finding keeps the check's grading on Block and never blocks on Warn.
 """
 
 from __future__ import annotations

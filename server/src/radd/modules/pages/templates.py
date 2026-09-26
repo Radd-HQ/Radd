@@ -1,17 +1,7 @@
-"""Page templates (RADD-712).
-
-Recurring pages — runbooks, meeting notes, RFCs, postmortems — should start from
-a shape rather than a blank editor or a copy-paste of last time's.
-
-**Placeholders are three, deliberately.** `{{title}}`, `{{date}}` and
-`{{author}}` cover the actual need; anything more is a template LANGUAGE, which
-is a project of its own with its own escaping rules, its own errors and its own
-documentation. Three substitutions need none of that.
-
-An unknown placeholder is left alone rather than blanked: `{{customer}}` in a
-template is a prompt to the person filling it in, and erasing it would delete the
-instruction.
-"""
+"""Page templates (RADD-712). Exactly three placeholders — `{{title}}`,
+`{{date}}`, `{{author}}` — because more is a template LANGUAGE. An unknown
+placeholder is left alone: `{{customer}}` is an instruction to whoever fills it
+in."""
 
 from __future__ import annotations
 

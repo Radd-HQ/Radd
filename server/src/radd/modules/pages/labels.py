@@ -1,14 +1,5 @@
-"""Page labels (RADD-718).
-
-The tree can only express ONE hierarchy. Labels are the cross-cutting axis: a
-`runbook` that lives under Operations is still a runbook when someone is looking
-for every runbook in the wiki, whichever space it ended up in.
-
-Reuses the `labels` module rather than growing a page-specific tag table — the
-label rows, their colours and their names are shared with issues, so tagging a
-page `incident` and an issue `incident` means the same thing. `resolve_labels`
-is the find-or-create seam items already uses.
-"""
+"""Page labels (RADD-718) — the shared `labels` vocabulary, so `incident` means
+one thing on a page and an issue."""
 
 from __future__ import annotations
 

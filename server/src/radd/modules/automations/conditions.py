@@ -1,14 +1,5 @@
-"""The event-side vocabulary every gate reads (spec 58, cut down by RADD-1265).
-
-`EventFacts` is the plain-data view of one event the engine hands to every
-gate; `_payload_path` addresses into its payload (lists fan out); `compare`
-gives the operators their meaning. The nestable all/any/none CONDITION TREE
-that used to live here is gone: the graph composes booleans (chain = AND,
-fan-out = OR, the `false` port = NOT) and the named gates in `gates.py` each
-ask one plain question, so a second boolean vocabulary taught nothing.
-
-Pure module: no session, no I/O — unit-tested in tests/test_automation_gates.py.
-"""
+"""The event-side vocabulary every gate reads: `EventFacts`, `_payload_path`
+(dotted paths; lists fan out) and `compare` (the operators). Pure."""
 
 from __future__ import annotations
 
@@ -64,22 +55,6 @@ def _payload_path(payload: Any, path: str) -> list[Any]:
     return [value for value in flat if value is not None]
 
 
-def _change_name(entry: dict[str, Any]) -> str:
-    """A diff entry's user-facing field name — custom-field entries carry the
-    real key under "key" (their "field" is the literal "custom_field")."""
-    if entry.get("field") == "custom_field":
-        return str(entry.get("key") or entry.get("name") or "custom_field")
-    return str(entry.get("field", ""))
-
-
-def _change_entry(facts: EventFacts, field_name: str) -> dict[str, Any] | None:
-    wanted = field_name.strip().casefold()
-    for entry in facts.changes:
-        if _change_name(entry).casefold() == wanted:
-            return entry
-    return None
-
-
 # --- comparison ---
 
 
@@ -120,19 +95,11 @@ def compare(resolved: list[Any], operator: ConditionOperator, expected: Any) -> 
             return len(resolved) > 0
         case ConditionOperator.NOT_SET:
             return len(resolved) == 0
-        case ConditionOperator.EQ:
+        case ConditionOperator.EQ | ConditionOperator.IN:
             return any(
                 _scalar_eq(value, want) for value in resolved for want in _expected_list(expected)
             )
-        case ConditionOperator.NEQ:
-            return not any(
-                _scalar_eq(value, want) for value in resolved for want in _expected_list(expected)
-            )
-        case ConditionOperator.IN:
-            return any(
-                _scalar_eq(value, want) for value in resolved for want in _expected_list(expected)
-            )
-        case ConditionOperator.NOT_IN:
+        case ConditionOperator.NEQ | ConditionOperator.NOT_IN:
             return not any(
                 _scalar_eq(value, want) for value in resolved for want in _expected_list(expected)
             )

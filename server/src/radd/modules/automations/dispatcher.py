@@ -1,5 +1,4 @@
-"""In-process engine loop, mirroring webhooks/dispatcher.py. Moves to the dedicated
-worker entrypoint when that lands (single-instance assumption today)."""
+"""In-process engine loop (PeriodicLoop, gated on `run_workers`)."""
 
 from radd.config import settings
 from radd.worker import PeriodicLoop

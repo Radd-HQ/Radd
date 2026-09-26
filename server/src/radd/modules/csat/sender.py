@@ -1,36 +1,15 @@
-"""The CSAT sender (spec 65): an outbox consumer emailing a one-click
-satisfaction survey when an item RESOLVES — an `item.updated` event whose change
-diff moves state and whose state embed now sits in the done category.
+"""The CSAT sender (spec 65): an outbox consumer that emails a one-click survey
+when an `item.updated` moves an item into a done-category state.
 
-Cursor idiom = the shared head-seeded scaffold (`events.runner.run_head_seeded`):
-consumer offset `csat.sender`, first start seeds AT THE STREAM HEAD (never
-survey the historical backlog), and the cursor + survey rows + csat.requested
-events commit BEFORE any email leaves — at-most-once: a dropped survey beats a
-duplicate. With outbound mail or the per-project CSAT_ENABLED setting off,
-events are skipped and the cursor still advances, so enabling either later
-replays nothing.
+Head-seeded cursor (`events.runner.run_head_seeded`): first start never surveys
+the backlog; cursor, survey row and `csat.requested` commit BEFORE any mail
+leaves — at-most-once, a dropped survey beats a duplicate. With mail or the
+project's CSAT_ENABLED off, events are skipped and the cursor still advances.
 
-Guards, in order (each one a spec-listed skip): the diff moved state into done,
-CSAT_ENABLED resolves true for the item's project (scalar cascade), there is
-somewhere to send FROM, the item has no survey yet (one per item LIFETIME —
-reopen→re-resolve never resends), and a recipient resolves — the item's mail
-contact (spec-62 seam) preferred over the reporter, when the reporter is a
-person with a mailbox.
-
-**The survey rides the ONE transport since RADD-983.** It used to gate on
-`settings.smtp_host` and deliver through `radd.smtp` directly, which meant an
-instance configured entirely through Settings → Email — sender ROWS, no
-`RADD_SMTP_*`, which is how radd-hq.com itself is configured — never sent a
-survey and said nothing about it: the guard returned None, the cursor advanced,
-and no line was logged. Routing it through `mailintake.service.send_item_mail`
-buys the rows-or-env sender resolution, the per-source sender identity
-(RADD-979 — the survey comes from the address the ticket arrived at), threading
-onto the item's own conversation, and `mail.sent`/`mail.failed`.
-
-`pin_subject=True`, and no `comment_id`: the survey's subject is its own
-sentence ("[KEY] How did we do?"), not a `Re:` on the requester's, because a
-survey opens a topic rather than continuing one — but the References/In-Reply-To
-headers still come from the message store, so a client files it with the ticket.
+Guards, in order: moved into done; CSAT_ENABLED; a mail sender exists; no
+survey yet (one per item lifetime); a recipient resolves (mail contact, else a
+mailable reporter). Sent through `mailintake.send_item_mail` with
+`pin_subject=True`: its own subject, but still threaded onto the ticket.
 """
 
 import logging
@@ -103,16 +82,9 @@ def survey_body(*, key: str, title: str, token: str) -> str:
 
 
 async def resolve_recipient(session: AsyncSession, item: WorkItem) -> tuple[str, str] | None:
-    """(email, name) — the item's mail contact (external requester, spec 62)
-    preferred; else the reporter, provided they are a person with a mailbox.
-
-    The reporter leg asks `mail_service.mailable_user` rather than
-    `reporter.active` (RADD-983). An `active` check passes for a spec-113
-    SERVICE account and for the system actor — and the system actor is the
-    reporter of every item mail intake creates, so the accounts most likely to
-    be surveyed here were exactly the two that have no mailbox. The rule is
-    stated once, on the module that owns outbound mail.
-    """
+    """(email, name): the item's mail contact, else the reporter if
+    `mail_service.mailable_user` — `active` alone passes service accounts and
+    the system actor, which have no mailbox (RADD-983)."""
     contact = await mail_service.contact_for_item(session, item.id)
     if contact is not None:
         return contact.email, contact.name
@@ -144,9 +116,7 @@ async def process_event(session: AsyncSession, event: Event) -> SurveyEmail | No
     if not enabled:
         return None  # per-project opt-in — dev projects never send surveys
     if not await mail_service.outbound_configured(session):
-        # Rows OR env (RADD-983). `settings.smtp_host` used to be this guard, so
-        # a rows-only instance skipped every survey. And it skipped SILENTLY,
-        # which is the half that made it unreportable — hence the line.
+        # Logged: a silent skip here made "no surveys" unreportable (RADD-983).
         logger.info(
             "csat: survey for %s skipped — no mail sender is configured", item_id
         )
@@ -159,9 +129,7 @@ async def process_event(session: AsyncSession, event: Event) -> SurveyEmail | No
     item_ref = payload.get("item") or {}
     key = item_ref.get("key") or str(item_id)
     title = item_ref.get("title") or ""
-    survey = await service.create_survey(
-        session, item_id=item_id, item_key=key
-    )
+    survey = await service.create_survey(session, item_id=item_id)
     email, name = recipient
     return SurveyEmail(
         item_id=item_id,
@@ -190,20 +158,9 @@ async def run_once() -> int:
 
 
 async def _deliver(email: SurveyEmail, session: AsyncSession | None = None) -> None:
-    """Post-commit delivery through the ONE transport (RADD-983).
-
-    Production passes no session: the cursor, the survey row and
-    `csat.requested` are already committed by this point (at-most-once, by
-    design), so there is no transaction left to join and the transport opens
-    what it needs — the outbound consumer's own posture. A caller inside a
-    transaction (a test) hands over its own, which is the transport's own contract and
-    the only way the send can be exercised against rows nobody committed.
-
-    Still no retry queue and still never raises: a survey is a nicety, the
-    survey row stays either way, and a failure is now a `mail.failed` event as
-    well as a log line, so an operator can see it on Settings → Monitoring
-    instead of grepping a pod.
-    """
+    """Post-commit delivery through mailintake's transport. Never raises and never
+    retries: a survey is a nicety; a failure is a `mail.failed` event and a log.
+    Production passes no session (everything is committed); a test passes its own."""
     sent = await mail_service.send_item_mail(
         session,
         item_id=email.item_id,

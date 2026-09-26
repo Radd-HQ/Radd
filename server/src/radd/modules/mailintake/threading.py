@@ -1,26 +1,13 @@
 """Matching an inbound message to its issue, and recording what we sent (RADD-952/954).
 
-**The order is the design.**
-
-    1. In-Reply-To          what a mail client sets when a human hits Reply
-    2. References, newest first   the chain, which survives a client that drops (1)
+    1. In-Reply-To                what a client sets when a human hits Reply
+    2. References, newest first   survives a client that drops (1)
     3. Subject key [RADD-812]     last resort — a human can type it
     4. nothing                    a new issue
 
-Steps 1 and 2 resolve against `mail_messages`, so they only work if every
-outbound id was stored. That is the easiest step in the whole feature to forget,
-because nothing fails until a reply arrives days later, at a customer.
-
-**Sub-addressing is deliberately absent.** `help+<token>@` is the obvious
-mechanism and it breaks in exactly the environments this feature targets:
-corporate mail systems and mailing lists rewrite or strip `+` addressing, and a
-Google Workspace admin can disable it outright. `parsing.extract_project_key`
-still reads a plus tag, but for ROUTING a first contact to a project — a
-different question, and one that fails safe.
-
-Candidate extraction is pure and lives beside the lookup so it can be tested on
-fixture bytes: real clients emit `References` as whitespace- or comma-separated,
-folded across lines, and sometimes with junk between the angle brackets.
+1 and 2 resolve against `mail_messages`, so every OUTBOUND id must be stored —
+nothing fails until a reply arrives days later. Sub-addressing (`help+token@`)
+is deliberately not a threading mechanism: corporate relays strip it.
 """
 
 from __future__ import annotations
@@ -36,17 +23,12 @@ from radd.clock import utcnow
 from .models import MailMessage
 from .types import DEDUP_WINDOW, MailDirection
 
-#: An angle-bracketed message id. Anything outside the brackets is noise a
-#: client added (comments, whitespace, stray commas) and is skipped.
+#: An angle-bracketed message id; anything outside the brackets is client noise.
 MESSAGE_ID_RE = re.compile(r"<[^<>\s]+>")
 
 
 def parse_message_ids(value: str | None) -> list[str]:
-    """Every `<id>` in a header value, in order, deduped.
-
-    Order is preserved because `References` is chronological: the LAST entry is
-    the message being replied to, which is why the caller reverses it.
-    """
+    """Every `<id>` in a header value, in order (`References` is chronological), deduped."""
     if not value:
         return []
     seen: dict[str, None] = {}
@@ -56,13 +38,8 @@ def parse_message_ids(value: str | None) -> list[str]:
 
 
 def thread_candidates(in_reply_to: str | None, references: str | None) -> list[str]:
-    """The ids to try, in priority order.
-
-    `In-Reply-To` first — it names the direct parent. Then `References` REVERSED,
-    because the chain runs oldest → newest and the newest ancestor is the most
-    specific answer: a long-running thread whose early messages were about a
-    different issue must resolve to the recent one.
-    """
+    """The ids to try, in priority order: `In-Reply-To`, then `References` REVERSED —
+    the newest ancestor is the most specific answer."""
     candidates = parse_message_ids(in_reply_to)
     for message_id in reversed(parse_message_ids(references)):
         if message_id not in candidates:
@@ -73,9 +50,8 @@ def thread_candidates(in_reply_to: str | None, references: str | None) -> list[s
 async def item_for_message_ids(
     session: AsyncSession, message_ids: list[str]
 ) -> uuid.UUID | None:
-    """The first candidate that names a message Radd sent. One query, then the
-    caller's own ordering applied in Python — a query per candidate would be a
-    round trip per hop of a long References chain."""
+    """The first candidate that names a message Radd sent — one query, the caller's
+    ordering applied in Python."""
     if not message_ids:
         return None
     rows = await session.execute(
@@ -91,12 +67,8 @@ async def item_for_message_ids(
 
 
 async def is_duplicate(session: AsyncSession, message_id: str) -> bool:
-    """Has this exact inbound id already been accepted inside the window?
-
-    The authoritative answer is the unique index — this is the cheap pre-check
-    that turns the common retry into a `200` without provoking an integrity
-    error. `record()` still has to handle the race.
-    """
+    """Has this inbound id been accepted inside the window? A cheap pre-check; the
+    unique index is authoritative and `record()` handles the race."""
     if not message_id:
         return False  # no id = nothing to dedup on; better a duplicate than a drop
     row = await session.scalar(
@@ -115,17 +87,9 @@ async def record(
     comment_id: uuid.UUID | None = None,
     source_id: uuid.UUID | None = None,
 ) -> MailMessage | None:
-    """Store one message id against its item.
-
-    Returns None when the id is already stored — the concurrent-retry case. The
-    caller reads that as "duplicate", which is the same answer `is_duplicate`
-    would have given had it won the race.
-
-    `source_id` is the mail source the message ARRIVED at, and only an INBOUND
-    caller has one to pass (RADD-979): `intake.accept` knows its source, while
-    an outbound row is the answer to a question this column asks. It is what
-    `origin_source_id` reads back to decide which identity replies leave under.
-    """
+    """Store one message id against its item; None when it is already stored (the
+    concurrent-retry case, read as "duplicate"). `source_id` is INBOUND-only
+    (RADD-979), read back by `origin_source_id`."""
     if not message_id:
         return None
     existing = await session.scalar(
@@ -147,20 +111,8 @@ async def record(
 
 
 async def origin_source_id(session: AsyncSession, item_id: uuid.UUID) -> uuid.UUID | None:
-    """Which mail source this item's conversation ARRIVED at (RADD-979), or None.
-
-    **The EARLIEST inbound row that names one**, not the latest. A thread often
-    gains addresses — someone CCs `sales@` on message four, and that message is
-    recorded against its own source too. Taking the newest would hand the
-    conversation's identity to whichever mailbox happened to be copied last,
-    changing the From address mid-conversation for the one person who never
-    asked for it.
-
-    None is the common answer: an item raised in the UI has no mail origin at
-    all, and an instance that never bound a sender never reads the result. One
-    lookup on the `(item_id, created_at)` index, so asking per outbound message
-    costs the same as asking once.
-    """
+    """The EARLIEST inbound row naming a source (RADD-979) — a mailbox CC'd later
+    must not take over the conversation's identity. None for UI-born items."""
     return await session.scalar(
         select(MailMessage.source_id)
         .where(
@@ -174,14 +126,8 @@ async def origin_source_id(session: AsyncSession, item_id: uuid.UUID) -> uuid.UU
 
 
 async def thread_chain(session: AsyncSession, item_id: uuid.UUID, limit: int = 20) -> list[str]:
-    """The item's message ids oldest-first — the `References` header of the next
-    outbound message.
-
-    Capped because `References` is a header, not an archive: clients thread on
-    the first and last few entries and some relays truncate long ones anyway.
-    Keeping the OLDEST (the thread root, which every client anchors on) plus the
-    most recent is what the cap has to preserve, so it takes from both ends.
-    """
+    """The item's message ids oldest-first — the next outbound `References`. Capped
+    from BOTH ends: clients anchor on the root and thread on the most recent."""
     rows = await session.execute(
         select(MailMessage.message_id)
         .where(MailMessage.item_id == item_id)
@@ -195,9 +141,8 @@ async def thread_chain(session: AsyncSession, item_id: uuid.UUID, limit: int = 2
 
 
 async def thread_subject(session: AsyncSession, item_id: uuid.UUID) -> str | None:
-    """The subject this thread started with. Byte-stable for its whole life —
-    re-deriving it from the item title means renaming an issue silently splits
-    the conversation in every participant's client."""
+    """The subject this thread started with — byte-stable, so a title edit cannot
+    split the conversation."""
     return await session.scalar(
         select(MailMessage.subject)
         .where(MailMessage.item_id == item_id, MailMessage.subject != "")

@@ -1,8 +1,4 @@
-"""Read seam for the service-desk report (spec 65): answered surveys joined to
-their items, optionally scoped to one project. Consumed by the slas plugin's
-`GET /sla-report` (csat_avg/csat_count on the weekly buckets) through a WEAK
-edge (RADD-1386): slas loads before csat, so it checks the plugin registry and
-imports this module only while csat is loaded."""
+"""Answered surveys for the SLA report — read by slas through a weak edge."""
 
 import uuid
 from dataclasses import dataclass
@@ -18,12 +14,8 @@ from .models import CsatSurvey
 
 @dataclass(frozen=True)
 class CsatResponseRow:
-    """One answered survey: what rating landed, when, and on which item.
-
-    `item_id` exists so the caller can intersect these rows with the item ids the
-    reader may actually see (RADD-789) — without it, a cross-project SLA report's
-    csat average was folded over every project's ratings regardless of access.
-    """
+    """One answered survey; `item_id` lets the caller intersect with the items
+    the reader may see (RADD-789)."""
 
     rating: int
     responded_at: datetime

@@ -1,7 +1,5 @@
-"""Authenticated requester-portal router (spec 73). ANY signed-in user may call
-these — eligibility (public OR shared with the actor/their teams) is the only
-gate, checked per form in portal.py; ineligible forms are a plain 404. The
-response schemas are the trimmed portal shapes, never the full internal reads."""
+"""Requester-portal router (spec 73): any signed-in user; eligibility per form is
+the only gate (portal.py), ineligible = 404; responses are the trimmed shapes."""
 
 import uuid
 from typing import Annotated
@@ -25,12 +23,8 @@ from .schemas import (
 )
 
 router = APIRouter(prefix="/portal/forms", tags=["portal"])
-#: A SECOND router, and the prefix is why (RADD-785). "my requests" is not a
-#: form, and hanging it off the forms router would make it `/portal/forms/
-#: requests` — a literal segment declared after `/{form_id}`, which Starlette
-#: matches first and answers with a 422 about parsing "requests" as a UUID
-#: (RADD-761). A sibling prefix says what the resource is and cannot be
-#: shadowed.
+#: A sibling prefix, not `/portal/forms/requests`: a literal after `/{form_id}` is
+#: shadowed (RADD-761).
 requests_router = APIRouter(prefix="/portal/requests", tags=["portal"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -44,14 +38,8 @@ async def list_portal_forms(session: Session, user: CurrentUser) -> list[PortalG
 
 @router.get("/staging-area", response_model=dict[str, uuid.UUID])
 async def staging_area(user: CurrentUser) -> dict[str, uuid.UUID]:
-    """Where to upload a submission's files BEFORE the item exists (RADD-800).
-
-    Derived from the caller, never accepted from them — that is what lets the
-    attachment guard verify it with a comparison instead of trusting an id it
-    was handed. Declared above `/{form_id}` so the literal segment is reachable
-    (RADD-761: Starlette matches in declaration order, and a literal after a
-    `{uuid}` route answers a 422 about parsing it as a UUID).
-    """
+    """Where to stage a submission's files (RADD-800) — derived from the caller,
+    never accepted. Declared above `/{form_id}` for the same route-order reason."""
     from . import staging
 
     return {"entity_id": staging.staging_id_for(user)}
@@ -77,24 +65,13 @@ async def submit_portal_form(
 
 @requests_router.get("", response_model=list[PortalRequestRead])
 async def my_requests(session: Session, user: CurrentUser) -> list[PortalRequestRead]:
-    """The requests this person may follow (RADD-785 → RADD-796/798).
-
-    Any signed-in user, because the answer is already scoped to them: the query
-    filters on `reporter_id == me OR team_id IN my teams`. Someone with no
-    requests gets an empty list, which is the correct answer rather than a
-    refusal.
-    """
+    """Requests this person may follow — filtered to them, so never a refusal."""
     return await requests_service.list_my_requests(session, actor=user)
 
 
 @requests_router.get("/{key}", response_model=PortalRequestDetail)
 async def get_request(key: str, session: Session, user: CurrentUser) -> PortalRequestDetail:
-    """One request, opened (RADD-796).
-
-    404 — never 403 — when the actor is neither the reporter nor in the request's
-    team. A refusal would confirm the key names a real issue, which is the thing
-    someone guessing keys is trying to learn.
-    """
+    """One request (RADD-796); 404, never 403 — a refusal would confirm the key."""
     return await requests_service.get_request(session, user, key)
 
 

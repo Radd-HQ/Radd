@@ -1,14 +1,5 @@
-"""Turning mention CANDIDATES into real recipients.
-
-`planner.parse_mention_candidates` is pure and deliberately credulous — it hands
-back every uuid and every @-address the text contains, valid or not. This is the
-half that needs a database: resolving those candidates to accounts that exist and
-are active.
-
-Its own file because both halves of the consumer need it (an issue comment and,
-since spec 118, a page comment) and neither should have to import the other to
-get at it.
-"""
+"""Mention CANDIDATES (`planner.parse_mention_candidates`, pure) resolved to
+real, active users — shared by the item and page comment paths."""
 
 from __future__ import annotations
 

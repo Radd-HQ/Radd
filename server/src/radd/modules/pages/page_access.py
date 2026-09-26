@@ -1,47 +1,22 @@
-"""Per-PAGE restriction, on the spec-92 access framework (RADD-792).
+"""Per-PAGE restriction on the spec-92 access framework (RADD-792/948).
 
-The space decides the default (RADD-791). Some pages need to be narrower than
-their space — a salary band inside an open HR space.
+Three layers, each of which can only NARROW access:
 
-Hussein's framing, and it is the right one: a page behaves like a custom FIELD.
-Unrestricted, it is visible to everyone with access to the space; the moment it
-carries a restriction, only the people named on it can reach it. That is exactly
-`default_open` in `access/resolution.py`, which custom fields already use — so
-this is a `ResourceSpec` registration, not a new mechanism.
+    SPACE  whether you are in the room at all   (a role grant)
+    PATH   every restriction from the root down (RADD-948)
+    PAGE   its own                               (an access grant)
 
-## The three layers compose, and the order matters
-
-    SPACE  decides whether you are in the room at all   (a role grant)
-    PATH   every restriction from the root down to here (RADD-948)
-    PAGE   its own                                      (an access grant)
-
-A page grant never WIDENS past the space. Someone with no access to the space
-cannot be let into one page by a grant on it — otherwise the space boundary
-would be advisory, and "restrict this page" would become a way to hand out
-access to a space you were never given.
-
-**And a restriction runs down the tree** (RADD-948). Every grant set on the
-ancestor path must pass, plus the page's own. RADD-792 shipped the opposite —
-"child pages do not inherit a parent's restriction; guessing at it would mean
-someone finds their subtree quietly invisible" — and that traded a subtree
-quietly INVISIBLE for a subtree quietly VISIBLE, which is the worse of the two
-by a wide margin. Sensitive material is naturally written as a parent page with
-children, so leaving children open was the default outcome, not the edge case.
-
-It is deliberately every ancestor rather than the nearest one. Nearest-wins lets
-a child re-open what its parent closed: put any grant on the child and someone
-excluded above reaches it by search or direct link — the same hole, one level
-down, and exactly what the space rule already forbids. Access may only narrow as
-you descend.
-
-`hierarchical` on the spec is unrelated: it means ordered access LEVELS
-(viewer<editor<owner), not the page tree.
+An unrestricted page is open to everyone in the space (`default_open`, the
+custom-field model). A page grant never widens past the space, and EVERY
+ancestor's restriction applies — nearest-wins would let a child re-open what
+its parent closed. `hierarchical` on the spec means access LEVELS, not the tree.
 """
 
 from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.access import service as access_service
@@ -77,8 +52,6 @@ async def _can_manage_page(
 
 async def _page_labels(session: AsyncSession, resource_ids) -> dict[str, str]:
     """Inspector labels (RADD-809): page id -> title."""
-    from sqlalchemy import select
-
     ids = []
     for raw in resource_ids:
         try:
@@ -101,8 +74,7 @@ _PAGE_SPEC = ResourceSpec(
     resource_type=PAGE_RESOURCE,
     can_manage=_can_manage_page,
     accesses=(Access.READ.value, Access.WRITE.value),
-    # Open until restricted — the custom-field model, which is what Hussein
-    # asked for and what makes an unrestricted wiki behave exactly as before.
+    # Open until restricted — the custom-field model.
     default_open=True,
     implied_by={Access.READ.value: (Access.WRITE.value,)},  # a writer can read
     subjects=(GrantSubject.USER, GrantSubject.TEAM, GrantSubject.ROLE, GrantSubject.GROUP),
@@ -118,12 +90,8 @@ register_resource(_PAGE_SPEC)
 async def _subject_context(
     session: AsyncSession, user: User, space_id: uuid.UUID, *, can_manage: bool
 ) -> SubjectContext:
-    """What the actor brings to a page grant.
-
-    `role_ids` are the roles they hold IN THE SPACE — the space equivalent of
-    "roles held on this project" — so a grant naming a role means what a reader
-    would expect: the people who hold that role here.
-    """
+    """What the actor brings to a page grant; `role_ids` are the roles held IN
+    THE SPACE, so a grant naming a role means the people who hold it here."""
     from radd.modules.groups import service as groups_service
     from radd.modules.teams import service as teams_service
 
@@ -139,14 +107,8 @@ async def _subject_context(
 
 
 async def _ancestor_path(session: AsyncSession, page: Page) -> list[uuid.UUID]:
-    """`page` and every ancestor above it, nearest first.
-
-    Bounded by a seen-set rather than trusting the tree: `core.would_create_cycle`
-    guards the write path, but a loop already in the data must read as a finite
-    path, not hang the request (the same defence `test_pages` pins for moves).
-    """
-    from sqlalchemy import select
-
+    """`page` and every ancestor, nearest first. A seen-set bounds it: a loop
+    already in the data must read as a finite path, not hang the request."""
     chain = [page.id]
     seen = {page.id}
     parent_id = page.parent_id
@@ -160,11 +122,8 @@ async def _ancestor_path(session: AsyncSession, page: Page) -> list[uuid.UUID]:
 async def page_access(
     session: AsyncSession, user: User, page: Page, access: str = Access.READ.value
 ) -> bool:
-    """May this actor read (or write) this page?
-
-    Space first, then every restriction on the path down to it — each layer can
-    only take access away.
-    """
+    """May this actor read (or write) this page? Space first, then every
+    restriction on the path down to it."""
     space_held = await space_access.space_permissions(session, user, page.space_id)
     needed = Permission.PAGE_READ if access == Access.READ.value else Permission.PAGE_WRITE
     if needed not in space_held:
@@ -177,10 +136,8 @@ async def page_access(
     if not restricted:
         return True  # nothing on the path: the space's answer stands
     if Permission.PAGE_MANAGE in space_held:
-        # The resource-owned manager rule (RADD-816 moved it here from the
-        # framework): a space's page.manage holder administers restrictions,
-        # so they can always see what they administer. Named at the call site,
-        # never a framework bypass.
+        # The resource-owned manager rule (RADD-816): a space's page.manage
+        # holder always sees what they administer.
         return True
     ctx = await _subject_context(session, user, page.space_id, can_manage=False)
     return all(has_access(grants, ctx, access, None, _PAGE_SPEC) for grants in restricted)
@@ -190,13 +147,8 @@ async def guard_page(
     session: AsyncSession, user: User, page_id: uuid.UUID, permission: Permission
 ) -> Page:
     """Resolve a page and enforce the atom IN ITS SPACE (RADD-791), then the
-    page's OWN restriction, which can only narrow (RADD-792).
-
-    The one gate every per-page endpoint goes through — ~20 REST routes and
-    the MCP write tools (RADD-1005) — so there is one reading of who may touch
-    a page rather than two. `page.space_id` is the scope: a role granted on one
-    space reaches its pages and no others.
-    """
+    page's own restriction (RADD-792) — the one gate every per-page REST route
+    and MCP tool goes through."""
     from .service import get_page  # deferred: service imports this module
 
     page = await get_page(session, page_id)
@@ -210,23 +162,14 @@ async def guard_page(
 async def readable_page_ids(
     session: AsyncSession, user: User, pages: list[Page]
 ) -> set[uuid.UUID]:
-    """Batched `page_access` over a list — the page tree, FTS results, a label index.
-
-    Filtering these matters more than it looks: a restricted page whose TITLE
-    still surfaced in search would defeat the restriction entirely, since a page
-    title is usually the sensitive part.
-    """
+    """Batched `page_access` over a list — the tree, FTS results, a label index."""
     if not pages:
         return set()
-    from sqlalchemy import select
-
     space_ids = {page.space_id for page in pages}
     space_perms = await space_access.permissions_by_space(session, user, list(space_ids))
 
-    # The parent map for every involved space, in ONE query (RADD-948). An
-    # ancestor is usually NOT in `pages` — FTS returns matches, not their
-    # lineage — so the path cannot be resolved from the input alone. Ids and
-    # parents only: no bodies, no titles.
+    # One parent-map query for every involved space (RADD-948): an ancestor is
+    # usually NOT in `pages` (FTS returns matches, not their lineage).
     parent_of: dict[uuid.UUID, uuid.UUID | None] = dict(
         (
             await session.execute(
@@ -276,3 +219,16 @@ async def readable_page_ids(
         if all(has_access(g, ctx, Access.READ.value, None, _PAGE_SPEC) for g in restricted):
             readable.add(page.id)
     return readable
+
+
+async def drop_restricted(session: AsyncSession, actor: User, rows: list, key: str) -> list:
+    """`rows` minus the pages `actor` may not read; each row names its page by the
+    attribute `key`. List surfaces leak a restriction cheapest: an FTS hit's
+    title and snippet ARE the content, and `radd:label-list` renders into a page
+    anyone in the space can open."""
+    if not rows:
+        return rows
+    ids = [getattr(row, key) for row in rows]
+    pages = list((await session.execute(select(Page).where(Page.id.in_(ids)))).scalars())
+    readable = await readable_page_ids(session, actor, pages)
+    return [row for row in rows if getattr(row, key) in readable]

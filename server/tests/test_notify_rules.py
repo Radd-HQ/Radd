@@ -8,9 +8,9 @@ mailboxes, and "nobody noticed" is not evidence — a person who stops receiving
 something has nothing to notice. So the first section asserts, kind by kind,
 that a user with ZERO rule rows resolves to exactly what RADD-686 gave them:
 every kind in the inbox, `DEFAULT_EMAIL_TYPES` also mailed as they happen, and
-the three kinds spec 118 introduced off everywhere. It is compared against
-`DEFAULT_EMAIL_TYPES` rather than a copied list precisely so that widening that
-set later cannot pass here while quietly changing behaviour.
+the three kinds spec 118 introduced off everywhere. The oracles are LITERALS
+below, so a change to a kind's default in `kinds.py` fails here instead of
+moving the expectation with it.
 
 The second section is precedence, which is where a scoped model earns its
 keep — most specific wins, rules are sparse, and a subscription is not a scope
@@ -30,23 +30,40 @@ from radd.config import settings as config
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.notify import prefs as prefs_read, rules as policy, service as notify_service
-from radd.modules.notify.kinds import (
-    NOTIFICATION_KINDS,
-    PERSONAL_KINDS,
-    SUBSCRIPTION_ONLY_KINDS,
-    every_kind,
-)
+from radd.modules.notify.kinds import NOTIFICATION_KINDS, every_kind
 from radd.modules.notify.router import put_preferences
 from radd.modules.notify.rules import Relation, RuleRow, RuleSet, Subject
 from radd.modules.notify.schemas import NotificationPrefsUpdate, NotificationRuleWrite
-from radd.modules.notify.types import (
-    DEFAULT_EMAIL_TYPES,
-    Channel,
-    NotificationType,
-    RuleScope,
-)
+from radd.modules.notify.types import Channel, NotificationType, RuleScope
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+
+# The parity oracles — literals, so the vocabulary cannot move with them.
+#: Addressed AT someone by the event; resolve through `own` alone.
+PERSONAL_KINDS = frozenset(
+    {
+        NotificationType.ASSIGNED,
+        NotificationType.MENTIONED,
+        NotificationType.PARTICIPANT_ADDED,
+        NotificationType.APPROVAL,
+        NotificationType.AUTOMATION,
+    }
+)
+#: Mailed as they happen with no preference saved (RADD-686; `participant_added`
+#: joined in RADD-978 — see `test_notify_mailer` for the stored-row asymmetry).
+DEFAULT_EMAIL_TYPES = frozenset(
+    {
+        NotificationType.ASSIGNED,
+        NotificationType.MENTIONED,
+        NotificationType.COMMENTED,
+        NotificationType.APPROVAL,
+        NotificationType.PARTICIPANT_ADDED,
+    }
+)
+#: Spec 118's additions: `off` everywhere until someone asks for them.
+SUBSCRIPTION_ONLY_KINDS = frozenset(
+    {NotificationType.CREATED, NotificationType.UPDATED, NotificationType.PAGE_CREATED}
+)
 
 PROJECT = uuid.uuid4()
 SPACE = uuid.uuid4()

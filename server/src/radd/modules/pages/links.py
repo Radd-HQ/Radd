@@ -1,9 +1,5 @@
-"""Issue ↔ doc-page links (spec 43).
-
-Items are resolved by their canonical key via the items module's public
-service; hydration (key/title/state) goes through project + workflow
-services — never another module's tables directly.
-"""
+"""Issue ↔ page links (spec 43), resolved and hydrated through the items,
+projects and workflow services."""
 
 import uuid
 
@@ -29,7 +25,6 @@ async def _emit_link(
     event_type: PageEvent,
     page: Page,
     item_id: uuid.UUID,
-    item_key: str,
     actor_id: uuid.UUID,
 ) -> None:
     await events.emit(
@@ -67,9 +62,7 @@ async def link_item(
         session.add(ItemPageLink(item_id=item.id, page_id=page.id, created_by=actor.id))
     await session.flush()
     key = f"{project.key}-{item.number}"
-    await _emit_link(
-        session, PageEvent.LINK_CREATED, page, item.id, key, actor.id
-    )
+    await _emit_link(session, PageEvent.LINK_CREATED, page, item.id, actor.id)
     state = await workflow_service.get_state(session, item.state_id)
     return PageLinkedItem(
         item_id=item.id,
@@ -96,9 +89,7 @@ async def unlink_item(
         )
     await session.delete(link)
     await session.flush()
-    await _emit_link(
-        session, PageEvent.LINK_DELETED, page, item_id, "", actor_id
-    )
+    await _emit_link(session, PageEvent.LINK_DELETED, page, item_id, actor_id)
 
 
 async def linked_items(
@@ -160,7 +151,7 @@ async def linked_items(
 
 
 async def pages_for_item(session: AsyncSession, item_id: uuid.UUID, *, actor=None) -> list[ItemPageRef]:
-    """Live (non-archived) pages linked to an item — the issue page's Docs row."""
+    """Live (non-archived) pages linked to an item."""
     rows = await session.execute(
         select(Page, PageSpace.name)
         .join(ItemPageLink, ItemPageLink.page_id == Page.id)

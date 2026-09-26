@@ -37,6 +37,8 @@ __all__ = [
     "repoint",
     "newest_per_parent",
     "delete_attachment",
+    "purge",
+    "remove_bytes",
     "download_response",
     "save_blob",
     "remove_blob",
@@ -94,7 +96,7 @@ async def save_upload(
     attachment = Attachment(
         entity_type=entity_type,
         entity_id=entity_id,
-        filename=upload.filename or "file",
+        filename=filename,
         content_type=content_type,
         size_bytes=size,
         storage_name=storage_name,
@@ -110,9 +112,7 @@ async def save_upload(
         entity_type=AttachmentEntity.ATTACHMENT,
         entity_id=attachment.id,
         actor_id=actor_id,
-        # None for a doc-parented attachment — the parent is polymorphic and
-        # only an item parent has an item subject.
-        subjects={"item": attachment.item_id},
+        subjects={"item": attachment.item_id},  # None unless an item is the parent
         payload={
             "entity_type": attachment.entity_type,
             "entity_id": str(attachment.entity_id),
@@ -155,11 +155,9 @@ async def repoint(
     to_entity_type: str,
     to_entity_id: uuid.UUID,
 ) -> int:
-    """Move the NAMED attachments from one parent to another, touching only rows
-    actually sitting on the from-parent — ids that don't match are ignored, not
-    errors. Consumed by forms.staging.claim (RADD-800 → RADD-887): the
-    from-filter IS that seam's ownership check — a stolen id names a row on
-    someone else's staging area and simply does not move. Returns how many did."""
+    """Move the NAMED attachments between parents, touching only rows on the
+    from-parent; returns how many moved. For `forms.staging.claim` (RADD-887) the
+    from-filter IS the ownership check: a stolen id simply does not move."""
     if not attachment_ids:
         return 0
     owned = set(
@@ -186,9 +184,8 @@ async def repoint(
 async def newest_per_parent(
     session: AsyncSession, entity_type: str
 ) -> list[tuple[uuid.UUID, datetime]]:
-    """(entity_id, newest created_at) per parent of this type, one grouped
-    query — consumed by forms.staging.sweep_abandoned (RADD-887) to find
-    staging areas nobody came back to without reading this module's table."""
+    """(entity_id, newest created_at) per parent of this type, one grouped query
+    (for `forms.staging.sweep_abandoned`, RADD-887)."""
     rows = await session.execute(
         select(Attachment.entity_id, func.max(Attachment.created_at))
         .where(Attachment.entity_type == entity_type)
@@ -202,11 +199,8 @@ async def download_response(
 ):
     """Bytes (proxy hosts) or a 307 presigned redirect (presigned hosts).
 
-    `width` is the `?w=` convention of RADD-751. When it is honoured the response
-    is always PROXIED, whatever the host's delivery mode: a presigned URL points
-    the browser straight at the object store, which will hand back the original
-    bytes — so redirecting would silently ignore the width the document asked
-    for. Serving fewer bytes is the point, and it is worth the proxy hop.
+    A honoured `width` (RADD-751's `?w=`) is always PROXIED: a presigned URL would
+    hand back the original bytes and silently ignore the width.
     """
     host = await hosts.get_host(session, attachment.storage_host_id)
     client = client_for(host)
@@ -234,12 +228,7 @@ async def delete_attachment(
     *,
     actor_id: uuid.UUID,
 ) -> None:
-    storage_name = attachment.storage_name
-    host_id = attachment.storage_host_id
-    # Resolved BEFORE the delete: the row is gone two lines down, which is
-    # exactly when a consumer cannot go and look the rest up.
-    # The attachment's OWN fields are captured before the row goes; the item is
-    # unaffected by this delete, so its subject resolves normally at emit.
+    # Captured BEFORE the row goes: a consumer cannot look them up afterwards.
     item_id = attachment.item_id
     payload = {
         "entity_type": attachment.entity_type,
@@ -248,15 +237,9 @@ async def delete_attachment(
         "size_bytes": attachment.size_bytes,
     }
     entity_id = attachment.id
-    await session.delete(attachment)
+    refs = await purge(session, [attachment])
     await session.flush()
-    # Grants have no FK on the resource — clear them with the row (spec 92 idiom).
-    from radd.modules.access import service as access_service
-
-    from .acl import ATTACHMENT_RESOURCE
-
-    await access_service.clear_resource(session, ATTACHMENT_RESOURCE, str(entity_id))
-    await _remove_bytes(session, host_id, storage_name)
+    await remove_bytes(session, refs)
     await events.emit(
         session,
         event_type=AttachmentEvent.DELETED,
@@ -268,13 +251,30 @@ async def delete_attachment(
     )
 
 
-async def _remove_bytes(session: AsyncSession, host_id: uuid.UUID, storage_name: str) -> None:
-    try:
-        host = await hosts.get_host(session, host_id)
-        await client_for(host).remove(storage_name)
-    except Exception:  # noqa: BLE001
-        # Best-effort: the DB row is already gone; orphaned bytes beat a 500.
-        logger.exception("attachments: removing %s from storage failed", storage_name)
+async def purge(session: AsyncSession, rows: list[Attachment]) -> list[tuple[uuid.UUID, str]]:
+    """Delete these rows and their grants (no FK on the resource — the spec-92
+    idiom); returns the `(host_id, storage_name)` refs whose bytes must go too."""
+    from radd.modules.access import service as access_service
+
+    from .acl import ATTACHMENT_RESOURCE
+
+    refs = []
+    for row in rows:
+        refs.append((row.storage_host_id, row.storage_name))
+        await access_service.clear_resource(session, ATTACHMENT_RESOURCE, str(row.id))
+        await session.delete(row)
+    return refs
+
+
+async def remove_bytes(session: AsyncSession, refs: list[tuple[uuid.UUID, str]]) -> None:
+    """Best-effort, after the rows are gone: an unreachable host leaves orphaned
+    bytes, never a 500 or a stuck consumer."""
+    for host_id, storage_name in refs:
+        try:
+            host = await hosts.get_host(session, host_id)
+            await client_for(host).remove(storage_name)
+        except Exception:  # noqa: BLE001
+            logger.exception("attachments: removing %s from storage failed", storage_name)
 
 
 # --- the blob API (other modules' loose bytes; no rows, no routing) -----------
@@ -302,16 +302,19 @@ async def save_blob(
     return BlobRef(storage_name=storage_name, host_id=host.id, size_bytes=size)
 
 
+async def _blob_host(session: AsyncSession, host_id: uuid.UUID | None) -> StorageHost:
+    """A None host (pre-102 row) means the default host."""
+    if host_id is not None:
+        return await hosts.get_host(session, host_id)
+    return await hosts.require_default(session)
+
+
 async def remove_blob(
     session: AsyncSession, storage_name: str, *, host_id: uuid.UUID | None
 ) -> None:
-    """Best-effort blob delete; a None host (pre-102 row) means the default host."""
+    """Delete a blob; a failure is logged and re-raised."""
     try:
-        host = (
-            await hosts.get_host(session, host_id)
-            if host_id is not None
-            else await hosts.require_default(session)
-        )
+        host = await _blob_host(session, host_id)
         await client_for(host).remove(storage_name)
     except Exception:  # noqa: BLE001
         logger.warning("attachments: removing blob %s failed", storage_name, exc_info=True)
@@ -321,9 +324,5 @@ async def remove_blob(
 async def read_blob(
     session: AsyncSession, storage_name: str, *, host_id: uuid.UUID | None
 ) -> bytes:
-    host = (
-        await hosts.get_host(session, host_id)
-        if host_id is not None
-        else await hosts.require_default(session)
-    )
+    host = await _blob_host(session, host_id)
     return await client_for(host).read(storage_name)

@@ -1,12 +1,5 @@
-"""The built-in GATES, the SLQ FILTER, the search SOURCE and the trigger node,
-registered as `AutomationNodeSpec`s (RADD-1322).
-
-Each gate is a pure evaluator in `gates.py` wrapped in a spec whose `plan`
-answers with a port — the same contract `ai.classify` has always had, so the
-executor routes a built-in gate and a contributed one through one path. The
-two gates that knew another module's payload (`gate.comment`,
-`gate.page_space`) moved to `comments` and `pages`, which own those shapes.
-"""
+"""The built-in gates, the SLQ filter, the search source and the trigger node as
+`AutomationNodeSpec`s (RADD-1322): each gate's `plan` answers with a port."""
 
 from __future__ import annotations
 
@@ -238,9 +231,7 @@ SEARCH_NODE = AutomationNodeSpec(
 )
 
 
-#: The trigger node itself. Registered so every stored node TYPE has a spec
-#: (RADD-1322); what it fires on is its `event` param, which the trigger
-#: catalogue describes — its ports are a trigger's single `out`.
+#: The trigger node — registered so every stored node TYPE has a spec.
 TRIGGER_NODE = AutomationNodeSpec(
     key="trigger.event",
     kind="trigger",

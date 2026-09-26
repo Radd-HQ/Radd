@@ -189,10 +189,8 @@ def test_unreachable_nodes_are_detectable():
     """A branch nobody wired to the trigger never runs. The editor needs to say
     so — a node that looks configured but is detached is the quietest way for an
     automation to do nothing."""
-    orphan = _node("orphan", AutomationNodeKind.ACTION)
-    nodes = [TRIGGER, ACTION, orphan]
-    edges = [Edge("t", NodePort.OUT, "a")]
-    reachable = graph.is_reachable(["t"], nodes, edges)
+    edges = [Edge("t", NodePort.OUT, "a")]  # an "orphan" node has no inbound edge
+    reachable = graph.is_reachable(["t"], edges)
     assert reachable == {"t", "a"}
     assert "orphan" not in reachable
 
@@ -297,7 +295,7 @@ def test_every_documented_token_actually_resolves():
         token = info.token
         if "<path>" in token:  # the documented shape, not a literal token
             token = "{{payload.changes.field}}"
-        rendered = templating.render_template(token, facts, item_ctx, items)
+        rendered = templating.Renderer(facts, item_ctx, items)(token)
         assert rendered != token, (
             f"{info.token} is documented but did not resolve — it would appear "
             f"verbatim in the output"

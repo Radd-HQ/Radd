@@ -12,33 +12,14 @@ class NotificationType(StrEnum):
     STATE_CHANGED = "state_changed"
     COMMENTED = "commented"
     SLA_BREACH = "sla_breach"
-    # Spec 69: the pre-breach sla.due_soon warning — muteable like the rest.
-    SLA_DUE_SOON = "sla_due_soon"
-    # Spec 58b: an automation rule's notify_user action — payload carries
-    # {"message", "rule"} rendered from the rule's template.
-    AUTOMATION = "automation"
-    # Spec 71: approval requests (to each eligible approver) and decisions (to
-    # the requester) — detail carries {"action", "to_state", ...}. Muteable.
-    APPROVAL = "approval"
-    # RADD-719: a watched wiki page changed. Carries no item — the payload
-    # holds the page's slugs so the inbox row can link without a join.
-    PAGE_UPDATED = "page_updated"
-    # RADD-978: someone SHARED an item with you (spec 72's direct user
-    # participant). The add auto-watches, so every LATER event reached them —
-    # the add itself told nobody, which is the one moment they had no idea the
-    # issue existed. A team add plans nothing personal: team rows resolve live
-    # at fan-out and are ambient by design.
+    SLA_DUE_SOON = "sla_due_soon"  # spec 69: the pre-breach warning
+    AUTOMATION = "automation"  # spec 58b: payload {"message", "rule"}
+    APPROVAL = "approval"  # spec 71: requests to approvers, decisions to the requester
+    PAGE_UPDATED = "page_updated"  # RADD-719: no item; the payload carries the page
+    # RADD-978: a USER was shared into an item; a team add plans nothing.
     PARTICIPANT_ADDED = "participant_added"
-    # --- spec 118: the AMBIENT kinds a SUBSCRIPTION exists to deliver ---
-    #
-    # Everything above answers "something happened to work that names me". A
-    # subscriber asked a different question — "what is happening in this
-    # project / space / team" — and there was no kind that could answer it: an
-    # issue being FILED reached only its assignee, and an edit that changed
-    # neither state nor description reached nobody at all.
-    #
-    # They resolve to `off` in every relationship scope by default, so an
-    # instance that has never opened the settings page cannot notice they exist.
+    # Spec 118: the AMBIENT kinds a subscription exists to deliver — `off` in
+    # every relationship scope by default.
     CREATED = "created"
     UPDATED = "updated"
     PAGE_CREATED = "page_created"
@@ -47,16 +28,9 @@ class NotificationType(StrEnum):
 class RuleScope(StrEnum):
     """How a person is connected to the thing an event is about (spec 118).
 
-    The first three are RELATIONSHIPS — they hold or they do not, and there is
-    nothing to point them at, so their rule rows carry `scope_id = NULL`. The
-    last three are SUBSCRIPTIONS: a row exists because someone named one
-    project, space or team, and `scope_id` is which one.
-
-    `TEAMS` is the my-teams column and `TEAM` is a subscription to one team.
-    They are two scopes rather than one because they answer different questions:
-    "issues filed against any team I belong to" is a standing relationship that
-    follows me as I join and leave teams, while "this team" is a choice about a
-    team I may not even be in.
+    OWN/PARTICIPATING/TEAMS are RELATIONSHIPS (`scope_id` NULL); PROJECT/SPACE/
+    TEAM are SUBSCRIPTIONS naming a target. TEAMS follows my membership; TEAM is
+    one named team I may not even be in.
     """
 
     OWN = "own"
@@ -83,15 +57,8 @@ RELATIONSHIP_SCOPES: tuple[RuleScope, ...] = (
 
 
 class Channel(StrEnum):
-    """What one cell of the matrix says (spec 118).
-
-    The two channels are INDEPENDENT — `EMAIL` with no inbox row is a real
-    answer, and it is the one thing the RADD-686 matrix could not express: a
-    muted type never became a row, and the mailer mailed rows, so "email me, do
-    not clutter my inbox" was structurally unsayable. Spec 118 moves the mute
-    out of the row's existence and onto the row's columns, which is what makes
-    the fourth state reachable.
-    """
+    """One matrix cell (spec 118). The two channels are independent: EMAIL with
+    no inbox row is reachable."""
 
     OFF = "off"
     INBOX = "inbox"
@@ -109,51 +76,6 @@ class Channel(StrEnum):
     @property
     def silent(self) -> bool:
         return self is Channel.OFF
-
-
-#: The types a user gets an EMAIL about the moment they happen, when they have
-#: expressed no preference (RADD-686). No prefs row means exactly this set.
-#:
-#: The personally-directed, high-signal set: someone assigned you the work,
-#: named you, replied to you, is waiting on your decision, or pulled you into an
-#: issue (RADD-978). The ambient types (state changes on things you watch, SLA
-#: timers, automation pings) stay in the digest by default, because an inbox that
-#: mails everything is an inbox nobody reads. Every type is switchable per-user
-#: either way — this is the default, not the rule — which is what the module
-#: constant it replaces (RADD-968's hard-coded `{commented}`) could never be.
-#:
-#: **Known asymmetry (RADD-978, accepted).** `participant_added` was added to
-#: this set AFTER `d686emailtypes` backfilled every existing `notification_prefs`
-#: row with the four types this set then held. So a user who has ever saved a
-#: preference does NOT get this one by email until they tick the box, while a
-#: user with no row does — the default and the stored rows disagree by exactly
-#: this type. No migration corrects it on purpose: rewriting a stored preference
-#: to add a channel the person never asked for is worse than the inconsistency,
-#: and the row is theirs to edit. Any type added here later inherits the same
-#: rule — the default applies to people who have not spoken, not to everyone.
-DEFAULT_EMAIL_TYPES: frozenset[NotificationType] = frozenset(
-    {
-        NotificationType.ASSIGNED,
-        NotificationType.MENTIONED,
-        NotificationType.COMMENTED,
-        NotificationType.APPROVAL,
-        NotificationType.PARTICIPANT_ADDED,
-    }
-)
-
-
-def default_email_types() -> list[NotificationType]:
-    """`DEFAULT_EMAIL_TYPES` in NotificationType declaration order.
-
-    A frozenset has no order, and the stored JSON array, the API response and
-    the checkbox column all need one that does not shuffle between processes.
-    """
-    return [type_ for type_ in NotificationType if type_ in DEFAULT_EMAIL_TYPES]
-
-
-def default_email_type_values() -> list[str]:
-    """The same list as wire strings — what the column actually stores."""
-    return [type_.value for type_ in default_email_types()]
 
 
 # Wire strings for the slas module's timer events (specs 30/69). Constants, not
@@ -189,21 +111,13 @@ class SubjectRef:
     payload: dict = field(default_factory=dict)
 
 
-# Wire string for the participants module's add event (spec 72; RADD-978) — the
-# same idiom again, participants loads AFTER notify (and is disableable); keep in
-# sync with ParticipantEvent.ADDED. There is deliberately no constant for the
-# REMOVE event: nobody needs telling they stopped being copied in.
+# participants' add event as a wire string (it loads after notify and is
+# disableable; keep in sync with ParticipantEvent.ADDED). No REMOVE constant on
+# purpose: nobody needs telling they stopped being copied in.
 PARTICIPANT_ADDED_EVENT = "item.participant_added"
 
-#: The engine's system actor (`automations.types.SYSTEM_ACTOR_ID`) — the identity
-#: every automated write carries, mail intake's items and comments included.
-#:
-#: A constant for a different reason than the three above: automations loads
-#: BEFORE notify, so importing it would be legal. It stays a literal because
-#: `planner.py` is pure policy with no `radd.modules` import at all, and because
-#: one sentinel uuid is not worth a module edge on a dependency list that is
-#: otherwise exactly the spine. `test_notify.py` asserts the two are the same
-#: uuid, so this cannot drift — the risk the idiom above has always carried.
+#: The engine's system actor, as a literal so `planner.py` stays import-free;
+#: `test_notify.py` pins it equal to `automations.types.SYSTEM_ACTOR_ID`.
 SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
 
 

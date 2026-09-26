@@ -33,9 +33,7 @@ plugin = RaddPlugin(
         ),
     ),
     crud_resources=(CrudResourceSpec("form", "project", "intake forms", "form.manage"),),
-    # RADD-892: the two facts about forms other machinery used to reach in for —
-    # whether the portal is worth a nav link, and that a form dies with its
-    # project (`forms.project_id` carries no ON DELETE CASCADE).
+    # RADD-892: the portal nav fact, and forms dying with their project (no FK cascade).
     nav_facts=(NavFactSpec(key="portal", resolve=portal.nav_portal_visible),),
     project_purges=(ProjectPurgeSpec(name="forms", tables=("forms",), order=20),),
     description=(

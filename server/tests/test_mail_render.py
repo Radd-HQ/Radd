@@ -49,7 +49,7 @@ from radd.modules.mailintake import (
     transport as mail_transport,
 )
 from radd.modules.mailintake.models import MailMessage, MailSender
-from radd.modules.mailintake.types import MailDirection, MailRecipientKind, MailSenderKind
+from radd.modules.mailintake.types import MailDirection, MailSenderKind
 from radd.modules.notify import emailer, lines, service as notify_service
 from radd.modules.notify.models import Notification
 from radd.modules.notify.types import NotificationType
@@ -136,9 +136,7 @@ async def test_the_outbound_reply_goes_to_the_contact_and_no_watcher(db, world):
 
     recipients = await reply.recipients_for(db, item.id)
 
-    assert [(r.email, r.kind) for r in recipients] == [
-        ("customer@vip.example.com", MailRecipientKind.REQUESTER)
-    ]
+    assert [r.email for r in recipients] == ["customer@vip.example.com"]
 
 
 async def test_an_item_with_no_contact_mails_nobody_from_here(db, world):
@@ -303,7 +301,7 @@ def test_the_footer_says_why_this_address_is_on_the_thread():
     planned = _reply()
     requester = reply.render(
         planned,
-        reply.Recipient("cass@vip.example.com", "Cass", MailRecipientKind.REQUESTER),
+        reply.Recipient("cass@vip.example.com", "Cass"),
     )
     # RADD-968: the watcher half is notify's, and it passes its OWN wording —
     # `mailrender` takes the reason as text so neither module imports the other.
@@ -389,9 +387,8 @@ async def test_the_planned_reply_names_the_author_and_addresses_the_contact(db, 
     subject are resolved by the transport at SEND time (RADD-968), so nothing
     here can go stale between planning and delivery."""
     agent, _project, item = world
-    await mail_service.upsert_contact(
-        db, item.id, email=f"cass-{uuid.uuid4().hex[:8]}@vip.example.com", name="Cass"
-    )
+    contact = f"cass-{uuid.uuid4().hex[:8]}@vip.example.com"
+    await mail_service.upsert_contact(db, item.id, email=contact, name="Cass")
     comment = await comments_service.create_comment(
         db, item.id, CommentCreate(body="Engineer dispatched."), agent
     )
@@ -409,7 +406,7 @@ async def test_the_planned_reply_names_the_author_and_addresses_the_contact(db, 
     assert planned.author == "Ada Agent"
     assert planned.item.key.endswith(f"-{item.number}")
     assert planned.item.base_url == BASE_URL + "/"
-    assert [r.kind for r in planned.recipients] == [MailRecipientKind.REQUESTER]
+    assert [r.email for r in planned.recipients] == [contact]
     message = reply.render(planned, planned.recipients[0])
     assert "Ada Agent" in message.text
     assert f"{BASE_URL}/issues/{planned.item.key}" in message.html

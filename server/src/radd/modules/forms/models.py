@@ -17,21 +17,9 @@ from radd.db import Base, TimestampMixin
 
 
 class Form(Base, TimestampMixin):
-    """Template-scoped intake form (spec 17): captures structured input and creates a
-    work item in `project_id`.
-
-    `fields` is an ordered list of `{field_key, label_override?, help?, required}` dicts —
-    each `field_key` references a registry field definition in the project's scope
-    (validated on write). A form field may be `required` even when the underlying
-    registry field is not. `defaults` is a `FormDefaults` dict applied to the item the
-    submit creates (kind/state_name/priority/labels/assignee_email/cycle_name/
-    release_version); unknown state/label/cycle/release names are stored verbatim and
-    resolved at submit, an unknown assignee is rejected on write.
-
-    `allow_public` survives as the PORTAL visibility flag; the spec-62 tokened
-    anonymous route (and its `public_token` column) died with RADD-828 — no
-    anonymous reporting.
-    """
+    """An intake form (spec 17) that creates an item in `project_id`. `fields` is
+    an ordered `[{field_key, label_override?, help?, required}]` over the project's
+    registry; `defaults` is a `FormDefaults` dict resolved by NAME at submit."""
 
     __tablename__ = "forms"
 
@@ -54,16 +42,12 @@ class Form(Base, TimestampMixin):
     description_required: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
-    # RADD-798: offer the submitter a team picker, limited to THEIR teams, whose
-    # choice writes `item.team_id` and lets that team open the request.
-    #
-    # Per-form and OFF by default. An internal-IT form wants it; an HR complaint
-    # form very much does not, and defaulting it on would quietly widen who can
-    # read requests that already exist.
+    # RADD-798: a submitter team picker (their own teams). Off by default — on, it
+    # widens who can read the request.
     team_picker_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false()
     )
-    # Public submit path (spec 62): token minted on first enable, kept on disable.
+    # Portal visibility: every signed-in user may see and submit (spec 73).
     allow_public: Mapped[bool] = mapped_column(Boolean, default=False)
 
 

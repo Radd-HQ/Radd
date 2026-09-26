@@ -19,10 +19,8 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("/items/{item_id}/csat", response_model=ItemCsatRead | None)
 async def item_csat(item_id: uuid.UUID, session: Session, user: CurrentUser) -> ItemCsatRead | None:
-    """The item's ANSWERED satisfaction survey, or null — none sent, or not yet
-    answered. RADD-1292: this used to 404 for both, so every issue view logged
-    a failed request for the ordinary case of "no survey"; an unreadable item
-    still 404s."""
+    """The item's answered survey, or null (none sent, or not yet answered —
+    RADD-1292: a 404 there was logged by every issue view). An unreadable item 404s."""
     await items_service.require_readable_item(session, item_id, user)
     try:
         survey = await service.responded_survey(session, item_id)

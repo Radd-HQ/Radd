@@ -10,13 +10,9 @@ SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]{0,99}$"
 
 
 class ExternalIdentity(BaseModel):
-    """Where a row came from, for callers that import (spec 117).
-
-    Honored only when the caller passes a permission set carrying
-    `page.manage` — the same shape `CommentCreate` uses for its author/timestamp
-    overrides, so an ordinary request cannot reach these by adding two fields to
-    its JSON body.
-    """
+    """Where a row came from (spec 117). Honored only with a permission set
+    carrying `page.manage` (the `CommentCreate` shape), so a request cannot reach
+    it by adding two fields."""
 
     #: The INSTANCE, not the product: `confluence:wiki.example.com`.
     external_source: str = Field(default="", max_length=200)
@@ -25,7 +21,7 @@ class ExternalIdentity(BaseModel):
 
 class PageSpaceCreate(ExternalIdentity):
     name: str = Field(min_length=1, max_length=200)
-    # Omitted -> derived from the name (slugs are cosmetic; URLs use ids).
+    # Omitted -> derived from the name.
     slug: str | None = Field(default=None, pattern=SLUG_PATTERN)
     description: str = ""
     position: float = 0
@@ -50,10 +46,8 @@ class PageSpaceRead(BaseModel):
     #: this space. Written through PUT /page-spaces/{id}/public-access.
     public: bool = False
     page_count: int = 0  # live (non-archived) pages; hydrated by the service
-    #: RADD-814: the caller's per-SPACE permission union — the space analogue of
-    #: ProjectRead.permissions, and what lets the SPA's one `can()` seam resolve
-    #: a space-scoped atom instead of asking a global question (the RADD-810
-    #: class). Filled by the list endpoint; empty from other constructors.
+    #: RADD-814: the caller's per-SPACE permission union (the space analogue of
+    #: ProjectRead.permissions); filled by the list endpoint only.
     permissions: list[str] = []
     created_at: UtcDatetime
     updated_at: UtcDatetime
@@ -76,12 +70,9 @@ class PageCreate(ExternalIdentity):
     slug: str | None = Field(default=None, max_length=120)
     body: str = ""
     position: float | None = None  # omitted -> appended after current siblings
-    #: RADD-712: start from a template's shape. Ignored when `body` is given —
-    #: an explicit body is a deliberate choice and must win.
+    #: RADD-712: start from a template; ignored when `body` is given.
     template: str | None = None
-    #: Spec 117 import overrides, honored only for a caller holding page.manage.
-    #: An import STATES the author; falling back to the actor credits whoever ran
-    #: it with thousands of other people's pages (the spec-90 mistake).
+    #: Spec 117 import overrides (page.manage only): an import STATES the author.
     author_id: uuid.UUID | None = None
     created_at: UtcDatetime | None = None
     updated_at: UtcDatetime | None = None
@@ -104,20 +95,12 @@ class PageUpdate(BaseModel):
     #: revision's real editor; `updated_at` backdates it.
     author_id: uuid.UUID | None = None
     updated_at: UtcDatetime | None = None
-    #: Do not snapshot the previous content into `page_versions`, and do not bump
-    #: `version` (spec 117). An import CONSTRUCTS a page over several passes — the
-    #: body is written once, then rewritten when its attachments exist — and those
-    #: intermediate states are not edits anybody made. Without this the
-    #: construction passes occupy the version numbers the page's REAL imported
-    #: history needs, and writing that history then collides on (page, version).
+    #: Spec 117: an import's construction passes must not consume version numbers.
     suppress_version: bool = False
-    #: Spec 122. The collaborative session (from `POST /collab/pages/{id}/join`)
-    #: this save was serialised FROM. When it names a connected editor of the
-    #: page's live document the `expected_version` check is skipped — the room
-    #: IS the current version — and the history window applies.
+    #: Spec 122: the live session this save came from; a connected editor's
+    #: session skips `expected_version` and the history window applies.
     collab_session: uuid.UUID | None = None
-    #: Spec 122. The session's last save: always writes a `page_versions` row,
-    #: whatever the window says.
+    #: Spec 122: the session's last save — always writes history.
     final: bool = False
 
 
@@ -191,23 +174,13 @@ class PageTemplateSummaryRead(BaseModel):
 
 
 class PageExtensionRead(BaseModel):
-    """One entry in the editor's insert menu (RADD-709).
-
-    A projection of the kernel's `PageExtensionSpec`. No handler crosses the
-    wire because there is none: rendering is client-side by design, and this
-    endpoint exists so the menu is a function of what is INSTALLED rather than a
-    list hardcoded in the SPA.
-    """
+    """One insert-menu entry (RADD-709); `source` is the contributing plugin (RADD-748)."""
 
     name: str
     label: str
     description: str
     params_schema: dict = Field(default_factory=dict)
     icon: str = ""
-    #: The plugin that contributes it (RADD-748). The insert menu groups on this,
-    #: so an installed plugin's extensions arrive under their own heading with no
-    #: frontend change — and the SERVER is what says where each came from, rather
-    #: than the client guessing from a name it may never have seen.
     source: str = ""
 
 
@@ -231,8 +204,7 @@ class PageSummary(BaseModel):
 
 
 class PageBreadcrumb(BaseModel):
-    """An ancestor in the trail. Carries its path so the client can build the
-    ancestor's URL without a second fetch (RADD-702, RADD-1233)."""
+    """An ancestor in the trail, with its path for the URL (RADD-1233)."""
 
     id: uuid.UUID
     number: int
@@ -250,8 +222,7 @@ class PageRead(BaseModel):
     parent_id: uuid.UUID | None
     title: str
     slug: str
-    #: RADD-1233: the canonical space-relative address. A client that reached
-    #: the page by a stale or permalink address compares and redirects here.
+    #: RADD-1233: the canonical address; a client that came by another redirects.
     path: str
     body: str
     position: float
@@ -301,13 +272,12 @@ class PageLinkedItem(BaseModel):
     title: str
     state: str
     state_category: str
-    #: The page's TEXT mentions it (RADD-943) — the link is reconciled on every
-    #: save, so it is not the reader's to remove. False = someone typed the key.
+    #: From the page TEXT (RADD-943), so not the reader's to remove.
     derived: bool = False
 
 
 class ItemPageRef(BaseModel):
-    """A page linked to an issue (the issue page's Docs row)."""
+    """A page linked to an issue."""
 
     page_id: uuid.UUID
     space_id: uuid.UUID

@@ -1,21 +1,10 @@
-"""The intake-validation API (spec 119), mounted under `/items`.
+"""The intake-validation API (spec 119), mounted under `/items`: the router lives
+here (items must never import automations), the path lives there.
 
-**Why an items-shaped URL from the automations module.** `POST /items/validate`
-is a thing you do to an item; naming it `/automations/validate-item` would make
-every caller learn which subsystem happens to implement the checks. The
-dependency runs the other way (items must never import automations), so the
-ROUTER lives here and the PATH lives there.
-
-That is only safe because of how Starlette matches. It tries routes in
-declaration order, and `items` mounts before `automations` — but a path that
-matches with the wrong METHOD is a PARTIAL match, and a later FULL match wins.
-`POST /items/validate` therefore reaches this handler past `GET|PATCH|DELETE
-/items/{item_id}`, and there is no `POST /items/{item_id}` for it to hide
-behind. The context read is three segments (`/items/validate/context`) for the
-same reason in reverse: as a two-segment GET it would sit behind
-`GET /items/{item_id}` and answer a 422 about parsing "validate" as a UUID —
-RADD-761's exact failure. `tests/test_route_shadowing.py` asserts both over the
-assembled app.
+Route-shadowing trap: `POST /items/validate` is reachable past
+`/items/{item_id}` only because no `POST /items/{item_id}` exists; the context
+read is three segments because a two-segment GET would be shadowed (RADD-761).
+`tests/test_route_shadowing.py` asserts both.
 """
 
 import uuid
@@ -30,7 +19,6 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.projects import service as projects_service
 
 from . import intake
-from .intake import IntakeCommit
 from .intake_schemas import (
     IntakeValidateRequest,
     IntakeValidateResult,
@@ -82,6 +70,3 @@ async def validation_context(
         session, DraftScope(project_id=project_id, type_id=type_id, form_id=form_id)
     )
     return ValidationContextRead(governed=governed, mode=mode)
-
-
-__all__ = ["router", "IntakeCommit"]

@@ -1,25 +1,12 @@
 """Page addresses (RADD-1233): the id is the key, the path is how people say it.
 
-A page has three addresses and one identity:
+- `pages.id` — the key; `pages.number` — the permalink (`/pages?pageId=12402`);
+- `<space>/<slug>/<slug>/…` — the readable address, derived, never stored.
 
-- `pages.id` — the key everything joins on;
-- `pages.number` — the same identity as a small integer, for a permalink
-  (`/pages?pageId=12402`) that survives every rename and move;
-- `<space>/<slug>/<slug>/…` — the hierarchical, readable address, derived
-  from the tree and never stored.
-
-Resolving a path is ONE query: every live page in the space whose slug appears
-in the path's segment set, then a walk from the root in memory
-(`core.walk_path`). Same-named pages at other depths are in the result set and
-simply never match their level's parent. Nothing is denormalised, so a move or
-rename rewrites nothing.
-
-When the walk fails, the path is looked up EXACTLY in `page_path_history` —
-every address the page and its descendants ever had is written there on
-rename, move and restore, and the migration seeded it with every nested
-page's pre-1233 single-slug address — so a stale link lands on the page it
-named, never on a same-named neighbour, and there is no third, guessing step.
-The client then redirects to the current path.
+Resolution is ONE query (every page in the space whose slug is in the path)
+plus an in-memory walk (`core.walk_path`); on a miss, an EXACT lookup in
+`page_path_history`, which every rename/move/restore writes for the page and
+its descendants. There is no third, guessing step.
 """
 
 from __future__ import annotations
@@ -47,12 +34,8 @@ def split(path: str) -> list[str]:
 
 
 async def resolve(session: AsyncSession, space: PageSpace, path: str) -> Page:
-    """The page at `path` inside `space`, or raise NotFound.
-
-    A single segment that parses as a UUID or an integer is the page's id or
-    number (a permalink, or a pre-702 link) — checked before any slug, since a
-    slug is never shaped like either.
-    """
+    """The page at `path` inside `space`, or raise NotFound. A single segment
+    shaped like a UUID or an integer is an id or number, checked first."""
     segments = split(path)
     if not segments:
         raise NotFoundError(PageEntity.PAGE, f"{space.slug}/")
@@ -65,10 +48,8 @@ async def resolve(session: AsyncSession, space: PageSpace, path: str) -> Page:
             select(Page).where(Page.space_id == space.id, Page.slug.in_(set(segments)))
         )
     ).scalars().all()
-    # Live pages first: a live page and an archived one may share a path (the
-    # archived one no longer holds the name), and the address means the live
-    # page. An archived page with no live namesake is still reachable by its
-    # path — the archive browser links it that way.
+    # Live pages first: an archived page may share a live page's path, and the
+    # address means the live one; with no live namesake it is still reachable.
     found = core.walk_path([row for row in candidates if row.archived_at is None], segments)
     if found is None:
         found = core.walk_path(candidates, segments)

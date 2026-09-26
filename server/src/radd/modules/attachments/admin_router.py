@@ -1,11 +1,6 @@
-"""Settings → Storage admin API (spec 102): storage hosts.
-
-Instance-admin only (the ai admin-router idiom). Reads redact the secret
-(`has_secret_key`) and carry usage counts from ONE grouped query; an empty
-secret on update means "keep the stored one" (handled in the service). Health
-is a live probe against the host — never stored, and failures come back as
-data (the admin is diagnosing config), never a 500.
-"""
+"""Settings → Storage admin API (spec 102), instance-admin only. Reads redact
+the secret and carry usage counts from one grouped query; health is a live
+probe whose failures come back as data, never a 500."""
 
 import logging
 import uuid
@@ -66,11 +61,9 @@ async def create_storage_host(
 ) -> StorageHostRead:
     _require_instance_admin(user)
     host = await hosts.create_host(session, data, actor_id=user.id)
-    # create_host only refreshes the capability snapshot when it promotes a
-    # default — cover the other path so the Server pill never lags this write.
+    # create_host refreshes the snapshot only when it promotes a default.
     await hosts.refresh_default_snapshot(session)
-    # Best-effort eager readiness (make the bucket/dir now); a failure is the
-    # health endpoint's story, not a failed create.
+    # Best-effort readiness (bucket/dir now); a failure is /health's story.
     try:
         await clients.client_for(host).ensure_ready()
     except Exception:  # noqa: BLE001 — any SDK/OS failure surfaces via /health

@@ -1,4 +1,4 @@
-"""Doc-space CRUD (spec 43). Pages/versions live in service.py."""
+"""Page-space CRUD (spec 43). Pages and versions live in service.py."""
 
 import uuid
 
@@ -149,14 +149,6 @@ async def delete_space(
         session, PageEvent.SPACE_DELETED, space, actor_id,
         {"name": space.name, "page_count": count or 0},
     )
-
-
-async def list_spaces(session: AsyncSession) -> list[PageSpaceRead]:
-    result = await session.execute(
-        select(PageSpace).order_by(PageSpace.position, PageSpace.name, PageSpace.id)
-    )
-    spaces = list(result.scalars())
-    return await read_spaces(session, spaces)
 
 
 async def read_spaces(

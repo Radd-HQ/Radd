@@ -10,10 +10,12 @@ import uuid
 from sqlalchemy import func, literal, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .core import build_tsquery
+from radd.modules.search.service import build_tsquery
+from radd.modules.search.types import MAX_QUERY_CHARS
+
 from .models import Page, PageSpace
 from .schemas import DocSearchResult
-from .types import DOCS_TS_CONFIG, MAX_QUERY_CHARS
+from .types import DOCS_TS_CONFIG
 
 
 async def search_pages(
@@ -24,10 +26,8 @@ async def search_pages(
     space_id: uuid.UUID | None = None,
     space_ids: "set[uuid.UUID] | None" = None,
 ) -> list[DocSearchResult]:
-    """Ranked live FTS over non-archived pages (docs are global — spec 86). The
-    public KB (spec 74) passes `public_only=True` (PUBLIC spaces only) and
-    optionally pins one space — same statement, same tsvector expression, same
-    GIN index."""
+    """Ranked live FTS over non-archived pages, constrained to `space_ids` BEFORE
+    the limit (RADD-791)."""
     q = q.strip()[:MAX_QUERY_CHARS]
     tsquery_text = build_tsquery(q)
     if not tsquery_text:
@@ -51,9 +51,7 @@ async def search_pages(
     )
     if space_id is not None:
         stmt = stmt.where(Page.space_id == space_id)
-    # RADD-791: constrain to the spaces the reader may see, BEFORE the limit —
-    # filtering afterwards would let unreadable hits eat the result budget and
-    # return a short page of nothing, the pagination bug RADD-672 fixed on items.
+    # BEFORE the limit: filtering afterwards lets unreadable hits eat the budget.
     if space_ids is not None:
         stmt = stmt.where(Page.space_id.in_(space_ids))
     return [
@@ -70,14 +68,8 @@ async def pages_by_ids(
     *,
     space_ids: "set[uuid.UUID] | None" = None,
 ) -> list[DocSearchResult]:
-    """Non-archived pages by id, result-shaped (spec 103: deflection fuses
-    semantic candidates that FTS never surfaced, so it needs their titles).
-    `public_only` re-checks the LIVE space flag (spec 106): the vector store
-    carries a public flag copied at embed time, and the anonymous surface must
-    not trust it for a space flipped private since. `space_ids` constrains to
-    the spaces a reader may see — search.semantic's Ask mode materializes its
-    ANN candidates through it (RADD-887), the same RADD-791 rule
-    `search_pages` applies."""
+    """Non-archived pages by id, result-shaped (semantic candidates FTS never
+    surfaced), constrained to `space_ids`."""
     if not page_ids:
         return []
     stmt = select(Page).where(Page.id.in_(page_ids), Page.archived_at.is_(None))

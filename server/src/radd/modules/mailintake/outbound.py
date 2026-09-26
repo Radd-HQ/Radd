@@ -1,34 +1,13 @@
-"""Outbound mail to the external requester (spec 62, rebuilt RADD-955/968).
+"""Outbound mail to the external requester (spec 62, RADD-955/968/982).
 
-A public comment on a ticket that came in by email is mailed back to the person
-who raised it, in a message their client threads under the original rather than
-stacking as a new conversation.
+One consumer ships two messages — a public comment relayed as a reply
+(`reply.py`) and the resolution notice (`resolved.py`) — through the
+`OutboundPlan` protocol. Users are notify's to mail; this leg exists because a
+requester has no account and so no notification row.
 
-**Two messages, one consumer.** The comment reply (`reply.py`) and the
-resolution notice (`resolved.py`, RADD-982 — gated on the `mail_send_resolved`
-setting since RADD-1368) are the same job: tell the external contact something
-that happened on their ticket, read off the same stream with the same
-at-most-once cursor. What differs is the PLAN, and the plan answers for itself
-through `OutboundPlan` (`recipients`, `subject`, `comment_id`, `pin_subject`,
-`kind`, `render(recipient)`), so a third message is a planner and a line in
-`_plan`.
-
-Cursor idiom = the shared head-seeded scaffold (`events.runner.run_head_seeded`):
-consumer offset `mailintake.outbound`, first start seeds AT THE STREAM HEAD (a
-requester must never be mailed the historical backlog), and the cursor is
-committed BEFORE sending — for email, a dropped reply beats a duplicate. With no
-sender configured the consumer still advances, so enabling SMTP later does not
-replay weeks of comments.
-
-**RADD-968 narrowed the recipients to the contact.** This consumer used to mail
-notify's watcher set too, a second fan-out that disagreed with the one deciding
-the inbox (see `reply.recipients_for`). Users are now mailed by `notify.mailer`;
-this file owns the leg notify structurally cannot: the requester has no account,
-so no notification row can ever exist for them.
-
-Delivery itself moved to `service.send_item_mail` — one transport, two callers
-(this consumer and notify's mailer), so threading, the sender row, the recorded
-Message-ID and the `mail.sent`/`mail.failed` events cannot drift apart.
+Head-seeded cursor (`events.runner.run_head_seeded`), committed BEFORE sending:
+for email a dropped reply beats a duplicate, and enabling a sender later
+replays nothing.
 """
 
 import logging
@@ -55,21 +34,14 @@ from .types import OUTBOUND_BATCH, OUTBOUND_CONSUMER_NAME, REPLY_SUBJECT_TEMPLAT
 
 logger = logging.getLogger(__name__)
 
-#: What a comment with no resolvable author is attributed to. An event whose
-#: `author` ref is missing is a bug upstream, but "commented" with an empty name
-#: in front of it is a broken sentence in someone's mailbox.
+#: Attribution for a comment with no resolvable author (an upstream bug, but an
+#: empty name is a broken sentence in someone's mailbox).
 UNKNOWN_AUTHOR = "Someone"
 
 
 class OutboundPlan(Protocol):
-    """What this consumer needs of a planned message, and nothing more.
-
-    A Protocol rather than a base class because the two planners are
-    dataclasses that share no state — only the questions `_deliver` asks. It is
-    also the list of things the TRANSPORT decides per message, which is why
-    `pin_subject` is on it: the consumer must not be the place that remembers
-    which message threads under the requester's subject and which opens its own.
-    """
+    """What this consumer needs of a planned message — including `pin_subject`, so
+    the consumer never has to know which message opens its own topic."""
 
     item_id: uuid.UUID
     subject: str
@@ -79,29 +51,18 @@ class OutboundPlan(Protocol):
     recipients: tuple[Recipient, ...]
 
     async def prepare(self, session: AsyncSession) -> tuple["OutboundPlan | None", tuple[MailAttachment, ...]]:
-        """Materialise what delivery needs from the database: the reply re-reads
-        its comment (RADD-988 — the body may have turned internal or gone since
-        planning, and its images are exported only from approved hosts); the
-        resolution notice needs nothing. None = nothing to send any more."""
+        """Materialise what delivery needs: the reply re-reads its comment (RADD-988 —
+        it may have turned internal or gone since planning). None = nothing to send."""
         ...
 
     def render(self, recipient: Recipient) -> mailrender.RenderedMail: ...
 
 
 def should_reply(*, has_recipients: bool, visibility: str, origin: str | None) -> bool:
-    """Pure send decision: someone to mail AND the comment is PUBLIC AND it did
-    not come FROM the requester's mail. That last gate is what stops an inbound
-    message echoing straight back out — the first half of a mail loop, closed
-    here rather than left to the RADD-957 guards.
-
-    It used to be "the author is not SYSTEM" (RADD-1318), which also swallowed
-    every automation's comment: "on Email received, reply 'we're on it'" wrote
-    the comment and never mailed it. Deciding by ORIGIN relays an automation's
-    public comment like anyone else's, and refuses exactly the inbound echo.
-
-    The PUBLIC gate is also what keeps an internal comment away from the
-    customer: notify mails internal comments to the users whose notification
-    rows survived `comment.read_internal`, and this leg never sees them.
+    """Pure send decision: someone to mail, the comment is PUBLIC, and it did not
+    come FROM the requester's mail (the inbound echo — the first half of a loop).
+    Decided by ORIGIN, not author (RADD-1318), so an automation's public comment
+    is relayed like anyone's.
     """
     if not has_recipients:
         return False
@@ -111,12 +72,8 @@ def should_reply(*, has_recipients: bool, visibility: str, origin: str | None) -
 
 
 async def _plan(session: AsyncSession, event: Event) -> OutboundPlan | None:
-    """Which planner, if any, claims this event.
-
-    The `outbound_configured` gate stays FIRST and shared: with nowhere to send
-    from, every message this consumer ships is equally undeliverable, and the
-    cursor must still advance so enabling a sender later replays nothing.
-    """
+    """Which planner, if any, claims this event — after the shared
+    `outbound_configured` gate (unconfigured still advances the cursor)."""
     if not await service.outbound_configured(session):
         return None  # unconfigured = advance silently, plan nothing
     if event.event_type == CommentEvent.CREATED.value:
@@ -156,13 +113,10 @@ async def _plan_reply(session: AsyncSession, event: Event) -> OutboundReply | No
     return OutboundReply(
         item_id=item_id,
         comment_id=comment_id,
-        # Only the OPENING subject: the transport prefers the thread's stored
-        # one, so a rename cannot split the conversation.
+        # Only the OPENING subject; the transport prefers the thread's stored one.
         subject=REPLY_SUBJECT_TEMPLATE.format(key=key, title=item.title),
         body=body or payload.get("excerpt", ""),
-        # The author ref the comment event has always carried (RADD-922) and
-        # this consumer never read — which is why a reply arrived as an
-        # unattributed paragraph.
+        # The comment event's author ref (RADD-922).
         author=(payload.get("author") or {}).get("name") or UNKNOWN_AUTHOR,
         item=mailrender.ItemMail(key=key, title=item.title, base_url=settings.app_base_url),
         recipients=recipients,
@@ -175,15 +129,11 @@ async def _deliver_all(plans: list[OutboundPlan]) -> None:
 
 
 async def _deliver(plan: OutboundPlan) -> None:
-    """Its own session per message: the consumer's cursor is already committed
-    by this point (at-most-once, by design), so there is no transaction left to
-    join and the transport opens what it needs."""
+    """Its own session per message: the cursor is already committed (at-most-once)."""
     async with SessionLocal() as session:
         prepared, images = await plan.prepare(session)
         for recipient in prepared.recipients if prepared is not None else ():
-            # Composed PER RECIPIENT: the footer says why this address is on the
-            # thread (RADD-967). Today that is one address, but the seam is the
-            # same one notify uses for the watcher wording.
+            # Composed PER RECIPIENT (RADD-967).
             message = prepared.render(recipient)
             await service.send_item_mail(
                 session,

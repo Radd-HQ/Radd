@@ -5,13 +5,8 @@ resolution, permission filtering) and the writes. One transaction per batch;
 each event runs in a SAVEPOINT so a bad event is logged and skipped, never
 wedging the cursor.
 
-**Transaction ownership (RADD-1047):** whoever OPENS the session commits it.
-`run_once` opens one and commits after the batch it drives; `_bootstrap` commits
-per batch of the backlog it loops over. `_consume` itself never commits — it is
-handed a session and writes into it. Tests exercise it with their rolled-back
-fixture session, and a commit here made every fixture row of every such test
-permanent in the shared test database (RADD-992: a second file then saw two
-senders where it had created one).
+Whoever OPENS the session commits it (RADD-1047): `_consume` never commits,
+which is what lets tests drive it inside their rolled-back fixture session.
 """
 
 import logging
@@ -35,15 +30,10 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from . import kinds, mentions, planner, rules as notify_rules, service, subjects
-from .audience import actor_name_of, item_audience, own_of, recipient_ids, subject_of
+from .audience import actor_name_of, item_audience, own_of, subject_of
 from .audience import item_ref as _ref
 from .planner import Plan, PlannedNotification
 from .rules import Subject
-
-# `consumer.recipient_ids` is the documented seam (docs/modules.md, spec 72) and
-# is re-exported rather than moved, so the name callers already reach for keeps
-# working after spec 118 split the recipient set four ways.
-__all__ = ["recipient_ids", "run_once"]
 from .types import (
     APPROVAL_APPROVED_EVENT,
     APPROVAL_DECLINED_EVENT,
@@ -83,9 +73,8 @@ _SLA_EVENT_TYPES = {
 
 
 def handles(event_type: str) -> bool:
-    """Does this consumer act on the event at all? The core families, a
-    plugin's contributed kinds (RADD-1326), and the events of every LIVE
-    notification subject (RADD-1385 — a page's, while the wiki is enabled)."""
+    """The core families, contributed kinds (RADD-1326), and every LIVE
+    subject provider's events (RADD-1385)."""
     return (
         event_type in _HANDLED
         or event_type in kinds.contributed_events()
@@ -108,10 +97,8 @@ async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
     if not batch:
         return 0
     for event in batch:
-        # A bulk import's events are `silent`: nobody is notified about work that
-        # happened years ago in another system. The importer sets watchers from the
-        # source data explicitly, so skipping these also keeps the watcher graph
-        # out of the bootstrap's hands rather than half-derived from imported rows.
+        # An import's events are `silent`: nobody is told about old work, and the
+        # importer sets watchers from the source data itself.
         if event.silent or not handles(event.event_type):
             continue
         try:
@@ -124,15 +111,12 @@ async def _consume(session: AsyncSession, *, watch_only: bool) -> int:
 
 
 async def _bootstrap(session: AsyncSession) -> int:
-    """Very first run: consume the entire historical backlog WATCH-ONLY. This
-    backfills the watcher graph from real activity (creators/assignees/commenters
-    follow what they touched) without spamming notifications for old events —
-    notifications begin from the moment the module first starts."""
+    """Very first run: consume the whole backlog WATCH-ONLY — the watcher graph
+    backfills from real activity; notifications begin from now."""
     logger.info("notify: first start — backfilling watchers from the event backlog")
     total = 0
     while processed := await _consume(session, watch_only=True):
-        # Per batch, not once at the end: a years-long backlog should land
-        # progressively, and a crash mid-way must not replay it from zero.
+        # Per batch: a crash mid-way must not replay the backlog from zero.
         await session.commit()
         total += processed
     return total
@@ -145,15 +129,12 @@ async def _handle(session: AsyncSession, event: Event, *, watch_only: bool) -> N
 
 async def _handle_derived(session: AsyncSession, event: Event, *, watch_only: bool) -> None:
     if not watch_only:
+        # Contributed kinds (RADD-1326) and non-item subjects (RADD-1385) only
+        # notify: neither follows anything, so the bootstrap skips them.
         for spec in kinds.contributed_for(event.event_type):
             await _handle_contributed(session, event, spec)
-        # RADD-1385: a non-item subject's own events (spec 118's page fan-out).
-        # Watch-only has nothing to do: the subject's module follows on its own
-        # write path (`pages.update_page` auto-watches the editor, RADD-719).
         await subjects.handle_event(session, event)
     if event.event_type not in _HANDLED:
-        # RADD-1326: a plugin's kind answers this event. Never on the watch-only
-        # bootstrap — a contributed kind notifies; it does not follow anything.
         return
     if event.event_type == CommentEvent.CREATED.value:
         await _handle_comment_created(session, event, watch_only=watch_only)
@@ -164,9 +145,7 @@ async def _handle_derived(session: AsyncSession, event: Event, *, watch_only: bo
         if not watch_only:  # approvals never touch the watcher graph (spec 71)
             await _handle_approval_event(session, event)
     elif event.event_type == PARTICIPANT_ADDED_EVENT:
-        # The watcher row was written by participants on the WRITE path, so this
-        # handler has nothing to contribute to a watch-only bootstrap pass.
-        if not watch_only:
+        if not watch_only:  # participants auto-watched on the write path
             await _handle_participant_added(session, event)
     else:
         await _handle_item_event(session, event, watch_only=watch_only)
@@ -180,15 +159,10 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
 
     mention_ids: frozenset[uuid.UUID] = frozenset()
     if not watch_only and (created or "description" in changed_fields):
-        # Under the ref since RADD-922 (see below) — this read a top-level
-        # `description`, so it always scanned "" and a description mention
-        # notified nobody.
         mention_ids = await mentions.resolve_mentions(session, _ref(payload).get("description") or "")
 
-    # RADD-817: the row itself, for per-recipient relation gating in _allowed —
-    # and, since spec 118, for the item's CURRENT project and team, which is
-    # what a subscription is matched against. A deleted item falls back to the
-    # payload; the notification then describes something already gone.
+    # The row: for `_allowed`'s per-row gate (RADD-817) and the item's CURRENT
+    # project/team, which subscriptions match. A deleted item falls back to the payload.
     item = await session.get(WorkItem, item_id)
     subject = subject_of(payload, item)
     audience = await item_audience(
@@ -200,15 +174,6 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
     else:
         plan = planner.plan_item_updated(payload, event.actor_id, audience, mention_ids)
 
-    # RADD-978: RADD-922 nested the item payload under `item` and promoted the
-    # project to an `{id, key, name}` ref; this line kept reading a TOP-LEVEL
-    # `project_id` that item events had stopped carrying. Every `item.created`
-    # and `item.updated` therefore raised KeyError inside the per-event
-    # SAVEPOINT, was logged and skipped, and the cursor moved on — so `assigned`,
-    # `state_changed` and description `mentioned` reached nobody at all, and the
-    # auto-watch graph stopped growing from item activity. Nothing failed
-    # loudly; the only symptom was silence. This is what a wire constant with no
-    # compiler behind it costs.
     project = await projects_service.get_project(
         session, uuid.UUID(_ref(payload)["project"]["id"])
     )
@@ -218,40 +183,33 @@ async def _handle_item_event(session: AsyncSession, event: Event, *, watch_only:
         event=event,
         item_id=item_id,
         project=project,
-        item_key=_ref(payload).get("key", ""),
-        item_title=_ref(payload).get("title", ""),
         watch_only=watch_only,
         item=item,
         subject=subject,
     )
 
 
+async def _item_context(
+    session: AsyncSession, payload: dict
+) -> tuple[uuid.UUID, WorkItem, Project]:
+    """The item an item-scoped event's canonical ref names, and its project."""
+    item_id = uuid.UUID(_ref(payload)["id"])
+    item = await items.require_item(session, item_id)
+    return item_id, item, await projects_service.get_project(session, item.project_id)
+
+
 async def _handle_comment_created(
     session: AsyncSession, event: Event, *, watch_only: bool
 ) -> None:
-    """A comment on an ISSUE — or, since RADD-1056, on a PAGE.
-
-    **The bug this branch closes.** `comments` has been polymorphic since
-    RADD-717: a comment's parent is an item OR a page, and the event says which
-    in `entity_type`. This handler did not look. It read `payload["item"]["id"]`
-    unconditionally, and a page comment's `item` subject is NULL by
-    construction (the emitter resolves it only for item parents), so every wiki
-    comment raised KeyError inside the per-event SAVEPOINT, was logged, and was
-    skipped. Page comments produced ZERO notifications for the whole life of the
-    feature — including a comment that @-named someone directly. Nothing failed
-    loudly, which is how it survived: the wiki fan-out that DID work
-    (`page_updated`) made the subsystem look alive.
-    """
+    """A comment on an issue; a page comment goes to its subject provider
+    (RADD-1056: branch on `entity_type` — a page comment has no `item`)."""
     payload = event.payload or {}
     parent = payload.get("entity_type") or CommentParentType.ITEM.value
     if parent != CommentParentType.ITEM.value:
-        # RADD-1385: the parent's subject provider answers, or — its plugin
-        # disabled — nobody does, which is a comment on a page nobody may hear.
+        # No live provider (its plugin disabled) means nobody hears it.
         await subjects.handle_comment(session, event, parent, watch_only=watch_only)
         return
-    item_id = uuid.UUID(_ref(payload)["id"])
-    item = await items.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
+    item_id, item, project = await _item_context(session, payload)
     mention_ids: frozenset[uuid.UUID] = frozenset()
     if not watch_only:
         mention_ids = await mentions.comment_mentions(session, event, payload)
@@ -268,8 +226,6 @@ async def _handle_comment_created(
         event=event,
         item_id=item_id,
         project=project,
-        item_key=_ref(payload).get("key", ""),
-        item_title=_ref(payload).get("title", ""),
         watch_only=watch_only,
         item=item,
         subject=subject,
@@ -281,9 +237,7 @@ async def _handle_sla_event(
 ) -> None:
     """sla.breached and (spec 69) sla.due_soon: same fan-out, different type."""
     payload = event.payload or {}
-    item_id = uuid.UUID(_ref(payload)["id"])
-    item = await items.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
+    item_id, item, project = await _item_context(session, payload)
     subject = subject_of(payload, item)
     audience = await item_audience(
         session, item_id, subject, own=own_of(item, payload)
@@ -297,15 +251,7 @@ async def _handle_sla_event(
         detail["remaining_seconds"] = payload.get("remaining_seconds")
     plan = planner.plan_sla_breached(item.assignee_id, audience, detail, type_)
     await _apply(
-        session,
-        plan,
-        event=event,
-        item_id=item_id,
-        project=project,
-        item_key=_ref(payload).get("key", ""),
-        item_title=_ref(payload).get("title", ""),
-        item=item,
-        subject=subject,
+        session, plan, event=event, item_id=item_id, project=project, item=item, subject=subject
     )
 
 
@@ -314,9 +260,7 @@ async def _handle_approval_event(session: AsyncSession, event: Event) -> None:
     wire-string idiom keeps notify from importing approvals, which loads later);
     approved/declined → the requester."""
     payload = event.payload or {}
-    item_id = uuid.UUID(_ref(payload)["id"])
-    item = await items.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
+    item_id, item, project = await _item_context(session, payload)
     if event.event_type == APPROVAL_REQUESTED_EVENT:
         approver_ids = frozenset(
             uuid.UUID(value) for value in payload.get("eligible_user_ids", [])
@@ -328,59 +272,27 @@ async def _handle_approval_event(session: AsyncSession, event: Event) -> None:
         plan = planner.plan_approval_decided(
             payload, event.actor_id, requester_id, _APPROVAL_DECISIONS[event.event_type]
         )
-    await _apply(
-        session,
-        plan,
-        event=event,
-        item_id=item_id,
-        project=project,
-        item_key=_ref(payload).get("key", ""),
-        item_title=_ref(payload).get("title", ""),
-        item=item,
-    )
+    await _apply(session, plan, event=event, item_id=item_id, project=project, item=item)
 
 
 async def _handle_participant_added(session: AsyncSession, event: Event) -> None:
-    """RADD-978: tell the person they were shared into an issue.
-
-    The wire-string idiom again — participants loads after notify and may be
-    disabled, so this file knows the event by its name and reads its payload,
-    never the module. The plan is built FIRST because a team add plans nothing
-    and there is then nothing to look anything up for.
-
-    The recipient still passes `_allowed` like every other type. Note what makes
-    that pass: the participant ROW already exists (the event is emitted after the
-    write), so the Baseline's `item.read@participant` answers the RADD-817
-    per-row gate for someone with no other standing in the project — the share
-    is what confers the read the notification is checked against.
-    """
+    """RADD-978: tell the person they were shared into an issue; a team add
+    plans nothing, so nothing is looked up. They pass `_allowed` via the
+    Baseline's `item.read@participant` — the participant row already exists, so
+    the share confers the read it is checked against."""
     payload = event.payload or {}
     plan = planner.plan_participant_added(payload, event.actor_id)
     if not plan.notifications:
         return
-    item_id = uuid.UUID(_ref(payload)["id"])
-    item = await items.require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await _apply(
-        session,
-        plan,
-        event=event,
-        item_id=item_id,
-        project=project,
-        item_key=_ref(payload).get("key", ""),
-        item_title=_ref(payload).get("title", ""),
-        item=item,
-    )
+    item_id, item, project = await _item_context(session, payload)
+    await _apply(session, plan, event=event, item_id=item_id, project=project, item=item)
 
 
 async def _handle_contributed(session: AsyncSession, event: Event, spec) -> None:
     """A plugin's notification kind (RADD-1326), through the same choke points
-    as every core kind: the recipient's channel matrix, and — when the event is
-    about an issue — the per-row read check (`_allowed`). The plugin says WHO
-    (`recipients`) and WHAT the line says (`render`); it never writes a row.
-
-    Personal by default: the event chose the recipients, so the `own` column
-    decides. The actor is never told about their own action."""
+    as every core kind: the channel matrix and, for an issue, `_allowed`. The
+    plugin says WHO (`recipients`) and WHAT (`render`); it never writes a row.
+    Personal by default; the actor is never told about their own action."""
     payload = event.payload or {}
     recipients = {uuid.UUID(str(uid)) for uid in (await spec.recipients(session, event) or ())}
     if event.actor_id is not None:
@@ -405,8 +317,8 @@ async def _handle_contributed(session: AsyncSession, event: Event, spec) -> None
         for user_id in sorted(recipients, key=str):
             plan.notifications.append(PlannedNotification(user_id, spec.key, detail))
         await _apply(
-            session, plan, event=event, item_id=item_id, project=project,
-            item_key=str(ref.get("key") or ""), item_title=str(ref.get("title") or ""), item=item,
+            session, plan, event=event, item_id=item_id, project=project, item=item,
+            item_key=str(ref.get("key") or ""), item_title=str(ref.get("title") or ""),
         )
         return
     rules = await service.rules_by_user(session, recipients)
@@ -429,11 +341,10 @@ async def _allowed(
     project: Project,
     item: "WorkItem | None" = None,
 ) -> bool:
-    """Recipient must exist, be active, and hold item.read (plus comment.read_internal
-    for internal-comment notifications) on the project — and, since RADD-817,
-    hold it FOR THIS ROW: a relation-scoped recipient (`item.read@own/@team`)
-    must not be told about an issue the list would never show them. This is the
-    single delivery choke point, so every notification type inherits it."""
+    """The single delivery choke point: an active recipient holding item.read
+    (plus comment.read_internal for an internal comment) on the project, and
+    FOR THIS ROW (RADD-817) — `item.read@own/@team` must not hear about an issue
+    the list would never show them."""
     users = await auth.users_by_ids(session, {planned.user_id})
     user = users.get(planned.user_id)
     if user is None or not user.active:
@@ -444,11 +355,9 @@ async def _allowed(
     if item is not None:
         relations = authz.relations_held(permissions, Permission.ITEM_READ)
         relation_actor = await authz.relation_actor(session, user)
-        # async form (RADD-844): a participant reads via a membership TABLE,
-        # not an item column — the sync gate would silently drop exactly
-        # the recipients participation exists to reach. Spec 121: no @any
-        # short-circuit here — the primitive applies the row guard first, so
-        # a restricted issue never notifies someone who is not on it.
+        # The async form (RADD-844): a participant reads via a membership TABLE,
+        # which the sync gate would silently drop. No @any short-circuit (spec
+        # 121): the row guard runs first, so a restricted issue stays restricted.
         if not await authz.relation_holds_row_async(
             session, "item", relations, relation_actor, item
         ):
@@ -481,32 +390,32 @@ async def _apply(
     event: Event,
     item_id: uuid.UUID,
     project: Project,
-    item_key: str,
-    item_title: str,
     watch_only: bool = False,
     item: "WorkItem | None" = None,
     subject: Subject = Subject(),
+    item_key: str | None = None,
+    item_title: str | None = None,
 ) -> None:
+    """Watch, then write each planned row that survives the channel and `_allowed`.
+    Key and title come from the event's canonical item ref unless given."""
     await service.add_watchers(session, item_id, plan.watch)
     if watch_only or not plan.notifications:
         return
+    ref = _ref(event.payload or {})
+    item_key = ref.get("key", "") if item_key is None else item_key
+    item_title = ref.get("title", "") if item_title is None else item_title
     actor_name = await actor_name_of(session, event)
-    # RADD-971: the channel decision is enforced INSIDE create_notification, so
-    # the types produced outside this consumer obey it too. All this batch does
-    # now is prefetch the rules for the whole recipient set — one query instead
-    # of one per planned row — which is what keeps the choke point off the N+1.
+    # One rules query for the whole recipient set; `create_notification` still
+    # enforces the channel itself (RADD-971), so this only avoids an N+1.
     rules = await service.rules_by_user(
         session, {planned.user_id for planned in plan.notifications}
     )
     for planned in plan.notifications:
-        # The CHANNEL first, the permission second. Both filters drop the same
-        # rows whichever order they run in, but `_allowed` costs a permission
-        # resolution plus a relation row check PER RECIPIENT, and spec 118
-        # multiplied the recipient set by everyone who subscribed to the
-        # project. Resolving first means an `off` verdict — which is what a
-        # subscriber gets for most kinds — costs a dictionary lookup instead.
+        # The CHANNEL first: same rows either way, but `_allowed` costs a
+        # permission resolution per recipient and an `off` verdict — what most
+        # subscribers get — costs a dict lookup.
         user_rules = rules.get(planned.user_id, notify_rules.EMPTY)
-        if service.channels_for(planned.type, user_rules, planned.relation, subject).silent:
+        if notify_rules.resolve(planned.type, user_rules, planned.relation, subject).silent:
             continue
         if not await _allowed(session, planned, project, item):
             continue

@@ -1,16 +1,7 @@
-"""Pure SLA timer math (spec 30) — unit-tested in tests/test_sla.py.
-
-The clock runs from the item's creation, PAUSES while the item sits in one of
-the policy's pause states, and stops when the target is met. The deadline is
-the moment accumulated ACTIVE (non-paused) time reaches the target — walking
-the pause intervals directly, so pausing before the deadline pushes it out
-exactly, with no fixpoint iteration.
-
-Everything here is a function of its arguments — no database, no registry, no
-clock beyond the `now` it is handed. Non-working days arrive as a work-week set
-and (RADD-1031) a set of calendar DATES; whoever knows which dates those are
-resolves them elsewhere (`slas/calendar.py`).
-"""
+"""Pure SLA timer math (spec 30). The clock runs from creation, PAUSES in the
+policy's pause states and on non-working time, and stops when met; the deadline
+is when accumulated ACTIVE time reaches the target. Holidays arrive as a set of
+dates — `slas/calendar.py` resolves them."""
 
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -38,18 +29,8 @@ def non_working_pauses(
     working_days: frozenset[int],
     non_working_dates: Collection[date] = (),
 ) -> list[tuple[datetime, datetime | None]]:
-    """Midnight-to-midnight pause intervals for every non-working day between
-    start and end (spec 35) — merged into a policy's state pauses so the SLA
-    clock skips weekends. Naive UTC days, matching event timestamps.
-
-    `non_working_dates` (RADD-1031) are individual CALENDAR DATES that are
-    non-working regardless of weekday — a studio holiday falling on a Tuesday.
-    Passed in as plain dates rather than looked up here on purpose: this module
-    is pure timer math and must stay computable without a database, so who
-    decides a date is a holiday is the caller's business (`slas/calendar.py`
-    resolves them through the kernel socket). An empty set is exactly the
-    pre-RADD-1031 behaviour.
-    """
+    """Midnight-to-midnight pauses for each non-working weekday or holiday date
+    between start and end (spec 35, RADD-1031). Naive UTC days."""
     holidays = frozenset(non_working_dates)
     pauses: list[tuple[datetime, datetime | None]] = []
     day = datetime(start.year, start.month, start.day)
@@ -67,12 +48,8 @@ def business_hours_pauses(
     end_minute: int,
     working_days: frozenset[int],
 ) -> list[tuple[datetime, datetime | None]]:
-    """Daily business-hours window (spec 63): on each WORKING day between start
-    and end, pause [midnight, window-open) and [window-close, next midnight) so
-    active time only accrues inside [open, close). Non-working days get nothing
-    here — pass `working_days=frozenset(range(7))` to window every day, or merge
-    `non_working_pauses` for whole-day weekend pauses (merge_intervals coalesces
-    the adjacent intervals either way). Naive UTC, like every SLA timestamp."""
+    """Daily business-hours window (spec 63): on WORKING days pause outside
+    [open, close). Merge with `non_working_pauses` for weekends."""
     pauses: list[tuple[datetime, datetime | None]] = []
     day = datetime(start.year, start.month, start.day)
     while day <= end:
@@ -114,7 +91,6 @@ def deadline(
     started_at: datetime,
     target_seconds: float,
     pauses: list[tuple[datetime, datetime | None]],
-    now: datetime,
 ) -> datetime | None:
     """When accumulated active time reaches the target. None = currently inside
     an open pause with the target not yet reached (the deadline floats)."""
@@ -129,9 +105,7 @@ def deadline(
             return cursor + timedelta(seconds=target_seconds - active)
         active += span
         if pause_end is None:
-            # Open-ended pause: if the target wasn't reached before it, it floats —
-            # unless the pause started before `now`... it's still open, so floats.
-            return None
+            return None  # inside an open pause before the target: the deadline floats
         cursor = max(cursor, pause_end)
     return cursor + timedelta(seconds=target_seconds - active)
 
@@ -152,8 +126,7 @@ def evaluate(
 ) -> TimerStatus:
     """One timer's full status. Met late still reads `breached=True` (it records
     that the target was missed, even though the clock has stopped)."""
-    horizon = met_at or now
-    due = deadline(started_at, target_seconds, pauses, horizon)
+    due = deadline(started_at, target_seconds, pauses)
     if met_at is not None:
         return TimerStatus(
             due_at=due,

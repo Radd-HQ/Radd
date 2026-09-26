@@ -1,8 +1,6 @@
-"""Survey lifecycle (spec 65): creation (sender), the public token read/submit,
-and the item-scoped read behind the issue-rail chip. Both csat events are
-emitted with entity_type=item (History feed) and actor_id=None (a requester has
-no user; None also lets automation rules on them fire — the engine's loop guard
-only skips the SYSTEM actor)."""
+"""Survey lifecycle (spec 65): creation, the public token read/submit, and the
+item-scoped read. Events are item-entity (History feed), `actor_id=None` (a
+requester may have no account)."""
 
 import secrets
 import uuid
@@ -24,15 +22,10 @@ from .types import PAYLOAD_COMMENT_EXCERPT_CHARS, CsatEntity, CsatEvent
 from radd.clock import utcnow
 
 
-
 async def announces_resolution(session: AsyncSession, project_id: uuid.UUID) -> bool:
-    """Will this project's requesters already be told their ticket resolved, by
-    the survey? (RADD-982.) Its first line IS "your request has been resolved",
-    so mail's resolution notice yields to it — the survey also asks a question.
-
-    Stated here because the condition is csat's own setting; `mailintake`
-    reaches this DEFERRED (`weak_depends`) since csat depends on it.
-    """
+    """Whether this project's requesters are told of resolution by the survey
+    (its first line) — so mail's resolution notice yields to it (RADD-982).
+    `mailintake` reads it deferred (`weak_depends`): csat depends on mailintake."""
     return bool(await settings_service.resolve(session, SettingKey.CSAT_ENABLED, project_id=project_id))
 
 
@@ -48,7 +41,6 @@ async def create_survey(
     session: AsyncSession,
     *,
     item_id: uuid.UUID,
-    item_key: str,
 ) -> CsatSurvey:
     """Mint the item's one-and-only survey row + emit csat.requested in the same
     transaction (the sender commits both with its cursor, before sending)."""
@@ -99,7 +91,6 @@ async def record_response(
     if survey.responded_at is None:
         survey.responded_at = utcnow()
     item = await items_service.require_item(session, survey.item_id)
-    await projects_service.get_project(session, item.project_id)
     await events.emit(
         session,
         event_type=CsatEvent.RESPONDED,

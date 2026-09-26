@@ -1,13 +1,5 @@
-"""SMTP `MailSender` (RADD-955).
-
-Thin on purpose: it wraps `radd.smtp.send_message`, which every other mail
-consumer already uses (notify digests, CSAT, the automation send_email action),
-so there is one place that speaks SMTP.
-
-The only thing it adds is the contract that matters — `send` returns the
-Message-ID that actually went out, read back off the composed message rather
-than assumed from what was passed in.
-"""
+"""SMTP `MailSender` (RADD-955): a thin wrapper over `radd.smtp.send_message`
+whose `send` returns the Message-ID that actually went out."""
 
 from __future__ import annotations
 
@@ -21,15 +13,8 @@ from ..types import MailSenderKind
 
 
 class SmtpSender:
-    """Sends over one `mail_senders` row (RADD-958).
-
-    The row is the whole configuration — host, credentials, identity — so an
-    instance can hold several and outbound picks by `is_default` rather than by
-    whatever the environment last said.
-
-    Connection details are RESOLVED, not read off the row (RADD-969): a Gmail
-    or Outlook row stores none, and the kind's preset answers them here.
-    """
+    """Sends over one `mail_senders` row (RADD-958), connection details RESOLVED
+    against the kind's preset (RADD-969)."""
 
     kind = MailSenderKind.SMTP.value
 

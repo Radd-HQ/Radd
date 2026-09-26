@@ -1,7 +1,4 @@
-"""In-process sender loop, mirroring mailintake's outbound dispatcher. Always
-started under `run_workers` (spec 48 split): the guards live inside `run_once`
-— with SMTP or every project's CSAT_ENABLED off it is a cursor-advancing no-op,
-so enabling either later never replays the backlog."""
+"""In-process sender loop; a cursor-advancing no-op while mail or CSAT_ENABLED is off."""
 
 from radd.config import settings
 from radd.worker import PeriodicLoop

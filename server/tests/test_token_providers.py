@@ -49,9 +49,9 @@ def _facts(**payload) -> EventFacts:
 
 
 def test_a_plugins_token_root_renders_is_documented_and_is_reserved(widget_tokens):
-    assert templating.render_template("Poked {{widget.name}}", _facts(widget={"name": "Gizmo"})) == "Poked Gizmo"
+    assert templating.Renderer(_facts(widget={"name": "Gizmo"}))("Poked {{widget.name}}") == "Poked Gizmo"
     # Nothing to say → verbatim, like any unknown token.
-    assert templating.render_template("{{widget.name}}", _facts()) == "{{widget.name}}"
+    assert templating.Renderer(_facts())("{{widget.name}}") == "{{widget.name}}"
     assert "{{widget.name}}" in {info.token for info in templating.all_tokens()}
     # A node may not be NAMED `widget` — it would shadow the root.
     assert "widget" in templating.reserved_roots()
@@ -61,8 +61,8 @@ def test_page_and_comment_are_providers_not_engine_code():
     load_plugins(settings.modules)
     assert {"page", "comment"} <= set(registries.token_providers)
     facts = _facts(page={"title": "Runbook", "number": 7, "space": {"slug": "ops"}}, visibility="internal")
-    assert templating.render_template("{{page.title}} in {{page.space}}", facts) == "Runbook in ops"
-    assert templating.render_template("{{comment.visibility}}", facts) == "internal"
+    assert templating.Renderer(facts)("{{page.title}} in {{page.space}}") == "Runbook in ops"
+    assert templating.Renderer(facts)("{{comment.visibility}}") == "internal"
 
 
 async def test_a_page_comment_renders_the_pages_title_on_a_manual_page_run(db):

@@ -110,18 +110,13 @@ async def run_body(
 async def run_test(session: AsyncSession, data: RunRequest, actor: User) -> runner.Outcome:
     """The inspector's Test box: the body as typed, seeded with one item when a
     key is given, as the caller."""
-    loaded: list[dict[str, Any]] = []
-    if data.item_key.strip():
+    subject_ids: list[uuid.UUID] = []
+    if data.item_key.strip():  # an unreadable key 404s here, before anything runs
         read = await items.get_item_by_key(session, data.item_key.strip().upper(), actor)
-        loaded.append(read.model_dump(mode="json"))
-    payload = {
-        "event": None,
-        "items": loaded,
-        "vars": data.vars,
-        "params": data.params,
-        "subject_ids": [entry["id"] for entry in loaded],
-        "actor": {"id": str(actor.id), "name": actor.name, "email": actor.email},
-    }
+        subject_ids.append(read.id)
+    payload = await packet_payload(
+        session, actor=actor, subject_ids=subject_ids, facts=None, variables=data.vars, params=data.params
+    )
     return await run_body(session, data.body, payload, actor=actor, timeout=data.timeout, label="test")
 
 

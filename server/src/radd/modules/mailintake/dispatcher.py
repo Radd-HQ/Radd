@@ -1,20 +1,8 @@
-"""In-process loops, mirroring notify/dispatcher.py: the IMAP intake poller
-(spec 47) and the outbound reply consumer (spec 62). Both run whenever this
-process runs workers — the spec-48 split and nothing else.
-
-**Neither loop is gated on the environment (RADD-970).** The poller used to
-start only when `RADD_MAIL_IMAP_HOST` was set, which survived RADD-958 moving
-mail into `mail_sources` rows and became the bug that made the move pointless:
-an admin adds a mailbox in Settings → Email on an instance with no mail env
-vars, the row is complete, the capability pill lights, and nothing ever polls
-it. The gate is now `poller.run_once`'s own first query — `polled_sources`
-empty means return 0 — so a row saved in the UI is picked up on the next tick
-with no restart, and a mailbox disabled there stops being polled the same way.
-
-That check has to live in `run_once` rather than here because `enabled` is
-SYNC: `PeriodicLoop` calls it per tick and cannot await a session. The outbound
-consumer already had exactly this posture (always started, `outbound_configured`
-consulted per tick), so this is the two halves agreeing rather than a new idea.
+"""In-process loops: the IMAP poller (spec 47) and the outbound consumer
+(spec 62), started whenever this process runs workers. Neither is gated on the
+environment (RADD-970): `PeriodicLoop.enabled` is sync, so each loop's own first
+query decides whether there is anything to do — a mailbox added in Settings →
+Email is polled on the next tick with no restart.
 """
 
 from radd.config import settings

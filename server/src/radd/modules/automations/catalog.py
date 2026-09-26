@@ -1,19 +1,6 @@
-"""Automation builder metadata (spec 58) + the trigger accessor.
-
-Triggers are NO LONGER a hardcoded list. `TRIGGERS` is derived live from the
-kernel **event-type registry** (docs/plugin-platform.md §3, chokepoint 1): every
-plugin declares its triggerable events in its manifest (`event_types=…`), so a new
-plugin's events appear here with **zero edits to this module** — the inversion of
-the old `_SPECS` list that imported 21 modules' event enums.
-
-Operators and schedule kinds stay here: they are the builder's *grammar* (how
-the "Event value is" gate and a schedule express themselves), not per-event data,
-so they are not plugin-contributed.
-
-`item_scoped` triggers resolve a target item (the event's entity, or the payload's
-`item_id`) — the SLQ condition and item actions apply to it. Rules on non-item
-triggers still evaluate event conditions, but item actions skip.
-"""
+"""Automation builder metadata: the trigger catalog (read live from the kernel
+event-type registry, so a plugin's events appear with no edit here), the
+"Event value is" operators, and each node type's arity rule."""
 
 from dataclasses import dataclass
 
@@ -25,31 +12,13 @@ from .types import ArityRule, ConditionOperator, ScheduleKind
 
 
 def triggers() -> dict[str, EventTypeSpec]:
-    """The automation trigger catalog — every registered event type marked as a
-    trigger, read live from the kernel registry (chokepoint-1 inversion). Each
-    spec carries `event_type`/`label`/`group`/`item_scoped`/`has_changes`, the
-    shape the old `TriggerSpec` had, so consumers are unchanged."""
+    """Every registered event type marked `trigger=True`."""
     return registries.triggers()
 
 
-def __getattr__(name: str):
-    """PEP 562: keep the `catalog.TRIGGERS` name working for existing consumers
-    (router, engine, rule-write validation) — resolves to the live registry dict
-    on each access, so it always reflects the currently-loaded plugins."""
-    if name == "TRIGGERS":
-        return registries.triggers()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 def node_arities() -> dict[str, ArityRule]:
-    """node type -> how it may read its packet, for EVERY node type the editor
-    can offer — built-in and contributed alike.
-
-    Served rather than mirrored in the SPA (RADD-918). The alternative was a
-    second copy of "create_item defaults to once, set_state is always per item"
-    in TypeScript, and a default that disagrees with the server is invisible: the
-    editor shows one thing, the run does another, and nothing fails to compile.
-    """
+    """node type -> arity rule for EVERY node type, served so the editor's
+    default cannot disagree with the engine's (RADD-918)."""
     return {key: arity_rule(key) for key in registries.automation_nodes}
 
 
@@ -66,7 +35,7 @@ class OperatorSpec:
 
 # Spec 69: the schedule kinds the builder's "On a schedule" editor offers.
 # (The schedule trigger itself is a sentinel like MANUAL — deliberately NOT in
-# TRIGGERS, so the event engine can never fire it.)
+# `triggers()`, so the event engine can never fire it.)
 SCHEDULE_KINDS: list[tuple[ScheduleKind, str]] = [
     (ScheduleKind.INTERVAL, "Every N minutes"),
     (ScheduleKind.DAILY, "Daily at a time"),

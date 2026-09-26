@@ -1,18 +1,7 @@
-"""Who may do what in a wiki space (RADD-791).
+"""Who may do what in a wiki space (RADD-791): a space is a SCOPE, like a project.
 
-A space is a SCOPE, the way a project is. Every `page.*` atom used to be checked
-globally — which is why per-space access was inexpressible, and why page
-commenting was dead for anyone whose grant was scoped: `comments_binding`
-resolved `comment.write` with `project=None`, so a project-scoped grant never
-reached it.
-
-This module is the pages side of that scope. It does not re-implement
-resolution: `authz.effective_permissions(space_id=…)` is the one answer, and
-everything here either calls it or batches the same inputs so a list of spaces
-costs one query instead of one per row.
-
-Per-PAGE restriction (RADD-792) sits on top and can only ever NARROW what a
-space grants — see `page_access.py`.
+Resolution is `authz.effective_permissions(space_id=…)`; this module only calls
+or batches it. Per-PAGE restriction narrows on top (`page_access.py`).
 """
 
 from __future__ import annotations

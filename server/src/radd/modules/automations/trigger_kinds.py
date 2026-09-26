@@ -1,17 +1,6 @@
-"""The trigger kinds automations itself provides, registered as `TriggerKindSpec`s
-(RADD-1323) — a button, a clock, a draft being checked.
-
-They were an enum of three sentinels with their handling scattered through the
-service, the engine and the SPA's hardcoded templates. They are registered now
-exactly as a plugin's kind would be, so the catalog serves them, the editor
-builds its trigger menu from that, and "is there an event to read here" is the
-spec's `has_event` rather than a list of sentinel names.
-
-What each one DOES stays where it always was: the scheduler fires `schedule`,
-intake walks `validate`, `POST /automations/{id}/run` fires `manual`. Their
-write-time invariants (a schedule's shape, a validation binding's targets) are
-checked by the service, which owns the state they project into.
-"""
+"""The trigger kinds automations provides (RADD-1323) — manual, schedule,
+validate — registered exactly as a plugin's would be. The scheduler fires
+`schedule`, intake walks `validate`, `POST /automations/{id}/run` fires `manual`."""
 
 from __future__ import annotations
 

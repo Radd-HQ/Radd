@@ -1,10 +1,6 @@
 """Parent bindings (spec 102): what may own attachments, and who may touch them.
-
-A binding maps an `entity_type` to the permission checks and context of its
-owner. attachments registers the `item` binding itself (below); other modules
-register theirs at their own plugin init — `docs` registers `page` — so
-attachments never learns those modules exist (dev rule 1).
-"""
+attachments registers `item` itself; other modules register theirs (`pages`
+registers `page`), so attachments never learns they exist."""
 
 import uuid
 from collections.abc import Awaitable, Callable
@@ -32,17 +28,8 @@ class ParentBinding:
     require_write: Guard  # upload + delete-own
     require_admin: Guard  # delete anyone's
     project_id_of: ProjectOf  # feeds routing context + ACL SubjectContext; None = global
-    #: The event emitted when a parent of this kind is destroyed (RADD-744).
-    #:
-    #: The polymorphic parent has no FK, so `gc.py` is what collects the rows AND
-    #: THE BYTES. It used to decide from a hardcoded map, which meant a parent
-    #: registered by a PLUGIN — the seam this registry exists for — got no
-    #: cleanup at all, and its files sat on a storage host forever with nothing
-    #: pointing at them.
-    #:
-    #: Required, not defaulted: `""` would reintroduce the same bug in a quieter
-    #: form, a binding that looks complete and silently leaks. Failing loudly at
-    #: import is the better failure.
+    #: The parent's deletion event — `gc` derives this parent's cleanup from it
+    #: (RADD-744/745). Required: a default would silently leak bytes.
     deleted_event: str
     space_id_of: ProjectOf | None = None
 
@@ -51,15 +38,13 @@ _BINDINGS: dict[str, ParentBinding] = {}
 
 
 def register_parent(binding: ParentBinding) -> None:
-    """Register a parent. Its cleanup follows automatically: the plugin's
-    `cascades` factory is derived from THIS registry (RADD-745), so a binding
-    cannot exist without one. A binding without cleanup would leak rows AND
-    BYTES on a storage host, silently and forever."""
+    """Register a parent; its cleanup follows, because the plugin's `cascades`
+    factory is derived from this registry (RADD-745)."""
     _BINDINGS[binding.entity_type] = binding
 
 
 def bindings() -> list[ParentBinding]:
-    """Every registered parent — the GC builds its event map from this."""
+    """Every registered parent — `gc.cascades` is built from this."""
     return list(_BINDINGS.values())
 
 
@@ -90,14 +75,8 @@ async def _item_read(session: AsyncSession, user: User, item_id: uuid.UUID) -> N
 
 
 async def _item_write(session: AsyncSession, user: User, item_id: uuid.UUID) -> None:
-    """Upload + delete-own. `attachment.create`, NOT `item.update` (RADD-790).
-
-    Those are different authorities and conflating them broke the obvious case: a
-    role of `item.read` + `comment.write` — someone who may discuss an issue but
-    not edit it — posted a comment fine and then 403'd on the pasted screenshot,
-    which reads as "commenting is broken". `item.update` still implies this atom,
-    so nothing that could attach before has stopped being able to.
-    """
+    """Upload + delete-own: `attachment.create`, NOT `item.update` (RADD-790) — a
+    role that may discuss an issue but not edit it must still paste a screenshot."""
     await _item_guard(session, user, item_id, Permission.ATTACHMENT_CREATE)
 
 

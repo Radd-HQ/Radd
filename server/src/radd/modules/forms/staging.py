@@ -1,33 +1,10 @@
 """Attachments on a submission, staged before the item exists (RADD-800).
 
-The submission editor took no files, and `FormDescriptionArea` said why: *"the
-item doesn't exist yet, so there's nothing to attach to."* True when written;
-spec 102 made it false by giving attachments polymorphic parents and a GC that
-removes bytes.
-
-## Stage, then repoint
-
-An upload needs a parent NOW and the item only exists later, so uploads land on a
-per-person STAGING AREA and are repointed onto the item at submit. Chosen over
-"create the item first, then upload" (you could not attach before sending, and
-closing the tab loses the file) and over inlining base64.
-
-## Why the staging id is derived, not chosen
-
-The obvious design is a client-minted draft id. It is also the one with a hole:
-the attachment guards receive only `(session, user, entity_id)`, so a
-client-chosen id gives them nothing to check the caller against, and anyone who
-learned your id could read what you staged.
-
-So the id is `uuid5(NAMESPACE, user.id)` — one staging area per person,
-derivable by the server from the caller alone. The guard becomes a comparison,
-which is the strongest check available at that seam and needs no table.
-
-That leaves one problem: with a single area per person, submitting one form
-would otherwise sweep up files staged in another tab. So the submission NAMES
-the attachments it is claiming, and each is verified to be sitting on the
-caller's own staging area before it moves. Multi-tab safe, and a stolen id is
-worth nothing.
+Uploads land on a per-person STAGING AREA and are repointed onto the item at
+submit. The area id is `uuid5(NAMESPACE, user.id)` — derived from the caller,
+never client-chosen — so every attachment guard is a comparison and a leaked
+id is worthless. With one area per person, a submission NAMES the files it
+claims, each verified to sit on the caller's own area (multi-tab safe).
 """
 
 from __future__ import annotations

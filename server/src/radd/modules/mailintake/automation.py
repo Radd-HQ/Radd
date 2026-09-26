@@ -1,10 +1,5 @@
-"""The resolution notice as an automation node (RADD-1339; shares `resolved.py`
-since RADD-1368).
-
-The desk sends the notice itself when `mail_send_resolved` is on. This node is
-for a rule that wants it on its own conditions — a project, a priority, an
-extra gate — and runs exactly the same guards and wording, minus the setting.
-"""
+"""The resolution notice as an automation node (RADD-1339): `resolved.py`'s guards
+and wording, minus the setting — for a rule that wants it on its own conditions."""
 from dataclasses import dataclass
 from typing import Any
 

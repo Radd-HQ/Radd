@@ -12,7 +12,7 @@ from test_attachment_acl import db, setup  # noqa: F401
 from radd.modules.auth.types import LoginMethod
 
 
-async def test_uploader_grants_require_parent_and_writable_credential(db,setup):
+async def test_uploader_grants_require_parent_and_writable_credential(db,setup):  # noqa: F811 — shared fixtures
     admin,member,item,attachment=setup
     app=create_app()
     async def override():yield db

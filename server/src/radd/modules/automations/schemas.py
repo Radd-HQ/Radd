@@ -6,9 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from radd.modules.comments.types import CommentVisibility
 from radd.modules.items.enums import ItemKind, ItemVisibility, Priority
 
-from radd import schedule as schedule_math
-
-
 from . import catalog
 from .templating import TOKEN_RE
 from .types import (
@@ -33,12 +30,8 @@ class SetStateParams(BaseModel):
     state: str = Field(min_length=1)  # state name within the item's project
 
 
-#: Value params that may carry a `{{token}}` instead of a literal (spec 120).
-#: Typed as strings with this check rather than as the enum, because the whole
-#: point is that the value can be produced at RUN time — `Priority` on the wire
-#: would refuse `{{triage.priority}}` before it ever had a chance to render.
-#: What the token renders to is still measured against the enum, in the planner,
-#: where the failure is a recorded skip naming the vocabulary.
+#: Enum-valued params may carry a `{{token}}` (spec 120), so they are typed as str
+#: and the rendered value is checked against the enum in the planner.
 def templated_enum(value: str, allowed: set[str], label: str) -> str:
     text = str(value or "").strip()
     if not text:
@@ -164,19 +157,9 @@ class MoveToProjectParams(BaseModel):
 
 
 class CreateItemParams(BaseModel):
-    """Everything you can set on a new issue (spec 116).
-
-    Was four fields — project, title, description, priority — which meant an
-    automation could only ever file a stub someone then had to finish by hand.
-    Every name here resolves at APPLY time (state name, assignee email, cycle
-    name, parent key), not on write, because the target project's vocabulary can
-    change between saving the automation and running it; an unresolvable name
-    skip-logs with the name in the message rather than failing the run.
-
-    Every text field is a `{{token}}` template. `custom_fields` values are too,
-    when they are strings — a select's option or a text field's content is
-    exactly where "from {{item.key}}" belongs.
-    """
+    """Everything settable on a new issue (spec 116). Names resolve at APPLY time
+    (the project's vocabulary may change after saving) and skip-log when they do
+    not; every text field — and string custom-field values — is a template."""
 
     project: str = Field(min_length=1)  # project KEY
     title: str = Field(min_length=1, max_length=500)  # template
@@ -401,69 +384,27 @@ Action = Annotated[
     Field(discriminator="type"),
 ]
 
-#: The union as a standalone validator. Before spec 116 an action's params were
-#: type-checked because `RuleCreate.actions` was `list[Action]`; a graph node's
-#: `params` is an untyped envelope, so the service revalidates each ACTION node
-#: through this. Without it a typo'd param would be stored happily and fail at
-#: 3am — the check moved, it did not go away. Phase 2 generalises this to a
-#: `params_schema` per node type, which is how a plugin's node gets the same.
+#: The union as a standalone validator: a graph node's `params` is an untyped
+#: envelope, so each ACTION node's params are revalidated through this — without
+#: it a typo'd param is stored happily and fails at run time.
 ActionAdapter: TypeAdapter[Action] = TypeAdapter(Action)
-
-
-# --- schedule config (spec 69) — the `schedule` JSONB of scheduled rules ---
-
-
-class ScheduleConfig(BaseModel):
-    """A stored schedule: interval every N minutes, daily/weekly/monthly at a
-    wall-clock time, or a cron expression. Times run on the instance clock
-    (`settings.scheduler_tz`).
-
-    The SHAPE rules live in `radd.schedule` (RADD-909/910) — backups store the
-    same vocabulary, and the two copies of these checks had already drifted
-    apart before two more kinds were added to both."""
-
-    kind: ScheduleKind
-    minutes: int | None = None
-    time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
-    weekdays: list[int] | None = None
-    #: Day of the month for a monthly schedule; clamped to the month's last day.
-    day: int | None = Field(default=None, ge=1, le=31)
-    #: Five-field cron expression.
-    expression: str | None = Field(default=None, max_length=200)
-
-    @model_validator(mode="after")
-    def _check_shape(self) -> "ScheduleConfig":
-        schedule_math.validate_config(self.model_dump(exclude_none=True))
-        return self
-
-
 
 
 # --- rule CRUD schemas ---
 
 
 def known_trigger(value: str) -> str:
-    """Public since spec 116: the trigger moved from a rule COLUMN with a field
-    validator to the trigger node's `params.event`, which this envelope does not
-    type — so the service calls this while validating the graph. Dropping the
-    check would make a typo'd event a silently dead automation rather than a 422."""
+    """Refuse an unknown trigger event (a typo'd event is a silently dead automation)."""
     from radd.kernel.registry import registries
 
-    if value not in registries.trigger_kinds and value not in catalog.TRIGGERS:
+    if value not in registries.trigger_kinds and value not in catalog.triggers():
         raise ValueError(f"unknown trigger {value!r} — see GET /automations/catalog")
     return value
 
 
 class NodeIn(BaseModel):
-    """One node of the graph (spec 116).
-
-    `params` is deliberately untyped here: what a node accepts is the business of
-    its TYPE, not of this envelope — a trigger takes `{event, schedule}`, a filter
-    `{slq}`, a gate its test, an action whatever its action takes. Phase 2
-    makes that a `params_schema` on the node registry so a plugin's node validates
-    the same way; until then the service validates the params it knows about
-    (a filter's SLQ is compiled on write) and the rest are checked when planned.
-    """
+    """One graph node. `params` is untyped here: each node TYPE validates its own
+    (spec schema + check hooks) in `service._validate_graph`."""
 
     id: str = Field(min_length=1, max_length=64)
     kind: AutomationNodeKind
@@ -534,13 +475,7 @@ class RuleRead(BaseModel):
     edges: list[dict[str, Any]]
     position: int
     orientation: GraphOrientation = GraphOrientation.VERTICAL
-    # Spec 69: the stored schedule config + the scheduler's bookkeeping (the
-    # next/last-run stamps live in automation_schedule_state — the service
-    # hydrates them via `rule_reads`; None for event/manual rules).
-    #: One entry per TRIGGER node, with its scheduler stamps. A list rather than
-    #: the old scalar `schedule`/`next_run_at`/`last_run_at`, because a graph may
-    #: hold several triggers and a scalar could only describe one of them —
-    #: silently, which is the worst way to be wrong about when something runs.
+    #: One entry per TRIGGER node with its scheduler stamps — a graph may hold several.
     triggers: list["TriggerRead"] = Field(default_factory=list)
     #: The newest recorded run (RADD-1266), for the list's chip. Empty when it
     #: has never run, or its runs have been swept.
@@ -590,13 +525,8 @@ class ScheduleKindInfo(BaseModel):
 
 
 class NodeInfo(BaseModel):
-    """A node type from the kernel registry (spec 116 phase 2) — EVERY node type
-    since RADD-1322, built-in and contributed alike.
-
-    Served rather than baked into the SPA for the same reason the trigger
-    catalogue is: what nodes exist is a function of which plugins are INSTALLED,
-    so a hardcoded palette would offer the AI classifier on an instance without
-    the AI module and miss anything a plugin adds."""
+    """A node type from the kernel registry — served, because what exists depends
+    on which plugins are installed."""
 
     key: str
     plugin: str
@@ -619,16 +549,9 @@ class NodeInfo(BaseModel):
     terminal: bool = False
     dynamic_outputs: bool = False
     shape_params: list[str] | None = None
-    #: The node's FIXED ports, when its outputs do not depend on its params
-    #: (RADD-1064). Empty means they DO — the editor computes those itself as the
-    #: form is edited, because an AI classifier's ports are the answers someone
-    #: is still typing. The distinction is the whole value of the field: without
-    #: it a client cannot tell a real port set from one node's starting shape,
-    #: and `ai.validate` drew a gate's TRUE/FALSE handles instead of its own.
+    #: FIXED ports when they do not depend on params; empty = dynamic (ask /shape).
     ports: list[str] = Field(default_factory=list)
-    #: Ports for the node's DEFAULT params. The editor recomputes them locally as
-    #: the form is edited (an AI classifier's ports are its answers), so this is
-    #: the starting shape, not the final word.
+    #: Ports for the default params — the starting shape.
     default_ports: list[str] = Field(default_factory=list)
     #: The node's FIXED named outputs (spec 120), on exactly the terms `ports`
     #: is fixed: empty means they depend on the params — `ai.generate`'s outputs
@@ -850,10 +773,7 @@ class NodeResult(BaseModel):
 
 
 class ActionPreview(BaseModel):
-    #: The action's NODE TYPE minus the `action.` prefix for built-ins, or the
-    #: full contributed key (`script.run`, `milestone.set_status`). Was the
-    #: `ActionType` enum, which is why every contributed action was silently
-    #: dropped from the dry run and the run history (RADD-1269).
+    #: The node type (`action.set_state`, `script.run`) — built-in and contributed alike.
     type: str
     params: dict[str, Any]
     resolves: bool  # would the action's target(s) resolve at apply time?

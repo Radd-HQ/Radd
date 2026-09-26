@@ -49,10 +49,8 @@ async def images_for_email(
     session: AsyncSession, item_id: uuid.UUID, attachment_ids: list[uuid.UUID]
 ) -> dict[uuid.UUID, MailAttachment]:
     """Fail closed before reading bytes; never mint a URL or use a default host.
-
-Query fresh rows for each delivery, so a move or revoked host permission since
-reply planning takes effect. Partial/unavailable exports must not drop the text.
-"""
+    Rows are read fresh per delivery, so a move or revoked host permission since
+    planning applies; an unavailable image never drops the text."""
     ids = list(dict.fromkeys(attachment_ids))[:MAX_IMAGES]
     if not ids:
         return {}

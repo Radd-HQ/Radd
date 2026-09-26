@@ -1,16 +1,9 @@
-"""SLA policy CRUD + first-match resolution (specs 30/63/67).
-
-Spec 63 retired spec 30's "every enabled policy applies": policies are ordered
-by (position, created_at) and ONE policy — the first whose filters match —
-governs an item. The filters are priority (spec 63) and issue type (RADD-1043).
-Spec 67 made policies project-level: an item is only
-ever matched against its own project's policies (no workspace-wide policies).
-Timer evaluation lives in `evaluation.py`.
-"""
+"""SLA policy CRUD and first-match resolution. Policies are per project and
+ordered (position, created_at); the FIRST whose filters match governs an item.
+Timer evaluation lives in `evaluation.py`."""
 
 import uuid
 from collections.abc import Mapping, Sequence
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -114,13 +107,14 @@ async def get_policy(session: AsyncSession, policy_id: uuid.UUID) -> SlaPolicy:
     return policy
 
 
-async def list_policies(session: AsyncSession, project_id: uuid.UUID) -> list[SlaPolicy]:
-    """One project's policies in first-match order (spec 67: project-level)."""
-    result = await session.execute(
-        select(SlaPolicy)
-        .where(SlaPolicy.project_id == project_id)
-        .order_by(SlaPolicy.position, SlaPolicy.created_at)
-    )
+async def list_policies(
+    session: AsyncSession, project_id: uuid.UUID, *, enabled_only: bool = False
+) -> list[SlaPolicy]:
+    """One project's policies in first-match order (position, created_at)."""
+    query = select(SlaPolicy).where(SlaPolicy.project_id == project_id)
+    if enabled_only:
+        query = query.where(SlaPolicy.enabled.is_(True))
+    result = await session.execute(query.order_by(SlaPolicy.position, SlaPolicy.created_at))
     return list(result.scalars())
 
 
@@ -196,21 +190,11 @@ def first_match(
     item: WorkItem,
     reporters: Mapping[uuid.UUID, frozenset[uuid.UUID]] | None = None,
 ) -> SlaPolicy | None:
-    """The FIRST policy (pre-ordered by position, created_at) that is enabled,
-    belongs to the item's project, and whose filters match the item. Pure —
-    unit-tested without a database.
-
-    Two filters, ANDed, each empty-means-any: priority (spec 63) and issue type
-    (RADD-1043). An item with no type matches only a policy with no type filter
-    — a filter names the types it covers, and "untyped" is not one of them.
-    Ordering is untouched: the filters decide whether a policy is a candidate,
-    position decides which candidate wins.
-
-    RADD-1299's third filter, the reporter's team: `reporters` maps a policy id
-    to the effective members of its reporter teams, fetched by the caller
-    (`reporter_members`) so this stays pure. A policy with the filter and no
-    entry does not match — a filter never widens by being unanswered.
-    """
+    """The first enabled policy of the item's project whose filters all match —
+    priority, issue type, reporter team; each empty means "any". An untyped item
+    matches only a policy with no type filter. `reporters` (policy id → effective
+    members, from `reporter_members`) keeps this pure; a reporter-team filter
+    with no entry does not match."""
     for policy in policies:
         if not policy.enabled:
             continue
@@ -229,16 +213,6 @@ def first_match(
     return None
 
 
-async def enabled_policies(session: AsyncSession, project_id: uuid.UUID) -> list[SlaPolicy]:
-    """Enabled policies of one project in first-match order (position, created_at)."""
-    result = await session.execute(
-        select(SlaPolicy)
-        .where(SlaPolicy.project_id == project_id, SlaPolicy.enabled.is_(True))
-        .order_by(SlaPolicy.position, SlaPolicy.created_at)
-    )
-    return list(result.scalars())
-
-
 async def reporter_members(
     session: AsyncSession, policies: Sequence[SlaPolicy]
 ) -> dict[uuid.UUID, frozenset[uuid.UUID]]:
@@ -254,10 +228,8 @@ async def reporter_members(
 
 
 async def matched_policy(session: AsyncSession, item: WorkItem) -> SlaPolicy | None:
-    """The one policy governing this item, or None (spec 63 first-match against
-    the item's project's policies — spec 67)."""
-    policies = await enabled_policies(session, item.project_id)
-    return first_match(policies, item, await reporter_members(session, policies))
+    """The one policy governing this item, or None."""
+    return (await matched_policies(session, [item])).get(item.id)
 
 
 async def matched_policies(
@@ -268,8 +240,8 @@ async def matched_policies(
     policies_by_project: dict[uuid.UUID, list[SlaPolicy]] = {}
     for item in items:
         if item.project_id not in policies_by_project:
-            policies_by_project[item.project_id] = await enabled_policies(
-                session, item.project_id
+            policies_by_project[item.project_id] = await list_policies(
+                session, item.project_id, enabled_only=True
             )
     members = {
         project_id: await reporter_members(session, policies)
@@ -281,9 +253,3 @@ async def matched_policies(
         if policy is not None:
             matched[item.id] = policy
     return matched
-
-
-def ordered(policies: Sequence[SlaPolicy]) -> list[SlaPolicy]:
-    """(position, created_at) order in Python — mirrors the SQL for callers
-    holding already-loaded (possibly unflushed) policies."""
-    return sorted(policies, key=lambda policy: (policy.position, policy.created_at or datetime.min))

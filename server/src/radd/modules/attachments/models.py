@@ -1,13 +1,6 @@
-"""Attachment storage tables (spec 102).
-
-`storage_hosts` moved storage out of the environment: several S3 deployments
-(plus filesystem roots) coexist, and every attachment row names the host its
-bytes live on. `storage_rules` is the ordered routing chain deciding the host
-per upload; `attachment_move_jobs` tracks background rebalancing. Attachments
-themselves became polymorphic — `(entity_type, entity_id)` instead of a hard
-item FK — so wiki pages can own files too (no FK: cleanup is the GC consumer's
-job, which also finally removes BYTES, not just rows).
-"""
+"""Attachment storage tables (spec 102): hosts, the ordered routing chain, move
+jobs, and polymorphic attachments — `(entity_type, entity_id)`, no FK, so any
+registered parent can own files and `gc`'s cascade removes rows AND bytes."""
 
 import uuid
 from datetime import datetime
@@ -96,8 +89,7 @@ class Attachment(Base):
     __table_args__ = (Index("ix_attachments_entity", "entity_type", "entity_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    # Polymorphic parent — kernel entity vocabulary ("item" | "page"), no FK;
-    # the GC consumer removes rows AND bytes when the parent dies.
+    # Polymorphic parent ("item" | "page"), no FK: `gc`'s cascade cleans up.
     entity_type: Mapped[str] = mapped_column(String(50))  # AttachmentParentType
     entity_id: Mapped[uuid.UUID] = mapped_column()
     filename: Mapped[str] = mapped_column(String(300))
@@ -117,9 +109,7 @@ class Attachment(Base):
 
     @property
     def item_id(self) -> uuid.UUID | None:
-        """The owning item for item-parented rows. KEPT for the EVENT payloads
-        (service.py stamps it so notify/automations can item-scope); the REST
-        field it also fed was dropped in RADD-895 — read entity_type/entity_id."""
+        """The owning item for item-parented rows — the events' item subject."""
         if self.entity_type == AttachmentParentType.ITEM.value:
             return self.entity_id
         return None

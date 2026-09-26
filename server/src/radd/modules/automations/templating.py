@@ -1,17 +1,6 @@
-"""Template variables for automation action params (spec 58b): `{{token}}`
-substitution so universal actions (create item / webhook / chat / notify) can
-carry the triggering event's facts into their output.
-
-The catalogue is `TOKENS`, served by GET /automations/catalog so the editor can
-SHOW what is supported instead of leaving people to guess. It sits next to
-`_resolve` deliberately: a documented token that does not resolve renders as a
-literal `{{…}}` in somebody's issue title, and a working token nobody documented
-is one nobody finds.
-
-Unknown tokens render as-is — visible in the output, debuggable, never an error.
-
-Pure module — tested in tests/test_automation_gates.py and test_automation_arity.py.
-"""
+"""`{{token}}` substitution in automation params (spec 58b). `TOKENS` is served
+by GET /automations/catalog and sits next to `_resolve` so the documented and
+the working vocabularies cannot drift. Unknown tokens render verbatim. Pure."""
 
 from __future__ import annotations
 
@@ -26,18 +15,11 @@ from .conditions import EventFacts, _payload_path
 #: graph for tokens, and a second regex there would eventually admit something
 #: this one does not.
 TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
-_TOKEN_RE = TOKEN_RE
 
 
 @dataclass(frozen=True)
 class TokenInfo:
-    """One documented token, for the editor's reference panel.
-
-    Served rather than written into the SPA because this list and `_resolve`
-    below must not drift: a token documented but unresolved renders as literal
-    `{{…}}` in someone's issue title, and an unlisted token that works is one
-    nobody finds. They are defined side by side here for exactly that reason.
-    """
+    """One documented token, for the editor's reference panel."""
 
     token: str
     description: str
@@ -64,11 +46,7 @@ TOKENS: tuple[TokenInfo, ...] = (
     TokenInfo("{{item.type}}", "Its issue type's name.", needs_item=True),
     TokenInfo("{{item.labels}}", "Its labels, comma-separated.", needs_item=True),
     TokenInfo("{{item.id}}", "Its id.", needs_item=True),
-    # Set-shaped tokens (RADD-918). An action running ONCE over many items could
-    # previously learn only how MANY there were: `{{matched_count}}` was the
-    # entire vocabulary, so "post the stale issues to Slack" could say "12" and
-    # not which twelve. At item arity these describe the one item, so the same
-    # template reads correctly in both modes.
+    # Set-shaped tokens (RADD-918): at item arity they describe the one item.
     TokenInfo("{{items.count}}", "How many items this action is acting on."),
     TokenInfo("{{items.keys}}", "Their keys, comma-separated — TD-42, TD-43."),
     TokenInfo("{{items.list}}", "One per line: `TD-42 — the title`. For chat and email bodies."),
@@ -94,19 +72,9 @@ def all_tokens() -> tuple[TokenInfo, ...]:
 
 
 def reserved_roots() -> frozenset[str]:
-    """The first segment of every documented token — the words a node may NOT be
-    named (spec 120).
-
-    DERIVED from `TOKENS` rather than listed beside it. A hand-kept list would be
-    the third copy of this vocabulary (the catalogue, the resolver, the reserved
-    set) and the one nobody notices going stale: a root that stopped being
-    reserved would let someone name a node `item` and shadow `{{item.key}}` in
-    every action of the graph.
-
-    Memoised per set of registered providers (RADD-1324: a plugin can add a
-    root), because `Renderer` asks per TOKEN and recomputing inside a render
-    loop over 200 items is work with no answer attached to it.
-    """
+    """The first segment of every documented token — words a node may NOT be
+    named (spec 120). Derived, never listed, and memoised per set of providers
+    because `Renderer` asks per token."""
     from radd.kernel.registry import registries
 
     return _roots(tuple(sorted(registries.token_providers)))
@@ -169,25 +137,12 @@ def _resolve_items(field: str, items: list[dict[str, Any]] | None) -> str | None
 
 @dataclass
 class Renderer:
-    """One action invocation's template resolver (spec 120).
-
-    An OBJECT rather than a function because rendering now has to report on
-    itself. The engine needs three answers, and a `str -> str` call can only give
-    the first:
-
-    * the text, with tokens substituted;
-    * what each token BECAME, so a dry run can show `{{triage.priority}} → high`
-      rather than making someone infer it from the result;
-    * which VARIABLE tokens found nothing, so the containing action can skip
-      with a reason instead of writing a literal `{{triage.priority}}` into
-      somebody's issue.
-
-    The last one is scoped deliberately. Every OTHER unresolvable token still
-    degrades verbatim, exactly as it has since spec 58b: `{{payload.foo}}` on an
-    event that does not carry `foo` is a normal, harmless miss on a shape that
-    varies per event, and turning it into a skip would silently disable working
-    automations. A variable token is different — it names a node the author
-    wired, and if that node did not run, acting anyway is the wrong write.
+    """One action invocation's template resolver (spec 120). An object because
+    it reports on itself: the text, what each token became (`resolved`, for the
+    dry run), and which VARIABLE tokens missed (`misses`, so the action skips
+    instead of writing a literal `{{triage.priority}}`). Every other unresolved
+    token still degrades verbatim — `{{payload.foo}}` missing on an event is a
+    normal miss, not a reason to disable a working automation.
     """
 
     facts: EventFacts
@@ -212,22 +167,13 @@ class Renderer:
             self.resolved[match.group(0)] = found
             return found
 
-        return _TOKEN_RE.sub(replace, str(value))
+        return TOKEN_RE.sub(replace, str(value))
 
     def line(self, value: Any) -> str:
-        """Render, then collapse every run of whitespace to one space.
-
-        For a param that names a THING or becomes a HEADER, never for a body.
-        The failure this exists for is silent and total: `EmailMessage` under the
-        default policy REFUSES a header containing a newline, so a rendered
-        `send_email` subject carrying one raises inside the transport — the dry
-        run says "Would apply", the real run logs a crash, and no mail is ever
-        sent. Model output is exactly where a stray newline comes from.
-
-        Collapsing is also the right answer for the by-name lookups: a value that
-        came back as "In\nProgress" should match the state called "In Progress",
-        and a literal someone typed has no whitespace runs to lose.
-        """
+        """Render, then collapse whitespace — for params that NAME something or
+        become a header, never a body. A newline in a mail header makes the
+        transport refuse it (dry run says "Would apply", nothing is sent), and
+        "In\nProgress" must still match the state "In Progress"."""
         return " ".join(self(value).split())
 
     def _from_bag(self, token: str) -> str | None:
@@ -253,17 +199,3 @@ class Renderer:
 
 class MissingTemplateOutput(ValueError):
     """A required named producer did not provide the value this action needs."""
-
-
-def render_template(
-    text: str,
-    facts: EventFacts,
-    item_ctx: dict[str, Any] | None = None,
-    items: list[dict[str, Any]] | None = None,
-    variables: Mapping[str, Mapping[str, str]] | None = None,
-) -> str:
-    """Substitute `{{token}}` occurrences; unresolvable tokens stay verbatim.
-
-    The one-shot form, kept because most callers want only the text. Anything
-    that has to REPORT on the rendering builds a `Renderer` and keeps it."""
-    return Renderer(facts, item_ctx, items, variables or {})(text)

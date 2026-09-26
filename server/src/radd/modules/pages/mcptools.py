@@ -1,23 +1,10 @@
-"""The page MCP tools (spec 43/45), declared by their owner (RADD-889).
+"""The page MCP tools, declared by their owner (RADD-889) — the kernel registry
+removes them from catalog and dispatch when pages is disabled.
 
-This replaces mcp/pages_bridge.py — an importlib reflection bridge that probed
-this module's service by function NAME so the doc tools could light up without
-mcp importing pages. The kernel registry is that seam done properly: pages
-contributes the specs on its manifest, so an absent or disabled pages plugin
-takes the tools out of catalog AND dispatch with no feature detection at all
-(the spec-94 unmount path — which the settings-modules probe never covered for
-a HOT disable).
-
-Reads are the bridge's, verbatim: `get_page` answers the raw page row's column
-projection, `search_pages` the ranked FTS results. Neither handler adds an
-authz call — exactly the pre-move surface; the spec's `permission` is the
-spec-114 catalog filter (`kernel_enforced=False`).
-
-Writes (RADD-1005: `create_page` / `update_page` / `move_page`) enforce
-IN-HANDLER through the same gates the REST router uses — `page.write` in the
-target SPACE for a create, `page_access.guard_page` (space atom + the page's
-own restriction) for an edit or a move — and answer with a compact receipt, not
-the body the agent just authored (the RADD-861 rule).
+Every handler enforces in-handler through the REST gates (`guard_page`, or
+`page.write` in the target space for a create); `permission` is only the
+catalog filter (`kernel_enforced=False`). Writes answer with a receipt, never
+the body (RADD-861).
 """
 
 import uuid
@@ -28,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
+from radd.mailrender import page_url
 from radd.kernel.mcptools import limit_arg, limit_property, object_schema
 from radd.kernel.specs import McpToolSpec
 from radd.modules.auth import authz
@@ -64,11 +52,9 @@ def receipt(page: Page) -> dict[str, Any]:
         "title": page.title,
         "version": page.version,
         "parent_id": str(page.parent_id) if page.parent_id else None,
-        # RADD-1240: the address to hand a person. A permalink, because it
-        # survives renames and moves — and because an agent given only an id
-        # assembled `/pages/<uuid>` itself, which is a space address that does
-        # not exist (radd-hq/radd#12).
-        "url": f"{settings.app_base_url.rstrip('/')}/pages?pageId={page.number}",
+        # RADD-1240: a permalink to hand a person — an agent given only an id
+        # assembled `/pages/<uuid>`, which is not an address.
+        "url": page_url(settings.app_base_url, page.number),
     }
 
 
@@ -85,12 +71,9 @@ async def _get_page(session: AsyncSession, actor: User, args: Mapping[str, Any])
 
 
 async def _search_pages(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:
-    limit = limit_arg(args)
-    # Spec 86: docs are global — a single search over every READABLE space.
     from .search_source import readable_results
 
-    results = jsonable(await readable_results(session, actor, str(args["query"]), limit=limit))
-    return (results if isinstance(results, list) else [results])[:limit]
+    return jsonable(await readable_results(session, actor, str(args["query"]), limit=limit_arg(args)))
 
 
 async def _create_page(session: AsyncSession, actor: User, args: Mapping[str, Any]) -> Any:

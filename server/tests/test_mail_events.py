@@ -184,14 +184,14 @@ async def test_a_loop_drop_keys_its_event_off_the_message_id(db, world):
 
 
 def test_every_mail_event_is_a_registered_automation_trigger():
-    """`catalog.TRIGGERS` derives live from the kernel event registry, so this is
+    """`catalog.triggers()` derives live from the kernel event registry, so this is
     what makes them appear in the rule builder — with no edit to `automations`.
     Asserted rather than assumed: a manifest that forgets one produces an event
     nobody can ever write a rule against, and nothing fails."""
     from radd.kernel import registries
     from radd.modules.automations import catalog
 
-    triggers = catalog.TRIGGERS
+    triggers = catalog.triggers()
     for event in MailEvent:
         # Spec 123: the configuration events (mail_source.*, mail_sender.*,
         # mail_rule.*) are registered for the audit log but deliberately NOT

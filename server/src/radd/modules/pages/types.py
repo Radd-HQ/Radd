@@ -1,4 +1,4 @@
-"""Constants + enums for the docs (wiki) module — spec 43."""
+"""Constants + enums for the pages module (spec 43)."""
 
 import re
 from enum import StrEnum
@@ -7,13 +7,7 @@ from enum import StrEnum
 # migration builds: to_tsvector('english', title || ' ' || body).
 DOCS_TS_CONFIG = "english"
 
-# Tokens kept when building a tsquery (same contract as the search module's).
-TSQUERY_TOKEN_RE = re.compile(r"[\w][\w.-]*", re.UNICODE)
-
-# Cap on q length — longer input is truncated, not an error.
-MAX_QUERY_CHARS = 200
-
-# Space slugs are cosmetic (URLs use ids): lowercase, digits, dashes.
+# Space slugs: lowercase, digits, dashes.
 SLUG_MAX_CHARS = 100
 SLUG_SEPARATOR_RE = re.compile(r"[^a-z0-9]+")
 

@@ -1,30 +1,11 @@
-"""Page → page references, indexed on save (RADD-713).
+"""Page → page references, indexed on save (RADD-713) — maintained on the write
+path, so a backlink read is one indexed lookup rather than a LIKE scan.
 
-A wiki without backlinks is a set of dead ends: a page can say what it points at
-but never what points at it, which is the direction people actually navigate.
-
-**An index, not a live search.** The obvious alternative — scan every body for a
-mention of this page when the page is opened — is `LIKE '%…%'` over the whole
-corpus per page view, cannot use the FTS index, and gets slower as the wiki gets
-more useful. The write path already parses the body, so maintaining a small
-table there costs one extra statement per save and makes the read a single
-indexed lookup.
-
-**What counts as a link.** Whatever the editor actually emits for an internal
-page reference:
-
-  - `/pages/<space-slug>/<path…>` — the canonical form (RADD-702, RADD-1233:
-    the path has as many segments as the page is deep),
-  - the same path with the instance's origin in front, because pasting a URL
-    from the address bar is how most links get made,
-  - `/pages?pageId=<number|uuid>` — the permalink (RADD-1233),
-  - `/pages/<uuid>` and bare page UUIDs in a link target, which is what pre-702
-    links look like and what the API still accepts.
-
-Resolution runs the same resolver the address bar does (`paths.resolve`), so a
-link counts as a backlink exactly when clicking it would land. A link that
-resolves to nothing is simply not indexed: pages are written before they exist,
-and a dangling link is a normal state of a wiki, not an error to report.
+A link is the LINK TARGET of markdown `](…)` or `href`: `/pages/<space>/<path…>`
+(with or without the instance origin), the permalink `/pages?pageId=<n|uuid>`,
+or a pre-702 `/pages/<uuid>`. Targets resolve through `paths.resolve`, so a
+link counts exactly when clicking it would land; unresolvable links are skipped
+— linking to a page not yet written is normal.
 """
 
 from __future__ import annotations
@@ -156,9 +137,7 @@ async def backlink_reads(session: AsyncSession, page_id: uuid.UUID, *, actor=Non
 
 
 async def reindex_all(session: AsyncSession) -> int:
-    """Rebuild the index for every live page. Derived data, so this is always
-    safe; it exists for content that arrived without passing the save path (an
-    import), where the index would otherwise stay empty."""
+    """Rebuild every live page's index — for content that bypassed the save path."""
     pages = list((await session.execute(select(Page).where(Page.archived_at.is_(None)))).scalars())
     for page in pages:
         await reindex(session, page)

@@ -55,8 +55,7 @@ router = APIRouter(prefix="/automations", tags=["automations"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
-# Rules act on items and run as an admin system actor, so managing them is admin-level:
-# AUTOMATION_MANAGE is global-scoped, held by instance admins only.
+# automation.manage is global: an automation acts on any project's items.
 _MANAGE = authz.Permission.AUTOMATION_MANAGE
 
 def _output_info(field) -> OutputFieldInfo:
@@ -72,9 +71,8 @@ def _output_info(field) -> OutputFieldInfo:
 
 @router.get("/catalog", response_model=CatalogRead)
 async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
-    """The trigger/subject/operator catalog the rule builder renders from (spec 58).
-    Static per build — but served, not baked into the SPA, so extensions listing
-    it stay honest about what this server supports."""
+    """The builder catalog: triggers, operators, node types, trigger kinds, arity
+    rules and tokens — live from the registries of the installed plugins."""
     node_owners = {
         node.key: plugin.name
         for plugin in registries.plugins.values()
@@ -92,7 +90,7 @@ async def get_catalog(session: Session, user: CurrentUser) -> CatalogRead:
                 item_scoped=spec.item_scoped,
                 has_changes=spec.has_changes,
             )
-            for spec in catalog.TRIGGERS.values()
+            for spec in catalog.triggers().values()
         ],
         operators=[
             OperatorInfo(
@@ -217,10 +215,7 @@ async def list_runnable_rules(session: Session, user: CurrentUser) -> list[Runna
     Member floor (RADD-788): item.read in SOME project, not the global atom."""
     if not await authz.readable_projects(session, user):
         return []
-    # (automation, node_id) pairs since spec 116 — a graph may hold several
-    # triggers, so the engine seam returns which one matched. Validating the
-    # TUPLE was a 500 on every call, and this endpoint drives the editor's `/`
-    # menu, so custom quick actions silently vanished.
+    # (automation, node_id) pairs since spec 116 — a graph may hold several triggers.
     rules = await service.rules_for_trigger(session, AutomationTrigger.MANUAL)
     return [RunnableRuleRead.model_validate(rule) for rule, _node_id in rules]
 
@@ -262,22 +257,15 @@ async def event_samples(
     user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=25)] = 10,
 ) -> EventSampleRead:
-    """What this event type actually carries, from REAL recent events (RADD-921).
-
-    Declared BEFORE `/{rule_id}` — Starlette matches in declaration order, and a
-    literal path registered after a `{uuid}` one is unreachable: it would answer
-    a 422 about parsing "samples" as a UUID (see tests/test_route_shadowing.py).
-
-    Gated on `automation.manage`, which is global-admin: a payload can name items
-    from any project, and this returns them verbatim. It is the same data the
-    admin audit view already serves, narrowed to one event type.
-    """
+    """What this event type carries, from REAL recent events (RADD-921). Declared
+    before `/{rule_id}` (route order). automation.manage: payloads name items from
+    any project."""
     await authz.require(session, user, _MANAGE)
-    if event_type not in catalog.TRIGGERS:
+    spec = catalog.triggers().get(event_type)
+    if spec is None:
         raise ConflictError(
             AutomationEntity.RULE, reason=f"unknown event type {event_type!r}"
         )
-    spec = catalog.TRIGGERS[event_type]
     recent = await events_service.query_events(session, event_types=[event_type], limit=limit)
     payloads = [event.payload or {} for event in recent]
     return EventSampleRead(
@@ -420,9 +408,7 @@ async def run_rule(
     this WRITES — so it needs item.update on the item's project, not automation.manage:
     manual rules are curated by admins precisely so members can safely invoke them."""
     rule = await service.get_rule(session, rule_id)
-    # `rule.trigger` was a COLUMN until spec 116 made an automation a graph; the
-    # read raised AttributeError, so every manual run 500'd. The trigger now
-    # lives on its node, and the run must start at the manual one specifically.
+    # The run starts at the MANUAL trigger node specifically.
     node_id = await service.manual_trigger_node(session, rule.id)
     if node_id is None:
         raise ConflictError(

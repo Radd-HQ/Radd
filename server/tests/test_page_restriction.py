@@ -185,8 +185,8 @@ async def test_search_does_not_leak_a_restricted_title(db):
     hits = await pages_search.search_pages(db, "Zorblatt", limit=10)
     assert page.id in {hit.page_id for hit in hits}, "fixture: the page must be findable"
 
-    for_outsider = await pages_service.drop_restricted_results(db, outsider, hits)
-    for_insider = await pages_service.drop_restricted_results(db, insider, hits)
+    for_outsider = await page_access.drop_restricted(db, outsider, hits, "page_id")
+    for_insider = await page_access.drop_restricted(db, insider, hits, "page_id")
     assert page.id not in {hit.page_id for hit in for_outsider}
     assert page.id in {hit.page_id for hit in for_insider}
 
@@ -281,7 +281,7 @@ async def test_an_ancestor_restriction_hides_children_from_the_tree_and_search(d
 
     hits = await pages_search.search_pages(db, "Zorblatt", limit=10)
     assert child.id in {hit.page_id for hit in hits}, "fixture: the child must be findable"
-    for_outsider = await pages_service.drop_restricted_results(db, outsider, hits)
+    for_outsider = await page_access.drop_restricted(db, outsider, hits, "page_id")
     assert child.id not in {hit.page_id for hit in for_outsider}
 
 

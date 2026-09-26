@@ -1,22 +1,13 @@
-"""In-transaction hook points this module dispatches (spec 122).
+"""In-transaction hook points around a page body write (spec 122). `pages`
+dispatches and never imports `collab` (collab depends on pages); with no
+subscriber a save is unchanged.
 
-The same inversion `items/hooks.py` made for spec 119: `pages` must never import
-`collab` (collab depends on pages, and `tests/test_module_contracts.py` refuses
-the cycle), so pages DISPATCHES around a body write and whoever holds the live
-document REGISTERS. With no subscriber the dispatch is a no-op and a save is
-byte-identical to what it was.
-
-Two moments, named for the moment rather than the fact:
-
-* `page.body_writing` — before the write. A handler may REFUSE it (raise
-  `ConflictError`) or VOUCH for it (set `live_editor`), which is how a save
-  that came from the room skips the `expected_version` check without the
-  service knowing what a room is.
-* `page.version_bumped` — after `version` moved, still inside the transaction.
-  A handler that tracks the page's version (the room's stored CRDT state is
-  tagged with one) learns the new number here; a handler that finds the body
-  was replaced by something that was NOT its own session learns its copy is
-  stale.
+* `page.body_writing` — before the write; a handler may REFUSE it (ConflictError)
+  or VOUCH for it (`live_editor`), which skips `expected_version`.
+* `page.version_bumped` — after `version` moved; the room re-tags its state, or
+  learns that a write from elsewhere made its copy stale.
+* `page.body_autosaved` — a live autosave inside the history window: body saved,
+  version not bumped; the session owes a seal (RADD-1244).
 """
 
 from __future__ import annotations
@@ -31,9 +22,7 @@ from .models import Page
 class PageHook(StrEnum):
     BODY_WRITING = "page.body_writing"
     VERSION_BUMPED = "page.version_bumped"
-    #: RADD-1244: a live autosave changed the body WITHOUT a history row (inside
-    #: the window) — so `version` did not move. Whoever owns the session must
-    #: seal it (write the row, bump) when the session ends without a final save.
+    #: RADD-1244: see the module docstring.
     BODY_AUTOSAVED = "page.body_autosaved"
 
 
@@ -45,11 +34,9 @@ class PageBodyWriting:
     page: Page
     actor_id: uuid.UUID
     collab_session: uuid.UUID | None
-    #: Whether the save actually changes the body (a same-text save or a
-    #: title-only save carrying `collab_session` changes nothing a room holds).
+    #: Whether the body actually changes (a title-only save touches nothing a room holds).
     body_changes: bool
-    #: Set by a handler when `collab_session` names a connected editor of this
-    #: page's live document — the save came FROM the room.
+    #: Set by a handler when `collab_session` names a connected editor: the save came FROM the room.
     live_editor: bool = False
 
 

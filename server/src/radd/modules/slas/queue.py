@@ -50,23 +50,13 @@ async def queue_items(
         matched = await service.matched_policies(
             session, list((await items.items_by_ids(session, ids)).values())
         )
-        policies, groups = {}, {}
-        for item_id, policy in matched.items():
-            policies[policy.id] = policy
-            groups.setdefault(policy.id, []).append(item_id)
         facts = {}
-        for policy_id, group in groups.items():
-            for item_id, per_kind in (
-                await evaluation.evaluate_items(session, policies[policy_id], group)
-            ).items():
-                open_timers = [status for _, status in per_kind.values() if status.met_at is None]
-                facts[item_id] = (
-                    any(s.breached for s in open_timers),
-                    min(
-                        (s.due_at for s in open_timers if s.due_at),
-                        default=NO_DUE,
-                    ),
-                )
+        for item_id, (_policy, per_kind) in (await evaluation.evaluate_matched(session, matched)).items():
+            open_timers = [status for _, status in per_kind.values() if status.met_at is None]
+            facts[item_id] = (
+                any(s.breached for s in open_timers),
+                min((s.due_at for s in open_timers if s.due_at), default=NO_DUE),
+            )
         for row in batch:
             breached, due = facts.get(row.id, (False, NO_DUE))
             keys.append((not breached, due, row.created_at, row.id))

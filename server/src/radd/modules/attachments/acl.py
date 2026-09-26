@@ -1,13 +1,8 @@
-"""Per-attachment read ACL (spec 102), on the spec-92 generic access framework.
+"""Per-attachment read ACL (spec 102) on the spec-92 access framework.
 
-One rule: an attachment with NO grant rows is open to everyone who can read its
-parent (pre-102 behavior); ANY grant row restricts it to matching subjects
-(user/team/role), with the uploader and parent-write holders always passing
-(`has_manage`). Registering the ResourceSpec buys the generic /grants API and
-the <AccessGrantsEditor> UI with no new endpoints.
-
-Grants are written unscoped (global rows) — an attachment already lives inside
-one parent, so per-project scoping adds nothing.
+NO grant rows = open to whoever reads the parent; ANY grant restricts it to
+matching subjects, the uploader and parent-writers always passing (explicit
+since RADD-816). Grants are unscoped: an attachment already lives in one parent.
 """
 
 import uuid
@@ -32,7 +27,7 @@ async def _can_manage(
 ) -> bool:
     """Who may edit an attachment's grants: its uploader, or anyone who could
     write the parent (mirrors the delete rule)."""
-    from . import service  # deferred: service imports nothing from here, but keep it lazy
+    from . import service
 
     try:
         attachment = await service.get_attachment(session, uuid.UUID(resource_id))
@@ -100,8 +95,7 @@ async def _base_subjects(
     session: AsyncSession, user: User, attachment: Attachment
 ) -> tuple[frozenset[uuid.UUID], frozenset[uuid.UUID], frozenset[uuid.UUID], bool]:
     """(role_ids, team_ids, group_ids, parent_writable) for one parent — shared
-    across a listing; `has_manage` is finished per attachment (the uploader
-    varies)."""
+    across a listing; the uploader check stays per attachment."""
     from radd.modules.auth import authz
     from radd.modules.groups import service as groups_service
     from radd.modules.projects import service as projects_service
@@ -131,11 +125,9 @@ async def _base_subjects(
 
 def _context(
     user: User,
-    attachment: Attachment,
     role_ids: frozenset[uuid.UUID],
     team_ids: frozenset[uuid.UUID],
     group_ids: frozenset[uuid.UUID],
-    parent_writable: bool,
 ) -> resolution.SubjectContext:
     return resolution.SubjectContext(
         user_id=user.id,
@@ -163,24 +155,21 @@ async def attachment_readable(
         session, user, attachment
     )
     if parent_writable or attachment.created_by == user.id:
-        # The resource-owned rule, explicit since RADD-816 moved bypasses out
-        # of the framework: uploaders and parent-writers always read their own.
-        return True
-    ctx = _context(user, attachment, role_ids, team_ids, group_ids, parent_writable)
+        return True  # the resource-owned rule (RADD-816): uploaders and parent-writers
+    ctx = _context(user, role_ids, team_ids, group_ids)
     return resolution.has_access(grants, ctx, Access.READ.value, None, _SPEC)
 
 
 async def readable_map(
     session: AsyncSession, user: User, attachments: list[Attachment]
 ) -> dict[uuid.UUID, tuple[bool, bool]]:
-    """{attachment_id: (readable, restricted)} for one parent's listing — the
-    caller has already passed the parent read gate, so only grants are checked
-    here (batched, no N+1). `restricted` drives the lock badge."""
+    """{attachment_id: (readable, restricted)} for one parent's listing, grants
+    only (the caller passed the parent gate), batched. `restricted` = lock badge."""
     grants_by_id = await access_service.grants_for_resources(
         session, ATTACHMENT_RESOURCE, [a.id for a in attachments]
     )
     out: dict[uuid.UUID, tuple[bool, bool]] = {}
-    base: tuple[frozenset[uuid.UUID], frozenset[uuid.UUID], bool] | None = None
+    base: tuple[frozenset[uuid.UUID], frozenset[uuid.UUID], frozenset[uuid.UUID], bool] | None = None
     for attachment in attachments:
         grants = grants_by_id.get(str(attachment.id), [])
         if not grants:
@@ -192,7 +181,7 @@ async def readable_map(
         if parent_writable or attachment.created_by == user.id:
             out[attachment.id] = (True, True)  # the explicit uploader/writer rule
             continue
-        ctx = _context(user, attachment, *base)
+        ctx = _context(user, *base[:3])
         out[attachment.id] = (
             resolution.has_access(grants, ctx, Access.READ.value, None, _SPEC),
             True,

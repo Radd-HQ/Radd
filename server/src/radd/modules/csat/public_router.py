@@ -1,8 +1,6 @@
-"""Unauthenticated router for the public rating page (spec 65, the spec-62
-public-forms idiom): its own APIRouter, nothing takes CurrentUser — the survey
-token IS the credential (404 unknown), and the responses are the trimmed public
-shapes. The page POSTs the rating; the emailed links only preselect a star, so
-a mail scanner prefetching them can never record one."""
+"""Unauthenticated rating page API (spec 65): the token IS the credential (404
+unknown). The page POSTs; the emailed links only preselect, so a mail scanner
+prefetching them never records a rating."""
 
 from typing import Annotated
 

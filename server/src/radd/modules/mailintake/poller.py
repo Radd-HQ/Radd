@@ -1,20 +1,8 @@
-"""IMAP poll + intake (specs 47+62; row-configured since RADD-958).
+"""IMAP poll (specs 47/62; every mailbox is a `mail_sources` row since RADD-958).
 
-The blocking imaplib calls run in a worker thread (`asyncio.to_thread`); the
-item/comment writes run on the event loop through the items/comments seams as
-the SYSTEM actor. `\\Seen` is the cursor: messages are fetched with BODY.PEEK and
-flagged only after an intake attempt, so a poison message is logged and still
-flagged — no retry loop.
-
-**Every mailbox is a `mail_sources` row**, not an env var. That is what makes
-the routing chain reachable: a message now arrives WITH the source it came from,
-so `intake` can walk that source's rules (alias → project, the AI classifier)
-instead of falling straight to one instance-wide default. Polling several
-mailboxes is now just several rows.
-
-Per-message decisions are NOT here — parsing, dedup, threading, quote stripping,
-attachments and the loop guards all live in `intake`, which the webhook source
-calls too.
+Blocking imaplib runs in `asyncio.to_thread`. `\\Seen` is the cursor: messages
+are fetched with BODY.PEEK and flagged after the intake attempt, so a poison
+message is flagged, not retried forever. Per-message decisions live in `intake`.
 """
 
 import asyncio
@@ -42,9 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def _connect(source: MailSource) -> imaplib.IMAP4_SSL:
-    # Resolved, not raw (RADD-969): a Gmail/Outlook row stores no host, port or
-    # username — its kind's preset answers them, and the poll is otherwise the
-    # same poll.
+    # Resolved, not raw (RADD-969): a preset row stores no host, port or username.
     imap = imaplib.IMAP4_SSL(resolve.source_host(source), resolve.source_port(source))
     imap.login(resolve.source_username(source), source.secret)
     imap.select(source.folder or DEFAULT_IMAP_FOLDER)
@@ -81,22 +67,15 @@ def mark_seen(source: MailSource, uids: list[str]) -> None:
 
 
 async def run_once() -> int:
-    """Poll every configured mailbox. Returns the messages processed.
-
-    **The zero-source early return IS the poller's gate (RADD-970).** The loop
-    itself only asks whether this process runs workers; whether there is
-    anything to poll is a question about ROWS, and `PeriodicLoop.enabled` is
-    sync and cannot ask the database. So it is asked here, once a tick, and an
-    instance with no mailboxes pays one indexed SELECT a minute for the property
-    that an admin adding one in Settings → Email needs no restart.
-    """
+    """Poll every configured mailbox; returns the messages processed. The
+    zero-source early return IS the poller's gate (RADD-970): `PeriodicLoop.enabled`
+    is sync and cannot ask the database, and a new mailbox needs no restart."""
     async with SessionLocal() as session:
         sources = await registry.polled_sources(session)
         if not sources:
             return 0
         own = await registry.own_addresses(session)
-        # Detach what the blocking side needs: the session closes before the
-        # thread runs, and a lazily-loaded attribute there would raise.
+        # Detach what the blocking side needs: a lazy load after close would raise.
         plans = [
             (
                 source,
@@ -123,10 +102,8 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
         try:
             plan = parsing.parse_email(raw)
         except Exception:
-            # A poison message. Before RADD-1035 it was flagged `\\Seen` and
-            # forgotten with only a log line — a silent loss. Now the drop is on
-            # the queryable event stream, THEN the message is flagged so the poll
-            # does not wedge on it. Unlike the webhook, there is nobody to 5xx.
+            # A poison message: emitted as a drop (RADD-1035), then flagged so the
+            # poll does not wedge on it.
             logger.warning(
                 "mailintake: unparseable message uid=%s on %s", uid, source.name, exc_info=True
             )
@@ -141,23 +118,19 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
                     raw=raw,
                     default_project_key="",
                     own_addresses=own,
-                    # IMAP exposes no envelope sender, so the rate limiter is
-                    # keyed on the FROM HEADER here — forgeable, acceptable for
-                    # a circuit breaker, and not acceptable for anything that
-                    # granted access.
+                    # IMAP has no envelope sender: the rate limiter keys on the
+                    # forgeable FROM header — fine for a circuit breaker only.
                     envelope_from=plan.sender_email,
                     source_id=source.id,
                     default_project_id=default_project_id,
                 )
                 await session.commit()
-            # Post-commit: never acknowledge a rolled-back item — and the
-            # commit is what puts the inbound Message-ID in the store before
-            # the receipt reads it back out as In-Reply-To.
+            # Post-commit: never acknowledge a rolled-back item, and the receipt's
+            # In-Reply-To reads the committed inbound id.
             if outcome.ack is not None:
                 await service.send_ack(outcome.ack)
         except Exception:
-            # Flagged `\\Seen` anyway below — a poison message must not wedge
-            # the poll. Unlike the webhook, there is nobody to hand a 5xx to.
+            # Flagged `\\Seen` anyway below — nobody to hand a 5xx to.
             logger.exception("mailintake: intake failed for uid=%s on %s", uid, source.name)
         processed.append(uid)
     await asyncio.to_thread(mark_seen, source, processed)
@@ -165,16 +138,9 @@ async def _drain(source: MailSource, default_project_id, own: set[str]) -> int:
 
 
 async def _emit_dropped(source: MailSource, *, reason: str) -> None:
-    """Record a poller-side loss on the event stream (RADD-1035).
-
-    A message the poller cannot even parse never reaches `intake`, so it would
-    otherwise be flagged Seen and forgotten with nothing queryable saying so.
-    The `entity_id` is a fresh uuid4 — an unparseable message has no Message-ID
-    to correlate on, which is exactly what makes it unparseable — and the SOURCE
-    is on the payload, so an operator can still see WHICH mailbox is dropping mail
-    and how often. Its own failure is swallowed: this is the error path, and it
-    must not raise back into a poll it is trying to keep honest.
-    """
+    """Record a poller-side loss on the event stream (RADD-1035): a fresh uuid4 (an
+    unparseable message has no Message-ID) and the SOURCE on the payload. Never
+    raises — this is the error path."""
     try:
         async with SessionLocal() as session:
             await events.emit(

@@ -1,12 +1,10 @@
-"""SLA timer evaluation over items (specs 30/35/63) — shared by the engine,
-the per-item endpoint, and the list/board batch endpoint.
-
-Split out of service.py in spec 63 (policy CRUD + first-match stay there).
-"""
+"""SLA timer evaluation over items — shared by the engine, the per-item endpoint
+and the list/board batch endpoint."""
 
 import math
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import asdict
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import inspect, select
@@ -31,7 +29,7 @@ from radd.modules.projects.models import Project
 from . import calendar, metrules, service, timers
 from .models import SlaItemState, SlaPolicy
 from .schemas import BatchTimerRead
-from .types import REPLY_MODES, STATE_MODES, SlaEvent, SlaKind, SlaMetOn
+from .types import DEFAULT_MET_ON, REPLY_MODES, STATE_MODES, SlaEvent, SlaKind, SlaMetOn
 from radd.clock import utcnow
 
 FULL_DAY_MINUTES = 24 * 60
@@ -40,6 +38,8 @@ FULL_DAY_MINUTES = 24 * 60
 HORIZON_SLACK_DAYS = 14
 ALL_WEEK: frozenset[int] = frozenset(range(7))
 
+#: {kind: (target minutes, timer status)} for one item.
+PerKind = dict[SlaKind, tuple[int, timers.TimerStatus]]
 
 
 async def evaluate_items(
@@ -47,7 +47,7 @@ async def evaluate_items(
     policy: SlaPolicy,
     item_ids: Iterable[uuid.UUID],
     now: datetime | None = None,
-) -> dict[uuid.UUID, dict[SlaKind, tuple[int, timers.TimerStatus]]]:
+) -> dict[uuid.UUID, PerKind]:
     """Live timer status per item for one policy: {item: {kind: (target_minutes, status)}}.
 
     Spec 63: callers must pass only items whose MATCHED policy is `policy`
@@ -69,7 +69,7 @@ async def evaluate_items(
     # RADD-1299: what satisfies each target, and the facts its mode needs —
     # gathered ONCE per batch, then resolved per item by `metrules`.
     targets = _targets(policy)
-    met = await _met_resolver(session, policy, targets, item_map, timelines)
+    met = await _met_resolver(session, targets, item_map, timelines)
 
     # Work-week-only policies (spec 35): non-working days pause the clock.
     # Spec 50/67: the work week resolves per item project (project→instance→env).
@@ -97,18 +97,14 @@ async def evaluate_items(
     # doubled (weekends and merged pauses), plus fixed slack.
     horizon_days = math.ceil(max_target_minutes / window_minutes) * 2 + HORIZON_SLACK_DAYS
 
-    # Holidays (RADD-1031): dates nobody works pause the clock exactly like a
-    # weekend, so they only apply to a policy that counts the WORK WEEK — a 24/7
-    # policy declares that calendar time is what it measures. Resolved ONCE for
-    # the whole batch's span rather than per item: the providers answer for a
-    # date range, and this loop already runs over items sharing one policy.
+    # Holidays pause only WORK-WEEK policies; resolved once for the batch's span.
     holidays: frozenset[date] = frozenset()
     if policy.work_week_only and item_map:
         starts = [item.created_at for item in item_map.values()]
         span_end = max(now, max(starts)) + timedelta(days=horizon_days)
         holidays = await calendar.non_working_dates(session, min(starts).date(), span_end.date())
 
-    results: dict[uuid.UUID, dict[SlaKind, tuple[int, timers.TimerStatus]]] = {}
+    results: dict[uuid.UUID, PerKind] = {}
     for item_id, item in item_map.items():
         tl = timelines.get(item_id)
         pauses: list[tuple[datetime, datetime | None]] = []
@@ -138,7 +134,7 @@ async def evaluate_items(
                         working_days,
                     )
                 )
-        per_kind: dict[SlaKind, tuple[int, timers.TimerStatus]] = {}
+        per_kind: PerKind = {}
         for kind, (minutes, _mode, _states, _teams) in targets.items():
             per_kind[kind] = (
                 minutes,
@@ -162,24 +158,19 @@ Targets = dict[SlaKind, tuple[int, SlaMetOn, frozenset[str], frozenset[str]]]
 
 def _targets(policy: SlaPolicy) -> Targets:
     out: Targets = {}
-    if policy.response_minutes is not None:
-        out[SlaKind.RESPONSE] = (
-            policy.response_minutes,
-            SlaMetOn(policy.response_met_on or SlaMetOn.FIRST_REPLY),
-            frozenset(str(s) for s in policy.response_state_ids or []),
-            frozenset(str(t) for t in policy.response_team_ids or []),
-        )
-    if policy.resolution_minutes is not None:
-        out[SlaKind.RESOLUTION] = (
-            policy.resolution_minutes,
-            SlaMetOn(policy.resolution_met_on or SlaMetOn.DONE),
-            frozenset(str(s) for s in policy.resolution_state_ids or []),
-            frozenset(str(t) for t in policy.resolution_team_ids or []),
-        )
+    for kind in SlaKind:
+        minutes = getattr(policy, f"{kind.value}_minutes")
+        if minutes is not None:
+            out[kind] = (
+                minutes,
+                SlaMetOn(getattr(policy, f"{kind.value}_met_on") or DEFAULT_MET_ON[kind]),
+                frozenset(str(s) for s in getattr(policy, f"{kind.value}_state_ids") or []),
+                frozenset(str(t) for t in getattr(policy, f"{kind.value}_team_ids") or []),
+            )
     return out
 
 
-async def _met_resolver(session, policy, targets: Targets, item_map, timelines):
+async def _met_resolver(session, targets: Targets, item_map, timelines):
     """A `met(kind, item) -> datetime | None` over facts fetched once: public
     comment times only if a reply mode is in play, and each needed team's
     effective members (nested groups included) once."""
@@ -217,6 +208,24 @@ async def _met_resolver(session, policy, targets: Targets, item_map, timelines):
     return met
 
 
+async def evaluate_matched(
+    session: AsyncSession, matched: Mapping[uuid.UUID, SlaPolicy]
+) -> dict[uuid.UUID, tuple[SlaPolicy, PerKind]]:
+    """`{item_id: (policy, per_kind)}` for items already matched to a policy —
+    one `evaluate_items` per policy."""
+    groups: dict[uuid.UUID, list[uuid.UUID]] = {}
+    policies: dict[uuid.UUID, SlaPolicy] = {}
+    for item_id, policy in matched.items():
+        policies[policy.id] = policy
+        groups.setdefault(policy.id, []).append(item_id)
+    out: dict[uuid.UUID, tuple[SlaPolicy, PerKind]] = {}
+    for policy_id, group in groups.items():
+        policy = policies[policy_id]
+        for item_id, per_kind in (await evaluate_items(session, policy, group)).items():
+            out[item_id] = (policy, per_kind)
+    return out
+
+
 # --- batch endpoint compute (spec 63: list/board chips) ---
 
 
@@ -239,28 +248,13 @@ async def batch_sla(
         if authz.holds_base(permissions.get(item.project_id, frozenset()), Permission.ITEM_READ)
     ]
     matched = await service.matched_policies(session, readable)
-    grouped: dict[uuid.UUID, list[uuid.UUID]] = {}
-    policy_by_id: dict[uuid.UUID, SlaPolicy] = {}
-    for item_id, policy in matched.items():
-        grouped.setdefault(policy.id, []).append(item_id)
-        policy_by_id[policy.id] = policy
-    result: dict[uuid.UUID, list[BatchTimerRead]] = {}
-    for policy_id, group in grouped.items():
-        policy = policy_by_id[policy_id]
-        for item_id, per_kind in (await evaluate_items(session, policy, group)).items():
-            result[item_id] = [
-                BatchTimerRead(
-                    policy_name=policy.name,
-                    kind=kind,
-                    due_at=status.due_at,
-                    met_at=status.met_at,
-                    breached=status.breached,
-                    paused=status.paused,
-                    remaining_seconds=status.remaining_seconds,
-                )
-                for kind, (_target, status) in per_kind.items()
-            ]
-    return result
+    return {
+        item_id: [
+            BatchTimerRead(policy_name=policy.name, kind=kind, **asdict(status))
+            for kind, (_target, status) in per_kind.items()
+        ]
+        for item_id, (policy, per_kind) in (await evaluate_matched(session, matched)).items()
+    }
 
 
 # --- engine bookkeeping (breach events fire exactly once) ---
@@ -273,9 +267,7 @@ def _sla_payload(
     status: timers.TimerStatus,
     item_refs: dict[uuid.UUID, dict],
 ) -> dict:
-    """`item_key` became `item` (RADD-922). It was the only place in the codebase
-    that spelled the issue key that way, which is why `googlechat/formatter.py`
-    had two branches for one concept and `notify/consumer.py` had four."""
+    """The breach/due-soon/met payload; `item` is the canonical item ref (RADD-922)."""
     return {
         "item": item_refs.get(item_id),
         "policy_id": str(policy.id),
@@ -309,7 +301,7 @@ def _fresh(met_at, now, row: SlaItemState) -> bool:
 async def sync_states(
     session: AsyncSession,
     policy: SlaPolicy,
-    evaluated: dict[uuid.UUID, dict[SlaKind, tuple[int, timers.TimerStatus]]],
+    evaluated: dict[uuid.UUID, PerKind],
     item_refs: dict[uuid.UUID, dict],
 ) -> int:
     """Upsert bookkeeping rows; emit sla.breached for NEW breaches and (spec 69)

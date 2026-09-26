@@ -1,13 +1,7 @@
-"""Settings → Email's API: sources, senders, and the kind catalog (RADD-958/969).
-
-Admin-gated CRUD over the connection rows, plus the operation that turns this
-from a form into something an operator can trust: a **test send** reporting the
-Message-ID the relay actually used, because a credential form with no test makes
-"is it working" a question you can only answer by waiting for a customer to
-complain. The routing chain and its dry run live in `rules_router`.
-
-`GET /mail/kinds` is the spec-110 pattern (RADD-969): the add form asks the
-server what a kind means instead of shipping its own copy of `smtp.gmail.com`.
+"""Settings → Email's API (RADD-958/969): admin CRUD over sources and senders, a
+test send that reports the Message-ID the relay actually used, and `GET
+/mail/kinds` — the form asks the server what a kind means instead of shipping
+its own copy of `smtp.gmail.com`. The routing chain lives in `rules_router`.
 """
 
 from __future__ import annotations
@@ -45,13 +39,8 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 
 async def require_mail_admin(session: AsyncSession, user) -> None:
-    """Mail configuration is instance plumbing: credentials, an internet-facing
-    ingest secret, and which project strangers' mail opens in. `global.manage`,
-    like Storage and Sign-in — deliberately not a per-project atom.
-
-    Public because `rules_router` gates on the same atom, and two copies of an
-    authz decision is how one of them ends up different.
-    """
+    """`global.manage`, like Storage and Sign-in: credentials, an internet-facing
+    ingest secret and where strangers' mail opens. Shared with `rules_router`."""
     await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
 
 
@@ -85,13 +74,6 @@ def _sender_read(row: MailSender) -> MailSenderRead:
 
 @router.get("/kinds", response_model=MailKinds)
 async def list_kinds(session: Session, user: CurrentUser) -> MailKinds:
-    """What each kind answers on the operator's behalf (RADD-969).
-
-    The spec-110 `GET /sso/kinds` shape: the form asks the server what a kind
-    means rather than carrying its own copy of `smtp.gmail.com`. That copy is
-    what a preset is for — one that lives on the client would have to be
-    redeployed to change, which is the whole point of not hardcoding it.
-    """
     await require_mail_admin(session, user)
     return MailKinds(
         sources=[_source_kind_info(kind) for kind in MailSourceKind],
@@ -156,6 +138,22 @@ async def _emit_config(
     )
 
 
+async def _update_row(session, row, data, actor_id, save, event_type, entity_type):
+    """Apply a write model to a source/sender row, save it and emit the diff."""
+    before = changes.snapshot(row, changes.column_fields(row))
+    for key, value in data.model_dump(exclude={"secret"}).items():
+        setattr(row, key, value)
+    # Omitted = unchanged, so a port edit does not require re-typing a password.
+    if "secret" in data.model_fields_set and data.secret is not None:
+        row.secret = data.secret
+    saved = await save(session, row)
+    await _emit_config(
+        session, event_type, entity_type, saved, actor_id,
+        changes.diff_object(saved, before, hidden=SECRET_FIELDS),
+    )
+    return saved
+
+
 @router.post("/sources", response_model=MailSourceRead, status_code=201)
 async def create_source(
     data: MailSourceWrite, session: Session, user: CurrentUser
@@ -173,20 +171,8 @@ async def update_source(
 ) -> MailSourceRead:
     await require_mail_admin(session, user)
     row = await registry.get_source(session, source_id)
-    before = changes.snapshot(row, changes.column_fields(row))
-    for key, value in data.model_dump(exclude={"secret"}).items():
-        setattr(row, key, value)
-    # Omitted = unchanged, so a port edit does not require re-typing a password.
-    if "secret" in data.model_fields_set and data.secret is not None:
-        row.secret = data.secret
-    saved = await registry.save_source(session, row)
-    await _emit_config(
-        session,
-        MailEvent.SOURCE_UPDATED,
-        MailEntity.SOURCE,
-        saved,
-        user.id,
-        changes.diff_object(saved, before, hidden=SECRET_FIELDS),
+    saved = await _update_row(
+        session, row, data, user.id, registry.save_source, MailEvent.SOURCE_UPDATED, MailEntity.SOURCE
     )
     return _source_read(saved)
 
@@ -225,19 +211,8 @@ async def update_sender(
 ) -> MailSenderRead:
     await require_mail_admin(session, user)
     row = await registry.get_sender(session, sender_id)
-    before = changes.snapshot(row, changes.column_fields(row))
-    for key, value in data.model_dump(exclude={"secret"}).items():
-        setattr(row, key, value)
-    if "secret" in data.model_fields_set and data.secret is not None:
-        row.secret = data.secret
-    saved = await registry.save_sender(session, row)
-    await _emit_config(
-        session,
-        MailEvent.SENDER_UPDATED,
-        MailEntity.SENDER,
-        saved,
-        user.id,
-        changes.diff_object(saved, before, hidden=SECRET_FIELDS),
+    saved = await _update_row(
+        session, row, data, user.id, registry.save_sender, MailEvent.SENDER_UPDATED, MailEntity.SENDER
     )
     return _sender_read(saved)
 
@@ -254,20 +229,11 @@ async def delete_sender(sender_id: uuid.UUID, session: Session, user: CurrentUse
 async def test_sender(
     sender_id: uuid.UUID, data: MailTestRequest, session: Session, user: CurrentUser
 ) -> MailTestResult:
-    """Send one real message and report what happened.
-
-    Returns the failure as a RESULT, not an HTTP error: "authentication failed"
-    is the answer to the question the admin asked, and turning it into a 500
-    would show them a generic toast instead of the relay's own words. The
-    Message-ID is the one the relay reported (RADD-955) — the value threading
-    actually depends on.
-    """
+    """Send one real message and report what happened — a failure is a RESULT (the
+    relay's own words), not an HTTP error; the Message-ID is the relay's (RADD-955)."""
     await require_mail_admin(session, user)
     row = await registry.get_sender(session, sender_id)
-    # ONE dispatch point (RADD-969) — `senders.sender_for`, the same call
-    # `transport.send_item_mail` makes for every real message. When this branch
-    # carried its own kind check, a kind the transport sent through answered
-    # "no implementation" here.
+    # The same dispatch the transport uses (RADD-969), so the two cannot disagree.
     sender = senders.sender_for(row)
     if sender is None:
         return MailTestResult(ok=False, error=f"no implementation for kind {row.kind!r}")

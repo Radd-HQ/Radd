@@ -1,11 +1,8 @@
 """`POST /collab/pages/{id}/join` + `WS /collab/pages/{id}?session=` (spec 122).
-
-The join is an ordinary authenticated route: `CurrentUser` only — the anonymous
-Actor never joins (spec 115 D9: nothing lets an anonymous caller write, and an
-observer's awareness is a write to everyone else's screen). The socket then
-authenticates the session COOKIE exactly as `realtime/router.py` does and
-requires the `session` to be one this user was handed for this page.
-"""
+The join takes `CurrentUser`: the anonymous Actor never joins (spec 115 D9 — an
+observer's awareness is a write to everyone's screen). The socket
+re-authenticates the session cookie as `realtime/router.py` does and requires a
+`session` this user was handed for this page."""
 
 from __future__ import annotations
 
@@ -16,7 +13,7 @@ from fastapi import APIRouter, Depends, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import SessionLocal, get_session
-from radd.modules.auth import authz, service as auth
+from radd.modules.auth import service as auth
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.types import SESSION_COOKIE_NAME
 from radd.modules.pages import page_access
@@ -24,7 +21,7 @@ from radd.modules.pages import page_access
 from .channel import RoomChannel
 from .rooms import hub
 from .schemas import CollabJoin, CollabJoinRead
-from .types import WS_CLOSE_SESSION_UNKNOWN, WS_CLOSE_UNAUTHENTICATED, CollabRole
+from .types import WS_CLOSE_SESSION_UNKNOWN, WS_CLOSE_UNAUTHENTICATED
 
 router = APIRouter(prefix="/collab", tags=["collab"])
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -34,10 +31,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 async def join_page(
     page_id: uuid.UUID, data: CollabJoin, session: Session, user: CurrentUser
 ) -> CollabJoinRead:
-    permission = (
-        authz.Permission.PAGE_WRITE if data.role == CollabRole.EDITOR else authz.Permission.PAGE_READ
-    )
-    page = await page_access.guard_page(session, user, page_id, permission)
+    page = await page_access.guard_page(session, user, page_id, data.role.permission)
     collab_session, seed = await hub.join(page.id, page.version, user.id, data.role)
     return CollabJoinRead(
         session=collab_session.id, role=collab_session.role, seed=seed, page_version=page.version

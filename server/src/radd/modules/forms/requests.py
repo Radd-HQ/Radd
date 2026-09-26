@@ -1,37 +1,13 @@
 """The requester's view of their own requests (RADD-796/797/798).
 
-Split out of `portal.py`, which was about the form DIRECTORY; this is about what
-happens to a request after it is filed.
+A requester is admitted by RELATIONSHIP, never by `item.read`: they reported
+it, or it was filed for a team they are in — one rule, `visible_condition`,
+used by every read and write here.
 
-## The rule everything here follows
-
-A requester is admitted by their RELATIONSHIP to the row, never by `item.read` —
-they typically hold no permission on the project they filed into. Two
-relationships count:
-
-    reporter_id == actor          you raised it
-    team_id IN actor's teams      you share the team it was filed for (RADD-798)
-
-That is the whole admission rule, expressed once in `visible_condition` and used
-by the list, the detail view and the reply. A second copy of it is how the two
-would eventually disagree.
-
-## What that must NOT become
-
-RADD-785 put it plainly: being the reporter must not become a back door into an
-issue's contents. So this module never returns labels, custom fields, worklogs,
-history, or internal comments — and the trimming is in the QUERY, not the
-serializer.
-
-The distinction matters most for the derived numbers. A comment count or a
-"who spoke last" computed over the unfiltered set and then hidden in the response
-still leaks: the number tells you internal discussion exists and how much of it
-there is. Both are computed with `visibility = public` in the WHERE clause.
-
-## Not found, not forbidden
-
-A request the actor cannot see answers 404. A 403 would confirm the key names a
-real issue, which is exactly the thing a stranger is probing for.
+Reporting must not become a back door (RADD-785): no labels, custom fields,
+worklogs, history or internal comments, trimmed in the QUERY, so even derived
+numbers (comment count, "who spoke last") see public comments only. An
+invisible request is a 404, never a 403 — a refusal confirms the key exists.
 """
 
 from __future__ import annotations
@@ -83,38 +59,16 @@ async def visible_condition(session: AsyncSession, actor: User) -> ColumnElement
 async def _comment_signals(
     session: AsyncSession, items: list[WorkItem]
 ) -> dict[uuid.UUID, tuple[int, bool]]:
-    """`{item_id: (public_count, awaiting_requester)}` in ONE query, not 2N —
-    ridden on `comments_service.public_comment_times`, the owner's PUBLIC-only
-    seam (the SLA first-response feed), so the visibility filter every derived
-    number below depends on lives in the comments module's query and none of
-    them can accidentally describe the internal thread.
+    """`{item_id: (public_count, awaiting_requester)}` in one query over the
+    comments module's PUBLIC-only seam, so no derived number can describe the
+    internal thread.
 
-    `awaiting_requester` is "somebody answered me and I have not answered back",
-    and it is computed as *the newest public comment by someone other than the
-    reporter is STRICTLY newer than the reporter's own newest* — not as "who
-    holds the last row".
-
-    That is deliberate, and it is a correctness fix rather than a style choice.
-    `created_at` is `server_default=func.now()`, and Postgres' `now()` is
-    TRANSACTION time — so every comment written in one transaction carries an
-    identical timestamp and "which came last" has no answer. A `DISTINCT ON …
-    ORDER BY created_at DESC` picks one arbitrarily, which made this marker flip
-    at random for the importer (many comments, one transaction) and for any
-    automation that comments alongside another write.
-
-    Comparing strictly resolves a tie the conservative way: if we cannot show
-    somebody spoke after you, we do not tell you they did. A marker that nags
-    wrongly is worse than one that occasionally stays quiet.
-
-    **The SYSTEM actor answers nobody (RADD-981).** It is the author of every
-    inbound-mail comment from a person with no account — so a requester emailing
-    the desk lit up their OWN row with "somebody answered you", pointing at the
-    message they had just sent. It also authors automation comments, which are
-    an acknowledgement rather than a reply. `slas.evaluation` reached the same
-    conclusion for the first-response timer and skips the same id; this is that
-    judgment applied to the marker a requester actually sees. The comment is
-    still COUNTED — it is a real public message on the thread, and hiding it
-    from the count would make the number disagree with the conversation.
+    `awaiting_requester`: the newest public comment by someone else is STRICTLY
+    newer than the requester's own newest. Strict because `created_at` is
+    transaction time — comments written in one transaction tie, and a tie must
+    not claim somebody answered. Classified by ORIGIN (RADD-1318): an
+    automation's comment is counted but answers nobody; the requester's own
+    inbound mail is their reply even with no account behind it.
     """
     item_ids = [item.id for item in items]
     if not item_ids:
@@ -152,7 +106,7 @@ async def _comment_signals(
 
 
 async def _hydrate(
-    session: AsyncSession, actor: User, pairs: list[tuple[WorkItem, State | None]]
+    session: AsyncSession, pairs: list[tuple[WorkItem, State | None]]
 ) -> list[PortalRequestRead]:
     """Rows with the status a requester actually needs (RADD-797)."""
     if not pairs:
@@ -242,7 +196,7 @@ async def list_my_requests(
         .order_by(WorkItem.updated_at.desc())
         .limit(limit)
     )
-    return await _hydrate(session, actor, list(rows.all()))
+    return await _hydrate(session, list(rows.all()))
 
 
 async def _require_visible(session: AsyncSession, actor: User, key: str) -> WorkItem:
@@ -276,7 +230,7 @@ async def get_request(session: AsyncSession, actor: User, key: str) -> PortalReq
     who holds it, and the PUBLIC conversation."""
     item = await _require_visible(session, actor, key)
     state = await session.get(State, item.state_id) if item.state_id else None
-    [row] = await _hydrate(session, actor, [(item, state)])
+    [row] = await _hydrate(session, [(item, state)])
 
     comments = await comments_service.public_comments_for_item(session, item.id)
     authors = await _people(session, {c.author_id for c in comments})

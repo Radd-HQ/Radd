@@ -17,16 +17,8 @@ class MailEntity(StrEnum):
 
 
 class MailEvent(StrEnum):
-    """What the mail channel itself did (RADD-960).
-
-    Before these, `mailintake` emitted nothing of its own — automations could see
-    the ITEM intake created and the COMMENT it appended, but never that the cause
-    was email. A rule could not tell a customer's reply from an agent typing in
-    the UI, which is the distinction a service desk runs on.
-
-    They need no edit to `automations`: `catalog.TRIGGERS` derives live from the
-    kernel event-type registry, so declaring them on the manifest is enough.
-    """
+    """What the mail channel itself did (RADD-960) — so a rule can tell a
+    customer's reply from an agent typing."""
 
     RECEIVED = "mail.received"
     SENT = "mail.sent"
@@ -47,15 +39,8 @@ class MailEvent(StrEnum):
 
 class SentMailKind(StrEnum):
     """WHAT a sent mail was, carried as `kind` on `mail.sent`/`mail.failed`
-    (RADD-1318). Not `MailKindPreset`, which is about PROVIDERS.
-
-    Required of every caller, so a new sender cannot forget to say: a rule on
-    "Email sent" that means "we replied to the customer" should not also fire on
-    the nightly digest. These are this module's senders and its dependents';
-    notify names its own two (`notify.transport.NotificationMailKind`:
-    notification | digest, RADD-1385), which is why the transport takes any
-    StrEnum rather than this one.
-    """
+    (RADD-1318); required of every caller, so "we replied" never matches the
+    digest. Notify names its own two (`NotificationMailKind`)."""
 
     REPLY = "reply"  # a public comment relayed to the requester
     SURVEY = "survey"  # a CSAT survey
@@ -69,14 +54,9 @@ MAIL_TRANSPORT_NAME = "mailintake"
 
 
 class MailSourceKind(StrEnum):
-    """How mail reaches Radd. A kind is a registered implementation resolved by
-    ROW, so a Gmail adapter is a class plus a row (RADD-958).
-
-    GOOGLE and OUTLOOK are **presets, not transports** (RADD-969): both are
-    polled over IMAP by the very same code, and the kind exists only so the row
-    can leave the connection blank and inherit it from `KIND_DEFAULTS`. That is
-    the spec-110 rule — a kind supplies defaults, never a second engine.
-    """
+    """How mail reaches Radd (RADD-958). GOOGLE and OUTLOOK are PRESETS, not
+    transports (RADD-969): polled over IMAP by the same code, the kind only lets
+    the row inherit its connection from `KIND_DEFAULTS`."""
 
     WEBHOOK = "webhook"   # HTTPS push (a Worker today, Gmail push later)
     IMAP = "imap"         # a polled mailbox — what radd-hq.com runs (RADD-959)
@@ -85,40 +65,35 @@ class MailSourceKind(StrEnum):
 
 
 class MailSenderKind(StrEnum):
-    """Where mail goes out. GOOGLE and OUTLOOK are SMTP with the host, port and
-    TLS mode already answered — see `MailSourceKind` (RADD-969)."""
+    """Where mail goes out; GOOGLE and OUTLOOK are SMTP presets (RADD-969)."""
 
     SMTP = "smtp"
     GOOGLE = "google"
     OUTLOOK = "outlook"
 
 
-#: Source kinds the IMAP poller walks. A preset kind is polled exactly like a
-#: hand-configured mailbox — the only difference is where its host comes from.
+#: Source kinds the IMAP poller walks (a preset is polled like any mailbox).
 POLLED_SOURCE_KINDS: tuple[MailSourceKind, ...] = (
     MailSourceKind.IMAP,
     MailSourceKind.GOOGLE,
     MailSourceKind.OUTLOOK,
 )
 
-#: Sender kinds `senders.sender_for` hands to `SmtpSender`. Gmail and Outlook
-#: both speak submission SMTP; a Gmail API adapter would be a NEW kind, not a
-#: second meaning for this one.
+#: Sender kinds `senders.sender_for` hands to `SmtpSender`; a Gmail API adapter
+#: would be a NEW kind.
 SMTP_SENDER_KINDS: tuple[MailSenderKind, ...] = (
     MailSenderKind.SMTP,
     MailSenderKind.GOOGLE,
     MailSenderKind.OUTLOOK,
 )
 
-# Column defaults, named because three files state them: the model, the write
-# schema and the preset table.
+# Column defaults shared by the model, the write schema and the preset table.
 DEFAULT_IMAP_PORT = 993
 DEFAULT_SMTP_PORT = 587
 DEFAULT_IMAP_FOLDER = "INBOX"
 
-#: Where an operator creates the app password each preset needs. Both providers
-#: refuse an account password over SMTP/IMAP, so a form that does not say so
-#: produces an authentication failure nobody can explain.
+#: Where to create the app password each preset needs — both providers refuse an
+#: account password over SMTP/IMAP.
 GOOGLE_APP_PASSWORD_URL = "https://support.google.com/accounts/answer/185833"
 OUTLOOK_APP_PASSWORD_URL = (
     "https://support.microsoft.com/en-us/account-billing/"
@@ -128,19 +103,9 @@ OUTLOOK_APP_PASSWORD_URL = (
 
 @dataclass(frozen=True)
 class MailKindPreset:
-    """What a kind answers on the operator's behalf (RADD-969).
-
-    Copied from spec 110's `KIND_DEFAULTS` including the part that matters:
-    **the row stores BLANK where the preset answers**, and resolution happens at
-    READ time (`resolve.py`). Baking `smtp.gmail.com` into the row at save time
-    would freeze it — upgrading the preset would then leave every existing row
-    pointing at the old value, which is exactly what "a kind supplies defaults"
-    is supposed to prevent.
-
-    One preset serves both halves: a Gmail mailbox and a Gmail relay are one
-    provider answering two questions, so the source and sender enums share the
-    kind's VALUE and this table is keyed by it.
-    """
+    """What a kind answers for the operator (RADD-969). The row stores BLANK where
+    the preset answers (`resolve.py`). One preset serves both halves; the table is
+    keyed by the kind's VALUE."""
 
     #: Short label — the name a new row is auto-named after.
     name: str
@@ -179,9 +144,8 @@ _OUTLOOK_GUIDANCE = (
     "Microsoft 365 tenants must also have IMAP/SMTP AUTH enabled for the mailbox."
 )
 
-#: Per-kind defaults, keyed by the kind's VALUE — which `MailSourceKind` and
-#: `MailSenderKind` deliberately share for the preset kinds (`StrEnum` members
-#: hash as their strings, so either enum indexes this table).
+#: Per-kind defaults, keyed by the kind's VALUE, which both enums share for the
+#: presets (`StrEnum` members hash as their strings).
 KIND_DEFAULTS: dict[str, MailKindPreset] = {
     MailSourceKind.WEBHOOK: MailKindPreset(
         name="Webhook",
@@ -215,11 +179,9 @@ KIND_DEFAULTS: dict[str, MailKindPreset] = {
 
 
 class EmailRecipient(StrEnum):
-    """Role values the Send email node's `to` may name (spec 66; this module's
-    since the node moved here, RADD-1387) — anything else is a literal address.
-    Roles resolve against the run's ONE target item: reporter/assignee = that
-    account's address when `mailable_user` says a person reads it; contact =
-    the issue's primary mail contact. No item, or nobody → the node skip-logs."""
+    """Role values the Send email node's `to` may name (spec 66) — anything else
+    is a literal address. Resolved on the run's ONE target item: reporter/assignee
+    when `mailable_user`, contact = the primary mail contact; none → skip-log."""
 
     REPORTER = "reporter"
     ASSIGNEE = "assignee"
@@ -227,12 +189,8 @@ class EmailRecipient(StrEnum):
 
 
 class MailRuleType(StrEnum):
-    """Builtin routing-rule kinds (RADD-958/961).
-
-    Cheap first by convention: the three deterministic kinds cost nothing, `llm`
-    costs an inference, so the seeded order puts it last and only mail no other
-    rule claimed pays for it.
-    """
+    """Builtin routing-rule kinds (RADD-958/961); `llm` costs an inference, so it
+    is seeded last."""
 
     RECIPIENT = "recipient"      # the alias it was delivered to — help@ vs pipeline@
     SENDER = "sender"            # a sender address, or a whole @domain
@@ -241,22 +199,10 @@ class MailRuleType(StrEnum):
 
 
 class MailRuleStatus(StrEnum):
-    """What ONE rule did on ONE message (RADD-989) — the dry run's vocabulary.
-
-    The distinction the preview exists for: a rule that ran and did not claim the
-    message (DECLINED) and a rule that crashed and was skipped (ERRORED) both
-    leave the chain continuing, and reporting them the same way is how a broken
-    rule reads as a working one. `feature_enabled` raising for an unregistered
-    feature was invisible for a release precisely because its outcome rendered as
-    "no rule matched — source default".
-
-    **The last two exist so that ABSENCE means one thing** (RADD-994). The trace
-    used to hold only the rules the walk consulted, which is three different
-    stories told as the same silence: a rule switched off, a rule sitting below
-    the winner, and a rule that was deleted all rendered as "not in the list".
-    "Why didn't my rule fire" is the commonest routing question there is, and the
-    honest answer for two of those three is a row, not a gap.
-    """
+    """What ONE rule did on ONE message — the dry run's vocabulary (RADD-989/994).
+    ERRORED is distinct from DECLINED so a crashed rule never reads as an
+    inapplicable one; DISABLED and NOT_REACHED exist so an absent row means only
+    "no such rule"."""
 
     MATCHED = "matched"
     DECLINED = "declined"
@@ -265,33 +211,14 @@ class MailRuleStatus(StrEnum):
     NOT_REACHED = "not_reached"  # an earlier rule matched and stopped the chain
 
 
-#: The extra choice every llm rule offers the model on top of its own answers
-#: (RADD-989). Without it "none of these apply" is inexpressible: the model must
-#: pick from an enumerated list, so an off-topic email forces a wrong category and
-#: the source default becomes reachable only by FAILURE. With it, declining is a
-#: verdict — and one the dry run can name. Appended at ask time, never stored as
-#: an answer row, so it cannot be edited into meaning something else.
+#: The extra choice every llm rule offers (RADD-989), so declining is a verdict
+#: rather than a forced wrong category. Appended at ask time, never stored.
 NO_MATCH_ANSWER = "None of these"
 
 
-class MailRecipientKind(StrEnum):
-    """Why an address is on an outbound reply (RADD-967).
-
-    It decides one thing — the footer's wording — and that is worth an enum
-    because the two are not interchangeable: a colleague is watching an issue
-    they can open, and the requester is a customer who has no account and whose
-    only interface is replying. A single "you are receiving this" line would be
-    wrong for one of them whichever way it was written.
-    """
-
-    WATCHER = "watcher"
-    REQUESTER = "requester"
-
-
 class MailDirection(StrEnum):
-    """Which way a `mail_messages` row went. Threading only ever resolves
-    against OUTBOUND ids (what a reply's In-Reply-To can name); dedup only ever
-    consults INBOUND ones."""
+    """Which way a `mail_messages` row went: threading resolves against OUTBOUND
+    ids, dedup consults INBOUND ones."""
 
     INBOUND = "inbound"
     OUTBOUND = "outbound"
@@ -299,31 +226,23 @@ class MailDirection(StrEnum):
 
 # --- the RADD-951 wave ---
 
-#: Cloudflare Email Routing's own ceiling — matching it means Radd rejects
-#: exactly what the provider would have, rather than inventing a second limit.
+#: Cloudflare Email Routing's own ceiling, rather than a second limit.
 MAX_BODY_BYTES = 25 * 1024 * 1024
 
-#: Attachment caps (RADD-956). Per message, not per part: the failure to prevent
-#: is one message becoming a hundred rows or a hundred megabytes.
+#: Attachment caps per MESSAGE, not per part (RADD-956).
 MAX_ATTACHMENTS = 20
 ATTACHMENTS_MAX_BYTES = 20 * 1024 * 1024
 
-#: When a cap above drops later parts, `parsing` reports HOW MANY and `intake`
-#: leaves this note on the item (RADD-1035). A silent drop is exactly what the
-#: cap must not be: someone whose fourth screenshot vanished has no way to know
-#: the desk never got it. The note is a SYSTEM comment because the item — the
-#: place a note can live — only exists in `intake`.
+#: The SYSTEM note `intake` leaves when a cap dropped later parts (RADD-1035) —
+#: a silent drop is what the cap must not be.
 ATTACHMENTS_DROPPED_NOTE = (
     "{count} attachment(s) on the inbound email were not stored — the message hit "
     "Radd's per-message attachment cap ({max_count} files / {max_mb} MB). Ask the "
     "sender to resend the rest as separate, smaller emails if they are needed."
 )
 
-#: How far back a repeated inbound Message-ID still counts as a duplicate.
-#: Every push provider is at-least-once and Cloudflare retries on timeout, so
-#: this is the difference between one ticket and two. Seven days because that is
-#: longer than any provider's retry schedule and short enough that the table
-#: does not become the archive of every message ever received.
+#: How far back a repeated inbound Message-ID still counts as a duplicate: push
+#: providers are at-least-once; longer than any provider's retry schedule.
 DEDUP_WINDOW = timedelta(days=7)
 
 
@@ -350,20 +269,16 @@ REPLY_COMMENT_TEMPLATE = "Email reply from {sender}:\n\n{body}"
 
 # --- sender authentication (RADD-1032) ---
 
-#: RFC 8601 result tokens. `pass` is the only value that proves a method
-#: authenticated; everything in FAIL is a positive statement that it did NOT.
-#: `none`/`neutral` (not published / not evaluated) are neither — a message with
-#: only those has proved nothing, which the caller treats as unverified too.
+#: RFC 8601 result tokens. Only `pass` proves a method; `none`/`neutral` prove
+#: nothing and are treated as unverified too.
 AUTH_PASS_RESULT = "pass"
 AUTH_FAIL_RESULTS = frozenset({"fail", "softfail", "hardfail", "permerror", "temperror"})
 #: The three methods a trusted authserv-id verdict is read for. Radd is trusting
 #: its MX's stamp, not verifying crypto itself, so this is the whole vocabulary.
 AUTH_METHODS = ("dkim", "spf", "dmarc")
 
-#: When a source trusts an authserv-id and the message FAILS or OMITS that
-#: verdict, attribution is demoted to SYSTEM and the reader is told why. `From:`
-#: is forgeable end to end, so a demoted message is recorded exactly as received
-#: but attributed to nobody — a forged staff `From:` can no longer speak as that
+#: A message that FAILS or OMITS a trusted authserv-id verdict is recorded as
+#: received but attributed to nobody: a forged staff `From:` cannot speak as that
 #: person, stop the SLA clock, or be relayed to the requester.
 UNVERIFIED_SENDER_LINE = (
     "Unverified sender — this message failed sender authentication ({detail}) at "
@@ -377,13 +292,9 @@ UNVERIFIED_SENDER_NOTE_TEMPLATE = "{body}\n\n---\n{note}\nReceived by email from
 
 # --- raw-message retention (RADD-1033) ---
 
-#: How long a webhook/poller-ingested message's RAW bytes are kept, so an
-#: over-eager quote strip or a lost attachment is recoverable. `0` = do not
-#: retain (the privacy-conscious choice — some desks must not keep customer mail
-#: at rest). 30 days is longer than any provider's retry window and short enough
-#: that the blob store is not the archive of every message ever received. A
-#: retention SWEEP that deletes bytes past this age is a separate follow-up; this
-#: constant is what it will read.
+#: Raw bytes of an ingested message are kept so an over-eager quote strip or a
+#: lost attachment is recoverable. `0` = do not retain (some desks must not keep
+#: customer mail at rest).
 MAIL_RAW_RETENTION_DAYS = 30
 
 #: The raw message is stored as one loose blob through the spec-102 seam.
@@ -392,34 +303,21 @@ RAW_MESSAGE_FILENAME = "message.eml"
 
 # --- dropped-message correlation (RADD-1035) ---
 
-#: `mail.dropped` events key their `entity_id` off the inbound Message-ID via
-#: uuid5 in this namespace, so two deliveries of the SAME dropped message
-#: correlate to one id instead of scattering across a fresh uuid4 each time. A
-#: message with no id (or an unparseable one) has nothing to correlate on and
-#: falls back to uuid4. Fixed value: the namespace IS the correlation key.
+#: `mail.dropped`'s `entity_id` is uuid5(this, Message-ID), so repeated drops of
+#: one message correlate. Fixed value: the namespace IS the correlation key.
 MAIL_DROPPED_ID_NAMESPACE = uuid.UUID("6d61696c-2d64-726f-7070-65640000002f")
 
-#: The reason string on a `mail.dropped` a poller emits for a message it could
-#: not parse (RADD-1035) — so the loss is on the queryable event stream, not only
-#: in a log line the poller then forgets by flagging the message Seen.
+#: `mail.dropped`'s reason for a message the poller could not parse (RADD-1035).
 POLLER_PARSE_FAILURE_REASON = "unparseable message"
 
-#: The window Settings → Monitoring's mail-health card reports over (RADD-1036).
-#: A day, because that is the shape of the question an operator is asking —
-#: "is mail working right now" — and because notify's own age window is 24h, so
-#: a failure older than this has already been given up on by the loops too.
+#: The mail-health card's window (RADD-1036) — notify's own age window is 24h too.
 MAIL_HEALTH_WINDOW_HOURS = 24
 
-#: How many `mail.failed` rows the health seam reads. A healthy instance has
-#: zero and a broken one only needs to be told it is broken, so the card reports
-#: "500+" rather than making an operator wait on a full-window scan. The count
-#: is capped, never wrong: the seam says when it hit the cap.
+#: `mail.failed` rows the health seam reads; the card says "500+" past it.
 MAIL_HEALTH_SCAN_LIMIT = 500
 
-#: How much of a delivery exception rides the `mail.failed` payload (RADD-1036).
-#: Enough for "Connection refused" or a relay's 5xx line — which is the whole
-#: reason the card exists — and capped because an SMTP server may answer with a
-#: paragraph, and the events table is not a log sink.
+#: How much of a delivery exception rides `mail.failed` (RADD-1036): enough for a
+#: relay's 5xx line; the events table is not a log sink.
 MAIL_ERROR_MAX_CHARS = 400
 
 # Appended to the description when the sender matches no user (spec 47).
@@ -433,10 +331,8 @@ OUTBOUND_CONSUMER_NAME = "mailintake.outbound"
 # Events read per outbound poll iteration (mirrors googlechat's batch).
 OUTBOUND_BATCH = 200
 
-# The receipt for a new email ticket (RADD-1368). The bracketed key in the
-# subject is what threads the requester's replies back onto the item
-# (`parsing.extract_reply_key`) — so the SUBJECT is a fixed wire constant while
-# the BODY is the admin-editable `mail_ack_body` setting.
+# The receipt's subject (RADD-1368): fixed, because its bracketed key threads the
+# requester's replies (`parsing.extract_reply_key`); the body is `mail_ack_body`.
 ACK_SUBJECT_TEMPLATE = "[{key}] {title}"
 
 # Outbound reply to the contact when an agent leaves a PUBLIC comment.
@@ -444,17 +340,13 @@ REPLY_SUBJECT_TEMPLATE = "Re: [{key}] {title}"
 
 # --- the resolution notice (RADD-982, back as a setting in RADD-1368) ---
 
-# The `changes` diff token for a state move (`items/changes.py`'s
-# `scalar("state", …)`), copied as `csat.types` copies it.
+# The `changes` diff token for a state move, as `csat.types` copies it.
 STATE_CHANGE_FIELD = "state"
 
-#: Its own sentence, not a `Re:` on the requester's — a resolution opens a topic
-#: the way the CSAT survey does, so the subject is pinned. Threading headers
-#: still come from the message store.
+#: Pinned, not a `Re:` — a resolution opens a topic, like the CSAT survey.
 RESOLVED_SUBJECT_TEMPLATE = "[{key}] Your request has been resolved"
 
-#: `{state}` is the state it actually landed in: "Resolved" and "Closed" mean
-#: different things, and the requester cannot look the difference up.
+#: `{state}` is where it landed: "Resolved" and "Closed" mean different things.
 RESOLVED_BODY_TEMPLATE = (
     "Your request {key} — {title} — has been marked {state}.\n"
     "\n"
@@ -467,11 +359,8 @@ RESOLVED_REASON_TEMPLATE = "You are receiving this because you contacted us abou
 #: The csat plugin's id in the kernel registry, reached DEFERRED (`weak_depends`).
 CSAT_PLUGIN_ID = "csat"
 
-# Why each recipient is being written to — the footer of an outbound reply.
-REPLY_REASON_TEMPLATES = {
-    MailRecipientKind.WATCHER: "You are watching {key} — reply to this email to comment.",
-    MailRecipientKind.REQUESTER: (
-        "You are receiving this because you contacted us about {key} — "
-        "reply to this email to add to the ticket."
-    ),
-}
+# The footer of an outbound reply: why the requester is being written to.
+REPLY_REASON_TEMPLATE = (
+    "You are receiving this because you contacted us about {key} — "
+    "reply to this email to add to the ticket."
+)

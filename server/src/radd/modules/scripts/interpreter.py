@@ -1,21 +1,9 @@
-"""The managed interpreter (RADD-1269): one uv-built virtual environment per
-instance, under `settings.scripts_dir`, with the Radd SDK client installed
-into it and whatever packages an admin asked for.
-
-uv does the work. It is already in the image for the server's own install,
-it can fetch a CPython the host does not have, and `uv pip` gives a resolver
-that reports what it resolved. Everything here is a subprocess with a
-timeout; nothing imports into the server process.
-
-Where packages come from (RADD-1277): the WHEELHOUSES first — directories of
-wheels uv reads from disk (`settings.scripts_find_links`, which the image
-points at `/app/wheels` holding the SDK and its closure, plus
-`<scripts_dir>/wheels` on the data volume for an operator's own) — then the
-package index the admin named on Settings → Scripts, else PyPI. The build of
-the venv itself never touches the network when the SDK is in a wheelhouse:
-that is what lets an air-gapped instance build it at all, since the image
-sets `UV_NO_CACHE` and a dropped route hangs uv rather than refusing it.
-"""
+"""The managed interpreter (RADD-1269): one uv-built venv per instance under
+`settings.scripts_dir`, with the SDK client and the admin's packages; every
+operation is a uv subprocess with a timeout. Packages resolve from the
+wheelhouses first (`scripts_find_links`, `<scripts_dir>/wheels`), then the
+admin's index, else PyPI. With the SDK in a wheelhouse the venv builds offline
+— the image sets `UV_NO_CACHE`, and a dropped route hangs uv."""
 
 from __future__ import annotations
 
@@ -23,7 +11,6 @@ import asyncio
 import logging
 import os
 import shutil
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -177,16 +164,9 @@ async def available_versions() -> list[str]:
 
 
 async def rebuild(python_version: str, *, index_url: str = "", offline: bool = False) -> ToolResult:
-    """(Re)create the venv for `python_version` and install the SDK into it.
-
-    Destructive and deliberate: a rebuild is how an admin changes the Python
-    version, and a venv built for 3.11 cannot be talked into 3.12 in place.
-    The packages table is the record of what to reinstall afterwards; the
-    caller does that.
-
-    No `--seed`: pip comes from an index, and nothing the harness runs needs
-    it. The SDK installs OFFLINE whenever it is a bundled wheel, so the build
-    is the same on a laptop and behind an air gap."""
+    """(Re)create the venv — destructive by design (a venv cannot change Python
+    version in place) — and install the SDK, offline when it is a bundled wheel.
+    The caller reinstalls the package rows. No `--seed`: nothing needs pip."""
     root().mkdir(parents=True, exist_ok=True)
     if venv_dir().exists():
         shutil.rmtree(venv_dir(), ignore_errors=True)
@@ -196,14 +176,18 @@ async def rebuild(python_version: str, *, index_url: str = "", offline: bool = F
     sdk = await install(sdk_source(), index_url=index_url, offline=offline or sdk_is_bundled())
     if not sdk.ok:
         return ToolResult(False, made.output + "\n" + sdk.output, sdk.returncode)
-    probe = await _run(str(python_path()), "-c", "import sys; print(sys.version.split()[0])", timeout=30)
+    probe = await _probe_version()
     return ToolResult(probe.ok, (made.output + "\n" + sdk.output + "\n" + probe.output)[-LOG_TAIL:], probe.returncode)
+
+
+async def _probe_version() -> ToolResult:
+    return await _run(str(python_path()), "-c", "import sys; print(sys.version.split()[0])", timeout=30)
 
 
 async def resolved_python() -> str:
     if not ready():
         return ""
-    probe = await _run(str(python_path()), "-c", "import sys; print(sys.version.split()[0])", timeout=30)
+    probe = await _probe_version()
     return probe.output.strip().splitlines()[-1] if probe.ok and probe.output.strip() else ""
 
 
@@ -233,10 +217,3 @@ async def installed_version(name: str) -> str:
         if line.lower().startswith("version:"):
             return line.split(":", 1)[1].strip()
     return ""
-
-
-def fallback_python() -> str:
-    """The interpreter a test may substitute for the venv: this process's own.
-    Named so a test can say what it is doing rather than reaching into
-    `sys`."""
-    return sys.executable

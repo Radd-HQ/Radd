@@ -8,12 +8,9 @@ from radd.config import settings
 from radd.exceptions import ConflictError, NotFoundError
 from radd.kernel import changes
 from radd.modules.events import service as events
-from radd.modules.fields import service as fields
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
-from radd.modules.fields.models import FieldDefinition
-from radd.modules.items import slq
 from radd.kernel.registry import registries
 from radd.kernel.specs import valid_output_name
 from pydantic import ValidationError as PydanticValidationError
@@ -53,28 +50,14 @@ CUSTOM_FIELD_PREFIX = "cf."
 logger = logging.getLogger(__name__)
 
 
-async def _scope_definitions(session: AsyncSession) -> dict[str, FieldDefinition]:
-    """key -> definition over the whole field registry (oldest wins on dup keys) —
-    the scope a rule's condition is validated against on write."""
-    by_key: dict[str, FieldDefinition] = {}
-    for definition in await fields.list_fields(session):
-        by_key.setdefault(definition.key, definition)
-    return by_key
-
-
 async def _validate_condition(session: AsyncSession, condition_slq: str) -> None:
-    """Parse + compile the condition against the field registry. Any problem raises
+    """Parse + compile the SLQ against the whole field registry. Any problem raises
     SlqError, which the items module's handler renders as 422 {detail, position}."""
+    from .planning import compile_slq
+
     text = condition_slq.strip()
-    if not text:
-        return
-    await slq.compile_query(
-        session,
-        slq.parse(text),
-        definitions_by_key=await _scope_definitions(session),
-        current_user_id=SYSTEM_ACTOR_ID,
-        project_id=None,
-    )
+    if text:
+        await compile_slq(session, text)
 
 
 async def _validate_graph(
@@ -139,17 +122,8 @@ async def _validate_graph(
 
     for node in parsed_nodes:
         _check_arity(node)
-        # A CONTRIBUTED node of ANY kind is checked against its own schema and
-        # its own atom (RADD-923, widened by spec 119). It used to be actions
-        # only, which left every contributed GATE — `ai.classify` since spec 116,
-        # `ai.validate` now — storable with its required params blank: a node
-        # that saves cleanly, sits on the canvas looking configured, and takes
-        # its fallback port forever. Same rule as `act_as`: a check that only
-        # bites at 3am is not a check.
-        # RADD-1322: EVERY node type is a registered spec — a built-in is
-        # checked exactly as a plugin's is: its own schema, its own `check` /
-        # `check_async`, its own atom. A type nothing registers (an uninstalled
-        # plugin's) cannot be SAVED, though a stored one still loads.
+        # Every node — built-in or contributed — is checked against its own spec's
+        # schema, check hooks and atom; a type nothing registers cannot be SAVED.
         spec = nodes_registry.spec_for(node)
         if spec is None:
             raise ConflictError(
@@ -175,7 +149,7 @@ async def _validate_graph(
     _check_token_references(parsed_nodes)
 
     detached = {n.id for n in parsed_nodes} - graph.is_reachable(
-        [t.id for t in triggers], parsed_nodes, parsed_edges
+        [t.id for t in triggers], parsed_edges
     )
     if detached:
         # Not fatal — someone mid-build has every right to a dangling node — but
@@ -189,21 +163,10 @@ async def _validate_graph(
 
 
 def _check_names(nodes: list[graph.Node]) -> None:
-    """A node's NAME is what downstream tokens address it by (spec 120), so it is
-    strict on write and lenient on read.
-
-    Three refusals, each because the alternative is silent:
-
-    * **Shape.** `Triage Result` cannot appear in `{{…}}` — the token grammar
-      does not admit a space and would render the braces verbatim into somebody's
-      issue. Refusing here is the only place anyone is looking at the field.
-    * **Uniqueness.** Two nodes called `triage` make `{{triage.priority}}` mean
-      whichever ran later, which is a graph whose behaviour depends on an
-      ordering nobody wrote down.
-    * **Reserved roots.** A node called `item` would shadow `{{item.key}}` in
-      every action of the graph — and the shadowing would be invisible, because
-      the token would keep resolving, just to something else.
-    """
+    """A node NAME is what tokens address (spec 120): strict on write, lenient on
+    read. Refused: an illegal identifier (would render braces verbatim), a
+    duplicate (`{{triage.x}}` would depend on run order), a reserved root (`item`
+    would shadow `{{item.key}}` invisibly)."""
     seen: dict[str, str] = {}
     reserved = templating.reserved_roots()
     for node in nodes:
@@ -240,21 +203,10 @@ def _check_names(nodes: list[graph.Node]) -> None:
 
 
 def _check_token_references(nodes: list[graph.Node]) -> None:
-    """Every `{{name.field}}` in the graph names a node that exists and an output
-    it declares (spec 120).
-
-    Caught on WRITE because the alternative is the failure this whole spec is
-    about: a token that resolves to nothing is an action that does not happen at
-    3am, and the commonest way to get one is renaming the producer and leaving
-    the consumer behind. The message names the token AND the node holding it, so
-    the fix is a click rather than a search.
-
-    Two deliberate limits. UPSTREAM-ness is not checked — a graph mid-build has
-    every right to a producer that is not wired yet, and the editor's picker
-    offers only reachable producers anyway; a token whose producer never ran is a
-    recorded skip at run time. And a producer that declares NO outputs (a
-    contributed node that never said what it makes) accepts any field: refusing
-    there would punish the plugin's user for the plugin's silence.
+    """Every `{{name.field}}` names a node in this graph and an output it declares
+    (spec 120) — caught on write, because a renamed producer otherwise skips its
+    consumer silently. Not checked: upstream-ness (a mid-build graph may not be
+    wired yet), and fields of a producer that declares no outputs at all.
     """
     reserved = templating.reserved_roots()
     declared: dict[str, set[str]] = {}
@@ -269,12 +221,6 @@ def _check_token_references(nodes: list[graph.Node]) -> None:
             if not dot or root in reserved:
                 continue
             if root not in declared:
-                # The message NAMES both vocabularies. A `{{reporter.name}}`
-                # written in the canned-response style is the likeliest way to
-                # meet this refusal, and "no node is named 'reporter'" alone
-                # does not tell someone that `reporter` was never a template
-                # word here — the built-in roots are the other half of the
-                # answer, and there are only six of them.
                 raise ConflictError(
                     AutomationEntity.RULE,
                     reason=(
@@ -299,7 +245,7 @@ def _check_token_references(nodes: list[graph.Node]) -> None:
                 )
 
 
-def _tokens_in(value, seen: set[int] | None = None) -> list[tuple[str, str]]:
+def _tokens_in(value) -> list[tuple[str, str]]:
     """`("{{a.b}}", "a.b")` for every token anywhere in a params structure.
 
     Walked rather than read off a list of "the template params", because which
@@ -317,20 +263,10 @@ def _tokens_in(value, seen: set[int] | None = None) -> list[tuple[str, str]]:
 
 
 def _check_node_schema(node: graph.Node, spec) -> None:
-    """A contributed node's params against its own JSON Schema (RADD-923).
-
-    Deliberately shallow — required keys, enum membership, and the two SCALAR
-    BOUNDS the schema states at top level (`maxLength` on a string, `maxItems` on
-    an array). A full JSON Schema validator here would be a second, stricter
-    opinion than the SPA's generated form, and the two disagreeing is worse than
-    either being loose: it produces a form that saves a value it just offered.
-    Those two are safe because the generated form already respects them.
-
-    Anything deeper is the NODE's own business, through `spec.check` — a
-    constraint that lives inside an array's items cannot be read honestly from
-    here, and leaving it unchecked is how a 20-field `ai.generate` stored fine,
-    truncated to 8 at run time, and then refused the tokens for the other twelve
-    with a message about outputs it "does not produce" (spec 120).
+    """A node's params against its own JSON Schema, deliberately shallow:
+    required keys, `enum`, top-level `maxLength`/`maxItems` — what the SPA's
+    generated form also enforces, so the two cannot disagree. Anything deeper is
+    the node's own `spec.check`.
     """
     schema = spec.params_schema or {}
     properties = schema.get("properties") or {}
@@ -493,7 +429,7 @@ def _check_validate_reach(
     while the inspector implied it would. The verdict nodes are the only
     actions that mean something here, and they apply nothing.
     """
-    reachable = graph.is_reachable([trigger.id], nodes, edges)
+    reachable = graph.is_reachable([trigger.id], edges)
     for node in nodes:
         spec = nodes_registry.spec_for(node)
         if node.id in reachable and spec is not None and not spec.preview_safe:
@@ -513,21 +449,10 @@ def _check_validate_reach(
 def _check_eventless_reach(
     trigger: graph.Node, kind, nodes: list[graph.Node], edges: list[graph.Edge]
 ) -> None:
-    """No EVENT-reading node downstream of a trigger that has no event
-    (RADD-1323; spec 119 for `validate`, spec 69 for `schedule`).
-
-    A schedule's run has no event, and a validation walk's facts are synthetic
-    (system actor, no diff) — so a node that reads the event (`reads_event`:
-    field changed, changed by, comment is, …) answers a constant, and the branch
-    behind the port it never takes looks configured and can never run.
-
-    Scoped to what THIS trigger reaches, by the node's own declaration — the old
-    rule refused every GATE after a schedule, including gates that read the
-    ITEMS (an AI classifier after a search), which made "schedule → find issues
-    → classify" impossible to build. A graph may also hold an event trigger
-    beside this one, and on that branch the same gates are exactly right.
-    """
-    reachable = graph.is_reachable([trigger.id], nodes, edges)
+    """No EVENT-reading node downstream of a trigger with no event (schedule,
+    validate, manual): it would answer a constant forever. Scoped to what THIS
+    trigger reaches, by the node's own `reads_event` — item-reading gates stay legal."""
+    reachable = graph.is_reachable([trigger.id], edges)
     for node in nodes:
         spec = nodes_registry.spec_for(node)
         if node.id in reachable and spec is not None and spec.reads_event:
@@ -585,12 +510,7 @@ def _check_trigger(
             reason=f"trigger {trigger.id!r}: only a schedule trigger takes a schedule",
         )
     if scheduled:
-        # The SHAPE, not just "is it a dict" (RADD-909). When triggers moved into
-        # node params for spec 116, `params` became an untyped envelope and the
-        # `ScheduleConfig` model stopped being applied to them — so a schedule
-        # missing its time, or naming a day that no month has, was stored happily
-        # and then blew up in the scheduler as a 500. Same seam the backup
-        # schedules validate through, so the two cannot disagree.
+        # The SHAPE too (RADD-909): a bad schedule otherwise 500s in the scheduler.
         try:
             schedule_math.validate_config(schedule)
         except ValueError as exc:
@@ -602,17 +522,9 @@ def _check_trigger(
 async def _sync_triggers(
     session: AsyncSession, rule: Automation, triggers: list[graph.Node]
 ) -> None:
-    """Rebuild the automation's trigger bindings and their scheduler state.
-
-    The graph is the source of truth; these rows are the index the engine and the
-    scheduler query. Rebuilt wholesale on every write rather than diffed — a
-    graph is small, and a diff is where a stale binding survives a node rename
-    and keeps firing an automation nobody can see the trigger for.
-
-    Schedule state is preserved per node where it can be: a rule saved for an
-    unrelated reason must not silently reset a daily trigger's next_run_at and
-    skip a day.
-    """
+    """Rebuild the trigger bindings wholesale (a diff is where a stale binding
+    survives a rename) and keep each schedule's state per node, re-anchoring only
+    when that node's schedule changed — so an unrelated save never skips a day."""
     existing_states = {
         (state.automation_id, state.node_id): state
         for state in (
@@ -700,7 +612,7 @@ async def _sync_validations(
         # RADD-1329: DERIVED — "can this graph refuse a submission" is "can this
         # trigger reach a Block submission node". Intake reads it before the
         # walk (the form's up-front note, `POST /items`' required-only pass).
-        reachable = graph.is_reachable([trigger.id], nodes, edges)
+        reachable = graph.is_reachable([trigger.id], edges)
         can_block = any(node.id in reachable and node.type == TYPE_VERDICT_BLOCK for node in nodes)
         mode = ValidationMode.REQUIRED if can_block else ValidationMode.ADVISORY
         for target in parse_targets(trigger.params):
@@ -714,6 +626,24 @@ async def _sync_validations(
                 )
             )
     await session.flush()
+
+
+async def _sync(session: AsyncSession, rule: Automation, triggers: list[graph.Node]) -> None:
+    """Rebuild both binding indexes from the graph just written."""
+    await _sync_triggers(session, rule, triggers)
+    await _sync_validations(session, rule, triggers)
+
+
+async def _emit_updated(
+    session: AsyncSession, rule: Automation, actor_id: uuid.UUID | None, before
+) -> None:
+    await _emit(
+        session,
+        AutomationEvent.UPDATED,
+        rule,
+        actor_id,
+        changes.diff_object(rule, before, hidden=("nodes", "edges")),
+    )
 
 
 def _dump(models) -> list[dict]:
@@ -736,8 +666,7 @@ async def create_rule(
     )
     session.add(rule)
     await session.flush()
-    await _sync_triggers(session, rule, triggers)
-    await _sync_validations(session, rule, triggers)
+    await _sync(session, rule, triggers)
     # v1 (RADD-1268). `version` starts at 0 on the object so the first write
     # lands on 1 — the column default would have said 1 before any row existed.
     rule.version = 0
@@ -781,19 +710,12 @@ async def update_rule(
         triggers = graph.validate(*parsed, nodes_registry.ports_of)
 
     await session.flush()
-    await _sync_triggers(session, rule, triggers)
-    await _sync_validations(session, rule, triggers)
+    await _sync(session, rule, triggers)
     # A new version only when what the automation IS changed (RADD-1268):
     # a toggle of `enabled` or a reorder writes none.
     if versions.changed(rule, content_before):
         await versions.write(session, rule, actor_id=actor_id, note=data.note)
-    await _emit(
-        session,
-        AutomationEvent.UPDATED,
-        rule,
-        actor_id,
-        changes.diff_object(rule, before, hidden=("nodes", "edges")),
-    )
+    await _emit_updated(session, rule, actor_id, before)
     return rule
 
 
@@ -820,16 +742,9 @@ async def restore_version(
     rule.nodes, rule.edges = old.nodes, old.edges
     rule.orientation = old.orientation
     await session.flush()
-    await _sync_triggers(session, rule, triggers)
-    await _sync_validations(session, rule, triggers)
+    await _sync(session, rule, triggers)
     await versions.write(session, rule, actor_id=actor_id, note=note, restored_from=version)
-    await _emit(
-        session,
-        AutomationEvent.UPDATED,
-        rule,
-        actor_id,
-        changes.diff_object(rule, before, hidden=("nodes", "edges")),
-    )
+    await _emit_updated(session, rule, actor_id, before)
     return rule
 
 

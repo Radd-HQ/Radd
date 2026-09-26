@@ -1,26 +1,15 @@
-"""The first-party page extensions (RADD-709).
-
-A name appears here only once the SPA can actually RENDER it — the menu offering
-an entry that lands as an "unknown extension" card is a visibly broken product,
-and `tests/test_page_extensions.py` fails the build for exactly that. So each
-new extension's declaration ships in the commit that builds its renderer.
-
-Declarations only. Rendering happens in the SPA, dispatched by name through its
-own registry — the server never renders a page body, so a server-side renderer
-here would be a second implementation of something nothing calls.
-
-What these rows drive is the editor's INSERT MENU (`GET /pages/extensions`): the
-menu is a function of what is installed, so a plugin contributing a
-`PageExtensionSpec` appears in it with no edit to this file, and disabling that
-plugin removes it again.
+"""The first-party page extensions (RADD-709) — declarations only; the SPA
+renders them by name. A name is added only in the commit that ships its renderer
+(`tests/test_page_extensions.py` fails the build otherwise). These rows drive the
+editor's insert menu (`GET /pages/extensions`), which is a function of what is
+installed.
 """
 
 from radd.kernel import PageExtensionSpec
 
 from .types import PageExtensionName
 
-#: `depth` recurs in several specs with the same meaning; one definition so the
-#: forms agree on the bounds.
+#: `depth` recurs across specs; one definition so the forms agree on the bounds.
 _DEPTH = {
     "type": "integer",
     "minimum": 1,
@@ -57,9 +46,7 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
             "type": "object",
             "properties": {
                 "depth": {**_DEPTH, "default": 1},
-                # RADD-858: embed = transclude every child's live body (the
-                # radd:include machinery per child), naturally ordered — one
-                # unified page that updates itself as children arrive.
+                # RADD-858: embed = transclude each child's live body (radd:include per child).
                 "mode": {
                     "type": "string",
                     "enum": ["links", "embed"],
@@ -83,10 +70,8 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
                     "default": "info",
                 },
                 "title": {"type": "string", "description": "Optional bold first line."},
-                # `format` is what tells the generated form (RADD-747) to offer a
-                # textarea rather than a one-line input. A hint in the schema, not
-                # a name the SPA special-cases — a plugin's extension gets the same
-                # treatment by declaring the same format.
+                # `format` makes the generated form (RADD-747) offer a textarea — a
+                # schema hint any plugin extension can declare, not a special case.
                 "text": {
                     "type": "string",
                     "format": "markdown",
@@ -135,9 +120,7 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
             },
         },
     ),
-    # --- spec 117 -----------------------------------------------------------
-    # Contributed for the Confluence importer, but ordinary extensions: a person
-    # can insert any of them, and nothing about them knows about Confluence.
+    # --- spec 117: made for the Confluence importer, but ordinary extensions ---
     PageExtensionSpec(
         name=PageExtensionName.UNSUPPORTED_MACRO,
         label="Unsupported macro",
@@ -193,9 +176,8 @@ PAGE_EXTENSIONS: tuple[PageExtensionSpec, ...] = (
                     "type": "string",
                     "description": "An SLQ query over items, e.g. project = TD AND status = Open.",
                 },
-                # Kept when a Confluence `jiraissues` macro's JQL could not be
-                # translated: the page then shows what the query WAS, rather than
-                # a guess that returns plausible rows.
+                # Kept when an imported `jiraissues` JQL could not be translated: the
+                # page shows what the query WAS, not a plausible-looking guess.
                 "source_jql": {
                     "type": "string",
                     "description": "The original Jira query, when this came from an import.",

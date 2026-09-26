@@ -36,7 +36,6 @@ from radd.modules.items.schemas import ItemCreate, ItemUpdate
 from radd.modules.mailintake import outbound, resolved, service as mail_service
 from radd.modules.mailintake.models import MailSender
 from radd.modules.mailintake.reply import Recipient
-from radd.modules.mailintake.types import MailRecipientKind
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.settings import service as settings_service
@@ -321,7 +320,7 @@ def test_the_rendered_notice_carries_the_ticket_the_state_and_the_link():
         subject="[SD-7] Your request has been resolved",
         state_name="Done",
         item=mailrender.ItemMail(key="SD-7", title="printer on fire", base_url="https://radd.test"),
-        recipients=(Recipient(CONTACT, "Jane", MailRecipientKind.REQUESTER),),
+        recipients=(Recipient(CONTACT, "Jane"),),
     )
     message = notice.render(notice.recipients[0])
     for half in (message.text, message.html):
@@ -346,7 +345,7 @@ def test_the_body_never_becomes_markup():
         item=mailrender.ItemMail(
             key="SD-8", title="<script>alert(1)</script>", base_url="https://radd.test"
         ),
-        recipients=(Recipient(CONTACT, "Jane", MailRecipientKind.REQUESTER),),
+        recipients=(Recipient(CONTACT, "Jane"),),
     )
     html = notice.render(notice.recipients[0]).html
     assert "<script>" not in html and "&lt;script&gt;" in html

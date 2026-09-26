@@ -25,9 +25,8 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('sla_policy', (f'/p/{{project.key}}/settings/{SETTINGS_PAGE_SEGMENT}',)),
     ),
-    # RADD-816: no sla.read — policy reads ride the project's item.read (the list is
-    # project-scoped), and a minted-but-unenforced atom is the dead class it deleted.
-    # RADD-1303: project-scoped under project.manage — policies are per project.
+    # Policy reads ride item.read (RADD-816); writes are project-scoped under
+    # project.manage (RADD-1303).
     crud_resources=(CrudResourceSpec("sla", "project", "SLA policies", "project.manage"),),
     core=False,  # optional plugin — disableable via the plugin manager
     description="Service levels: response and resolution targets with timers and breach alerts.",
@@ -48,11 +47,8 @@ plugin = RaddPlugin(
     # checked against the plugin registry per request (report.ratings).
     weak_depends=("csat",),
     routers=(router,),
-    # RADD-1386: the SLA report's UI (a reports-page section and the
-    # "Service desk SLA" dashboard widget) is this plugin's own remote; RADD-1394
-    # added the timers — the issue rail section and the `slas.timer` list column
-    # / board-card cell (an SDK 1.15 item attribute over `slas.timers`); RADD-1396
-    # the project's SLA settings page (a `project.settings.page`, SDK 1.16).
+    # UI: the timers (rail section, `slas.timer` column/card cell), the report, the
+    # project settings page and the `slas.queue` view type.
     ui=PluginUiManifest(
         nav=(
             NavItemSpec(
@@ -65,8 +61,6 @@ plugin = RaddPlugin(
         remote="/plugins/slas/remoteEntry.js",
         ui_api_version="1.16.0",
     ),
-    # RADD-1396: the spec-64 triage queue is this plugin's view type — the host's list over
-    # the urgency-ordered rows, listed in the sidebar's Queues section with live counts.
     view_types=(
         ViewTypeSpec(
             key=SlaViewType.QUEUE, label="Queue (triage list)", icon="list-ordered",

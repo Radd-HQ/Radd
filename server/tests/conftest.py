@@ -10,7 +10,7 @@ resolved test URL names the same database as the configured dev URL.
 The kernel contribution registries (event types, triggers, capabilities, …) are
 *boot state*: `create_app()` populates them by calling `load_plugins`. Unit tests
 that exercise services directly without booting the app still need that state —
-e.g. `automations.catalog.TRIGGERS` is derived live from the event-type registry
+e.g. `automations.catalog.triggers()` is derived live from the event-type registry
 (spec 93, chokepoint-1 inversion). This autouse fixture loads the full plugin set
 before every test, exactly as the app does at startup, so the registry is always
 the complete, current boot state regardless of any test that reloads it.

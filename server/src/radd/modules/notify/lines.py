@@ -1,15 +1,5 @@
-"""What a notification SAYS — one vocabulary, two channels (RADD-967, RADD-968).
-
-This module owns `NotificationType`, so every type's sentence belongs here. What
-they LOOK like is `radd.mailrender`'s decision; this file only ever produces
-words and a `DigestEntry`.
-
-It was `emailer._headline`/`_entry`, private to the digest. RADD-968 gave notify
-a SECOND email channel — the per-event mailer — and two renderings of "Ada
-commented" is exactly how the digest came to have four sentences for nine types
-in the first place. So the vocabulary moved out of the loop that happened to be
-written first, and both loops read it.
-"""
+"""What a notification SAYS — one vocabulary for the inbox and both email
+channels (RADD-967/968). What it LOOKS like is `radd.mailrender`'s."""
 
 from __future__ import annotations
 
@@ -24,16 +14,12 @@ from .types import NotificationType
 #: No resolvable actor: a clock (SLA timers) or the system (automations) did it.
 UNKNOWN_ACTOR = "Someone"
 
-#: The opening subject of a per-event email, used only until the item has a mail
-#: thread — after that the transport prefers the thread's own (see
-#: `mailintake.transport`). Shaped like the ack's, because the bracketed key is
-#: what threads a reply typed by someone whose client dropped the headers.
+#: The opening subject of a per-event email, until the item has a mail thread.
+#: The bracketed key threads a reply whose client dropped the headers.
 MAIL_SUBJECT_TEMPLATE = "[{key}] {title}"
 
-#: Why a user is being written to. Notify's own wording, deliberately not
-#: imported from `mailintake.types`: the reason is a property of WHY THIS MODULE
-#: is mailing you, and mailrender takes it as plain text precisely so neither
-#: side has to learn the other's enum.
+#: Why a user is being written to — notify's own wording, as plain text, so
+#: neither side learns the other's enum.
 MAIL_REASON_TEMPLATE = "You are receiving this because you follow {key} — reply to this email to comment."
 
 
@@ -99,17 +85,14 @@ def headline(type_: NotificationType | str, actor: str, payload: dict) -> str:
     return f"{actor}: {type_.value.replace('_', ' ')}"
 
 
-#: Notification kinds whose subject is a PAGE, not an issue — they carry the
-#: wiki payload (`page_id`/`page_number`/`title`) and link to the page permalink.
+#: Kinds whose subject is a PAGE: they carry the wiki payload and link its permalink.
 _PAGE_KINDS = frozenset(
     {NotificationType.PAGE_UPDATED, NotificationType.PAGE_CREATED}
 )
 
 
 def actor_name(notification: Notification, actor_names: dict[uuid.UUID, str]) -> str:
-    """Who did it. The id resolves first because `page_updated` notifications
-    never carried `actor_name` in their payload (pages writes its own), so every
-    wiki line read "Someone edited …"."""
+    """Who did it — by id first: `page_updated` rows carry no `actor_name`."""
     return (
         actor_names.get(notification.actor_id)
         or (notification.payload or {}).get("actor_name")
@@ -134,10 +117,8 @@ def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mail
     # RADD-1297: a notification about a comment links to the COMMENT.
     comment = payload.get("comment_id") or None
     if type_ in _PAGE_KINDS or (payload.get("page_number") and not payload.get("item_key")):
-        # RADD-1233: the permalink. Every row carries the number — the
-        # migration wrote it into the rows that predate page numbering. A page
-        # COMMENT (commented/mentioned with a page payload) is a page line too;
-        # before RADD-1297 it fell through to the issue branch with no link.
+        # The permalink (RADD-1233). A page COMMENT (commented/mentioned with a
+        # page payload) is a page line too.
         key = payload.get("page_number")
         return mailrender.DigestEntry(
             headline=line,
@@ -148,10 +129,7 @@ def entry(notification: Notification, actor_names: dict[uuid.UUID, str]) -> mail
     title = payload.get("item_title") or ""
     return mailrender.DigestEntry(
         headline=line,
-        # An ITEMLESS automation notification (a schedule at set arity, a
-        # universal action) carries neither, so the line degrades to the message
-        # with no link rather than to a `/issues/` URL with nothing after it.
-        # Item-scoped rules have carried the pair since RADD-972.
+        # An itemless automation notification has no key: no subject, no link.
         subject=f"[{key}] {title}".strip() if key else "",
         excerpt=payload.get("excerpt") or "",
         url=mailrender.issue_url(base, key, comment=comment) if key else "",

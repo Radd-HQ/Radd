@@ -9,7 +9,6 @@ from radd.choices import ChoiceRead
 from radd.modules.auth import service as auth
 from radd.modules.auth.deps import CurrentUser
 from radd.modules.items import service as items_service
-from radd.modules.projects.models import Project
 
 from . import prefs as prefs_read, service, targets
 from .models import Notification
@@ -70,12 +69,7 @@ async def list_notifications(
 
 @router.get("/notifications/preferences", response_model=NotificationPrefsRead)
 async def get_preferences(session: Session, user: CurrentUser) -> NotificationPrefsRead:
-    """The caller's whole notification policy: vocabulary, defaults, saved rules.
-
-    No rules is not an error state and not an empty page — it is the documented
-    default matrix, which the response carries as `defaults` so the settings
-    page can show every inherited cell and where it came from.
-    """
+    """The caller's policy; no rules = the documented defaults, served as `defaults`."""
     return await prefs_read.read(session, user)
 
 
@@ -96,19 +90,12 @@ async def get_subscription_options(
 async def put_preferences(
     data: NotificationPrefsUpdate, session: Session, user: CurrentUser
 ) -> NotificationPrefsRead:
-    # A subscription names a target the CLIENT chose, so the target is checked
-    # here against what this actor may read (`targets.py` has the reasoning and
-    # the per-family seams). Dropped rather than 4xx'd, `set_rules`' own posture
-    # for a row it will not store: this is a FULL REPLACE, so refusing the
-    # request over one stale subscription would refuse the matrix edit the person
-    # actually made — and the response is read back off the rows, so the row that
-    # did not survive is visibly gone rather than silently ignored.
+    # Targets are checked against what this actor may name (`targets.py`) and
+    # DROPPED, not 4xx'd — a full replace must not refuse the matrix edit over one
+    # stale subscription. The response is read back from the stored rows.
     readable = await targets.readable_targets(
         session, user, targets.targets_by_scope((r.scope, r.scope_id) for r in data.rules)
     )
-    # Read back from the rows, not the request: `set_rules` drops scopes whose
-    # target is missing (or present when it should not be) and channel values
-    # this version does not know, and the client must see what was stored.
     await service.set_rules(
         session,
         user.id,
@@ -130,28 +117,21 @@ async def mark_all_read(session: Session, user: CurrentUser) -> None:
     await service.mark_all_read(session, user.id)
 
 
-async def _readable_item_project(
-    session: AsyncSession, user: CurrentUser, item_id: uuid.UUID
-) -> Project:
-    _item, project, _perms = await items_service.require_readable_item(session, item_id, user)
-    return project
-
-
 @router.put("/items/{item_id}/watch", status_code=204)
 async def watch_item(item_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await _readable_item_project(session, user, item_id)  # 403/404 guard
+    await items_service.require_readable_item(session, item_id, user)  # 403/404 guard
     await service.watch(session, item_id, user.id)
 
 
 @router.delete("/items/{item_id}/watch", status_code=204)
 async def unwatch_item(item_id: uuid.UUID, session: Session, user: CurrentUser) -> None:
-    await _readable_item_project(session, user, item_id)  # 403/404 guard
+    await items_service.require_readable_item(session, item_id, user)  # 403/404 guard
     await service.unwatch(session, item_id, user.id)
 
 
 @router.get("/items/{item_id}/watchers", response_model=WatchersRead)
 async def item_watchers(item_id: uuid.UUID, session: Session, user: CurrentUser) -> WatchersRead:
-    await _readable_item_project(session, user, item_id)
+    await items_service.require_readable_item(session, item_id, user)
     ids = await service.watcher_ids(session, item_id)
     users = await auth.users_by_ids(session, set(ids))
     watchers = [

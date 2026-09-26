@@ -1,23 +1,6 @@
-"""Trigger classification + condition matching + the read-only action planner,
-split out of `engine.py` (RADD-902) along its own "loop guard + trigger
-classification" / "condition matching" / "action planning" markers (formerly
-lines 72-425) — the planning-vs-applying seam the audit called out as the
-file's cleanest cut.
-
-Nothing here writes to the database or calls another module's service to
-MUTATE anything; `_plan` resolves one stored action into a `_Plan` the caller
-(`engine._apply_plan`) then executes. `engine.py` imports this module (never
-the other way — nothing here needs anything `engine.py` defines) and
-re-exports the public/test-visible names under its own name, so
-`from radd.modules.automations.engine import _plan, condition_matches, ...`
-is unaffected.
-
-`_signed_headers` did NOT move here even though it sits physically inside the
-original "action planning" section, right after `_plan` — its only consumer
-is `_apply_plan`, which is application code that stays in `engine.py`. Private
-helpers move with their consumer, not with the section they happened to be
-typed under.
-"""
+"""Trigger classification, the loop guard, SLQ item matching and the read-only
+action planner. Nothing here writes: `_plan` resolves one action into a `_Plan`
+that `engine._apply_plan` executes."""
 
 import uuid
 from dataclasses import dataclass, field
@@ -68,18 +51,9 @@ from .types import (
 
 
 def is_automation_caused(event: Event) -> bool:
-    """True if this event was emitted by an engine-applied mutation (the loop guard).
-
-    Reads the event's own `automated` marker, never its actor. Since spec 116 an
-    action may run AS a real person, so identity cannot answer "did an automation
-    cause this" — causation lives on the event (`events.automated()`).
-
-    RADD-1308: this used to be `automated OR actor == SYSTEM`. Every integration
-    writes as the system user — the VCS connectors, the form portal, mail intake,
-    Alertmanager — so that second arm hid every one of their events from every
-    automation: a `vcs.updated` trigger only ever fired for a link a person added
-    by hand. The engine's own writes are all marked, so the arm protected nothing
-    the marker does not."""
+    """The loop guard: the event's own `automated` marker, never its actor — an
+    action may run AS a person, and integrations write as the system user and must
+    still trigger automations (RADD-1308)."""
     return bool(getattr(event, "automated", False))
 
 
@@ -93,23 +67,15 @@ def _fires_a_kind(event_type: str) -> bool:
 
 
 def should_process(event: Event) -> bool:
-    """A subscribable event the engine should look at: a human/API/integration
-    event, or (RADD-1315) another automation's change below the chain-depth cap —
-    which then reaches only the trigger nodes that opted in.
-    EXCEPTION (spec 69): the scheduler's synthetic `automation.scheduled` event is
-    system-emitted by design and not a catalog trigger, so it is admitted by name
-    — loop safety holds because the item events a scheduled run emits are marked
-    `automated`, which this predicate rejects on the EVENT-rule path.
-
-    `silent` events (a bulk import, `events.quiet()`) never match: a rule that
-    assigns on create or transitions on a field change would otherwise fire once
-    per imported issue and rewrite the history being imported. Checked ahead of
-    the scheduled-event exception — an import is silent whatever it emits."""
+    """A subscribable event the engine should look at. `silent` (imports) never;
+    the scheduler's synthetic `automation.scheduled` always; another automation's
+    change only below the chain-depth cap (RADD-1315), and then only for the
+    triggers that opted in."""
     if event.silent:
         return False
     if event.event_type == AutomationEvent.SCHEDULED.value:
         return True
-    if event.event_type not in catalog.TRIGGERS and not _fires_a_kind(event.event_type):
+    if event.event_type not in catalog.triggers() and not _fires_a_kind(event.event_type):
         return False
     if not is_automation_caused(event):
         return True
@@ -119,14 +85,7 @@ def should_process(event: Event) -> bool:
 
 
 async def _resolve_target_item(session: AsyncSession, event: Event) -> WorkItem | None:
-    """The item a rule's actions apply to.
-
-    ONE rule since RADD-922: `payload.item.id`, which every item-scoped event
-    carries. It used to be two — the entity id when the entity was an item, the
-    payload's `item_id` otherwise — because the item events were the only ones
-    that did not name the item in their payload. The entity fallback stays for
-    the item events' own `entity_id`, which is the same value and free.
-    """
+    """The item a rule acts on: `payload.item.id` (RADD-922), else an item event's entity id."""
     raw = ((event.payload or {}).get("item") or {}).get("id")
     if not raw and event.entity_type == ItemEntity.ITEM.value:
         raw = event.entity_id
@@ -152,33 +111,47 @@ async def _event_facts(session: AsyncSession, event: Event) -> conditions.EventF
     )
 
 
-# --- condition matching (reuses the SLQ compiler, filtered to the one item) ---
+# --- SLQ matching (the items compiler, run as the system actor) ---
 
 
-async def _project_definitions(
-    session: AsyncSession, project: Project
+async def definitions_by_key(
+    session: AsyncSession, project: Project | None = None
 ) -> dict[str, FieldDefinition]:
+    """key -> field definition (oldest wins on duplicate keys): the project's, or
+    the whole registry for a query that belongs to no project — arbitrary but
+    stable when two projects share a key."""
+    found = (
+        await fields.definitions_for_project(session, project)
+        if project is not None
+        else await fields.list_fields(session)
+    )
     by_key: dict[str, FieldDefinition] = {}
-    for definition in await fields.definitions_for_project(session, project):
+    for definition in found:
         by_key.setdefault(definition.key, definition)
     return by_key
+
+
+async def compile_slq(session: AsyncSession, text: str, project: Project | None = None):
+    """Compile `text` against `project`'s fields (or the whole registry); a bad
+    query raises SlqError, which the items module renders as a 422."""
+    return await slq.compile_query(
+        session,
+        slq.parse(text),
+        definitions_by_key=await definitions_by_key(session, project),
+        current_user_id=SYSTEM_ACTOR_ID,
+        project_id=project.id if project is not None else None,
+    )
 
 
 async def condition_matches(
     session: AsyncSession, condition_slq: str, item: WorkItem, project: Project
 ) -> bool:
-    """Does the item satisfy the rule's condition? Empty condition = always. Reuses the
-    SLQ compiler and runs the compiled WHERE guarded to this single item id."""
+    """Does the item satisfy the SLQ? Empty = always. The compiled WHERE runs
+    guarded to this single item id."""
     text = (condition_slq or "").strip()
     if not text:
         return True
-    compiled = await slq.compile_query(
-        session,
-        slq.parse(text),
-        definitions_by_key=await _project_definitions(session, project),
-        current_user_id=SYSTEM_ACTOR_ID,
-        project_id=project.id,
-    )
+    compiled = await compile_slq(session, text, project)
     stmt = select(WorkItem.id).where(WorkItem.id == item.id)
     if compiled.where is not None:
         stmt = stmt.where(compiled.where)
@@ -240,7 +213,6 @@ async def _plan_create_item(
     session: AsyncSession,
     params: dict,
     target: Project,
-    system_user: User,
     text: Renderer,
 ) -> "_Plan":
     """Resolve every named target into the ItemCreate the items service wants.
@@ -282,7 +254,7 @@ async def _plan_create_item(
             return _Plan(PlanKind.SKIP, f"create_item: no issue type {name!r} in {target.key}")
         create_kwargs["type_id"] = found.id
     if name := params.get("state"):
-        found = await _state_by_name(session, target.id, text.line(name))
+        found = _named(await workflow.list_states(session, target.id), text.line(name))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no state {name!r} in {target.key}")
         create_kwargs["state_id"] = found.id
@@ -295,12 +267,12 @@ async def _plan_create_item(
                 return _Plan(PlanKind.SKIP, f"create_item: no user {value!r} for {key}")
             create_kwargs[f"{key}_id"] = found.id
     if name := params.get("team"):
-        found = await _team_by_name(session, text.line(name))
+        found = _named(await teams_service.list_teams(session), text.line(name))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no team {name!r}")
         create_kwargs["team_id"] = found.id
     if name := params.get("cycle"):
-        found = await _cycle_by_name(session, text.line(name))
+        found = _named(await cycles_service.list_cycles(session), text.line(name))
         if found is None:
             return _Plan(PlanKind.SKIP, f"create_item: no cycle {name!r}")
         create_kwargs["cycle_id"] = found.id
@@ -337,11 +309,8 @@ async def _plan_create_item(
     try:
         create = ItemCreate(**create_kwargs)
     except ValidationError as invalid:
-        # A RENDERED value the item schema will not take — a title past 500
-        # characters is the one a model produces without trying. Skipped with
-        # the validator's own words, because the alternative is this raising
-        # through `_one`'s generic handler: a dry run that says "Would apply"
-        # and a live run that logs a crash and records nothing.
+        # A RENDERED value the schema rejects (a 500-char model title): skip with
+        # the validator's words rather than a dry run that lies.
         return _Plan(PlanKind.SKIP, f"create_item: {_validation_reason(invalid)}")
     return _Plan(
         PlanKind.CREATE_ITEM,
@@ -355,15 +324,7 @@ _VOCABULARY_LIMIT = 12
 
 
 def _vocabulary(names, limit: int = _VOCABULARY_LIMIT) -> str:
-    """A hint naming what WOULD have resolved (spec 120).
-
-    Only ever built from a collection the planner ALREADY HAS — the states it
-    just listed, the enum it just failed to coerce. Never a second query for the
-    sake of a message: a skip is already the unhappy path, and paying a round
-    trip to phrase it better is how a nightly run over 200 items gets slower
-    every time something is misconfigured. Capped, because forty team names in
-    an error is not a hint.
-    """
+    """A capped "did you mean" hint, built only from a list the planner already holds."""
     seen = [str(name) for name in names]
     shown = ", ".join(seen[:limit])
     return f"{shown}, …" if len(seen) > limit else shown
@@ -517,18 +478,6 @@ def _named(rows, name: str):
     return next((row for row in rows if row.name == name), None)
 
 
-async def _state_by_name(session: AsyncSession, project_id: uuid.UUID, name: str):
-    return _named(await workflow.list_states(session, project_id), name)
-
-
-async def _team_by_name(session: AsyncSession, name: str):
-    return _named(await teams_service.list_teams(session), name)
-
-
-async def _cycle_by_name(session: AsyncSession, name: str):
-    return _named(await cycles_service.list_cycles(session), name)
-
-
 async def _current_labels(session: AsyncSession, item: WorkItem, system_user: User) -> list[str]:
     read = await items.get_item(session, item.id, actor=system_user)
     return list(read.labels)
@@ -564,20 +513,9 @@ async def _plan(
     variables: Any = None,
     item_facts: ItemFacts | None = None,
 ) -> _Plan:
-    """Resolve one stored action — read-only. Returns the work to perform, or a
-    'skip' plan when a named target no longer resolves (logged, not fatal).
-
-    `item` is the ONE item this invocation targets (per-item arity, or a set of
-    exactly one); `items` is everything it speaks for, which is what the
-    set-shaped tokens and the webhook body render from. Both are supplied by the
-    executor, so the planner never asks which arity it is in.
-
-    `variables` is the packet's bag (spec 120) — what upstream nodes produced,
-    readable as `{{<node>.<field>}}` anywhere a token already worked. A THIN
-    WRAPPER around `_plan_action` so the renderer is built once and its record of
-    what it substituted is stamped onto whatever plan comes back: twenty return
-    sites each remembering to carry it is exactly how one of them would not.
-    """
+    """Resolve one stored action, read-only: the work to do, or a SKIP naming what
+    no longer resolves. A thin wrapper so one `Renderer` is built and its record of
+    substitutions is stamped onto whatever plan comes back."""
     render = Renderer(
         facts=facts,
         item_ctx=_item_ctx(item, project, item_facts),
@@ -589,16 +527,9 @@ async def _plan(
         facts=facts, rule_name=rule_name, items=items, text=render,
     )
     if render.misses:
-        # A VARIABLE token that found nothing OVERRIDES whatever the planner
-        # concluded, including a skip of its own. `set_state {{triage.state}}`
-        # with no `triage` on this branch would otherwise report "no state
-        # '{{triage.state}}' in TD" — technically true, and it sends the reader
-        # to the workflow settings for a problem that is in the wiring.
-        #
-        # It is a SKIP rather than an error because the branch is allowed to be
-        # conditional: an `unavailable` port that nobody wired means the model
-        # did not answer, and the actions that needed its answer should not
-        # happen — quietly is the bug, refusing the whole run is worse.
+        # A VARIABLE token that found nothing overrides the planner's own verdict:
+        # the real problem is the wiring, not the vocabulary. A skip, not an error —
+        # the branch may legitimately be conditional.
         return _Plan(
             PlanKind.SKIP,
             f"{action['type']}: {'; '.join(render.misses)}",
@@ -630,7 +561,7 @@ async def _plan_action(
             target = await _project_by_key(session, text.line(params["project"]))
             if target is None:
                 return _Plan(PlanKind.SKIP, f"create_item: no project {params['project']!r}")
-            return await _plan_create_item(session, params, target, system_user, text)
+            return await _plan_create_item(session, params, target, text)
         case ActionType.SEND_WEBHOOK:
             body = {
                 "rule": rule_name,
@@ -664,7 +595,7 @@ async def _plan_action(
                 # A role names a property of ONE item — per-item arity supplies
                 # it. "Notify the assignee" was previously inexpressible: the
                 # param took a literal address only.
-                user_id = await resolve_user(session, target_user, item)
+                user_id = resolve_user(target_user, item)
                 if user_id is None:
                     return _Plan(
                         PlanKind.SKIP, f"notify_user: no {target_user} on the target item"
@@ -683,12 +614,7 @@ async def _plan_action(
                 notify=(user.id, text(params["message"])),
             )
         case ActionType.SET_STATE:
-            # Every named target below renders as a TEMPLATE first (spec 120), so
-            # `{{triage.state}}` is a state name the same way a literal is. The
-            # rendering is the only change: resolution still goes through the
-            # by-NAME seam that was already here, which is what keeps an
-            # automation written against a project's vocabulary working when the
-            # rows behind it are recreated.
+            # Named targets render as templates first (spec 120), then resolve by NAME.
             name = text.line(params["state"])
             states = await workflow.list_states(session, project.id)
             state = _named(states, name)
@@ -894,7 +820,7 @@ async def _plan_action(
             verb = action_type.value
             target_user = params["user"]
             if is_role(target_user):
-                user_id = await resolve_user(session, target_user, item)
+                user_id = resolve_user(target_user, item)
                 if user_id is None:
                     return _Plan(PlanKind.SKIP, f"{verb}: no {target_user} on the target item")
                 who = target_user
@@ -915,10 +841,6 @@ async def _plan_action(
             return _Plan(PlanKind.MOVE, f"move_to_project -> {key}", move_to=target.id)
         case ActionType.ADD_COMMENT:
             visibility = CommentVisibility(params.get("visibility", CommentVisibility.PUBLIC.value))
-            # Templated like every other body of text an automation writes. It
-            # was the one that was not, so `{{actor.name}}` in a comment posted
-            # the literal braces — the token panel offers it and the field
-            # silently ignored it.
             comment = CommentCreate(body=text(params["body"]), visibility=visibility)
             return _Plan(PlanKind.COMMENT, f"add_comment ({visibility.value})", comment=comment)
     return _Plan(PlanKind.SKIP, f"unknown action {action_type}")  # pragma: no cover

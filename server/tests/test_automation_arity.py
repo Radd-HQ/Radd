@@ -36,7 +36,6 @@ from radd.modules.automations.types import (
     ACTION_ARITY_CONFIGURABLE,
     ACTION_ARITY_DEFAULT,
     ARITY_PARAM,
-    ITEM_ACTIONS,
     ActionType,
     AutomationNodeKind,
     NodeArity,
@@ -48,10 +47,9 @@ from radd.modules.automations.types import (
 
 
 def test_the_arity_table_reproduces_the_historical_item_action_split():
-    """`ITEM_ACTIONS` used to be a hand-written frozenset and is now derived from
-    the arity table. If those ever disagree, every automation stored before this
-    change starts running in a mode nobody chose — so the old list is spelled out
-    here rather than derived from the same source it is checking."""
+    """The item-arity defaults must equal the old hand-written item-action set,
+    or every automation stored before RADD-918 runs in a mode nobody chose — so
+    the old list is spelled out here rather than derived from the table."""
     historical = {
         ActionType.SET_STATE,
         ActionType.SET_PRIORITY,
@@ -83,7 +81,8 @@ def test_the_arity_table_reproduces_the_historical_item_action_split():
         ActionType.ADD_WATCHER,
         ActionType.MOVE_TO_PROJECT,
     }
-    assert set(ITEM_ACTIONS) == historical | added
+    item_defaults = {a for a, arity in ACTION_ARITY_DEFAULT.items() if arity is NodeArity.ITEM}
+    assert item_defaults == historical | added
     assert ACTION_ARITY_DEFAULT.keys() == set(ActionType), "every action needs a default"
 
 
@@ -166,9 +165,9 @@ ITEMS = [
 def test_set_tokens_name_the_items_not_just_how_many():
     """`{{matched_count}}` was the whole vocabulary an action running once had:
     it could say "12 issues went stale" and never which twelve."""
-    assert templating.render_template("{{items.count}}", FACTS, None, ITEMS) == "2"
-    assert templating.render_template("{{items.keys}}", FACTS, None, ITEMS) == "TD-1, TD-2"
-    assert templating.render_template("{{items.list}}", FACTS, None, ITEMS) == (
+    assert templating.Renderer(FACTS, None, ITEMS)("{{items.count}}") == "2"
+    assert templating.Renderer(FACTS, None, ITEMS)("{{items.keys}}") == "TD-1, TD-2"
+    assert templating.Renderer(FACTS, None, ITEMS)("{{items.list}}") == (
         "TD-1 — First\nTD-2 — Second"
     )
 
@@ -176,8 +175,8 @@ def test_set_tokens_name_the_items_not_just_how_many():
 def test_an_empty_set_renders_empty_rather_than_verbatim():
     """A literal `{{items.keys}}` in a chat message reads as a broken automation;
     "0" and a blank list are the honest rendering of a run that matched nothing."""
-    assert templating.render_template("{{items.count}}", FACTS, None, []) == "0"
-    assert templating.render_template("{{items.keys}}", FACTS, None, []) == ""
+    assert templating.Renderer(FACTS, None, [])("{{items.count}}") == "0"
+    assert templating.Renderer(FACTS, None, [])("{{items.keys}}") == ""
 
 
 # --- the executor's fan-out ---------------------------------------------------

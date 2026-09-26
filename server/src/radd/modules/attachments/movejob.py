@@ -1,13 +1,8 @@
-"""Bulk attachment moves between hosts (spec 102 §move): copy -> verify ->
-repoint -> best-effort source delete, per file.
-
-The ordering is the safety property: a row is only repointed AFTER the target
-copy verified (size always; etag best-effort — multipart etags aren't content
-hashes), so a crash at any point leaves every row pointing at real bytes. A
-failed source delete is a logged orphan on the SOURCE, never a job failure —
-the row already points at verified bytes. Runs as an in-process task (the
-jiraimport/backup idiom) with its own sessions and small commit batches so
-progress is live.
+"""Bulk attachment moves between hosts (spec 102): copy -> verify -> repoint ->
+best-effort source delete, per file. A row is repointed only AFTER the copy
+verified (size; etag best-effort — multipart etags are not hashes), so a crash
+leaves every row on real bytes; a failed source delete is a logged orphan, not
+a job failure. An in-process task with small commit batches, so progress is live.
 """
 
 import asyncio

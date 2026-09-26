@@ -16,32 +16,37 @@ def _m(minutes: float) -> timedelta:
     return timedelta(minutes=minutes)
 
 
+def _ordered(policies):
+    """First-match order, (position, created_at), for policies never flushed."""
+    return sorted(policies, key=lambda policy: (policy.position, policy.created_at or datetime.min))
+
+
 # --- deadline ---
 
 
 def test_deadline_without_pauses():
-    assert deadline(T0, 60 * 60, [], T0) == T0 + _m(60)
+    assert deadline(T0, 60 * 60, []) == T0 + _m(60)
 
 
 def test_pause_before_deadline_pushes_it_out():
     # 20 minutes paused inside the first hour → deadline slides 20 minutes.
     pauses = [(T0 + _m(10), T0 + _m(30))]
-    assert deadline(T0, 60 * 60, pauses, T0 + _m(90)) == T0 + _m(80)
+    assert deadline(T0, 60 * 60, pauses) == T0 + _m(80)
 
 
 def test_pause_after_deadline_is_irrelevant():
     pauses = [(T0 + _m(90), T0 + _m(120))]
-    assert deadline(T0, 60 * 60, pauses, T0 + _m(150)) == T0 + _m(60)
+    assert deadline(T0, 60 * 60, pauses) == T0 + _m(60)
 
 
 def test_open_pause_before_target_floats_the_deadline():
     # Paused at +30m with a 60m target and never resumed: no deadline yet.
-    assert deadline(T0, 60 * 60, [(T0 + _m(30), None)], T0 + _m(300)) is None
+    assert deadline(T0, 60 * 60, [(T0 + _m(30), None)]) is None
 
 
 def test_target_reached_before_open_pause_still_has_deadline():
     # 60m target reached at +60m; the pause starts later, deadline stands.
-    assert deadline(T0, 60 * 60, [(T0 + _m(90), None)], T0 + _m(300)) == T0 + _m(60)
+    assert deadline(T0, 60 * 60, [(T0 + _m(90), None)]) == T0 + _m(60)
 
 
 def test_merge_overlapping_pauses():
@@ -106,7 +111,7 @@ def test_work_week_deadline_skips_the_weekend():
     # so the deadline lands Monday 6th 10:00 instead of Saturday.
     friday = datetime(2026, 7, 3, 10, 0)
     pauses = non_working_pauses(friday, friday + timedelta(days=10), frozenset(range(5)))
-    assert deadline(friday, 24 * 3600, pauses, friday) == datetime(2026, 7, 6, 10, 0)
+    assert deadline(friday, 24 * 3600, pauses) == datetime(2026, 7, 6, 10, 0)
 
 
 def test_paused_now_neither_breaches_nor_counts_down():
@@ -150,7 +155,7 @@ def test_ticket_filed_at_night_starts_burning_at_window_open():
     # 9:00, so the deadline is Thursday 10:00.
     filed = datetime(2026, 7, 1, 23, 0)
     pauses = business_hours_pauses(filed, filed + timedelta(days=7), NINE, FIVE_THIRTY, EVERY_DAY)
-    assert deadline(filed, 3600, pauses, filed) == datetime(2026, 7, 2, 10, 0)
+    assert deadline(filed, 3600, pauses) == datetime(2026, 7, 2, 10, 0)
 
 
 def test_weekend_and_window_pauses_merge():
@@ -164,7 +169,7 @@ def test_weekend_and_window_pauses_merge():
     pauses = non_working_pauses(filed, horizon, MON_FRI) + business_hours_pauses(
         filed, horizon, NINE, FIVE_THIRTY, MON_FRI
     )
-    assert deadline(filed, 2 * 3600, pauses, filed) == datetime(2026, 7, 6, 10, 0)
+    assert deadline(filed, 2 * 3600, pauses) == datetime(2026, 7, 6, 10, 0)
 
 
 def test_target_beyond_a_days_window_rolls_over():
@@ -174,7 +179,7 @@ def test_target_beyond_a_days_window_rolls_over():
     # 8.5h Wednesday, 7.5h Thursday → due Thursday 16:30.
     filed = datetime(2026, 7, 1, 9, 0)
     pauses = business_hours_pauses(filed, filed + timedelta(days=7), NINE, FIVE_THIRTY, EVERY_DAY)
-    assert deadline(filed, 16 * 3600, pauses, filed) == datetime(2026, 7, 2, 16, 30)
+    assert deadline(filed, 16 * 3600, pauses) == datetime(2026, 7, 2, 16, 30)
 
 
 # --- first-match resolution (specs 63/67: policies are project-level) ---
@@ -197,13 +202,13 @@ def test_first_match_priority_filter_and_position_order():
     import uuid
 
     from radd.modules.items.models import WorkItem
-    from radd.modules.slas.service import first_match, ordered
+    from radd.modules.slas.service import first_match
 
     project_id = uuid.uuid4()
     blocker = _policy("P1 fast", project_id, position=0, priorities=("blocker",))
     catch_all = _policy("Standard", project_id, position=1)
     disabled = _policy("Off", project_id, position=0, enabled=False, priorities=("blocker",))
-    policies = ordered([catch_all, disabled, blocker])
+    policies = _ordered([catch_all, disabled, blocker])
 
     urgent = WorkItem(project_id=project_id, priority="blocker")
     normal = WorkItem(project_id=project_id, priority="normal")
@@ -214,21 +219,21 @@ def test_first_match_priority_filter_and_position_order():
     # position order beats list order: promote the catch-all above the filter.
     catch_all.position = 0
     blocker.position = 1
-    assert first_match(ordered([catch_all, blocker]), urgent) is catch_all
+    assert first_match(_ordered([catch_all, blocker]), urgent) is catch_all
 
 
 def test_first_match_scope_and_no_match():
     import uuid
 
     from radd.modules.items.models import WorkItem
-    from radd.modules.slas.service import first_match, ordered
+    from radd.modules.slas.service import first_match
 
     mine = uuid.uuid4()
     other = uuid.uuid4()
     scoped = _policy("Scoped", other, position=0)
     low_only = _policy("Low only", mine, position=1, priorities=("low",))
-    policies = ordered([scoped, low_only])
+    policies = _ordered([scoped, low_only])
     item = WorkItem(project_id=mine, priority="high")
     # Another project's policy + wrong priority → no policy governs the item.
     assert first_match(policies, item) is None
-    assert first_match(ordered([scoped]), WorkItem(project_id=other, priority="high")) is scoped
+    assert first_match(_ordered([scoped]), WorkItem(project_id=other, priority="high")) is scoped

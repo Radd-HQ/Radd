@@ -273,7 +273,7 @@ async def test_an_assignee_who_watches_nothing_hears_about_their_own_item(db):
     await db.flush()
     await _drain(db, head)
 
-    assert await notify_service.is_watching(db, item.id, assignee.id) is False
+    assert assignee.id not in await notify_service.watcher_ids(db, item.id)
     (row,) = await _rows(db, assignee)
     assert row.type == NotificationType.COMMENTED.value
     assert row.inbox is True and row.email is True
@@ -348,7 +348,7 @@ async def test_unwatching_no_longer_silences_an_assignee_and_own_off_still_does(
     )
     await db.flush()
     await _drain(db, head)
-    assert await notify_service.is_watching(db, item.id, assignee.id) is True
+    assert assignee.id in await notify_service.watcher_ids(db, item.id)
     await notify_service.unwatch(db, item.id, assignee.id)
 
     head = await _at_head(db)

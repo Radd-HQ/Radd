@@ -4,23 +4,13 @@ from enum import StrEnum
 
 from radd.schedule import ScheduleKind
 
-# A rule's trigger is an EVENT TYPE string from the workspace event stream
-# (spec 58: "item.updated", "comment.created", …, validated against the catalog
-# in catalog.py) — or one of these sentinels. MANUAL rules never fire from
-# events: they run via POST /automations/{id}/run — the editor's `/`
-# quick-action menu lists them, and extensions/MCP can create them, making
-# custom quick actions a plain rule. SCHEDULE rules (spec 69) fire from the
-# scheduler loop instead of an event; they carry a `schedule` config and must
-# have empty event_conditions (there is no event to condition on).
+# A rule's trigger is an EVENT TYPE from the catalog, or one of these sentinels —
+# no event names them, so the outbox consumer never starts a run from them.
 class AutomationTrigger(StrEnum):
     MANUAL = "manual"
     SCHEDULE = "schedule"
-    # Spec 119. Fires SYNCHRONOUSLY at intake, against a savepoint-created draft,
-    # and its walk applies nothing — it collects FINDINGS. A sentinel like the
-    # other two, and for the same reason: no event in the catalog names it, so
-    # the engine's outbox consumer can never start a run from it. What it binds
-    # to (a form, an issue type, a project) lives in `automation_validations`,
-    # indexed off the trigger node's params exactly as a schedule's clock is.
+    # Spec 119: runs synchronously at intake over a savepoint draft and collects
+    # FINDINGS; what it governs lives in `automation_validations`.
     VALIDATE = "validate"
 
 
@@ -128,36 +118,21 @@ class PersonRole(StrEnum):
     a person param (`notify_user`'s `user`, `add_watcher`'s, a contributed
     action's through `ctx.person`) may say instead of an email. Resolves
     against ONE item, so it only means anything at per-item arity; no item or
-    nobody in the role → the action skip-logs.
-
-    Was `EmailRecipient` until RADD-1387, when the email action (and its third
-    role, the mail `contact`) moved to `mailintake`, which owns that vocabulary.
-    """
+    nobody in the role → the action skip-logs."""
 
     REPORTER = "reporter"
     ASSIGNEE = "assignee"
 
 
 class NodeArity(StrEnum):
-    """How a node reads its input packet — the axis that used to be implied by
-    the action type and could not be chosen (RADD-918).
+    """How a node reads its input packet (RADD-918). There is no loop construct:
+    "for each" is how a node reads its input, not control flow.
 
-    There is no LOOP construct in an automation graph and deliberately so: a
-    back-edge would break the DAG that `graph.validate` rejects cycles against,
-    and a nested-scope executor would make every budget and every report entry
-    grow a dimension. In a dataflow model over SETS, "for each" is not control
-    flow — it is how a node reads its input, and that is what this names.
+    * SET — runs once over the whole packet; a router sends it down ONE port.
+    * ITEM — runs once per item; a router PARTITIONS the set across its ports.
 
-    * **SET** — the node runs once and sees the whole packet. A router sends the
-      packet down ONE port; an action fires once.
-    * **ITEM** — the node runs once per item. A router PARTITIONS the set across
-      its ports (each item leaves by the port its own answer names); an action
-      fires once per item.
-
-    An action's output is its input either way (chains continue past it), so
-    arity on an action has no effect on graph SHAPE — only on how many side
-    effects happen. That is what makes this a local property rather than a new
-    kind of node.
+    An action passes its input through either way, so arity changes how many
+    side effects happen, never the graph's shape.
     """
 
     SET = "set"
@@ -184,22 +159,14 @@ class ArityRule:
 
 
 
-#: Every action's DEFAULT arity. This table replaces the `ITEM_ACTIONS` frozenset
-#: as the source of truth: the frozenset was the law, and now it is the default.
-#: The values reproduce the pre-RADD-918 behaviour exactly, which is why no data
-#: migration is needed — a stored node with no `arity` param runs as before.
+#: Every action's DEFAULT arity; a stored node with no `arity` param runs as this.
 ACTION_ARITY_DEFAULT: dict[ActionType, NodeArity] = {
     # Mutations of one item. Only ITEM is meaningful — there is no canonical
     # item in a set to apply them to.
     ActionType.SET_STATE: NodeArity.ITEM,
     ActionType.SET_PRIORITY: NodeArity.ITEM,
     ActionType.SET_ASSIGNEE: NodeArity.ITEM,
-    # Fixed ITEM and NOT in ACTION_ARITY_CONFIGURABLE — there is no legitimate
-    # set reading of a round-robin assign, so its spec offers only
-    # options=(ITEM,) and `_check_arity` refuses a hand-edited `arity=set` row.
-    # This is the STRONGER of the two per-item forcings: unlike a role recipient
-    # (set-capable, and only forced to item when a role is chosen),
-    # this can never be talked into a skip-log on a set at all.
+    # Fixed ITEM: no set reading of round-robin exists; `_check_arity` refuses `arity=set`.
     ActionType.ASSIGN_ROUND_ROBIN: NodeArity.ITEM,
     ActionType.SET_TEAM: NodeArity.ITEM,
     ActionType.ADD_LABEL: NodeArity.ITEM,
@@ -247,33 +214,11 @@ ACTION_ARITY_CONFIGURABLE = frozenset(
 )
 
 
-# ActionTypes whose DEFAULT needs the event's target item. Derived rather than
-# declared, so it cannot drift from the table above; still exported because the
-# engine, the schemas and several tests read it by name.
-ITEM_ACTIONS = frozenset(
-    action for action, arity in ACTION_ARITY_DEFAULT.items() if arity is NodeArity.ITEM
-)
-
-
-# The complement — actions that default to running once, with or without a
-# target item.
-UNIVERSAL_ACTIONS = frozenset(ActionType) - ITEM_ACTIONS
-
 
 class AutomationNodeKind(StrEnum):
-    """The node kinds of an automation graph (spec 116).
-
-    FILTER and GATE stay apart even though RADD-918 gave them one implementation,
-    because they answer different questions on the canvas: a filter is a
-    predicate over EACH ITEM answering with a SUBSET, a gate is a question
-    answered ONCE for the packet. "Changed by someone in QA" is not a property
-    any single item has. Sharing machinery is not the same as sharing a concept.
-
-    SOURCE is the fifth (RADD-919). Every other kind can only narrow what the
-    trigger handed it, so an automation could never reach an item the event did
-    not name — "when this ships, find everything blocked by it" was inexpressible
-    with any arrangement of filters. A source PRODUCES items, which is a
-    different verb from every other node here and so a different kind.
+    """Node kinds (spec 116). FILTER answers per ITEM with a subset; GATE answers
+    ONCE for the packet ("changed by someone in QA" is not a property of an item).
+    SOURCE (RADD-919) PRODUCES items; every other kind can only narrow them.
     """
 
     TRIGGER = "trigger"
@@ -333,32 +278,11 @@ TYPE_FILTER_SLQ = "filter.slq"
 TYPE_SEARCH_SLQ = "search.slq"
 ACTION_TYPE_PREFIX = "action."
 
-#: Spec 119: reaching this node records a FINDING against the draft being
-#: validated, and passes the packet on unchanged so several checks can chain off
-#: one branch.
-#:
-#: An ACTION kind rather than a sixth `AutomationNodeKind`, deliberately. Its
-#: port behaviour is byte-identical to every other action's — one `out` that
-#: carries its input through — so a new kind would buy a `PORTS_BY_KIND` row, a
-#: `BUILTIN_ARITY` row, a SPA `NodeKind` member and a canvas visual, all to
-#: express a difference that lives entirely in what the node DOES. That is what
-#: `type` is for. On an ordinary event walk it is a no-op that passes through:
-#: nothing is collecting findings there, which is the honest answer rather than
-#: an error about a node someone wired in the wrong graph.
-TYPE_VALIDATION_FAIL = "validation.fail"  # retired by RADD-1329; the migration rewrites it
-
 #: RADD-1329: the two TERMINAL verdict nodes of a validation graph. A submission
 #: is refused only because a BLOCK node ran; a WARN node shows its findings and
 #: lets the person submit again to create anyway.
 TYPE_VERDICT_BLOCK = "verdict.block"
 TYPE_VERDICT_WARN = "verdict.warn"
-
-
-#: RADD-1322: the ports, outputs and arity of every built-in node type used to
-#: live in side tables here (BUILTIN_PORTS / BUILTIN_OUTPUTS / BUILTIN_ARITY).
-#: They are fields of each node's `AutomationNodeSpec` now —
-#: `builtin_actions.py` and `builtin_routers.py` — so a built-in and a
-#: contributed node are described, validated and run the same way.
 
 
 class SearchMode(StrEnum):
@@ -381,9 +305,7 @@ class GraphOrientation(StrEnum):
     HORIZONTAL = "horizontal"
 
 
-# Guard rails for a stored graph, mirroring conditions.MAX_DEPTH/MAX_NODES:
-# validated on write and enforced again at run time, so a hand-crafted DB row
-# cannot wedge the engine.
+# Guard rails validated on write and re-checked at run time (hand-edited rows).
 MAX_GRAPH_NODES = 60
 MAX_GRAPH_EDGES = 120
 # A graph may hold several triggers (spec 116 revision): "on create OR on a
@@ -415,12 +337,7 @@ class RunSource(StrEnum):
 
 
 class RunStatus(StrEnum):
-    """How a recorded run ended (RADD-1266).
-
-    Ranked in `runs.status_of`: a run with one refused action and three applied
-    ones reads as REFUSED, because the refusal is the thing someone opens the
-    row to find out about — "it mostly worked" is what the counts beside it say.
-    """
+    """How a recorded run ended (RADD-1266); ranked in `runs.status_of`."""
 
     APPLIED = "applied"  # at least one action resolved and was applied
     NOTHING_TO_DO = "nothing_to_do"  # the walk ran and no action resolved
@@ -445,15 +362,10 @@ class AutomationEvent(StrEnum):
 # This module's cursor in the events stream (mirrors webhooks.dispatcher).
 CONSUMER_NAME = "automations.engine"
 
-# The system actor: a REAL users row (seeded by this module's migration so the
-# comments.author_id FK resolves) that integrations write as, and that an
-# automation with no author runs as. It is NOT the loop guard — that is the
-# `automated` event marker (spec 116, RADD-1308). Instance-admin so authz never
-# blocks it.
+
 class PlanKind(StrEnum):
     """What a resolved automation action DOES (RADD-898) — the vocabulary the
-    engine's planner and applier share. Was a comment on `_Plan.kind`; a typo in
-    one branch was invisible."""
+    engine's planner and applier share."""
 
     ITEM_UPDATE = "item_update"
     COMMENT = "comment"
@@ -468,6 +380,9 @@ class PlanKind(StrEnum):
     SKIP = "skip"
 
 
+# The system actor: a REAL users row (seeded by migration) that integrations write
+# as and author-less automations run as. NOT the loop guard (that is `automated`).
+# Instance-admin so authz never blocks it.
 SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
 SYSTEM_ACTOR_EMAIL = "automation@radd.system"
 SYSTEM_ACTOR_NAME = "Automation"

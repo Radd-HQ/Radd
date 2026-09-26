@@ -8,14 +8,10 @@ from radd.db import Base
 
 
 class PageCollabDoc(Base):
-    """The encoded Yjs state of a page's live document (spec 122).
-
-    One row per page, written debounced while a room is open and when its last
-    client leaves. `page_version` is the `pages.version` the state corresponds
-    to: a room opening with a row whose version matches the page's RESUMES it;
-    any other row is discarded, because the page was written by something that
-    was not this room and the markdown is the truth.
-    """
+    """The encoded Yjs state of a page's live document (spec 122), one row per
+    page. A room RESUMES it only when `page_version` matches the page's; any
+    other row is discarded — something else wrote the page, and the markdown is
+    the truth."""
 
     __tablename__ = "page_collab_docs"
 

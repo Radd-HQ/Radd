@@ -213,7 +213,7 @@ async def test_the_digest_sends_on_a_rows_only_instance(
     environment and gated on `settings.smtp_host`, so on a rows-only instance it
     returned 0 forever and stamped nothing.
 
-    `state_changed` is deliberately not in `DEFAULT_EMAIL_TYPES`, so the row is
+    `state_changed` is deliberately not mailed by default, so the row is
     the digest's by construction rather than by the per-event mailer having
     passed over it.
     """

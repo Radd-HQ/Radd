@@ -1,15 +1,11 @@
-"""Pure decision helpers for the pages module (unit-tested, no DB).
-
-The service layer feeds these plain values so the invariants many flows depend
-on — no page-tree cycles, when an edit snapshots a version — stay testable
-without a database.
-"""
+"""Pure decision helpers for the pages module (unit-tested, no DB): tree cycles,
+version snapshots, slugs, paths, archived-subtree visibility."""
 
 import uuid
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Protocol
 
-from .types import MAX_QUERY_CHARS, SLUG_MAX_CHARS, SLUG_SEPARATOR_RE, TSQUERY_TOKEN_RE
+from .types import SLUG_MAX_CHARS, SLUG_SEPARATOR_RE
 
 
 def would_create_cycle(
@@ -47,23 +43,8 @@ def should_snapshot(
     return title_changed or body_changed
 
 
-def build_tsquery(q: str) -> str:
-    """User text → a safe prefix tsquery string: `render & farm:*` (pure).
-
-    Same contract as the search module's: tokenize on non-word separators
-    (dropping tsquery metacharacters), AND the terms, prefix-star the LAST
-    term so type-ahead matches mid-word. Empty result = nothing searchable.
-    """
-    tokens = TSQUERY_TOKEN_RE.findall(q[:MAX_QUERY_CHARS])
-    if not tokens:
-        return ""
-    quoted = [f"'{token}'" for token in tokens]
-    quoted[-1] += ":*"
-    return " & ".join(quoted)
-
-
 def slugify(name: str) -> str:
-    """Space name → a cosmetic slug: lowercase, dash-separated, bounded."""
+    """Space name → its slug: lowercase, dash-separated, bounded."""
     slug = SLUG_SEPARATOR_RE.sub("-", name.lower()).strip("-")
     return slug[:SLUG_MAX_CHARS] or "space"
 
@@ -81,12 +62,8 @@ def page_slugify(title: str) -> str:
 
 
 def unique_slug(candidate: str, taken: Collection[str]) -> str:
-    """`candidate`, or the first free `candidate-2`, `candidate-3`, … .
-
-    Pure so the collision rule is testable without a database, and shared by
-    creation and the explicit rename — two implementations of "what happens when
-    two pages want the same URL" would eventually disagree.
-    """
+    """`candidate`, or the first free `candidate-2`, `candidate-3`, … — the one
+    collision rule, shared by creation and rename."""
     if candidate not in taken:
         return candidate
     suffix = 2
@@ -104,11 +81,9 @@ class PathRow(Protocol):
 
 
 def page_paths(rows: Iterable[PathRow]) -> dict[uuid.UUID, str]:
-    """Every row's path — `parent-slug/child-slug/…`, space-relative — from the
-    rows themselves (RADD-1233). Nothing is stored: the tree is loaded whole per
-    space already, so the path is a fold over rows that are in memory anyway.
-    A row whose parent is missing (a restricted ancestor dropped by the reader
-    filter) starts its path where its visible ancestry does."""
+    """Every row's space-relative path, `parent-slug/child-slug/…`, folded over
+    the rows (RADD-1233). A row whose parent is missing (a restricted ancestor
+    the reader filter dropped) starts where its visible ancestry does."""
     by_id = {row.id: row for row in rows}
     cache: dict[uuid.UUID, str] = {}
 
@@ -133,13 +108,9 @@ def page_paths(rows: Iterable[PathRow]) -> dict[uuid.UUID, str]:
 
 
 def walk_path(rows: Iterable[PathRow], segments: Sequence[str]) -> uuid.UUID | None:
-    """The page at `segments`, walking the tree from the root, or None.
-
-    `rows` need only hold the candidates — the live pages whose slug appears in
-    `segments` — which is what makes resolution one query: the walk matches
-    `parent_id` level by level, and a same-named page at another depth simply
-    never matches its level's parent.
-    """
+    """The page at `segments`, walking from the root, or None. `rows` need hold
+    only the candidates (slug in `segments`): the walk matches `parent_id` level
+    by level, so a same-named page at another depth never matches."""
     if not segments:
         return None
     by_parent: dict[uuid.UUID | None, dict[str, uuid.UUID]] = {}
@@ -154,15 +125,28 @@ def walk_path(rows: Iterable[PathRow], segments: Sequence[str]) -> uuid.UUID | N
     return parent
 
 
+def ancestor_ids(
+    parent_of: Mapping[uuid.UUID, uuid.UUID | None], page_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """`page_id`'s ancestors, nearest first, stopping at a root or at a parent
+    outside `parent_of`. Bounded by the map's size, so a loop in the data ends
+    instead of spinning."""
+    chain: list[uuid.UUID] = []
+    current = parent_of.get(page_id)
+    for _ in range(len(parent_of) + 1):
+        if current is None or current not in parent_of:
+            break
+        chain.append(current)
+        current = parent_of[current]
+    return chain
+
+
 def visible_page_ids(
     parent_of: Mapping[uuid.UUID, uuid.UUID | None],
     archived: frozenset[uuid.UUID] | set[uuid.UUID],
 ) -> set[uuid.UUID]:
-    """Pages visible in the tree: not archived and no archived ancestor.
-
-    Archiving prunes the whole subtree from the default listing without
-    touching descendant rows (they come back when the ancestor is restored).
-    """
+    """Pages visible in the tree: not archived and no archived ancestor —
+    archiving prunes a subtree without touching its rows."""
     visible: set[uuid.UUID] = set()
     for page_id in parent_of:
         current: uuid.UUID | None = page_id

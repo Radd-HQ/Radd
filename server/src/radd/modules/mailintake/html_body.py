@@ -1,21 +1,8 @@
 """HTML → markdown-ish text for HTML-only mail (RADD-956).
 
-Inbound mail is the most reliably hostile input Radd accepts: anyone with an
-address can send it and nothing in it is trustworthy. An HTML-only message is
-also completely ordinary — Outlook, most marketing systems and plenty of phones
-send nothing else — so dropping it produces a blank ticket, which is what
-happened before this.
-
-**This strips markup rather than sanitising it, and that is the stronger
-choice.** Sanitising keeps an allow-list of tags and attributes, so its safety is
-the completeness of that list; every sanitiser CVE is a gap in one. Here nothing
-survives as markup at all: the output is text, the body is rendered as markdown
-downstream, and Radd's own viewer escapes raw HTML anyway (verified against the
-real renderer in RADD-942). There is no allow-list to get wrong.
-
-It is deliberately not a general HTML-to-markdown converter. Tables, nested
-lists and layout are flattened. The goal is a readable ticket body, not a
-faithful reproduction of a marketing email.
+Markup is STRIPPED, not sanitised: nothing survives as markup, so there is no
+allow-list to get wrong. Tables, nested lists and layout are flattened — the
+goal is a readable ticket body, not a faithful rendering.
 """
 
 from __future__ import annotations

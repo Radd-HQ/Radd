@@ -1,13 +1,6 @@
-"""Requester portal (spec 73): the intake-form directory for signed-in users.
-
-Eligibility = the form is ENABLED and (allow_public OR a `form_shares` row
-matches the actor directly or one of their teams). The share IS the grant —
-exactly the public-form trust model, so submits run as the SYSTEM actor with
-`reporter_id=actor.id` (a known user: no mail-contact/ack path). Managing the
-share list lives in service.update_sharing (`form.manage`); everything here is
-for eligible visitors, and an ineligible/unknown/disabled form is one 404 — a
-form you can't use might as well not exist.
-"""
+"""Requester portal (spec 73). A form is eligible when ENABLED and (allow_public
+or shared with the actor or their teams); the share IS the grant, so submits run
+as the SYSTEM actor with `reporter_id=actor.id`. Ineligible is one 404."""
 
 import uuid
 
@@ -39,10 +32,8 @@ from .types import FormEntity
 
 
 async def trimmed_read(session: AsyncSession, form: Form) -> PublicFormRead:
-    """The trimmed render payload: form chrome + each exposed field WITH the
-    definition bits the widgets need — a portal sharee (spec 73) may not read
-    the field registry. Lived in public.py until RADD-828 removed the
-    anonymous path; the portal is its only caller now."""
+    """The trimmed render payload with field definitions inlined — a portal visitor
+    may not read the field registry."""
     project = await projects_service.get_project(session, form.project_id)
     definitions = {
         definition.key: definition
@@ -89,13 +80,10 @@ async def _eligible_form(session: AsyncSession, form_id: uuid.UUID, actor: User)
         if form.allow_public:
             return form
         team_ids = await teams_service.user_team_ids(session, actor.id)
-        share = await session.scalar(
-            select(FormShare.id)
-            .where(FormShare.form_id == form.id)
-            .where(or_(FormShare.user_id == actor.id, FormShare.team_id.in_(team_ids)))
-            .limit(1)
+        shared = await session.scalar(
+            _shared_form_ids(actor, team_ids).where(FormShare.form_id == form.id).limit(1)
         )
-        if share is not None:
+        if shared is not None:
             return form
     raise NotFoundError(FormEntity.FORM, form_id)
 
@@ -141,8 +129,7 @@ async def nav_portal_visible(session: AsyncSession, actor: User) -> bool:
 async def render_portal_form(
     session: AsyncSession, form_id: uuid.UUID, actor: User
 ) -> PortalFormRead:
-    """Render payload for an ELIGIBLE actor: the spec-62 public trimming (the
-    visitor may not read the registry) plus the form id + project ref."""
+    """Render payload for an ELIGIBLE actor: the trimmed form plus its id and project."""
     form = await _eligible_form(session, form_id, actor)
     project = await projects_service.get_project(session, form.project_id)
     base = await trimmed_read(session, form)
@@ -162,14 +149,8 @@ async def render_portal_form(
 async def _my_team_options(
     session: AsyncSession, form: Form, actor: User
 ) -> list[PortalTeamOption]:
-    """The teams THIS submitter may share with (RADD-798).
-
-    Their own teams, never the full list: offering every team would let anyone
-    drop a request into any team's queue, and this picker is the only thing
-    between "share with my team" and "assign work to strangers". The server
-    re-checks the choice at submit regardless — a list is a convenience, not a
-    control.
-    """
+    """The submitter's OWN teams only (RADD-798) — offering every team would let
+    anyone drop work into a stranger's queue. Re-checked at submit."""
     if not form.team_picker_enabled:
         return []
     team_ids = await teams_service.user_team_ids(session, actor.id)
@@ -185,12 +166,9 @@ async def _my_team_options(
 async def _resolve_shared_team(
     session: AsyncSession, form: Form, actor: User, team_id: uuid.UUID | None
 ) -> uuid.UUID | None:
-    """Validate a submitted team choice. UI is not enforcement (RADD-798).
-
-    Refuses a team the submitter does not belong to, and refuses ANY team when
-    the form has no picker — otherwise a hand-made request could attach itself
-    to a team's queue on a form whose author deliberately turned sharing off.
-    """
+    """Validate a submitted team choice server-side (UI is not enforcement):
+    refused for a team the submitter is not in, and for ANY team on a form with
+    no picker."""
     if team_id is None:
         return None
     if not form.team_picker_enabled:
@@ -203,16 +181,12 @@ async def _resolve_shared_team(
 async def submit_portal_form(
     session: AsyncSession, form_id: uuid.UUID, data: FormSubmit, actor: User
 ) -> PublicSubmitResult:
-    """Create the item as the SYSTEM actor with the visitor as reporter — the
-    sharee may hold no item.create anywhere; the share is the grant. Form
-    required-overrides + registry validation apply (422), like the public path."""
-    # Deferred: automations loads after forms in RADD_MODULES (public.py idiom).
+    """Create as the SYSTEM actor with the visitor as reporter: the share is the grant."""
+    # Deferred: automations loads after forms.
     from radd.modules.automations.types import SYSTEM_ACTOR_ID
 
     form = await _eligible_form(session, form_id, actor)
-    # RADD-798: validate the team choice HERE, before anything is written. The
-    # client only offers the submitter's own teams; that is presentation, and a
-    # hand-made request must meet the same rule.
+    # RADD-798: validate the team choice before anything is written.
     team_id = await _resolve_shared_team(session, form, actor, data.team_id)
     system = await auth.get_user(session, SYSTEM_ACTOR_ID)
     item = await service.submit_form(

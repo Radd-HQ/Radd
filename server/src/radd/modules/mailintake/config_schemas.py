@@ -1,13 +1,6 @@
-"""Wire shapes for Settings → Email (RADD-958).
-
-**Secrets are write-only.** Every read model carries `has_secret: bool` and never
-the value — the same rule Storage, Sign-in and AI follow. An admin who needs to
-know the password should read it from wherever they store passwords, not from a
-settings screen that anyone with the atom can open.
-
-An omitted secret on update means "leave it alone", which is what makes editing a
-port without re-typing a password possible. That is `model_fields_set`, not a
-sentinel: an explicit empty string is a deliberate "clear it".
+"""Wire shapes for Settings → Email (RADD-958). Secrets are write-only: reads
+carry `has_secret`, never the value. On update an OMITTED secret is unchanged
+(`model_fields_set`) and an explicit "" clears it.
 """
 
 from __future__ import annotations
@@ -27,16 +20,10 @@ from .types import (
 
 
 class MailKindInfo(BaseModel):
-    """What the add-a-source / add-a-sender form needs to prefill itself
-    (RADD-969) — the spec-110 `GET /sso/kinds` shape.
-
-    `host`/`port`/`starttls` describe the kind's TRANSPORT for the half this
-    entry belongs to: IMAP under `sources`, SMTP under `senders`. `preset` is
-    the one the form branches on — true means the connection is answered, so
-    those fields are hidden rather than shown pre-filled: a field showing
-    `imap.gmail.com` invites someone to edit it, and the edited value would then
-    outlive the preset.
-    """
+    """What the add form needs to prefill itself (RADD-969). `host`/`port`/
+    `starttls` are IMAP under `sources`, SMTP under `senders`. `preset` true = the
+    connection is answered, so the form HIDES those fields (an edited value would
+    outlive the preset)."""
 
     #: A `MailSourceKind` value under `sources`, a `MailSenderKind` under `senders`.
     kind: str
@@ -64,8 +51,7 @@ class MailSourceRead(BaseModel):
     kind: MailSourceKind
     enabled: bool
     address: str
-    #: RAW, as stored — blank on a preset kind, which is what the edit form has
-    #: to show so a saved round trip does not freeze the preset into the row.
+    #: RAW, as stored (blank on a preset kind), so a round trip does not freeze it.
     host: str
     port: int
     username: str
@@ -73,13 +59,11 @@ class MailSourceRead(BaseModel):
     default_project_id: uuid.UUID | None
     #: "Send replies from" (RADD-979) — NULL means the default sender.
     sender_id: uuid.UUID | None = None
-    #: The trusted `Authentication-Results` authserv-id (RADD-1032). NULL/blank =
-    #: trust nothing (the default), so `From:` is taken at face value as before.
+    #: The trusted `Authentication-Results` authserv-id (RADD-1032); blank = trust nothing.
     trusted_authserv_id: str | None = None
     has_secret: bool
     rule_count: int = 0
-    #: What the poller will actually use (RADD-969) — row value or the kind's
-    #: preset. The LIST reads these; the FORM reads the raw ones above.
+    #: What the poller will use (RADD-969); the LIST reads these, the FORM the raw ones.
     resolved_host: str = ""
     resolved_port: int = 0
     resolved_username: str = ""
@@ -92,17 +76,14 @@ class MailSourceWrite(BaseModel):
     address: str = ""
     #: Blank on a preset kind. A stored value overrides the preset.
     host: str = ""
-    #: 0 = unset, so the preset answers. Non-zero overrides it.
+    #: 0 = unset, so the preset answers.
     port: int = DEFAULT_IMAP_PORT
     username: str = ""
     folder: str = DEFAULT_IMAP_FOLDER
     default_project_id: uuid.UUID | None = None
-    #: The sender that answers for this address (RADD-979). None = the default
-    #: sender, which is what every source did before the binding existed.
+    #: The sender that answers for this address (RADD-979); None = the default.
     sender_id: uuid.UUID | None = None
-    #: The `Authentication-Results` authserv-id to trust (RADD-1032). "" / None =
-    #: trust nothing, the default and today's exact behaviour. Normalised to None
-    #: when blank so "unset" is one value, not two.
+    #: The authserv-id to trust (RADD-1032); "" / None = trust nothing.
     trusted_authserv_id: str | None = None
     #: Omitted = unchanged. "" = clear.
     secret: str | None = None
@@ -157,17 +138,14 @@ class MailRuleWrite(BaseModel):
     rule_type: MailRuleType
     enabled: bool = True
     #: Per-type: `{addresses: []}` / `{patterns: []}` / `{contains: []}` /
-    #: `{prompt, answers: [{answer, project_id}]}`. Loosely typed on purpose —
-    #: a plugin's rule kind brings its own shape, and the handler validates.
+    #: `{prompt, answers: [{answer, project_id}]}` — validated by the handler.
     config: dict = Field(default_factory=dict)
     project_id: uuid.UUID | None = None
     position: float | None = None
 
 
 class MailRuleReorder(BaseModel):
-    """Full ordered list of rule ids. Sent whole rather than as a pair of
-    swapped positions: a drag reorder is one intent, and applying it as N
-    independent updates leaves a half-ordered chain if one fails."""
+    """Full ordered list of rule ids — one intent, never a half-ordered chain."""
 
     rule_ids: list[uuid.UUID]
 
@@ -177,9 +155,7 @@ class MailTestRequest(BaseModel):
 
 
 class MailTestResult(BaseModel):
-    """What a test send actually did. `message_id` is the one the RELAY
-    reported, which is the value threading depends on (RADD-955) — showing it
-    turns 'did that work' into something an admin can verify."""
+    """What a test send did; `message_id` is the one the RELAY reported (RADD-955)."""
 
     ok: bool
     message_id: str = ""
@@ -187,12 +163,7 @@ class MailTestResult(BaseModel):
 
 
 class RoutingPreviewRequest(BaseModel):
-    """Ask the chain where a message WOULD go, without sending one.
-
-    Storage learned this the hard way: an ordered rule chain nobody can dry-run
-    makes "why did this land there" unanswerable, so its page shows which rule
-    captured an upload. Same here.
-    """
+    """Ask the chain where a message WOULD go, without sending one."""
 
     recipient: str = ""
     sender: str = ""
@@ -201,18 +172,7 @@ class RoutingPreviewRequest(BaseModel):
 
 
 class RoutingRuleOutcome(BaseModel):
-    """One rule's verdict on the sample message (RADD-989).
-
-    `status` is a `MailRuleStatus` value. The one that earns this schema its
-    place is `errored`: a rule that CRASHED and a rule that declined both let the
-    chain continue to the source default, and a preview that reports only the
-    destination describes them identically — so a broken rule reads as an
-    inapplicable one, which is how a KeyError went unnoticed for a release.
-
-    Since RADD-994 the list is the WHOLE chain, so `disabled` and `not_reached`
-    arrive here too. Absence now means one thing — no such rule — instead of
-    three, which is what "why didn't my rule fire" is actually asking.
-    """
+    """One rule's verdict on the sample message (a `MailRuleStatus` value)."""
 
     rule_id: uuid.UUID | None = None
     rule_name: str = ""
@@ -227,5 +187,4 @@ class RoutingPreviewResult(BaseModel):
     matched_rule_name: str = ""
     reason: str = ""
     #: The whole chain, in order: consulted, skipped (disabled) or never reached.
-    #: Additive — the destination fields above are unchanged.
     outcomes: list[RoutingRuleOutcome] = []

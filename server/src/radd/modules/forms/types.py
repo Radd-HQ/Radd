@@ -4,9 +4,7 @@ class FormEvent(StrEnum):
     CREATED = "form.created"
     UPDATED = "form.updated"
     DELETED = "form.deleted"
-    #: RADD-1320 — someone submitted this form and an issue was created. The
-    #: item, the form's project and the submitter are subjects; `item.created`
-    #: alone could not say WHICH form produced the issue.
+    #: RADD-1320: a form was submitted and an item created — says WHICH form.
     SUBMITTED = "form.submitted"
     #: RADD-800 — a person's submission staging area was reclaimed. Emitted by
     #: the age sweep, and named `.deleted` because that is exactly what it is

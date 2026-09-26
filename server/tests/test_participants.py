@@ -19,11 +19,7 @@ from radd.modules.auth.models import GlobalRoleGrant, User
 from radd.modules.auth.types import InstanceRole, Permission
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.notify import (
-    consumer as notify_consumer,
-    planner,
-    service as notify_service,
-)
+from radd.modules.notify import audience as notify_audience, planner, service as notify_service
 from radd.modules.notify.types import NotificationType
 from radd.modules.participants import service as participants
 from radd.modules.participants.schemas import ParticipantAdd
@@ -161,13 +157,13 @@ async def test_team_fan_out_is_live_and_direct_users_auto_watch(db, actor):
     await participants.add_participant(db, item.id, ParticipantAdd(user_id=direct.id), reporter)
 
     # Direct user participant → item_watchers row on add (one fan-out mechanism).
-    assert await notify_service.is_watching(db, item.id, direct.id)
+    assert direct.id in await notify_service.watcher_ids(db, item.id)
     # Team participants are NOT individually watched — membership resolves live.
-    assert not await notify_service.is_watching(db, item.id, stayer.id)
+    assert stayer.id not in await notify_service.watcher_ids(db, item.id)
 
     # A comment.created plan built through the consumer's recipient union
     # (watchers ∪ participant-team CURRENT members) reaches both team members.
-    recipients = await notify_consumer.recipient_ids(db, item.id)
+    recipients = await notify_audience.recipient_ids(db, item.id)
     assert {stayer.id, leaver.id, direct.id} <= recipients
     plan = planner.plan_comment_created(
         {"excerpt": "hi", "visibility": "public"},
@@ -181,7 +177,7 @@ async def test_team_fan_out_is_live_and_direct_users_auto_watch(db, actor):
 
     # Leaving the team stops delivery WITHOUT cleanup rows (spec 72 §3).
     await teams_service.remove_team_member(db, team.id, leaver.id)
-    recipients = await notify_consumer.recipient_ids(db, item.id)
+    recipients = await notify_audience.recipient_ids(db, item.id)
     assert leaver.id not in recipients and stayer.id in recipients
     plan = planner.plan_comment_created(
         {"excerpt": "again", "visibility": "public"},

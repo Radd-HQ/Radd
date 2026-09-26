@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -97,15 +98,7 @@ async def item_sla(item_id: uuid.UUID, session: Session, user: CurrentUser) -> I
     if policy is not None:
         evaluated = await evaluation.evaluate_items(session, policy, [item_id])
         timers_read = [
-            TimerRead(
-                kind=kind,
-                target_minutes=target,
-                due_at=status.due_at,
-                met_at=status.met_at,
-                breached=status.breached,
-                paused=status.paused,
-                remaining_seconds=status.remaining_seconds,
-            )
+            TimerRead(kind=kind, target_minutes=target, **asdict(status))
             for kind, (target, status) in evaluated.get(item_id, {}).items()
         ]
         if timers_read:

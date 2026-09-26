@@ -4,6 +4,8 @@ from enum import IntEnum, StrEnum
 
 from pycrdt import YMessageType, YSyncMessageType
 
+from radd.modules.auth.types import Permission
+
 
 class CollabRole(StrEnum):
     """What a session may do to the live document. An observer's awareness
@@ -12,24 +14,23 @@ class CollabRole(StrEnum):
     EDITOR = "editor"
     OBSERVER = "observer"
 
-
-class CollabEntity(StrEnum):
-    SESSION = "collab_session"
-    DOCUMENT = "page_collab_doc"
+    @property
+    def permission(self) -> Permission:
+        """The page atom this role is joined, and re-checked, against."""
+        return Permission.PAGE_WRITE if self is CollabRole.EDITOR else Permission.PAGE_READ
 
 
 #: This module's id in the kernel registry — the plugin's `name`.
 PLUGIN_ID = "collab"
 
-#: WebSocket close codes (4000-range = application-defined). 4401 is the
-#: realtime module's, kept numerically identical so a client has one meaning.
+#: WebSocket close codes (4000-range). 4401 is numerically the realtime
+#: module's, so a client has one meaning for it.
 WS_CLOSE_UNAUTHENTICATED = 4401
 #: `session` missing, unknown, for another user/page, or its room is gone —
 #: the client must `POST …/join` again.
 WS_CLOSE_SESSION_UNKNOWN = 4403
-#: The page body was replaced by a write that did not come from this room
-#: (an import, an MCP update while only observers were connected): the room
-#: was reset and every client must rejoin.
+#: The body was replaced by a write not from this room (an import, an MCP
+#: update while only observers were connected): every client must rejoin.
 WS_CLOSE_DOCUMENT_REPLACED = 4409
 
 #: An empty Yjs update — what `Doc.get_update()` answers for an empty document
@@ -38,10 +39,9 @@ EMPTY_UPDATE = b"\x00\x00"
 
 
 class YClientMessage(IntEnum):
-    """y-websocket message types the CLIENT sends that pycrdt's `YMessageType`
-    does not name. A provider asks for every awareness state on connect; a
-    server that stays silent leaves the newcomer thinking it is alone until
-    the others' next heartbeat (the saver election disagreed for 15 s)."""
+    """Client y-websocket messages pycrdt's `YMessageType` does not name. A
+    provider asks for every awareness state on connect; silence leaves the
+    newcomer alone until the next heartbeat (two savers for 15 s)."""
 
     QUERY_AWARENESS = 3
 

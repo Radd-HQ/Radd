@@ -60,12 +60,12 @@ from radd.modules.mailintake.types import (
     MailSenderKind,
     MailSourceKind,
 )
-from radd.modules.notify import consumer, emailer, mailer, retry, service as notify_service
+from radd.modules.notify import consumer, emailer, mailer, retry, rules as notify_rules
+from radd.modules.notify import service as notify_service
 from radd.modules.notify.kinds import every_kind
 from radd.modules.notify.models import Notification
 from radd.modules.notify.types import (
     CONSUMER_NAME,
-    DEFAULT_EMAIL_TYPES,
     RELATIONSHIP_SCOPES,
     Channel,
     NotificationType,
@@ -554,7 +554,7 @@ async def test_inbox_only_still_reaches_the_mailbox_through_the_digest_once(
 async def test_a_user_who_never_saved_a_preference_gets_the_default_set(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """No prefs row = `DEFAULT_EMAIL_TYPES`, the personally-directed four.
+    """No prefs row = each kind's default channel: the personally-directed set mails.
 
     So a mention now mails as it happens — under RADD-968's constant only
     `commented` ever did — while a state change on something they merely watch
@@ -562,8 +562,8 @@ async def test_a_user_who_never_saved_a_preference_gets_the_default_set(
     default is only right if it stopped somewhere.
     """
     _agent, _project, item = world
-    assert NotificationType.MENTIONED in DEFAULT_EMAIL_TYPES
-    assert NotificationType.STATE_CHANGED not in DEFAULT_EMAIL_TYPES
+    assert notify_rules.resolve(NotificationType.MENTIONED).email
+    assert not notify_rules.resolve(NotificationType.STATE_CHANGED).email
     newcomer = await _user(db, name="Nia", email=f"n-{uuid.uuid4().hex[:8]}@example.com")
     assert await notify_service.get_prefs(db, newcomer.id) is None, "the absence IS the fixture"
     await _notify(db, newcomer, NotificationType.MENTIONED, item, source="comment")
@@ -584,7 +584,7 @@ async def test_being_shared_into_an_issue_mails_the_person_it_reaches(
 ):
     """RADD-978, end to end: the real add, the real consumer, the real tick.
 
-    `participant_added` is personally directed, so it joins `DEFAULT_EMAIL_TYPES`
+    `participant_added` is personally directed, so it mails by default
     — someone shared into an issue hears about it now, not in tomorrow's digest,
     which is the whole point of telling them at all. The recipient holds nothing
     on the project: they pass the consumer's read gate through the Baseline's
@@ -593,7 +593,7 @@ async def test_being_shared_into_an_issue_mails_the_person_it_reaches(
     agent, project, item = world
     colleague = await _user(db, name="Colleague", email=f"p-{uuid.uuid4().hex[:8]}@example.com")
     assert await notify_service.get_prefs(db, colleague.id) is None, "the absence IS the fixture"
-    assert NotificationType.PARTICIPANT_ADDED in DEFAULT_EMAIL_TYPES
+    assert notify_rules.resolve(NotificationType.PARTICIPANT_ADDED).email
 
     await _share(db, item, agent, user_id=colleague.id)
 
@@ -622,8 +622,7 @@ async def test_a_preference_saved_before_the_type_existed_does_not_mail_it(
     """
     agent, _project, item = world
     settled = await _user(db, name="Settled", email=f"s-{uuid.uuid4().hex[:8]}@example.com")
-    # Verbatim what the migration wrote, not `default_email_types()` — the point
-    # is a row that predates the type.
+    # Verbatim what the migration wrote — the point is a row that predates the type.
     await _channels(
         db,
         settled,
@@ -652,8 +651,8 @@ async def test_a_type_mailed_from_a_non_comment_event_does_not_crash_the_tick(
 
     `mailer._comment_id` resolved the notification's event blindly, and an ITEM
     event's `entity_id` is the item — so the transport was handed an item uuid as
-    a comment id and the tick died on a foreign-key violation. `assigned` is in
-    `DEFAULT_EMAIL_TYPES`, so this was one assignment away on every instance with
+    a comment id and the tick died on a foreign-key violation. `assigned` mails by
+    default, so this was one assignment away on every instance with
     mailintake configured. It never fired in this file because every non-comment
     case here was written with `event_id=None`, which is the one shape that
     cannot reach the lookup.
@@ -851,7 +850,7 @@ async def test_the_digest_skips_a_service_account_and_stamps_it(
 ):
     """The other loop, which had the same bug and no end-to-end test at all.
 
-    `state_changed` is deliberately not in `DEFAULT_EMAIL_TYPES`, so these rows
+    `state_changed` is deliberately not mailed by default, so these rows
     are the digest's by construction rather than by the mailer having passed
     over them.
     """

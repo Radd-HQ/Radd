@@ -58,9 +58,9 @@ def test_a_holiday_pushes_the_deadline_a_full_day():
     Thursday is a holiday, when the last 10 hours burn on Friday."""
     horizon = FILED + timedelta(days=20)
     plain = non_working_pauses(FILED, horizon, MON_FRI)
-    assert deadline(FILED, ONE_DAY_MINUTES * 60, plain, FILED) == datetime(2026, 7, 2, 10, 0)
+    assert deadline(FILED, ONE_DAY_MINUTES * 60, plain) == datetime(2026, 7, 2, 10, 0)
     with_holiday = non_working_pauses(FILED, horizon, MON_FRI, {THURSDAY})
-    assert deadline(FILED, ONE_DAY_MINUTES * 60, with_holiday, FILED) == datetime(
+    assert deadline(FILED, ONE_DAY_MINUTES * 60, with_holiday) == datetime(
         2026, 7, 3, 10, 0
     )
 

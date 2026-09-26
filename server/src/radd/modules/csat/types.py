@@ -4,9 +4,7 @@ from enum import StrEnum
 
 
 class CsatEvent(StrEnum):
-    # Both emitted with entity_type=item so they land in the item's History feed
-    # (sla.breached precedent) and with actor_id=None so automation rules on them
-    # fire (the engine skips SYSTEM-actor events as its loop guard).
+    # entity_type=item (History feed); actor_id=None (the requester has no account).
     REQUESTED = "csat.requested"
     RESPONDED = "csat.responded"
 

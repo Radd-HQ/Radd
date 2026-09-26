@@ -1,9 +1,4 @@
-"""The page hook handlers (spec 122): nothing publishes over live work.
-
-Registered here rather than reached for by `pages`, because the dependency has
-exactly one legal direction: `collab` depends on `pages`, so it is the side
-that knows both names (the `automations/subscribers.py` shape).
-"""
+"""Page hook handlers (spec 122), registered here because collab depends on pages."""
 
 from __future__ import annotations
 
@@ -21,10 +16,8 @@ from .types import PLUGIN_ID
 
 
 def is_enabled() -> bool:
-    """Whether this module is still MOUNTED. `HookRegistry.on()` appends and
-    nothing takes it back, so a hot-disabled plugin would go on refusing saves
-    from a handler nobody can unregister — asked of the kernel registry, the
-    same way `automations.subscribers.is_enabled` asks."""
+    """Whether this module is still MOUNTED: `HookRegistry.on()` cannot
+    unregister, so a hot-disabled plugin asks the kernel registry."""
     return PLUGIN_ID in registries.plugins
 
 

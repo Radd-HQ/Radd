@@ -1,14 +1,7 @@
-"""scripts — admin-authored Python, run from automations (RADD-1269).
-
-A `core=False` plugin: on by default, disableable from the plugin manager. It
-owns a managed interpreter (a uv-built venv with the Radd SDK client and the
-packages an admin asks for) and two automation nodes — `script.run` (an action
-whose returned dict becomes tokens) and `script.decide` (a gate that takes the
-port the script names). The script's BODY lives on the node (RADD-1272), so the
-graph is the script and the graph's versions are its history. Scripts
-run OUT OF PROCESS with a short-lived key minted for the automation's
-identity, so a script can never exceed what the automation may already do.
-"""
+"""scripts — admin-authored Python run from automations (RADD-1269), optional.
+A uv-built interpreter plus two nodes, `script.run` and `script.decide`; the body
+lives on the node, so the graph's versions are its history. Runs OUT OF PROCESS
+with a short-lived key for the automation's identity."""
 
 from radd.kernel import NavItemSpec, EventTypeSpec, PermissionSpec, PluginUiManifest, RaddPlugin
 
@@ -17,8 +10,7 @@ from .router import router
 from .types import PERM_MANAGE, ScriptEvent
 
 plugin = RaddPlugin(
-    # RADD-1325: this plugin's automation-node inspectors ship in its own UI
-    # remote (./ui), registered through `automation.node.inspector`.
+    # The node inspectors ship in this remote (`automation.node.inspector`).
     ui=PluginUiManifest(
         remote="/plugins/scripts/remoteEntry.js", ui_api_version="1.5.0",
         nav=(NavItemSpec(key="scripts", label="Scripts", path="/settings/scripts",

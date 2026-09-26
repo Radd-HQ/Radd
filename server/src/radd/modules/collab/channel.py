@@ -1,17 +1,13 @@
 """The socket a room serves (spec 122): pycrdt's `Channel` over Starlette's
-WebSocket, carrying the two things the room itself must not know about.
+WebSocket, carrying what the room itself must not know about.
 
-* **The session cookie is re-validated** exactly as `realtime/router.py` does:
-  on an ABSOLUTE deadline (`realtime_session_refresh_seconds` — inbound traffic
-  cannot extend a revoked session) and on inbound frames, throttled to
-  `collab_frame_auth_seconds` because an editor's keystrokes arrive as frames
-  and a session lookup per keystroke would put the database behind the cursor.
-* **Current page access is checked before every outbound frame and inbound
-  document update**, as well as on the idle deadline. A valid login must never
-  preserve an old page/ancestor/space grant. Checks use fresh DB sessions.
-* **An observer's document updates are dropped here**, before the room sees
-  them: `YRoom.serve` applies every sync frame it is handed, so the role is
-  enforced by what the iterator yields, not by anything the room decides.
+* The session cookie is re-validated as `realtime/router.py` does: on an
+  ABSOLUTE deadline (traffic cannot extend a revoked session) and on inbound
+  frames, throttled to `collab_frame_auth_seconds` (keystrokes arrive as frames).
+* Page access is re-checked before every outbound frame, every inbound document
+  update and on the idle deadline — a live login never preserves an old grant.
+* An observer's document updates are dropped here: `YRoom.serve` applies every
+  sync frame it is handed, so the role is enforced by what the iterator yields.
 """
 
 from __future__ import annotations
@@ -29,7 +25,7 @@ from pycrdt import Channel
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ForbiddenError, NotFoundError
-from radd.modules.auth import authz, service as auth
+from radd.modules.auth import service as auth
 from radd.modules.pages import page_access
 
 from .types import (
@@ -124,12 +120,8 @@ class RoomChannel(Channel):
             if current is None or current.id != self._user_id:
                 await self._close(WS_CLOSE_UNAUTHENTICATED)
                 return False
-            permission = (
-                authz.Permission.PAGE_WRITE
-                if self.role == CollabRole.EDITOR else authz.Permission.PAGE_READ
-            )
             try:
-                await page_access.guard_page(session, current, self._page_id, permission)
+                await page_access.guard_page(session, current, self._page_id, self.role.permission)
             except (ForbiddenError, NotFoundError):
                 await self._close(WS_CLOSE_SESSION_UNKNOWN)
                 return False

@@ -1,15 +1,5 @@
-"""The page attachment parent (spec 102): wiki pages own files.
-
-Registered from the docs plugin so `attachments` never learns this module
-exists (its ParentBinding registry is the seam). `project_id_of` is None — a
-wiki file has no project for attachment routing/ACL context — but the page's
-SPACE is a scope since RADD-791, and that is what the guards below resolve
-against, so "who may attach in the render space" is an ordinary role grant.
-
-Known follow-up (documented in the spec): PUBLIC kb spaces render without a
-session, but downloads require one — public pages need a public mint path on
-the ordinary chokepoint — RADD-1147 gave it the actor, so they do.
-"""
+"""The page attachment parent (spec 102), registered here so `attachments` never
+learns pages exist. No project; the SPACE is the scope (RADD-791)."""
 
 import uuid
 

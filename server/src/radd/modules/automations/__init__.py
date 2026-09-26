@@ -23,14 +23,8 @@ from .validation import ValidationUnavailable
 async def _validation_blocked_handler(
     request: Request, exc: ValidationBlocked
 ) -> JSONResponse:
-    """Spec 119's error contract — the THIRD 422 vocabulary.
-
-    `findings`, not `errors`: the field registry's `errors` name a value the API
-    could not accept, and the workflow guards' name an edge it would not take.
-    A finding names something a PERSON should go and fix, carries the control it
-    belongs to, and is rendered against that control rather than in a list — so
-    reusing the older key would have made the client guess which kind it had.
-    """
+    """Spec 119's third 422 shape: `findings` (something a person should fix,
+    rendered against its control), not `errors` (a value the API refused)."""
     return JSONResponse(
         status_code=422,
         content={
@@ -39,13 +33,7 @@ async def _validation_blocked_handler(
                 finding_read(finding).model_dump() for finding in exc.verdict.findings
             ],
             "mode": exc.verdict.mode.value,
-            # DERIVED, not asserted — `blocks` is the same property that decides
-            # the 409 on `commit: always` and the `blocking` flag on a 200
-            # verdict, so every answer about this draft carries the same fact
-            # computed the same way. True by construction here (this error is
-            # only raised when it is), and written as the derivation anyway:
-            # the day that stops being true, the client should hear about it.
-            "blocking": exc.verdict.blocks,
+            "blocking": exc.verdict.blocks,  # derived, the same fact as the 409 and the 200
         },
     )
 
@@ -53,13 +41,7 @@ async def _validation_blocked_handler(
 async def _validation_unavailable_handler(
     request: Request, exc: ValidationUnavailable
 ) -> JSONResponse:
-    """The checks BROKE — which is not the submitter's problem (spec 119).
-
-    503 rather than the 422: a 422 says "this draft is wrong, here is what to
-    fix", and there is nothing here to fix. It also carries no `findings` key,
-    so a client cannot mistake an outage for a clean verdict and quietly create
-    what nobody checked.
-    """
+    """The checks BROKE (→ 503): nothing for the submitter to fix, and no `findings` key."""
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
@@ -75,8 +57,7 @@ plugin = RaddPlugin(
     # RADD-1323: the button, the clock and the draft check, as registered kinds.
     trigger_kinds=TRIGGER_KINDS,
     automation_templates=TEMPLATES,
-    # RADD-1168: emitted since spec 12 and never registered. Not triggers — a
-    # rule that fires on rules being edited is the loop guard's nightmare.
+    # Not triggers — a rule that fires on rules being edited is the loop guard's nightmare.
     event_types=(
         EventTypeSpec(
             AutomationEvent.CREATED, "Automation created", "Admin",
@@ -94,8 +75,7 @@ plugin = RaddPlugin(
             AutomationEvent.SCHEDULED, "Automation scheduled run", "System",
             trigger=False, entity_type="automation", audited=False,
         ),
-        # RADD-1266: audited, never a trigger — an automation that reacts to
-        # automations failing is the loop guard's nightmare.
+        # RADD-1266: audited, never a trigger.
         EventTypeSpec(
             AutomationEvent.RUN_FAILED, "Automation run failed", "Admin",
             trigger=False, entity_type="automation_rule",

@@ -300,9 +300,7 @@ async def test_sla_report_pins_outcomes_and_folds_csat_only_while_csat_is_loaded
         )
     )
     for item, rating in ((met, 5), (late, 3)):
-        survey = await csat_service.create_survey(
-            db, item_id=item.id, item_key=f"{project.key}-{item.number}"
-        )
+        survey = await csat_service.create_survey(db, item_id=item.id)
         await csat_service.record_response(db, survey.token, PublicCsatSubmit(rating=rating))
     await db.flush()
 

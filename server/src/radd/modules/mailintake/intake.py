@@ -1,12 +1,8 @@
-"""The provider-agnostic intake core (RADD-951).
+"""The provider-agnostic intake core (RADD-951): every decision about an inbound
+message happens here, and nothing here knows how it arrived — `sources/` is
+transport and authentication only.
 
-**Every decision about an inbound message happens here**, and nothing about it
-knows how the message arrived. The webhook source posts raw bytes; the IMAP
-poller fetches raw bytes; a Gmail adapter will hand over raw bytes. Logic that
-only one of them can reach is precisely the failure the abstraction exists to
-avoid, so `sources/` contains transport and authentication and nothing else.
-
-The order of the pipeline is the order the checks have to happen in:
+The pipeline order is the order the checks must happen in:
 
     guards   loops first — an autoresponder must not even be deduped
     dedup    before any write, because a retry is the common case
@@ -14,9 +10,7 @@ The order of the pipeline is the order the checks have to happen in:
     write    comment on the matched item, or a new one
     record   the inbound id, so a reply to THIS message threads too
 
-`Outcome` is what the transports translate into their own vocabulary — HTTP
-status for the webhook, a log line for the poller. It never carries an HTTP code
-itself: the core has no opinion about a protocol it cannot see.
+`Outcome` is protocol-free; each transport maps it (HTTP status, a log line).
 """
 
 from __future__ import annotations
@@ -31,10 +25,12 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ConflictError, ForbiddenError
+from radd.mailtypes import MailAttachment
 from radd.modules.attachments import service as attachments_service
 from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth import service as auth
 from radd.modules.auth.models import User
+from radd.modules.auth.types import UserSource
 from radd.modules.automations.intake import suppressed as intake_suppressed
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.comments import service as comments
@@ -48,7 +44,9 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from . import loops, parsing, quoting, routing, service, threading
-from .parsing import EmailPlan, MailAttachment
+from .models import MailSource
+from .parsing import EmailPlan
+from .signatures import detect
 from .types import (
     ATTACHMENTS_DROPPED_NOTE,
     ATTACHMENTS_MAX_BYTES,
@@ -77,21 +75,10 @@ logger = logging.getLogger(__name__)
 
 
 def _mail_facts(plan: EmailPlan, *, mailbox: str = "", matched_rule: str = "") -> dict:
-    """What a rule may condition on — and deliberately not the body (RADD-960).
-
-    Event payloads are readable by anything that can read the stream, and an
-    inbound mail body is customer content that already lives on the item behind
-    the item's own read gate. Copying it into the stream would quietly widen who
-    can see it, with no screen anywhere admitting that.
-
-    `sender_domain` is split out because "from a VIP domain" is the condition
-    people actually write, and asking every rule author to re-derive it from the
-    address means half of them get it wrong.
-
-    RADD-1318 added where it ARRIVED: `recipients` (every address it was
-    delivered to — the only place `help@` vs `billing@` is visible when aliases
-    share a mailbox), `mailbox` (the source's name) and `matched_rule` (the
-    routing rule that placed a new issue, "" when a fallback did).
+    """What a rule may condition on (RADD-960/1318) — deliberately NOT the body:
+    event payloads are readable by anything that reads the stream, and the body
+    already lives behind the item's read gate. `sender_domain` is split out
+    because "from a VIP domain" is the condition people write.
     """
     _, _, domain = plan.sender_email.partition("@")
     return {
@@ -123,18 +110,15 @@ class Outcome:
     item_id: uuid.UUID | None = None
     item_key: str = ""
     reason: str = ""
-    #: Set when a NEW item was opened by a message we can answer — the caller
-    #: sends the receipt AFTER the transaction commits, never before, and only
-    #: if `mail_send_ack` is on for the project (`service.send_ack`).
+    #: Set when a NEW item was opened by a message we can answer; the caller sends
+    #: the receipt AFTER commit (`service.send_ack`).
     ack: "AckPlan | None" = None
 
 
 @dataclass(frozen=True)
 class AckPlan:
-    """Everything one receipt needs, so a caller reads `outcome.ack` and nothing
-    else. In-Reply-To is not carried: the transport resolves it from
-    `mail_messages`, which already holds the inbound id recorded in the
-    transaction the caller commits before sending (RADD-970)."""
+    """Everything one receipt needs. No In-Reply-To: the transport resolves it from
+    `mail_messages` once the caller has committed the inbound id (RADD-970)."""
 
     item_id: uuid.UUID
     project_id: uuid.UUID
@@ -146,18 +130,13 @@ class AckPlan:
 
 @dataclass(frozen=True)
 class SenderAuth:
-    """Whether the source's TRUSTED gateway vouched for this `From:` (RADD-1032).
+    """Whether the source's TRUSTED gateway vouched for this `From:` (RADD-1032):
 
-    `verified` is a tri-state on purpose:
+        None   the source trusts no authserv-id — `From:` taken at face value
+        True   the trusted authserv-id stamped a pass and no fail
+        False  it stamped a fail, or nothing at all — DEMOTED to SYSTEM
 
-        None   the source trusts no authserv-id — today's behaviour exactly, so
-               `From:` is taken at face value and existing installs are unchanged.
-        True   the trusted authserv-id stamped a pass and no fail.
-        False  it stamped a fail, or said nothing at all (absent when required).
-
-    Only False DEMOTES: the message is recorded as received but attributed to
-    SYSTEM, never to the account whose address it may have forged. `detail` is the
-    human-readable why, shown in the note.
+    `detail` is the human-readable why, shown in the note.
     """
 
     verified: bool | None
@@ -169,14 +148,8 @@ class SenderAuth:
 
 
 def _check_sender_auth(plan: EmailPlan, trusted_authserv_id: str | None) -> SenderAuth:
-    """Read the trusted gateway's verdict for this message (RADD-1032, pure).
-
-    Radd is not doing crypto here — it is reading the SPF/DKIM/DMARC verdict its
-    own MX already stamped, and trusting that stamp because the admin named the
-    authserv-id it comes from. A message with no such stamp, or one showing a
-    fail, is not trusted: fail-closed, because the entire point is to stop a
-    forged `From:` speaking as a real account.
-    """
+    """Read the TRUSTED gateway's SPF/DKIM/DMARC stamp (RADD-1032) — not crypto.
+    Absent or failing = demoted: fail-closed."""
     if not trusted_authserv_id:
         return SenderAuth(None)
     verdicts = parsing.parse_auth_results(plan.authentication_results, trusted_authserv_id)
@@ -195,16 +168,9 @@ def _check_sender_auth(plan: EmailPlan, trusted_authserv_id: str | None) -> Send
 async def _sender_auth(
     session: AsyncSession, plan: EmailPlan, source_id: uuid.UUID | None
 ) -> SenderAuth:
-    """The verdict for this message under its source's trust policy (RADD-1032).
-
-    Loads the source once to read `trusted_authserv_id`; a message with no source
-    (a direct `accept` in a test, or the env-only path) trusts nothing and so
-    behaves exactly as before.
-    """
+    """The verdict under the source's trust policy; no source trusts nothing."""
     if source_id is None:
         return SenderAuth(None)
-    from .models import MailSource
-
     source = await session.get(MailSource, source_id)
     return _check_sender_auth(plan, source.trusted_authserv_id if source else None)
 
@@ -220,13 +186,9 @@ async def accept(
     source_id: uuid.UUID | None = None,
     default_project_id: uuid.UUID | None = None,
 ) -> Outcome:
-    """Take one parsed message all the way to an issue or a comment.
-
-    Raises on anything that is Radd's fault (a database failure, an unresolvable
-    default project). The webhook turns those into 5xx — a 4xx there would bounce
-    valid mail and tell the sender their message was rejected by policy when it
-    was in fact dropped by an outage.
-    """
+    """Take one parsed message all the way to an issue or a comment. Raises on
+    anything that is Radd's fault; the webhook turns that into a 5xx (a 4xx would
+    bounce valid mail)."""
     verdict = loops.check(
         auto_submitted=plan.auto_submitted,
         from_header=plan.from_header,
@@ -235,10 +197,7 @@ async def accept(
     )
     if verdict.drop:
         logger.info("mailintake: dropped message %s — %s", plan.message_id, verdict.reason)
-        # Emitted, not only logged: a silent drop and a bug are indistinguishable
-        # from outside, and a log line is not queryable (RADD-960). The id is
-        # correlatable off the Message-ID (RADD-1035), so a retried loop is one
-        # id, not a fresh uuid4 per delivery.
+        # Emitted, not only logged: a log line is not queryable (RADD-960).
         await events.emit(
             session,
             event_type=MailEvent.DROPPED,
@@ -257,9 +216,7 @@ async def accept(
         return await _append(
             session, plan, raw=raw, item_id=target, source_id=source_id, sender_auth=sender_auth
         )
-    # Routing runs ONLY here — the first message in a thread. A reply resolved
-    # above and never reaches the chain, so the AI classifier can never
-    # re-decide the project on message four (RADD-961).
+    # Routing runs ONLY for the first message in a thread (RADD-961).
     return await _create(
         session,
         plan,
@@ -273,14 +230,8 @@ async def accept(
 
 
 def dropped_entity_id(message_id: str) -> str:
-    """A correlatable `entity_id` for a `mail.dropped` event (RADD-1035).
-
-    A repeated drop of the SAME message — a provider retrying a message the loop
-    guard keeps rejecting — should be ONE id, not a scatter of uuid4s nobody can
-    group. So it is uuid5 over the Message-ID. A message with none has nothing to
-    correlate on and falls back to uuid4. Also keeps the value inside the events
-    table's `entity_id` width, which a verbatim Message-ID can overflow.
-    """
+    """uuid5 over the Message-ID so repeated drops of one message correlate
+    (RADD-1035) and fit `entity_id`'s width; uuid4 when there is none."""
     return (
         str(uuid.uuid5(MAIL_DROPPED_ID_NAMESPACE, message_id))
         if message_id
@@ -291,21 +242,10 @@ def dropped_entity_id(message_id: str) -> str:
 async def _resolve_thread(session: AsyncSession, plan: EmailPlan) -> uuid.UUID | None:
     """The issue this message belongs to, or None for a new one.
 
-    Headers first and the subject key LAST — the reverse of what shipped in
-    spec 47, where the subject key was the only mechanism. A reply whose subject
-    key names a different issue than its headers follows the headers: the key is
-    text a human can edit or a list can mangle, the headers are what the client
-    generated.
-
-    **The subject-key leg is gated on the sender (RADD-981).** Header threading
-    is not: an `In-Reply-To` names an id Radd generated and told exactly one
-    person, so possessing it is itself the evidence. `[PROJ-412]` is not — it is
-    a guessable string in a text field, and any stranger who typed it wrote
-    straight into somebody else's ticket, where the outbound consumer then
-    mailed their words to that ticket's requester. `_may_thread_by_subject_key`
-    is what closes that; a refused message becomes a NEW routed issue rather
-    than being dropped, because a stranger with the wrong subject line is still
-    a person asking for help.
+    Headers first (In-Reply-To, then References), the subject key LAST: headers
+    name ids Radd generated and told one person, a key is editable text. The
+    subject-key leg is gated on the sender (`_may_thread_by_subject_key`,
+    RADD-981); a refused message becomes a new routed issue, not a drop.
     """
     candidates = threading.thread_candidates(plan.in_reply_to, plan.references)
     item_id = await threading.item_for_message_ids(session, candidates)
@@ -319,35 +259,15 @@ async def _resolve_thread(session: AsyncSession, plan: EmailPlan) -> uuid.UUID |
 
 
 async def _may_thread_by_subject_key(session: AsyncSession, item, plan: EmailPlan) -> bool:
-    """Is this sender CONNECTED to the issue their subject line names? (RADD-1032)
+    """Is this sender CONNECTED to the issue their subject key names? (RADD-981/1032)
 
-    A `[PROJ-412]` in a subject is a guessable string in a text field, and keys
-    are sequential — so on its own it is evidence of nothing. It threads only for
-    someone the conversation already belongs to:
-
-        an address already on the item's mail thread   they are in the conversation
-        the item's reporter                            they raised it
-        a real account that can WRITE on the project    staff working that desk
-
-    The last leg is the narrowing. It used to admit ANY active real account
-    instance-wide — so one email to the desk earned a stranger the right to type
-    into every ticket whose key they could guess, and the outbound consumer then
-    mailed their words to that ticket's requester. The UNQUALIFIED `comment.write`
-    on the item's OWN project is the honest test for "staff who work this desk":
-    a project member with the Member/Agent role holds it, while a bare member
-    holds only the relation-qualified `comment.write@own` / `@participant` — which
-    lets them comment on their OWN items, not type into a stranger's — and every
-    `UserSource.EMAIL` account intake provisions for a customer (RADD-828) is
-    excluded outright. The exact-membership test is deliberate: `holds_base` would
-    count `comment.write@own` as the base and re-admit every member (the
-    "holds_base is for gates, not summaries" trap). It is also, by construction,
-    the set an item-watcher leg would admit — a colleague watching a ticket they
-    can act on holds this atom already.
-
-    A refused message is NOT dropped: `_resolve_thread` opens the stranger a new
-    routed issue, because a wrong subject line is still a person asking for help.
-    Header threading stays ungated (see `_resolve_thread`) — an `In-Reply-To`
-    names an id Radd generated and told exactly one person.
+    A `[PROJ-412]` is a guessable string, so it threads only for: an address
+    already on the item's mail thread, the item's reporter, or a real account
+    holding UNQUALIFIED `comment.write` on the item's project (staff on that
+    desk). Exact membership, not `holds_base` — a bare member's
+    `comment.write@own` must not admit them to someone else's ticket; provisioned
+    `UserSource.EMAIL` accounts never qualify. A refused message opens a new
+    routed issue instead of being dropped; header threading stays ungated.
     """
     if not plan.sender_email:
         return False
@@ -360,7 +280,6 @@ async def _may_thread_by_subject_key(session: AsyncSession, item, plan: EmailPla
     if user.id == item.reporter_id:
         return True  # the requester, whatever their account is sourced from
     from radd.modules.auth import authz
-    from radd.modules.auth.types import UserSource
 
     if user.source == UserSource.EMAIL.value:
         return False  # a provisioned requester earns nothing from a guessed key
@@ -376,39 +295,17 @@ async def _may_thread_by_subject_key(session: AsyncSession, item, plan: EmailPla
 async def _reply_comment(
     session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan, *, sender_auth: SenderAuth
 ):
-    """Write the mailed reply as a comment, and say WHO it is from (RADD-981).
+    """Write a mailed reply as a comment and say WHO it is from (RADD-981).
 
-    Every inbound reply used to be authored by the SYSTEM actor with the sender
-    named in a `Email reply from …:` line of the body. For a customer with no
-    account that is the only honest answer. For a colleague replying to a
-    notification it was wrong in four places at once, all of them invisible from
-    the diff: the issue read as if a robot had spoken, the outbound consumer's
-    SYSTEM gate refused to relay it to the requester, the SLA response timer
-    skipped it as a non-answer, and — because notify excludes the ACTOR — the
-    agent was notified of their own comment while nobody else's exclusion
-    applied.
-
-    So a REAL account (active, not one of the `UserSource.EMAIL` accounts intake
-    provisions) becomes the comment's author and the body is the mail, verbatim.
-    Everyone else keeps the SYSTEM attribution and the prefix.
-
-    **Attribution is not authorisation.** `From:` is forgeable — the header this
-    whole module treats as a claim — so the comment goes through
-    `create_comment`, which enforces that person's own `comment.write` on that
-    project, rather than the caller-authorised seam. A sender who cannot write
-    there falls back to SYSTEM: the message still lands, and nothing was granted
-    on the strength of a header. Returns `(comment, author)`; the author is what
-    the attachments are stored as, so the mail arrives as one person's act.
-
-    **A DEMOTED message never reaches `_reply_author` at all (RADD-1032).** When
-    the source trusts an authserv-id and this message failed or lacked its
-    verdict, `From:` is not merely unauthorised, it is unverified — so the reply
-    is a SYSTEM comment that leads with the unverified-sender warning, and no
-    real account is ever named as its author.
+    A REAL account (active, not a provisioned `UserSource.EMAIL` requester)
+    authors the comment with the mail verbatim — through `create_comment`,
+    which enforces THAT person's `comment.write`, because `From:` is a claim and
+    attribution must not become authorisation. Everyone else — a sender who may
+    not write there, and any DEMOTED message (RADD-1032) — gets the SYSTEM author
+    and the "Email reply from …" prefix. Returns `(comment, author)`.
     """
-    # Quoted history is stripped from the COMMENT only; the RAW message is
-    # retained by the caller per `MAIL_RAW_RETENTION_DAYS` (RADD-1033), so an
-    # over-eager strip is recoverable for the retention window.
+    # Quotes are stripped from the COMMENT only; the retained raw message keeps
+    # them (RADD-1033).
     body = quoting.strip_quotes(plan.body, strip_signature=False) or EMPTY_BODY_PLACEHOLDER
     author = None if sender_auth.demoted else await _reply_author(session, plan)
     if author is not None:
@@ -438,18 +335,10 @@ async def _reply_comment(
 
 
 async def _reply_author(session: AsyncSession, plan: EmailPlan) -> User | None:
-    """The real account behind a mailed reply, or None for a customer.
-
-    `_sender_user` still runs — an unknown sender is still provisioned as a
-    requester (RADD-828), which is what makes them addressable at all — and this
-    only decides whether that account is a person Radd already knew.
-    """
+    """The real account behind a mailed reply, or None for a customer — who is
+    still provisioned as a requester by `_sender_user` (RADD-828)."""
     user = await _sender_user(session, plan)
-    if user is None:
-        return None
-    from radd.modules.auth.types import UserSource
-
-    return None if user.source == UserSource.EMAIL.value else user
+    return user if _is_real(user) else None
 
 
 async def _append(
@@ -462,25 +351,13 @@ async def _append(
     sender_auth: SenderAuth,
 ) -> Outcome:
     comment, actor = await _reply_comment(session, item_id, plan, sender_auth=sender_auth)
-    from .signatures import detect
     signature, _ = await detect(session, quoting.strip_quotes(plan.body, strip_signature=False), plan.sender_email)
     if signature:
         await comments.annotate_email_signature(session, comment.id, signature)
-    await _store_attachments(session, item_id, plan.attachments, actor_id=actor.id)
-    await _note_dropped_attachments(session, item_id, plan)
-    row = await threading.record(
-        session,
-        message_id=plan.message_id,
-        item_id=item_id,
-        direction=MailDirection.INBOUND,
-        subject=plan.subject,
+    await _record_inbound(
+        session, plan, raw=raw, item_id=item_id, actor_id=actor.id, source_id=source_id,
         comment_id=getattr(comment, "id", None),
-        # The source is recorded on every inbound row, replies included
-        # (RADD-979) — but the ORIGIN is the earliest of them, so a mailbox
-        # copied in later never takes over the identity replies leave under.
-        source_id=source_id,
     )
-    await _retain_raw(session, row, raw)
     await _touch_contact(session, item_id, plan)
     item = await items.require_item(session, item_id)
     await events.emit(
@@ -512,10 +389,8 @@ async def _create(
     sender = await _sender_user(session, plan)
     body = plan.body or EMPTY_BODY_PLACEHOLDER
     if sender_auth.demoted:
-        # A trusted gateway said this From is fail-or-absent (RADD-1032). The
-        # reporter is only ever a mailback claim, but pinning it to the account
-        # whose address may be forged still asserts an identity — so a demoted
-        # issue names no reporter, and its description carries the warning.
+        # A demoted issue names no reporter (the address may be forged), and its
+        # description carries the warning (RADD-1032).
         note = UNVERIFIED_SENDER_LINE.format(detail=sender_auth.detail)
         description = UNVERIFIED_SENDER_NOTE_TEMPLATE.format(
             body=body, note=note, sender=_sender(plan)
@@ -527,12 +402,8 @@ async def _create(
     else:
         description = SENDER_NOTE_TEMPLATE.format(body=body, sender=_sender(plan))
         reporter_id = None
-    # Machine intake is not human intake (spec 119). There is no feedback
-    # channel here: the poller marks the message Seen, so a required check that
-    # refused this would drop the customer's request on the floor — no issue, no
-    # bounce, no trace but a log line. Bouncing the findings back by mail is a
-    # real feature and a different one; until it exists, refusing silently is
-    # the worse of the two failures.
+    # Spec 119: intake checks are suppressed — there is no channel to report a
+    # refusal to, so refusing would drop the request silently.
     with intake_suppressed(), items.creating_from(ItemOrigin.EMAIL):
         created = await items.create_item(
             session,
@@ -541,30 +412,18 @@ async def _create(
                 title=(plan.subject or NO_SUBJECT_TITLE)[:TITLE_MAX_CHARS],
                 description=description,
                 labels=[EMAIL_LABEL],
-                # The reporter is a CLAIM, not an identity (RADD-956). `From:` is
-                # trivially forged, so this names who to write back to and grants
-                # nothing — `_sender_user` provisions an account that cannot log in.
+                # A CLAIM, not an identity (RADD-956): `From:` is forgeable, so this
+                # names who to write back to and grants nothing.
                 reporter_id=reporter_id,
             ),
             actor,
         )
-    from .signatures import detect
     signature, _ = await detect(session, body, plan.sender_email)
     if signature:
         await items.annotate_email_signature(session, created.id, signature)
-    await _store_attachments(session, created.id, plan.attachments, actor_id=actor.id)
-    await _note_dropped_attachments(session, created.id, plan)
-    row = await threading.record(
-        session,
-        message_id=plan.message_id,
-        item_id=created.id,
-        direction=MailDirection.INBOUND,
-        subject=plan.subject,
-        # The item's mail ORIGIN (RADD-979): this row is the earliest inbound
-        # one by construction, so it is what decides the reply identity.
-        source_id=source_id,
+    await _record_inbound(
+        session, plan, raw=raw, item_id=created.id, actor_id=actor.id, source_id=source_id
     )
-    await _retain_raw(session, row, raw)
 
     await events.emit(
         session,
@@ -588,13 +447,9 @@ async def _create(
 
 
 def _ack_plan(plan: EmailPlan, created, own_addresses: set[str]) -> "AckPlan | None":
-    """The receipt for a mail-born issue, or None (RADD-995).
-
-    A receipt answers a MESSAGE, not an account: whoever sent it gets one,
-    known user or not. The only refusals are an address we cannot answer (no
-    `From:`) and one of our own, which would be a mail loop with a friendly
-    subject. Only on CREATE — a receipt per reply would be an autoresponder.
-    """
+    """The receipt for a mail-born issue, or None (RADD-995). It answers a MESSAGE,
+    known user or not; refused only for no `From:` or one of our own addresses
+    (a loop). Only on CREATE — a receipt per reply would be an autoresponder."""
     if not plan.sender_email or _is_ours(plan.sender_email, own_addresses):
         return None
     return AckPlan(
@@ -616,23 +471,10 @@ async def _capture_contacts(
 ) -> None:
     """Everyone external on the FIRST message becomes a contact (RADD-980).
 
-    The sender is captured first and as a WRITER, which is what makes them the
-    item's primary contact; the To/Cc addresses are captured `copied_in`, which
-    is what stops one of them inheriting that badge on a ticket a colleague
-    raised by mail.
-
-    Three exclusions on the recipient sweep, each for its own reason: our OWN
-    addresses (we are not a party to the conversation, we are the desk), the
-    sender (already captured, and their `From:` need not match the `To:` they
-    used), and any address belonging to a REAL account — a copied-in colleague
-    is a user, and users are reached by notify through the rows that decide
-    their inbox. Mailing them from here as well would be the duplicate fan-out
-    RADD-968 deleted.
-
-    The account lookups are ONE `WHERE email IN (...)` (RADD-1042): the sweep
-    used to run a `get_user_by_email` per recipient, a query per CC on the hot
-    path of every first message. Byte-identical to the per-address version — the
-    same predicate, resolved from one dict.
+    The sender is captured as a WRITER (so they become primary); To/Cc are
+    `copied_in` (never primary). Skipped: our own addresses, the sender again,
+    and real accounts — users are notify's to reach. Account lookups are one
+    batched query (RADD-1042).
     """
     known = await auth.users_by_emails(session, [plan.sender_email, *plan.recipients])
     if plan.sender_email and not _is_real(known.get(plan.sender_email)):
@@ -652,13 +494,8 @@ async def _capture_contacts(
 
 
 def _is_ours(address: str, own_addresses: set[str]) -> bool:
-    """Is this one of the desk's own addresses, sub-addressing included?
-
-    `support+td@` is spec 62's plus-address routing convention and therefore
-    expected traffic on the To line, but `registry.own_addresses` holds the
-    mailbox (`support@`) — so a literal comparison files our own alias as an
-    external requester, puts it in the issue rail, and mails it every reply.
-    """
+    """Is this one of the desk's own addresses, sub-addressing included? `support+td@`
+    is our own alias, but `registry.own_addresses` holds only `support@`."""
     if address in own_addresses:
         return True
     local, _, domain = address.partition("@")
@@ -673,16 +510,11 @@ async def _store_attachments(
     *,
     actor_id: uuid.UUID,
 ) -> None:
-    """Mail parts become Radd attachments through the spec-102 polymorphic seam.
-
-    One failing part is logged and skipped rather than failing the message: a
-    ticket with three of four attachments beats a bounce, and — when retention is
-    on — the raw message is kept regardless (RADD-1033), so a dropped part is
-    still recoverable from the stored bytes for the retention window.
-    """
+    """Mail parts become item attachments (spec 102). A failing part is logged and
+    skipped — the retained raw message still holds it (RADD-1033)."""
     for part in parts:
         upload = UploadFile(
-            file=io.BytesIO(part.content),
+            file=io.BytesIO(part.data),
             filename=part.filename,
             headers={"content-type": part.content_type},  # type: ignore[arg-type]
         )
@@ -706,15 +538,8 @@ async def _store_attachments(
 async def _note_dropped_attachments(
     session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan
 ) -> None:
-    """Leave a note when a per-message cap swallowed attachments (RADD-1035).
-
-    `parsing` counts them; the note lives HERE because the item — the only place
-    a note can attach to — exists only at this point. A SYSTEM comment, because
-    the loss is Radd's cap talking, not the sender's. Nothing is written when
-    nothing was dropped, so the ordinary message pays neither a comment nor a
-    query. A failure to write the note is logged and swallowed: a receipt about
-    lost attachments must not itself cost the message.
-    """
+    """Leave a SYSTEM note when a per-message cap dropped attachments (RADD-1035);
+    failure to write it is swallowed."""
     if plan.attachments_dropped <= 0:
         return
     system = await auth.get_user(session, SYSTEM_ACTOR_ID)
@@ -737,16 +562,9 @@ async def _note_dropped_attachments(
 
 
 async def _retain_raw(session: AsyncSession, message_row, raw: bytes) -> None:
-    """Persist the raw inbound bytes against their `mail_messages` row (RADD-1033).
-
-    Behind `MAIL_RAW_RETENTION_DAYS` and stored as one loose blob through the
-    spec-102 seam, keyed off the message row so a reader reaches it the way it
-    reaches an attachment — through the item's own gate. Every skip is silent and
-    the mail still lands: retention off (0), no row to key off (no Message-ID, or
-    a concurrent-retry duplicate `record` answered None), empty bytes (a test),
-    or no storage host configured. Keeping a copy of the mail must never be the
-    thing that costs the customer their ticket.
-    """
+    """Persist the raw bytes against the `mail_messages` row (RADD-1033) as a loose
+    blob behind the item's gate. Every skip is silent (retention off, no row, no
+    bytes, no storage host) — keeping a copy must never cost the ticket."""
     if message_row is None or MAIL_RAW_RETENTION_DAYS <= 0 or not raw:
         return
     upload = UploadFile(
@@ -771,6 +589,34 @@ async def _retain_raw(session: AsyncSession, message_row, raw: bytes) -> None:
     await session.flush()
 
 
+async def _record_inbound(
+    session: AsyncSession,
+    plan: EmailPlan,
+    *,
+    raw: bytes,
+    item_id: uuid.UUID,
+    actor_id: uuid.UUID,
+    source_id: uuid.UUID | None,
+    comment_id: uuid.UUID | None = None,
+) -> None:
+    """What every accepted message leaves on its item: its attachments (and a
+    note for any a cap dropped), its `mail_messages` row, the retained raw bytes."""
+    await _store_attachments(session, item_id, plan.attachments, actor_id=actor_id)
+    await _note_dropped_attachments(session, item_id, plan)
+    row = await threading.record(
+        session,
+        message_id=plan.message_id,
+        item_id=item_id,
+        direction=MailDirection.INBOUND,
+        subject=plan.subject,
+        comment_id=comment_id,
+        # On every inbound row; the ORIGIN is the earliest (RADD-979), so a mailbox
+        # copied in later never takes over the identity replies leave under.
+        source_id=source_id,
+    )
+    await _retain_raw(session, row, raw)
+
+
 async def _key(session: AsyncSession, item) -> str:
     project = await projects_service.get_project(session, item.project_id)
     return f"{project.key}-{item.number}"
@@ -783,17 +629,14 @@ def _sender(plan: EmailPlan) -> str:
 
 
 async def _sender_user(session: AsyncSession, plan: EmailPlan) -> User | None:
-    """The sender resolved to an ACTIVE user — provisioned when unknown
-    (RADD-828): a `UserSource.EMAIL` account that cannot log in and whose floor
-    is the seeded Requester role. That property is load-bearing: `From:` is a
-    claim, so an account derived from it must never be able to authenticate."""
+    """The sender resolved to an ACTIVE user — provisioned when unknown (RADD-828)
+    as a `UserSource.EMAIL` account that cannot log in: `From:` is a claim, so an
+    account derived from it must never be able to authenticate."""
     if not plan.sender_email:
         return None
     user = await auth.get_user_by_email(session, plan.sender_email)
     if user is not None:
         return user if user.active else None
-    from radd.modules.auth.types import UserSource
-
     user, _created = await auth.ensure_imported_user(
         session,
         email=plan.sender_email,
@@ -804,48 +647,18 @@ async def _sender_user(session: AsyncSession, plan: EmailPlan) -> User | None:
 
 
 def _is_real(user: User | None) -> bool:
-    """Is this resolved account a genuine person, not a provisioned requester?
-
-    ACTIVE, and NOT one of the `UserSource.EMAIL` accounts intake provisions for
-    unknown senders (RADD-828) — those exist precisely so a customer has a
-    reporter id, and treating one as staff would delete the contact row that is
-    the only way to write back to them. Pure so a BATCH caller (`_capture_contacts`,
-    RADD-1042) can apply the same predicate to a user it already resolved.
-    """
-    from radd.modules.auth.types import UserSource
-
+    """Active and not a provisioned `UserSource.EMAIL` requester (RADD-828)."""
     return user is not None and user.active and user.source != UserSource.EMAIL.value
 
 
-async def _is_real_account(session: AsyncSession, email: str) -> bool:
-    """Does this address belong to a person with a genuine Radd account?
-
-    **It looks up; it never provisions.** That distinction is the RADD-980 bug
-    it replaces: `_touch_contact` asked `_sender_user(...) is None`, and that
-    function CREATES an account for an unknown address — so the test it was
-    guarding could effectively never be true, and a second sender on a thread
-    was never recorded.
-    """
-    return _is_real(await auth.get_user_by_email(session, email))
-
-
 async def _touch_contact(session: AsyncSession, item_id: uuid.UUID, plan: EmailPlan) -> None:
-    """Advance THIS sender's contact row, or open one for a new external voice.
-
-    Both halves changed in RADD-980. `last_message_id` used to be advanced on
-    whichever single contact the item had, whoever had actually written — one
-    column standing in for three people's threads. And a genuinely new external
-    sender is now recorded as a secondary contact instead of being dropped, so
-    the colleague a customer looped in hears the answer too.
-
-    CC capture is deliberately NOT repeated here. A reply's `To:` line carries
-    everyone the mail client happened to keep, including addresses that were
-    dropped from the conversation on purpose; only somebody who actually WROTE
-    joins the thread after the first message.
-    """
+    """Advance THIS sender's contact row, or add them as a secondary contact —
+    unless they are a real account. CC capture is not repeated after the first
+    message: only someone who WROTE joins later."""
     if not plan.sender_email:
         return
-    if await _is_real_account(session, plan.sender_email):
+    # Looks up, never provisions (`_sender_user` would CREATE an account).
+    if _is_real(await auth.get_user_by_email(session, plan.sender_email)):
         return  # a colleague replying by mail is a user, reached by notify
     await service.upsert_contact(
         session,
@@ -863,19 +676,15 @@ async def _target_project(
     source_id: uuid.UUID | None = None,
     default_project_id: uuid.UUID | None = None,
 ) -> tuple[Project, str]:
-    """Where a NEW issue opens, and the name of the routing rule that decided it
-    ("" when a fallback did — RADD-1318 carries it on `mail.received`), in
-    precedence order (RADD-958/961):
+    """Where a NEW issue opens, and the routing rule that decided it ("" for a
+    fallback; RADD-1318), in precedence order (RADD-958/961):
 
         1. the source's rule chain — alias, sender, subject, then the AI classifier
         2. a plus-address tag (`support+td@`), the spec-62 convention
         3. the source's default project
         4. RADD_MAIL_PROJECT_KEY
 
-    The chain is first, because it is the configured, visible answer; the plus
-    tag stays underneath it so anything already using `support+td@` keeps
-    working. Every layer falls THROUGH rather than failing — a message must
-    always land somewhere.
+    Every layer falls THROUGH — a message must always land.
     """
     decision = await routing.decide(session, plan, source_id=source_id)
     if decision.project_id is not None:
@@ -893,8 +702,6 @@ async def _target_project(
         if tagged is not None:
             return tagged, ""
     if default_project_id is None and source_id is not None:
-        from .models import MailSource
-
         source = await session.get(MailSource, source_id)
         default_project_id = source.default_project_id if source else None
     if default_project_id is not None:
@@ -914,7 +721,5 @@ async def _mailbox_name(session: AsyncSession, source_id: uuid.UUID | None) -> s
     """The name of the source a message arrived through, "" for the env webhook."""
     if source_id is None:
         return ""
-    from .models import MailSource
-
     source = await session.get(MailSource, source_id)
     return source.name if source is not None else ""
