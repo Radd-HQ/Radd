@@ -116,11 +116,11 @@ function ConnectionCard({ config, connection, repos, categories, onEdit }: {
           <div className="truncate text-[13px] font-medium text-heading">{connection.name}</div>
           <div className="truncate text-[11px] text-fg-muted">{connection.base_url || "no base URL set"}</div>
         </div>
-        {!connection.has_secret && <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] text-warning-text">no webhook secret</span>}
+        {!connection.has_secret && <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] text-status-warning-ink">no webhook secret</span>}
         {!connection.active && <span className="rounded bg-elevated px-1.5 py-0.5 text-[10px] text-fg-muted">inactive</span>}
         {result && (
           <span className="flex items-center gap-1 text-[11px] text-fg-muted">
-            {result.ok ? <CheckCircle2 size={12} className="text-success-text" aria-hidden /> : <XCircle size={12} className="text-danger-text" aria-hidden />}
+            {result.ok ? <CheckCircle2 size={12} className="text-status-success-ink" aria-hidden /> : <XCircle size={12} className="text-status-danger-ink" aria-hidden />}
             {result.ok ? result.version || "reachable" : result.detail}
           </span>
         )}
@@ -133,7 +133,7 @@ function ConnectionCard({ config, connection, repos, categories, onEdit }: {
           <Trash2 size={13} aria-hidden />
         </IconButton>
       </header>
-      {error && <p role="alert" className="px-4 pt-2 text-xs text-danger-text">{errorMessage(error)}</p>}
+      {error && <p role="alert" className="px-4 pt-2 text-xs text-status-danger-ink">{errorMessage(error)}</p>}
       {repos.length > 8 && (
         <div className="border-b border-subtle/60 px-4 py-2">
           <ListSearchInput value={search.filter} onChange={search.setFilter} placeholder="Filter repositories…"
@@ -216,7 +216,7 @@ function HostForm({ config, connection, onDone }: {
         <Button type="submit" disabled={save.isPending}>{connection ? "Save host" : "New host"}</Button>
         <Button type="button" variant="ghost" onClick={onDone}>Cancel</Button>
       </div>
-      {save.isError && <p role="alert" className="text-[12px] text-danger-text">{errorMessage(save.error)}</p>}
+      {save.isError && <p role="alert" className="text-[12px] text-status-danger-ink">{errorMessage(save.error)}</p>}
     </form>
   );
 }

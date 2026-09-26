@@ -86,7 +86,7 @@ export function AlertmanagerSettingsPage() {
             also automation triggers, for anything the settings don't cover.
           </p>
           {[update, remove].map((mutation, index) =>
-            mutation.isError ? <p key={index} role="alert" className="mb-2 text-xs text-danger-text">{errorMessage(mutation.error)}</p> : null)}
+            mutation.isError ? <p key={index} role="alert" className="mb-2 text-xs text-status-danger-ink">{errorMessage(mutation.error)}</p> : null)}
           {receivers.isPending ? (
             <TableSkeleton rows={2} />
           ) : receivers.isError ? (
@@ -118,7 +118,7 @@ export function AlertmanagerSettingsPage() {
                   <Button type="submit" disabled={create.isPending || !form.name.trim() || !form.project_id}>Create receiver</Button>
                   <Button type="button" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
                 </div>
-                {create.isError && <p role="alert" className="text-[12px] text-danger-text">{errorMessage(create.error)}</p>}
+                {create.isError && <p role="alert" className="text-[12px] text-status-danger-ink">{errorMessage(create.error)}</p>}
               </form>
             ) : (
               <Button variant="secondary" onClick={() => setAdding(true)}>

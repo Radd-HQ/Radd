@@ -98,7 +98,7 @@ export function RepoRow({ provider, changeNoun, connection, repo, categories }: 
           onChange={(next) => patch.mutate({ publish_on_release: next })} data-publish-on-release={repo.full_name} />
         {!repo.project_id && <span className="text-[11px] text-fg-muted">Publishing needs a default project.</span>}
       </div>
-      {error && <p role="alert" className="pl-5 text-xs text-danger-text">{errorMessage(error)}</p>}
+      {error && <p role="alert" className="pl-5 text-xs text-status-danger-ink">{errorMessage(error)}</p>}
       {report && (
         <details className="pl-5 text-xs text-fg-muted" open>
           <summary>{report.linked} linked · {report.branches} branches · {report.commits} commits · {report.pull_requests} requests</summary>
@@ -106,7 +106,7 @@ export function RepoRow({ provider, changeNoun, connection, repo, categories }: 
           {Object.entries(report.worklogs ?? {}).map(([key, value]) => (
             <p key={key}>Time — {key.replaceAll("_", " ")}: {Array.isArray(value) ? value.join(", ") : String(value)}</p>
           ))}
-          {(report.errors ?? []).map((line, index) => <p key={index} className="text-danger-text">{line}</p>)}
+          {(report.errors ?? []).map((line, index) => <p key={index} className="text-status-danger-ink">{line}</p>)}
         </details>
       )}
     </li>

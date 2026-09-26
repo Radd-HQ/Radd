@@ -105,7 +105,7 @@ function KeyEditor({ account, onClose, accountError }: { account: ServiceAccount
                     aria-label={`Revoke ${key.name}`}
                     disabled={revoke.isPending}
                     onClick={() => revoke.mutate(key.id)}
-                    className="flex size-8 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-elevated hover:text-danger-text cursor-pointer"
+                    className="flex size-8 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-elevated hover:text-status-danger-ink cursor-pointer"
                   >
                     <Trash2 size={13} aria-hidden />
                   </button>

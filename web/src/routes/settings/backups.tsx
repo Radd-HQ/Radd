@@ -157,7 +157,7 @@ function StatusCard({ status }: { status: BackupStatus }) {
       {problems.length > 0 && (
         <ul className="mt-3 flex flex-col gap-1 border-t border-subtle pt-3">
           {problems.map((problem) => (
-            <li key={problem} className="text-[13px] text-danger-text">
+            <li key={problem} className="text-[13px] text-status-danger-ink">
               {problem}
             </li>
           ))}
@@ -253,7 +253,7 @@ function SchedulesCard() {
                   <Td className="whitespace-nowrap">
                     {when(schedule.last_run_at)}
                     {schedule.last_status === "failed" && (
-                      <span className="ml-2 text-danger-text" title={schedule.last_error ?? ""}>
+                      <span className="ml-2 text-status-danger-ink" title={schedule.last_error ?? ""}>
                         failed
                       </span>
                     )}
@@ -509,7 +509,7 @@ function ArtifactsCard({
                       database{backup.includes_attachments ? " + attachments" : ""}
                     </span>
                     {backup.problem && (
-                      <div className="text-[11px] text-danger-text">{backup.problem}</div>
+                      <div className="text-[11px] text-status-danger-ink">{backup.problem}</div>
                     )}
                   </Td>
                   <Td className="truncate">{backup.created_by ?? "—"}</Td>
@@ -596,7 +596,7 @@ function RestoreModal({
   return (
     <Modal onClose={onClose} title="Restore this backup?">
       <div className="flex flex-col gap-4">
-        <div className="rounded-md border border-danger/30 bg-danger/5 px-3.5 py-3 text-[13px] text-fg">
+        <div className="rounded-md border border-status-danger/30 bg-status-danger/5 px-3.5 py-3 text-[13px] text-fg">
           Every row in this instance will be <strong>replaced</strong> with the contents of this
           backup. A safety backup is taken first, and Radd is unavailable while it runs.
         </div>

@@ -308,3 +308,13 @@ test('the host never re-exports the SDK or a plugin package (RADD-1375)',()=>{
   }
   assert.deepEqual(offenders,[]);
 });
+
+test('status colours use the status-* tokens that exist (RADD-1388)',()=>{
+  // `text-danger-text` & co. read like tokens but index.css defines none of them, and Tailwind emits
+  // nothing for an unknown colour — the error text simply came out uncoloured on three pages.
+  const roots=['web/src','web/packages/plugin-sdk/src',...readdirSync('server/src/radd/modules').map(m=>`server/src/radd/modules/${m}/ui/src`).filter(existsSync)];
+  const guessed=/(?<![\w-])(?:text|bg|border|ring|outline|fill|divide)-(?:danger|success|warning)\b/g;
+  const found=roots.flatMap(files).flatMap(file=>[...readFileSync(file,'utf8').matchAll(guessed)].map(m=>`${file}: ${m[0]}`));
+  assert.deepEqual(found,[]);
+  assert.match('text-danger-text',new RegExp(guessed.source),'the pattern must catch the class it was written for');
+});

@@ -128,7 +128,7 @@ function MappedList({ links, provider, connectionId }: { links: VcsUserLink[]; p
             <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
               Cancel
             </Button>
-            {add.isError && <span className="text-[12px] text-danger-text">{errorMessage(add.error)}</span>}
+            {add.isError && <span className="text-[12px] text-status-danger-ink">{errorMessage(add.error)}</span>}
           </form>
         ) : (
           <Button size="sm" variant="ghost" className="mt-2" onClick={() => setAdding(true)}>
@@ -164,10 +164,10 @@ function UnmatchedList({ rows, provider, connectionId }: { rows: VcsUnmatchedAut
             : "Every account that logged time is matched."}
         </p>
       ) : (
-        <ul className="divide-y divide-subtle/60 rounded-md border border-warning-border/40">
+        <ul className="divide-y divide-subtle/60 rounded-md border border-status-warning/40">
           {rows.map((row) => (
             <li key={row.external_username} className="flex flex-wrap items-center gap-2 px-3 py-1.5 text-[12px]">
-              <UserCheck size={12} className="text-warning-text" aria-hidden />
+              <UserCheck size={12} className="text-status-warning-ink" aria-hidden />
               <span className="font-mono text-fg">{row.external_username}</span>
               {row.external_email && <span className="text-fg-muted">{row.external_email}</span>}
               <span className="text-fg-faint">
@@ -196,7 +196,7 @@ function UnmatchedList({ rows, provider, connectionId }: { rows: VcsUnmatchedAut
           ))}
         </ul>
       )}
-      {replay.isError && <p className="mt-1 text-[12px] text-danger-text">{errorMessage(replay.error)}</p>}
+      {replay.isError && <p className="mt-1 text-[12px] text-status-danger-ink">{errorMessage(replay.error)}</p>}
     </section>
   );
 }
