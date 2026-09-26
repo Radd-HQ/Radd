@@ -1,17 +1,7 @@
-"""The sources search consults through kernel sockets (RADD-1384).
-
-Search is the MECHANISM — item full-text, RRF fusion, the time budget, the
-full-text-only floor, the response shapes. Two things it shows are somebody
-else's: documents (`pages` provides SEARCH_DOCUMENTS) and meaning-ranked
-candidates (`ai` provides SEMANTIC_CANDIDATES). It reaches both through the
-sockets, never an import, because `sockets.providers` answers only for plugins
-loaded NOW: a plugin disabled at runtime stops contributing in the same breath,
-where the old `settings.modules` probe read the BOOT config and kept serving a
-disabled wiki's pages.
-
-`DocumentHit` is the shape a document provider answers with — defined here, by
-the consumer, and imported by the provider (pages → search, the right way).
-"""
+"""The sources search consults through kernel sockets (RADD-1384): documents
+(SEARCH_DOCUMENTS; `pages`) and meaning-ranked candidates (SEMANTIC_CANDIDATES; `ai`). Sockets
+answer only for plugins loaded NOW, so a runtime disable withdraws them. `DocumentHit` is
+the consumer's shape, imported by providers."""
 
 import asyncio
 import logging

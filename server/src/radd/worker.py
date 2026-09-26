@@ -1,11 +1,5 @@
-"""Shared background-loop scaffold for the in-process workers.
-
-Every outbox consumer / periodic engine runs the same skeleton: tick, log
-(never crash the loop) on failure, honour cancellation, sleep, repeat. Modules
-instantiate a `PeriodicLoop` with their tick coroutine and wire its
-`start`/`stop` into `on_startup`/`on_shutdown`; the gate (`enabled`) and the
-interval stay per-module lambdas so config is read live at each tick.
-"""
+"""PeriodicLoop: tick, log (never crash), honour cancellation, sleep; gate and interval are
+read live at each tick."""
 
 import asyncio
 import logging
@@ -15,11 +9,8 @@ logger = logging.getLogger(__name__)
 
 
 class LocalLoopBackend:
-    """The default `task_backend` socket provider (spec 93 / A8, §6) — today's
-    poll-loop runner, wrapped in the TaskBackend interface so a `celery` plugin can
-    provide an alternative by registering another `task_backend` provider. It keeps
-    no roster: `PluginRuntime` owns each plugin's loops and starts/stops them with
-    the plugin (RADD-1341)."""
+    """The default `task_backend` socket provider. It keeps no roster: `PluginRuntime` owns
+    each plugin's loops and starts/stops them with the plugin (RADD-1341)."""
 
     def schedule(self, name, run, interval, gate=None) -> "PeriodicLoop":
         return PeriodicLoop(
@@ -28,10 +19,6 @@ class LocalLoopBackend:
             name=name,
             enabled=gate or (lambda: True),
         )
-
-    def enqueue(self, name, run):
-        from radd.kernel.admission import spawn
-        return spawn(run(), name=name)
 
 
 # The default TaskBackend singleton — registered on the `task_backend` socket.

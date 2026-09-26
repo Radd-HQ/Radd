@@ -16,7 +16,6 @@ from .service import sweep_expired_grants
 
 plugin = RaddPlugin(
     name="access",
-    # RADD-1168: emitted since spec 92 and never registered. Not triggers.
     event_types=(
         EventTypeSpec(
             AccessEvent.GRANTED, "Access granted", "Admin",

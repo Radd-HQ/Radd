@@ -28,14 +28,10 @@ def _deny_verdict(
     accesses: tuple[str, ...],
     project_id: uuid.UUID | None,
 ) -> bool | None:
-    """RADD-819 precedence, decided once for both models. Returns True when a
-    deny kills the access, None when denies decide nothing here.
-
-    The rule, written down: SPECIFICITY FIRST, DENY ON TIES. A project-scoped
-    row beats a global row regardless of effect (the narrower statement is the
-    more deliberate one); at equal specificity a deny beats an allow. The one
-    documented back door — the instance admin — lives at the resolvers'
-    CALLERS, never here."""
+    """RADD-819 precedence for both models: True when a deny kills the access, None when
+    denies decide nothing. SPECIFICITY FIRST, DENY ON TIES — a project-scoped row beats a
+    global one regardless of effect; at equal specificity a deny beats an allow. The
+    instance-admin back door lives at the resolvers' CALLERS, never here."""
     matching = [
         g
         for g in grants
@@ -63,19 +59,11 @@ class _GrantLike(Protocol):
 
 @dataclass(frozen=True, kw_only=True)
 class SubjectContext:
-    """What the acting user brings to a grant check, in one scope. `role_ids` are the
-    roles the user holds ON THIS PROJECT (direct + team + project-scoped grants), so
-    a role-subject grant is inherently project-aware. `has_manage` is a FACT
-    the resolvers no longer consult (RADD-816/F5.2 removed the bypass) — kept
-    on the context so call sites that own a deliberate resource-manage
-    short-circuit can carry it, but it grants nothing here.
-
-    `group_ids` (RADD-830) is REQUIRED on purpose — no default. The user's
-    transitive directory groups are part of the subject graph, and a
-    construction site that forgets them must fail to COMPILE, because at
-    runtime it fails as a quiet access denial the day RADD-832 makes groups
-    grant subjects. Pass `frozenset()` explicitly where groups genuinely
-    don't apply (pure unit fixtures)."""
+    """What the actor brings to a grant check in one scope. `role_ids` are the roles held ON
+    THIS PROJECT. `has_manage` grants nothing in these resolvers (RADD-816); it rides along
+    for callers that own a deliberate manage short-circuit. `group_ids` (RADD-830) is
+    REQUIRED: a site that forgets groups must fail to compile, not deny quietly — pass
+    `frozenset()` where groups do not apply."""
 
     group_ids: frozenset[uuid.UUID]
     user_id: uuid.UUID | None = None
@@ -120,19 +108,12 @@ def has_access(
     project_id: uuid.UUID | None,
     spec: ResourceSpec,
 ) -> bool:
-    """Flag model (fields): an access is OPEN until some in-scope grant restricts it;
-    once restricted, the actor needs a matching grant of that access (or one that
-    implies it — write implies read). RADD-816 (F5.2): `has_manage` no longer
-    bypasses — a manager holds access the same way anyone does, through a
-    matching grant, which is what lets the inspector EXPLAIN it. A resource
-    that wants a manager bypass short-circuits at its own call site, where the
-    decision is named and owned."""
-    # RADD-819: denies resolve first — one deny row expresses "this team may
-    # not", with nobody else's access touched (denies never RESTRICT a
-    # default-open resource for non-matching subjects). A deny binds its EXACT
-    # access; on an implied route (write satisfies read) it blocks THAT route
-    # without closing the check sideways — deny write, and an open read stays
-    # open, but write no longer answers for read.
+    """Flag model (fields): an access is OPEN until some in-scope grant restricts it; then the
+    actor needs a matching grant of it (or one implying it — write implies read). No manager
+    bypass here (RADD-816): a resource that wants one short-circuits at its own call site."""
+    # RADD-819: denies resolve first and never RESTRICT a default-open resource for others. A
+    # deny binds its EXACT access: deny write and an open read stays open, but write no
+    # longer answers for read.
     if _deny_verdict(grants, ctx, (access,), project_id):
         return False
     satisfying = tuple(

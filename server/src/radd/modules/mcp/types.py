@@ -1,9 +1,5 @@
-"""Wire constants + enums for the embedded MCP server (spec 45).
-
-Everything that names a protocol behavior lives here: JSON-RPC error codes,
-the MCP methods this server answers, the tool names in the v1 catalog, and the
-protocol revision whose semantics the supported subset implements.
-"""
+"""Wire constants + enums for the embedded MCP server (spec 45): JSON-RPC error codes,
+the MCP methods answered, the builtin tool names, and the protocol revision implemented."""
 
 from enum import IntEnum, StrEnum
 
@@ -16,10 +12,6 @@ JSONRPC_VERSION = "2.0"
 
 # Notifications (no `id` member) are acknowledged with HTTP 202 and no body.
 HTTP_ACCEPTED = 202
-
-# tools/call result shaping (page budgets, comment tails) moved with the tools
-# to their owner modules (RADD-889); the shared clamp lives in
-# `radd.kernel.mcptools`.
 
 
 class JsonRpcErrorCode(IntEnum):
@@ -37,7 +29,6 @@ class McpMethod(StrEnum):
     """The supported subset of MCP methods (anything else -> METHOD_NOT_FOUND)."""
 
     INITIALIZE = "initialize"
-    INITIALIZED = "notifications/initialized"
     TOOLS_LIST_CHANGED = "notifications/tools/list_changed"  # RADD-740 (server -> client)
     PING = "ping"
     TOOLS_LIST = "tools/list"
@@ -51,10 +42,8 @@ class McpContentType(StrEnum):
 
 
 class McpTool(StrEnum):
-    """The v1 tool catalog's wire NAMES. Since RADD-889 each tool is a kernel
-    `McpToolSpec` contributed by its owner module; this enum stays as the
-    stable name vocabulary + the catalog's builtin/plugin split (see
-    catalog.CATALOG_ORDER). Doc tools ride the pages plugin's registration."""
+    """The builtin tools' wire NAMES; each tool itself is its owner module's `McpToolSpec`
+    (RADD-889). Orders the catalog and splits builtin from plugin (catalog.CATALOG_ORDER)."""
 
     SEARCH_ITEMS = "search_items"
     FIND_ITEMS = "find_items"  # text/meaning search (hybrid FTS+vector, spec 103)
@@ -88,18 +77,6 @@ class McpTool(StrEnum):
     LIST_USERS = "list_users"
     LIST_SERVICE_ACCOUNTS = "list_service_accounts"
     CREATE_SERVICE_ACCOUNT = "create_service_account"
-
-
-# The doc tools ride the pages plugin (spec 43), which may be absent or disabled.
-PAGE_TOOLS = frozenset(
-    {
-        McpTool.GET_PAGE,
-        McpTool.SEARCH_PAGES,
-        McpTool.CREATE_PAGE,
-        McpTool.UPDATE_PAGE,
-        McpTool.MOVE_PAGE,
-    }
-)
 
 
 #: Same headers the AI streams use: no buffering anywhere between here and the

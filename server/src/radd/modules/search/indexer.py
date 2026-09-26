@@ -45,22 +45,27 @@ _ACCESS_EVENTS = {AccessEvent.GRANTED.value, AccessEvent.REVOKED.value}
 _SUBJECT_EVENTS = {AuthEvent.USER_DELETED.value, TeamEvent.DELETED.value}
 _DESCRIPTION = BuiltinItemField.DESCRIPTION.value
 
-# RADD-840: `description` is read-restrictable AND searchable. Conservative
-# indexing — the internal-comments precedent ("public text only by
-# construction"): where a read-restricting grant covers a project, its items'
-# descriptions index for NOBODY, so snippets, similar-issues and the embedding
-# provider can never carry text some readers may not see. Synced once at
-# consumer start and again on every description read-grant change.
+# RADD-840: where a read-restricting grant covers a project, its descriptions index for
+# NOBODY, so snippets, similar-issues and embeddings never carry text some readers may not
+# see. Synced at consumer start and on every description read-grant change.
 _restriction_synced = False
 
-# The key is indexed in both "TD-123" and "TD 123" token forms so either matches.
+
+def _tsv(key: str, title: str, description: str | None, comments: str) -> str:
+    """The weighted tsvector SQL: A = the key in both "TD-123" and "TD 123" token forms (so
+    either matches) + title, B = description (None leaves it out), C = comments."""
+    parts = [f"setweight(to_tsvector('{SEARCH_TS_CONFIG}',\n"
+             f"            {key} || ' ' || replace({key}, '-', ' ') || ' ' || {title}), 'A')"]
+    if description is not None:
+        parts.append(f"setweight(to_tsvector('{SEARCH_TS_CONFIG}', {description}), 'B')")
+    parts.append(f"setweight(to_tsvector('{SEARCH_TS_CONFIG}', {comments}), 'C')")
+    return " ||\n        ".join(parts)
+
+
 _TSV_UPDATE = text(
     f"""
     UPDATE search_index SET tsv =
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}',
-            key || ' ' || replace(key, '-', ' ') || ' ' || title), 'A') ||
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}', description), 'B') ||
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}', comments_text), 'C')
+        {_tsv("key", "title", "description", "comments_text")}
     WHERE item_id = :item_id
     """
 )
@@ -128,10 +133,7 @@ async def _restricted_scope(session: AsyncSession) -> tuple[bool, set[uuid.UUID]
 
 
 async def _index_item(session: AsyncSession, event: Event) -> None:
-    # RADD-922: one nested `item`, so the guard is "is this an item event at
-    # all" rather than the old `if "project_id" not in payload: return` — which
-    # made a payload missing a field indistinguishable from an item that should
-    # not be indexed.
+    # RADD-922: the guard is "is this an item event at all".
     item = (event.payload or {}).get("item") or {}
     if not item:
         return
@@ -175,9 +177,7 @@ async def _index_item(session: AsyncSession, event: Event) -> None:
 _BLANK_RESTRICTED = text(
     f"""
     UPDATE search_index SET description = '', tsv =
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}',
-            key || ' ' || replace(key, '-', ' ') || ' ' || title), 'A') ||
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}', comments_text), 'C')
+        {_tsv("key", "title", None, "comments_text")}
     WHERE description <> ''
       AND (:everywhere OR project_id = ANY(:project_ids))
     """
@@ -188,10 +188,7 @@ _BLANK_RESTRICTED = text(
 _RESTORE_OPEN = text(
     f"""
     UPDATE search_index si SET description = COALESCE(wi.description, ''), tsv =
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}',
-            si.key || ' ' || replace(si.key, '-', ' ') || ' ' || si.title), 'A') ||
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}', COALESCE(wi.description, '')), 'B') ||
-        setweight(to_tsvector('{SEARCH_TS_CONFIG}', si.comments_text), 'C')
+        {_tsv("si.key", "si.title", "COALESCE(wi.description, '')", "si.comments_text")}
     FROM work_items wi
     WHERE wi.id = si.item_id
       AND NOT (:everywhere OR si.project_id = ANY(:project_ids))
@@ -242,9 +239,7 @@ async def _reindex_comments(session: AsyncSession, event: Event) -> None:
     payload = event.payload or {}
     item = payload.get("item")
     if not item:
-        # RADD-1247: a PAGE comment's event carries `item: None` by design
-        # (RADD-922's canonical ref is null when the parent is not an item).
-        # Page bodies are indexed through the pages path; nothing to do here.
+        # RADD-1247: a PAGE comment's event carries `item: None`; pages index their own.
         return
     item_id = uuid.UUID(item["id"])
     row = await session.get(SearchIndexRow, item_id)

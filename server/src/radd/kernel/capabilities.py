@@ -1,10 +1,5 @@
-"""Capability evaluation — the read side of the /capabilities aggregator (§3.2, §8a).
-
-A plugin declares a `CapabilitySpec` (static `enabled`, or a `check()` returning
-`{enabled: bool, **detail}`) in its manifest; the kernel evaluates them all here.
-This is the inversion of the hardcoded provider `enabled()` logic that `/instance/
-status` inlined — the truth about each provider now lives in its own plugin.
-"""
+"""Capability evaluation — the read side of `/capabilities`: each plugin's `CapabilitySpec`
+(static `enabled`, or `check()` returning `{enabled, **detail}`) evaluated here."""
 
 from __future__ import annotations
 
@@ -29,9 +24,7 @@ def describe(cap: CapabilitySpec) -> dict[str, Any]:
             res = cap.check() or {}
             enabled = bool(res.get("enabled", enabled))
             detail = {k: v for k, v in res.items() if k != "enabled"}
-        except Exception:  # a broken check must not blank the whole surface —
-            # but a permanently-broken one used to read as "unconfigured"
-            # forever with the traceback lost (RADD-898).
+        except Exception:  # never blank the surface; log it, or it reads "unconfigured" (RADD-898)
             logger.warning("capability %s check failed", cap.key, exc_info=True)
             enabled = False
             detail = {"error": "check failed"}
@@ -50,8 +43,7 @@ def evaluate() -> list[dict[str, Any]]:
 
 
 def capability_map() -> dict[str, dict[str, Any]]:
-    """`{key: {enabled, category, **detail}}` — for consumers that look up a
-    specific capability (e.g. the legacy /instance/status adapter)."""
+    """`{key: {enabled, category, **detail}}` — for consumers that look up one capability."""
     return {
         c["key"]: {"enabled": c["enabled"], "category": c["category"], **c["detail"]}
         for c in evaluate()

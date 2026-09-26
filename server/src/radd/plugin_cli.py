@@ -109,8 +109,8 @@ build-backend = "hatchling.build"
 packages = ["src/{module}"]
 artifacts = ["src/{module}/ui/dist/**/*"]
 
-[tool.hatch.build.targets.wheel.exclude]
-'''.replace('\n[tool.hatch.build.targets.wheel.exclude]\n', '\nexclude = ["**/node_modules/**", "**/ui/vendor/**"]\n'))
+exclude = ["**/node_modules/**", "**/ui/vendor/**"]
+''')
     ui_manifest = ''
     imports = 'from radd.sdk import RaddPlugin'
     if sdk:
@@ -198,7 +198,7 @@ def build(root: Path, toolchain: Path | None = None) -> dict:
             subprocess.run(['npm', 'ci'], cwd=ui, check=True)
             subprocess.run(['npm', 'run', 'build'], cwd=ui, check=True)
     check(root, built=True)
-    # A fresh output directory prevents accidentally shipping stale wheels.
+    # The wheel is built in a temporary directory, so a stale one in dist/ is never shipped.
     out = root / 'dist'
     out.mkdir(exist_ok=True)
     import tempfile

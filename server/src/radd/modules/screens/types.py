@@ -31,8 +31,6 @@ class ScreenBuiltinField(StrEnum):
     START_DATE = "start_date"
     TARGET_DATE = "target_date"
     LABELS = "labels"
-    # (`sla` placed the SLA timers until RADD-1394 made them the slas plugin's issue-rail
-    # section; RADD-1396 deleted the row that no longer placed anything, and its stored rows.)
     TIME_TRACKING = "time_tracking"
     POINTS = "points"  # story points (spec 70) — rendered only where the project opts in
 

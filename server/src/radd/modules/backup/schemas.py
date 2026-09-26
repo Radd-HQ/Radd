@@ -4,17 +4,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from radd.schedule import ScheduleKind, validate_config
 
 
 class ScheduleConfig(BaseModel):
-    """The shared schedule vocabulary — interval, daily, weekly, monthly, cron.
-
-    Monthly and cron arrived with RADD-909/910 for automations and land here for
-    free, because both modules store the same config and validate it through the
-    same rules in `radd.schedule`."""
+    """The shared schedule vocabulary, validated by the same rules as automations' (`radd.schedule`)."""
 
     kind: ScheduleKind
     minutes: int | None = None
@@ -48,6 +44,8 @@ class ScheduleUpdate(BaseModel):
 
 
 class ScheduleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     name: str
     enabled: bool
@@ -81,6 +79,8 @@ class BackupRead(BaseModel):
 
 
 class RunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     kind: str
     status: str

@@ -2,9 +2,7 @@ from enum import StrEnum
 
 
 class PluginOrigin(StrEnum):
-    """Where a plugin ships from (RADD-898): the main image + migration chain
-    (`bootstrap`) or the installable set (`installable`) — previously bare
-    strings compared across service.py."""
+    """Where a plugin ships from: the main image + migration chain, or the installable set."""
 
     BOOTSTRAP = "bootstrap"
     INSTALLABLE = "installable"
@@ -19,7 +17,7 @@ class PluginState(StrEnum):
     INSTALLED = "installed"  # registered, not requested active
     ENABLED = "enabled"  # requested active
     DISABLED = "disabled"  # requested inactive
-    ERRORED = "errored"  # quarantined: load/startup threw (boot survives)
+    ERRORED = "errored"  # a package discovery could not load (reported, never stored)
 
 
 class RuntimeState(StrEnum):
@@ -38,8 +36,7 @@ class PluginEvent(StrEnum):
     ENABLED = "plugin.enabled"
     DISABLED = "plugin.disabled"
     UNINSTALLED = "plugin.uninstalled"
-    # Spec 123: a contribution switched on/off instance-wide (RADD-1168 — the
-    # write used to leave no event).
+    # Spec 123: a contribution switched on/off instance-wide.
     CONTRIBUTIONS_CHANGED = "plugin.contributions_changed"
 
 

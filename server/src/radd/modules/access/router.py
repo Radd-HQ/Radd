@@ -55,24 +55,9 @@ async def _require_read_scope(session, user, resource_type, resource_id, project
 
 @router.get("/resources", response_model=list[ResourceSpecRead])
 async def list_resource_specs(user: CurrentUser) -> list[ResourceSpecRead]:
-    """Every registered resource's grant MODEL — which accesses exist, which
-    subject kinds apply, whether grants can be project-scoped (RADD-947).
-
-    `ResourceSpecRead` was written for this route and the route was never added,
-    so `AccessGrantsEditor` grew its own answer instead: it took `accesses` and
-    `subjectKinds` as props from each call site and rendered the project
-    ScopePicker unconditionally — including for `page`, whose spec sets
-    `project_scoped=False` and whose write path answers "page grants can't be
-    scoped". A UI that offers what the validator rejects is a second opinion
-    about one rule, and this is the same registry the validator reads.
-
-    No `can_manage` check: this is the SHAPE of the access model, not anyone's
-    grants, and the editor needs it before it can render the form that would be
-    authorized. Any signed-in caller may read it.
-
-    Declared before `/{grant_id}` — Starlette matches in declaration order, so a
-    literal segment written after a UUID pattern is unreachable (RADD-761).
-    """
+    """Every registered resource's grant MODEL (RADD-947) — what the grants editor renders
+    from, so it cannot offer what the validator rejects. No can_manage: the shape is not
+    sensitive. Declared before `/{grant_id}` (Starlette matches in order, RADD-761)."""
     del user  # authentication is the gate; the catalog itself is not sensitive
     return [
         ResourceSpecRead(

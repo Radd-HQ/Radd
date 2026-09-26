@@ -17,8 +17,7 @@ plugin = RaddPlugin(
     description="Reports which features are available and configured on this server.",
     depends_on=("auth",),
     routers=(router,),
-    # The default TaskBackend socket provider (spec 93 / A8, §6). A `celery` plugin
-    # registers another `task_backend` provider to swap the runner.
+    # The TASK_BACKEND socket provider (spec 93, §6).
     integrations=(
         IntegrationSpec(Socket.TASK_BACKEND, "localloop", impl=LOCALLOOP),
     ),

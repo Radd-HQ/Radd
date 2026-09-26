@@ -10,7 +10,6 @@ plugin = RaddPlugin(
     entity_links=(
         EntityLinkSpec('canned_response', ('/settings/canned',)),
     ),
-    # RADD-1168: emitted since spec 30 and never registered. Not triggers.
     event_types=(
         EventTypeSpec(CannedEvent.CREATED, "Canned response created", "Service desk", trigger=False),
         EventTypeSpec(

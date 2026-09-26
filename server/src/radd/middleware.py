@@ -1,17 +1,8 @@
-"""ASGI middleware that holds a response until the request's transaction has committed.
-
-FastAPI runs dependency-with-yield teardown (where `get_session` commits) AFTER the
-response bytes are sent. A client that reads its response and immediately issues a
-dependent request can therefore miss the write (found in the wild by the Jira importer).
-Buffering the send until the inner app — including that teardown — finishes closes the
-race. Non-http scopes (websockets, lifespan) pass through untouched.
-
-Two response shapes bypass the buffer (RADD-877): event streams (buffering defeats
-them) and file deliveries (buffering holds the entire artifact in RAM — a multi-GB
-backup download accumulated in a Python list before the first byte left). Both are
-recognized from the response-start headers, and neither is ever the JSON API answer
-the commit race involves: a download commits nothing a follow-up request depends on.
-"""
+"""Hold a response until the request's transaction has committed: FastAPI runs the
+committing `get_session` teardown AFTER the response is sent, so a client's immediate
+follow-up could miss the write. Non-http scopes pass through. SSE and Content-Disposition
+responses stream through (RADD-877) — buffering a multi-GB download holds it in RAM, and
+neither commits anything a follow-up depends on."""
 
 from collections.abc import Awaitable, Callable
 from typing import Any

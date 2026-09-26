@@ -1,12 +1,8 @@
-"""Plugin discovery — the manager's view of what exists (docs/plugin-platform.md §10).
+"""Plugin discovery (docs/plugin-platform.md §10): `id → (plugin, importable module path)`.
 
-Core plugins come from `config.modules` (always enabled, locked). Installable (non-core) plugins
-come from two sources, both surfaced as `installable_plugins()`:
-  - `config.installable_plugins` — in-repo builtin optional plugins (e.g. the north-star milestones);
-  - **third-party `radd.plugins` entry points** — a pip/uv-installed external plugin package
-    (e.g. examples/acme-notes) is discovered here with NO edit to the core config, which is what lets
-    it install/enable at runtime with zero repo edits (spec 94 acceptance).
-Every entry is `id → (plugin, importable module path)`.
+Core plugins come from `config.modules`. Installable ones come from `config.installable_plugins`
+and from third-party `radd.plugins` entry points — a pip/uv-installed package is discovered with
+NO edit to the core config (spec 94 acceptance).
 """
 
 import importlib
@@ -29,7 +25,7 @@ discovery_errors: dict[str, str] = {}
 def _plugin_of(obj: object) -> RaddPlugin | None:
     if isinstance(obj, RaddPlugin):
         return obj
-    plugin = getattr(obj, "plugin", None) or getattr(obj, "module", None)
+    plugin = getattr(obj, "plugin", None)
     return plugin if isinstance(plugin, RaddPlugin) else None
 
 
@@ -59,9 +55,8 @@ def entrypoint_plugins() -> dict[str, tuple[RaddPlugin, str]]:
         if plugin.id in out or any(p.name == plugin.name for p, _ in out.values()):
             discovery_errors[ep.name] = "Duplicate external plugin identity"
             continue
-        if plugin is not None:
-            # The module part of the entry point value ("acme_notes" or "acme_notes:plugin").
-            out[plugin.id] = (plugin, ep.value.split(":", 1)[0].strip())
+        # The module part of the entry point value ("acme_notes" or "acme_notes:plugin").
+        out[plugin.id] = (plugin, ep.value.split(":", 1)[0].strip())
     return out
 
 

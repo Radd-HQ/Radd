@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from radd.kernel import RaddPlugin, registries
+from radd.kernel import registries
 from radd.modules.pluginmgr import acks, discovery, live, service, store
 
 
@@ -135,14 +135,6 @@ async def test_unacknowledged_process_prevents_cleanup(plugin_store, monkeypatch
     assert info['distribution'] in store.catalog()
 
 
-def test_backend_hooks_and_tasks_are_live_capable():
-    from radd.kernel.specs import TaskSpec
-    assert live.supported(RaddPlugin(name='ui', core=False))
-    assert live.supported(RaddPlugin(name='hook', core=False, on_startup=(AsyncMock(),)))
-    assert live.supported(RaddPlugin(name='task', core=False, tasks=(TaskSpec(name='job', run=AsyncMock()),)))
-    assert not live.supported(RaddPlugin(name='core'))
-
-
 def test_installer_lock_is_nonblocking_for_live_poll(plugin_store):
     with store.locked():
         with pytest.raises(BlockingIOError):
@@ -191,7 +183,7 @@ async def main():
     while line := await loop.run_in_executor(None, sys.stdin.readline):
         command = json.loads(line)
         if command.get("stop"):
-            await live.stop(); break
+            await live.halt(); await live.withdraw(); break
         async def states(session):
             if command["state"] == "forgotten":
                 return {}

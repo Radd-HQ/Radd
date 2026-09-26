@@ -62,11 +62,9 @@ def create_app() -> FastAPI:
             await live.start()
             yield
         finally:
-            # RADD-1372: each step is guarded so none can skip the next. The
-            # reconciler stops first (cancellation only, it cannot fail) so
-            # nothing enables a plugin mid-shutdown; then every plugin's
-            # on_shutdown runs (collab flushes its rooms); only then is this
-            # process's acknowledgement withdrawn, which logs rather than raises.
+            # RADD-1372: each step guarded so none skips the next — the reconciler stops
+            # first (nothing enables a plugin mid-shutdown), then every on_shutdown (collab
+            # flushes its rooms), then this process's acknowledgement is withdrawn.
             admission.gate.release_ticks()
             await live.halt()
             try:
@@ -74,11 +72,8 @@ def create_app() -> FastAPI:
             finally:
                 await live.withdraw()
 
-    # orjson for every route response (RADD-1067): serialization is the slowest
-    # pure-Python step left on the hot read paths, and the encoder in front of it
-    # (jsonable_encoder) has already reduced everything to primitives, so the
-    # swap changes speed, not shape. Exception handlers keep constructing plain
-    # JSONResponse deliberately — tiny cold-path bodies, not worth the churn.
+    # orjson for every route response (RADD-1067): jsonable_encoder has already reduced
+    # everything to primitives, so the swap changes speed, not shape.
     app = FastAPI(
         title=settings.api_title,
         version=__version__,
@@ -88,13 +83,8 @@ def create_app() -> FastAPI:
 
     @app.get("/health", include_in_schema=False)
     async def health() -> dict[str, str]:
-        # Unprefixed liveness probe (RADD-870): CLAUDE.md and the helm chart
-        # assumed this endpoint for two waves before anything registered it —
-        # GET /health fell through to the SPA catch-all and answered index.html.
-        # RADD-1372: it reports the plugin lease instead of staying green while
-        # plugin routes refuse work, but stays 200: a lapsed lease means the
-        # database is unreachable (a restore, an outage), and restarting the
-        # process or pulling it from the service would not bring it back.
+        # Unprefixed liveness probe (RADD-870). Reports the plugin lease but stays 200: a
+        # lapsed lease means the DB is unreachable, and a restart would not help (RADD-1372).
         from radd.kernel import admission
 
         lease = admission.gate.lease_state()
@@ -110,25 +100,13 @@ def create_app() -> FastAPI:
     # backup status/run endpoints answers 503 (radd/maintenance.py).
     app.add_middleware(MaintenanceMiddleware)
 
-    @app.exception_handler(NotFoundError)
-    async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:
-        return JSONResponse(status_code=404, content={"detail": str(exc)})
-
-    @app.exception_handler(ConflictError)
-    async def conflict_handler(request: Request, exc: ConflictError) -> JSONResponse:
-        return JSONResponse(status_code=409, content={"detail": str(exc)})
-
-    @app.exception_handler(UnauthorizedError)
-    async def unauthorized_handler(request: Request, exc: UnauthorizedError) -> JSONResponse:
-        return JSONResponse(status_code=401, content={"detail": str(exc)})
-
-    @app.exception_handler(ForbiddenError)
-    async def forbidden_handler(request: Request, exc: ForbiddenError) -> JSONResponse:
-        return JSONResponse(status_code=403, content={"detail": str(exc)})
+    for error, status_code in (
+        (NotFoundError, 404), (ConflictError, 409), (UnauthorizedError, 401), (ForbiddenError, 403)
+    ):
+        app.add_exception_handler(error, _detail_handler(status_code))
 
     from radd.kernel.runtime import PluginRuntime, RuntimeMiddleware
     runtime = PluginRuntime(app)
-    app.state.plugin_runtime = runtime
     app.add_middleware(RuntimeMiddleware)
     for plugin in plugins:
         runtime.mount(plugin)
@@ -148,10 +126,15 @@ def create_app() -> FastAPI:
     return app
 
 
-# Files with STABLE urls (plugin bundles, the /shared shims, index.html) change on every rebuild but
-# keep their url, so they must be REVALIDATED on each load — otherwise a browser serves a stale build
-# after `build-all` and a plain reload shows old code. `no-cache` = cache but always check freshness
-# (FileResponse's ETag/Last-Modified → a fast 304 when unchanged, fresh 200 when rebuilt).
+def _detail_handler(status_code: int):
+    async def handler(request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(status_code=status_code, content={"detail": str(exc)})
+
+    return handler
+
+
+# STABLE-url files (plugin bundles, /shared shims, index.html) change on rebuild, so they are
+# REVALIDATED each load (`no-cache` → ETag 304 or fresh 200), or a reload shows a stale build.
 _REVALIDATE = {"Cache-Control": "no-cache"}
 # Content-hashed build assets (vite emits new filenames on change) are safe to cache forever.
 _IMMUTABLE = {"Cache-Control": "public, max-age=31536000, immutable"}

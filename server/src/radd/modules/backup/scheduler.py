@@ -1,13 +1,6 @@
-"""The backup scheduler loop (spec 99 §4).
-
-One `PeriodicLoop` tick per minute: claim every due schedule, start its backup,
-advance `next_run_at`. Claiming uses `FOR UPDATE SKIP LOCKED` and the row is
-advanced IN THE SAME TRANSACTION, so a second worker never takes the same backup
-twice — the idiom `automations/scheduler.py` already uses for scheduled rules.
-
-Gated on `run_workers`, so a web-only tier (spec 48's split) does not duplicate
-the dumps its worker sibling is taking.
-"""
+"""The backup scheduler loop (spec 99 §4): each tick claims due schedules `FOR UPDATE SKIP
+LOCKED` and advances `next_run_at` in the SAME transaction, so a second worker never takes the
+same backup. Gated on `run_workers`, so a web-only tier does not duplicate the dumps."""
 
 import logging
 

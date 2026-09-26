@@ -67,16 +67,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def commit_before_streaming(session: AsyncSession) -> None:
-    """End the request transaction NOW — the last session touch before
-    returning a flush-through response (SSE, file delivery).
-
-    `get_session` commits in dependency TEARDOWN, which runs only after the
-    response body finishes. Buffered responses never notice; a flush-through
-    response (see `CommitBeforeSendMiddleware`) holds the session checked out
-    — idle in transaction, still holding the auth read's ACCESS SHARE locks —
-    for the connection's whole life. Two PAT streams idling 4-5h blocked a
-    production migration behind exactly that (RADD-845). A stream body that
-    touches the DB afterwards autobegins its own short transaction; the
-    engine's idle_in_transaction_session_timeout is the backstop for those.
-    """
+    """End the request transaction NOW, before returning a flush-through response (SSE, file
+    delivery): `get_session` commits only after the body finishes, so a long stream would
+    idle in transaction holding the auth read's locks (RADD-845)."""
     await session.commit()

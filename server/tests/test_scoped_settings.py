@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings as config
 from radd.exceptions import ConflictError
 from radd.modules.settings import service
-from radd.modules.settings.types import SETTINGS_REGISTRY, SettingKey, SettingScope
+from radd.modules.settings.types import SettingKey, SettingScope, setting_spec
 
 KEY = SettingKey.WORK_WEEK_DAYS
 
@@ -29,7 +29,7 @@ async def db_session():
 
 async def test_resolve_falls_back_to_env_default(db_session):
     resolved = await service.resolve(db_session, KEY, project_id=uuid.uuid4())
-    assert resolved == SETTINGS_REGISTRY[KEY].default == config.work_week_days
+    assert resolved == setting_spec(KEY).default == config.work_week_days
 
 
 async def test_resolve_cascade_narrowest_wins(db_session):

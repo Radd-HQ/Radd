@@ -1,11 +1,7 @@
 """Shared Pydantic field types + wire constants for API schemas.
 
-`UtcDatetime` serializes to ISO-8601 with a `Z` suffix. Our datetime columns are
-naive UTC (see `auth.security.utcnow`); without the suffix a browser's
-`new Date("2026-07-20T09:49:40")` parses the string as LOCAL time, skewing every
-timestamp by the viewer's UTC offset (the "4 hours ago" bug). Tagging naive
-values as UTC on the way out makes them unambiguous for every client.
-"""
+`UtcDatetime` serializes naive-UTC columns (`radd.clock.utcnow`) with a `Z` suffix: without
+it a browser parses the string as LOCAL time (the "4 hours ago" bug)."""
 
 from datetime import UTC, datetime
 from typing import Annotated

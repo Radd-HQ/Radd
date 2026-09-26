@@ -1,11 +1,6 @@
-"""Backup API (spec 99 §5) — instance admin only, every endpoint.
-
-There is no weaker tier worth delegating: a *download* is full data exfiltration
-(password hashes, TOTP seeds, API tokens) and an *upload* hands `pg_restore` a
-file that executes SQL. The gate is the `jiraimport` shape.
-
-Artifact names are validated as NAMES, never joined as paths. An invalid name and
-a missing file both answer 404, which leaks nothing about the directory.
+"""Backup API (spec 99 §5) — instance admin only, every endpoint: a download is full data
+exfiltration (password hashes, TOTP seeds, API tokens) and an upload hands `pg_restore` a file
+that executes SQL. Artifact names are validated as NAMES, never joined as paths.
 """
 
 import uuid
@@ -26,7 +21,6 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.auth.models import User
 
 from . import service
-from .models import BackupRun, BackupSchedule
 from .schemas import (
     BackupCreateRequest,
     BackupRead,
@@ -75,36 +69,6 @@ def _as_backup(stored: core.StoredBackup) -> BackupRead:
     )
 
 
-def _as_run(run: BackupRun) -> RunRead:
-    return RunRead(
-        id=run.id,
-        kind=run.kind,
-        status=run.status,
-        stage=run.stage,
-        artifact_name=run.artifact_name,
-        size_bytes=run.size_bytes,
-        started_at=run.started_at,
-        finished_at=run.finished_at,
-        error=run.error,
-    )
-
-
-def _as_schedule(schedule: BackupSchedule) -> ScheduleRead:
-    return ScheduleRead(
-        id=schedule.id,
-        name=schedule.name,
-        enabled=schedule.enabled,
-        config=schedule.config,
-        include_attachments=schedule.include_attachments,
-        keep_last=schedule.keep_last,
-        keep_days=schedule.keep_days,
-        next_run_at=schedule.next_run_at,
-        last_run_at=schedule.last_run_at,
-        last_status=schedule.last_status,
-        last_error=schedule.last_error,
-    )
-
-
 def _resolve(name: str) -> core.StoredBackup:
     try:
         return store.load(name)
@@ -138,14 +102,14 @@ async def create_backup(data: BackupCreateRequest, session: Session, user: Curre
     run = await service.start_backup(
         session, actor=user, include_attachments=data.include_attachments
     )
-    return _as_run(run)
+    return RunRead.model_validate(run)
 
 
 @router.get("/runs/{run_id}", response_model=RunRead)
 async def get_run(run_id: uuid.UUID, session: Session, user: CurrentUser) -> RunRead:
     """Stays live during maintenance so a restore can be watched to completion."""
     _require_instance_admin(user)
-    return _as_run(await service.get_run(session, run_id))
+    return RunRead.model_validate(await service.get_run(session, run_id))
 
 
 # --- schedules ---
@@ -154,13 +118,13 @@ async def get_run(run_id: uuid.UUID, session: Session, user: CurrentUser) -> Run
 @router.get("/schedules", response_model=list[ScheduleRead])
 async def list_schedules(session: Session, user: CurrentUser) -> list[ScheduleRead]:
     _require_instance_admin(user)
-    return [_as_schedule(item) for item in await service.list_schedules(session)]
+    return [ScheduleRead.model_validate(item) for item in await service.list_schedules(session)]
 
 
 @router.post("/schedules", response_model=ScheduleRead, status_code=201)
 async def create_schedule(data: ScheduleCreate, session: Session, user: CurrentUser) -> ScheduleRead:
     _require_instance_admin(user)
-    return _as_schedule(await service.create_schedule(session, data, user))
+    return ScheduleRead.model_validate(await service.create_schedule(session, data, user))
 
 
 @router.patch("/schedules/{schedule_id}", response_model=ScheduleRead)
@@ -168,7 +132,7 @@ async def update_schedule(
     schedule_id: uuid.UUID, data: ScheduleUpdate, session: Session, user: CurrentUser
 ) -> ScheduleRead:
     _require_instance_admin(user)
-    return _as_schedule(await service.update_schedule(session, schedule_id, data, user))
+    return ScheduleRead.model_validate(await service.update_schedule(session, schedule_id, data, user))
 
 
 @router.delete("/schedules/{schedule_id}", status_code=204)
@@ -280,4 +244,4 @@ async def restore_backup(
     run = await service.start_restore(
         session, name, actor=user, override_compatibility=data.override_compatibility
     )
-    return _as_run(run)
+    return RunRead.model_validate(run)

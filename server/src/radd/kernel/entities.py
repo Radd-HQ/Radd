@@ -1,17 +1,12 @@
 """kernel.entities — declarative entity registration + auto-wiring (§0.5).
 
-A plugin declares an `EntitySpec` (a field DSL, or a code-defined `model` via the
-escape hatch); the kernel builds the model into `Base.metadata`, and AUTO-WIRES —
-with no further plugin code — a generic permission-guarded CRUD router, the
-`<key>.created/updated/deleted` event types (which flow straight into automations
-+ webhooks + audit), and the `<key>.create/update/delete` CRUD-resource RBAC atoms.
-This is the payoff of mediation: "add a milestone entity → get a first-class
-feature." Model access goes only through the kernel session, so the permission and
-outbox invariants hold.
+From an `EntitySpec` (a field DSL, or a code-defined `model`) the kernel builds the model
+and AUTO-WIRES a permission-guarded CRUD router, the `<key>.created/updated/deleted`
+event types and the `<key>.create/update/delete` atoms — no further plugin code.
 
-The kernel imports nothing from `radd.modules.*` — at load OR inside a handler
-(RADD-892). Identity, the permission gate, row visibility and event emission are
-policies, resolved per request through the installed `kernel.hosts.EntityHost`.
+The kernel imports nothing from `radd.modules.*`, at load OR inside a handler (RADD-892):
+identity, the permission gate, row visibility and event emission are resolved per request
+through the installed `kernel.hosts.EntityHost`.
 """
 
 # NOTE: deliberately NOT `from __future__ import annotations` — the generated CRUD
@@ -139,25 +134,15 @@ def _event_types(spec: EntitySpec) -> tuple[EventTypeSpec, ...]:
 
 
 def _project_purge(spec: EntitySpec) -> ProjectPurgeSpec:
-    """A declared entity's table has no `ON DELETE CASCADE` — `_column` never
-    emits one — so a project cannot be deleted while its rows exist. Registering
-    the purge HERE is what makes the north-star promise hold in both directions:
-    a plugin that writes no model code also writes no teardown code, and the
-    hardcoded child list that predated this (jiraimport's `_PROJECT_CHILDREN`)
-    could never have known the table existed. Order 10: entity rows are leaves.
-    """
+    """A declared entity's table has no `ON DELETE CASCADE` (`_column` never emits one), so
+    the purge is registered here — a plugin writing no model code writes no teardown code.
+    Order 10: entity rows are leaves."""
     return ProjectPurgeSpec(name=f"entity:{spec.key}", tables=(spec.table,), order=10)
 
 
 def _ref_builder(spec: EntitySpec, model: type):
-    """A canonical ref for a declared entity, generated from its own fields.
-
-    The shape mirrors the hand-written item ref: `id` plus whatever names the row
-    (`title`/`name`), plus `project` when the entity is project-scoped. A plugin
-    author writes none of it — which is the point. The alternative was every
-    plugin inventing its own payload shape, and the tracker already ran that
-    experiment: RADD-922 found fourteen of them.
-    """
+    """A canonical ref generated from the entity's own fields, shaped like the item ref:
+    `id`, whatever names the row (`title`/`name`/`label`), and `project` when scoped."""
     label_field = next(
         (f.name for f in spec.fields if f.name in ("title", "name", "label")), None
     )
@@ -296,13 +281,8 @@ def _pydantic_models(spec: EntitySpec):
 async def _acting_user(
     request: Request, session: Annotated[AsyncSession, Depends(get_session)]
 ):
-    """The caller, resolved through the host at REQUEST time.
-
-    A kernel-owned dependency with a fixed signature is what lets the generated
-    routers be built while plugins are still loading: FastAPI needs a callable at
-    decoration time, and `auth.deps.CurrentUser` would have to be imported then —
-    the very dependency this file is here to shed.
-    """
+    """The caller, resolved through the host at REQUEST time: FastAPI needs a callable at
+    decoration time, while plugins are still loading and `auth.deps` cannot be imported."""
     return await entity_host().current_user(request, session)
 
 
@@ -327,10 +307,7 @@ def crud_router(spec: EntitySpec) -> APIRouter:
     async def _emit(
         session: AsyncSession, verb: str, obj, actor_id, changes: list[dict] | None = None
     ) -> None:
-        # RADD-923: the id, not a shape. What lands in the payload is the
-        # entity's canonical ref — the same one every other module sees — rather
-        # than the `{id, project_id}` stub this used to write, which forced a
-        # webhook receiver to call back for so much as a title.
+        # RADD-923: pass the id; the payload carries the entity's canonical ref.
         await entity_host().emit(
             session,
             event_type=f"{key}.{verb}",
@@ -341,10 +318,8 @@ def crud_router(spec: EntitySpec) -> APIRouter:
             changes=changes,
         )
 
-    # Spec 123: the columns an update can touch — every mapped column but the
-    # identity and the timestamps. `updated` declares `has_changes`, so the
-    # router must keep that promise: snapshot before the setattr loop, diff
-    # after. A plugin entity's history is then as legible as an item's.
+    # Spec 123: `updated` declares `has_changes`, so updates diff every mapped column but
+    # the identity and timestamps (snapshot before the setattr loop, diff after).
     diffable_columns = tuple(
         c.name for c in model.__table__.columns if c.name not in ("id", "created_at", "updated_at")
     )

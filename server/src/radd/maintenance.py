@@ -1,14 +1,5 @@
-"""Maintenance mode — a core mechanism, not a backup feature.
-
-A restore replaces the database the app is connected to, so the app has to stop
-serving first. That is generic: any future migration or upgrade path wants the
-same switch, which is why the flag and the middleware live here beside
-`CommitBeforeSendMiddleware` rather than inside `modules/backup`.
-
-While engaged, every request answers 503 except an allowlist — the backup status
-and run endpoints, so the operator watching a restore can still see it finish,
-and the SPA can show a maintenance screen instead of a wall of failed calls.
-"""
+"""Maintenance mode — a core switch, not a backup feature: while engaged, every request
+answers 503 except the backup status/run endpoints, so a restore can be watched to the end."""
 
 import logging
 from dataclasses import dataclass

@@ -8,16 +8,10 @@ from radd.db import Base, TimestampMixin
 
 
 class AccessGrant(Base, TimestampMixin):
-    """One access grant (spec 92): a SUBJECT (user|team|role) is granted an ACCESS
-    (read|write|…) on a RESOURCE (resource_type + resource_id), SCOPED to a project
-    (NULL = every scope the resource applies in) — the single, generic ACL row used
-    by fields, builtin fields, views, and any plugin-registered resource.
-
-    `resource_id` is a string so it can hold a uuid (a field/view id) OR a stable
-    key (a builtin field name). No FK on it (polymorphic) — a resource deletes its
-    grants via `service.clear_resource`. `subject_id` is polymorphic too (validated
-    against the subject's table in the service).
-    """
+    """One access grant (spec 92): a SUBJECT gets an ACCESS on a RESOURCE (resource_type +
+    resource_id), SCOPED to a project (NULL = every scope). `resource_id` is a string (a uuid
+    OR a stable key such as a builtin field name) with no FK: a resource deletes its grants
+    via `service.clear_resource`. `subject_id` is polymorphic too (validated in the service)."""
 
     __tablename__ = "access_grants"
     __table_args__ = (
@@ -38,10 +32,8 @@ class AccessGrant(Base, TimestampMixin):
     # scope wins across scopes (a project deny beats a global allow AND a
     # project allow beats a global deny — specificity first, deny on ties).
     effect: Mapped[str] = mapped_column(String(5), default="allow", server_default="allow")
-    # RADD-820: NULL = permanent (every pre-existing row). Applied at
-    # RESOLUTION time — an expired grant is absent the moment it passes, and
-    # the sweep merely deletes corpses. `granted_by` NULL = pre-existing or
-    # system-created, which is honest: nobody knows who granted those.
+    # RADD-820: NULL = permanent. Applied at RESOLUTION — an expired grant is absent the moment
+    # it passes; the sweep only deletes corpses. `granted_by` NULL = pre-existing or system.
     expires_at: Mapped["datetime | None"] = mapped_column(nullable=True)
     granted_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

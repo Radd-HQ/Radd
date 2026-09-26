@@ -6,7 +6,7 @@ shaping (domain error -> isError:true + rollback, unknown tool -> -32602,
 arguments the advertised schema rejects -> -32602 with every violation in
 `data` [RADD-1106], a handler bug -> -32603 + rollback, never an HTTP 500
 [RADD-905]), tool-catalog generation from a stubbed field registry, and
-pages-module feature detection. HTTP-level auth gates (401/403) ride an in-process ASGI client that
+the doc tools leaving with the pages plugin. HTTP-level auth gates (401/403) ride an in-process ASGI client that
 never touches the DB. The full PAT round trip is an integration step, not a
 unit test (repo rule: tests only where they earn their keep).
 """
@@ -25,11 +25,19 @@ from radd.modules.mcp.protocol import JsonRpcError, JsonRpcRequest, parse_reques
 from radd.modules.mcp.router import handle_request
 from radd.modules.mcp.types import (
     MCP_PROTOCOL_VERSION,
-    PAGE_TOOLS,
     JsonRpcErrorCode,
     McpMethod,
     McpTool,
 )
+
+# The doc tools: the pages plugin's own registrations.
+PAGE_TOOLS = {
+    McpTool.GET_PAGE,
+    McpTool.SEARCH_PAGES,
+    McpTool.CREATE_PAGE,
+    McpTool.UPDATE_PAGE,
+    McpTool.MOVE_PAGE,
+}
 
 TRACKER_TOOLS = {
     McpTool.SEARCH_ITEMS,
@@ -318,8 +326,8 @@ STUB_REGISTRY = {
 
 
 def test_catalog_names_and_required_fields():
-    catalog = tools.build_catalog(STUB_REGISTRY, include_pages=False)
-    assert {tool["name"] for tool in catalog} == {t.value for t in TRACKER_TOOLS}
+    catalog = tools.build_catalog(STUB_REGISTRY)
+    assert {tool["name"] for tool in catalog} == {t.value for t in TRACKER_TOOLS | PAGE_TOOLS}
     by_name = {tool["name"]: tool for tool in catalog}
     assert by_name[McpTool.SEARCH_ITEMS]["inputSchema"]["required"] == ["slq"]
     assert by_name[McpTool.CREATE_ITEM]["inputSchema"]["required"] == ["project_key", "title"]
@@ -329,7 +337,7 @@ def test_catalog_names_and_required_fields():
 
 
 def test_catalog_custom_fields_schema_comes_from_registry():
-    catalog = tools.build_catalog(STUB_REGISTRY, include_pages=False)
+    catalog = tools.build_catalog(STUB_REGISTRY)
     by_name = {tool["name"]: tool for tool in catalog}
     for name in (McpTool.CREATE_ITEM, McpTool.UPDATE_ITEM):
         custom = by_name[name]["inputSchema"]["properties"]["custom_fields"]
@@ -337,28 +345,15 @@ def test_catalog_custom_fields_schema_comes_from_registry():
         assert custom["additionalProperties"] is False
 
 
-def test_catalog_doc_tools_appear_only_when_docs_live():
-    without = {t["name"] for t in tools.build_catalog({}, include_pages=False)}
-    with_docs = {t["name"] for t in tools.build_catalog({}, include_pages=True)}
-    assert with_docs - without == {tool.value for tool in PAGE_TOOLS}
-
-
-# --- docs feature detection ---
-# RADD-889: pages_bridge (the importlib probe of the pages service) is gone.
-# The doc tools are the pages plugin's OWN McpToolSpec contributions, so
+# RADD-889: the doc tools are the pages plugin's OWN McpToolSpec contributions, so
 # availability IS registration: absent/disabled pages plugin -> no specs in the
 # kernel registry -> no doc tools, in catalog and dispatch alike.
-
-
-def test_docs_unavailable_when_pages_contributes_no_tools(monkeypatch):
+def test_catalog_doc_tools_appear_only_when_pages_registers_them(monkeypatch):
+    with_docs = {t["name"] for t in tools.build_catalog({})}
     for tool in PAGE_TOOLS:
         monkeypatch.delitem(registries.mcp_tools, tool.value, raising=False)
-    assert tools.pages_available() is False
-
-
-def test_pages_available_when_the_pages_plugin_is_registered():
-    # conftest loads the full plugin set; the pages manifest carries both specs.
-    assert tools.pages_available() is True
+    without = {t["name"] for t in tools.build_catalog({})}
+    assert with_docs - without == {tool.value for tool in PAGE_TOOLS}
 
 
 async def test_doc_handler_calls_the_pages_service(monkeypatch):

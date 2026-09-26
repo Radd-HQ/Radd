@@ -1,23 +1,11 @@
-"""The ledger columns (spec 123): what `emit` derives from a payload so that
-the audit log can be FILTERED and SEARCHED without reading every row.
+"""The ledger columns (spec 123), derived by `emit` so the audit log filters and searches
+without reading every row. Pure; no I/O.
 
-Three pure functions, no I/O, each answering one question an auditor asks:
-
-- `project_of`: which project did this happen in? Read from the subject refs
-  the kernel already writes (`payload.project`, `payload.item.project`) or a
-  bare `project_id` an emitter put there — never resolved here, so the events
-  module keeps depending on no plugin.
-- `entity_label`: what is this thing called? `RADD-123 Board scroll`, `Role:
-  Contributor`, `alice@example.com`. Taken from the entity's own ref when the
-  payload carries one, else from the payload's `name`/`title`/`key`/`email`…
-  at WRITE time, so the record survives the row's deletion or rename.
-- `search_text`: what should free text match? The event's words, the label,
-  the changed fields and their old/new values — a trigram index over ONE
-  column instead of an ILIKE over the whole JSONB.
-
-Bounded on purpose: a label is 300 characters, the search text 4000. A mail
-payload of a megabyte contributes its subject line, not its body.
-"""
+- `project_of`: the project, from the subject refs the payload carries (never resolved here,
+  so `events` depends on no plugin);
+- `entity_label`: the display label at WRITE time (survives rename/delete);
+- `search_text`: event words + label + changed fields/values — one trigram-indexed column.
+Bounded: label 300 chars, search text 4000."""
 
 from __future__ import annotations
 

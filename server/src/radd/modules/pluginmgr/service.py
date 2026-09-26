@@ -32,16 +32,13 @@ class PluginInfo:
     state: PluginState
     description: str
     can_toggle: bool  # non-core only
-    # The plugin's evaluated CapabilitySpecs ({key,label,category,enabled}) —
-    # evaluated from the plugin OBJECT, not the kernel registry, so a disabled
-    # connector still reports whether its env config is present (the Plugins
-    # page is the home for per-connector status; settings reorg).
+    # Evaluated from the plugin OBJECT, not the kernel registry, so a disabled
+    # connector still reports whether its config is present.
     capabilities: tuple[dict, ...] = ()
     active: bool = False
     origin: str = "builtin"
     dependencies: tuple[str, ...] = ()
     problems: tuple[str, ...] = ()
-    live_supported: bool = False
     managed: bool = False
     runtime_state: RuntimeState = RuntimeState.APPLYING
     #: Failures to apply THIS plugin, per process. A process that cannot
@@ -67,11 +64,8 @@ async def _states(session: AsyncSession) -> dict[str, InstalledPlugin]:
 
 
 async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
-    """Every plugin the manager knows, with its lifecycle state.
-
-    Core bootstrap plugins (config.modules, core=True) are locked-ENABLED. Optional
-    bootstrap plugins (config.modules, core=False) are ENABLED unless a DISABLED row
-    exists — they're on by default, disableable. Installable plugins carry their row
+    """Every plugin the manager knows, with its lifecycle state: core ones locked-ENABLED,
+    optional bootstrap ones ENABLED unless a DISABLED row exists, installable ones their row's
     state (DISCOVERED until installed)."""
     rows = await _states(session)
     infos: list[PluginInfo] = []
@@ -95,7 +89,7 @@ async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
                                 capabilities=_capabilities(plugin)))
     known = {**core_plugins, **installable_plugins}
     enabled_names = {i.name for i in infos if i.state == PluginState.ENABLED}
-    from . import acks, live, store
+    from . import acks, store
     managed_ids = {entry["id"] for entry in store.catalog().values()}
     peers = [p for p in await acks.cluster_reports(session) if not p.get("stale")]
 
@@ -120,7 +114,6 @@ async def list_plugins(session: AsyncSession) -> list[PluginInfo]:
         **runtime_info(i),
         origin="builtin" if i.id in core_plugins else "package",
         dependencies=known[i.id][0].depends_on,
-        live_supported=live.supported(known[i.id][0]),
         managed=i.id in managed_ids,
         problems=tuple(plugin_problems(known[i.id][0], enabled_names)),
     ) for i in infos]
@@ -160,8 +153,6 @@ def _resolve_toggleable(plugin_id: str):
 
 def _ensure_no_dependents(plugin) -> None:
     """Block disabling a plugin another currently-loaded plugin depends on (§10)."""
-    from radd.kernel import registries
-
     dependents = sorted(
         p.id for p in registries.plugins.values()
         if plugin.name in p.depends_on and p.id != plugin.id
@@ -171,6 +162,15 @@ def _ensure_no_dependents(plugin) -> None:
             PluginEntity.PLUGIN,
             reason=f"{plugin.id} is required by {', '.join(dependents)} — disable those first",
         )
+
+
+async def _ensure_no_enabled_dependents(session: AsyncSession, plugin) -> None:
+    """The same, against DESIRED state: an enabled plugin that depends on this one."""
+    dependents = [i.name for i in await list_plugins(session)
+                  if i.id != plugin.id and i.state == PluginState.ENABLED
+                  and plugin.name in i.dependencies]
+    if dependents:
+        raise ConflictError(PluginEntity.PLUGIN, reason=f"Required by {', '.join(dependents)}")
 
 
 async def _emit(session: AsyncSession, event: PluginEvent, plugin_id: str, actor_id) -> None:
@@ -201,11 +201,7 @@ async def install(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | N
     if row is None:
         row = InstalledPlugin(id=plugin_id, version=plugin.version, state=PluginState.INSTALLED.value, config={})
         session.add(row)
-    elif row.state == PluginState.ERRORED.value:
-        # Re-installing a quarantined plugin clears the error back to INSTALLED. (There is no
-        # UNINSTALLED row state — uninstall DELETES the row — so an existing row otherwise means the
-        # plugin is already installed/enabled/disabled and install is a no-op.)
-        row.state = PluginState.INSTALLED.value
+    # Otherwise it is already installed/enabled/disabled (uninstall DELETES the row): a no-op.
     await session.flush()
     await _emit(session, PluginEvent.INSTALLED, plugin_id, actor_id)
     return row
@@ -237,11 +233,7 @@ async def _resume_consumers(session: AsyncSession, plugin) -> None:
 async def disable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> InstalledPlugin:
     plugin, _path, kind = _resolve_toggleable(plugin_id)
     _ensure_no_dependents(plugin)
-    dependents = [i.name for i in await list_plugins(session)
-                  if i.id != plugin.id and i.state == PluginState.ENABLED
-                  and plugin.name in i.dependencies]
-    if dependents:
-        raise ConflictError(PluginEntity.PLUGIN, reason=f"Required by {', '.join(dependents)}")
+    await _ensure_no_enabled_dependents(session, plugin)
     row = await _row(session, plugin_id)
     # An installable plugin must actually be enabled to disable; an optional bootstrap
     # plugin is enabled-by-default (no row), so disabling writes a DISABLED row.
@@ -253,11 +245,8 @@ async def disable(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | N
 
 
 # --- instance-wide contribution settings (spec 94) --------------------------------------------
-# A plugin's UI contributions can be disabled INSTANCE-WIDE by an admin (distinct from a user
-# disabling one for just themselves via /auth/me/preferences). The set lives in the plugin's own
-# `InstalledPlugin.config['disabled_contributions']` as `"<slot>::<id>"` keys, so it's plugin-scoped
-# and drops when the plugin is uninstalled. The aggregate read prefixes each with the plugin's
-# `name` (the UI slot-registry tag), the exact `"<name>::<slot>::<id>"` key the SDK matches on.
+# Stored as `"<slot>::<id>"` keys in the plugin's own `InstalledPlugin.config`, so the set drops
+# with the plugin; the aggregate read prefixes the plugin's `name`, the key the SDK matches on.
 _DISABLED_KEY = "disabled_contributions"
 
 
@@ -280,19 +269,14 @@ async def contribution_settings_all(session: AsyncSession) -> list[str]:
 async def set_contribution_settings(
     session: AsyncSession, plugin_id: str, disabled: list[str], *, actor_id=None
 ) -> list[str]:
-    """Replace a plugin's instance-wide-disabled set (`"<slot>::<id>"` keys). Get-or-creates the
-    plugin's row WITHOUT changing its lifecycle: a new row is seeded with the plugin's DEFAULT
-    reported state (core/bootstrap-optional → ENABLED, installable → DISCOVERED), so persisting a
-    contribution setting never accidentally enables or disables the plugin itself. In practice the
-    row already exists and is ENABLED — you only manage a plugin's contributions once its UI loads."""
+    """Replace a plugin's instance-wide-disabled set (`"<slot>::<id>"` keys). A missing row is
+    created in the plugin's DEFAULT reported state, so this never enables or disables the plugin."""
     entry = discovery.all_known().get(plugin_id)
     if entry is None:
         raise NotFoundError(PluginEntity.PLUGIN, plugin_id)
     plugin, _path = entry
     row = await _row(session, plugin_id)
     if row is None:
-        # config.modules plugins (core + optional bootstrap) are on-by-default; installable ones are
-        # DISCOVERED until installed. Match that so the created row reports the same state as none.
         default = (
             PluginState.ENABLED
             if plugin_id in discovery.core_plugins()
@@ -321,15 +305,10 @@ async def set_contribution_settings(
 
 
 async def sweep_plugin_atoms(session: AsyncSession, plugin, actor_id: uuid.UUID | None) -> dict:
-    """RADD-818: strip a departing plugin's atoms from stored roles and token
-    scopes, and delete the grants of its access-resource types — the RADD-701
-    migration pattern applied at runtime, each step over its own table.
-
-    Only atoms the plugin itself DECLARED are stripped (its PermissionSpec keys
-    and its CRUD resources' key.action forms) — never a shared umbrella like
-    global.manage. Relation-qualified forms (`x.read@own`) strip by BASE. The
-    emitted payload names everything removed, because silently narrowing a
-    role is exactly what an access review needs to see."""
+    """RADD-818: strip a departing plugin's atoms from stored roles and token scopes, and
+    delete the grants of its access-resource types. Only atoms it DECLARED go (never a shared
+    umbrella like global.manage); `x.read@own` strips by BASE. The payload names everything
+    removed: silently narrowing a role is exactly what an access review needs to see."""
     import json
 
     from sqlalchemy import text as sa_text
@@ -405,21 +384,15 @@ async def sweep_plugin_atoms(session: AsyncSession, plugin, actor_id: uuid.UUID 
 
 
 async def uninstall(session: AsyncSession, plugin_id: str, actor_id: uuid.UUID | None = None) -> None:
-    """Remove an installable plugin's record (keeps data by default — a separate purge
-    drops its tables, §10). Bootstrap builtins can't be uninstalled — only disabled.
-    RADD-818: the atom sweep runs first, so roles/token scopes/grants never keep
-    vocabulary the catalog no longer knows."""
+    """Forget an installable plugin (its data stays, §10); builtins can only be disabled.
+    The atom sweep runs first, so stored roles and scopes never keep unknown vocabulary."""
     plugin, _path, kind = _resolve_toggleable(plugin_id)
     if kind == PluginOrigin.BOOTSTRAP.value:
         raise ConflictError(
             PluginEntity.PLUGIN, reason=f"{plugin_id} is a builtin — disable it instead of uninstalling"
         )
     _ensure_no_dependents(plugin)
-    dependents = [i.name for i in await list_plugins(session)
-                  if i.id != plugin.id and i.state == PluginState.ENABLED
-                  and plugin.name in i.dependencies]
-    if dependents:
-        raise ConflictError(PluginEntity.PLUGIN, reason=f"Required by {', '.join(dependents)}")
+    await _ensure_no_enabled_dependents(session, plugin)
     from . import acks
     row = await _row(session, plugin_id)
     # Every live process must have OBSERVED this disabled version and run none of

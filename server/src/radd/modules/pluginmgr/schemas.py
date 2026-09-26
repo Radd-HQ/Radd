@@ -25,7 +25,6 @@ class PluginRead(BaseModel):
     origin: str = "builtin"
     dependencies: list[str] = []
     problems: list[str] = []
-    live_supported: bool = False
     managed: bool = False
     runtime_state: str = "applying"
     runtime_errors: list[str] = []

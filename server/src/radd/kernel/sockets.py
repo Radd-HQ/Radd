@@ -1,21 +1,13 @@
-"""Integration sockets — typed plugin-to-plugin implementation points (§4a).
+"""Integration sockets — named interfaces one plugin PROVIDES and others consume.
 
-A socket is a named interface one plugin *provides* and another *consumes*: a
-plugin registers `IntegrationSpec(socket, name, impl)` on its manifest, and a
-consumer resolves the active one via a settings key. This is the uniform shape
-behind "S3 as a plugin" (StorageBackend), "Celery as a plugin" (TaskBackend),
-notifiers, connectors, AI/VCS providers, and the upload filter pipeline.
-
-Per docs/plugin-platform.md §13 most of these are **[seam]s**: the interface is
-defined now; a concrete second provider arrives when the first consuming plugin is
-actually built. `StorageBackend` and `TaskBackend` already have real providers.
-"""
+A provider registers `IntegrationSpec(Socket.X, name, impl=...)`; a consumer reads
+`providers(Socket.X)` / `provider(Socket.X, name)`, which answer only for plugins loaded
+NOW, so disabling a provider withdraws it."""
 
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
-
 
 from .registry import registries
 
@@ -58,31 +50,15 @@ class TaskBackend(Protocol):
     default; a `celery` plugin provides an alternative."""
 
     def schedule(self, name: str, run: Any, interval: Any, gate: Any) -> Any: ...
-    def enqueue(self, name: str, run: Any) -> Any: ...
-
-
-@runtime_checkable
-class Notifier(Protocol):
-    async def notify(self, target: str, message: dict[str, Any]) -> None: ...
 
 
 @runtime_checkable
 class RoutingRule(Protocol):
-    """One storage routing-rule TYPE (spec 102): evaluates an upload's context
-    against an admin-authored config and answers with a host id, or None to
-    fall through to the next rule in the chain. `config_model` is the pydantic
-    class validating the rule's stored JSON config. A plugin rule type is one
-    IntegrationSpec on this socket (`ai` provides `llm`, RADD-1387).
-
-    `captured_types(session, config, *, source_ip, content_types)` — the subset
-    of `content_types` this rule would decide WITHOUT reaching an "ask the
-    uploader" rule behind it, so the upload form prompts only when the answer
-    can matter. OPTIONAL: a type that does not implement it is treated as
-    capturing nothing (over-asking beats silently discarding an answer).
-
-    A stored rule whose type has no provider — the plugin disabled — is
-    skipped: routing degrades toward the default host, never toward an error.
-    """
+    """One storage routing-rule TYPE (spec 102): `evaluate` answers a host id, or None to
+    fall through; `config_model` validates its stored config. Optional
+    `captured_types(session, config, *, source_ip, content_types)` — the types it decides
+    without reaching an "ask the uploader" rule (absent = captures nothing: over-asking beats
+    discarding an answer). A stored rule whose provider is gone is skipped."""
 
     config_model: Any
 
@@ -91,77 +67,36 @@ class RoutingRule(Protocol):
 
 @runtime_checkable
 class NonWorkingDaysProvider(Protocol):
-    """Calendar dates on which the INSTANCE does not work (RADD-1031).
-
-    Mechanism only: the kernel knows there is such a thing as a day nobody
-    works, and nothing about why. `leave` answers with its studio holidays; a
-    plugin holding a regional calendar answers alongside it — every provider on
-    the socket is asked and the answers UNION, because a date is non-working if
-    anyone's calendar says so.
-
-    The subject is the instance, not a person: an SLA clock is attached to an
-    item, so there is no user whose personal absence could pause it. Providers
-    must therefore answer with dates that stop work for everybody, never with
-    one person's leave.
-
-    Answers are advisory and time-boxed to the [start, end] window the consumer
-    asks for, so a provider never has to enumerate a calendar it cannot bound.
-    """
+    """Calendar dates on which NOBODY works (RADD-1031) — never one person's leave: an SLA
+    clock belongs to an item. Every provider is asked and answers UNION, bounded to the
+    [start, end] window asked for."""
 
     async def non_working_dates(self, session: Any, start: date, end: date) -> set[date]: ...
 
 
 @runtime_checkable
 class PersonAvailabilityProvider(Protocol):
-    """Which PEOPLE are away on a date (RADD-1387).
-
-    `NON_WORKING_DAYS` answers for the INSTANCE — a date nobody works, so a
-    clock attached to an item can stop. This answers per PERSON: somebody's
-    leave, or a holiday that covers their team. The consumer is whatever hands
-    work to people (round-robin assignment skips whoever is away), and it must
-    never read these answers as instance-wide.
-
-    `away_user_ids(session, day, user_ids)` — which of `user_ids` are away on
-    `day`. "Is this person away" is the one-element question. Batched because
-    a consumer asks about a whole team at once.
-
-    Every provider is asked and the answers UNION: a person is away if any
-    calendar says so. With no provider — `leave` disabled — nobody is away,
-    which is exactly the behaviour of an instance that never recorded leave.
-    """
+    """Which PEOPLE are away on a date (RADD-1387): `away_user_ids(session, day, user_ids)`,
+    batched. Per person, unlike NON_WORKING_DAYS — never read it as instance-wide. Answers
+    UNION; no provider means nobody is away."""
 
     async def away_user_ids(self, session: Any, day: date, user_ids: Collection[Any]) -> set[Any]: ...
 
 
 @runtime_checkable
 class TransitionCheckProvider(Protocol):
-    """One CHECK a workflow transition rule may name (RADD-1383).
+    """One CHECK a workflow transition rule may name (RADD-1383); workflow evaluates its
+    own checks and asks this socket for the rest (`approvals` → `require_approval`).
 
-    Mechanism only: the kernel knows a transition row carries rules
-    `[{check, params}]` and that some checks belong to plugins. `workflow`
-    evaluates its own (field conditions, resolved threads, a release) and asks
-    this socket for every other key; `approvals` answers `require_approval`.
-    The provider owns the check end to end, so workflow never learns it exists:
+    * `check` — the rule's key, unique across providers (= the IntegrationSpec name);
+    * `sort_last` — its failure reads after workflow's own;
+    * `validate(session, params)` — write path: normalized params, or ConflictError;
+    * `prepare(session, item)` — per-item data `failure` needs, fetched once;
+    * `failure(params, prepared, to_state_id)` — pure: None, or the mover's sentence;
+    * `moved(session, item_id, to_state_id)` — told after every state change (an
+      approval is spent by the move it unlocked).
 
-    * `check` — the rule's `check` key, unique across providers (register the
-      IntegrationSpec under the same name);
-    * `sort_last` — its failure follows workflow's own: a gate someone else
-      clears reads after the data the mover can fix;
-    * `validate(session, params)` — the WRITE path: return the params to store
-      (normalized, display names snapshotted server-side) or raise the
-      `ConflictError` (409) the rule editor shows;
-    * `prepare(session, item)` — the per-item data `failure` needs, fetched once
-      per evaluation so a list of targets costs one query, not one per target;
-    * `failure(params, prepared, to_state_id)` — pure: None when the rule
-      passes, else the human sentence the mover sees;
-    * `moved(session, item_id, to_state_id)` — told after every successful
-      state change, whatever governed it (an approval is spent by the move it
-      unlocked).
-
-    A stored rule whose provider is gone — the plugin disabled or uninstalled —
-    FAILS CLOSED in workflow: an admin configured that gate, and switching a
-    plugin off must not quietly open it.
-    """
+    A stored rule whose provider is gone FAILS CLOSED in workflow."""
 
     check: str
     sort_last: bool
@@ -176,27 +111,15 @@ class TransitionCheckProvider(Protocol):
 
 @runtime_checkable
 class SearchDocumentSource(Protocol):
-    """A corpus of DOCUMENTS search shows beside issues (RADD-1384).
+    """A corpus of DOCUMENTS search shows beside issues (RADD-1384); the provider owns its
+    ACL end to end.
 
-    Mechanism only: `search` knows there are non-item hits it can rank, fuse
-    with semantic candidates and shape into deflection and Ask-mode answers;
-    `pages` answers with wiki pages. The provider owns its ACL end to end, so
-    search never learns what a space or a page restriction is:
+    * `entity_type` — its id space (also what SEMANTIC_CANDIDATES is asked for);
+    * `search(session, actor, q, limit=)` — full-text, best first, readable only, scoped
+      BEFORE the limit;
+    * `resolve(session, actor, ids)` — the readable subset of `ids`, any order.
 
-    * `entity_type` — the id space its hits live in; it is what the
-      SEMANTIC_CANDIDATES socket is asked for (register the spec under it);
-    * `search(session, actor, q, limit=)` — the full-text ranking, best-first,
-      of the documents `actor` may read, scoped BEFORE the limit so unreadable
-      hits never eat the budget;
-    * `resolve(session, actor, ids)` — the live, readable subset of `ids`
-      through the same gate, in any order: how a semantic-only candidate
-      becomes a hit.
-
-    Both answer `search.sources.DocumentHit`s — the consumer's shape, which the
-    provider imports (a provider depends on search, never the reverse). No
-    provider registered means no documents: deflection and Ask mode answer with
-    issues alone, and nothing errors.
-    """
+    Both return `search.sources.DocumentHit`. No provider = issues alone."""
 
     entity_type: str
 
@@ -206,23 +129,14 @@ class SearchDocumentSource(Protocol):
 
 @runtime_checkable
 class SemanticCandidateSource(Protocol):
-    """Meaning-ranked candidates for a query (RADD-1384); `ai` answers from its
-    embeddings.
+    """Meaning-ranked candidates for a query (RADD-1384); `ai` answers from embeddings.
 
-    * `enabled(session)` — whether it can answer RIGHT NOW (switched on,
-      configured, its store reachable); cheap-first, since every hybrid search
-      asks;
-    * `candidates(session, entity_type, q, limit=, project_ids=)` — `(id, cosine
-      distance)` nearest-first for one entity type, `[]` for a type it does not
-      embed. Item candidates are pre-filtered to `project_ids`; a document type
-      is unscoped, because the document source's `resolve` is its gate.
+    * `enabled(session)` — can it answer NOW (asked on every hybrid search; keep it cheap);
+    * `candidates(session, entity_type, q, limit=, project_ids=)` — `(id, cosine distance)`
+      nearest first, `[]` for a type it does not embed; items pre-filtered to `project_ids`.
 
-    A candidate is never a permission answer: the consumer materializes every
-    id through the owner's read gate before a person sees it. `search` fuses
-    each provider's ranking with its full-text one by RRF, time-budgets the
-    hybrid call, and reads any exception as "no candidates" — full-text only
-    is the floor, and switching the provider off lands exactly there.
-    """
+    A candidate is never a permission answer (every id passes the owner's read gate); any
+    exception reads as "no candidates" — full-text only is the floor."""
 
     async def enabled(self, session: Any) -> bool: ...
     async def candidates(
@@ -238,35 +152,22 @@ class SemanticCandidateSource(Protocol):
 
 @runtime_checkable
 class NotificationSubjectProvider(Protocol):
-    """Something other than an issue that notifications can be ABOUT (RADD-1385).
+    """Something other than an issue that notifications can be ABOUT (RADD-1385), registered
+    under its `entity_type` (the IntegrationSpec name, = the comment parent type); notify asks
+    it only what it cannot know.
 
-    Mechanism only: `notify` owns the kinds × scopes matrix, the planner, the
-    channel verdict, the inbox and the mail; an issue is its built-in subject.
-    Anything else — a wiki page — registers here under its ENTITY TYPE (the
-    IntegrationSpec's name, which is also the comment parent type), and notify
-    asks it only what it cannot know itself:
+    * `scope` — the subscription scope its container answers to (`space` for a page);
+    * `events` — event type → notification kind;
+    * `locate(session, event)` — the notify `SubjectRef` an event is about, or None;
+    * `watcher_ids(session, subject_id)` — who follows it;
+    * `reader_ids(session, subject_id, user_ids)` — the ACTIVE ones who may read it now
+      (the one read gate for fan-out and mail re-checks);
+    * `scope_options(session, actor, *, q, limit, offset, exclude)` — subscribable
+      containers, paged `(choices, total)`;
+    * `scope_names(session, actor, scope_ids)` — the ones the actor may NAME (narrows and
+      labels at once: the label is all an unchecked subscription id would leak).
 
-    * `entity_type` — the key above;
-    * `scope` — the SUBSCRIPTION scope the subject's container answers to
-      (`space` for a page): the prefs picker and a subscription's label ask the
-      provider of that scope;
-    * `events` — event type → the notification kind it fans out as;
-    * `locate(session, event)` — the subject an event is about (one of `events`,
-      or a comment whose parent is this entity type), as notify's `SubjectRef`
-      (id, container id, the display payload the row is written with), or None;
-    * `watcher_ids(session, subject_id)` — who follows it (`participating`);
-    * `reader_ids(session, subject_id, user_ids)` — of these people, the ACTIVE
-      ones who may read it now. The one read gate: fan-out and the mail loops'
-      re-check both ask it;
-    * `scope_options(session, actor, *, q, limit, offset, exclude)` — the
-      containers the actor may subscribe to, paged `(choices, total)`;
-    * `scope_names(session, actor, scope_ids)` — of these containers, the ones
-      the actor may NAME, by name. It narrows and labels at once, because the
-      label is the whole of what an unchecked subscription id would leak.
-
-    A subject whose provider is gone — the plugin disabled — notifies nobody,
-    and its queued rows stop being mailed: nothing is left to vouch for them.
-    """
+    With its provider gone a subject notifies nobody and its queued rows stop mailing."""
 
     entity_type: str
     scope: str
@@ -283,44 +184,24 @@ class NotificationSubjectProvider(Protocol):
 
 @runtime_checkable
 class NotificationAudienceSource(Protocol):
-    """More people PARTICIPATING in an issue than its watchers (RADD-1385).
-
-    `participants` answers with the CURRENT members of the item's participant
-    teams — resolved at fan-out time, so joining a team joins its shared
-    tickets. Every provider is asked and the answers UNION; each recipient
-    still passes notify's per-row read check, so a source can widen who is
-    ASKED, never what anyone may see.
-    """
+    """More people following an issue than its watchers (RADD-1385): `participants`
+    answers with its teams' CURRENT members. Answers UNION; recipients still pass notify's
+    per-row read check."""
 
     async def participant_ids(self, session: Any, item_id: Any) -> set[Any]: ...
 
 
 @runtime_checkable
 class MailTransport(Protocol):
-    """Carries one notification email (RADD-1385).
+    """Carries one notification email (RADD-1385); `mailintake` provides it and owns sender
+    resolution, threading and the mail.sent/mail.failed record. With none, notify records
+    rows as undeliverable.
 
-    `notify` decides who is mailed what; the transport owns sender resolution,
-    threading and the `mail.sent`/`mail.failed` record. `mailintake` provides it.
-    With none registered email is UNAVAILABLE: notify records the rows as
-    undeliverable instead of dialling a relay of its own, and the inbox is
-    untouched.
-
-    * `configured(session)` — is there anywhere to send FROM? Asked once per
-      loop tick, never per recipient;
-    * `send(session, mail)` — deliver notify's `NotificationMail` (its `kind`
-      and `failure` are notify's vocabulary). True when it went out; never raises.
-    """
+    * `configured(session)` — anywhere to send FROM? (once per tick);
+    * `send(session, mail)` — deliver a `NotificationMail`; True when sent, never raises."""
 
     async def configured(self, session: Any) -> bool: ...
     async def send(self, session: Any, mail: Any) -> bool: ...
-
-
-@runtime_checkable
-class AttachmentFilter(Protocol):
-    """Synchronous, ordered, *vetoing* hook every upload passes through (§13
-    interceptor). Raise to reject; return (optionally transformed) bytes to accept."""
-
-    async def check(self, filename: str, content: bytes) -> bytes: ...
 
 
 # --- resolution helpers (over the kernel integrations registry) ---

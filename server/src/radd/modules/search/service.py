@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import load_only
 
 from radd.config import settings
+from radd.kernel import registries
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
@@ -43,10 +44,6 @@ def build_tsquery(q: str) -> str:
     return " & ".join(quoted)
 
 
-def looks_like_key(q: str) -> bool:
-    return bool(KEY_QUERY_RE.match(q.strip()))
-
-
 def key_pattern(q: str) -> str | None:
     """ILIKE pattern for key matching, or None when q isn't key-shaped.
 
@@ -70,14 +67,9 @@ class SearchHit:
 
 
 async def readable_project_ids(session: AsyncSession, user: User) -> set[uuid.UUID]:
-    """Public seam (spec 103): the ai module scopes vector candidates with it."""
-    return await _readable_project_ids(session, user)
-
-
-async def _readable_project_ids(session: AsyncSession, user: User) -> set[uuid.UUID]:
-    """Projects where the caller may read items — one batched authz pass.
-    `holds_base` (RADD-823): a relation-qualified reader still counts; WHICH
-    rows they see inside the project is `_relation_index_clause`'s job."""
+    """Projects where the caller may read items (public seam: ai scopes vector candidates
+    with it). A relation-qualified reader still counts (RADD-823); WHICH rows they see is
+    `_relation_index_clause`'s job."""
     return set(await authz.readable_projects(session, user))
 
 
@@ -88,11 +80,16 @@ def _scope(stmt: Select, readable: set[uuid.UUID], relation_clause=None) -> Sele
     return stmt
 
 
-# The relation keys the index MIRRORS as columns (RADD-841): a relation whose
-# meaning is one of the item's OWN anchors is answered from search_index itself,
-# because a mirror exists precisely so search never joins work_items. Every
-# other registered item relation is compiled from its spec (RADD-1030) — see
-# `_rebind_to_index`; the mirror set is the fast path, not the whole answer.
+async def _scoped(session: AsyncSession, user: User, stmt: Select) -> Select | None:
+    """`stmt` narrowed to the index rows `user` may read; None when they may read none."""
+    readable = await readable_project_ids(session, user)
+    if not readable:
+        return None
+    return _scope(stmt, readable, await _relation_index_clause(session, user))
+
+
+# Relation keys the index MIRRORS as columns (RADD-841) — the fast path, so search never
+# joins work_items; every other registered item relation goes through `_rebind_to_index`.
 _INDEX_RELATION_COLUMNS = ("own", "assigned", "team", "public")
 
 # The table the registered item relations write their where-forms against, and
@@ -105,24 +102,10 @@ _unmirrorable_warned: set[str] = set()
 
 
 def _rebind_to_index(clause):
-    """A registered item relation's where-form, re-anchored from `work_items.id`
-    onto `search_index.item_id` — or None when that cannot be done (RADD-1030).
-
-    Relations whose membership lives in ANOTHER table (`@participant`, RADD-844)
-    are expressed as `WorkItem.id IN (SELECT … FROM item_participants …)`. Only
-    the anchor names work_items; the predicate itself is about a different table
-    entirely, so swapping the anchor for the mirror's `item_id` yields exactly
-    the same set of item ids without search learning what the relation MEANS.
-    That is why this compiles the REGISTERED spec rather than restating it: the
-    owning plugin stays the single source of truth (participants' RelationSpec
-    covers team-participant rows live, and a change there reaches search for
-    free), and `search` names no plugin, so an unloaded one simply registers
-    nothing.
-
-    A rebound clause still touching `work_items` is REFUSED, not shipped: the
-    d841 mirror rule ("search never joins work_items") is what keeps FTS one
-    index scan, and a column relation like `@own` is already covered above.
-    """
+    """A registered item relation's where-form re-anchored from `work_items.id` onto
+    `search_index.item_id`, or None (RADD-1030). Compiling the REGISTERED spec keeps the
+    owner the single source of truth (`@participant` needs no mirror column). A result still
+    touching `work_items` is refused: search never joins it (d841)."""
     from sqlalchemy.sql import visitors
 
     item_id = SearchIndexRow.item_id.__clause_element__()
@@ -151,7 +134,6 @@ def _relation_clauses(relation_actor, held: set[str]) -> dict:
     plugin relation reaches search without search naming the plugin."""
     from sqlalchemy import false
 
-    from radd.kernel import registries
     from radd.modules.auth.types import relation_contains
 
     clauses = {
@@ -240,8 +222,6 @@ def _guard_index_clause(relation_actor):
     None when no guard binds this actor (none registered, or an admin)."""
     from sqlalchemy import or_
 
-    from radd.kernel import registries
-
     guard = registries.row_guards.get("item")
     if guard is None or relation_actor.unrestricted:
         return None
@@ -261,17 +241,14 @@ async def search(
     q = q.strip()[:MAX_QUERY_CHARS]
     if not q:
         return []
-    readable = await _readable_project_ids(session, user)
+    readable = await readable_project_ids(session, user)
     if not readable:
         return []
     relation_clause = await _relation_index_clause(session, user)
 
-    # RADD-1085: ts_headline reads the INDEX row's description + public comment
-    # text, bypassing the spec-50 builtin blanking the item read applies. When
-    # ANY read grant restricts `description` anywhere, non-admin hits degrade
-    # to title-only rather than leak — the denied_slq_fields stance: restriction
-    # is rare, a per-hit authz pass is not worth it, and a leak is worse than a
-    # missing preview.
+    # RADD-1085: ts_headline reads the INDEX row, bypassing the item read's builtin blanking.
+    # When any grant restricts `description` anywhere, non-admin hits go title-only: a
+    # per-hit authz pass is not worth it, and a leak is worse than a missing preview.
     snippets_allowed = authz.is_instance_admin(user)
     if not snippets_allowed:
         _, restricted_builtins = await fields_service.outbound_restricted_keys(session)
@@ -426,15 +403,10 @@ async def similar_to_text(
     exclude_item_id: uuid.UUID | None = None,
     limit: int = 10,
 ) -> list[tuple[SearchHit, float]]:
-    """Items ranked by full-text overlap with `text` (spec 46).
+    """(hit, raw ts_rank_cd) pairs ranked by full-text overlap with `text` (spec 46).
 
-    Unlike `search` (which ANDs terms for precision), the tokens are OR-ed so
-    partial overlap still ranks — ts_rank_cd rewards documents sharing more
-    terms. When `user` is given, results are scoped to projects where they hold
-    item.read (the same rule as `search`). Returns (hit, rank) pairs ordered by
-    rank descending; rank is the raw ts_rank_cd value (callers normalize), and
-    `snippet` carries a plain description excerpt (no highlighting).
-    """
+    Tokens are OR-ed (unlike `search`'s AND) so partial overlap still ranks. With `user`,
+    scoped as `search` is. `snippet` is a plain description excerpt."""
     tokens = TSQUERY_TOKEN_RE.findall(text[:_SIMILAR_TEXT_CHARS])
     deduped: list[str] = []
     seen_tokens: set[str] = set()
@@ -458,13 +430,9 @@ async def similar_to_text(
     if exclude_item_id is not None:
         stmt = stmt.where(SearchIndexRow.item_id != exclude_item_id)
     if user is not None:
-        readable = await _readable_project_ids(session, user)
-        if not readable:
+        stmt = await _scoped(session, user, stmt)
+        if stmt is None:
             return []
-        stmt = stmt.where(SearchIndexRow.project_id.in_(readable))
-        clause = await _relation_index_clause(session, user)
-        if clause is not None:
-            stmt = stmt.where(clause)
     return [
         (_hit(row, snippet=row.description[:_SIMILAR_SNIPPET_CHARS] or None), float(value))
         for row, value in (await session.execute(stmt)).all()
@@ -480,15 +448,12 @@ async def titles_for_keys(
     unknown keys silently drop out."""
     if not keys:
         return []
-    readable = await _readable_project_ids(session, user)
-    if not readable:
-        return []
-    stmt = select(SearchIndexRow.key, SearchIndexRow.title).where(
-        SearchIndexRow.key.in_(keys), SearchIndexRow.project_id.in_(readable)
+    stmt = await _scoped(
+        session, user,
+        select(SearchIndexRow.key, SearchIndexRow.title).where(SearchIndexRow.key.in_(keys)),
     )
-    clause = await _relation_index_clause(session, user)
-    if clause is not None:
-        stmt = stmt.where(clause)
+    if stmt is None:
+        return []
     rows = await session.execute(stmt)
     titles = dict(rows.all())
     return [(key, titles[key]) for key in keys if key in titles]
@@ -515,15 +480,10 @@ async def rows_for_embedding(
     model: str = "",
     limit: int = 200,
 ) -> list[EmbeddingRow]:
-    """Text rows for the semantic-search embedder (spec 103).
-
-    Reuses this table because search already solved "public text only" —
-    internal comment bodies never enter `search_index`, so they can never reach
-    an embedding provider either. Two modes: explicit `item_ids` (event-driven
-    re-embeds), or `missing_from` — the embedder's (table, model) anti-join for
-    the reconcile sweep, run HERE so each module queries only its own table
-    shape (the other side is referenced by name, which is the seam's contract).
-    """
+    """Text rows for the semantic-search embedder (spec 103) — public text only by
+    construction (internal comments never enter `search_index`). Either explicit `item_ids`,
+    or `missing_from`: the embedder's (table, model) anti-join, run here so each module
+    queries only its own table (the other side is referenced by name — the seam's contract)."""
     if item_ids is not None:
         stmt = (
             select(SearchIndexRow).where(SearchIndexRow.item_id.in_(item_ids)).limit(limit)

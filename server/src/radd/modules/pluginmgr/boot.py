@@ -1,19 +1,9 @@
-"""Boot-time resolution of which plugins load (docs/plugin-platform.md §10).
+"""Which plugins load at boot (docs/plugin-platform.md §10): every core plugin in
+`config.modules`; optional ones there unless DISABLED; installable ones when ENABLED.
 
-`create_app` loads:
-  - every **core** bootstrap plugin from `config.modules` (locked, always on);
-  - every **optional** bootstrap plugin from `config.modules` (`core=False`) UNLESS
-    it's explicitly DISABLED in `installed_plugins` (on by default, disableable);
-  - every **installable** plugin (`config.installable_plugins`) that is ENABLED
-    (off by default, enable to turn on).
-
-A synchronous read (short-lived sync engine over the psycopg driver) so it runs
-before routers mount. Defensive ONLY for the fresh-database case: a missing
-`installed_plugins` table reads as "no overrides". Every other failure raises —
-answering "no overrides" on a transient DB error would silently change which
-plugins load (the spec-104 lesson: a swallowed error here means "disable
-changed nothing"), and a boot that cannot read its plugin state should fail
-loudly and restart, not guess (RADD-873).
+A synchronous read, before routers mount. Only a MISSING `installed_plugins` table reads as
+"no overrides" (fresh DB); anything else raises — guessing on a transient DB error would
+silently change which plugins load (RADD-873).
 """
 
 import logging
@@ -59,7 +49,7 @@ def resolve_boot_paths() -> tuple[str, ...]:
         ):
             paths.append(path)
     # installable — only when enabled
-    for pid, (plugin, path) in discovery.installable_plugins().items():
+    for pid, (_plugin, path) in discovery.installable_plugins().items():
         if states.get(pid) == PluginState.ENABLED.value:
             paths.append(path)
     # External distributions are discovered in arbitrary package order. Resolve

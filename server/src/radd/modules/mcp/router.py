@@ -1,25 +1,13 @@
-"""{api_prefix}/mcp — the embedded MCP server endpoint (spec 45).
+"""{api_prefix}/mcp — the embedded MCP server (spec 45), Streamable HTTP: one JSON-RPC 2.0
+message per POST (JSON only), plus the GET event stream that carries `tools/list_changed`
+(RADD-740). Authenticate with `Bearer radd_pat_…` (a session cookie also works).
 
-Streamable-HTTP transport: one JSON-RPC 2.0 message per POST body (JSON-only —
-a POST never streams), plus the RADD-740 GET leg answering `text/event-stream`
-as the notification channel the transport spec requires. Module routers are
-mounted under `settings.api_prefix`, so the endpoint lives at
-**POST /api/v1/mcp** — point an MCP client there with
-`Authorization: Bearer radd_pat_…`.
-
-Layering:
-- HTTP level: disabled instance -> 403; missing/invalid credentials -> 401
-  (PAT is the primary path; a session cookie also works via the auth deps).
-- Protocol level: malformed body -> -32700/-32600, unknown method -> -32601,
-  bad tools/call params, an unknown tool, or arguments the tool's advertised
-  input schema rejects (RADD-1106: missing/unknown/mistyped properties, every
-  violation listed in `data`) -> -32602 (JSON-RPC error envelopes).
-- Tool level: domain errors (NotFound/Forbidden/Conflict/Unauthorized/…
-  RaddError) -> `isError: true` results with the message text — NEVER
-  JSON-RPC protocol errors. The session is rolled back first so a half-applied
-  mutation is not committed by the request teardown. Anything else a handler
-  raises is rolled back the same way, logged with its traceback, and answered
-  as -32603 — never an HTTP 500 (RADD-905).
+- HTTP: disabled → 403; no credentials → 401.
+- Protocol: bad body -32700/-32600, unknown method -32601, bad params / unknown tool /
+  arguments the advertised schema rejects -32602 (violations in `data`).
+- Tool: RaddError/ValueError → `isError: true` after a rollback (so teardown cannot commit
+  a half-applied mutation); anything else rolls back, logs and answers -32603 — never
+  HTTP 500 (RADD-905).
 """
 
 import asyncio
@@ -64,17 +52,18 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 _TOOL_ERROR_TYPES = (RaddError, ValueError)
 
 
-def _initialize_result() -> dict[str, Any]:
-    """RADD-740: `listChanged` is TRUE, and it is honest — `GET /mcp` below is
-    the channel the notification travels down.
+def _require_mcp_user(user: User | None) -> User:
+    if not settings.mcp_enabled:
+        raise ForbiddenError("MCP server is disabled (RADD_MCP_ENABLED=false)")
+    if user is None:
+        raise UnauthorizedError(
+            "MCP requires a personal access token: Authorization: Bearer radd_pat_…"
+        )
+    return user
 
-    Before this it was `{}`, which told every client the tool list was fixed for
-    the life of the connection. Spec 114 made that false by construction: the
-    catalog is a function of the CALLER, and it also moves when a plugin mounts
-    or unmounts and on any deploy that adds a tool. A client that connected
-    before a deploy went on offering the old, smaller surface, and the agent on
-    the other end concluded the missing tools did not exist.
-    """
+
+def _initialize_result() -> dict[str, Any]:
+    """`listChanged` is true because GET /mcp is the channel it travels (RADD-740)."""
     return {
         "protocolVersion": MCP_PROTOCOL_VERSION,
         "capabilities": {"tools": {"listChanged": True}},
@@ -83,20 +72,11 @@ def _initialize_result() -> dict[str, Any]:
 
 
 async def _catalog_change_stream(user: User) -> AsyncIterator[str]:
-    """Emit `notifications/tools/list_changed` whenever this principal's catalog
-    stops matching what they were last shown.
-
-    Polling a FINGERPRINT rather than subscribing to mutation events is the
-    deliberate choice. The surface moves for three unrelated reasons — a deploy,
-    a plugin mounting, the caller's own scopes changing — and only the last is
-    even an event this process sees. Re-deriving the finished, already-filtered
-    catalog covers all three uniformly, and cannot drift the way a counter that
-    every mutation site must remember to bump would.
-
-    Each tick opens its OWN session: this generator outlives the request's, and
-    holding one open for the life of a long-lived stream would pin a connection
-    per connected agent.
-    """
+    """Emit `notifications/tools/list_changed` when this principal's catalog fingerprint
+    changes. Polled, not event-driven: a deploy, a plugin mounting and the caller's own
+    scopes all move it, and only the last is an event this process sees. Each tick opens
+    its OWN session: the stream outlives the request, and holding one pins a connection per
+    agent."""
     yield ": connected\n\n"  # flush headers; also what makes this route testable
     last: str | None = None
     idle = 0.0
@@ -118,19 +98,8 @@ async def _catalog_change_stream(user: User) -> AsyncIterator[str]:
 
 @router.get("")
 async def mcp_stream(user: OptionalUser, session: Session) -> Response:
-    """The server->client half of Streamable HTTP (RADD-740).
-
-    The transport was POST-only, so there was nowhere to push a notification —
-    which is why `listChanged` had to be false. A client that opens this stream
-    is told when its tool list changes and can re-issue `tools/list`; a client
-    that never opens it loses nothing it had before.
-    """
-    if not settings.mcp_enabled:
-        raise ForbiddenError("MCP server is disabled (RADD_MCP_ENABLED=false)")
-    if user is None:
-        raise UnauthorizedError(
-            "MCP requires a personal access token: Authorization: Bearer radd_pat_…"
-        )
+    """The server→client half of Streamable HTTP (RADD-740)."""
+    user = _require_mcp_user(user)
     # The auth read opened a transaction on the request session, and teardown
     # won't commit it until the stream ENDS — hours later (RADD-845).
     await commit_before_streaming(session)
@@ -160,9 +129,7 @@ async def _tools_call(session: AsyncSession, user: User, params: dict[str, Any])
             "isError": True,
         }
     except Exception as exc:
-        # RADD-905: a handler bug used to escape as an HTTP 500 with the
-        # half-applied flush still pending. Roll back, keep the traceback, and
-        # answer inside the protocol.
+        # RADD-905: a handler bug is rolled back and answered inside the protocol.
         await session.rollback()
         logger.exception("mcp tool %r failed", name)
         raise JsonRpcError(
@@ -201,12 +168,7 @@ async def handle_request(
 @router.post("")
 async def mcp_endpoint(request: Request, session: Session, user: OptionalUser) -> Response:
     """The MCP Streamable-HTTP endpoint (see module docstring for semantics)."""
-    if not settings.mcp_enabled:
-        raise ForbiddenError("MCP server is disabled (RADD_MCP_ENABLED=false)")
-    if user is None:
-        raise UnauthorizedError(
-            "MCP requires a personal access token: Authorization: Bearer radd_pat_…"
-        )
+    user = _require_mcp_user(user)
     try:
         message = parse_request(await request.body())
     except JsonRpcError as exc:

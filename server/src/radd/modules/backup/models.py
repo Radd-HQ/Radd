@@ -1,12 +1,9 @@
 """Backup schedules and run history (spec 99).
 
-Only these two tables live in the database. The ARTIFACTS do not: a restore
-rewrites the database, so a table listing backups would roll its own inventory
-back to whatever the restored snapshot knew — erasing the record of the safety
-backup taken seconds earlier. The directory is the inventory (`radd.backup.store`).
-
-Schedules and runs are the opposite case: they are configuration and history, and
-reverting them along with everything else is exactly right.
+The ARTIFACTS are not in the database: a restore rewrites it, so a table of backups would
+roll its inventory back and erase the safety backup taken seconds earlier. The directory is
+the inventory (`radd.backup.store`). Schedules and runs are configuration and history, which
+a restore rightly reverts.
 """
 
 import uuid
@@ -20,14 +17,9 @@ from radd.db import Base, TimestampMixin
 
 
 class BackupSchedule(Base, TimestampMixin):
-    """When to take a backup, and how many to keep.
-
-    `config` is the shared schedule shape from `radd.schedule` ({kind, minutes |
-    time, weekdays}) — the same vocabulary automations use, because it is now
-    literally the same helper. `next_run_at` is the claim point: the scheduler
-    selects due rows `FOR UPDATE SKIP LOCKED`, so two workers never take the
-    same backup twice.
-    """
+    """When to take a backup, and how many to keep. `config` is the shared `radd.schedule`
+    shape; `next_run_at` is the claim point — due rows are selected `FOR UPDATE SKIP LOCKED`,
+    so two workers never take the same backup."""
 
     __tablename__ = "backup_schedules"
 
@@ -48,13 +40,9 @@ class BackupSchedule(Base, TimestampMixin):
 
 
 class BackupRun(Base, TimestampMixin):
-    """One backup or restore, in flight or finished — the row IS the progress bar.
-
-    The jiraimport idiom: `stage` and `status` are rewritten and committed as work
-    proceeds, so polling `GET /backups/runs/{id}` reflects live state. A process
-    restart abandons the asyncio task, so runs left RUNNING at startup are marked
-    interrupted rather than lying about being in progress forever.
-    """
+    """One backup or restore — the row IS the progress bar: `stage` and `status` are committed
+    as work proceeds. A restart abandons the task, so runs left RUNNING at startup are marked
+    interrupted."""
 
     __tablename__ = "backup_runs"
 

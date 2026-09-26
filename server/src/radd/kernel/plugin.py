@@ -1,12 +1,5 @@
-"""The plugin contract — `RaddPlugin`, the manifest of contributions.
-
-Evolves the pre-kernel `RaddModule` (routers + lifecycle hooks) into a manifest
-of *declarations* the loader aggregates into kernel registries
-(docs/plugin-platform.md §4). All 49 builtin plugins construct `RaddPlugin`
-directly; the migration is finished, so the `RaddModule` alias is gone. The
-minimal `name=`/`description=`/`routers=` constructor still builds a valid
-plugin with `core: true` and empty new fields (§11.1).
-"""
+"""The plugin contract — `RaddPlugin`, the manifest of declarations the loader aggregates
+into kernel registries (docs/plugin-platform.md §4)."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, fields
@@ -89,19 +82,15 @@ class RaddPlugin:
     #: carries only real features; enabling it writes an ENABLED row.
     enabled_by_default: bool = True
     depends_on: tuple[str, ...] = ()  # other plugin names that must load first
-    #: Cross-module imports the loader must NOT order by (RADD-885): deferred
-    #: reverse reaches ("teams calls items.service after both loaded") and
-    #: feature-detected optional seams. tests/test_module_contracts.py requires
-    #: every `radd.modules.X` import to appear in depends_on OR here — the
-    #: "# deferred: X loads after Y" comment, promoted to a declaration.
+    #: Cross-module imports the loader must NOT order by (RADD-885): deferred reverse
+    #: reaches. tests/test_module_contracts.py requires every `radd.modules.X` import to
+    #: appear in depends_on OR here.
     weak_depends: tuple[str, ...] = ()
     # --- contributions (each → a kernel registry) ---
-    #: Offset-tracked event-consumer names this plugin runs (RADD-1093). THE
-    #: roster consumer_status trusts: a consumer_offsets row matching no
-    #: registered name renders as RETIRED, not stalled — rename residue must
-    #: not be able to impersonate a dead worker. Declared even by consumers
-    #: that only run in the worker process, so a web-only replica still knows
-    #: the full set and never mistakes off-duty for retired.
+    #: Offset-tracked event-consumer names this plugin runs (RADD-1093) — THE roster
+    #: consumer_status trusts: an offset row matching none reads RETIRED, not stalled.
+    #: Declared even for worker-only consumers, so a web replica never mistakes off-duty
+    #: for retired.
     consumer_names: tuple[str, ...] = ()
     routers: tuple[APIRouter, ...] = ()
     entities: tuple[EntitySpec, ...] = ()
@@ -153,11 +142,8 @@ class RaddPlugin:
     #: that item instead of invalidating every open list.
     record_local_entities: tuple[str, ...] = ()
     page_extensions: tuple[PageExtensionSpec, ...] = ()  # page fenced blocks (RADD-709)
-    #: Rows that die with a parent (RADD-745). A FACTORY, not a tuple: the set is
-    #: derived from a binding registry that other modules populate at import
-    #: time, so it cannot be evaluated when this manifest is constructed — and a
-    #: static tuple would also not survive the registry being cleared and
-    #: rebuilt, which the app lifespan does.
+    #: Rows that die with a parent (RADD-745). A FACTORY: the set derives from bindings
+    #: other modules register at import time, after this manifest is constructed.
     cascades: Callable[[], tuple[CascadeSpec, ...]] | None = None
     integrations: tuple[IntegrationSpec, ...] = ()
     ui: PluginUiManifest | None = None
@@ -198,26 +184,9 @@ class RaddPlugin:
         return tuple(name for name, resume in self.consumer_resume if resume is ConsumerResume.HEAD)
 
     def _reject_unwrapped_contributions(self) -> None:
-        """Refuse a single contribution passed where a tuple is declared.
-
-        Every contribution field on this manifest is a `tuple[Spec, ...]`, and
-        `on_startup=_startup` instead of `on_startup=(_startup,)` is a defect
-        Python will not catch: the dataclass stores whatever it is handed, and
-        the failure surfaces much later, wherever the field is finally iterated.
-        RADD-745's cascade refactor shipped exactly that and produced an image
-        that could not complete `lifespan` — a one-character typo that reached a
-        published container with 1391 green tests behind it.
-
-        Rejecting rather than NORMALISING is the deliberate choice. Quietly
-        wrapping a bare value into a 1-tuple would make two shapes valid for one
-        field, and the second one is how the next module learns the wrong
-        convention. This raises at import — before an image is built, let alone
-        deployed.
-
-        A `str` is caught by the same rule and matters just as much: it *is*
-        iterable, so `depends_on="items"` becomes five one-character dependency
-        names rather than one, with no error anywhere.
-        """
+        """Refuse a bare value where a tuple is declared: `on_startup=_startup` (RADD-745
+        shipped exactly that and the image could not start) or `depends_on="items"` (a str
+        iterates as five names). Rejected, not normalised, so one shape stays valid."""
         for name in _TUPLE_FIELDS:
             value = getattr(self, name)
             if isinstance(value, tuple):
@@ -230,14 +199,8 @@ class RaddPlugin:
 
 
 def _tuple_fields() -> tuple[str, ...]:
-    """The fields the check policices, read from the dataclass's own annotations.
-
-    Derived rather than listed by hand: a new `tuple[…]` contribution is covered
-    the moment it is declared, which a maintained list would not be. Both
-    annotation forms are handled because whether `field.type` is a string
-    depends on PEP 563 being on in this module — a detail that should not decide
-    whether the guard works.
-    """
+    """The `tuple[…]` fields, derived from the annotations (string or not, PEP 563 aside) so a
+    new contribution is covered the moment it is declared."""
     names = []
     for field in fields(RaddPlugin):
         declared = field.type

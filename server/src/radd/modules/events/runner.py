@@ -1,30 +1,13 @@
-"""Head-seeded outbox-consumer scaffold (consolidation).
+"""Head-seeded outbox-consumer scaffold (`run_head_seeded`).
 
-The delivery-flavored consumers — csat's survey sender, the googlechat
-notifier, mailintake's outbound replies — share one run_once shape, extracted
-here:
+- no offset row yet → seed the cursor AT THE STREAM HEAD and return (first start only;
+  `ConsumerResume.HEAD` covers re-enable, RADD-1372);
+- read one batch; `plan` each event (log-don't-crash; planning may write rows);
+- advance the cursor and COMMIT before any delivery, then `deliver` post-commit —
+  at-most-once: a dropped message beats a duplicate.
 
-- no offset row yet → seed the cursor AT THE STREAM HEAD, commit, log, return 0
-  (a chat channel / requester inbox must never be replayed the historical
-  backlog). That covers a consumer's FIRST start only; one that must also skip
-  what happened while its plugin was disabled declares
-  `ConsumerResume.HEAD` on its plugin, and the plugin manager moves its cursor
-  to the head when the plugin is re-enabled (RADD-1372);
-- read one batch after the cursor;
-- build per-event delivery "plans" via the `plan` callback (log-don't-crash per
-  event; planning MAY write rows through the session — csat creates survey rows
-  and emits csat.requested while planning);
-- advance the cursor and COMMIT everything BEFORE any delivery, then hand the
-  plans to `deliver` post-commit — at-most-once: a dropped message beats a
-  duplicate.
-
-Consumers with real semantic differences stay hand-rolled: search's indexer
-(replays the backlog from 0 as its index build, savepoint per event), notify
-(watch-only bootstrap OVER the backlog), the automations engine (one
-transaction per event), webhooks (fan-out rows ARE the delivery).
-
-Every consumer here delivers OUTSIDE the instance, so all of them skip `silent`
-events (`events.quiet()` — bulk imports). Search's indexer deliberately does not.
+`silent` (bulk-import) events are skipped. Consumers with different semantics (search
+indexer, notify, automations, webhooks) stay hand-rolled.
 """
 
 import logging
@@ -65,9 +48,7 @@ async def run_head_seeded[P](
         deliveries: list[tuple[Event, list[P]]] = []
         previous_cause = None
         for event in batch:
-            # Every consumer on this scaffold DELIVERS somewhere external (a survey
-            # email, a chat message, a requester reply), which is exactly what a
-            # `silent` bulk-import event must not trigger. The cursor still advances.
+            # A `silent` bulk-import event must not trigger delivery; the cursor still advances.
             if event.silent:
                 continue
             try:

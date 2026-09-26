@@ -78,7 +78,7 @@ async def _user(db, role: InstanceRole) -> User:
 
 
 async def _names(db, user) -> set[str]:
-    catalog = build_catalog({}, include_pages=True)
+    catalog = build_catalog({})
     return {tool["name"] for tool in await visible_catalog(db, user, catalog)}
 
 
@@ -89,7 +89,7 @@ async def test_every_tool_declares_what_it_needs():
     """Every tool carries its requirement ON its kernel spec (RADD-640/889 — the
     builtin REQUIREMENTS table is gone), and anything unregistered is hidden as
     a wiring bug."""
-    catalog = build_catalog({}, include_pages=True)
+    catalog = build_catalog({})
     assert all(requirement_for(tool["name"]) is not None for tool in catalog)
 
 
@@ -140,7 +140,7 @@ async def test_project_parameter_enumerates_only_permitted_projects(db, project)
         {"projects": {str(project.id): ["item.read", "item.create"]}}
     )
 
-    catalog = await visible_catalog(db, admin, build_catalog({}, include_pages=True))
+    catalog = await visible_catalog(db, admin, build_catalog({}))
     create = next(t for t in catalog if t["name"] == McpTool.CREATE_ITEM.value)
     enum = create["inputSchema"]["properties"]["project_key"]["enum"]
     assert enum == [project.key]
@@ -151,7 +151,7 @@ async def test_enum_degrades_to_a_string_above_the_threshold(db, project, monkey
     admin = await _user(db, InstanceRole.ADMIN)
     monkeypatch.setattr(settings, "mcp_project_enum_max", 0)
 
-    catalog = await visible_catalog(db, admin, build_catalog({}, include_pages=True))
+    catalog = await visible_catalog(db, admin, build_catalog({}))
     create = next(t for t in catalog if t["name"] == McpTool.CREATE_ITEM.value)
     prop = create["inputSchema"]["properties"]["project_key"]
     assert "enum" not in prop
@@ -211,14 +211,14 @@ async def test_item_read_nowhere_is_still_refused(db, project):
 
 
 async def test_an_anonymous_principal_sees_nothing(db):
-    assert await visible_catalog(db, None, build_catalog({}, include_pages=True)) == []
+    assert await visible_catalog(db, None, build_catalog({})) == []
 
 
 async def test_unscoped_admin_keeps_the_whole_catalog(db, project):
     """Spec 45's behaviour for every key that existed before this spec."""
     admin = await _user(db, InstanceRole.ADMIN)
     assert admin.token_scope is None
-    full = {tool["name"] for tool in build_catalog({}, include_pages=True)}
+    full = {tool["name"] for tool in build_catalog({})}
     assert await _names(db, admin) == full
 
 
@@ -429,7 +429,7 @@ async def test_a_registered_tool_is_filtered_like_a_builtin(db, project, registr
     from radd.modules.mcp.catalog import registry_catalog
 
     extra = registry_catalog(frozenset())
-    catalog = build_catalog({}, include_pages=True) + extra
+    catalog = build_catalog({}) + extra
 
     admin = await _user(db, InstanceRole.ADMIN)
     admin.token_scope = scopes.parse_scope(

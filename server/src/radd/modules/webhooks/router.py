@@ -23,7 +23,7 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
 
-# Endpoints carry signing secrets, so everything here is admin-level (project.manage).
+# Endpoints carry signing secrets, so everything here needs a global `webhook.*` atom.
 
 
 @router.post("", response_model=EndpointRead, status_code=201)

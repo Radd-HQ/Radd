@@ -1,4 +1,4 @@
-"""In-process delivery loop. Moves to the dedicated worker entrypoint when that lands."""
+"""In-process delivery loop."""
 
 import httpx
 

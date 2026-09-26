@@ -1,10 +1,5 @@
-"""Shared helpers for MCP tool contributions (RADD-889).
-
-`McpToolSpec` is kernel vocabulary, and its authors span feature modules and
-external plugins alike — so the three fragments every paginated tool repeats
-live here, below all of them. A per-module copy of the same clamp is how two
-tools end up with different default page sizes.
-"""
+"""Shared helpers for MCP tool contributions (RADD-889) — one copy of the paging clamp, so
+two tools cannot end up with different default page sizes."""
 
 from collections.abc import Mapping
 from typing import Any
@@ -49,13 +44,9 @@ def object_schema(
 
 
 class InvalidArgumentsError(Exception):
-    """tools/call arguments do not match the tool's declared input schema
-    (RADD-1106/905) -> JSON-RPC INVALID_PARAMS.
-
-    Deliberately NOT a RaddError: an argument-shape failure is a protocol
-    fault, not a tool result. `errors` carries every violation as
-    `{path, message}` so an agent can fix them all in one round trip.
-    """
+    """tools/call arguments the tool's schema rejects (RADD-1106) -> JSON-RPC INVALID_PARAMS.
+    Not a RaddError: a protocol fault, not a tool result. `errors` carries EVERY violation
+    as `{path, message}`, so an agent fixes them in one round trip."""
 
     def __init__(self, tool: str, errors: list[dict[str, str]]):
         self.tool = tool
@@ -75,12 +66,8 @@ def _violation(error: ValidationError) -> dict[str, str]:
 
 
 def validate_arguments(tool: str, schema: Mapping[str, Any], arguments: Mapping[str, Any]) -> None:
-    """Refuse arguments the tool's advertised schema does not admit — a missing
-    required property, an unknown one (every tool schema is CLOSED), a mistyped
-    value. Before this, a handler's own KeyError/TypeError escaped as an HTTP
-    500 and an unknown property was silently ignored (`list_worklogs
-    {"key": …}` answered with every worklog). Raises InvalidArgumentsError
-    carrying ALL violations."""
+    """Refuse arguments the advertised schema does not admit (missing, unknown — every schema
+    is CLOSED — or mistyped); raises InvalidArgumentsError carrying ALL violations."""
     validator = Draft202012Validator(
         dict(schema), format_checker=Draft202012Validator.FORMAT_CHECKER
     )

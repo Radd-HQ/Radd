@@ -1,29 +1,14 @@
-"""Field-level change records — the ONE shape every event's diff takes (spec 123).
-
-An `*.updated` event says *what* changed as a list of change entries, at the
-payload's top level under `changes` (it describes the event, not the entity):
+"""Field-level change records — the ONE shape every event's diff takes (spec 123), at the
+payload's top level under `changes`:
 
     {"field": "name", "from": "Old", "to": "New"}            a scalar
     {"field": "permissions", "added": [...], "removed": [...]} a collection
-    {"field": "client_secret"}                                 a hidden value —
-                                                               it changed; the
-                                                               value is never
-                                                               recorded
+    {"field": "client_secret"}                                 changed; value never recorded
     {"field": "custom_field", "key": "team_size", "name": "Team size", …}
 
-`items/changes.py` produced this shape first (spec 23) and resolved display
-names at write time so a record stays true after the state or person it names
-is renamed or deleted. This module is the generic half: a JSON-safe snapshot of
-an object's fields and a diff over two snapshots, for the forty-odd emitters
-that are not items. Values are whatever the emitter put in the snapshot — pass
-names, not ids, where a name is what an auditor will read.
-
-`events.emit(changes=…)` writes the list; an event whose `EventTypeSpec` says
-`has_changes` and carries none is refused, the RADD-923 pattern (a promise the
-emitter cannot forget to keep). `[]` is the explicit "nothing visible changed".
-
-Pure — no I/O, no ORM import — so it is trivially testable and usable from any
-plugin through `radd.sdk`.
+Values are what the emitter snapshotted — pass names, not ids, where an auditor reads a
+name. A `has_changes` event without `changes=` is refused; `[]` = "nothing visible changed".
+Pure (no I/O, no ORM); exposed to plugins via `radd.sdk`.
 """
 
 from __future__ import annotations

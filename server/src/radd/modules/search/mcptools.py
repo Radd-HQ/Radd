@@ -1,11 +1,6 @@
-"""The `find_items` MCP tool (spec 103), declared by its owner (RADD-889).
-
-Moved verbatim from mcp/tools.py. `search_items` (structured SLQ) stays with
-items; this is the text/MEANING tool, and its handler is a straight call into
-`search.service.search` — which is why search owns it. Enforcement is the
-search service's own project scoping, so `kernel_enforced=False` (the spec-114
-`permission` drives the caller filter only).
-"""
+"""The `find_items` MCP tool (spec 103): the text/MEANING tool (`search_items`, structured
+SLQ, stays with items). Enforcement is the search service's own project scoping, so
+`kernel_enforced=False` — `permission` drives only the caller filter."""
 
 from collections.abc import Mapping
 from typing import Any

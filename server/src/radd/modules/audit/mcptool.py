@@ -1,12 +1,7 @@
-"""The `audit_log` MCP tool (spec 123, RADD-1172): who changed what, from what,
-to what — over the same ledger, through the same service, as the REST route.
-
-The spec is the annotation (RADD-640): `permission="project.manage"` with
-`project_param="project_key"` is exactly the audit access rule — the atom
-on the named project, or the GLOBAL atom (an instance admin) when no
-project is named — so the dispatcher enforces it before this handler runs,
-and `visible_catalog` hides the tool from a key that manages no project.
-This module contains no authz call on purpose.
+"""The `audit_log` MCP tool (spec 123): the same ledger, through the same service, as the REST
+route. `permission="project.manage"` + `project_param="project_key"` IS the audit access rule —
+the atom on the named project, or the GLOBAL atom when none is named — and the dispatcher
+enforces it before this handler runs, so this module makes no authz call on purpose.
 """
 
 from collections.abc import Mapping
@@ -16,6 +11,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import NotFoundError
+from radd.kernel.mcptools import SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, object_schema
 from radd.modules.auth import service as auth
 from radd.modules.auth.types import AuthEntity
 from radd.modules.events.types import EventSource
@@ -25,10 +21,6 @@ from radd.modules.projects import service as projects_service
 from radd.sdk import McpToolSpec
 
 from . import service
-
-_LIMIT_DEFAULT = 25
-_LIMIT_MAX = 100
-
 
 async def _audit_log(session: AsyncSession, actor: Any, args: Mapping[str, Any]) -> Any:
     project = (
@@ -62,7 +54,7 @@ async def _audit_log(session: AsyncSession, actor: Any, args: Mapping[str, Any])
         end=datetime.fromisoformat(args["until"]) if args.get("until") else None,
         q=args.get("q"),
         include_noise=bool(args.get("include_noise", False)),
-        limit=min(int(args.get("limit", _LIMIT_DEFAULT)), _LIMIT_MAX),
+        limit=min(int(args.get("limit", SEARCH_LIMIT_DEFAULT)), SEARCH_LIMIT_MAX),
         offset=int(args.get("offset", 0)),
     )
     return {
@@ -95,34 +87,30 @@ AUDIT_LOG = McpToolSpec(
         "project they manage. Filter by entity (type + id, or an issue key), "
         "person, changed field, source, dates and free text."
     ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "project_key": {
-                "type": "string",
-                "description": "Constrain to one project (required unless you are an instance admin).",
-            },
-            "entity_type": {
-                "type": "string",
-                "description": "Entity type, or several comma-separated: item, role, field, setting…",
-            },
-            "entity_id": {"type": "string", "description": "One entity's id (with entity_type)."},
-            "entity_key": {"type": "string", "description": "An issue key, e.g. RADD-123."},
-            "actor_email": {"type": "string", "description": "Only changes made by this person."},
-            "changed_field": {
-                "type": "string",
-                "description": "Only rows whose diff touched this field (assignee, permissions…).",
-            },
-            "source": {"type": "string", "enum": ["people", "automations", "system"]},
-            "since": {"type": "string", "description": "ISO 8601 lower bound."},
-            "until": {"type": "string", "description": "ISO 8601 upper bound."},
-            "q": {"type": "string", "description": "Free text over the event, entity and values."},
-            "include_noise": {"type": "boolean", "description": "Include machine noise (default false)."},
-            "limit": {"type": "integer", "minimum": 1, "maximum": _LIMIT_MAX},
-            "offset": {"type": "integer", "minimum": 0},
+    input_schema=object_schema({
+        "project_key": {
+            "type": "string",
+            "description": "Constrain to one project (required unless you are an instance admin).",
         },
-        "additionalProperties": False,
-    },
+        "entity_type": {
+            "type": "string",
+            "description": "Entity type, or several comma-separated: item, role, field, setting…",
+        },
+        "entity_id": {"type": "string", "description": "One entity's id (with entity_type)."},
+        "entity_key": {"type": "string", "description": "An issue key, e.g. RADD-123."},
+        "actor_email": {"type": "string", "description": "Only changes made by this person."},
+        "changed_field": {
+            "type": "string",
+            "description": "Only rows whose diff touched this field (assignee, permissions…).",
+        },
+        "source": {"type": "string", "enum": [source.value for source in EventSource]},
+        "since": {"type": "string", "description": "ISO 8601 lower bound."},
+        "until": {"type": "string", "description": "ISO 8601 upper bound."},
+        "q": {"type": "string", "description": "Free text over the event, entity and values."},
+        "include_noise": {"type": "boolean", "description": "Include machine noise (default false)."},
+        "limit": {"type": "integer", "minimum": 1, "maximum": SEARCH_LIMIT_MAX},
+        "offset": {"type": "integer", "minimum": 0},
+    }),
     handler=_audit_log,
     permission="project.manage",
     project_scoped=True,

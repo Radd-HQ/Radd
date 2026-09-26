@@ -9,9 +9,7 @@ plugin work (`kernel.admission`). Readers treat a row older than
 because the lease is shorter: by then the process has already stopped admitting.
 
 The admin UI (`service.list_plugins`), Forget (`service.uninstall`) and package
-removal (`ensure_unused`) all read these rows. There is no second channel: the
-filesystem reports under `<plugins_dir>/runtime/` that RADD-1341 kept beside
-the table are gone.
+removal (`ensure_unused`) all read these rows.
 """
 
 import logging
@@ -20,11 +18,12 @@ import socket
 import time
 import uuid
 from collections.abc import Iterable
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 
+from radd.clock import utcnow
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.kernel import admission, registries
@@ -47,12 +46,8 @@ def state_version(row) -> str:
     return f"{row.state}:{getattr(row, 'updated_at', '')}" if row is not None else BOOTSTRAP_VERSION
 
 
-def _utcnow() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
-
-
 async def cluster_reports(session) -> list[dict]:
-    now = _utcnow()
+    now = utcnow()
     stale = timedelta(seconds=settings.plugin_process_stale_seconds)
     rows = (await session.execute(select(PluginProcess))).scalars()
     return [{**row.report, "stale": now - row.updated_at > stale} for row in rows]
@@ -91,7 +86,7 @@ async def publish(process_id: str, report: dict) -> None:
     """Upsert this process's row, prune long-gone processes, and renew the lease
     from the moment the write STARTED (a slow commit must not stretch it)."""
     started = time.monotonic()
-    now = _utcnow()
+    now = utcnow()
     record = {**report, "process": process_id, "updated_at": time.time()}
     async with SessionLocal() as session:
         statement = insert(PluginProcess).values(process_id=process_id, report=record, updated_at=now)

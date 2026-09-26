@@ -1,12 +1,6 @@
-"""Reciprocal rank fusion (spec 103) — pure, unit-tested.
-
-RRF combines rankings WITHOUT comparable scores: each list contributes
-1/(k + rank) per member, so an item near the top of either list surfaces, and
-one near the top of BOTH dominates. k=60 is the literature default — it damps
-the difference between rank 1 and rank 5 enough that neither ranker bullies
-the other (research/architecture.md: hybrid ≈ 62%→84% precision over either
-alone).
-"""
+"""Reciprocal rank fusion (spec 103): each ranking contributes 1/(k + rank) per member, so
+scores need not be comparable — a hit near the top of either list surfaces, near the top of
+both dominates. k=60 (the literature default) keeps either ranker from bullying the other."""
 
 from collections.abc import Hashable, Sequence
 

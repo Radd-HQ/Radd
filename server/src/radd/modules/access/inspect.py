@@ -1,15 +1,8 @@
-"""Provenance for the spec-92 half of the access system (RADD-809).
-
-`permission_sources` explains atoms; this explains RESOURCE access — which
-grant rows reach a subject, through what (the user directly, a named team, a
-held role), at what scope, and what each resource type defaults to when no
-grant restricts it ("readable because nothing restricts it" is a different
-fact from "granted", and before this they looked identical from outside).
-
-Same rule as RADD-779: a second pass over the same tables the resolver reads
-(`resolution.py` stays the ONE place access is decided), off the request path
-— it runs when an admin opens one person's row.
-"""
+"""Provenance for spec-92 RESOURCE access (RADD-809): which grant rows reach a subject,
+through what (the user, a team, a role, a group), at what scope, and each resource type's
+default when nothing restricts it — "readable because nothing restricts it" is not "granted".
+A second pass over the resolver's tables (`resolution.py` stays the ONE place access is
+decided), run only when an admin opens one person's row."""
 
 from __future__ import annotations
 
@@ -78,27 +71,16 @@ async def subject_access(
     role_ids = set(role_ids)
     group_ids = set(group_ids)
     from radd.modules.auth.principals import subject_user_ids
-    conditions = []
-    if user_id is not None:
-        conditions.append(
-            (AccessGrant.subject_type == GrantSubject.USER.value)
-            & (AccessGrant.subject_id.in_(subject_user_ids(user_id)))
+    conditions = [
+        (AccessGrant.subject_type == subject.value) & AccessGrant.subject_id.in_(ids)
+        for subject, ids in (
+            (GrantSubject.USER, subject_user_ids(user_id)),  # empty when user_id is None
+            (GrantSubject.TEAM, team_ids),
+            (GrantSubject.ROLE, role_ids),
+            (GrantSubject.GROUP, group_ids),
         )
-    if team_ids:
-        conditions.append(
-            (AccessGrant.subject_type == GrantSubject.TEAM.value)
-            & (AccessGrant.subject_id.in_(team_ids))
-        )
-    if role_ids:
-        conditions.append(
-            (AccessGrant.subject_type == GrantSubject.ROLE.value)
-            & (AccessGrant.subject_id.in_(role_ids))
-        )
-    if group_ids:
-        conditions.append(
-            (AccessGrant.subject_type == GrantSubject.GROUP.value)
-            & (AccessGrant.subject_id.in_(group_ids))
-        )
+        if ids
+    ]
     grants: list[AccessGrant] = []
     if conditions:
         result = await session.execute(

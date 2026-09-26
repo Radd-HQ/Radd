@@ -1,12 +1,6 @@
-"""The resource registry (spec 92) — the plugin extension point.
-
-A module registers each protectable resource type with its access model (which
-access values exist, whether absence-of-grants means open or closed, whether the
-values are independent flags or ordered levels, which subject kinds apply, whether
-grants can be project-scoped) and an authz hook deciding who may manage its grants.
-The generic /grants router and the reusable GrantsEditor then work for it with no
-extra code — including for plugins.
-"""
+"""The resource registry (spec 92) — the plugin extension point. A module registers each
+protectable resource type with its access model and a `can_manage` hook; the generic
+/grants router and the grants editor then work for it with no extra code."""
 
 from __future__ import annotations
 
@@ -17,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import uuid
 
+from radd.kernel import registries
 from radd.modules.auth.models import User
 
 from .types import Access, GrantSubject
@@ -58,28 +53,17 @@ class ResourceSpec:
     roles_for: Callable[[AsyncSession, uuid.UUID, str], Awaitable[set[uuid.UUID]]] | None = None
 
 
-# RADD-818: the store is the KERNEL registry, not a private dict — the
-# sixteenth contribution kind. A plugin declares `access_resources=` on its
-# manifest (or calls the SDK's register_access_resource, which lands here),
-# and disable withdraws its resource types with everything else it
-# contributed. Core modules keep calling register_resource at import; the
-# app loader re-registers manifests after clear(), so both paths converge.
+# The store is the KERNEL registry (RADD-818): a plugin's resource types withdraw with it on disable.
 
 
 def register_resource(spec: ResourceSpec) -> None:
-    from radd.kernel.registry import registries
-
     registries.access_resources[spec.resource_type] = spec
 
 
 def get_spec(resource_type: str) -> ResourceSpec | None:
-    from radd.kernel.registry import registries
-
     spec = registries.access_resources.get(resource_type)
     return spec  # type: ignore[return-value]
 
 
 def all_specs() -> list[ResourceSpec]:
-    from radd.kernel.registry import registries
-
     return list(registries.access_resources.values())  # type: ignore[arg-type]

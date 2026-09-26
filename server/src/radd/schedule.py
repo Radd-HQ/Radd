@@ -1,28 +1,11 @@
-"""Pure next-occurrence math — no I/O, a core util beside `worker.py`/`smtp.py`.
+"""Pure next-occurrence math shared by automations and backups (spec 99) — one copy of
+DST-correct wall-clock arithmetic. Unit-tested in tests/test_scheduled_automations.py.
 
-Written for scheduled automation rules (spec 69) and promoted here by spec 99,
-when backups needed the same thing: rule 1 forbids importing another module's
-internals, and a second copy of DST-correct wall-clock arithmetic would drift.
-`automations` and `backup` now share this one. Unit-tested in
-tests/test_scheduled_automations.py.
-
-`next_run(cfg, now, tz)` takes a stored schedule config ({kind, minutes|time,
-weekdays} — see automations.schemas.ScheduleConfig), a NAIVE-UTC `now`, and an
-IANA timezone name (`settings.scheduler_tz`), and returns the naive-UTC moment
-of the next occurrence STRICTLY after now:
-
-- interval: now + minutes (the caller anchors on last_run/now — the scheduler
-  calls this right after firing, so runs stay one interval apart).
-- daily: the next wall-clock HH:MM in `tz` after now.
-- weekly: the next wall-clock HH:MM in `tz` on one of the listed weekdays
-  (0=Mon) after now.
-- monthly: the next wall-clock HH:MM in `tz` on the given day of the month,
-  clamped to the month's last day (the 31st fires on 28 February).
-- cron: the next moment matching a five-field cron expression, via croniter.
-
-Wall-clock times are resolved through zoneinfo, so DST transitions keep the
-LOCAL time stable (the UTC gap to the next run stretches/shrinks with the
-offset change, as a human reading "every day at 09:00" expects).
+`next_run(cfg, now, tz)` takes a stored config ({kind, minutes | time, weekdays | day |
+expression}), a NAIVE-UTC `now` and an IANA zone, and returns the naive-UTC moment of the
+next occurrence STRICTLY after now. Interval adds `minutes` to `now` (the scheduler calls
+it right after firing); wall-clock kinds go through zoneinfo, so DST keeps the LOCAL time
+stable; monthly clamps to the month's last day; cron is croniter's.
 """
 
 from calendar import monthrange
@@ -35,11 +18,7 @@ from enum import StrEnum
 
 
 class ScheduleKind(StrEnum):
-    """Shape of a schedule config: interval = every N minutes; daily = every day
-    at HH:MM; weekly = at HH:MM on the listed weekdays (0=Mon); monthly = at
-    HH:MM on a day of the month, clamped to the month's last day; cron = a
-    five-field cron expression. Times are interpreted in
-    `settings.scheduler_tz`."""
+    """A schedule config's shape; weekdays are 0=Mon, times are in `settings.scheduler_tz`."""
 
     INTERVAL = "interval"
     DAILY = "daily"
@@ -50,9 +29,7 @@ class ScheduleKind(StrEnum):
 
 _WEEK_DAYS = 7
 
-#: Floor on how often any schedule may fire. Lives here rather than in
-#: `automations` because backups share this vocabulary and a second copy would
-#: eventually disagree about what "too often" means.
+#: Floor on how often any schedule may fire (one value for automations and backups).
 MIN_INTERVAL_MINUTES = 5
 
 
@@ -88,14 +65,8 @@ def _next_wall_clock(
 
 
 def _next_monthly(now: datetime, tz: str, at: time, day: int) -> datetime:
-    """The next `day`-of-month at `at`, strictly after now.
-
-    CLAMPED to the month's last day: a schedule set for the 31st fires on the
-    28th of February rather than skipping the month entirely. Skipping is the
-    other obvious reading and it is the wrong one — "monthly on the 31st" is
-    someone asking for month-end, and a maintenance ticket that silently misses
-    four months a year is worse than one that arrives three days early.
-    """
+    """The next `day`-of-month at `at`, strictly after now — CLAMPED to the month's last
+    day, not skipped: "monthly on the 31st" means month-end."""
     local_now = _local_now(now, tz)
     year, month = local_now.year, local_now.month
     for _ in range(_MONTHS_AHEAD):
@@ -110,14 +81,8 @@ def _next_monthly(now: datetime, tz: str, at: time, day: int) -> datetime:
 
 
 def _next_cron(now: datetime, tz: str, expression: str) -> datetime:
-    """The next moment matching a cron expression, in `tz`.
-
-    Delegated to croniter rather than parsed here. Cron's day-of-month and
-    day-of-week fields OR together when both are restricted — a rule nobody
-    remembers and every hand-rolled parser gets wrong for years before anyone
-    notices. It is a specified standard; taking the small dependency is the
-    cheaper correctness.
-    """
+    """The next moment matching a cron expression, in `tz`. croniter, not a hand-rolled
+    parser: day-of-month and day-of-week OR together when both are restricted."""
     from croniter import croniter
 
     return _to_naive_utc(croniter(expression, _local_now(now, tz)).get_next(datetime))
@@ -139,14 +104,8 @@ def next_run(cfg: Mapping[str, Any], now: datetime, tz: str) -> datetime:
 
 
 def cron_shortest_gap(expression: str, tz: str) -> timedelta:
-    """The smallest gap between consecutive runs of a cron expression.
-
-    The interval floor cannot be read off a cron config the way it is read off
-    `minutes` — `* * * * *` names no number at all — so it is MEASURED. Sampling
-    a handful of consecutive occurrences is enough: anything firing too often
-    does so relentlessly, and a schedule whose only tight pair is far in the
-    future is not what the floor exists to stop.
-    """
+    """The smallest gap between a few consecutive runs — MEASURED, since `* * * * *` names
+    no number; anything firing too often does so relentlessly, so a sample suffices."""
     from croniter import croniter
 
     itr = croniter(expression, datetime.now(ZoneInfo(tz)))
@@ -155,13 +114,7 @@ def cron_shortest_gap(expression: str, tz: str) -> timedelta:
 
 
 def validate_config(cfg: Mapping[str, Any]) -> None:
-    """Shape rules for a stored schedule config; raises ValueError.
-
-    Here rather than in each caller's pydantic model. `automations` and `backup`
-    each had their own copy of these checks, already subtly different — one
-    accepted a stray `weekdays` on a daily schedule that the other rejected —
-    and adding two kinds to two copies is how that becomes three differences.
-    """
+    """Shape rules for a stored schedule config, one copy for every caller; raises ValueError."""
     try:
         kind = ScheduleKind(str(cfg.get("kind")))
     except ValueError:
@@ -176,12 +129,12 @@ def validate_config(cfg: Mapping[str, Any]) -> None:
         for key in ("minutes", "time", "weekdays", "day", "expression")
         if cfg.get(key)
     }
-    allowed = _FIELDS_BY_KIND[kind]
-    if stray := present - allowed:
+    fields = _FIELDS_BY_KIND[kind]
+    if stray := present - fields:
         raise ValueError(
             f"a {kind.value} schedule does not take {', '.join(sorted(stray))}"
         )
-    for required in _REQUIRED_BY_KIND[kind]:
+    for required in fields:
         if cfg.get(required) is None:
             raise ValueError(f"a {kind.value} schedule needs `{required}`")
 
@@ -224,21 +177,13 @@ def validate_config(cfg: Mapping[str, Any]) -> None:
             raise ValueError("weekdays must not repeat")
 
 
-#: How many months ahead `_next_monthly` will look. Thirteen so that a schedule
-#: on the 29th, 30th or 31st always finds a month — the clamp means it never has
-#: to, but a bounded loop beats a `while True` that a bad config could hang on.
+#: Bound on `_next_monthly`'s loop (the clamp always matches sooner; no `while True`).
 _MONTHS_AHEAD = 13
 #: Consecutive occurrences sampled when measuring a cron expression's cadence.
 _CRON_SAMPLES = 5
 
+#: Each kind's fields: all of them required, no others allowed.
 _FIELDS_BY_KIND: dict[ScheduleKind, set[str]] = {
-    ScheduleKind.INTERVAL: {"minutes"},
-    ScheduleKind.DAILY: {"time"},
-    ScheduleKind.WEEKLY: {"time", "weekdays"},
-    ScheduleKind.MONTHLY: {"time", "day"},
-    ScheduleKind.CRON: {"expression"},
-}
-_REQUIRED_BY_KIND: dict[ScheduleKind, set[str]] = {
     ScheduleKind.INTERVAL: {"minutes"},
     ScheduleKind.DAILY: {"time"},
     ScheduleKind.WEEKLY: {"time", "weekdays"},

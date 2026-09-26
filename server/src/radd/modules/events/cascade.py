@@ -1,32 +1,6 @@
-"""The cascade consumer (RADD-745): one loop for every "died with its parent".
-
-Three registries had independently grown the same hole. `attachments` and
-`comments` key rows to a POLYMORPHIC parent (`entity_type` + `entity_id`), which
-cannot carry a foreign key, so `ON DELETE CASCADE` is unavailable. `access_grants`
-keys to `resource_type` + `resource_id` for the same reason. Each answered it
-differently: two head-seeded consumers, plus four call sites in access that have
-to remember.
-
-This is the one answer. Modules register a `CascadeSpec` on their manifest and
-this consumer drains the stream once for all of them.
-
-**Why one and not three.** There were already eighteen `PeriodicLoop`s polling
-this instance. A cascade is not worth its own cursor, its own poll interval and
-its own query of the events table — the work is a `DELETE … WHERE parent = ?`
-that usually matches nothing, because the delete path swept it a moment earlier.
-Registering costs a dict entry; a consumer costs a task per process forever.
-
-**Why the kernel and not a shared base class.** A plugin must be able to register
-cleanup for its own rows without editing a module it does not own. That was the
-entire justification for the polymorphic parent, and hardcoded maps inside each
-GC were quietly taking it back.
-
-`sweep` runs in the planning transaction (committed with the cursor, so a crash
-cannot lose or repeat it); whatever it returns goes to `after_commit`, for the
-effects that must not run inside a transaction — attachments removes bytes from a
-storage host there, where an unreachable host must leave orphaned bytes rather
-than a stuck consumer.
-"""
+"""The cascade consumer (RADD-745): one loop drains the stream for every registered
+`CascadeSpec` (see its docstring for the contract). One consumer rather than one per owner:
+a cascade is a DELETE that usually matches nothing, not worth its own cursor and poll."""
 
 from __future__ import annotations
 

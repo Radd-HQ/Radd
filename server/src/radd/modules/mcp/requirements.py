@@ -1,21 +1,8 @@
 """What each tool needs, and how the catalog narrows to the caller (spec 114).
 
-`tools/list` stops being a constant. For each tool we know the permission it
-demands and whether that permission is checked per project; the caller's own
-resolution (already intersected with the key's scope by spec 113) answers where
-they hold it. A tool with nowhere to run does not appear, and a tool that does
-carries an ENUM of the projects it may run in — so an agent cannot even name a
-project it may not write to.
-
-Hiding is presentation, not enforcement: every tool still calls `authz.require`
-(in its handler's service seam, or — for kernel-enforced plugin tools — in the
-dispatcher), and a tool invoked without being listed fails exactly as it always
-did.
-
-Since RADD-889 every tool — builtin and plugin alike — carries its requirement
-ON its kernel `McpToolSpec` (the spec IS the annotation, RADD-640), so the
-whole surface is annotated by construction: a tool absent from the registry is
-a wiring bug, not a contribution, and is hidden.
+Every `McpToolSpec` carries its requirement (the spec IS the annotation, RADD-640). A tool
+with nowhere to run is hidden; a project-scoped one carries an ENUM of the projects it may
+run in. Hiding is presentation, not enforcement — every call still passes `authz.require`.
 """
 
 import logging
@@ -27,6 +14,7 @@ from typing import Any, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.config import settings
+from radd.kernel import registries
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
 from radd.modules.auth.types import Permission
@@ -50,18 +38,12 @@ class ToolRequirement:
 
 
 def requirement_for(name: str) -> ToolRequirement | None:
-    """The requirement for a tool by name, read off its registered spec (the
-    spec IS its annotation, RADD-640/889). None means the name is unregistered
-    — a wiring bug the caller should treat as hidden."""
-    from radd.kernel import registries  # deferred: keep the kernel import lazy
-
+    """The requirement read off the tool's registered spec; None = unregistered (hide it)."""
     spec = registries.mcp_tools.get(name)
     if spec is None:
         return None
     return ToolRequirement(
-        # Plugin atoms are registered KEYS, not Permission members; the sets they
-        # are checked against hold plain strings (combine_permissions), so a str
-        # atom participates in every membership test a builtin does.
+        # Plugin atoms are plain str KEYS; the permission sets hold strings, so they test alike.
         permission=cast(Permission, spec.permission) if spec.permission else None,
         project_scoped=spec.project_scoped,
         space_scoped=spec.space_scoped,
@@ -121,10 +103,7 @@ async def visible_catalog(
     for tool in catalog:
         requirement = requirement_for(tool["name"])
         if requirement is None:
-            # Not in the kernel registry: a wiring bug. Since RADD-640 every
-            # legitimate tool is annotated by construction, so hide it —
-            # advertising a tool whose requirement nobody can state is how an
-            # unfiltered tool would slip out.
+            # A wiring bug: a tool whose requirement nobody can state must not slip out unfiltered.
             logger.warning("mcp tool %r has no requirement; hiding it", tool["name"])
             continue
         if requirement.permission is None:

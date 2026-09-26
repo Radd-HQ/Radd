@@ -3,12 +3,13 @@
 Owners authenticate/authorize their endpoint and pass the configured timezone.
 The same next_run function drives both live schedulers and these previews.
 """
-from datetime import UTC, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from radd.apitypes import UtcDatetime
 from radd import schedule
+from radd.apitypes import UtcDatetime
+from radd.clock import utcnow
 
 #: Occurrences a preview returns — enough to show a PATTERN (that a weekly rule
 #: really is weekly) without turning into a calendar.
@@ -18,7 +19,7 @@ PREVIEW_RUNS = 5
 class SchedulePreviewRequest(BaseModel):
     """A candidate schedule, not necessarily a valid one — the point of the
     endpoint is to say WHY when it is not, so this deliberately does not reuse
-    `ScheduleConfig` (whose validator would 422 with pydantic's wrapping before
+    a validated schedule model (whose validator would 422 with pydantic's wrapping before
     the handler could phrase the answer)."""
 
     kind: str
@@ -37,12 +38,11 @@ class SchedulePreviewRead(BaseModel):
     error: str | None = None
 
 
-
 def preview_schedule(data: SchedulePreviewRequest, timezone: str, *, now: datetime | None = None) -> SchedulePreviewRead:
     cfg = data.model_dump(exclude_none=True)
     try:
         schedule.validate_config(cfg)
-        at = now if now is not None else datetime.now(UTC).replace(tzinfo=None)
+        at = now if now is not None else utcnow()
         runs = []
         for _ in range(PREVIEW_RUNS):
             at = schedule.next_run(cfg, at, timezone)

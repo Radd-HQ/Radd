@@ -27,10 +27,8 @@ class SearchIndexRow(Base):
         ForeignKey("work_items.id", ondelete="CASCADE"), primary_key=True
     )
     project_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    # RADD-841: the item's relation anchors, denormalized like the text — so a
-    # relation-scoped actor (item.read@own/@team, RADD-823) filters FTS results
-    # without joining work_items per query. No FKs (mirrors, not owners): the
-    # indexer + the startup/user-event sweep keep them in step.
+    # RADD-841: relation anchors mirrored (no FKs) so a relation-scoped reader filters FTS
+    # without joining work_items; the indexer and its startup/user-event sweep keep them in step.
     reporter_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     team_id: Mapped[uuid.UUID | None] = mapped_column(index=True)

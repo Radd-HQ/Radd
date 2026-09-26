@@ -1,13 +1,7 @@
-"""Pure meaning-based retrieval (spec 103): the palette's Ask mode.
-
-Unlike hybrid /search (which ANDs keywords and fuses), this runs the query as
-ONE semantic probe over items and documents — "issues where the render farm
-ran out of disk" works as a sentence. Returns `enabled: false` (never an error)
-when no SEMANTIC_CANDIDATES provider is live (RADD-1384: `ai` disabled, or its
-feature/role/store off), so the UI can gate without a second status call.
-Documents come from whichever SEARCH_DOCUMENTS provider is loaded; none means
-items alone.
-"""
+"""Pure meaning retrieval (spec 103), the palette's Ask mode: ONE semantic probe over items
+and documents, so a sentence works as a query. `enabled: false` (never an error) when no
+SEMANTIC_CANDIDATES provider is live, so the UI gates without a second status call.
+Documents come from whichever SEARCH_DOCUMENTS provider is loaded."""
 
 import logging
 
@@ -20,7 +14,7 @@ from radd.modules.items.enums import ItemEntity
 from . import sources
 from .models import SearchIndexRow
 from .schemas import SemanticDoc, SemanticItem, SemanticResponse
-from .service import _readable_project_ids, _relation_index_clause
+from .service import _relation_index_clause, readable_project_ids
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +40,7 @@ def _score(distance: float) -> float:
 
 
 async def _items(session: AsyncSession, user: User, q: str, live) -> list[SemanticItem]:
-    readable = await _readable_project_ids(session, user)
+    readable = await readable_project_ids(session, user)
     if not readable:
         return []
     ranked = sources.nearest(

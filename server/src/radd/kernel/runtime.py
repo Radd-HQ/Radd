@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 def schedule_tasks(plugin, backend=None) -> list:
     """RADD-872: the loops for every periodic TaskSpec a plugin declares.
 
-    Enqueue-only specs (interval=None) have no tick to schedule. A spec without
-    its own gate runs under the spec-48 worker split like every hand-rolled loop."""
+    A spec without an interval has no tick to schedule. A spec without its own gate
+    runs under the spec-48 worker split like every hand-rolled loop."""
     from radd.config import settings
 
     from .sockets import Socket, provider

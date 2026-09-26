@@ -46,9 +46,8 @@ def sign(secret: str, msg_id: str, timestamp: int, body: str) -> str:
 
 
 async def encrypt_plaintext_secrets(session: AsyncSession) -> int:
-    """Lazy adoption (RADD-1086): re-encrypt any legacy plaintext secret. Runs
-    at startup; a missing secretbox key (host-run dev without a backup key)
-    logs and skips rather than blocking boot — rows adopt on the next start."""
+    """Re-encrypt any legacy plaintext secret at startup (RADD-1086). A missing secretbox key
+    logs and skips rather than blocking boot."""
     result = await session.execute(select(WebhookEndpoint))
     endpoints = list(result.scalars())
     changed = 0
@@ -123,9 +122,8 @@ async def update_endpoint(
 async def delete_endpoint(
     session: AsyncSession, endpoint_id: uuid.UUID, actor_id: uuid.UUID | None = None
 ) -> None:
-    """Delete an endpoint and its delivery log (spec 87 — webhook.delete had no
-    endpoint). Deliveries have no CASCADE (the log outlives individual sends), so
-    they are cleared explicitly; both tables belong to this module."""
+    """Delete an endpoint and its delivery log. Deliveries have no CASCADE (the log outlives
+    individual sends), so they are cleared explicitly."""
     endpoint = await get_endpoint(session, endpoint_id)
     await session.execute(
         delete(WebhookDelivery).where(WebhookDelivery.endpoint_id == endpoint_id)
@@ -159,9 +157,8 @@ async def list_endpoints(session: AsyncSession) -> list[WebhookEndpoint]:
 async def replay_delivery(
     session: AsyncSession, endpoint_id: uuid.UUID, delivery_id: uuid.UUID
 ) -> WebhookDelivery:
-    """RADD-1096: a DEAD delivery back onto the queue — the manual replay the
-    DeliveryStatus.DEAD comment promised since spec 25. Attempts reset so the
-    replay gets the full retry schedule, not one last gasp."""
+    """Put a DEAD delivery back on the queue (RADD-1096). Attempts reset so the replay gets
+    the full retry schedule, not one last gasp."""
     delivery = await session.get(WebhookDelivery, delivery_id)
     if delivery is None or delivery.endpoint_id != endpoint_id:
         raise NotFoundError(WebhookEntity.DELIVERY, delivery_id)

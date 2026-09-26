@@ -41,15 +41,9 @@ router = APIRouter(tags=["capabilities"])
 
 @router.get("/capabilities", response_model=CapabilitiesRead)
 async def get_capabilities(user: Actor) -> CapabilitiesRead:
-    """The backend-assembled UI manifest (docs/plugin-platform.md §3.2/§8a).
-
-    `capabilities`: each enabled plugin's `CapabilitySpec` evaluated (its `check()`),
-    replacing the hardcoded provider enumeration `/instance/status` inlined
-    (chokepoint 2). `nav`: plugin-contributed nav items (chokepoint 3) — the SPA
-    renders them alongside its builtin nav, gating each by `requires` against the
-    user's atoms, so an enabled plugin's nav appears with no edit to the shell.
-    Authenticated. The pre-sign-in subset stays on `/instance/login-options`.
-    """
+    """The backend-assembled UI manifest (docs/plugin-platform.md §3.2/§8a): each enabled
+    plugin's evaluated `CapabilitySpec`, and plugin-contributed `nav` the SPA gates by `requires`
+    against the user's atoms. The pre-sign-in subset is `/instance/login-options`."""
     return CapabilitiesRead(
         capabilities=[CapabilityRead(**c, plugin=_owner(c["key"])) for c in kcaps.evaluate()],
         nav=[

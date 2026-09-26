@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -10,7 +11,7 @@ from radd.modules.auth import authz
 from radd.modules.auth.deps import CurrentUser
 
 from . import acks, service, store
-from .schemas import ContributionSettings, PluginCapabilityRead, PluginRead
+from .schemas import ContributionSettings, PluginRead
 
 router = APIRouter(prefix="/plugins", tags=["plugins"])
 
@@ -23,15 +24,7 @@ def _require_admin(user: CurrentUser) -> None:
 
 
 def _read(info: service.PluginInfo) -> PluginRead:
-    return PluginRead(
-        id=info.id, name=info.name, version=info.version, core=info.core,
-        state=info.state.value, description=info.description, can_toggle=info.can_toggle,
-        capabilities=[PluginCapabilityRead(**cap) for cap in info.capabilities],
-        active=info.active, origin=info.origin, dependencies=list(info.dependencies), problems=list(info.problems),
-        live_supported=info.live_supported, managed=info.managed,
-        runtime_state=info.runtime_state, runtime_errors=list(info.runtime_errors),
-        pending_processes=info.pending_processes,
-    )
+    return PluginRead(**asdict(info))
 
 
 @router.get("", response_model=list[PluginRead])

@@ -29,7 +29,6 @@ class InvalidationEvent:
     event_type: str
     payload: dict
     item_ids: set[str] | None
-    silent: bool = False
 
 
 def event_project_id(event: Event) -> str | None:

@@ -1,32 +1,13 @@
 """Every email Radd sends, composed in ONE place (RADD-967).
 
-Three subsystems had each grown their own idea of what an email is. The outbound
-comment reply shipped the raw comment body — no author, no issue, no link, so a
-watcher received a paragraph with nothing saying what it was about. The
-notification digest had explicit lines for four of the nine notification types
-(the other five all read "commented") and pasted its URLs together inline. The
-ack was a template constant. All three were plain text only. And a fourth,
-`googlechat`, kept a private copy of the issue-URL string.
+Composition only: no session, no `radd.modules.*` import, no settings — the base URL is an
+argument, so a rendering test needs neither a database nor a config.
 
-This module owns composition and nothing else. It has no session, imports no
-`radd.modules.*`, and reads no settings — the base URL arrives as an argument.
-A rendering test therefore needs neither a database nor an app config, and the
-caller stays the one that decides what this instance is called.
-
-**Both parts, always.** Every renderer returns text AND html together. A
-multipart message whose halves are built in different places is a message whose
-halves drift; here they cannot, because one function writes both.
-
-**Nothing survives as markup.** Everything interpolated goes through
-`html.escape`, and a comment body is inserted as escaped text with its line
-breaks preserved. A comment IS markdown, and rendering it would mean running a
-markdown renderer (a new dependency) over user text whose output lands in
-someone's mail client. That is `mailintake/html_body.py`'s decision pointed the
-other way: markup is stripped on the way in, and never produced on the way out.
-
-**Inline styles, table layout, no assets.** Gmail drops `<style>` blocks,
-Outlook lays out with tables, and a remote asset is a tracking-pixel prompt in
-the recipient's client. So the chrome is deliberately small.
+**Both parts, always.** Every renderer returns text AND html, so the halves cannot drift.
+**Nothing survives as markup.** Everything interpolated is `html.escape`d; a comment body is
+escaped text with its line breaks kept (rendering markdown would put user-controlled output
+in a mail client). **Inline styles, table layout, no assets:** Gmail drops `<style>`,
+Outlook lays out with tables, a remote asset is a tracking-pixel prompt.
 """
 
 from __future__ import annotations
@@ -41,15 +22,12 @@ from typing import NamedTuple
 ISSUE_PATH = "/issues"
 PAGE_PATH = "/pages"
 INBOX_PATH = "/inbox"
-#: Where a signed-in person turns notification email off — the matrix moved to
-#: its own settings tab in spec 118, so this is NOT the profile page.
+#: Where a signed-in person turns notification email off (spec 118) — NOT the profile page.
 PREFERENCES_PATH = "/settings/notifications"
 
 
 def site(base_url: str) -> str:
-    """The instance root with no trailing slash. A configured
-    `https://radd.example.com/` used to produce `…com//issues/KEY`, which most
-    servers redirect and some proxies 404."""
+    """The instance root with no trailing slash (avoids `…com//issues`)."""
     return (base_url or "").rstrip("/")
 
 
@@ -134,13 +112,8 @@ class ItemMail:
 
 @dataclass(frozen=True)
 class DigestEntry:
-    """One notification as a digest line.
-
-    The headline is already a sentence when it gets here: what a `page_updated`
-    or an `approval` reads like is knowledge the `notify` module owns (it owns
-    the enum), and teaching this module those types would put the vocabulary
-    in two places.
-    """
+    """One notification as a digest line. The headline arrives as a sentence: notify owns
+    the type vocabulary, so this module never learns it."""
 
     headline: str
     subject: str = ""
@@ -230,16 +203,9 @@ def _quoted(body: str) -> str:
 def comment_reply(
     item: ItemMail, *, author: str, body: str, reason: str, preferences: str = ""
 ) -> RenderedMail:
-    """A public comment, mailed to someone on the issue.
-
-    `reason` is the recipient's own — a watcher and an external requester are on
-    the thread for different reasons, and one wording cannot honestly say both.
-
-    `preferences` is the notification-settings URL and is passed by the
-    USER-addressed caller only (notify's mailer, RADD-985). A requester has no
-    matrix to open: the conversation is their ticket, and the reply-to-comment
-    wording already says how to take part in it.
-    """
+    """A public comment, mailed to someone on the issue. `reason` is the recipient's own;
+    `preferences` is passed only for USER-addressed mail (RADD-985) — a requester has no
+    preferences matrix."""
     headline = f"{author} commented on {item.label}"
     text = "\n".join(
         filter(
@@ -273,26 +239,11 @@ TICKET_LINK_LABEL = "View the ticket"
 def contact_notice(
     item: ItemMail, *, body: str, reason: str = "", link_label: str = TICKET_LINK_LABEL
 ) -> RenderedMail:
-    """The shape every message to an EXTERNAL contact takes: the ticket named in
-    plain text, the prose, then the link (RADD-982 named it; RADD-967 built it).
-
-    Not `comment_reply`'s shape, and the difference is the point. A reply quotes
-    a person and links an issue the recipient may be able to open; this is the
-    desk speaking about a ticket to someone with no account, so the header is a
-    LABEL rather than an anchor and the link is an affordance at the end rather
-    than the subject of the sentence.
-
-    Public since RADD-1318: the receipt and the resolution notice that used to
-    call it are automation templates now, and an automation's `send_email` to
-    the item's `contact` renders through here so it still reads like the desk.
-    `body` arrives already rendered and is escaped like a comment.
-
-    **`reason` rides BOTH halves** (RADD-982). It used to be passed only to
-    `_document`, so the "why am I getting this" line existed in the html and
-    not in the text — the exact drift this module's "both parts, always" rule
-    exists to prevent, invisible because the one caller never passed a reason.
-    `comment_reply` had always put it in both.
-    """
+    """The shape of every message to an EXTERNAL contact: the ticket named in plain text (a
+    LABEL, not a link — the recipient has no account), the prose, then the link. An
+    automation's `send_email` to the item's contact renders through here (RADD-1318);
+    `body` arrives rendered and is escaped like a comment. `reason` rides BOTH halves
+    (RADD-982)."""
     footer = f"\n{reason}" if reason else ""
     text = f"{item.label}\n\n{body}\n\n{link_label}: {item.url}\n{footer}"
     content = (
@@ -305,12 +256,8 @@ def contact_notice(
 
 
 def digest_line(entry: DigestEntry, *, divider: bool = True) -> RenderedMail:
-    """One notification, both halves. Public because the digest's shape is what
-    a test pins — every notification type has to produce a distinct line.
-
-    `divider` is off for the last line: a rule under the final row reads as a
-    section that lost its content, not as a separator.
-    """
+    """One notification, both halves (public: tests pin a distinct line per type).
+    `divider` is off for the last line — a rule under it reads as missing content."""
     head = f"{entry.subject} — {entry.headline}" if entry.subject else entry.headline
     lines = [f"• {head}"]
     if entry.excerpt:
@@ -340,14 +287,9 @@ def digest_line(entry: DigestEntry, *, divider: bool = True) -> RenderedMail:
 
 
 def notice(entry: DigestEntry, *, reason: str, preferences: str = "") -> RenderedMail:
-    """ONE notification as its own email — the per-event message, as opposed to
-    the batched `digest` (RADD-968).
-
-    Same vocabulary, none of the batching chrome: the footer is the recipient's
-    own reason, because "you have email digests on" is not why this arrived.
-    A comment has its own renderer (`comment_reply`) that quotes the full body;
-    this is what every other type gets. `preferences` as in `comment_reply`.
-    """
+    """ONE notification as its own email (RADD-968), for every type but a comment
+    (`comment_reply`). The footer is the recipient's own reason, not the digest's.
+    `preferences` as in `comment_reply`."""
     head = f"{entry.subject} — {entry.headline}" if entry.subject else entry.headline
     body = [head, ""]
     if entry.excerpt:

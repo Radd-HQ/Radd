@@ -1,12 +1,7 @@
 """Contribution specs — the typed declarations a plugin puts on its manifest.
 
-Each spec is a frozen dataclass the loader aggregates into a kernel registry
-(`radd.kernel.registry`). The kernel iterates the registries blind — no consumer
-names a plugin. These are the vocabulary of the plugin platform (docs/plugin-platform.md §4).
-
-Kept deliberately pure: this module imports nothing from `radd.modules.*`, so the
-kernel never depends on a plugin. Specs carry data + light callables only.
-"""
+Frozen dataclasses the loader aggregates into `radd.kernel.registry`. Pure: imports nothing
+from `radd.modules.*`."""
 
 from collections.abc import Awaitable, Callable, Mapping
 import re
@@ -18,11 +13,8 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ViewListSpec:
-    """A view type drawn by the HOST's list rather than by its plugin (RADD-1396).
-
-    The plugin supplies ROWS and defaults, never UI: selection, bulk actions, columns, paging and
-    the SLQ bar are the list's own. A list-surface type is always flat (no axes). The slas
-    plugin's triage queue is the first: the same list, ordered by live SLA urgency."""
+    """A view type drawn by the HOST's list: the plugin supplies ROWS and defaults, never UI
+    (selection, bulk actions, columns, paging and the SLQ bar are the list's). Always flat."""
 
     #: The endpoint serving this type's rows, relative to the API root. It takes the `/items`
     #: paging contract (`q`, `project_id`, `limit`, `offset`) and answers an `ItemRead` list in the
@@ -38,10 +30,8 @@ class ViewListSpec:
 
 @dataclass(frozen=True)
 class ViewTypeSpec:
-    """A saved-view TYPE a plugin contributes (spec 94) — like board/list/roadmap. By default it is
-    rendered by the plugin's own `view.type` UI slot (keyed by `key`); with `list_surface` the
-    host's list draws it over the plugin's rows (RADD-1396). The view still stores its SLQ `query`
-    + config either way. Inverts the hardcoded `ViewType` enum."""
+    """A saved-view TYPE a plugin contributes (spec 94), drawn by its `view.type` UI slot (keyed
+    by `key`) or, with `list_surface`, by the host's list over the plugin's rows."""
 
     key: str  # the stored view_type value, e.g. "acme.notes"
     label: str  # shown in the create-view Type dropdown
@@ -75,16 +65,8 @@ class WidgetTypeSpec:
 
 @dataclass(frozen=True)
 class SlqFieldContext:
-    """What a plugin SLQ resolver needs from the query beyond its own operands.
-
-    `me` is a grammar SENTINEL, not a string — the parser marks it unquoted and
-    the builtin people fields branch on it rather than text-matching. Plugin
-    resolvers get the same distinction as a typed flag, so `logged_by = me` and
-    a person literally named "me" cannot be confused.
-
-    Passing a context object rather than the id itself means the next thing a
-    resolver needs (a project scope, a timezone) is an added attribute, not
-    another signature break."""
+    """What a plugin SLQ resolver gets beyond its operands. `me` is a grammar SENTINEL, so
+    `is_me` tells `logged_by = me` apart from a person named "me"."""
 
     current_user_id: uuid.UUID
     #: True when the operand was the bare `me` literal; `value` is then empty
@@ -94,16 +76,10 @@ class SlqFieldContext:
 
 @dataclass(frozen=True)
 class SlqFieldSpec:
-    """A custom SLQ query field a plugin contributes — the SLQ engine's inversion of its hardcoded
-    field set. Two uses, same mechanism: a plugin's OWN data (`note ~ "foo"`), and RELATIONAL
-    predicates over a module's child rows (`logged_by = me`, `commented_by = "alice@corp.example"` —
-    find issues by who logged time on them or commented on them).
-
-    `item_ids` returns a SQLAlchemy `Select` of the work-item ids that MATCH (positive sense); the
-    items query engine wraps it as `work_item.id IN (…)` and applies negation. The resolver builds
-    the subquery from the plugin's OWN table only (joining the `auth.User` spine is fine), so the
-    plugin stays decoupled from the items model and items never learns about worklogs or comments.
-    Supports `=`, `!=`, and `~` (contains)."""
+    """A plugin SLQ field: its own data (`note ~ "x"`) or a relational predicate
+    (`logged_by = me`). `item_ids(contains, value, ctx)` returns a `Select` of MATCHING
+    work-item ids from the plugin's own table; items wraps it as `id IN (…)` and applies
+    negation. Supports `=`, `!=`, `~`."""
 
     name: str  # the SLQ field keyword, e.g. "note"
     label: str  # human label (autocomplete / errors)
@@ -123,50 +99,27 @@ class EventTypeSpec:
     item_scoped: bool = False  # a target item resolves → SLQ + item actions apply
     has_changes: bool = False  # payload carries a field diff (old/new subjects work)
     trigger: bool = True  # appears in the automation trigger catalog
-    #: Spec 123: shown in the audit log by default. False for machine noise —
-    #: a failed mail delivery, a notification row, the scheduler's tick — that
-    #: is a full citizen of the stream but buries the trail (19,516 of the dev
-    #: database's 20,615 rows were `mail.failed`). Still queryable on request.
+    #: Spec 123: shown in the audit log by default; False for machine noise
+    #: (mail.failed, notification rows, ticks) — still queryable on request.
     audited: bool = True
     entity_type: str = ""  # the entity this event is about (for auto-registered CRUD events)
-    #: Entity types this event is ABOUT (RADD-923) — `("item",)`, `("item",
-    #: "release")`, `("milestone",)`. Each must have a registered `EntityRefSpec`
-    #: or the plugin refuses to LOAD: an event promising a subject nothing can
-    #: resolve is an automation that silently does nothing at 3am, and boot is
-    #: the cheapest place to find out.
-    #:
-    #: The emitter passes these as IDS and the kernel writes the refs, so a
-    #: declared subject is a promise the emitter cannot forget to keep.
+    #: Entity types this event is ABOUT (RADD-923); the emitter passes ids, the kernel writes
+    #: refs. Each needs a registered `EntityRefSpec` or the plugin refuses to LOAD — boot is
+    #: the cheapest place to find an unresolvable subject.
     subjects: tuple[str, ...] = ()
-    #: JSON Schema for the event's OWN data — not the subject refs, which the
-    #: kernel writes and therefore already knows the shape of. Deriving beats
-    #: declaring: a schema that repeats what the kernel generated is a second
-    #: copy that drifts. This covers only the remainder (`{"environment": …}`).
-    #:
-    #: Served by `GET /automations/samples/events`, which otherwise has nothing
-    #: to show for an event type that has never fired on this instance.
+    #: JSON Schema for the event's OWN data (subject refs are derived); served by
+    #: `GET /automations/samples/events` for types that never fired here.
     payload_schema: dict[str, Any] = field(default_factory=dict)
 
 
 # --- entity refs (RADD-923: the kernel owns SUBJECTS, plugins own data) -------
 @dataclass(frozen=True)
 class EntityRefSpec:
-    """How to describe one entity type inside an event payload.
+    """How to describe one entity type inside an event payload (RADD-923).
 
-    Registered once by the module that owns the entity; used by `events.emit` to
-    expand `subjects={"item": id}` into `payload["item"] = {id, key, title, …}`.
-
-    **Why the kernel resolves rather than the emitter building.** RADD-922 found
-    fourteen hand-built shapes for the same idea, fixed them, and left an AST
-    test to keep them fixed — a test that is only necessary because the shape is
-    still hand-built. Handing the kernel an ID deletes the failure mode instead
-    of policing it: you cannot forget to build a ref you never build, and eleven
-    emitters stop needing `depends_on items` to describe an item.
-
-    `ref(session, entity_id) -> dict | None`. None means the row has gone, which
-    is a real answer — a delete event resolves its subject BEFORE the row goes,
-    and anything racing it legitimately finds nothing.
-    """
+    `events.emit` expands `subjects={"item": id}` into `payload["item"] = ref(session, id)`,
+    so emitters never hand-build refs. None means the row has gone (a delete resolves its
+    subject before the row goes)."""
 
     entity_type: str
     ref: Callable[..., Any]
@@ -201,15 +154,9 @@ class EntityLinkSpec:
 # --- search + mentions (RADD-1327) --------------------------------------------
 @dataclass(frozen=True)
 class SearchableSpec:
-    """An entity type Cmd-K search (and, when `mentionable`, the editor's `#`
-    picker) can find.
-
-    The OWNER answers the query, so its ACL stays where it already lives:
-    `search(session, actor, q, limit) -> list[{"id", "title", "subtitle"?,
-    "url", "snippet"?}]` returns only rows `actor` may read. Items and pages
-    register their tuned searches through this; a declared `EntitySpec` with
-    `searchable=True` gets one derived from its own table and read gate.
-    """
+    """An entity type Cmd-K (and, when `mentionable`, the `#` picker) can find. The OWNER
+    answers: `search(session, actor, q, limit)` returns only rows `actor` may read, as
+    `{"id", "title", "subtitle"?, "url", "snippet"?}`. A searchable EntitySpec derives one."""
 
     entity_type: str
     label: str
@@ -222,11 +169,8 @@ class SearchableSpec:
 # --- capabilities (§3 chokepoint 2: /capabilities aggregator) ---
 @dataclass(frozen=True)
 class CapabilitySpec:
-    """What a plugin reports to `/capabilities` — a status/flag descriptor. `check`
-    is an optional callable returning extra runtime detail (e.g. whether SSO is
-    configured); a `summary` string in that detail is the one line Settings →
-    Server status shows beside the row (RADD-1389), which renders every
-    capability generically instead of a schema naming plugins."""
+    """What a plugin reports to `/capabilities`. `check()` returns runtime detail that
+    overrides `enabled`; a `summary` string in it is the Server status line (RADD-1389)."""
 
     key: str
     label: str
@@ -238,13 +182,8 @@ class CapabilitySpec:
 # --- relations (RADD-823: access qualified by who you are to the record) ---
 @dataclass(frozen=True)
 class RelationActor:
-    """What a relation predicate may know about the acting user (RADD-823).
-
-    Deliberately tiny: relations are structural facts about columns
-    (`reporter_id = :me`, `team_id IN :my_teams`), so the actor is ids only —
-    never the User row, never a session. `team_ids` is the RESOLVED set (the
-    RADD-830 subject graph: direct + group-carried, memoised per request);
-    a relation predicate must not re-derive it."""
+    """What a relation predicate may know about the actor (RADD-823): ids only.
+    `team_ids` is the RESOLVED set (direct + group-carried, RADD-830) — never re-derive it."""
 
     user_id: uuid.UUID
     team_ids: frozenset[uuid.UUID] = frozenset()
@@ -255,17 +194,10 @@ class RelationActor:
 
 @dataclass(frozen=True)
 class RowGuardSpec:
-    """A per-row ADMISSION every reader of a resource passes, whatever relation
-    they hold (spec 121 §3): a restricted issue admits only the people on it.
-
-    A relation says who the actor is to a row; a guard says which rows are
-    open to everyone who may read the resource at all, and which relations
-    ADMIT a reader to the rest. The resolvers compose it under every relation
-    set — `@any` stops meaning "every row" the moment a guard is registered —
-    so a list, a count, a search and a gate agree by construction. `admits`
-    names relation KEYS resolved through the registry at query time, so an
-    unloaded plugin's relation simply does not admit.
-    """
+    """A per-row ADMISSION every reader passes whatever relation they hold (spec 121): a
+    restricted issue admits only the people on it. Composed under every relation set (`@any`
+    stops meaning "every row"), so list, count, search and gate agree; `admits` names relation
+    KEYS resolved at query time (an unloaded plugin's relation admits nobody)."""
 
     resource: str
     label: str
@@ -280,21 +212,14 @@ class RowGuardSpec:
 
 @dataclass(frozen=True)
 class RelationSpec:
-    """One relation a resource contributes: what `@own` / `@team` MEAN for its
-    rows (RADD-823). Only the owning module knows — the kernel carries the
-    declaration and the resolvers compose it.
+    """What `@<key>` means for one resource's rows (RADD-823).
 
-    The FILTERING form is mandatory: a read restriction must become a WHERE
-    clause or every list, count and aggregate leaks. The GATING form (`holds`)
-    is asked about a row already loaded; a column relation supplies it as a
-    pure predicate, and the pair must agree — the contract test in
-    tests/test_relation_semantics.py asserts it on a fixture, because a pair
-    that DISAGREES is a silent leak. A relation whose membership lives in
-    ANOTHER table (`@participant`, RADD-844) has no pure row form: it sets
-    `holds=None` + `expensive=True`, and gates answer it by running `where`
-    against that one row (`authz.relation_holds_row_async`). Sync resolvers
-    treat a None-holds relation as NOT held — failing closed, never wide.
-    """
+    `where` (FILTERING) is mandatory: a read restriction must become a WHERE clause or
+    lists and counts leak. `holds` (GATING a loaded row) must agree with it —
+    tests/test_relation_semantics.py checks the pair. A relation living in another table
+    (`@participant`) sets `holds=None` + `expensive=True`: gates then run `where` against
+    the row (`authz.relation_holds_row_async`), and sync resolvers treat it as NOT held
+    (fail closed)."""
 
     #: The resource whose rows this qualifies — the atom prefix ("item", "page").
     resource: str
@@ -308,14 +233,10 @@ class RelationSpec:
     #: GATING form: (RelationActor, row) -> does the relation hold for THIS row?
     #: None = no pure form exists; gate via the where-form (requires expensive).
     holds: Callable[[RelationActor, Any], bool] | None
-    #: A relation needing a join ("issues shared with me") is expressible but
-    #: marked, so hot paths can decline it — never silently slow.
+    #: Required with `holds=None`: a query-gated relation must be declared as one.
     expensive: bool = False
-    #: Spec 121: the relation is a property of the ROW, not of who the actor
-    #: is (`@public` = the item's own visibility). Holding `item.read@public`
-    #: on a project therefore ENTITLES the actor to the project (it appears in
-    #: their rail) rather than merely relating them to rows they happen to be
-    #: on — `authz.visible_projects` reads this flag.
+    #: Spec 121: a property of the ROW (`@public`), so holding it ENTITLES the actor to the
+    #: project (read by `authz.visible_projects`).
     row_property: bool = False
 
     def __post_init__(self) -> None:
@@ -333,20 +254,13 @@ class PermissionSpec:
     registering one makes it appear in the roles matrix + GET /permissions."""
 
     key: str
-    #: One of auth.types.PermissionScope: "project" | "global" | "space".
-    #: RADD-814 retired "instance" (zero atoms, no resolution branch); RADD-791
-    #: added "space" — kept in step by the scope contract test (RADD-818).
+    #: auth.types.PermissionScope value: "project" | "global" | "space".
     scope: str
     description: str = ""
-    #: Umbrella atoms that expand to this one. RADD-890 wired it into
-    #: `auth.types.implied_map()` — it was declared in spec 93 and read by
-    #: nothing, so a plugin atom could not ride an umbrella at all.
+    #: Umbrella atoms that expand to this one (`auth.types.implied_map`).
     implied_by: tuple[str, ...] = ()
-    #: The reverse edge: atoms a holder of THIS one also holds. Needed because
-    #: `implied_by` can only name the umbrella, and an implication may confer a
-    #: RELATION-QUALIFIED form that is not itself a catalog atom — `item.update`
-    #: confers `attachment.delete@own` (RADD-790/816), which has no PermissionSpec
-    #: of its own and must not appear in the catalog.
+    #: The reverse edge: atoms a holder of THIS also holds — including a relation-qualified
+    #: form that is not itself a catalog atom (`item.update` → `attachment.delete@own`).
     implies: tuple[str, ...] = ()
 
 
@@ -376,9 +290,8 @@ class EntityFieldSpec:
 
 @dataclass(frozen=True)
 class EntitySpec:
-    """Declarative entity registration → generated model + auto-wired CRUD/events/
-    activity/search/RBAC (docs/plugin-platform.md §0.5). `model` is the code
-    escape-hatch: a plugin-defined SQLAlchemy model registered through the kernel."""
+    """Declarative entity registration → generated model + auto-wired CRUD/events/search/RBAC
+    (docs/plugin-platform.md §0.5). `model` is the escape hatch: a code-defined mapped class."""
 
     key: str  # stable entity type, e.g. "milestone"
     table: str
@@ -390,7 +303,6 @@ class EntitySpec:
     #: and the entity's read gate); `mentionable` adds it to the `#` picker.
     searchable: bool = False
     mentionable: bool = False
-    activity: bool = True
     plural: str = ""
     #: Where one lives in the SPA (`{id}` substituted) — mentions and audit links.
     url: str = ""
@@ -399,21 +311,18 @@ class EntitySpec:
 # --- background work (§6: TaskBackend socket) ---
 @dataclass(frozen=True)
 class TaskSpec:
-    """A unit of background work: a periodic tick or an enqueueable job. Consumers
-    register these instead of hand-rolling PeriodicLoops; the active TaskBackend runs them."""
+    """A periodic unit of background work. Consumers register these instead of hand-rolling
+    PeriodicLoops; the active TaskBackend runs them."""
 
     name: str
     run: Callable[[], Awaitable[Any]]
-    interval: Callable[[], float] | float | None = None  # periodic tick seconds (None = enqueue-only)
+    interval: Callable[[], float] | float | None = None  # tick seconds (None = nothing scheduled)
     gate: Callable[[], bool] | None = None  # e.g. run_workers
 
 
 # --- automation dataflow (spec 120: a node's outputs are addressable) --------
-#: What a node's OUTPUT may be called, and equally what may NAME a node — the two
-#: halves of `{{<node>.<output>}}` are read as one identifier, so one rule covers
-#: both rather than two regexes that eventually disagree about an underscore.
-#: Lowercase and dot-free: the dot is the separator, and a name carrying one
-#: could not be told from a node-plus-field pair.
+#: One rule for node names AND output names — both halves of `{{<node>.<output>}}`;
+#: lowercase and dot-free (the dot is the separator).
 OUTPUT_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,29}$")
 
 
@@ -422,17 +331,8 @@ def valid_output_name(name: Any) -> bool:
 
 
 class OutputKind(StrEnum):
-    """What a declared output carries.
-
-    The kernel's OWN vocabulary rather than a module's — `OutputField` lives
-    here, so what its `kind` may say lives here too. That is the difference from
-    `AutomationNodeSpec.arity`, which is a plain string precisely because
-    `NodeArity` belongs to `automations`.
-
-    ENUM is not decoration: a producer that declares its choices lets the graph
-    editor offer them and lets the write path refuse a token naming a value the
-    producer can never emit. TEXT is anything else, stringified.
-    """
+    """What a declared output carries. ENUM lets the editor offer the choices and the write
+    path refuse a token naming a value the producer never emits; TEXT is anything else."""
 
     TEXT = "text"
     ENUM = "enum"
@@ -440,14 +340,8 @@ class OutputKind(StrEnum):
 
 @dataclass(frozen=True)
 class OutputField:
-    """One named value a node PRODUCES, addressable downstream as
-    `{{<node name>.<name>}}` (spec 120).
-
-    Declared, not inferred, for the reason `ports` is declared (RADD-1064): the
-    graph editor has to list what a downstream token may say BEFORE anything has
-    run, and a value discovered only at run time can only be offered after it is
-    too late to reference it.
-    """
+    """One named value a node PRODUCES, addressable downstream as `{{<node name>.<name>}}`
+    (spec 120). Declared, like `ports`, because the editor lists tokens before anything runs."""
 
     name: str
     label: str = ""
@@ -460,27 +354,15 @@ class OutputField:
 # --- notification kinds (RADD-1326) -------------------------------------------
 @dataclass(frozen=True)
 class NotificationKindSpec:
-    """One kind of notification: a row in everyone's preferences matrix, and —
-    for a CONTRIBUTED kind — the events that produce it.
+    """One kind of notification: a preferences-matrix row and, for a CONTRIBUTED kind,
+    the `events` that produce it (notify's own kinds leave `events` empty).
 
-    The notify module registers its own kinds through this (their events are
-    handled by its built-in fan-out, so `events` is empty). A plugin's kind
-    names the `events` it answers and says who hears (`recipients`) and what the
-    row says (`render`); the notify consumer does the rest — the channel matrix,
-    the item read check, the inbox row, the email — with no edit to notify.
+    - `personal`: addressed AT the recipients (the `own` column only).
+    - `default_channel`: an unset relationship cell — "off" | "inbox" | "email" | "both".
+    - `recipients(session, event) -> Iterable[uuid]`; the actor never hears their own action.
+    - `render(payload, actor_name) -> {"headline", "link"}`, stored on the row.
 
-    - `personal`: addressed AT the recipients by the event (the `own` column
-      only), as opposed to reaching people through how they are connected.
-    - `default_channel`: what an unset cell resolves to in the relationship
-      columns — "off" | "inbox" | "email" | "both". Subscriptions default off.
-    - `recipients(session, event) -> Iterable[uuid]`: who hears. The actor is
-      never told about their own action.
-    - `render(payload, actor_name) -> {"headline": str, "link": str | None}`:
-      stored on the notification, so the inbox and the mail render it without
-      the plugin's code.
-
-    `key` is at most 30 characters — it is stored as the notification's type.
-    """
+    `key` ≤ 30 chars (stored as the notification's type)."""
 
     key: str
     label: str
@@ -495,17 +377,9 @@ class NotificationKindSpec:
 # --- automation templates (RADD-1316) -----------------------------------------
 @dataclass(frozen=True)
 class AutomationTemplateSpec:
-    """A whole automation a module offers as a STARTING POINT (RADD-1316).
-
-    Built-in behaviour that used to run unasked — an alert comment, a mail
-    receipt — lives here instead: nothing runs until someone opens the template,
-    edits it and saves. The editor starts from an unsaved, DISABLED draft; no row
-    exists until then, so there is nothing to clean up if nobody wants it.
-
-    `nodes` / `edges` are the stored graph shape (dicts), with placeholder params
-    where the author must choose (a state, an address). A template naming a node
-    type or trigger event this instance does not offer is not listed.
-    """
+    """A whole automation offered as a STARTING POINT (RADD-1316): opened as an unsaved,
+    DISABLED draft, so nothing runs until someone saves it. `nodes`/`edges` are the stored
+    graph shape; a template naming a node type or trigger this instance lacks is not listed."""
 
     key: str
     name: str
@@ -518,17 +392,8 @@ class AutomationTemplateSpec:
 # --- template tokens (RADD-1324) ----------------------------------------------
 @dataclass(frozen=True)
 class TokenProviderSpec:
-    """A `{{root.field}}` vocabulary an automation's text can use, contributed by
-    the module that owns the entity (RADD-1324).
-
-    `page` and `comment` lived inside the automation engine, which meant the
-    engine knew the shape of those modules' event payloads — and a plugin could
-    not offer `{{milestone.name}}` at all. A provider reads the event PAYLOAD
-    (where the kernel writes each subject's ref, RADD-923) and answers one field.
-
-    `resolve(field, payload) -> str | None`: None means "nothing to say", and the
-    token then renders verbatim, exactly as an unknown token always has.
-    """
+    """A `{{root.field}}` vocabulary contributed by the entity's owner (RADD-1324).
+    `resolve(field, payload)` reads the event payload; None renders the token verbatim."""
 
     root: str
     #: (field, description) pairs — what the editor's token panel lists.
@@ -539,24 +404,14 @@ class TokenProviderSpec:
 # --- trigger kinds (RADD-1323) -------------------------------------------------
 @dataclass(frozen=True)
 class TriggerKindSpec:
-    """A KIND of trigger an automation can start from, contributed by a module.
+    """A KIND of trigger an automation can start from (RADD-1323).
 
-    Two families, one spec:
+    * `has_event=False` — a button, a clock, a validation draft: no event to read, so
+      nodes with `reads_event` are refused under it; the owning module fires it.
+    * `has_event=True` — fired by emitting an event whose type is `key`; the engine asks
+      `matches(params, payload)` per automation.
 
-    * **Event-less kinds** — a button (`manual`), a clock (`schedule`), a draft
-      being checked (`validate`). `has_event=False`: there is no event to read,
-      so nodes that read one (`reads_event`) are refused downstream on write.
-      Their firing is the owning module's business (the scheduler, intake).
-    * **Event-backed kinds** — `has_event=True`: the kind is FIRED by emitting an
-      event whose type is the kind's `key`. The engine consumes it like any
-      trigger and asks `matches(node params, event payload)` per automation, so
-      a plugin can offer "a webhook was received on endpoint X" — a trigger with
-      its own configuration — with no core edits: register the kind, emit the
-      event.
-
-    Plain event triggers (every `EventTypeSpec` marked `trigger`) are NOT kinds:
-    the event catalogue already describes them.
-    """
+    Plain `EventTypeSpec(trigger=True)` events are not kinds."""
 
     key: str  # stored as the trigger node's `params.event`
     label: str
@@ -588,38 +443,13 @@ def _default_outputs_for(_params: Mapping[str, Any]) -> tuple["OutputField", ...
 class AutomationNodeSpec:
     """A node type an automation graph can hold, contributed by a module.
 
-    Before this, node behaviour was a closed set of `if kind is …` branches in
-    the executor and a hardcoded palette in the SPA — so the AI module could not
-    offer a classifier node, and every new condition meant editing `automations`.
+    Ports belong to the SPEC: fixed `ports`, or `ports_for(params)` when outputs depend
+    on configuration (an AI classifier's answers ARE its branches). Static ports are
+    DECLARED, not inferred (RADD-1064): `ports_for({})` describes an unconfigured node,
+    and the canvas must draw handles before it can ask the server. `ports_at` ranks the two.
 
-    Two things make ports part of the SPEC rather than of the KIND:
-
-    * A condition node is one named test ("field changed", "changed by"), and
-      each names its own outputs.
-    * `ports_for(params)` lets a node's outputs depend on its CONFIGURATION — an
-      AI classifier with four user-defined answers has four outputs. A fixed
-      tuple ALONE could not express that, and the graph validator has to know the
-      real set or it cannot reject an edge naming a port that will not exist.
-
-    **Static ports are DECLARED, not inferred (RADD-1064).** Most contributed
-    nodes' outputs do not depend on their params at all, and `ports_for({})` is
-    not a way to find that out: for a dynamic node it answers about a node that
-    has not been configured yet. So a node whose ports are fixed says so in
-    `ports`, and everything that has to draw a node BEFORE it can ask the server
-    about a particular params dict — the canvas, above all — has an answer it can
-    trust. `ai.validate` drew TRUE/FALSE handles for a whole release because the
-    SPA had nowhere to read `("pass", "fail", "unavailable")` from and fell back
-    to the KIND's table; every edge wired from those handles named a port the
-    engine never emits. Resolution is `ports_at(params)`, in one place.
-
-    `plan(ctx) -> NodeOutcome` decides what the node does; it never applies. That
-    split is what gives dry-run for free and is enforced by the executor calling
-    planners only.
-
-    `params_schema` is JSON Schema. The SPA generates a form from it when the
-    plugin ships no component of its own, which is the same deal PageExtensionSpec
-    offers — a plugin gets a usable editor without writing React.
-    """
+    `plan(ctx)` decides and never applies — that split makes dry runs free.
+    `params_schema` is JSON Schema; the SPA generates a form when the plugin ships none."""
 
     key: str  # "filter.slq", "gate.field_changed", "ai.classify"
     kind: str  # AutomationNodeKind value — fixes whether it filters, gates or acts
@@ -630,98 +460,58 @@ class AutomationNodeSpec:
     #: RADD-1322: extra words the palette search matches (synonyms, the wire key).
     keywords: str = ""
     #: RADD-1322: the params a freshly dropped node starts with — valid enough to
-    #: save. Empty means "the schema's own defaults", which is what a generated
-    #: form fills in anyway.
+    #: save. Empty = the schema's own defaults.
     default_params: dict[str, Any] = field(default_factory=dict)
-    #: RADD-1322: whether the node reads the triggering EVENT (its diff, its
-    #: actor, its comment) rather than the items. Such a node is refused under a
-    #: trigger that has no event — a validation walk's synthetic facts or a
-    #: schedule — because it could only ever answer with a constant.
+    #: Reads the triggering EVENT (its diff, actor, comment), so it is refused under a
+    #: trigger with none — it could only answer with a constant (RADD-1322).
     reads_event: bool = False
     #: False for evaluators that execute arbitrary code or have side effects.
     preview_safe: bool = True
     #: RADD-1329: a CHECK that publishes findings (`ctx.publish_findings`) for a
-    #: "Block submission" / "Warn submitter" node downstream to relay. The
-    #: editor's relay picker lists these.
+    #: "Block submission" / "Warn submitter" node downstream to relay.
     produces_findings: bool = False
-    #: RADD-1329: an END of the graph — no output ports at all (the verdict
-    #: nodes). Nothing can be wired after it.
+    #: RADD-1329: an END of the graph (the verdict nodes) — no output ports.
     terminal: bool = False
-    #: FIXED outputs, for a node whose ports do not depend on its params. Set
-    #: this OR `ports_for`, never both — declaring it is what lets a client draw
-    #: the node's handles from the served catalog instead of guessing by kind.
+    #: FIXED output ports. Set this OR `ports_for`, never both: declaring it lets a client
+    #: draw the handles from the served catalog instead of guessing by kind.
     ports: tuple[str, ...] = ()
-    #: Outputs for a given params dict, when they genuinely vary (an AI
-    #: classifier's answers ARE its branches). Ignored when `ports` is set.
+    #: Ports for a given params dict, when they genuinely vary. Ignored when `ports` is set.
     ports_for: Callable[[Mapping[str, Any]], tuple[str, ...]] = _default_ports_for
-    #: FIXED named values this node produces (spec 120), stamped into the
-    #: packet's variable bag under the node's name. Same static-or-dynamic pair
-    #: as ports, ranked the same way in `outputs_at` — and for the same reason:
-    #: a client listing the tokens a downstream node may use has to know the set
-    #: before anything has run.
+    #: FIXED named values (spec 120), stamped under the node's name; ranked with
+    #: `outputs_for` exactly like ports.
     outputs: tuple[OutputField, ...] = ()
-    #: Outputs for a given params dict, when they vary. `ai.generate`'s outputs
-    #: ARE its params — the fields someone typed — which no static tuple can say.
+    #: Outputs for a given params dict (`ai.generate`'s outputs ARE its typed fields).
     outputs_for: Callable[[Mapping[str, Any]], tuple[OutputField, ...]] = _default_outputs_for
     #: Params used by ports_for/outputs_for. None means all params; a declared
     #: subset avoids shape requests while unrelated prompts or code are edited.
     shape_params: tuple[str, ...] | None = None
     #: False = runs even when nothing reached it (webhook, chat, "nothing matched").
     needs_items: bool = True
-    #: How the node reads its packet — a `NodeArity` value, "set" or "item"
-    #: (RADD-918). SET runs once over the whole set; ITEM runs per item, which
-    #: for a routing node means PARTITIONING the set across its ports rather
-    #: than sending all of it down one. Strings rather than the enum because the
-    #: kernel may not import a module's vocabulary.
+    #: How the node reads its packet — a NodeArity value (a string: kernel purity):
+    #: "set" runs once, "item" per item (partitioning across ports).
     arity: str = "set"
     #: Arities the author may choose between. Empty = fixed at `arity`, and the
     #: editor shows no control — a toggle with one setting teaches nothing.
     arity_options: tuple[str, ...] = ()
     #: Atom required to USE this node in an automation; "" = any author.
     permission: str = ""
-    #: Which SUBJECT this node acts on (RADD-923) — the entity type it wants out
-    #: of the packet. "item" for everything built in; a plugin's own entity for
-    #: an action on its own rows. The executor hands `ctx.subject_ids` the ids of
-    #: exactly this type, so a node that acts on milestones never has to know
-    #: how an item-shaped packet is put together.
+    #: The entity type this node acts on (RADD-923); `ctx.subject_ids` holds ids of it.
     subject: str = "item"
     #: `plan(ctx) -> port name`, used at SET arity: one answer for the packet.
     #: On an ACTION node it returns a `NodePlan`-shaped object (`detail`,
     #: `resolves`) describing what it WOULD do, and writes nothing.
     plan: Callable[..., Any] | None = None
-    #: `apply(ctx, plan)` — an ACTION node's other half (RADD-923).
-    #:
-    #: The split is the safety property, not a style preference. `plan` runs on
-    #: every walk including a dry run, so the report is free and identical to the
-    #: real thing; `apply` runs only when applying, inside the executor's
-    #: SAVEPOINT, inside its `RunBudget`, and inside the `events.automated()`
-    #: scope. A contributed action therefore cannot spin the engine, cannot
-    #: escape the budget, and cannot take a branch down when it raises.
+    #: `apply(ctx, plan)` — an ACTION's other half (RADD-923). Runs only when applying,
+    #: inside the executor's SAVEPOINT, RunBudget and `events.automated()` scope, so a
+    #: contributed action cannot spin the engine or take a branch down.
     apply: Callable[..., Any] | None = None
-    #: `check(params) -> None`, raising `ValueError` — the node's own write-time
-    #: validation, for what its JSON Schema cannot say and the generic checker
-    #: must not guess (spec 120).
-    #:
-    #: The generic checker is deliberately shallow (required keys, top-level
-    #: enums, and the scalar bounds a generated form already respects), because
-    #: a full JSON Schema validator there would be a second, stricter opinion
-    #: than the form that offered the value. Anything DEEPER belongs to the node:
-    #: `ai.generate` caps its field list, refuses a field name that could never
-    #: appear in a token, and caps each field's choices — none of which a
-    #: shallow reader can see, and all of which are silently truncated at run
-    #: time if nobody says so on write.
+    #: `check(params)` raising ValueError — write-time validation beyond the generic,
+    #: deliberately shallow schema check (required keys, top-level enums, scalar bounds).
     check: Callable[[Mapping[str, Any]], None] | None = None
-    #: `check_async(session, params) -> None`, raising `ValueError` — write-time
-    #: validation that needs the database (RADD-1322): an SLQ query that must
-    #: compile against the live field registry. Same contract as `check`.
+    #: `check_async(session, params)` — the same, when it needs the database (RADD-1322).
     check_async: Callable[..., Awaitable[None]] | None = None
-    #: `plan_items(ctx) -> {item_id: port name}`, used at ITEM arity, where the
-    #: node PARTITIONS its input across its ports. Optional: without it the
-    #: executor falls back to calling `plan` once per single-item packet, which
-    #: is correct for any node and is the whole feature for a cheap one. A node
-    #: whose per-item work is expensive overrides it — only the node knows
-    #: whether its calls can be batched or run concurrently, so that decision
-    #: does not belong in the executor.
+    #: `plan_items(ctx) -> {item_id: port}` at ITEM arity; optional (the executor
+    #: otherwise calls `plan` per single-item packet). Override when work can be batched.
     plan_items: Callable[..., Any] | None = None
 
     @property
@@ -735,48 +525,24 @@ class AutomationNodeSpec:
         return not self.outputs and self.outputs_for is not _default_outputs_for
 
     def ports_at(self, params: Mapping[str, Any]) -> tuple[str, ...]:
-        if self.terminal:
-            return ()
-        return self._ports_at(params)
-
-    def _ports_at(self, params: Mapping[str, Any]) -> tuple[str, ...]:
-        """This node's outputs for these params — the ONE place the two
-        declarations are ranked.
-
-        A second copy of "static wins over dynamic" anywhere would eventually
-        disagree with this one, and the graph validator cannot survive that: it
-        rejects edges against a port set it has to believe.
-        """
-        return self.ports or tuple(self.ports_for(params))
+        # THE one place static and dynamic ports are ranked; the graph validator relies on it.
+        return () if self.terminal else (self.ports or tuple(self.ports_for(params)))
 
     def outputs_at(self, params: Mapping[str, Any]) -> tuple[OutputField, ...]:
-        """The named values this node produces for these params — ranked exactly
-        as `ports_at` ranks ports, because the two answer the same shape of
-        question and a second precedence would drift from this one."""
+        """Ranked exactly as `ports_at`."""
         return self.outputs or tuple(self.outputs_for(params))
 
 
 # --- MCP tools (RADD-640: the spec-114 catalog becomes plugin-registerable) ---
 @dataclass(frozen=True)
 class McpToolSpec:
-    """An MCP tool a plugin contributes. The last hardcoded contribution type:
-    every other kind was plugin-registerable since spec 93, while the MCP catalog
-    was a closed enum — a plugin could not expose a tool at all, and one that
-    somehow did would have bypassed the spec-114 caller filter.
+    """An MCP tool a plugin contributes (RADD-640).
 
-    A registered tool inherits BOTH halves with no extra code: `visible_catalog`
-    hides it from keys lacking `permission` (and enum-rewrites `project_param`,
-    spec 114), and the MCP dispatcher REQUIRES the atom before the handler runs —
-    so a plugin cannot accidentally expose an unfiltered tool. Disabling the
-    plugin unregisters it (the spec-94 unmount path): it leaves the catalog and
-    stops dispatching in the same breath.
-
-    `handler(session, actor, args) -> jsonable` — the tool result, serialized by
-    the MCP router. `permission` is an RBAC atom KEY (a plugin's registered atom
-    or a builtin value like "item.read"; kernel purity forbids importing the auth
-    enum here); "" means any authenticated principal. When `project_param` names
-    an input property carrying a project KEY, enforcement resolves it and
-    requires the atom on THAT project."""
+    `visible_catalog` hides it from keys lacking `permission` (and enum-rewrites
+    `project_param`, spec 114); with `kernel_enforced` the dispatcher REQUIRES the atom —
+    on the `project_param` project when given — before `handler(session, actor, args)`.
+    `permission` is an atom KEY; "" = any authenticated principal. Disabling the plugin
+    removes catalog entry and dispatch together."""
 
     name: str
     description: str
@@ -786,51 +552,25 @@ class McpToolSpec:
     project_scoped: bool = False  # visibility: show only where the atom holds (spec 114)
     space_scoped: bool = False
     project_param: str = ""  # input property naming the project; enum-rewritten + enforced
-    #: LIVE schema (RADD-889): when set, the catalog composer calls it with
-    #: keyword projections — today `custom_field_properties` (the field
-    #: registry's OpenAPI properties) and `link_types` (the instance's link-type
-    #: keys), the parameters `build_catalog` always took — instead of reading
-    #: `input_schema`. Builders accept ``**_`` so a new projection never breaks
-    #: an old one; `input_schema` stays as the same shape with the projections
-    #: empty, for pure consumers and as documentation.
+    #: LIVE schema (RADD-889): called with keyword projections (`custom_field_properties`,
+    #: `link_types`; accept `**_`) instead of reading `input_schema`.
     input_schema_builder: Callable[..., dict[str, Any]] | None = None
-    #: When True (the default, and right for every NEW tool) the dispatcher
-    #: requires `permission` — on the `project_param` project when given —
-    #: before the handler runs, so a plugin cannot expose an unfiltered tool.
-    #: The migrated spec-45/114 builtins set False: their handlers already carry
-    #: enforcement at the service seam (row-level rules, require-ANYWHERE gates),
-    #: and a blanket global `require` on top would re-refuse the scoped keys
-    #: RADD-672 admitted. `permission` still drives the spec-114 catalog filter.
+    #: Require `permission` in the dispatcher (default; right for new tools). The migrated
+    #: builtins set False: their service seams enforce row rules, and a blanket require
+    #: would re-refuse the scoped keys RADD-672 admitted.
     kernel_enforced: bool = True
 
 
 @dataclass(frozen=True)
 class CascadeSpec:
-    """Rows that must die with a parent the database cannot cascade from.
+    """Rows that must die with a parent the database cannot cascade from — a POLYMORPHIC
+    parent (`entity_type`+`entity_id`) carries no foreign key.
 
-    Three registries had independently grown the same hole. `attachments` and
-    `comments` key their rows to a POLYMORPHIC parent (`entity_type` +
-    `entity_id`), which cannot carry a foreign key, so `ON DELETE CASCADE` is
-    unavailable. `access_grants` keys to `resource_type` + `resource_id` for the
-    same reason. Each answered it differently — two head-seeded consumers and, in
-    access's case, four call sites that each have to remember.
-
-    One registry and ONE consumer instead:
-
-      - **performant** — a cascade is not worth its own cursor and its own poll
-        of the events table; there are already 18 such loops. Registering here
-        costs a dict entry, not a background task.
-      - **extensible** — a plugin registers a cascade and gets cleanup, with no
-        edit to a module it does not own. That was the point of the polymorphic
-        parent, and it was exactly what the hardcoded maps took away.
-
-    `sweep(session, parent_id)` runs in the consumer's PLANNING transaction,
-    which is committed with the cursor — so a crash between the two cannot lose
-    the work or repeat it. Whatever it returns is handed to `after_commit`, for
-    the effects that must not run inside a transaction: attachments removes bytes
-    from a storage host there, because an unreachable host must leave orphaned
-    bytes rather than a stuck consumer.
-    """
+    Registering is a dict entry, not a consumer: `events.cascade` drains the stream once
+    for all specs. `sweep(session, parent_id)` runs in the planning transaction
+    (committed with the cursor, so a crash can neither lose nor repeat it); its result
+    goes to `after_commit`, for effects that must not run inside a transaction (an
+    unreachable storage host must leave orphaned bytes, not a stuck consumer)."""
 
     #: The event that means a parent died, e.g. "item.deleted".
     parent_event: str
@@ -840,25 +580,12 @@ class CascadeSpec:
     after_commit: Callable[[Any], Awaitable[None]] | None = None
 
 
-# --- fact providers (RADD-892: the aggregation inversion) ---
-#
-# Three registries, one shape: the feature that OWNS a fact declares it, and a
-# generic consumer iterates. Each replaces a consumer that had grown a hardcoded
-# list of the features it aggregated — auth reaching into timelogging/forms for
-# nav visibility and into pages for space names, jiraimport naming seven other
-# modules' tables by string — which inverts the load order those consumers are
-# supposed to sit above.
+# --- fact providers (RADD-892): the owning feature declares a fact; a generic consumer
+# iterates, instead of holding a list of the features it aggregates.
 @dataclass(frozen=True)
 class NavFactSpec:
-    """One area-visibility answer the client cannot derive from lists it already
-    loads (RADD-843).
-
-    The consumer (`GET /auth/me`) does not know which facts exist; it serves
-    whatever is registered, keyed by `key`. A module that is not loaded
-    contributes no fact and the key is simply absent, which the SPA reads as
-    VISIBLE — hiding is presentation, every area still enforces its own authz on
-    direct navigation, and failing open here costs a link, never a leak.
-    """
+    """One area-visibility fact for `GET /auth/me`'s `nav` (RADD-843). An absent key reads
+    as VISIBLE: hiding is presentation, and every area enforces its own authz."""
 
     key: str  # the key on /auth/me's `nav` object, e.g. "timesheet"
     resolve: Callable[[Any, Any], Awaitable[bool]]  # (session, user) -> is the area worth offering
@@ -866,26 +593,12 @@ class NavFactSpec:
 
 @dataclass(frozen=True)
 class ProjectRelationSpec:
-    """Why an actor can see a project WITHOUT having been granted it (RADD-937).
+    """Why an actor can see a project WITHOUT a grant on it (RADD-937).
 
-    Qualified permissions (`item.read@own`, `@participant`) say "you may read
-    your own rows anywhere", which the project list read as "every project is
-    yours" — an account with no grants at all was listed against all 97. The
-    fix is not to drop the qualifier, which is what people's own tickets rest
-    on, but to require that the relationship is REAL: you see a project you
-    actually have something in.
-
-    Each spec answers, for one kind of relationship, "which projects does this
-    actor have something in?". `items` contributes reported/assigned/team-owned;
-    `participants` contributes participation. The resolver reads whatever is
-    registered and names none of them — `auth` must not grow an import of
-    `items` to answer a question about items, and the next module that creates a
-    relationship (worklogs: "I logged time there") contributes without editing
-    it. The RADD-892 inversion, one registry over.
-
-    A module that is not loaded contributes nothing, which narrows visibility
-    rather than widening it — the safe direction for a fail case.
-    """
+    Qualified permissions (`item.read@own`) must not list every project: each spec
+    answers "which projects does this actor have something in?" for one relationship.
+    The resolver names no contributor; an unloaded module contributes nothing, which
+    narrows visibility — the safe direction."""
 
     key: str  # "reported" | "assigned" | "team" | "participant" | …
     #: Shown when explaining why a project is visible; keep it a sentence
@@ -897,19 +610,10 @@ class ProjectRelationSpec:
 
 @dataclass(frozen=True)
 class GrantScopeSpec:
-    """A kind of thing a role grant can be BOUND to — spec 91's project scope,
-    RADD-791's wiki space.
-
-    `key` names the `<key>_id` column on the grant row, so this registry does NOT
-    make the set of scopes open: a new kind needs a column, i.e. a migration in
-    auth. What it inverts is the KNOWLEDGE — what a scope id is called, whether
-    it is real, how much of the kind an actor reaches — none of which auth can
-    answer without importing the module that owns the scope.
-
-    `reach` is optional because only a scope kind whose readability is its own
-    can answer it: wiki spaces carry per-space ACLs, while project readability is
-    an atom question auth answers with its own machinery.
-    """
+    """A kind of thing a role grant binds to (project, wiki space). `key` names the grant
+    row's `<key>_id` column, so a new kind still needs a migration; this inverts only the
+    KNOWLEDGE auth lacks (labels, existence, reach). `reach` is optional: only a kind with
+    its own ACLs (spaces) answers it."""
 
     key: str
     labels: Callable[[Any, Any], Awaitable[dict]]  # (session, ids) -> {id: display name}
@@ -919,21 +623,10 @@ class GrantScopeSpec:
 
 @dataclass(frozen=True)
 class ProjectPurgeSpec:
-    """Rows that must be destroyed with a project because the DATABASE will not
-    do it — their `project_id` foreign key carries no `ON DELETE CASCADE`.
-
-    Table names rather than a callback, deliberately: the value of the registry
-    is that coverage can be CHECKED (tests/test_project_purge.py asserts every
-    non-cascading project-scoped table is named by some spec), and a callback is
-    opaque to that check. A plain DELETE is also the right verb — a purge is an
-    administrative teardown of rows nobody authored, so routing it through each
-    module's service would re-run permission checks and emit deletion events for
-    work that never really happened.
-
-    `tables` are deleted in the order given; `order` sequences the modules
-    against each other (low first), because a table must go before the one its
-    rows point at.
-    """
+    """Tables to DELETE from when a project dies, because their `project_id` FK has no
+    `ON DELETE CASCADE`. Table names, not a callback, so coverage is checkable
+    (tests/test_project_purge.py); a plain DELETE, because teardown must not re-run authz
+    or emit events. `tables` go in order; `order` sequences specs (low first)."""
 
     name: str
     tables: tuple[str, ...]
@@ -943,28 +636,12 @@ class ProjectPurgeSpec:
 # --- page extensions (RADD-709: live blocks embedded in a page's markdown) ---
 @dataclass(frozen=True)
 class PageExtensionSpec:
-    """An extension a page can embed as a fenced block — ```` ```radd:<name> ````.
+    """An extension a page embeds as a fenced block (```` ```radd:<name> ````).
 
-    The kernel half is DECLARATION only: the name, how to describe it in the
-    editor's insert menu, and the shape of its parameters. Rendering is entirely
-    client-side (the SPA dispatches by name through its own registry), which is
-    why there is no handler here — the server never renders a page body, so a
-    server-side renderer would be a second implementation of something nothing
-    calls.
-
-    What this registry buys is the INSERT MENU: `GET /pages/extensions` is a
-    function of what is installed, so a plugin's extension appears in the menu of
-    a running Radd with no edit to the pages module, and disabling that plugin
-    removes it from the menu in the same breath (the spec-94 unmount path). A
-    page still holding a block whose name has gone renders an honest "unknown
-    extension" card rather than raw JSON — degrading is the client's job, not a
-    reason to keep a dead entry in the registry.
-
-    `params_schema` is JSON Schema, used by the insert menu to build a small form
-    and by the renderer to report a malformed block against the field that is
-    wrong. It is advisory, not enforcement: a body is markdown, and markdown a
-    user typed by hand must never fail to render because a parameter was spelled
-    oddly."""
+    Declaration only — rendering is client-side, by name. The registry feeds the editor's
+    insert menu (`GET /pages/extensions`), so a plugin's toggle adds/removes its entry; a
+    stale block renders an "unknown extension" card. `params_schema` is advisory JSON
+    Schema: hand-typed markdown must always render."""
 
     name: str  # the fence suffix: `toc` for ```radd:toc
     label: str  # insert-menu title
@@ -976,39 +653,26 @@ class PageExtensionSpec:
 # --- sockets (§4a: typed plugin-to-plugin integration points) ---
 @dataclass(frozen=True)
 class IntegrationSpec:
-    """A plugin providing (or consuming) a named socket: StorageBackend, Notifier,
-    Connector, AIProvider, VcsProvider, TaskBackend, AttachmentFilter."""
+    """A plugin providing a named socket (`kernel.sockets.Socket`)."""
 
     socket: str
     name: str
     impl: Any = None  # provider instance/factory
-    consumes: bool = False
 
 
 # --- settings (§ settings: keys + admin sections owned per plugin, RADD-891) ---
 @dataclass(frozen=True)
 class SettingSpec:
-    """A scalar cascade setting a plugin contributes — the inversion of
-    `settings.types.SettingKey`'s old hardcoded catalog, mirroring
-    `PermissionSpec` (RADD-890). `settings` keeps the CASCADE MECHANISM
-    (resolution order project → instance → env, coercion, the
-    `/scoped-settings` API) and reads this catalog instead of hardcoding every
-    feature's tunables.
-
-    `type`/`scopes` are plain strings rather than `settings.types.SettingType`/
-    `SettingScope` — kernel purity forbids importing a module's enum here —
-    and `settings.service` coerces via `SettingType(spec.type)` at read time,
-    same as it already did for the enum form.
-    """
+    """A scalar cascade setting a plugin contributes (RADD-891). `settings` owns the
+    cascade (project → instance → env) and reads this catalog; `type`/`scopes` are plain
+    strings because kernel purity forbids importing `settings.types`."""
 
     key: str
     type: str  # "string" | "int" | "bool" (settings.types.SettingType values)
     scopes: tuple[str, ...]  # cascade levels this key may be SET at: "instance" | "project"
     label: str = ""
     description: str = ""
-    # The `config.Settings` attribute supplying the env/config default, when it
-    # differs from the key itself (e.g. `ldap_user_sync_base` defaults to the
-    # pre-existing `RADD_LDAP_USER_SEARCH_BASE`). "" = same name as `key`.
+    # `config.Settings` attribute holding the env default when it differs from `key`.
     config_attr: str = ""
     # Enumerated STRING settings (spec 107): the only accepted values — a write
     # outside the set 409s, and the generic settings editor renders a select.
@@ -1019,29 +683,18 @@ class SettingSpec:
     # RADD-1368: a STRING setting that holds prose (a mail body) — the editor
     # renders a textarea instead of a single-line input. Presentation only.
     multiline: bool = False
-    # RADD-930: which settings SURFACE this key belongs on — the owning plugin's
-    # call, not the kernel's, and not re-derived client-side. "" = the scope's
-    # General page. General renders the REMAINDER (empty sections plus any
-    # section this build has no surface for), so a departed or misspelt section
-    # can never make a setting unreachable — the reason it is computed by
-    # subtraction rather than given a section name of its own.
+    # Settings surface this key belongs on (RADD-930); "" = the scope's General page, which
+    # renders the REMAINDER, so a departed or misspelt section never hides a setting.
     section: str = ""
-    # RADD-1390: the scopes at which the owning plugin renders this setting on a
-    # page of its OWN, so that scope's General page leaves it out. Declared here,
-    # beside the section, instead of a host list of section names every plugin
-    # page had to be added to. Empty = General shows it (the safe default).
+    # Scopes at which the owner renders this on a page of its OWN (General skips it there).
     page_scopes: tuple[str, ...] = ()
-    # RADD-1279: the owner may REFUSE a write — `guard(session, value, actor_id)`
-    # raises a domain error (409/403) to veto it, after coercion and before the
-    # row is written. Mechanism only: what counts as a bad value is the owning
-    # plugin's policy (e.g. `require_mfa` refuses to lock out the admin flipping it).
+    # `guard(session, value, actor_id)` may veto a write (409/403) after coercion — policy
+    # is the owner's (e.g. `require_mfa` refuses to lock out the admin flipping it).
     guard: Callable[[Any, Any, "uuid.UUID | None"], Awaitable[None]] | None = None
 
     @property
     def default(self) -> Any:
-        """The ultimate fallback: the instance's env/config value. Kernel's own
-        domain per its charter (config/loader/lifecycle + "the settings
-        platform"), so importing `radd.config` here is not a plugin dependency."""
+        """The env/config default (the kernel may read `radd.config`)."""
         from radd.config import settings as _config
 
         return getattr(_config, self.config_attr or self.key)
@@ -1082,10 +735,9 @@ class PluginUiManifest:
     """Nav/routes/pages a plugin contributes to the SPA (docs/plugin-platform.md §8)."""
 
     nav: tuple[NavItemSpec, ...] = ()
-    # Module-federation remote (spec 94 / §8b-A): the URL of the plugin's built ESM bundle, which the
-    # host imports at runtime and whose `activate()` registers its UI slots. Builtin remotes are
-    # served same-origin under /plugins/<name>/; external plugins serve their own.
+    # URL of the plugin's built ESM remote (spec 94); its `activate()` registers UI slots.
+    # Builtin remotes are served same-origin under /plugins/<name>/.
     remote: str = ""
-    # The minimum @radd/plugin-sdk version required by the remote. The host refuses
-    # a different major or newer required minor/patch. Only meaningful with `remote`.
+    # Minimum @radd/plugin-sdk version the remote needs; the host refuses another major or a
+    # newer minor/patch.
     ui_api_version: str = ""

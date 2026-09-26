@@ -1,14 +1,8 @@
-"""RADD-1295 — people's pictures.
-
-A person's avatar is an uploaded image, else their identity provider's picture,
-else the colour/emoji they already had. `auth` owns the columns and the one
-`User.avatar_url` rule; this module owns the BYTES: it normalises an upload
-(square, 256px, WebP — so no 20px chip ever downloads a photo) and stores it
-through the attachments blob API, which is why it sits above `attachments`
-rather than inside `auth`.
-
-An avatar is deliberately NOT an attachment: it is not listed on anything,
-carries no per-file grants, and never asks which storage host to use.
+"""People's pictures (RADD-1295): an upload, else the identity provider's picture, else the
+colour/emoji. `auth` owns the columns and the `User.avatar_url` rule; this module owns the BYTES —
+normalised (square, 256px, WebP: no 20px chip downloads a photo) and stored through the
+attachments blob API. Deliberately NOT an attachment: never listed, no per-file grants, no
+storage-host question.
 """
 
 from radd.kernel import RaddPlugin

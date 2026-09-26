@@ -51,10 +51,6 @@ def bind(runtime):
     _runtime = runtime
 
 
-def supported(plugin: RaddPlugin) -> bool:
-    return not plugin.core
-
-
 def _report() -> dict:
     return {"active": list(registries.plugins), "observed": sorted(_observed),
             "versions": dict(_versions), "pending": sorted(_pending),
@@ -284,8 +280,3 @@ async def withdraw() -> None:
     global _runtime
     _runtime = None
     await acks.withdraw(_process)
-
-
-async def stop() -> None:
-    await halt()
-    await withdraw()

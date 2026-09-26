@@ -1,14 +1,4 @@
-"""The Radd kernel — the generic machinery every feature (plugin) builds on.
-
-Kernel = config/loader/lifecycle, the entity & event-type registries, access
-control + the permission-aware data SDK, the settings platform + /capabilities,
-the contribution registries, and the [primitive] socket seams. Never disabled.
-Concrete features are plugins (docs/plugin-platform.md §1).
-
-This package holds the *machinery*; the generic mechanism modules (events, access,
-auth-core, settings) remain in `radd.modules.*` for import stability but are
-governed by this contract.
-"""
+"""The Radd kernel — plugin contract, registries, specs, sockets and loader; never disabled."""
 
 from .loader import PluginLoadError, import_models, load_plugins
 from .plugin import KERNEL_API_VERSION, ConsumerResume, RaddPlugin

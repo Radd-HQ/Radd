@@ -47,7 +47,7 @@ async def _user(db, role: InstanceRole) -> User:
 
 
 async def _names(db, user):
-    catalog = build_catalog({}, include_pages=True)
+    catalog = build_catalog({})
     catalog += registry_catalog(frozenset(tool["name"] for tool in catalog))
     return {tool["name"] for tool in await visible_catalog(db, user, catalog)}
 

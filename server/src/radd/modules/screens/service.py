@@ -53,17 +53,17 @@ async def _find_screen(
     )
 
 
+def _field_rows(screen: Screen | None) -> list[ScreenFieldRow]:
+    return [ScreenFieldRow(field=f.field, placement=ScreenPlacement(f.placement))
+            for f in (screen.fields if screen is not None else ())]
+
+
 async def get_screen_config(
     session: AsyncSession, project_id: uuid.UUID, issue_type_id: uuid.UUID | None
 ) -> ScreenRead:
     """A scope's stored screen (empty fields when none is configured)."""
     screen = await _find_screen(session, project_id, issue_type_id)
-    rows = (
-        [ScreenFieldRow(field=f.field, placement=ScreenPlacement(f.placement)) for f in screen.fields]
-        if screen is not None
-        else []
-    )
-    return ScreenRead(project_id=project_id, issue_type_id=issue_type_id, fields=rows)
+    return ScreenRead(project_id=project_id, issue_type_id=issue_type_id, fields=_field_rows(screen))
 
 
 async def replace_screen(
@@ -104,11 +104,7 @@ async def replace_screen(
     ]
     await session.flush()
     await _emit(session, project, issue_type_id, actor_id, _rows_diff(before, _screen_rows(screen)))
-    return ScreenRead(
-        project_id=project.id,
-        issue_type_id=issue_type_id,
-        fields=[ScreenFieldRow(field=r.field, placement=ScreenPlacement(r.placement)) for r in screen.fields],
-    )
+    return ScreenRead(project_id=project.id, issue_type_id=issue_type_id, fields=_field_rows(screen))
 
 
 async def resolve_effective(

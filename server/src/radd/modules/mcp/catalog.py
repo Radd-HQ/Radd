@@ -1,16 +1,7 @@
-"""The MCP tool catalog (spec 45) — tools/list payload generation.
-
-Since RADD-889 the catalog is COMPOSED, not written: every tool is a kernel
-`McpToolSpec` contributed by its OWNER module (items, timelogging, releases,
-pages, projects, auth, search — plus any plugin), and this module only orders,
-renders and filters them. `build_catalog` stays the pure seam it always was:
-the live projections (custom-field properties from the field registry — the
-SAME source as OpenAPI — and the spec-91 link-type keys) are passed IN and
-handed to each spec's `input_schema_builder`, so studio-defined custom fields
-appear as documented `custom_fields` properties automatically. The doc tools
-ride the pages plugin's own registration — its absence removes them (the
-spec-94 unmount path replaced the old pages_bridge feature probe).
-"""
+"""The MCP tool catalog (spec 45): orders, renders and filters the `McpToolSpec`s owner
+modules contribute (RADD-889). `build_catalog` is pure: the live projections (custom-field
+properties — the OpenAPI source — and link-type keys) are passed in to each spec's
+`input_schema_builder`. A tool whose owner is absent or disabled drops out."""
 
 import hashlib
 import json
@@ -19,16 +10,14 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.kernel import registries
 from radd.kernel.specs import McpToolSpec
 from radd.modules.fields import openapi as fields_openapi, service as fields_service
 
-from .types import PAGE_TOOLS, McpTool
+from .types import McpTool
 
-#: The builtin catalog in its spec-45/114 wire order — the order agents have
-#: always seen. The ENTRIES come from the kernel registry (each owner module's
-#: manifest); this tuple carries only presentation order and the builtin/plugin
-#: split (a name here is skipped by `registry_catalog`). A tool whose owner is
-#: absent or disabled simply drops out.
+#: The builtin tools in their spec-45/114 wire order. Only order and the builtin/plugin
+#: split live here (`registry_catalog` skips these names); the entries are the registry's.
 CATALOG_ORDER: tuple[McpTool, ...] = (
     McpTool.SEARCH_ITEMS,
     McpTool.FIND_ITEMS,
@@ -46,9 +35,7 @@ CATALOG_ORDER: tuple[McpTool, ...] = (
     McpTool.CREATE_PAGE,
     McpTool.UPDATE_PAGE,
     McpTool.MOVE_PAGE,
-    # --- spec 114 families. Each appears only for a key that may execute it; the
-    # filter (requirements.visible_catalog) reads the same permission engine the
-    # call itself does, so the catalog cannot drift from the enforcement.
+    # --- spec 114 families: listed only for a key that may run them (visible_catalog).
     McpTool.GET_ALLOWED_TRANSITIONS,
     McpTool.TRANSITION_ITEM,
     McpTool.LOG_WORK,
@@ -101,24 +88,12 @@ def _entry(
 def build_catalog(
     custom_field_properties: Mapping[str, Any],
     *,
-    include_pages: bool,
     link_types: Sequence[str] = (),
 ) -> list[dict[str, Any]]:
-    """The builtin half of the tools/list payload. Pure: the registry projections
-    are passed in.
-
-    `link_types` (RADD-739) enumerates the instance's ACTUAL link-type keys.
-    They are user-definable (spec 91), so a free-string parameter would have an
-    agent guessing whether this instance says `blocks`, `depends_on`, or
-    something a studio invented — the same argument spec 114 already makes for
-    the project parameter.
-    """
-    from radd.kernel import registries  # deferred: the kernel must not be a hard import cycle
-
+    """The builtin half of tools/list, in CATALOG_ORDER. Pure; `link_types` are the
+    instance's real keys (RADD-739), so an agent never guesses a user-defined name."""
     catalog: list[dict[str, Any]] = []
     for tool in CATALOG_ORDER:
-        if tool in PAGE_TOOLS and not include_pages:
-            continue
         spec = registries.mcp_tools.get(tool.value)
         if spec is None:  # owner module absent/disabled — its tools go with it
             continue
@@ -126,21 +101,9 @@ def build_catalog(
     return catalog
 
 
-def pages_available() -> bool:
-    """Whether the pages plugin has contributed the doc tools (RADD-889 — the
-    registry IS the feature detection: a disabled plugin's specs are gone)."""
-    from radd.kernel import registries
-
-    return all(tool.value in registries.mcp_tools for tool in PAGE_TOOLS)
-
-
 def registry_catalog(builtin_names: frozenset[str]) -> list[dict[str, Any]]:
-    """Plugin-contributed tools (RADD-640), read live from the kernel registry so
-    a disabled plugin's tools vanish with it. A name colliding with a builtin is
-    skipped: the dispatcher would resolve identically either way, but the builtin
-    section already lists it — a second entry would advertise the same tool twice."""
-    from radd.kernel import registries  # deferred: the kernel must not be a hard import cycle
-
+    """Plugin-contributed tools (RADD-640), read live so a disabled plugin's vanish with it.
+    A name the builtin section already lists is skipped, or it would be advertised twice."""
     return [
         _entry(spec, {}, ())
         for spec in registries.mcp_tools.values()
@@ -173,31 +136,20 @@ async def live_schema(session: AsyncSession, spec: McpToolSpec) -> dict[str, Any
 
 
 async def catalog_fingerprint(session: AsyncSession, user: Any) -> str:
-    """A short digest of the catalog THIS principal can see (RADD-740).
-
-    Covers every reason the surface can move — a deploy adding a tool, a plugin
-    mounting or unmounting, and the caller's own scopes changing — because it is
-    computed from the finished, already-filtered catalog rather than from a
-    counter that each mutation site would have to remember to bump.
-    """
+    """A short digest of the catalog THIS principal can see (RADD-740). Computed from the
+    finished, filtered catalog, so a deploy, a plugin (un)mounting and the caller's own scopes
+    all move it — no counter every mutation site must remember to bump."""
     catalog = await live_catalog(session, user)
     canonical = json.dumps(catalog, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
 async def live_catalog(session: AsyncSession, user: Any = None) -> list[dict[str, Any]]:
-    """build_catalog fed from the live registry (same projection as OpenAPI), plus
-    plugin-contributed tools (RADD-640), then NARROWED to what this principal may
-    execute (spec 114).
-
-    `user=None` returns the whole catalog — the shape tests and the OpenAPI
-    projection want the full surface, and an unauthenticated MCP request never
-    reaches here (the router 401s first).
-    """
+    """build_catalog from the live projections plus plugin tools (RADD-640), NARROWED to
+    what this principal may execute (spec 114). `user=None` returns the whole surface
+    (an unauthenticated MCP request never reaches here — the router 401s first)."""
     custom_field_properties, link_types = await live_projections(session)
-    catalog = build_catalog(
-        custom_field_properties, include_pages=pages_available(), link_types=link_types
-    )
+    catalog = build_catalog(custom_field_properties, link_types=link_types)
     catalog += registry_catalog(_BUILTIN_NAMES | frozenset(tool["name"] for tool in catalog))
     if user is None:
         return catalog

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
+from radd.kernel import registries
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
 from radd.modules.auth.deps import Actor
@@ -67,8 +68,6 @@ async def search_entities(
     order. `mentionable=true` is the editor's `#` picker: only types a mention
     can name. A type whose search raises is left out rather than failing the
     palette."""
-    from radd.kernel import registries
-
     wanted = {t for t in types.split(",") if t}
     skipped = {t for t in exclude.split(",") if t}
     q = q.strip()

@@ -1,16 +1,11 @@
-"""The kernel contribution registries — one dict per contribution kind, populated
-by the loader and read by exactly one generic consumer. No consumer names a plugin
-(docs/plugin-platform.md §4). This is the `access.registry` pattern, generalized.
-
-The registry is a process-global singleton (`registries`). The loader calls
-`register_plugin` for each loaded plugin, which fans the manifest fields out into
-the per-kind dicts. Consumers (automations, /capabilities, the nav manifest) read
-these dicts blind.
-"""
+"""The kernel contribution registries — one dict per contribution kind, filled by the
+loader (`register_plugin`) and read blind by generic consumers; no consumer names a
+plugin (docs/plugin-platform.md §4). `registries` is the process-global singleton."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
+from operator import attrgetter
 from pathlib import Path
 
 from .plugin import RaddPlugin
@@ -49,23 +44,43 @@ from .specs import (
 
 @dataclass(frozen=True)
 class ContributionSource:
-    """Which plugin contributed a thing, as the registry saw it register.
-
-    Recorded here rather than on the spec because the spec is authored BY the
-    plugin: a self-declared `source` could disagree with reality, and only the
-    registry is in a position to know the truth.
-
-    Deliberately just the plugin's NAME. The first cut carried a `core` flag so
-    the editor's insert menu could group "built in" apart from "from a plugin"
-    (RADD-748) — but `core` means "cannot be disabled", not "ships with Radd",
-    and `pages` is itself `core=False`, so first-party extensions landed under a
-    plugin heading. The deeper point is that development rule 1 says everything
-    IS a plugin, so a built-in/plugin split was fighting the architecture to
-    produce a distinction that is not real. Grouping by contributor is both
-    simpler and true.
-    """
+    """Which plugin contributed a thing, as the registry saw it register — never
+    self-declared on the spec, which the plugin authors and could get wrong."""
 
     plugin: str
+
+
+#: (manifest field, registry dict, key) for every contribution kind that is a plain
+#: keyed dict: registering overwrites the key, unregistering pops it. Kinds with any
+#: other behaviour are handled explicitly in register_plugin/unregister_plugin.
+_KEYED: tuple[tuple[str, str, attrgetter], ...] = (
+    ("entities", "entities", attrgetter("key")),
+    ("event_types", "event_types", attrgetter("event_type")),
+    ("entity_refs", "entity_refs", attrgetter("entity_type")),
+    ("permissions", "permissions", attrgetter("key")),
+    ("settings_keys", "settings", attrgetter("key")),
+    ("relations", "relations", attrgetter("resource", "key")),
+    ("row_guards", "row_guards", attrgetter("resource")),
+    ("access_resources", "access_resources", attrgetter("resource_type")),
+    ("crud_resources", "crud_resources", attrgetter("key")),
+    ("nav_facts", "nav_facts", attrgetter("key")),
+    ("grant_scopes", "grant_scopes", attrgetter("key")),
+    ("project_relations", "project_relations", attrgetter("key")),
+    ("project_purges", "project_purges", attrgetter("name")),
+    ("capabilities", "capabilities", attrgetter("key")),
+    ("slq_fields", "slq_fields", attrgetter("name")),
+    ("view_types", "view_types", attrgetter("key")),
+    ("widget_types", "widget_types", attrgetter("key")),
+    ("mcp_tools", "mcp_tools", attrgetter("name")),
+    ("automation_nodes", "automation_nodes", attrgetter("key")),
+    ("trigger_kinds", "trigger_kinds", attrgetter("key")),
+    ("token_providers", "token_providers", attrgetter("root")),
+    ("automation_templates", "automation_templates", attrgetter("key")),
+    ("notification_kinds", "notification_kinds", attrgetter("key")),
+    ("searchables", "searchables", attrgetter("entity_type")),
+    ("page_extensions", "page_extensions", attrgetter("name")),
+    ("integrations", "integrations", attrgetter("socket", "name")),
+)
 
 
 @dataclass
@@ -73,36 +88,26 @@ class KernelRegistries:
     plugins: dict[str, RaddPlugin] = field(default_factory=dict)
     entities: dict[str, EntitySpec] = field(default_factory=dict)
     event_types: dict[str, EventTypeSpec] = field(default_factory=dict)
-    #: entity type -> how to describe it in an event payload (RADD-923). Read by
-    #: `events.emit` to expand `subjects={"item": id}` into a canonical ref.
+    #: entity type -> how `events.emit` describes it in a payload (RADD-923).
     entity_refs: dict[str, EntityRefSpec] = field(default_factory=dict)
     entity_links: dict[str, EntityLinkSpec] = field(default_factory=dict)
     entity_link_owners: dict[str, RaddPlugin] = field(default_factory=dict)
     permissions: dict[str, PermissionSpec] = field(default_factory=dict)
-    #: RADD-891: scalar cascade settings, keyed like `settings.types.SettingKey`'s
-    #: values — the inversion of that module's old hardcoded catalog dict.
+    #: RADD-891: scalar cascade settings, keyed like `settings.types.SettingKey`'s values.
     settings: dict[str, SettingSpec] = field(default_factory=dict)
     #: (resource, key) -> what @key MEANS for that resource's rows (RADD-823).
     relations: dict[tuple[str, str], RelationSpec] = field(default_factory=dict)
-    #: base atom -> the resource whose relations qualify it (RADD-844). Default
-    #: is the atom's own prefix; a CREATE-shaped atom whose row does not exist
-    #: yet may declare its PARENT — `comment.write@participant` reads "write
-    #: comments on ITEMS shared with them", so its qualifier resolves against
-    #: the item relations, in validation and at the gate alike.
+    #: base atom -> the resource whose relations qualify it (RADD-844). Default is the
+    #: atom's own prefix; a CREATE-shaped atom whose row does not exist yet may declare its
+    #: PARENT (`comment.write@participant` resolves against the item relations).
     relation_domains: dict[str, str] = field(default_factory=dict)
-    #: RADD-818: spec-92 access resources — the SIXTEENTH contribution kind,
-    #: typed loosely (the spec class lives in modules/access; kernel purity
-    #: forbids importing it). modules/access reads THROUGH this dict, so a
-    #: plugin's resource type is withdrawn with its plugin on disable.
+    #: spec-92 access resources, typed loosely (kernel purity: the spec class lives in
+    #: modules/access), so a plugin's resource type withdraws with it (RADD-818).
     access_resources: dict[str, object] = field(default_factory=dict)
     crud_resources: dict[str, CrudResourceSpec] = field(default_factory=dict)
-    #: RADD-892, the aggregation inversion — three registries whose consumer used
-    #: to hold the list instead: /auth/me's nav facts, the scope kinds a role
-    #: grant binds to, and the rows that die with a project.
     nav_facts: dict[str, NavFactSpec] = field(default_factory=dict)
     grant_scopes: dict[str, GrantScopeSpec] = field(default_factory=dict)
     #: RADD-937: why an actor can SEE a project without being granted it.
-    #: Read blind by the visibility resolver, which names no contributor.
     project_relations: dict[str, ProjectRelationSpec] = field(default_factory=dict)
     #: resource -> the per-row admission every reader passes (spec 121).
     row_guards: dict[str, RowGuardSpec] = field(default_factory=dict)
@@ -127,10 +132,7 @@ class KernelRegistries:
     #: RADD-1328: entity types the realtime hub may narrow to their item.
     record_local_entities: set[str] = field(default_factory=set)
     page_extensions: dict[str, PageExtensionSpec] = field(default_factory=dict)  # RADD-709
-    #: Which plugin contributed each page extension (RADD-748). The registry is
-    #: the only thing that knows — the spec is authored BY the plugin, so a
-    #: `source` field on it would be self-declared and could disagree with
-    #: reality. Kept beside the specs rather than inside them for that reason.
+    #: Which plugin contributed each page extension (RADD-748).
     page_extension_sources: dict[str, ContributionSource] = field(default_factory=dict)
     #: A LIST, not a dict: several modules cascade off the same parent event.
     cascades: list[CascadeSpec] = field(default_factory=list)  # RADD-745
@@ -144,22 +146,8 @@ class KernelRegistries:
     plugin_ui_dirs: dict[str, str] = field(default_factory=dict)
 
     def clear(self) -> None:
-        for f in (
-            self.plugins, self.entities, self.event_types, self.entity_refs, self.permissions,
-            self.entity_links, self.entity_link_owners,
-            self.settings, self.relations, self.relation_domains, self.access_resources,
-            self.row_guards,
-            self.crud_resources, self.nav_facts, self.grant_scopes, self.project_relations, self.project_purges,
-            self.capabilities, self.tasks, self.consumer_names,
-            self.integrations, self.plugin_ui_dirs, self.slq_fields,
-            self.view_types, self.widget_types, self.mcp_tools, self.page_extensions,
-            self.automation_nodes, self.trigger_kinds, self.token_providers, self.automation_templates,
-            self.notification_kinds, self.searchables, self.record_local_entities,
-            self.page_extension_sources,
-        ):
-            f.clear()
-        self.cascades.clear()
-        self.nav.clear()
+        for f in fields(self):
+            getattr(self, f.name).clear()
 
     # --- registration (called by the loader per plugin) ---
     def register_plugin(self, plugin: RaddPlugin) -> None:
@@ -180,61 +168,15 @@ class KernelRegistries:
             self.entity_links[link.entity_type] = link
             self.entity_link_owners[link.entity_type] = plugin
         self.plugins[plugin.id] = plugin
-        for e in plugin.entities:
-            self.entities[e.key] = e
-        for et in plugin.event_types:
-            self.event_types[et.event_type] = et
-        for consumer_name in plugin.consumer_names:
-            self.consumer_names.add(consumer_name)
-        for er in plugin.entity_refs:
-            self.entity_refs[er.entity_type] = er
-        for p in plugin.permissions:
-            self.permissions[p.key] = p
-        for s in plugin.settings_keys:
-            self.settings[s.key] = s
-        for r in plugin.relations:
-            self.relations[(r.resource, r.key)] = r
-        for g in plugin.row_guards:
-            self.row_guards[g.resource] = g
+        for plugin_field, registry, key in _KEYED:
+            target = getattr(self, registry)
+            for spec in getattr(plugin, plugin_field):
+                target[key(spec)] = spec
+        self.consumer_names.update(plugin.consumer_names)
         for atom, resource in plugin.relation_domains:
             self.relation_domains[atom] = resource
-        for ar in plugin.access_resources:
-            self.access_resources[ar.resource_type] = ar  # type: ignore[attr-defined]
-        for c in plugin.crud_resources:
-            self.crud_resources[c.key] = c
-        for nf in plugin.nav_facts:
-            self.nav_facts[nf.key] = nf
-        for gs in plugin.grant_scopes:
-            self.grant_scopes[gs.key] = gs
-        for pr in plugin.project_relations:
-            self.project_relations[pr.key] = pr
-        for pp in plugin.project_purges:
-            self.project_purges[pp.name] = pp
-        for cap in plugin.capabilities:
-            self.capabilities[cap.key] = cap
-        for sf in plugin.slq_fields:
-            self.slq_fields[sf.name] = sf
-        for vt in plugin.view_types:
-            self.view_types[vt.key] = vt
-        for wt in plugin.widget_types:
-            self.widget_types[wt.key] = wt
-        for mt in plugin.mcp_tools:
-            self.mcp_tools[mt.name] = mt
-        for node in plugin.automation_nodes:
-            self.automation_nodes[node.key] = node
-        for kind in plugin.trigger_kinds:
-            self.trigger_kinds[kind.key] = kind
-        for provider in plugin.token_providers:
-            self.token_providers[provider.root] = provider
-        for template in plugin.automation_templates:
-            self.automation_templates[template.key] = template
-        for kind in plugin.notification_kinds:
-            self.notification_kinds[kind.key] = kind
-        for searchable in plugin.searchables:
-            self.searchables[searchable.entity_type] = searchable
         self.record_local_entities.update(plugin.record_local_entities)
         for px in plugin.page_extensions:
-            self.page_extensions[px.name] = px
             self.page_extension_sources[px.name] = ContributionSource(plugin=plugin.name)
         if plugin.cascades is not None:
             for cascade in plugin.cascades():
@@ -242,8 +184,6 @@ class KernelRegistries:
                     self.cascades.append(cascade)
         for t in plugin.tasks:
             self.tasks[t.name] = t
-        for ig in plugin.integrations:
-            self.integrations[(ig.socket, ig.name)] = ig
         if plugin.ui is not None:
             keys = {n.key for n in plugin.ui.nav}
             self.nav[:] = [n for n in self.nav if n.key not in keys]  # dedupe re-registers
@@ -266,7 +206,7 @@ class KernelRegistries:
         remaining_consumers = {name for p in self.plugins.values() for name in p.consumer_names}
         self.consumer_names.difference_update(set(plugin.consumer_names) - remaining_consumers)
         for e in plugin.entities:
-            self.entities.pop(e.key, None)
+            # What `entities.register_entity` derived from the spec goes with it.
             self.crud_resources.pop(e.key, None)
             self.entity_refs.pop(e.key, None)
             from .entities import _event_types, _project_purge
@@ -275,64 +215,19 @@ class KernelRegistries:
             if e.project_scoped:
                 self.project_purges.pop(_project_purge(e).name, None)
             self.searchables.pop(e.key, None)  # RADD-1327: derived at register
-        for et in plugin.event_types:
-            self.event_types.pop(et.event_type, None)
-        for er in plugin.entity_refs:
-            self.entity_refs.pop(er.entity_type, None)
-        for p in plugin.permissions:
-            self.permissions.pop(p.key, None)
-        for s in plugin.settings_keys:
-            self.settings.pop(s.key, None)
-        for r in plugin.relations:
-            self.relations.pop((r.resource, r.key), None)
-        for g in plugin.row_guards:
-            self.row_guards.pop(g.resource, None)
+        for plugin_field, registry, key in _KEYED:
+            target = getattr(self, registry)
+            for spec in getattr(plugin, plugin_field):
+                target.pop(key(spec), None)
         for atom, _resource in plugin.relation_domains:
             self.relation_domains.pop(atom, None)
-        for ar in plugin.access_resources:
-            self.access_resources.pop(ar.resource_type, None)  # type: ignore[attr-defined]
-        for c in plugin.crud_resources:
-            self.crud_resources.pop(c.key, None)
-        for nf in plugin.nav_facts:
-            self.nav_facts.pop(nf.key, None)
-        for gs in plugin.grant_scopes:
-            self.grant_scopes.pop(gs.key, None)
-        for pr in plugin.project_relations:
-            self.project_relations.pop(pr.key, None)
-        for pp in plugin.project_purges:
-            self.project_purges.pop(pp.name, None)
-        for cap in plugin.capabilities:
-            self.capabilities.pop(cap.key, None)
-        for sf in plugin.slq_fields:
-            self.slq_fields.pop(sf.name, None)
-        for vt in plugin.view_types:
-            self.view_types.pop(vt.key, None)
-        for wt in plugin.widget_types:
-            self.widget_types.pop(wt.key, None)
-        for mt in plugin.mcp_tools:
-            self.mcp_tools.pop(mt.name, None)
-        for node in plugin.automation_nodes:
-            self.automation_nodes.pop(node.key, None)
-        for kind in plugin.trigger_kinds:
-            self.trigger_kinds.pop(kind.key, None)
-        for provider in plugin.token_providers:
-            self.token_providers.pop(provider.root, None)
-        for template in plugin.automation_templates:
-            self.automation_templates.pop(template.key, None)
-        for kind in plugin.notification_kinds:
-            self.notification_kinds.pop(kind.key, None)
-        for searchable in plugin.searchables:
-            self.searchables.pop(searchable.entity_type, None)
         self.record_local_entities.difference_update(plugin.record_local_entities)
         for px in plugin.page_extensions:
-            self.page_extensions.pop(px.name, None)
             self.page_extension_sources.pop(px.name, None)
         if plugin.cascades is not None:
             for cascade in plugin.cascades():
                 if cascade in self.cascades:
                     self.cascades.remove(cascade)
-        for ig in plugin.integrations:
-            self.integrations.pop((ig.socket, ig.name), None)
         if plugin.ui is not None:
             keys = {n.key for n in plugin.ui.nav}
             self.nav[:] = [n for n in self.nav if n.key not in keys]
@@ -359,14 +254,9 @@ class KernelRegistries:
         return self.relation_domains.get(base_atom, base_atom.partition(".")[0])
 
     def project_purge_tables(self) -> tuple[str, ...]:
-        """Every table a dying project's rows must be deleted from, in an order
-        the foreign keys survive (RADD-892).
-
-        Flattened here rather than at the call site so the ordering rule — spec
-        `order` first, then the order a spec lists its own tables — is stated
-        once. Deduped because two modules may legitimately name the same table
-        during a hand-off.
-        """
+        """Every table a dying project's rows must be deleted from, in an order the foreign
+        keys survive: spec `order`, then each spec's own table order; deduped, since two
+        modules may name one table during a hand-off (RADD-892)."""
         tables: list[str] = []
         for spec in sorted(self.project_purges.values(), key=lambda s: (s.order, s.name)):
             for table in spec.tables:
@@ -385,9 +275,7 @@ class KernelRegistries:
 
     def event_owners(self) -> dict[str, str]:
         """Which plugin contributed each registered event type — declared in its
-        `event_types` OR derived from one of its EntitySpecs (RADD-1371: the
-        automation catalog read only the former, so any EntitySpec plugin's
-        `<entity>.created` trigger had no owner and the catalog 500'd)."""
+        `event_types` OR derived from one of its EntitySpecs (RADD-1371)."""
         from .entities import _event_types
 
         owners: dict[str, str] = {}
@@ -403,7 +291,7 @@ class KernelRegistries:
         return self.integrations.get((socket, name))
 
     def providers(self, socket: str) -> dict[str, IntegrationSpec]:
-        return {n: ig for (s, n), ig in self.integrations.items() if s == socket and not ig.consumes}
+        return {n: ig for (s, n), ig in self.integrations.items() if s == socket}
 
 
 # Process-global singleton.

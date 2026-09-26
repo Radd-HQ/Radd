@@ -25,7 +25,6 @@ plugin = RaddPlugin(
     description="Webhooks: signed event deliveries to your own endpoints, with retries.",
     depends_on=("projects", "events", "auth", "fields", "items"),
     routers=(router,),
-    # RADD-1168: emitted since spec 25 and never registered. Not triggers.
     event_types=(
         EventTypeSpec(
             WebhookEvent.ENDPOINT_CREATED, "Webhook endpoint created", "Admin",

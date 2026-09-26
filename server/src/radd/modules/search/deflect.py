@@ -1,14 +1,7 @@
-"""KB deflection (spec 66): "does this already have an answer?" for a
-half-typed issue title — top DOCUMENTS from whichever plugin provides them
-(the SEARCH_DOCUMENTS socket; `pages` answers with wiki pages) + top RESOLVED
-items (the item FTS filtered to done/canceled state categories through the
-workflow seam).
-
-Both halves are FTS fused with semantic candidates when a SEMANTIC_CANDIDATES
-provider is live (specs 103/106, RADD-1384) and degrade to plain FTS on any
-failure; with no document provider the docs half is empty. The endpoint's
-shape won't change.
-"""
+"""KB deflection (spec 66): "does this already have an answer?" for a half-typed title —
+top DOCUMENTS from the SEARCH_DOCUMENTS providers + top RESOLVED items (done/canceled).
+Both halves fuse FTS with SEMANTIC_CANDIDATES when a provider is live and degrade to plain
+FTS on any failure; no document provider = an empty docs half."""
 
 import logging
 import uuid
@@ -35,11 +28,9 @@ RESOLVED_CATEGORIES = (StateCategory.DONE, StateCategory.CANCELED)
 
 
 async def deflect_docs(session: AsyncSession, q: str, *, actor) -> list[DeflectDoc]:
-    """Top documents `actor` may open: each provider's FTS fused with its
-    semantic candidates (spec 103) — KB questions rarely reuse the answer's
-    exact words. The provider gates both halves (RADD-791's readable spaces,
-    RADD-792's restricted pages), because deflection is the one page surface an
-    ISSUE reader reaches. A provider that raises is skipped, never a 500."""
+    """Top documents `actor` may open: each provider's FTS fused with its semantic candidates
+    (KB questions rarely reuse the answer's words). The provider gates both halves — this is
+    the one page surface an ISSUE reader reaches. A provider that raises is skipped."""
     providers = sources.document_sources()
     if not providers:
         return []

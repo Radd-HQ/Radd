@@ -12,12 +12,8 @@ class Settings(BaseSettings):
     db_pool_size: int = 5
     db_max_overflow: int = 10
     db_pool_pre_ping: bool = True
-    # Self-healing backstop for leaked transactions (RADD-845): Postgres kills
-    # any app session idle in transaction longer than this. Two PAT-auth
-    # sessions idling 4-5h once blocked a deploy's migration; with this set, a
-    # future leak costs one broken connection instead of a wedged deploy. 0
-    # disables. Applies to the app engine only — alembic and pg_dump/pg_restore
-    # connect on their own.
+    # Postgres kills an app session idle-in-transaction this long (RADD-845): a leak costs
+    # one connection, not a wedged migration. 0 disables; app engine only.
     db_idle_tx_timeout_seconds: int = 600
     api_title: str = "Radd"
     api_prefix: str = "/api/v1"
@@ -50,10 +46,8 @@ class Settings(BaseSettings):
     auth_login_account_attempts: int = Field(default=20, gt=0)
     auth_login_ip_attempts: int = Field(default=120, gt=0)
     auth_login_bucket_limit: int = Field(default=10000, gt=0)
-    # Per-account write admission (spec 121 §9, RADD-1148): sliding window over
-    # issue + comment creation, consulted by the routers after authentication.
-    # Instance admins and the automation actor are exempt. Same single-process
-    # caveat as the login counters above.
+    # Per-account write admission (RADD-1148): a sliding window over issue + comment
+    # creation; admins and the automation actor are exempt. Per process, like the above.
     write_window_seconds: int = Field(default=3600, gt=0)
     item_creates_per_window: int = Field(default=30, gt=0)
     comments_per_window: int = Field(default=120, gt=0)
@@ -70,9 +64,7 @@ class Settings(BaseSettings):
     # background loops (webhooks/automations/notify/search/sla/mail)
     # stay dormant. Realtime + storage init always run (they serve the web tier).
     run_workers: bool = True
-    # Which task_backend socket provider runs kernel-registered TaskSpecs
-    # (RADD-872). "localloop" is the built-in poll-loop runner; a celery-style
-    # plugin swaps in by registering another provider under its own name.
+    # The task_backend socket provider that runs kernel TaskSpecs; "localloop" is built in.
     task_backend: str = "localloop"
 
     # Webhook dispatcher (see radd/modules/webhooks)
@@ -92,14 +84,11 @@ class Settings(BaseSettings):
     automation_scheduler_interval: float = 60.0
     scheduler_tz: str = "UTC"
     automation_schedule_max_items: int = 200
-    # Graph runs (spec 116). A linear rule cost `items x actions`; a graph costs
-    # `items x nodes x fan-out`, so a run needs a ceiling on both axes. Hitting
-    # either is RECORDED in the run report, never applied in silence — a run that
-    # quietly did less is indistinguishable from a run that had less to do.
+    # Graph run ceilings (spec 116), on nodes and on item actions. Hitting one is RECORDED
+    # in the run report: a run that quietly did less reads like one with less to do.
     automation_graph_max_node_runs: int = 200
-    # RADD-1315: how deep a chain of automations may go. A trigger that opted in
-    # to other automations' changes fires only on events below this depth — two
-    # opted-in rules that feed each other stop here instead of looping.
+    # RADD-1315: a trigger opted in to other automations' changes fires only below this
+    # chain depth, so two rules that feed each other stop instead of looping.
     automation_max_chain_depth: int = 3
     automation_graph_max_item_actions: int = 2000
     #: How long recorded runs are kept (RADD-1266). 0 keeps them forever.
@@ -116,16 +105,12 @@ class Settings(BaseSettings):
     #: a package name. Empty = the newest `radd_sdk` wheel in a wheelhouse, else
     #: the checkout's sdk/ when present, else the `radd-sdk` package.
     scripts_sdk_source: str = ""
-    #: Wheelhouses (RADD-1277): directories of wheels uv resolves from BEFORE
-    #: any index, comma-separated. The image sets /app/wheels (the SDK and its
-    #: closure, so the interpreter build never touches the network);
-    #: `<scripts_dir>/wheels` is always searched too, which is how an air-gapped
-    #: admin adds a package. The package index itself is an admin setting on
-    #: Settings → Scripts (a row, not env), since a mirror is instance policy.
+    #: Wheelhouse dirs uv resolves from before any index (comma-separated; the image sets
+    #: /app/wheels so the build needs no network); `<scripts_dir>/wheels` is always
+    #: searched. The index URL is a Settings → Scripts row.
     scripts_find_links: str = ""
-    #: The URL a script's `ctx.client` calls; empty = `app_base_url`. The chart
-    #: sets the in-cluster service so a worker-pod script never hairpins
-    #: through the ingress.
+    #: The URL a script's `ctx.client` calls; empty = `app_base_url`. The chart sets the
+    #: in-cluster service so a script never hairpins through the ingress.
     scripts_api_url: str = ""
     #: Ceiling on a node's timeout param, and the default when it names none.
     scripts_max_timeout_seconds: int = 300
@@ -134,14 +119,9 @@ class Settings(BaseSettings):
     scripts_tool_timeout_seconds: int = 600
     #: How many items a script is handed at once (the read models are wide).
     scripts_max_items: int = 50
-    # Intake validation (spec 119): the wall clock ONE verdict may spend, across
-    # every graph governing the draft. The walk runs synchronously inside the
-    # create's transaction — which holds the project's number lock — so this is
-    # not the engine's kind of budget: it is how long every other creation in
-    # that project can be made to queue. Past it, a check that costs a model
-    # round trip leaves by its "can't check" port, and the graph decides what
-    # that means (RADD-1329) — an overloaded provider need not close an intake.
-    # Deliberately under the 30s AI timeout, so the budget bites first.
+    # Spec 119: wall clock ONE intake verdict may spend. It runs in the create transaction
+    # holding the project's number lock, so it bounds how long other creations queue; keep
+    # it under ai_timeout_seconds (a slow check leaves by its "can't check" port, RADD-1329).
     intake_validation_budget_seconds: float = 25.0
 
     # Event-cascade consumer (see radd/modules/events/cascade.py) — events read
@@ -151,14 +131,11 @@ class Settings(BaseSettings):
     # Notifications (see radd/modules/notify)
     notify_poll_interval: float = 1.0
     notify_batch: int = 100
-    # Email digests: one batched email per user per interval. Empty smtp_host = disabled.
+    # Email digests: one batched email per user per interval.
     notify_email_interval: float = 300.0
     notify_email_max_age_hours: int = 24
-    # Per-event mail (RADD-968): the second, FASTER loop that mails the
-    # notification rows whose type is in the immediate-email set, so a comment
-    # reaches its watchers now rather than at the next digest window. Rows it
-    # sends are stamped `emailed_at`, which is what keeps the digest from
-    # repeating them.
+    # Per-event mail (RADD-968): the faster loop for immediate-email types; sent rows get
+    # `emailed_at` so the digest skips them.
     notify_mail_poll_interval: float = 5.0
     notify_mail_batch: int = 100
     smtp_host: str = ""
@@ -166,13 +143,7 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_starttls: bool = True
-    # RADD_SMTP_FROM **or** RADD_SMTP_FROM_ADDRESS. The field name implies the
-    # latter, every document and the deployment say the former, and for months
-    # only the unwritten one was read — so outbound mail went out as
-    # `radd@localhost`, which a real relay refuses because it hosts no such
-    # mailbox. A wire constant with no compiler behind it: it type-checks
-    # nowhere and simply does nothing. Both names work now; the short one is
-    # what people actually type.
+    # Read from RADD_SMTP_FROM or RADD_SMTP_FROM_ADDRESS (docs always said the former).
     smtp_from_address: str = Field(
         default="Radd <radd@localhost>",
         validation_alias=AliasChoices(
@@ -207,29 +178,12 @@ class Settings(BaseSettings):
     # (default; attachments_dir) or "s3" (any S3-compatible store — Garage, AWS).
     attachment_storage: str = "filesystem"
     attachments_dir: str = "var/attachments"
-    # Raised from 25 MB for spec 117. A wiki's attachments are not screenshots:
-    # in ONE section of a real Confluence space, 23 of 56 files (41%) exceeded
-    # 25 MB, and the largest was a 217 MB meeting recording. A migration that
-    # silently leaves 40% of attachments behind is not a migration — the old
-    # instance could never be switched off.
-    #
-    # Safe to raise because uploads are never held whole in memory: the storage
-    # layer buffers through a SpooledTemporaryFile, and spec 117's downloader
-    # writes straight to disk. Disk is the real constraint, not RAM.
+    # 5 GiB: wiki imports carry recordings (spec 117). Uploads spool to disk, so disk,
+    # not RAM, is the limit.
     attachment_max_bytes: int = 5 * 1024 * 1024 * 1024
 
-    # Spec 117 — where a downloaded Confluence snapshot lives ON DISK.
-    #
-    # Snapshot attachments used to go through the spec-102 blob API and out to the
-    # object store. That is the right home for a page's attachments, and the wrong
-    # one for a download: one real section pushed 49 GB through Garage's S3 API to
-    # cache bytes that may never be imported, and the download crawled. A snapshot
-    # is a working file, not durable content — so it is a plain directory that a
-    # delete can remove with one rmtree, and that an operator can inspect, copy
-    # between machines, or hand to a colleague.
-    #
-    # Bytes reach the object store when a RUN imports them, which is the point at
-    # which they become real attachments someone will read.
+    # Spec 117: downloaded Confluence snapshots are working files on local disk (one rmtree
+    # to delete), not object-store blobs; bytes reach storage when a run imports them.
     confluence_snapshot_dir: str = "var/confluence-snapshots"
     s3_endpoint: str = "localhost:9000"  # host:port (no scheme; s3_secure picks it)
     s3_access_key: str = ""
@@ -245,26 +199,17 @@ class Settings(BaseSettings):
     # old, long-answered items must not fire a burst of historical "met" events.
     sla_met_event_max_age_hours: int = 24
 
-    # OIDC SSO (see radd/modules/sso). SEED-ONLY since spec 110: providers are
-    # `sso_providers` rows managed in Settings → Sign-in, and these values create
-    # the first row ONCE, on a database that has none. Editing them later does
-    # nothing — change the provider in the UI. Empty issuer = seed nothing.
+    # OIDC SSO (radd/modules/sso): SEED-ONLY since spec 110 — the first `sso_providers` row,
+    # once, on a database with none; later edits do nothing. Empty issuer = seed nothing.
     oidc_issuer: str = ""
     oidc_client_id: str = ""
     oidc_client_secret: str = ""
     oidc_scopes: str = "openid email profile"
     oidc_auto_provision: bool = True
-    # Comma-separated domains allowed to CREATE an account through the seeded
-    # provider ("radd-hq.com,acme.example"). Empty + auto-provision on seeds the
-    # "*" wildcard, preserving spec 40's anyone-at-the-IdP behavior for existing
-    # deployments; new providers added in the UI default to an empty list, which
-    # means no signups at all.
+    # Domains allowed to CREATE accounts via the seeded provider; empty + auto-provision seeds "*".
     oidc_signup_domains: str = ""
-    # Groups claim → instance role sync: members of any listed group become
-    # instance admins; everyone else joins as member. Re-synced on every login.
-    # Leaving admin_groups EMPTY means the provider has no role opinion and
-    # leaves instance_role alone (spec 110) — required so a Google login can't
-    # demote the AD admin whose account it just linked to.
+    # Groups claim → instance admin, re-synced each login. Empty admin_groups = no role opinion
+    # (spec 110), so a Google login cannot demote the AD admin it just linked to.
     oidc_group_claim: str = "groups"
     oidc_admin_groups: str = ""
     # Live tunable (not seed-only): per-request bound on the SSO HTTP round
@@ -293,29 +238,23 @@ class Settings(BaseSettings):
     ldap_user_search_base: str = ""  # "" = base_dn(); narrow to an OU to scope the import
     ldap_user_filter: str = "(&(objectCategory=person)(objectClass=user)(mail=*))"
     ldap_page_size: int = 500  # AD caps a single search at ~1000; page through
-    # Group reconcile loop (spec 84 → RADD-829: GROUPS are the sync surface, not
-    # linked teams). Needs the bind account + run_workers; long interval by design.
+    # Group reconcile loop (RADD-829); needs the bind account + run_workers.
     ldap_group_sync_seconds: float = 3600.0
-    # RADD-829: the nesting walk's depth cap. AD nesting is rarely deeper than 3;
-    # a pathological directory degrades to "incomplete" (fails CLOSED — fewer
-    # memberships resolved) instead of "down".
+    # Nesting walk depth cap: a deeper directory degrades to "incomplete" (fails CLOSED).
     group_nesting_max_depth: int = 10
     # Cap on the error list persisted per sync run in directory_sync_state —
     # the JSONB row is a status line, not a log (group + user sync loops).
     ldap_max_recorded_errors: int = 20
-    # Directory settings page + automatic user sync (spec 85). These four are
-    # the CASCADE DEFAULTS for the registered instance-scope SettingKeys — an
-    # instance override written on the Directory settings page wins over env.
+    # Directory page + user sync (spec 85): cascade DEFAULTS for instance SettingKeys; an
+    # override written on Settings → Directory wins.
     ldap_group_search_base: str = ""  # "" = base_dn(); narrow to a groups OU
     ldap_user_sync_enabled: bool = False  # the automation switch (off = manual only)
     # Deactivate ldap-source users that vanish from the directory. OFF by
     # default so a transient AD outage can't lock people out.
     ldap_user_sync_deactivate_missing: bool = False
     ldap_user_sync_seconds: float = 3600.0  # ldap-usersync loop interval
-    # Exclude directory accounts with the AD ACCOUNTDISABLE bit from imports and
-    # sync. ON by default because most of a real directory is leavers — a live
-    # instance held roughly two disabled accounts per active one — and importing them fills
-    # the tracker with dead users. Overridable per instance in Settings → Directory.
+    # Skip AD ACCOUNTDISABLE accounts in imports and sync. ON: most of a real directory is
+    # leavers (a live one held ~2 disabled per active account).
     ldap_exclude_disabled: bool = True
 
     # RADD-1279: refuse a session to a password login with no second factor.
@@ -333,10 +272,8 @@ class Settings(BaseSettings):
     # right behind a proxy. See radd/clientip.py.
     trusted_proxies: str = ""
 
-    # AI layer (see radd/modules/ai). Since spec 101 the ai_provider/base_url/
-    # api_key/model quartet is SEED-ONLY: it creates one provider row + the chat
-    # role on first boot (like the jira_* block), after which Settings → AI owns
-    # the registry. max_tokens/timeouts stay live global tunables.
+    # AI layer (radd/modules/ai). provider/base_url/api_key/model are SEED-ONLY (spec 101):
+    # one provider row + chat role on first boot. max_tokens/timeouts stay live.
     ai_provider: str = ""  # "openai" (any OpenAI-compatible base_url) | "anthropic"
     ai_base_url: str = ""  # "" = the provider's default endpoint
     ai_api_key: str = ""
@@ -344,42 +281,25 @@ class Settings(BaseSettings):
     ai_max_tokens: int = 1024
     ai_timeout_seconds: float = 30.0
     ai_stream_timeout_seconds: float = 120.0  # editor-action SSE read timeout
-    # RADD-1273: the thinking budget an Anthropic-shape provider gets when its
-    # row says reasoning ON (added on top of the call's max_tokens, since the
-    # API requires the budget to fit inside it). OpenAI-shape providers leave
-    # the model's own default in charge when reasoning is on.
+    # RADD-1273: an Anthropic-shape provider's thinking budget when its row has reasoning
+    # ON, added to max_tokens (the API requires it to fit inside). OpenAI shapes ignore it.
     ai_reasoning_budget_tokens: int = 1024
-    # RADD-1275: pictures a summary may show a vision model — how many of the
-    # entity's image attachments (newest first), the largest original it will
-    # read, and the width it is downscaled to before it is sent.
+    # RADD-1275: image attachments a summary shows the vision model — count, source cap, width.
     ai_vision_max_images: int = 4
     ai_vision_max_image_bytes: int = 8_000_000
     ai_vision_image_width: int = 1024
-    # Embedding indexer (spec 103): batch handed to one /embeddings call, loop
-    # cadence, and the per-entity text cap fed to the model. The embedder loop
-    # DRAINS (no sleep between full batches), so the interval only paces the
-    # idle poll; the batch amortizes per-call overhead during backfills.
+    # Embedding indexer (spec 103): batch per /embeddings call, idle-poll interval (the
+    # loop DRAINS full batches without sleeping), per-entity text cap.
     ai_embed_batch: int = 256
     ai_embedder_poll_interval: float = 3.0
     ai_embed_max_chars: int = 8000
     # Budget for the semantic half of a hybrid search — past it, FTS-only.
     ai_search_timeout_seconds: float = 2.0
-    # Spec 116: how much text the automation AI-classifier node may send in one
-    # prompt. There is no principled value — the real limit is the configured
-    # model's context window, which the provider registry does not record, so
-    # this is a deliberately generous default you raise or lower to match yours
-    # (~40k characters is roughly 10k tokens, comfortable for an 8k-token model
-    # with room for the answer). It is spent on WHOLE items: the digest includes
-    # each item entirely or not at all, and names how many it left out, rather
-    # than truncating a description mid-sentence and cutting the very line that
-    # decides the classification.
+    # Text budget for one AI-classifier prompt (spec 116); size it to your model's context
+    # (~40k chars ≈ 10k tokens). Spent on WHOLE items, never cut mid-sentence.
     ai_automation_context_chars: int = 40_000
-    #: How many items ONE per-item AI classifier node may classify in a single
-    #: run. Separate from (and far below) `automation_graph_max_item_actions`
-    #: because these are model round trips, not database writes: at roughly a
-    #: second each, the action budget of 2000 would park a consumer iteration for
-    #: half an hour. Items past the cap take the node's fallback port — routed,
-    #: never silently dropped.
+    #: Items ONE per-item classifier node may classify per run — model round trips, so far
+    #: below the action budget. Overflow takes the node's fallback port.
     ai_automation_max_classifications: int = 50
     #: Concurrent model calls for one per-item classifier node. The contexts are
     #: built first, on the walk's single session; only the provider calls overlap.
@@ -403,15 +323,9 @@ class Settings(BaseSettings):
     # OFF by default: the rerank buys reasons + rescoring at the
     # price of a chat-model round trip on every similar-issues open.
     ai_similar_rerank: bool = False
-    # Spec 119: the `ai.validate` node — an AI check on an intake draft that
-    # writes its own findings. ON by default like the other workflow features:
-    # nothing runs until an admin puts the node in a graph and binds that graph
-    # to a form or a project, so the toggle is the kill switch, not the opt-in.
+    # Spec 119: kill switch for the ai.validate node (nothing runs until it is in a graph).
     ai_validation: bool = True
-    # Spec 120: the `ai.generate` node — works out named values about an item
-    # that downstream actions read as {{tokens}}. ON for the same reason:
-    # nothing runs until an admin puts the node in a graph, so this is the
-    # kill switch rather than the opt-in.
+    # Spec 120: kill switch for the ai.generate node (same).
     ai_generation: bool = True
     # Deliver summaries / similar-reasons progressively (SSE) instead of
     # complete-then-show.
@@ -429,15 +343,9 @@ class Settings(BaseSettings):
     mcp_catalog_poll_seconds: float = 15.0
     mcp_stream_keepalive_seconds: float = 25.0
 
-    # Forgejo/Gitea connector (see radd/modules/forgejo). Spec 111 moved hosts into
-    # the database (`forgejo_connections`), so these SEED one connection on first
-    # startup and are inert afterwards — the spec-100/101 rule. An existing deploy
-    # keeps verifying webhooks across the upgrade; rotation happens in the UI.
+    # Forgejo (radd/modules/forgejo): SEED-ONLY since spec 111 — one connection row on first start.
     forgejo_webhook_secret: str = ""
     forgejo_base_url: str = ""  # seed only: https://git.example.com
-    # (RADD-1285: the spec-112 release_waiting_state/release_shipped_state
-    # defaults are gone — which states ship is an on-release workflow transition.
-    # Migration d1285releaseflow converted RADD_RELEASE_*_STATE into transitions.)
     # Backfill bounds (spec 111): how far back the API walk goes by default.
     forgejo_backfill_max_commits: int = 2000
     forgejo_api_page_size: int = 50
@@ -455,11 +363,8 @@ class Settings(BaseSettings):
     github_api_page_size: int = 100  # GitHub's maximum
     github_http_timeout_seconds: float = 30.0
 
-    # Jira import connector (see radd/modules/jiraimport, specs 90/100).
-    # Spec 100 moved connections into the database (`jira_connections`), so these
-    # now only SEED a default connection on first startup — an existing deploy
-    # keeps working, and thereafter connections are managed in the UI with no
-    # restart. Empty base URL = nothing to seed.
+    # Jira import (radd/modules/jiraimport): SEED-ONLY since spec 100 — one connection row on
+    # first start. Empty base URL = nothing to seed.
     jira_base_url: str = ""  # e.g. https://jira.example.com (no trailing /rest)
     # Two auth modes, both supported. A PAT (Bearer) takes precedence when set;
     # otherwise username + password is used (HTTP Basic — Jira DC accepts either).
@@ -468,27 +373,18 @@ class Settings(BaseSettings):
     jira_password: str = ""  # basic-auth password
     jira_verify_ssl: bool = True  # internal CA / self-signed → set false
     jira_timeout_seconds: float = 30.0
-    # Domain used to synthesize an address for a Jira user whose email Jira does
-    # not expose, so a later AD import can match on email and adopt the
-    # placeholder's work (spec 88). Empty = DERIVE it from the connection's host
-    # (jira.internal.example.com -> example.com). Spec 100 replaced a hardcoded
-    # company domain in `issuemap.py` with this.
+    # Placeholder-email domain for Jira users with hidden emails (spec 88), so a later AD import
+    # can adopt them. Empty = derived from the connection's host.
     jira_placeholder_email_domain: str = ""
 
-    # Confluence import connector (see radd/modules/confluenceimport, spec 117).
-    # SEED-ONLY, exactly like the jira_* block above: connections live in
-    # `confluence_connections` and are managed in the UI. Empty base URL = nothing
-    # to seed. Server/DC only — the REST base is /rest/api and bodies arrive as
-    # storage format; Cloud is a different client behind the same service seam.
+    # Confluence import (spec 117): SEED-ONLY, like jira_*. Server/DC only.
     confluence_base_url: str = ""  # e.g. https://confluence.example.com
     confluence_pat: str = ""  # personal access token — Bearer; read scope is enough
     confluence_user: str = ""  # basic-auth username (used when the PAT is empty)
     confluence_password: str = ""
     confluence_verify_ssl: bool = True  # internal CA / self-signed → set false
     confluence_timeout_seconds: float = 30.0
-    # Same contract as jira_placeholder_email_domain: empty DERIVES it from the
-    # connection's own host, so an imported author can be matched by a later AD
-    # import instead of forking a second account for the same person.
+    # Same contract as jira_placeholder_email_domain.
     confluence_placeholder_email_domain: str = ""
 
 
@@ -505,11 +401,8 @@ class Settings(BaseSettings):
     mail_imap_folder: str = "INBOX"
     mail_poll_seconds: float = 60.0
     mail_project_key: str = ""
-    # Requester loop (spec 62): the outbound consumer mails public comments back.
-    # The receipt and the resolution notice (RADD-1368) are `email`-section
-    # scalar settings on Settings → Email; these are their cascade defaults.
-    # Both OFF: nothing reaches a requester's mailbox that nobody switched on
-    # (RADD-1318's rule, kept when the switches came back to the page).
+    # Requester-loop defaults (Settings → Email overrides, RADD-1368). Both OFF: nothing
+    # reaches a requester's mailbox unless switched on.
     mail_send_ack: bool = False
     mail_send_resolved: bool = False
     # The receipt's plain-text body. `{{key}}`/`{{title}}`/`{{link}}`/
@@ -523,28 +416,18 @@ class Settings(BaseSettings):
         "the subject)."
     )
     mail_outbound_poll_seconds: float = 5.0
-    # HTTPS ingest (RADD-953). The shared secret the Cloudflare Email Worker
-    # signs each raw message with — `openssl rand -base64 32`. EMPTY REJECTS
-    # EVERYTHING, the same safe default as forgejo_webhook_secret: an
-    # unauthenticated, internet-reachable endpoint that creates issues is the
-    # worst way to discover a missing environment variable.
+    # HTTPS ingest (RADD-953): the Cloudflare Email Worker's signing secret. EMPTY REJECTS ALL.
     email_ingest_secret: str = ""
     # The address mail is accepted for. Informational for now — it is what the
     # Reply-To on outbound carries, and what a source row will name (RADD-958).
     email_ingest_address: str = ""
 
-    # CSAT surveys (see radd/modules/csat, spec 65). `csat_enabled` is the
-    # instance default of the SettingKey.CSAT_ENABLED scalar cascade — surveys
-    # are per-project OPT-IN, so the default stays off.
+    # CSAT (spec 65): `csat_enabled` is the cascade default; surveys are per-project OPT-IN.
     csat_enabled: bool = False
     csat_poll_seconds: float = 5.0
     csat_batch: int = 200  # events read per sender iteration
 
-    # GitLab connector (see radd/modules/gitlab). RADD-1253: connections are rows
-    # (`gitlab_connections`), so these SEED one connection on first start when
-    # the table is empty — the spec-100/101 rule. Rotating a secret is a Settings
-    # edit, not a redeploy. The spec-31 merge-transition state name is gone: a
-    # merged MR moves the item to the project's waiting-for-release state.
+    # GitLab (radd/modules/gitlab): SEED-ONLY since RADD-1253 — one connection row on first start.
     gitlab_webhook_secret: str = ""  # seed only: the hook's "Secret token"
     gitlab_base_url: str = ""  # seed only: https://gitlab.example.com (default gitlab.com)
     gitlab_api_token: str = ""  # seed only: a read_api token (admin's = automatic author matching)
@@ -579,9 +462,7 @@ class Settings(BaseSettings):
     # scalar-settings cascade. "off" keeps the feature fully optional.
     workflow_transition_mode: str = "off"
 
-    # Story points (spec 70) — the instance default of the
-    # SettingKey.ESTIMATION_POINTS scalar cascade. Per-project OPT-IN: a
-    # project that hasn't enabled it shows zero points UI anywhere.
+    # Story points (spec 70): the cascade default; per-project OPT-IN.
     estimation_points: bool = False
     # Spec 121: what a new issue is unless the filer says otherwise
     # (public | internal | restricted); the `item_default_visibility` scoped setting.
@@ -666,10 +547,8 @@ class Settings(BaseSettings):
         "radd.modules.monitoring",
         "radd.modules.leave",
     )
-    # Non-core plugins are INSTALLED + runtime-ENABLED via the plugin manager
-    # (docs/plugin-platform.md §10), not the always-on bootstrap set above. These
-    # ship in the repo and are discoverable by the manager; `create_app` also loads
-    # whichever are in state ENABLED in the `installed_plugins` table.
+    # Shipped but not bootstrapped: installed + enabled through the plugin manager
+    # (docs/plugin-platform.md §10); boot also loads those ENABLED in `installed_plugins`.
     installable_plugins: tuple[str, ...] = ("radd.modules.milestones",)
 
 

@@ -18,11 +18,8 @@ from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.events import service as events
 from radd.modules.projects import service as projects_service
 
-# `AccessGrant` is re-exported here as the PUBLIC grant row type (RADD-887,
-# the events.Event pattern from RADD-886): the row is what the resolution
-# helpers and every share-shaped read return, and importing it from
-# access.models made four modules reach into another module's models file.
-# The ratchet test bans `access.models` outside this module.
+# `AccessGrant` is re-exported as the PUBLIC grant row type (RADD-887); the ratchet test
+# bans `access.models` outside this module.
 from .models import AccessGrant, AccessRestriction
 from .registry import get_spec
 from .resolution import SubjectContext, effective_level
@@ -110,20 +107,25 @@ def shared_resource_level(
     return effective_level(grants, context, None, spec, default_level=global_access)
 
 
+async def _actor_context(session: AsyncSession, actor) -> SubjectContext:
+    from radd.modules.groups import service as groups
+    from radd.modules.teams import service as teams
+
+    return SubjectContext(user_id=actor.id,
+        team_ids=frozenset(await teams.user_team_ids(session, actor.id)),
+        group_ids=frozenset(await groups.user_group_ids(session, actor.id)))
+
+
 async def shared_resource_visible_clause(
     session: AsyncSession, actor, resource_type: str, *, resource_id, owner_id, global_access,
 ):
     """Public SQL seam: filter shared catalogs before count/limit/hydration."""
-    from radd.modules.groups import service as groups
-    from radd.modules.teams import service as teams
     from .shared import visible_clause
 
     spec = get_spec(resource_type)
     if spec is None:
         raise ValueError(f"unknown shared resource {resource_type}")
-    context = SubjectContext(user_id=actor.id,
-        team_ids=frozenset(await teams.user_team_ids(session, actor.id)),
-        group_ids=frozenset(await groups.user_group_ids(session, actor.id)))
+    context = await _actor_context(session, actor)
     return visible_clause(spec, context, resource_id=resource_id, owner_id=owner_id,
                           global_access=global_access, live=_live_clause())
 
@@ -131,16 +133,12 @@ async def shared_resource_visible_clause(
 async def shared_resource_state_expressions(session, actor, resource_type, *, resource_id,
                                              global_access):
     """Public SQL seam for bounded sharing flags and exact allow/deny levels."""
-    from radd.modules.groups import service as groups
-    from radd.modules.teams import service as teams
     from .shared import state_expressions
 
     spec = get_spec(resource_type)
     if spec is None:
         raise ValueError(f"unknown shared resource {resource_type}")
-    context = SubjectContext(user_id=actor.id,
-        team_ids=frozenset(await teams.user_team_ids(session, actor.id)),
-        group_ids=frozenset(await groups.user_group_ids(session, actor.id)))
+    context = await _actor_context(session, actor)
     return state_expressions(spec, context, resource_id=resource_id,
                              global_access=global_access, live=_live_clause())
 
@@ -321,10 +319,8 @@ async def remove_subject_grants(
     subject_type: GrantSubject,
     subject_id: uuid.UUID,
 ) -> None:
-    """Drop every grant ONE subject holds on one resource — the views/dashboards
-    ownership transfer clears the new owner's now-redundant share rows this way
-    (RADD-887). No REVOKED events, matching those callers: a transfer emits its
-    own UPDATED event."""
+    """Drop every grant ONE subject holds on one resource (an ownership transfer clears the
+    new owner's redundant shares). No REVOKED events: the transfer emits its own UPDATED."""
     await session.execute(
         delete(AccessGrant).where(
             AccessGrant.resource_type == resource_type,
@@ -338,9 +334,8 @@ async def remove_subject_grants(
 async def clear_resource_types(
     session: AsyncSession, resource_types: Iterable[str]
 ) -> int:
-    """Drop EVERY grant of the given resource types, returning how many rows went
-    — pluginmgr's uninstall sweep (RADD-818) removes a departing plugin's grant
-    types wholesale (RADD-887). No per-row events: the sweep emits one summary."""
+    """Drop EVERY grant of these resource types and return the count (pluginmgr's uninstall
+    sweep, RADD-818). No per-row events: the sweep emits one summary."""
     types = list(resource_types)
     if not types:
         return 0
@@ -396,9 +391,8 @@ async def _emit(
 
 
 async def sweep_expired_grants() -> int:
-    """RADD-820: delete expired rows from BOTH grant tables. Resolution already
-    treats them as absent (the liveness clauses) — this only stops the tables
-    accumulating corpses. Registered on the kernel task registry."""
+    """RADD-820: delete expired rows from BOTH grant tables. Resolution already ignores
+    them; this only stops the tables accumulating corpses."""
 
     from radd.db import SessionLocal
     from radd.modules.auth.models import GlobalRoleGrant

@@ -143,13 +143,6 @@ async def ensure_default_schedule(session: AsyncSession) -> None:
 # --- runs ---
 
 
-async def list_runs(session: AsyncSession, limit: int = 20) -> list[BackupRun]:
-    result = await session.execute(
-        select(BackupRun).order_by(BackupRun.started_at.desc()).limit(limit)
-    )
-    return list(result.scalars())
-
-
 async def get_run(session: AsyncSession, run_id: uuid.UUID) -> BackupRun:
     run = await session.get(BackupRun, run_id)
     if run is None:

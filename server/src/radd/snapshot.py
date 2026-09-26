@@ -1,14 +1,6 @@
-"""Stale-while-revalidate module snapshots (RADD-899).
-
-The write-through pattern ("refreshed on write + at startup") answers correctly
-in the process that WROTE — and serves the old value in every OTHER replica
-until restart. These snapshots exist because `CapabilitySpec.check` is sync and
-cannot query, so the fix is not "query instead": a sync read returns the
-current value and, once the TTL has lapsed, schedules ONE background refresh
-through the loader (which owns its own session). Bounded staleness — default
-`settings.snapshot_ttl_seconds` — replaces unbounded, and the
-per-request-query win the caches exist for stays.
-"""
+"""Stale-while-revalidate snapshots (RADD-899) for sync readers that cannot query (e.g.
+`CapabilitySpec.check`): `get()` returns the value and, past the TTL, schedules ONE refresh
+through the loader, so another replica's write shows within `snapshot_ttl_seconds`."""
 
 import asyncio
 import logging

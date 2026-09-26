@@ -1,15 +1,6 @@
-"""Scalar settings resolution (specs 50/67): project → instance → env.
-
-`resolve()` is the single read seam; consumers that used `config.settings.<x>`
-directly for a registered key call this instead so per-scope overrides apply.
-Absence of any row returns the env/config default, so switching a consumer over
-is behaviour-preserving until an override is written.
-
-RADD-891: the per-key POLICY (type, scopes, prose, default source) is no
-longer a static dict literal in `.types` — it is the kernel `SettingSpec` each
-owning module declares via `settings_keys=(...)` on its `RaddPlugin`,
-looked up live through `.types.setting_spec`/`SETTINGS_REGISTRY`.
-"""
+"""Scalar settings resolution (specs 50/67): project → instance → env. `resolve()` is the
+single read seam; with no override row it returns the env/config default, so switching a
+consumer over is behaviour-preserving. Per-key policy is the owner's `kernel.SettingSpec`."""
 
 import uuid
 from typing import Any

@@ -61,6 +61,8 @@ def _coalesce(batch: list[Event]) -> list[InvalidationEvent]:
     """Frames invalidate snapshots; repeated changes in one poll need one ping."""
     pending = {}
     for event in batch:
+        # Silent (bulk-import) events are not pushed — a 45k-issue import would otherwise
+        # flood every open tab. The cursor still advances past them.
         if not event.silent:
             key = (
                 event.entity_type,
@@ -90,10 +92,7 @@ async def _run() -> None:
             async with SessionLocal() as session:
                 batch = await events.read_after(session, last_id, settings.realtime_batch)
             for event in _coalesce(batch):
-                # Silent (bulk-import) events still advance the cursor, but are not
-                # pushed — a 45k-issue import would otherwise flood every open tab.
-                if not event.silent:
-                    await _fan_out(event)
+                await _fan_out(event)
             if batch:
                 last_id = batch[-1].id
         except asyncio.CancelledError:

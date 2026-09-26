@@ -1,6 +1,4 @@
-"""Idempotent bootstrap: instance-admin user + global builtin roles + default
-work categories (spec 86 — the workspace entity is gone; users are users OF THE
-SERVER, any active user holds the global member floor).
+"""Idempotent bootstrap: instance-admin user + global builtin roles + default work categories.
 
 Run:  uv run python -m radd.seed --email admin@example.com --password change-me [--name Admin]
 Env fallbacks: RADD_SEED_EMAIL, RADD_SEED_PASSWORD, RADD_SEED_NAME.

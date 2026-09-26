@@ -12,10 +12,8 @@ from radd.config import settings
 from radd.db import ilike_term
 from radd.kernel import changes as kchanges, registries
 
-# `Event` is re-exported here as the PUBLIC consumer payload type (RADD-886):
-# the row IS the contract every consumer loop receives, and importing it from
-# events.models made 13 modules reach into another module's models file. The
-# ratchet test bans `events.models` outside this module.
+# `Event` is re-exported as the PUBLIC consumer payload type (RADD-886); the ratchet test
+# bans `events.models` outside this module.
 from . import ledger
 from .models import ConsumerOffset, Event
 from .quiet import AutomationCause, automated, current_cause, is_automated, is_quiet, quiet, run_cause
@@ -54,29 +52,13 @@ async def emit(
     silent: bool | None = None,
     automated_cause: bool | None = None,
 ) -> None:
-    """Append to the outbox inside the caller's transaction — commits or rolls back with it.
+    """Append to the outbox inside the caller's transaction.
 
-    **`changes` is the diff (spec 123)** — the `kernel.changes` shape, written
-    at the payload's top level under `changes` because it describes the EVENT.
-    An event type whose spec declares `has_changes` must carry one: `None`
-    here raises `ChangesRequired`, `[]` is the explicit "nothing visible
-    changed" (a rank-only reorder). The refusal is the RADD-923 pattern — a
-    promise the emitter cannot forget to keep — and is what makes "updated"
-    in the audit log always answer *what*.
-
-    `occurred_at` overrides the row's timestamp for historical imports (naive UTC);
-    the monotonic `id` still orders the stream, so consumers are unaffected.
-
-    `silent` defaults to whether the caller is inside an `events.quiet()` scope, so
-    a bulk import marks its whole event stream without any service in the call
-    chain having to know an import is running. Pass it explicitly to override.
-
-    **`subjects` are IDS; the kernel writes the shape (RADD-923.)** Pass
-    `subjects={"item": item_id}` and `payload["item"]` becomes the canonical ref
-    for that entity, resolved through `registries.entity_refs`. Emitters do not
-    build refs, so they cannot build them differently — which is what fourteen
-    of them had done before RADD-922 fixed it by hand.
-    """
+    `changes` is the `kernel.changes` diff (spec 123), written at the payload's top level. A
+    type declaring `has_changes` must carry one: None raises `ChangesRequired`, `[]` means
+    "nothing visible changed". `subjects` are IDS (RADD-923): `{"item": id}` becomes
+    `payload["item"]`, the registered canonical ref. `occurred_at` backdates imports (naive
+    UTC; `id` still orders the stream). `silent` defaults to being inside `events.quiet()`."""
     subjects = _with_own_subject(str(entity_type), entity_id, payload, subjects)
     payload = await _with_subjects(session, payload, subjects)
     payload = _with_changes(str(event_type), payload, changes)
@@ -146,20 +128,10 @@ async def _with_subjects(
     payload: dict[str, Any] | None,
     subjects: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Expand `{entity_type: id}` into canonical refs on the payload (RADD-923).
-
-    The kernel registry is the only thing this module reaches for — `events` still
-    depends on no plugin, which is the property that lets it load first.
-
-    An entity type with no registered ref is a PROGRAMMING error, and the loader
-    already refuses to boot a plugin whose declared subjects are unresolvable.
-    Reaching here means an undeclared subject was passed at a call site, so it
-    raises in debug and degrades to a bare id in production — a slightly thin
-    payload is a better outcome than a failed user write, because the event is a
-    side effect of somebody else's action.
-    """
-    from radd.kernel.registry import registries
-
+    """Expand `{entity_type: id}` into canonical refs on the payload (RADD-923). An
+    unregistered subject is a programming error (the loader refuses undeclared ones): raise in
+    debug, degrade to a bare id in production — the event is a side effect of someone else's
+    write, and a thin payload beats failing it."""
     result = dict(payload or {})
     for entity_type, entity_id in (subjects or {}).items():
         if entity_id is None:
@@ -225,18 +197,11 @@ async def query_events(
     limit: int = 100,
     offset: int = 0,
 ) -> list[Event]:
-    """Filtered read of the audit log — the query behind the admin audit view.
+    """Filtered read of the (append-only) audit log; filters AND, newest first by default.
 
-    Any combination of filters ANDs together; results are the newest first by
-    default (id DESC). The events table is append-only, so this IS the audit trail.
-
-    `q` matches `search_text` (spec 123: the event's label, the entity's label,
-    the changed fields and their values) through the trigram index the
-    `d123ledger` migration creates — RADD-884's cast-the-whole-payload ILIKE
-    read every row. `changed_field` is a containment probe over
-    `payload -> 'changes'` (GIN, jsonb_path_ops). `exclude_event_types` is how
-    the audit view drops what `EventTypeSpec.audited=False` marks as noise.
-    """
+    `q` matches `search_text` through the `d123ledger` trigram index; `changed_field` is a
+    containment probe over `payload -> 'changes'` (GIN). `exclude_event_types` drops what
+    `EventTypeSpec.audited=False` marks as noise."""
     conditions = []
     if before_id is not None:
         conditions.append(Event.id < before_id)
@@ -339,13 +304,9 @@ async def set_offset(session: AsyncSession, consumer: str, event_id: int) -> Non
 
 
 async def resume_at_head(session: AsyncSession, consumers: Iterable[str]) -> int:
-    """Move each named consumer's cursor to the stream head and return it.
-
-    RADD-1372: how a `ConsumerResume.HEAD` consumer continues when its plugin is
-    re-enabled. The head-seeded runner seeds only a consumer's FIRST start, so
-    without this a disable→enable replayed every event since the disable into
-    requesters' inboxes. Written in the enabling transaction, so the skipped
-    stretch is exactly the time the plugin was switched off."""
+    """Move each named consumer's cursor to the stream head and return it — how a
+    `ConsumerResume.HEAD` consumer resumes on re-enable (RADD-1372), in the enabling
+    transaction, so the skipped stretch is exactly the time the plugin was off."""
     head = await latest_event_id(session)
     for name in consumers:
         await set_offset(session, name, head)
@@ -353,20 +314,10 @@ async def resume_at_head(session: AsyncSession, consumers: Iterable[str]) -> int
 
 
 async def consumer_status(session: AsyncSession) -> list[dict[str, Any]]:
-    """Every consumer's cursor vs the stream head, for monitoring: name, lag,
-    and seconds since the cursor last moved (computed server-side against the
-    same clock that wrote `updated_at`, so timezones can't skew it).
-
-    `registered` is the RADD-1093 honesty bit: the roster comes from the
-    kernel's `consumer_names` registry (what the CODE runs), not from table
-    rows — a cursor left behind by a rename renders as retired residue
-    instead of impersonating a permanently stalled worker for 12 days, which
-    is how attachments.gc read after RADD-745 folded it into events.cascade.
-    Rows are flagged, never auto-deleted: a DISABLED plugin's consumer is
-    absent from the registry too, and deleting its cursor would replay or
-    skip history on re-enable."""
-    from radd.kernel.registry import registries
-
+    """Every consumer's cursor vs the stream head: lag, and seconds since it moved (computed
+    by the clock that wrote `updated_at`). `registered` (RADD-1093) says whether the CODE
+    still runs it, so a renamed consumer's leftover cursor reads as residue, not a stall.
+    Never auto-deleted: a disabled plugin's consumer is unregistered too."""
     descriptions = {name: text for plugin in registries.plugins.values()
                     for name, text in plugin.consumer_descriptions}
     head = await latest_event_id(session)
