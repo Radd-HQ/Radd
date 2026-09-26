@@ -59,6 +59,8 @@ class SentMailKind(StrEnum):
     DIGEST = "digest"  # a batch of notifications
     SURVEY = "survey"  # a CSAT survey
     AUTOMATION = "automation"  # an automation's Send email
+    RECEIPT = "receipt"  # the desk's receipt for a new email ticket (RADD-1368)
+    RESOLUTION = "resolution"  # the desk's resolution notice (RADD-1368)
 
 
 class MailFailureReport(StrEnum):
@@ -439,8 +441,39 @@ OUTBOUND_CONSUMER_NAME = "mailintake.outbound"
 # Events read per outbound poll iteration (mirrors googlechat's batch).
 OUTBOUND_BATCH = 200
 
+# The receipt for a new email ticket (RADD-1368). The bracketed key in the
+# subject is what threads the requester's replies back onto the item
+# (`parsing.extract_reply_key`) — so the SUBJECT is a fixed wire constant while
+# the BODY is the admin-editable `mail_ack_body` setting.
+ACK_SUBJECT_TEMPLATE = "[{key}] {title}"
+
 # Outbound reply to the contact when an agent leaves a PUBLIC comment.
 REPLY_SUBJECT_TEMPLATE = "Re: [{key}] {title}"
+
+# --- the resolution notice (RADD-982, back as a setting in RADD-1368) ---
+
+# The `changes` diff token for a state move (`items/changes.py`'s
+# `scalar("state", …)`), copied as `csat.types` copies it.
+STATE_CHANGE_FIELD = "state"
+
+#: Its own sentence, not a `Re:` on the requester's — a resolution opens a topic
+#: the way the CSAT survey does, so the subject is pinned. Threading headers
+#: still come from the message store.
+RESOLVED_SUBJECT_TEMPLATE = "[{key}] Your request has been resolved"
+
+#: `{state}` is the state it actually landed in: "Resolved" and "Closed" mean
+#: different things, and the requester cannot look the difference up.
+RESOLVED_BODY_TEMPLATE = (
+    "Your request {key} — {title} — has been marked {state}.\n"
+    "\n"
+    "If it isn't sorted, reply to this email and the ticket picks up where it "
+    "left off."
+)
+
+RESOLVED_REASON_TEMPLATE = "You are receiving this because you contacted us about {key}."
+
+#: The csat plugin's id in the kernel registry, reached DEFERRED (`weak_depends`).
+CSAT_PLUGIN_ID = "csat"
 
 # Why each recipient is being written to — the footer of an outbound reply.
 REPLY_REASON_TEMPLATES = {

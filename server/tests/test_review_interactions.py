@@ -100,10 +100,14 @@ async def test_verdict_item_tokens_always_describe_original_draft(world):
     assert [f.message for f in outcome.verdict.findings] == ["Draft: Member request"]
 
 
-async def test_resolution_template_binds_automated_changes(world):
-    from radd.modules.mailintake.templates import TELL_REQUESTER_WHEN_RESOLVED as template
+async def test_resolution_node_binds_automated_changes(world):
     db, admin, _ = world
-    rule = await automations.create_rule(db, RuleCreate(name=template.name, nodes=list(template.nodes), edges=list(template.edges)), admin.id)
+    nodes = [
+        {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.updated", "include_automated": True}},
+        {"id": "notice", "kind": "action", "type": "mailintake.notify_resolution", "params": {}},
+    ]
+    edges = [{"source": "trg", "port": "out", "target": "notice"}]
+    rule = await automations.create_rule(db, RuleCreate(name="Resolution", nodes=nodes, edges=edges), admin.id)
     assert rule.enabled
     assert rule.id in [r.id for r, _ in await automations.rules_for_trigger(db, "item.updated")]
     assert rule.id in [r.id for r, _ in await automations.rules_for_trigger(db, "item.updated", automated=True)]
@@ -240,8 +244,7 @@ async def test_private_search_candidates_do_not_hide_readable_milestone(world):
 
 async def test_resolution_mail_keeps_lifecycle_contacts_and_csat_policy(world, monkeypatch):
     from types import SimpleNamespace
-    from radd.kernel import registries
-    from radd.modules.mailintake import automation, service as mail
+    from radd.modules.mailintake import automation, resolved, service as mail
     from radd.modules.workflow.models import State
     db, admin, project = world
     item = await items.create_item(db, ItemCreate(project_id=project.id, title="Request"), admin)
@@ -257,9 +260,10 @@ async def test_resolution_mail_keeps_lifecycle_contacts_and_csat_policy(world, m
     async def available(*args, **kwargs): return True
     async def no_survey(*args, **kwargs): return False
     monkeypatch.setattr(mail, "outbound_configured", available)
-    monkeypatch.setattr(automation.settings_service, "resolve", no_survey)
+    monkeypatch.setattr(resolved, "_csat_announces", no_survey)
+    # The node runs whatever the `mail_send_resolved` setting says (default OFF).
     plan = await automation.plan_resolution(ctx)
-    assert plan.resolves and {r.email for r in plan.recipients} == {"requester@example.test", "copied@example.test"}
+    assert plan.resolves and {r.email for r in plan.notice.recipients} == {"requester@example.test", "copied@example.test"}
     delivered = []
     async def send(*args, **kwargs): delivered.append(kwargs)
     monkeypatch.setattr(mail, "send_item_mail", send)
@@ -268,8 +272,7 @@ async def test_resolution_mail_keeps_lifecycle_contacts_and_csat_policy(world, m
     payload["changes"][0]["from"] = done.name
     assert not (await automation.plan_resolution(ctx)).resolves
     payload["changes"][0]["from"] = todo.name
-    monkeypatch.setitem(registries.plugins, "csat", object())
-    monkeypatch.setattr(automation.settings_service, "resolve", available)
+    monkeypatch.setattr(resolved, "_csat_announces", available)
     assert not (await automation.plan_resolution(ctx)).resolves
 
 

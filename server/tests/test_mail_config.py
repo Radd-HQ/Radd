@@ -921,8 +921,8 @@ async def test_the_ack_and_the_reply_both_leave_from_the_source_they_arrived_at(
     requester wrote to never appeared on anything Radd sent back. The fix is ONE
     resolution point inside the transport — which is exactly why proving it for
     the acknowledgement and the reply says something about notification mail
-    too (RADD-1318: the "acknowledgement" leg is an automation's threaded Send
-    email now — the same transport call), and why the third leg is driven for real in `test_notify_mailer.py`
+    too (the "acknowledgement" leg here is an automation's threaded Send email —
+    the same transport call the desk's receipt makes), and why the third leg is driven for real in `test_notify_mailer.py`
     rather than re-implemented here.
     """
     actor, project, _ = world

@@ -119,6 +119,11 @@ async def ingest_email(
             plan.message_id or "(no Message-ID)",
         )
         return _status(response, 503, {"error": "intake failed; retry later"})
+    # Post-commit: never acknowledge a rolled-back item — and the commit is
+    # what puts the inbound Message-ID in the store before the receipt reads it
+    # back out as In-Reply-To. Both intake paths commit first for this reason.
+    if outcome.ack is not None:
+        await service.send_ack(outcome.ack)
     response.status_code = _RESULT_STATUS[outcome.result]
     return {"result": outcome.result.value, "item": outcome.item_key or None}
 

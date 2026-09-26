@@ -725,13 +725,13 @@ def test_send_message_without_html_stays_a_single_plain_part(monkeypatch):
     assert _FakeSmtp.sent[-1].get_content_type() == "text/plain"
 
 
-# --- mail on the issue's thread: the receipt's shape, now an automation's ------
+# --- mail on the issue's thread: the receipt's shape, and an automation's -----
 #
-# RADD-1318 deleted the built-in receipt (`send_ack`, `mail_send_ack`, the
-# `mail_ack_body` setting). What it guaranteed — the default sender row, the env
-# fallback, `[KEY]` pinned, In-Reply-To from the store, its own Message-ID
-# recorded so a reply threads back — is now the Send email action's `thread`
-# option, and these tests hold that path to the same bar.
+# The desk's receipt (`service.send_ack`, switched by `mail_send_ack`) and the
+# Send email action's `thread` option both go through `send_item_mail`. What
+# the receipt guarantees — the default sender row, the env fallback, `[KEY]`
+# pinned, In-Reply-To from the store, its own Message-ID recorded so a reply
+# threads back — these tests hold the automation path to as well.
 
 
 @pytest.fixture

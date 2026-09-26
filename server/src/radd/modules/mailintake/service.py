@@ -9,18 +9,24 @@ re-exported from `transport.py` (RADD-968, widened by RADD-983/1036): they are
 the seam NOTIFY, CSAT and the automation `send_email` action call to put a
 message on the wire, and a caller looks for a module's public functions here,
 not in a file named after the implementation. Since RADD-983 there is no mail
-leaving the INSTANCE by any other route. (The acknowledgment that used to live
-here is an automation template since RADD-1318.)
+leaving the INSTANCE by any other route — the receipt (`send_ack`) included.
 """
 
+import re
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import mailrender
+from radd.config import settings
+from radd.db import SessionLocal
 from radd.modules.auth.models import User
 from radd.modules.auth.types import UserSource
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey
 
 from .models import MailContact
 from .transport import (
@@ -31,7 +37,10 @@ from .transport import (
     send_item_mail,
     send_plain_mail,
 )
-from .types import SentMailKind
+from .types import ACK_SUBJECT_TEMPLATE, SentMailKind
+
+if TYPE_CHECKING:
+    from .intake import AckPlan
 
 __all__ = [
     "MailFailure",
@@ -41,6 +50,7 @@ __all__ = [
     "mail_health",
     "mailable_user",
     "outbound_configured",
+    "send_ack",
     "send_item_mail",
     "send_plain_mail",
     "SentMailKind",
@@ -172,3 +182,66 @@ async def upsert_contact(
             contact.name = name
     await session.flush()
     return contact
+
+
+#: The `{{token}}` idiom `canned.render` and `automations.templating` also use.
+#: An unknown token, or one whose value is empty, stays VERBATIM — visible in
+#: the sent mail, never an error.
+_ACK_TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
+
+
+def _render_ack_body(template: str, ctx: dict[str, str]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        value = ctx.get(match.group(1))
+        return match.group(0) if not value else value
+
+    return _ACK_TOKEN_RE.sub(replace, template)
+
+
+async def send_ack(ack: "AckPlan", session: AsyncSession | None = None) -> str | None:
+    """Send the receipt for a new email ticket, if `mail_send_ack` is on for its
+    project (RADD-1368). Returns the Message-ID, or None when nothing was sent.
+
+    Called POST-COMMIT by both intake paths with an `intake.AckPlan`, so the
+    inbound Message-ID is already in the store the transport reads In-Reply-To
+    from. `session` is for a caller inside a transaction (a test); production
+    passes none and a short-lived one is borrowed for the settings read.
+
+    The subject is `[KEY] title`, pinned: the bracketed key is the threading
+    fallback, and the requester's own subject carries none. The body is the
+    `mail_ack_body` setting — an unset OR blank override sends the default
+    wording. Never raises: the transport answers "nowhere to send from" with
+    None and reports failures as `mail.failed`.
+    """
+    async def read(own: AsyncSession) -> tuple[bool, str]:
+        enabled = await settings_service.resolve(own, SettingKey.MAIL_SEND_ACK, project_id=ack.project_id)
+        body = await settings_service.resolve(own, SettingKey.MAIL_ACK_BODY)
+        return bool(enabled), str(body or "")
+
+    if session is not None:
+        enabled, template = await read(session)
+    else:
+        async with SessionLocal() as own:
+            enabled, template = await read(own)
+    if not enabled:
+        return None
+    if not template.strip():
+        template = settings.mail_ack_body
+    link = mailrender.issue_url(settings.app_base_url, ack.item_key)
+    body = _render_ack_body(
+        template, {"key": ack.item_key, "title": ack.title, "link": link, "requester_name": ack.name}
+    )
+    rendered = mailrender.contact_notice(
+        mailrender.ItemMail(key=ack.item_key, title=ack.title, base_url=settings.app_base_url), body=body
+    )
+    return await send_item_mail(
+        session,
+        item_id=ack.item_id,
+        to_address=ack.email,
+        to_name=ack.name,
+        subject=ACK_SUBJECT_TEMPLATE.format(key=ack.item_key, title=ack.title),
+        text=rendered.text,
+        html=rendered.html,
+        pin_subject=True,
+        kind=SentMailKind.RECEIPT,
+    )

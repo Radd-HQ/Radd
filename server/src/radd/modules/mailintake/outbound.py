@@ -4,11 +4,14 @@ A public comment on a ticket that came in by email is mailed back to the person
 who raised it, in a message their client threads under the original rather than
 stacking as a new conversation.
 
-**One message since RADD-1318.** The resolution notice (RADD-982) shared this
-consumer until it became an automation template — the desk sends nothing on its
-own that nobody switched on. The plan still answers for itself through
-`OutboundPlan` (`recipients`, `subject`, `comment_id`, `pin_subject`,
-`render(recipient)`), so a second message is a planner and a line in `_plan`.
+**Two messages, one consumer.** The comment reply (`reply.py`) and the
+resolution notice (`resolved.py`, RADD-982 — gated on the `mail_send_resolved`
+setting since RADD-1368) are the same job: tell the external contact something
+that happened on their ticket, read off the same stream with the same
+at-most-once cursor. What differs is the PLAN, and the plan answers for itself
+through `OutboundPlan` (`recipients`, `subject`, `comment_id`, `pin_subject`,
+`kind`, `render(recipient)`), so a third message is a planner and a line in
+`_plan`.
 
 Cursor idiom = the shared head-seeded scaffold (`events.runner.run_head_seeded`):
 consumer offset `mailintake.outbound`, first start seeds AT THE STREAM HEAD (a
@@ -42,9 +45,10 @@ from radd.modules.comments.types import CommentEvent, CommentOrigin, CommentVisi
 from radd.modules.events import runner
 from radd.modules.events.service import Event
 from radd.modules.items import service as items
+from radd.modules.items.enums import ItemEvent
 from radd.modules.projects import service as projects_service
 
-from . import service
+from . import resolved, service
 from .reply import OutboundReply, Recipient, recipients_for
 from .transport import MailAttachment
 from .types import OUTBOUND_BATCH, OUTBOUND_CONSUMER_NAME, REPLY_SUBJECT_TEMPLATE, SentMailKind
@@ -71,6 +75,7 @@ class OutboundPlan(Protocol):
     subject: str
     comment_id: uuid.UUID | None
     pin_subject: bool
+    kind: SentMailKind
     recipients: tuple[Recipient, ...]
 
     async def prepare(self, session: AsyncSession) -> tuple["OutboundPlan | None", tuple[MailAttachment, ...]]:
@@ -116,6 +121,8 @@ async def _plan(session: AsyncSession, event: Event) -> OutboundPlan | None:
         return None  # unconfigured = advance silently, plan nothing
     if event.event_type == CommentEvent.CREATED.value:
         return await _plan_reply(session, event)
+    if event.event_type == ItemEvent.UPDATED.value:
+        return await resolved.plan(session, event)
     return None
 
 
@@ -189,6 +196,6 @@ async def _deliver(plan: OutboundPlan) -> None:
                 comment_id=prepared.comment_id,
                 pin_subject=prepared.pin_subject,
                 attachments=images,
-                kind=SentMailKind.REPLY,
+                kind=prepared.kind,
             )
         await session.commit()

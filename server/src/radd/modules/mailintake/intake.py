@@ -123,6 +123,25 @@ class Outcome:
     item_id: uuid.UUID | None = None
     item_key: str = ""
     reason: str = ""
+    #: Set when a NEW item was opened by a message we can answer — the caller
+    #: sends the receipt AFTER the transaction commits, never before, and only
+    #: if `mail_send_ack` is on for the project (`service.send_ack`).
+    ack: "AckPlan | None" = None
+
+
+@dataclass(frozen=True)
+class AckPlan:
+    """Everything one receipt needs, so a caller reads `outcome.ack` and nothing
+    else. In-Reply-To is not carried: the transport resolves it from
+    `mail_messages`, which already holds the inbound id recorded in the
+    transaction the caller commits before sending (RADD-970)."""
+
+    item_id: uuid.UUID
+    project_id: uuid.UUID
+    email: str
+    name: str
+    item_key: str
+    title: str
 
 
 @dataclass(frozen=True)
@@ -564,6 +583,27 @@ async def _create(
         Result.CREATED,
         item_id=created.id,
         item_key=created.key,
+        ack=_ack_plan(plan, created, own_addresses or set()),
+    )
+
+
+def _ack_plan(plan: EmailPlan, created, own_addresses: set[str]) -> "AckPlan | None":
+    """The receipt for a mail-born issue, or None (RADD-995).
+
+    A receipt answers a MESSAGE, not an account: whoever sent it gets one,
+    known user or not. The only refusals are an address we cannot answer (no
+    `From:`) and one of our own, which would be a mail loop with a friendly
+    subject. Only on CREATE — a receipt per reply would be an autoresponder.
+    """
+    if not plan.sender_email or _is_ours(plan.sender_email, own_addresses):
+        return None
+    return AckPlan(
+        item_id=created.id,
+        project_id=created.project_id,
+        email=plan.sender_email,
+        name=plan.sender_name,
+        item_key=created.key,
+        title=created.title,
     )
 
 

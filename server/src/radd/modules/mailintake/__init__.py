@@ -1,6 +1,7 @@
 from radd.kernel import EntityLinkSpec
 from radd.kernel import CapabilitySpec, EventTypeSpec, PluginUiManifest
 from radd.kernel import RaddPlugin
+from radd.kernel import SettingSpec
 
 from . import dispatcher, registry, seeding
 from .config_router import router as config_router
@@ -8,7 +9,6 @@ from .signature_router import router as signature_router
 from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .rules_router import router as rules_router
-from .templates import TEMPLATES
 from .automation import RESOLUTION_NODE
 from .types import MailEvent, OUTBOUND_CONSUMER_NAME
 
@@ -37,11 +37,54 @@ plugin = RaddPlugin(
     # the module is optional and disableable, and a missing one must fall through
     # to the next rule rather than cost a customer their email. Same edge
     # `attachments` declares for its own LLM storage rule.
-    weak_depends=("ai",),
+    # csat (RADD-982/1368): it depends_on THIS module, so the resolution
+    # notice's "yield to the survey" question can only be asked the deferred
+    # way — and a disabled csat answering by absence is exactly right.
+    weak_depends=("ai", "csat"),
     routers=(router, config_router, rules_router, signature_router),
-    # RADD-1318: the receipt and the resolution notice, as opt-in automations.
-    automation_templates=TEMPLATES,
+    # The resolution notice as a node too, for rules that want it on their own
+    # conditions; it shares `resolved.py`'s guards and wording.
     automation_nodes=(RESOLUTION_NODE,),
+    # RADD-1368: what the desk sends a requester on its own. Settings on the
+    # Email page, run by this module, OFF until someone switches them on.
+    # `section="email"` lands them on Settings → Email (RADD-930); the project
+    # scope renders on a project's General page.
+    settings_keys=(
+        SettingSpec(
+            key="mail_send_ack",
+            type="bool",
+            scopes=("instance", "project"),
+            label="Receipt for new email tickets",
+            description=(
+                "Reply to the sender when their email opens a new issue, on the issue's email "
+                "thread so their reply comes back to it. Replies to an existing issue get no receipt."
+            ),
+            section="email",
+        ),
+        SettingSpec(
+            key="mail_ack_body",
+            type="string",
+            scopes=("instance",),
+            label="Receipt text",
+            multiline=True,
+            description=(
+                "Plain-text body of the receipt. Tokens: {{key}}, {{title}}, {{link}}, "
+                "{{requester_name}} — an unrecognised token is sent as written. Empty sends the default wording."
+            ),
+            section="email",
+        ),
+        SettingSpec(
+            key="mail_send_resolved",
+            type="bool",
+            scopes=("instance", "project"),
+            label="Resolution notice",
+            description=(
+                "Email an issue's external contacts when it moves into a done state. A project with "
+                "satisfaction surveys on sends the survey instead, which already says the issue is resolved."
+            ),
+            section="email",
+        ),
+    ),
     # Seed rows from env BEFORE the poller starts, or the first tick finds
     # no sources on a fresh instance (RADD-958).
     on_startup=(seeding.seed_from_env, dispatcher.start),

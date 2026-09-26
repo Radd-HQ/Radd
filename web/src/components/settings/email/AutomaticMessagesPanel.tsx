@@ -1,29 +1,34 @@
-import { Link } from "@tanstack/react-router";
-import { Slot, SlotId } from "@radd/plugin-sdk";
+import { ScopedSettingsEditor } from "../ScopedSettingsEditor";
+import { SettingScope } from "../../../lib/types";
 
 /**
- * What the desk sends on its own (RADD-1318): only a person's public reply,
- * relayed to the requester. The receipt and the resolution notice were
- * switches here (`mail_ack_body`, `mail_send_resolved`) that defaulted ON —
- * mail nobody chose to send. Both are automation templates now; this panel
- * says so instead of offering switches that no longer exist.
+ * What the desk sends a requester on its own (RADD-1368): the receipt for a
+ * new email ticket, its text, and the resolution notice. Settings the
+ * mailintake plugin contributes to the `email` section and runs itself — all
+ * OFF until someone switches them on here. A project can override either
+ * switch on its own General page.
+ *
+ * Rendered by the generic editor: the receipt text is a `multiline` setting,
+ * so it gets a textarea without a bespoke card. Public replies are relayed to
+ * the thread's contacts regardless — that is the conversation, not a message
+ * the desk decides to send.
  */
 export function AutomaticMessagesPanel() {
   return (
     <section data-automatic-messages>
-      <div className="mb-2">
+      <div className="mb-3">
         <h3 className="text-sm font-semibold text-heading">Automatic messages</h3>
+        <p className="text-[11px] text-fg-muted">
+          What the desk sends without being asked. Public replies always reach the issue's
+          external contacts; these are the messages beyond them. Each switch can be overridden per
+          project.
+        </p>
       </div>
-      <p className="text-[13px] text-fg-muted">
-        Public replies are relayed to the issue's external email contacts. A receipt for new email
-        tickets and a notice when an issue is resolved are automations you switch on: start from the “Acknowledge
-        new email tickets” or “Tell the requester when resolved” template in{" "}
-        <Link to="/settings/$" params={{_splat: "automations"}} className="text-accent-text hover:underline">
-          Automations
-        </Link>
-        .
-      </p>
-      <Slot id={SlotId.integrationSettings} integration="mailintake" label="Email" />
+      <ScopedSettingsEditor
+        scope={SettingScope.instance}
+        section="email"
+        emptyLabel="No automatic messages are configurable — the email plugin is disabled."
+      />
     </section>
   );
 }

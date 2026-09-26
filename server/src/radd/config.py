@@ -488,9 +488,22 @@ class Settings(BaseSettings):
     mail_poll_seconds: float = 60.0
     mail_project_key: str = ""
     # Requester loop (spec 62): the outbound consumer mails public comments back.
-    # The receipt (`mail_send_ack`/`mail_ack_body`) and the resolution notice
-    # (`mail_send_resolved`) are gone since RADD-1318 — the desk sends nothing
-    # nobody switched on; both are automation templates.
+    # The receipt and the resolution notice (RADD-1368) are `email`-section
+    # scalar settings on Settings → Email; these are their cascade defaults.
+    # Both OFF: nothing reaches a requester's mailbox that nobody switched on
+    # (RADD-1318's rule, kept when the switches came back to the page).
+    mail_send_ack: bool = False
+    mail_send_resolved: bool = False
+    # The receipt's plain-text body. `{{key}}`/`{{title}}`/`{{link}}`/
+    # `{{requester_name}}` substitute (`mailintake.service._render_ack_body`);
+    # an unset OR blank override sends this wording.
+    mail_ack_body: str = (
+        "Your request has been received and is being tracked as {{key}}.\n"
+        "\n"
+        "We'll follow up by email. You can reply to this message to add details "
+        "— replies are attached to the ticket automatically (keep [{{key}}] in "
+        "the subject)."
+    )
     mail_outbound_poll_seconds: float = 5.0
     # HTTPS ingest (RADD-953). The shared secret the Cloudflare Email Worker
     # signs each raw message with — `openssl rand -base64 32`. EMPTY REJECTS

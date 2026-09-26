@@ -39,7 +39,8 @@ export function EmailSettingsPage() {
           the address and an app password. Each source has an ordered{" "}
           <strong>routing chain</strong>: the first matching rule decides the project, and anything
           unmatched falls to the source's default. Environment variables seed the first rows on an
-          empty instance and are then ignored — these rows are the truth.
+          empty instance and are then ignored — these rows are the truth. Email received, sent and
+          failed are also automation triggers, for anything the switches below don't cover.
         </>
       }
     >

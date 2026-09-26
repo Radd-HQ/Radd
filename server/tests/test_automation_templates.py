@@ -85,8 +85,9 @@ async def test_catalog_and_templates_report_actual_registry_owners(db, admin):
     assert listed
     for template in listed:
         assert template.plugin == template_owners[template.key]
-    # The real mail plugin's display group has a different name.
-    assert any(template.plugin == "mailintake" and template.group == "Email" for template in listed)
+    # A display group is not the owner: automations' own templates group as
+    # "Issues"/"Chat" and still report the automations plugin.
+    assert any(template.plugin == "automations" and template.group != "Automations" for template in listed)
 
 
 async def test_withdrawn_owner_disappears_from_catalog_and_templates(db, admin):

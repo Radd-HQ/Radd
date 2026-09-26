@@ -33,6 +33,8 @@ export interface ScopedSetting {
   choices?: string[] | null;
   /** RADD-846: render a masked input (the value itself is admin-readable). */
   secret?: boolean;
+  /** RADD-1368: prose (a mail body) — the editor renders a textarea. */
+  multiline?: boolean;
   /** RADD-930: the settings surface this key belongs on, declared by the owning
    * plugin. "" (or absent) = the scope's General page. */
   section?: string;

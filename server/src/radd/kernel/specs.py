@@ -977,6 +977,9 @@ class SettingSpec:
     # The editor renders a masked input; the value itself stays admin-readable
     # over the settings API (RADD-846's recorded decision).
     secret: bool = False
+    # RADD-1368: a STRING setting that holds prose (a mail body) — the editor
+    # renders a textarea instead of a single-line input. Presentation only.
+    multiline: bool = False
     # RADD-930: which settings SURFACE this key belongs on — the owning plugin's
     # call, not the kernel's, and not re-derived client-side. "" = the scope's
     # General page. General renders the REMAINDER (empty sections plus any

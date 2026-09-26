@@ -221,6 +221,27 @@ function SettingRow({
               ))}
             </SelectField>
           </div>
+        ) : row.multiline ? (
+          // Prose: a textarea that writes on blur (Enter is a newline here),
+          // Escape reverts — the text row's autosave, minus the Enter commit.
+          <textarea
+            aria-label={row.label}
+            value={value}
+            rows={5}
+            placeholder={String(row.default ?? "")}
+            onFocus={() => setEditing(true)}
+            onChange={(event) => setValue(event.target.value)}
+            onBlur={commitText}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setValue(stored);
+                setEditing(false);
+                event.currentTarget.blur();
+              }
+            }}
+            disabled={disabled}
+            className="min-h-24 flex-1 rounded-md border border-strong bg-surface px-2.5 py-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:opacity-50"
+          />
         ) : (
           <input
             type={row.type === "int" ? "number" : row.secret ? "password" : "text"}

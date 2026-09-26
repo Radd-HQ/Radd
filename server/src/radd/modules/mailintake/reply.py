@@ -27,7 +27,7 @@ from radd.modules.auth import service as auth
 
 from . import service
 from .transport import MailAttachment
-from .types import REPLY_REASON_TEMPLATES, MailRecipientKind
+from .types import REPLY_REASON_TEMPLATES, MailRecipientKind, SentMailKind
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,7 @@ class OutboundReply:
     #: the consumer now ships two kinds of message and reads this off both,
     #: rather than knowing which one it holds (`outbound.OutboundPlan`).
     pin_subject: bool = False
+    kind: SentMailKind = SentMailKind.REPLY
 
     async def prepare(self, session: AsyncSession) -> tuple["OutboundReply | None", tuple[MailAttachment, ...]]:
         """The body as it is NOW, not as the event excerpt had it (RADD-988): a

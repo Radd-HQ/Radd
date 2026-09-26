@@ -15,12 +15,25 @@ from radd.modules.events import service as events
 from radd.modules.items import service as items_service
 from radd.modules.items.enums import ItemEntity
 from radd.modules.projects import service as projects_service
+from radd.modules.settings import service as settings_service
+from radd.modules.settings.types import SettingKey
 
 from .models import CsatSurvey
 from .schemas import PublicCsatRead, PublicCsatSubmit
 from .types import PAYLOAD_COMMENT_EXCERPT_CHARS, CsatEntity, CsatEvent
 from radd.clock import utcnow
 
+
+
+async def announces_resolution(session: AsyncSession, project_id: uuid.UUID) -> bool:
+    """Will this project's requesters already be told their ticket resolved, by
+    the survey? (RADD-982.) Its first line IS "your request has been resolved",
+    so mail's resolution notice yields to it — the survey also asks a question.
+
+    Stated here because the condition is csat's own setting; `mailintake`
+    reaches this DEFERRED (`weak_depends`) since csat depends on it.
+    """
+    return bool(await settings_service.resolve(session, SettingKey.CSAT_ENABLED, project_id=project_id))
 
 
 async def survey_for_item(session: AsyncSession, item_id: uuid.UUID) -> CsatSurvey | None:

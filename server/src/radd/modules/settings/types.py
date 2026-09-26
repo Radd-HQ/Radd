@@ -98,6 +98,12 @@ class SettingKey(StrEnum):
     # Spec 122: a collaborative session writes a history row only when the
     # previous one is older than this many seconds (or the save is final).
     PAGE_COLLAB_VERSION_WINDOW_SECONDS = "page_collab_version_window_seconds"
+    # RADD-1368: what the desk sends a requester on its own — Settings → Email.
+    # Both switches are per project as well as instance (one instance runs a
+    # service desk beside a dev project) and OFF by default.
+    MAIL_SEND_ACK = "mail_send_ack"
+    MAIL_ACK_BODY = "mail_ack_body"
+    MAIL_SEND_RESOLVED = "mail_send_resolved"
     # Directory settings page + automatic user sync (spec 85) — instance-only.
     LDAP_URL = "ldap_url"
     LDAP_USER_DOMAIN = "ldap_user_domain"
