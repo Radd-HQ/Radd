@@ -17,7 +17,11 @@ import subprocess
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
-LEDGER = "research/plugin-isolation"
+# The ledger is LOCAL working data (RADD-1374): a per-file hash inventory in git
+# made every commit regenerate megabytes of JSON, so it lives in an ignored
+# directory and the module table in research/plugin-isolation/README.md is the
+# record. Run on demand; nothing in CI depends on it.
+LEDGER = "research/plugin-isolation/ledger"
 GENERATED = {f"{LEDGER}/{name}.json" for name in ("inventory", "review", "retired")}
 SOURCE_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".css", ".sh", ".sql"}
 CONFIG_SUFFIXES = {".json", ".toml", ".yaml", ".yml", ".ini", ".lock", ".tpl", ".mako", ".html"}

@@ -28,3 +28,5 @@ var/
 
 # maintainer-personal agent config (points at the owner instance)
 .mcp.json
+# RADD-1374: the plugin-isolation hash ledger is local working data.
+research/plugin-isolation/ledger/

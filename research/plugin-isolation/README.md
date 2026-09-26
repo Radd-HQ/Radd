@@ -4,11 +4,42 @@ The objective is the complete audit and refactor requested on 2026-09-25. This i
 
 ## Evidence and coverage
 
-`inventory.json` accounts for every existing tracked repository artifact, independent of file extension, plus nonignored new implementation/configuration files in the application, SDK, examples, scripts, deployment and CI roots. It records artifact roles, hashes, import hints, builtin and example manifests, colocated UI files, and package dependencies. Untracked documents/screenshots and gitignored local state are outside discovery; stage a new non-code artifact to include it. The only tracked-file exclusions are the three generated audit ledgers, whose own hashes would be circular.
+The record is the **module review ledger** below: 57 builtin modules and the
+external example, each with its review status and the issue that moved it.
 
-Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownership decisions and evidence per artifact; changed bytes reset that entry to unreviewed. Removed entries remain in `retired.json` for explicit disposition. Documentation, assets, generated files and tests have distinct roles, but no role automatically grants ownership approval. The module table below remains a manual review ledger.
+`scripts/plugin_inventory.py` is an on-demand discovery tool. It inventories
+every tracked artifact (and new source/config files), with hashes, import hints,
+manifests and package dependencies, and keeps per-file review notes. Its output
+lives in `research/plugin-isolation/ledger/`, which is gitignored (RADD-1374). A
+per-file hash ledger committed to git made every commit — a docs typo included —
+regenerate about 4 MB of JSON to satisfy a CI freshness gate, and reset a changed
+file's review to "unreviewed". The CI job is gone. The durable invariants live in
+tests: `server/tests/test_module_contracts.py` (declared cross-module imports) and
+`web/scripts/plugin-boundaries.test.mjs` (host/plugin frontend boundaries).
 
-`python scripts/plugin_inventory.py --check` checks coverage/freshness and review schema without rewriting the ledgers; CI runs it alongside isolated discovery tests. `--require-reviewed` additionally refuses unreviewed/partial current or retired entries and exceptions without a reason. This is a record-completeness gate, not proof that a claimed review or test result is valid. The final audit must inspect the cited evidence and actual runtime behavior. Static imports/declarations are discovery hints and cannot establish dynamic registration or semantic ownership by themselves.
+Static imports and declarations are discovery hints; they cannot establish
+dynamic registration or ownership by themselves. The final audit inspects actual
+runtime behaviour.
+
+## Course correction (2026-09-26)
+
+A four-way review of RADD-1340–1366 changed the plan (Hussein's decisions):
+
+- **Core modules are static plugins** (RADD-1373). Core, non-disableable modules
+  keep their UI in `modules/<m>/ui/src` and contribute through the same slot API,
+  but the host bundles and registers them at boot. Only optional plugins
+  (`core=False`) are federated remotes. Moving core UI into remotes had bought
+  nothing (a core plugin cannot be withdrawn) and cost a load gap on every
+  picker, uncached refetches, and host code still importing plugin source by
+  relative path.
+- **The per-file ledger left git and CI** (RADD-1374); see above.
+- **Confirmed bugs** from the moves are tracked as RADD-1371 (automation catalog
+  500 with Milestones on, page-space gate, aborted writes) and RADD-1372 (live
+  plugin toggling: process-wide drain and 503, skipped shutdown hooks, consumers
+  replaying their backlog on re-enable).
+- **Integration behaviours returned to their pages** as plain settings run by the
+  owning plugin (RADD-1367: Email, VCS, Alertmanager) — separate from isolation,
+  decided the same day.
 
 ## Work groups
 
@@ -31,6 +62,12 @@ Refresh with `python scripts/plugin_inventory.py`. `review.json` records ownersh
 | RADD-1362 | Independent scheduling contributions and preview lifecycle | Verified; Waiting for release |
 | RADD-1363 | Owner-declared entity destinations for audit navigation | Verified; Waiting for release |
 | RADD-1364 | Audit page/history/footer ownership and exact scope access | Verified; Waiting for release |
+| RADD-1365 | Automations frontend contribution | Verified; Waiting for release |
+| RADD-1366 | VCS settings and connector-owned declarations | Revised after review; Waiting for release |
+| RADD-1371 | Automations review fixes (catalog 500, page-space gate, aborted writes) | In progress |
+| RADD-1372 | Live plugin toggling: per-plugin drain, no process-wide 503, no backlog replay | In progress |
+| RADD-1373 | Core modules as static plugins; pending state for optional remotes | Todo |
+| RADD-1374 | Ledger out of git and CI; module table is the record | Waiting for release |
 | RADD-1347 | Issue, automation and editor integrations | In progress |
 | RADD-1348 | Pages, dashboards, widgets and navigation | Pending |
 | RADD-1349 | Backend public seams, dependencies and background lifecycle | Pending |
@@ -678,3 +715,77 @@ not a new ability to disable them in Settings. Backend/action separation,
 remaining VCS/Email/Alertmanager implementation and built-in item quick-action
 ownership stay in the epic's full inventory. Moved files whose entire behavior
 has not been individually audited remain partially reviewed.
+
+## RADD-1366 — VCS settings and connector-owned declarations
+
+VCS now contributes its settings/navigation and shared connection/repository and
+identity-map workflow. Forgejo, GitHub and GitLab each contribute their own tab,
+endpoint configuration, guidance and legacy redirect through the public VCS
+contract. Host settings/transport/provider lists and dead connector constants
+were removed. Provider tab order is explicit, independent of import timing; a
+missing requested provider keeps its URL selection and restores when available.
+The core VCS page offers an empty state when all connector tabs are unavailable.
+
+Shared request cancellation and entity invalidation are SDK primitives used by
+VCS, Automations and the host. Provider reads have fresh mounted scopes and hide
+denied cached data; permission withdrawal disposes all credential drafts. Auth,
+Projects and Time Logging own their directory/category lookups, while VCS retains
+saved IDs and identity selections during their withdrawal. Time Logging formats
+held durations on the server using its configured working-day units; VCS's
+unmatched-author DTO carries that display value with the original seconds.
+Identity rows wait for their reads before reporting an empty or fully matched
+state. Screenshot review caught squeezed repository names, now rendered on a
+separate row and checked by browser measurement.
+
+Stage evidence:
+
+- Host plus 31 executable remotes built against SDK 1.13, with nine public
+  contract packages. All 79 frontend tests passed, including ownership/import
+  guards, shared entity invalidation and federation parity. All 80 backend tests
+  passed across time mirroring, connector configuration, federation, module
+  contracts and plugin workflow (three existing dependency warnings). The new
+  DB-backed endpoint test proves eight hours renders as `1d 1h` for a seven-hour
+  working day. Changed Python files passed Ruff.
+- `browser-vcs-settings.mjs` passed 13 groups using actual VCS, all three
+  connector, Auth, Projects, Time Logging, Automations and Audit bundles: 210
+  requests, seven writes against mocked fixtures, two confirmed transport
+  aborts. It checks initial absence, matching URL/legacy paths, preserved
+  credentials, mirroring/backfill/test, actual person selection/replay/unmapping,
+  missing lookup owners, denied refresh, provider and VCS withdrawal/recovery,
+  failed provider and VCS bundle replacement, and permission loss/recovery.
+  Light/dark screenshots inspected at `/tmp/radd-vcs-settings-{light,dark}.png`.
+- Existing Automations actual-bundle proof passed 16 groups/156 requests/four
+  aborts after adopting the SDK mutation lifetime. Existing Audit proof passed
+  17 groups/77 requests/three aborts after shared invalidation extraction.
+- Local backend reloaded and served bytes checked for VCS, GitLab, Time Logging,
+  Automations, Projects and Auth. Its existing GitLab connection/repository are
+  still present; no credentials are exposed by the reads. There are no locally
+  unmatched authors, so duration content is proven by the DB-backed test rather
+  than a local row. The temporary probe token was discarded. Leave/GitHub/Forgejo
+  remain disabled and the complete enabled-plugin list is unchanged. No external
+  push/deployment occurred.
+
+**Revised 2026-09-26 after review** (same issue, before commit): a static review
+found four defects. The SDK `useContributionMutation` keyed its lifetime on the
+whole instance's plugin list and ABORTED in-flight writes on any capability
+change — an accepted create reported "no longer current" and a retry duplicated
+it; a backfill died on a tab switch. It is deleted: VCS and Automations use plain
+`useMutation`. The category select showed a raw UUID while categories loaded; it
+now waits, and names archived or deleted categories. The connectors' legacy
+redirect pages existed only for stale audit links; their `EntityLinkSpec`s name
+`/settings/vcs?host=<provider>` and the redirects are gone. The host's
+`invalidateEntities` lost its `EntityTag` typing; it wraps the SDK function typed
+again. Also: connector configs carry wording only (paths/tags/audit types follow
+from the provider key), each repository row owns its mutations (one save no longer
+disables every row), removals confirm, the repo toggles are SDK `Switch`es, the
+`VcsScope`/per-mount identities are gone, and the page no longer embeds the
+automation panel (RADD-1369 brings the behaviours back as switches).
+`browser-vcs-settings.mjs` was updated to match and passes 13 groups (149
+requests, 7 mocked writes, one read aborted on VCS withdrawal; no write aborted).
+The loading flash while connector bundles register is RADD-1373's pending state.
+
+Remaining ownership is explicit: the VCS issue-reference panel, backend
+connectors/ingestion and realtime server-entity mapping still need their full
+inventory audit. Core bundle-withdrawal fixtures do not make core VCS or Time
+Logging administratively disableable. Large shared/backend artifacts retain
+partial status; this stage is not completion of RADD-1343/1346/1347.
