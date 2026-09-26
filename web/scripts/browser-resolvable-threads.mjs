@@ -105,14 +105,21 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(200, {"content-type": mime}); res.end(readFileSync(file));
 });
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-const until = async (predicate, label, attempts = 150) => {
+// 20 s per wait: alone every step lands in well under a second, but under the full mocked suite
+// this proof flaked at different steps with the old 7.5 s budget (lazy editor mounts, saves).
+// A state that never arrives still fails — only the tolerance changed.
+let proofSession = null;
+const until = async (predicate, label, attempts = 400) => {
   for (let i = 0; i < attempts; i++) {if (await predicate()) return; await new Promise(resolve => setTimeout(resolve, 50));}
-  throw Error(label);
+  // Say what the page showed, so a failure under load can be read instead of guessed at.
+  const seen = await proofSession?.eval(`location.pathname + " :: " + document.body.innerText.slice(0, 400).replace(/\\s+/g, " ")`).catch(() => "(page unreadable)");
+  throw Error(`${label}\n  page: ${seen}\n  console: ${JSON.stringify(proofSession?.consoleErrors?.slice(0, 3) ?? [])}`);
 };
 let browser;
 try {
   browser = await openBrowser({port: 18849, profile: await mkdtemp("/tmp/radd-resolvable-threads-"), scale: 1});
   const s = browser.session;
+  proofSession = s;
   const base = `http://127.0.0.1:${server.address().port}`;
   await s.navigate(base + "/issues/THR-1");
   await until(() => s.eval(`!!document.querySelector('[data-thread-resolution="thread"]')`), "thread lifecycle did not render");
@@ -135,7 +142,7 @@ try {
   await s.click('[data-thread-toggle="locked"]');
   await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-open-reply]')`), "reply action missing");
   await s.click('[data-comment-replies="locked"] [data-open-reply]');
-  await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [contenteditable="true"]')`), "locked thread reply composer missing", 400); // the lazily mounted rich editor: < 1 s alone, slower under the full suite
+  await until(() => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [contenteditable="true"]')`), "locked thread reply composer missing");
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-reply-unresolve]')`), false, "Reply and unresolve offered against the rule");
   await s.click('[data-thread-toggle="locked"]');
   if (await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute("aria-expanded") === "false"`)) await s.click('[data-thread-toggle="thread"]');

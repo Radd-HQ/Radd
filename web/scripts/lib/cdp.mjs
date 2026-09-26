@@ -9,6 +9,9 @@
  * proof applies to the first.
  */
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve as resolvePath, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromeArgs, findChrome, HOVER_CAPABLE_PROBE } from "./chrome.mjs";
 
@@ -58,7 +61,14 @@ export async function openBrowser({ port, profile, width = 1440, height = 1000, 
   // The harness owns the browser's life, not the caller. A proof that throws
   // before its own cleanup used to leak a headless Chrome per run, and every
   // proof had to remember the same two `chrome.kill()` calls in its tail.
-  process.on("exit", () => { try { chrome.kill(); } catch { /* already gone */ } });
+  // A proof's Chrome profile under the temp dir is scratch: remove it with the browser. Every run
+  // left 40–60 MB behind, and ~900 of them filled the 16 GB /tmp until Chrome hung at launch.
+  const scratch = resolvePath(profile).startsWith(resolvePath(tmpdir()) + sep);
+  const dispose = () => {
+    try { chrome.kill(); } catch { /* already gone */ }
+    if (scratch) { try { rmSync(profile, { recursive: true, force: true, maxRetries: 3 }); } catch { /* best effort */ } }
+  };
+  process.on("exit", dispose);
 
   // 60 s, not 10 (RADD-1135): a FIRST launch of Google Chrome on a cold GitHub
   // runner — profile creation, font cache, sandbox setup, under load from a
@@ -161,7 +171,15 @@ export async function openBrowser({ port, profile, width = 1440, height = 1000, 
     },
   };
 
-  return { session, close: () => chrome.kill() };
+  return {
+    session,
+    // Wait for Chrome to exit before removing its profile, or it may still be writing into it.
+    close: () => new Promise((done) => {
+      if (chrome.exitCode !== null || chrome.signalCode !== null) { dispose(); done(); return; }
+      chrome.once("exit", () => { dispose(); done(); });
+      try { chrome.kill(); } catch { dispose(); done(); }
+    }),
+  };
 }
 
 /**
