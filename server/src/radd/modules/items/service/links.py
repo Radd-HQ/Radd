@@ -21,7 +21,7 @@ from ..models import ItemLink, WorkItem
 from ..schemas import ItemLinkCreate, ItemLinkSearchResult, ItemRead
 from .queries import find_item_by_key, require_item
 from .read import _finish, _hydrate_one
-from .visibility import _field_ctx
+from .visibility import _field_ctx, ensure_item_relation
 
 
 # --- link typeahead (dependency add-row autocomplete) ---
@@ -189,6 +189,7 @@ async def add_item_link(
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
+    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
     # Validate the link type against the catalog (spec 91): must exist, be manual
     # (not auto-managed like `mentions`), and be in scope for the source project.
     catalog = await linktypes_service.catalog(session)
@@ -220,6 +221,7 @@ async def remove_item_link(
     item = await require_item(session, item_id)
     project = await projects_service.get_project(session, item.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_UPDATE, project=project)
+    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
     link = await session.get(ItemLink, link_id)
     if link is None or item.id not in (link.source_item_id, link.target_item_id):
         raise NotFoundError(ItemEntity.LINK, link_id)

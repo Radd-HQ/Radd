@@ -28,6 +28,7 @@ from radd.modules import workflow as _workflow  # noqa: F401
 from radd.modules.items import bulk, service as items
 from radd.modules.items.filters import ItemListFilters
 from radd.modules.items.enums import ItemKind
+from radd.modules.items.models import ItemStar
 from radd.modules.items.schemas import ItemCreate, ItemLinkCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
@@ -150,6 +151,39 @@ async def test_update_own_refuses_someone_elses_row(db, scenario):
         await items.update_item(
             db, fixture["other"].id, ItemUpdate(title="hijacked"), restricted
         )
+
+
+async def test_links_ride_the_row_gate(db, scenario):
+    """RADD-1413: a link is an item.update on its SOURCE row, so an `@own`
+    writer can neither link from nor unlink someone else's item."""
+    project, restricted, admin, fixture = scenario
+    await _grant(db, restricted, project, ["item.read", "item.update@own"])
+    link = ItemLinkCreate(target_id=fixture["team"].id, link_type="blocks")
+    mine = await items.add_item_link(db, fixture["own"].id, link, restricted)
+    assert [edge.item.id for edge in mine.links.outgoing] == [fixture["team"].id]
+    with pytest.raises(ForbiddenError):
+        await items.add_item_link(db, fixture["other"].id, link, restricted)
+    theirs = await items.add_item_link(db, fixture["other"].id, link, admin)
+    with pytest.raises(ForbiddenError):
+        await items.remove_item_link(
+            db, fixture["other"].id, theirs.links.outgoing[0].id, restricted
+        )
+
+
+async def test_stars_are_no_existence_oracle(db, scenario):
+    """RADD-1413: star/unstar resolve through the read seam, so a hidden item
+    answers exactly as a missing one does, and no star row is left behind."""
+    project, restricted, _admin, fixture = scenario
+    await _grant(db, restricted, project, ["item.read@own"])
+    await items.star_item(db, fixture["own"].id, restricted)
+    await items.unstar_item(db, fixture["own"].id, restricted)
+    with pytest.raises(NotFoundError):
+        await items.unstar_item(db, uuid.uuid4(), restricted)
+    with pytest.raises(NotFoundError):
+        await items.unstar_item(db, fixture["other"].id, restricted)
+    with pytest.raises(NotFoundError):
+        await items.star_item(db, fixture["other"].id, restricted)
+    assert await db.get(ItemStar, (restricted.id, fixture["other"].id)) is None
 
 
 async def test_search_inherits_the_relation_filter(db, scenario):

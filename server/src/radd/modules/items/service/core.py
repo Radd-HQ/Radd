@@ -34,6 +34,7 @@ from .queries import (
     _rebalance_ranks,
     _resolve_number,
     require_item,
+    require_readable_item,
 )
 from .read import _finish, _hydrate_one, get_item
 from .relations import (
@@ -407,16 +408,10 @@ async def delete_item(session: AsyncSession, item_id: uuid.UUID, actor: User) ->
 # --- stars (spec 24) ---
 
 
-async def _require_readable(session: AsyncSession, item_id: uuid.UUID, actor: User) -> None:
-    """Star/unstar only need to SEE the item (item.read on its project)."""
-    item = await require_item(session, item_id)
-    project = await projects_service.get_project(session, item.project_id)
-    await authz.require(session, actor, Permission.ITEM_READ, project=project)
-
-
 async def star_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> ItemRead:
-    """Personal star (spec 24) — idempotent; no event (per-user, not shared state)."""
-    await _require_readable(session, item_id, actor)
+    """Personal star (spec 24) — idempotent; no event (per-user, not shared state).
+    Star/unstar only need to SEE the item, through the read seam (a hidden item 404s)."""
+    await require_readable_item(session, item_id, actor)
     if await session.get(ItemStar, (actor.id, item_id)) is None:
         session.add(ItemStar(user_id=actor.id, item_id=item_id))
         await session.flush()
@@ -424,7 +419,7 @@ async def star_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> I
 
 
 async def unstar_item(session: AsyncSession, item_id: uuid.UUID, actor: User) -> None:
-    await _require_readable(session, item_id, actor)
+    await require_readable_item(session, item_id, actor)
     star = await session.get(ItemStar, (actor.id, item_id))
     if star is not None:
         await session.delete(star)
