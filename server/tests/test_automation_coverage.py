@@ -161,8 +161,24 @@ async def test_verb_actions_plan_and_apply(db, admin):
     plan = await _planned(db, admin, item, project, ActionType.ADD_WATCHER, {"user": "assignee"})
     assert plan.kind is PlanKind.SKIP and "no assignee" in plan.detail
 
-    plan = await _planned(db, admin, item, project, ActionType.ADD_PARTICIPANT, {"user": admin.email})
-    assert plan.kind is PlanKind.PARTICIPANT and plan.person == admin.id
+    # Add participant is the participants plugin's node since RADD-1387 —
+    # planned through the engine's node context, person grammar included.
+    from radd.modules.automations.executor import _NodeContext
+    from radd.modules.automations.graph import Node, Packet
+    from radd.modules.automations.types import AutomationNodeKind
+    from radd.modules.participants import automation as participants_node
+
+    def share(user: str) -> _NodeContext:
+        node = Node(id="p", kind=AutomationNodeKind.ACTION, type=participants_node.NODE_KEY, params={"user": user})
+        return _NodeContext(
+            session=db, node=node, packet=Packet.of(engine._manual_facts(), item=[item.id]),
+            actor=admin, subject_ids=(item.id,),
+        )
+
+    shared = await participants_node.plan_add(share(admin.email))
+    assert shared.resolves and shared.user_id == admin.id and shared.item_id == item.id
+    assert (await participants_node.plan_add(share("reporter"))).user_id == admin.id
+    assert not (await participants_node.plan_add(share("assignee"))).resolves
 
     plan = await _planned(db, admin, item, project, ActionType.MOVE_TO_PROJECT, {"project": other.key})
     assert plan.kind is PlanKind.MOVE and plan.move_to == other.id

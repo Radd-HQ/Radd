@@ -1,7 +1,8 @@
 """Desk polish (spec 66): canned variables, send_email action, KB deflection.
 
-Pure cases for `render_canned` and the send_email planner's literal/skip
-branches; DB-backed cases (test_csat idiom — real services against live
+Pure cases for `render_canned` and the Send email node's literal/skip
+branches (mailintake's contribution since RADD-1387, planned through a real
+engine node context); DB-backed cases (test_csat idiom — real services against live
 Postgres in a rolled-back transaction) for role-recipient resolution and the
 deflect resolved-only filter. Send paths never touch the network:
 `radd.smtp.send_message` is monkeypatched.
@@ -15,15 +16,17 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.automations import engine, planning
-from radd.modules.automations.types import ActionType
+from radd.modules.automations import engine
+from radd.modules.automations.executor import _NodeContext
+from radd.modules.automations.graph import Node, Packet
+from radd.modules.automations.types import AutomationNodeKind
 from radd.modules.canned import service as canned_service
 from radd.modules.canned.render import render_canned
 from radd.modules.pages import service as docs_service, spaces as docs_spaces
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.mailintake import service as mail_service
+from radd.modules.mailintake import automation_email, service as mail_service
 from radd.modules.search import deflect
 from radd.modules.search.indexer import _TSV_UPDATE
 from radd.modules.search.models import SearchIndexRow
@@ -76,7 +79,7 @@ def smtp_on(monkeypatch):
     async def configured(_session):
         return True
 
-    monkeypatch.setattr(planning, "outbound_available", configured)
+    monkeypatch.setattr(mail_service, "outbound_configured", configured)
     return sent
 
 
@@ -140,12 +143,18 @@ async def test_render_context_resolves_users_and_leaves_unset_empty(db, admin, p
 # --- send_email action (planner + apply) ---
 
 
-def _send_action(to: str, subject: str = "s {{event_type}}", body: str = "b") -> dict:
-    return {"type": ActionType.SEND_EMAIL.value, "params": {"to": to, "subject": subject, "body": body}}
-
-
-def _plan_kwargs() -> dict:
-    return {"facts": engine._manual_facts(), "rule_name": "r"}
+def _send_ctx(session, to: str, *, item_id=None, subject: str = "s {{event_type}}", body: str = "b"):
+    """The Send email node as the executor hands it over — a real node context
+    over manual facts, per item when there is one."""
+    ids = (item_id,) if item_id is not None else ()
+    params = {"to": to, "subject": subject, "body": body}
+    if ids:
+        params["arity"] = "item"
+    node = Node(id="mail", kind=AutomationNodeKind.ACTION, type=automation_email.NODE_KEY, params=params)
+    return _NodeContext(
+        session=session, node=node, packet=Packet.of(engine._manual_facts(), item=ids),
+        actor=None, subject_ids=ids,
+    )
 
 
 async def test_send_email_skips_without_a_sender(monkeypatch):
@@ -157,21 +166,25 @@ async def test_send_email_skips_without_a_sender(monkeypatch):
     async def unconfigured(_session):
         return False
 
-    monkeypatch.setattr(planning, "outbound_available", unconfigured)
-    plan = await engine._plan(None, _send_action("ext@example.com"), None, None, None, **_plan_kwargs())
-    assert plan.kind == "skip" and "sender" in plan.detail
+    monkeypatch.setattr(mail_service, "outbound_configured", unconfigured)
+    plan = await automation_email.plan_send(_send_ctx(None, "ext@example.com"))
+    assert not plan.resolves and "sender" in plan.detail
+
+
+def _sent(plan) -> tuple:
+    return (plan.to_address, plan.to_name, plan.subject, plan.body, plan.thread_on is not None)
 
 
 async def test_send_email_literal_recipient_renders_templates(smtp_on):
-    plan = await engine._plan(None, _send_action("Ext@Example.com "), None, None, None, **_plan_kwargs())
-    assert plan.kind == "email"
+    plan = await automation_email.plan_send(_send_ctx(None, "Ext@Example.com "))
+    assert plan.resolves
     # Literal addresses pass through trimmed (case preserved); templates render.
-    assert plan.email == ("Ext@Example.com", "", "s manual", "b", False)
+    assert _sent(plan) == ("Ext@Example.com", "", "s manual", "b", False)
 
 
 async def test_send_email_role_needs_a_target_item(smtp_on):
-    plan = await engine._plan(None, _send_action("reporter"), None, None, None, **_plan_kwargs())
-    assert plan.kind == "skip" and "reporter" in plan.detail
+    plan = await automation_email.plan_send(_send_ctx(None, "reporter"))
+    assert not plan.resolves and "reporter" in plan.detail
 
 
 async def test_send_email_resolves_roles_from_the_item(db, admin, project, smtp_on):
@@ -179,18 +192,18 @@ async def test_send_email_resolves_roles_from_the_item(db, admin, project, smtp_
     row = await items_service.require_item(db, item.id)
     await mail_service.upsert_contact(db, row.id, email="ext@example.com", name="Ext")
 
-    plan = await engine._plan(
-        db, _send_action("reporter", subject="Re: {{item.key}}"), row, project, None, **_plan_kwargs()
+    plan = await automation_email.plan_send(
+        _send_ctx(db, "reporter", item_id=row.id, subject="Re: {{item.key}}")
     )
-    assert plan.kind == "email"
-    assert plan.email == (admin.email, admin.name, f"Re: {item.key}", "b", False)
+    assert plan.resolves
+    assert _sent(plan) == (admin.email, admin.name, f"Re: {item.key}", "b", False)
 
-    plan = await engine._plan(db, _send_action("contact"), row, project, None, **_plan_kwargs())
-    assert plan.kind == "email" and plan.email[0] == "ext@example.com" and plan.email[1] == "Ext"
+    plan = await automation_email.plan_send(_send_ctx(db, "contact", item_id=row.id))
+    assert plan.resolves and plan.to_address == "ext@example.com" and plan.to_name == "Ext"
 
     # Unset assignee → the role doesn't resolve → skip-log, never a crash.
-    plan = await engine._plan(db, _send_action("assignee"), row, project, None, **_plan_kwargs())
-    assert plan.kind == "skip"
+    plan = await automation_email.plan_send(_send_ctx(db, "assignee", item_id=row.id))
+    assert not plan.resolves
 
 
 async def test_send_email_apply_rides_the_one_transport(db, smtp_on):
@@ -211,11 +224,9 @@ async def test_send_email_apply_rides_the_one_transport(db, smtp_on):
 
     await db.execute(update(MailSender).values(enabled=False))
 
-    plan = await engine._plan(
-        None, _send_action("ext@example.com", subject="hello", body="world"), None, None, None,
-        **_plan_kwargs(),
-    )
-    await engine._apply_plan(db, plan, None, None, rule_name="r")
+    ctx = _send_ctx(db, "ext@example.com", subject="hello", body="world")
+    plan = await automation_email.plan_send(ctx)
+    await automation_email.apply_send(ctx, plan)
 
     (args, kwargs), = smtp_on
     assert args == ("ext@example.com", "hello", "world")

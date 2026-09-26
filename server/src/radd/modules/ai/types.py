@@ -48,6 +48,14 @@ class AiFeature(StrEnum):
     GENERATION = "generation"  # spec 120: the ai.generate automation node
 
 
+class StorageRuleType(StrEnum):
+    """The storage routing-rule type this plugin provides on the kernel's
+    STORAGE_ROUTING_RULE socket (spec 102; moved here from `attachments`,
+    RADD-1387). The value is stored on `storage_rules.rule_type` — never rename."""
+
+    LLM = "llm"
+
+
 # Wire-shape default endpoints, used when a provider's base_url is empty.
 DEFAULT_BASE_URLS: dict[AiWireShape, str] = {
     AiWireShape.OPENAI: "https://api.openai.com/v1",

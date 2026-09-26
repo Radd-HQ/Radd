@@ -149,6 +149,7 @@ export const queryKeys = {
   // Storage host registry + routing chain + move jobs (spec 102).
   storageHosts: ["storageHosts"] as const,
   storageRules: ["storageRules"] as const,
+  storageRuleTypes: ["storageRuleTypes"] as const,
   storageUploadContext: ["storageUploadContext"] as const,
   storageMoveJobs: ["storageMoveJobs"] as const,
   storageMoveJob: (jobId: string) => ["storageMoveJob", { jobId }] as const,

@@ -22,6 +22,15 @@ export const storageRulesQuery = () =>
     staleTime: 30_000,
   });
 
+/** The rule types a new rule may use (RADD-1387) — the server's LIVE
+ * providers, so `llm` is absent while the ai plugin is disabled. */
+export const storageRuleTypesQuery = () =>
+  queryOptions({
+    queryKey: queryKeys.storageRuleTypes,
+    queryFn: ({ signal }) => api.get<string[]>(ApiPath.storageRuleTypes, { signal }),
+    staleTime: 30_000,
+  });
+
 /** All move jobs — seeds the progress card when the page loads mid-move. */
 export const storageMoveJobsQuery = () =>
   queryOptions({

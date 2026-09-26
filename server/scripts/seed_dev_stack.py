@@ -28,7 +28,7 @@ from radd.config import settings as app_settings
 from radd.db import SessionLocal
 from radd.kernel import load_plugins
 from radd.modules.ai.models import AiModelRole, AiProviderRow
-from radd.modules.ai.types import AiRole, AiWireShape
+from radd.modules.ai.types import AiRole, AiWireShape, StorageRuleType
 from radd.modules.attachments import hosts as storage_hosts
 from radd.modules.attachments.models import StorageHost, StorageRule
 from radd.modules.attachments.schemas import StorageHostCreate
@@ -108,7 +108,8 @@ async def _storage(session) -> None:
     rules = (
         # An LLM rule first: it is the one that needs the vision role, so having
         # it here is what makes "is storage routing actually wired?" answerable.
-        ("Content", RuleType.LLM, 1, {"host_id": str(content.id) if content else "",
+        # The llm type is the ai plugin's provider since RADD-1387.
+        ("Content", StorageRuleType.LLM, 1, {"host_id": str(content.id) if content else "",
                                "prompt": "Is this image production content (frames, "
                                          "plates, renders) or a general document?",
                                "answers": {"content": str(content.id) if content else ""}}),

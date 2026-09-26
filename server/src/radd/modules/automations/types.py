@@ -111,25 +111,31 @@ class ActionType(StrEnum):
     LINK_ITEM = "link_item"
     ARCHIVE_ITEM = "archive_item"
     ADD_WATCHER = "add_watcher"
-    ADD_PARTICIPANT = "add_participant"
     MOVE_TO_PROJECT = "move_to_project"
     # Universal actions (spec 58b) — run with or without a target item.
     CREATE_ITEM = "create_item"
     SEND_WEBHOOK = "send_webhook"
     POST_CHAT = "post_chat"
     NOTIFY_USER = "notify_user"
-    SEND_EMAIL = "send_email"  # spec 66 — templated email via radd.smtp
+    # RADD-1387: `send_email` and `add_participant` are no longer built in —
+    # `mailintake` and `participants` contribute them under the SAME node keys
+    # (`action.send_email`, `action.add_participant`), so stored graphs load
+    # unchanged, and disabling either plugin takes its action with it.
 
 
-class EmailRecipient(StrEnum):
-    """Role values the send_email `to` param may name (spec 66) — anything else
-    is a literal address. Roles resolve against the event's TARGET ITEM
-    (reporter/assignee = that user's email when active; contact = the spec-62
-    mail contact); no item or no resolvable target → the action skip-logs."""
+class PersonRole(StrEnum):
+    """A person named RELATIVE TO the target item rather than by address — what
+    a person param (`notify_user`'s `user`, `add_watcher`'s, a contributed
+    action's through `ctx.person`) may say instead of an email. Resolves
+    against ONE item, so it only means anything at per-item arity; no item or
+    nobody in the role → the action skip-logs.
+
+    Was `EmailRecipient` until RADD-1387, when the email action (and its third
+    role, the mail `contact`) moved to `mailintake`, which owns that vocabulary.
+    """
 
     REPORTER = "reporter"
     ASSIGNEE = "assignee"
-    CONTACT = "contact"
 
 
 class NodeArity(StrEnum):
@@ -191,8 +197,8 @@ ACTION_ARITY_DEFAULT: dict[ActionType, NodeArity] = {
     # Fixed ITEM and NOT in ACTION_ARITY_CONFIGURABLE — there is no legitimate
     # set reading of a round-robin assign, so its spec offers only
     # options=(ITEM,) and `_check_arity` refuses a hand-edited `arity=set` row.
-    # This is the STRONGER of the two per-item forcings: unlike the send_email
-    # role (which is set-capable and only forced to item when a role is chosen),
+    # This is the STRONGER of the two per-item forcings: unlike a role recipient
+    # (set-capable, and only forced to item when a role is chosen),
     # this can never be talked into a skip-log on a set at all.
     ActionType.ASSIGN_ROUND_ROBIN: NodeArity.ITEM,
     ActionType.SET_TEAM: NodeArity.ITEM,
@@ -212,7 +218,6 @@ ACTION_ARITY_DEFAULT: dict[ActionType, NodeArity] = {
     ActionType.LINK_ITEM: NodeArity.ITEM,
     ActionType.ARCHIVE_ITEM: NodeArity.ITEM,
     ActionType.ADD_WATCHER: NodeArity.ITEM,
-    ActionType.ADD_PARTICIPANT: NodeArity.ITEM,
     ActionType.MOVE_TO_PROJECT: NodeArity.ITEM,
     # Outward-facing actions. SET by default because that is what they did
     # before, and because one message about twelve items beats twelve messages.
@@ -220,27 +225,24 @@ ACTION_ARITY_DEFAULT: dict[ActionType, NodeArity] = {
     ActionType.SEND_WEBHOOK: NodeArity.SET,
     ActionType.POST_CHAT: NodeArity.SET,
     ActionType.NOTIFY_USER: NodeArity.SET,
-    ActionType.SEND_EMAIL: NodeArity.SET,
 }
 
 
 #: Actions where BOTH readings are real, so the author chooses:
 #:
 #: * `create_item` — one triage ticket, or a follow-up per matched item.
-#: * `send_email` — a digest to a fixed address, or one mail per item. The
-#:   ROLE recipients (reporter/assignee/contact) resolve against a single item,
-#:   so they only work at ITEM arity; the editor forces the mode when one is
-#:   chosen rather than letting someone build the version that skip-logs.
 #: * `send_webhook` — one batch body, or one POST per item for receivers that
 #:   take a single object.
-#: * `post_chat` / `notify_user` — a digest, or one per item.
+#: * `post_chat` / `notify_user` — a digest, or one per item. A ROLE recipient
+#:   resolves against a single item, so it only works at ITEM arity; the editor
+#:   forces the mode when one is chosen rather than letting someone build the
+#:   version that skip-logs. (`mailintake`'s `send_email` follows the same rule.)
 ACTION_ARITY_CONFIGURABLE = frozenset(
     {
         ActionType.CREATE_ITEM,
         ActionType.SEND_WEBHOOK,
         ActionType.POST_CHAT,
         ActionType.NOTIFY_USER,
-        ActionType.SEND_EMAIL,
     }
 )
 
@@ -460,11 +462,9 @@ class PlanKind(StrEnum):
     LINK = "link"
     ARCHIVE = "archive"
     WATCH = "watch"
-    PARTICIPANT = "participant"
     MOVE = "move"
     HTTP = "http"
     NOTIFY = "notify"
-    EMAIL = "email"
     SKIP = "skip"
 
 

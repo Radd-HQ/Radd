@@ -29,27 +29,6 @@ def available(template: AutomationTemplateSpec) -> bool:
     return True
 
 
-#: "Tell the reporter when their issue is done" — the kind of behaviour a
-#: tracker might do unasked; here it is a starting point someone chooses.
-NOTIFY_REPORTER_ON_DONE = AutomationTemplateSpec(
-    key="automations.notify_reporter_on_done",
-    name="Tell the reporter when their issue is done",
-    description="When an issue moves into a done state, email its reporter.",
-    group="Issues",
-    nodes=(
-        {"id": "trg", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.updated", "include_automated": True}},
-        {"id": "done", "kind": "gate", "type": "gate.entered_state_category", "params": {"categories": ["done"]}},
-        {"id": "mail", "kind": "action", "type": "action.send_email",
-         "params": {"to": "reporter", "arity": "item",
-                    "subject": "{{item.key}} is done",
-                    "body": "Your issue {{item.key}} — {{item.title}} — is now {{item.state}}.\n{{item.url}}"}},
-    ),
-    edges=(
-        {"source": "trg", "port": "out", "target": "done"},
-        {"source": "done", "port": "true", "target": "mail"},
-    ),
-)
-
 #: RADD-1319: what the retired `googlechat` plugin did from the environment —
 #: post new issues and SLA breaches to one chat space — as a rule someone
 #: switches on, pointed at a webhook they paste. Google Chat and Slack-style
@@ -78,4 +57,7 @@ POST_TO_CHAT = AutomationTemplateSpec(
     ),
 )
 
-TEMPLATES: tuple[AutomationTemplateSpec, ...] = (NOTIFY_REPORTER_ON_DONE, POST_TO_CHAT)
+#: RADD-1387: "Tell the reporter when their issue is done" moved to `mailintake`
+#: with the send_email node it is built on — a template offered by the plugin
+#: that owns its action is withdrawn with it, rather than filtered out here.
+TEMPLATES: tuple[AutomationTemplateSpec, ...] = (POST_TO_CHAT,)

@@ -97,7 +97,6 @@ plugin = RaddPlugin(
     relation_domains=(("attachment.create", "item"),),
     description="File attachments on issues and pages, stored on the hosts you configure and routed by rules you set.",
     depends_on=("events", "projects", "auth", "items", "access", "groups", "teams"),
-    weak_depends=("ai",),
     # Per-plugin deps (§14): the S3 backend needs the MinIO SDK. Maps to the
     # `radd[s3]` extra; the default filesystem backend needs nothing extra.
     routers=(router, admin_router),
@@ -135,7 +134,8 @@ plugin = RaddPlugin(
     integrations=(
         IntegrationSpec(Socket.STORAGE_BACKEND, "filesystem", impl=clients.FilesystemClient),
         IntegrationSpec(Socket.STORAGE_BACKEND, "s3", impl=clients.S3Client),
-        # Routing-rule types (spec 102): a plugin type is one more registration.
+        # Routing-rule types (spec 102): a plugin type is one more registration
+        # — `ai` registers `llm` (RADD-1387), so this module never imports it.
         IntegrationSpec(
             Socket.STORAGE_ROUTING_RULE,
             RuleType.USER_CHOICE.value,
@@ -143,9 +143,6 @@ plugin = RaddPlugin(
         ),
         IntegrationSpec(
             Socket.STORAGE_ROUTING_RULE, RuleType.CIDR.value, impl=routing_rules.CidrRule()
-        ),
-        IntegrationSpec(
-            Socket.STORAGE_ROUTING_RULE, RuleType.LLM.value, impl=routing_rules.LlmRule()
         ),
     ),
 )

@@ -156,10 +156,6 @@ class AddWatcherParams(BaseModel):
     user: str = Field(min_length=1, max_length=320)  # email, or reporter/assignee
 
 
-class AddParticipantParams(BaseModel):
-    user: str = Field(min_length=1, max_length=320)  # email, or reporter/assignee
-
-
 class MoveToProjectParams(BaseModel):
     project: str = Field(min_length=1, max_length=20)  # project KEY
 
@@ -243,18 +239,6 @@ class NotifyUserParams(BaseModel):
     #: person, so it could not be written once for a whole project.
     user: str = Field(min_length=1)
     message: str = Field(min_length=1, max_length=1000)  # template
-
-
-class SendEmailParams(BaseModel):
-    # A literal address, or an `EmailRecipient` role: reporter/assignee/contact
-    # (resolved against the event's target item at apply time, spec 66).
-    to: str = Field(min_length=1, max_length=320)
-    subject: str = Field(min_length=1, max_length=500)  # template
-    body: str = Field(min_length=1, max_length=10_000)  # template
-    #: RADD-1318: send it ON the issue's email thread — the conversation the
-    #: requester's mail opened — so their reply threads back onto the ticket and
-    #: the message reads like the desk (the old receipt's shape). Needs an issue.
-    thread: bool = False
 
 
 class SetStateAction(BaseModel):
@@ -362,11 +346,6 @@ class AddWatcherAction(BaseModel):
     params: AddWatcherParams
 
 
-class AddParticipantAction(BaseModel):
-    type: Literal[ActionType.ADD_PARTICIPANT]
-    params: AddParticipantParams
-
-
 class MoveToProjectAction(BaseModel):
     type: Literal[ActionType.MOVE_TO_PROJECT]
     params: MoveToProjectParams
@@ -392,11 +371,6 @@ class NotifyUserAction(BaseModel):
     params: NotifyUserParams
 
 
-class SendEmailAction(BaseModel):
-    type: Literal[ActionType.SEND_EMAIL]
-    params: SendEmailParams
-
-
 Action = Annotated[
     SetStateAction
     | SetPriorityAction
@@ -419,13 +393,11 @@ Action = Annotated[
     | LinkItemAction
     | ArchiveItemAction
     | AddWatcherAction
-    | AddParticipantAction
     | MoveToProjectAction
     | CreateItemAction
     | SendWebhookAction
     | PostChatAction
-    | NotifyUserAction
-    | SendEmailAction,
+    | NotifyUserAction,
     Field(discriminator="type"),
 ]
 

@@ -214,6 +214,18 @@ KIND_DEFAULTS: dict[str, MailKindPreset] = {
 }
 
 
+class EmailRecipient(StrEnum):
+    """Role values the Send email node's `to` may name (spec 66; this module's
+    since the node moved here, RADD-1387) — anything else is a literal address.
+    Roles resolve against the run's ONE target item: reporter/assignee = that
+    account's address when `mailable_user` says a person reads it; contact =
+    the issue's primary mail contact. No item, or nobody → the node skip-logs."""
+
+    REPORTER = "reporter"
+    ASSIGNEE = "assignee"
+    CONTACT = "contact"
+
+
 class MailRuleType(StrEnum):
     """Builtin routing-rule kinds (RADD-958/961).
 

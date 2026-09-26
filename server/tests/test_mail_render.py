@@ -785,12 +785,13 @@ async def _requester_wrote(db, item, *, subject="my printer is on fire") -> str:
 
 
 async def _thread_mail(db, item, *, to="cass@vip.example.com", name="Cass Customer", body="Received."):
-    """An automation's Send email with `thread` on — the engine's own delivery."""
-    from radd.modules.automations import engine
+    """An automation's Send email with `thread` on — the node's own delivery
+    (mailintake's since RADD-1387)."""
+    from radd.modules.mailintake import automation_email
 
     project = await projects_service.get_project(db, item.project_id)
     key = f"{project.key}-{item.number}"
-    await engine._send_email(db, to, name, f"[{key}] {item.title}", body, thread_on=item)
+    await automation_email.deliver(db, to, name, f"[{key}] {item.title}", body, thread_on=item)
     return key
 
 
@@ -924,14 +925,14 @@ async def test_an_unthreaded_automation_email_stays_off_the_issues_thread(
 ):
     """`thread` is opt-in: without it the action's mail is the rule's own text,
     itemless, and never filed into the customer's conversation."""
-    from radd.modules.automations import engine
+    from radd.modules.mailintake import automation_email
 
     _agent, _project, item = world
     monkeypatch.setattr(settings, "smtp_host", "")
     _row_relay(db)
     await _requester_wrote(db, item)
 
-    await engine._send_email(db, "ops@example.com", "", "Heads up", "Something happened.")
+    await automation_email.deliver(db, "ops@example.com", "", "Heads up", "Something happened.")
 
     sent = relay.sent[-1]
     assert sent["In-Reply-To"] is None

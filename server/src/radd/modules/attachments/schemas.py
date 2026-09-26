@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from radd.apitypes import UtcDatetime
 
-from .types import DeliveryMode, RuleType, StorageHostType
+from .types import DeliveryMode, StorageHostType
 
 
 class AttachmentRead(BaseModel):
@@ -74,7 +74,9 @@ class UploadContextRead(BaseModel):
 
 class StorageRuleCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    rule_type: "RuleType"
+    # Any LIVE provider on the routing-rule socket — a plugin's type included
+    # (RADD-1387); an unregistered one is refused by `store.validate_config`.
+    rule_type: str = Field(min_length=1, max_length=20)
     config: dict = {}
     enabled: bool = True
 

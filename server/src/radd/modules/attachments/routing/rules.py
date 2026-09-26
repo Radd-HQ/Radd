@@ -1,17 +1,15 @@
-"""The three builtin routing-rule types (spec 102).
+"""The builtin routing-rule types (spec 102): ask the uploader, and CIDR.
 
 Every handler answers a host id or None (fall through) — a rule can only
-NARROW where an upload goes, never error an upload out. The LLM rule is the
-spec-102/101 seam: an admin-authored filtering prompt plus ENUMERATED answers,
-each mapped to a host; structured output means the model cannot invent an
-unmapped answer, and any failure (timeout, refusal, feature off, module gone)
-falls through to the next rule.
+NARROW where an upload goes, never error an upload out. Other types arrive on
+the STORAGE_ROUTING_RULE socket: the `llm` classifier is the `ai` plugin's
+(RADD-1387), which is why this module no longer imports `ai` at all.
 """
 
-import asyncio
 import ipaddress
 import logging
 import uuid
+from collections.abc import Collection
 
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,59 +82,14 @@ class CidrRule:
     ) -> uuid.UUID | None:
         return match_cidr(ctx.source_ip, config.ranges)
 
-
-# --- LLM (vision) --------------------------------------------------------------
-
-
-class LlmAnswer(BaseModel):
-    answer: str = Field(min_length=1, max_length=100)
-    host_id: uuid.UUID
-
-
-class LlmConfig(BaseModel):
-    prompt: str = Field(min_length=1)
-    answers: list[LlmAnswer] = Field(min_length=2)  # one answer = no decision to make
-    content_type_prefixes: list[str] = ["image/"]
-    timeout_seconds: float = Field(default=10.0, ge=1, le=120)
-
-
-class LlmRule:
-    config_model = LlmConfig
-
-    async def evaluate(
-        self, session: AsyncSession, ctx: RoutingContext, config: LlmConfig
-    ) -> uuid.UUID | None:
-        if not any(ctx.content_type.startswith(p) for p in config.content_type_prefixes):
-            return None
-        if ctx.content is None:
-            return None
-        try:  # the ai module is optional — absent/disabled means fall through
-            from radd.modules.ai import client as ai_client
-            from radd.modules.ai import features as ai_features
-            from radd.modules.ai.types import (
-                AiDisabledError,
-                AiFeature,
-                AiRole,
-                AiUpstreamError,
-            )
-        except ImportError:
-            return None
-        if not await ai_features.feature_enabled(session, AiFeature.STORAGE_ROUTING):
-            return None
-        mapping = {entry.answer: entry.host_id for entry in config.answers}
-        try:
-            choice = await asyncio.wait_for(
-                ai_client.complete_choice(
-                    session,
-                    AiRole.VISION,
-                    prompt=config.prompt,
-                    choices=list(mapping),
-                    image_bytes=ctx.content(),
-                    image_media_type=ctx.content_type,
-                ),
-                timeout=config.timeout_seconds,
-            )
-        except (TimeoutError, AiUpstreamError, AiDisabledError) as exc:
-            logger.warning("storage llm rule: fell through (%s)", exc.__class__.__name__)
-            return None
-        return mapping.get(choice)
+    async def captured_types(
+        self,
+        session: AsyncSession,
+        config: CidrConfig,
+        *,
+        source_ip: str | None,
+        content_types: Collection[str],
+    ) -> set[str]:
+        """A range matching the caller's network decides EVERYTHING they
+        upload — the network, not the file, picks the host."""
+        return set(content_types) if match_cidr(source_ip, config.ranges) is not None else set()

@@ -337,7 +337,6 @@ def test_item_actions_registry_covers_exactly_the_item_bound_types():
         ActionType.SEND_WEBHOOK,
         ActionType.POST_CHAT,
         ActionType.NOTIFY_USER,
-        ActionType.SEND_EMAIL,  # spec 66
     }
     assert ITEM_ACTIONS == set(ActionType) - universal
 

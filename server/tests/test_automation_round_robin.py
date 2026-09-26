@@ -13,7 +13,9 @@ These pin the parts that are easy to get subtly wrong:
   lands on the assignee, never on a skipped member;
 * nobody eligible -> pick returns None (the planner skip-logs, leaves the item
   unassigned, and does NOT advance the cursor);
-* leave being absent turns away-skipping OFF rather than crashing.
+* leave WITHDRAWN at runtime turns away-skipping off rather than crashing —
+  pinned with the other RADD-1387 withdrawals in
+  test_optional_plugin_withdrawal.py.
 
 DB-backed because the whole point is real teams, memberships, leave rows and the
 cursor table; the `db`/`admin` fixtures mirror test_automation_arity.py.
@@ -190,26 +192,6 @@ async def test_no_eligible_member_returns_none_and_does_not_advance(db, admin):
 async def test_a_team_with_no_members_returns_none(db, admin):
     team, _ = await _team_with_members(db, admin, 0)
     assert await round_robin.pick_next(db, team) is None
-
-
-# --- leave optional -----------------------------------------------------------
-
-
-async def test_away_skipping_is_off_when_the_leave_module_is_absent(db, admin, monkeypatch):
-    """The leave reach is deferred + feature-detected. With the module present an
-    away member is excluded; with it unloaded, `_away_user_ids` is empty and the
-    member stays eligible — degraded, not crashed."""
-    team, members = await _team_with_members(db, admin, 3)
-    await _mark_away(db, admin, members[1])
-
-    assert await round_robin._away_user_ids(db) == {members[1].id}
-
-    without_leave = tuple(m for m in settings.modules if m != round_robin.LEAVE_MODULE)
-    monkeypatch.setattr(settings, "modules", without_leave)
-    assert round_robin.leave_service() is None
-    assert await round_robin._away_user_ids(db) == set()
-    # And a pick still succeeds, now including the (no-longer-skipped) member.
-    assert await round_robin.pick_next(db, team) is not None
 
 
 # --- the planner wires it to an item update + a cursor advance ----------------

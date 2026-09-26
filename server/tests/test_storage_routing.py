@@ -1,7 +1,9 @@
 """Storage routing chain (spec 102): first match wins, everything falls through
 toward the default, and a rule can only pick a REAL host — never error an
-upload out. The LLM rule is exercised with a stubbed AI client (choice, timeout,
-refusal); CIDR matching is pure.
+upload out. The LLM rule — the `ai` plugin's provider on the routing socket
+since RADD-1387 — is exercised with a stubbed AI client (choice, timeout,
+refusal); CIDR matching is pure. What happens when `ai` is WITHDRAWN is pinned
+in test_optional_plugin_withdrawal.py.
 """
 
 import asyncio
@@ -23,8 +25,12 @@ from radd.modules.attachments.types import (
     RuleType,
     StorageHostType,
 )
+from radd.modules.ai import features as ai_features
+from radd.modules.ai.types import StorageRuleType
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
+
+LLM = StorageRuleType.LLM
 
 
 @pytest.fixture
@@ -117,7 +123,7 @@ async def test_llm_rule_maps_answers_and_falls_through_on_failure(db, tmp_path, 
     await store.create_rule(
         db,
         name="classify images",
-        rule_type=RuleType.LLM,
+        rule_type=LLM,
         config={
             "prompt": "human characters or 3d assets -> content",
             "answers": [
@@ -128,7 +134,6 @@ async def test_llm_rule_maps_answers_and_falls_through_on_failure(db, tmp_path, 
         },
     )
     from radd.modules.ai import client as ai_client
-    from radd.modules.ai import features as ai_features
 
     async def feature_on(session, feature):
         return True
@@ -193,7 +198,7 @@ async def test_rule_config_is_validated_on_write():
     with pytest.raises(store.RuleConfigError):
         store.validate_config(RuleType.CIDR.value, {"ranges": []})
     with pytest.raises(store.RuleConfigError):
-        store.validate_config(RuleType.LLM.value, {"prompt": "p", "answers": [{"answer": "only-one", "host_id": str(uuid.uuid4())}]})
+        store.validate_config(LLM.value, {"prompt": "p", "answers": [{"answer": "only-one", "host_id": str(uuid.uuid4())}]})
     with pytest.raises(store.RuleConfigError):
         store.validate_config("no_such_type", {})
     validated = store.validate_config(
@@ -213,7 +218,7 @@ async def test_choice_reachability_ask_only_when_the_answer_matters(
     llm = await store.create_rule(
         db,
         name="Classify images",
-        rule_type=RuleType.LLM,
+        rule_type=LLM,
         config={
             "prompt": "p",
             "answers": [
@@ -224,10 +229,10 @@ async def test_choice_reachability_ask_only_when_the_answer_matters(
     )
     ask = await store.create_rule(db, name="Ask", rule_type=RuleType.USER_CHOICE, config={})
 
-    async def llm_live(session):
+    async def llm_live(session, feature):
         return True
 
-    monkeypatch.setattr(engine, "_llm_live", llm_live)
+    monkeypatch.setattr(ai_features, "feature_enabled", llm_live)
 
     # Images are captured by the LLM rule sitting first -> no prompt, named why.
     reachable, preempted = await engine.choice_reachable(
@@ -245,13 +250,13 @@ async def test_choice_reachability_ask_only_when_the_answer_matters(
     )
     assert reachable is True
     # LLM feature dormant -> images fall through too -> ask.
-    async def llm_dead(session):
+    async def llm_dead(session, feature):
         return False
 
-    monkeypatch.setattr(engine, "_llm_live", llm_dead)
+    monkeypatch.setattr(ai_features, "feature_enabled", llm_dead)
     reachable, _ = await engine.choice_reachable(db, source_ip=None, content_types=["image/png"])
     assert reachable is True
-    monkeypatch.setattr(engine, "_llm_live", llm_live)
+    monkeypatch.setattr(ai_features, "feature_enabled", llm_live)
 
     # Reorder: ask first -> the choice always matters, images included.
     await store.reorder(db, [ask.id, llm.id])

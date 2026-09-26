@@ -1,6 +1,7 @@
 from radd.kernel import EventTypeSpec, IntegrationSpec, PluginUiManifest, RaddPlugin
 from radd.kernel.sockets import Socket
 
+from .availability import LeaveAvailability
 from .holidays import HolidayCalendar
 from .router import router
 from .types import LeaveEvent
@@ -24,7 +25,11 @@ plugin = RaddPlugin(
     # than called directly, so `slas` never learns this module exists and
     # disabling leave withdraws the calendar with it (the clock then runs on
     # weekends-only, exactly as it did before).
+    # RADD-1387: the per-person answer — who is away on a date — for whoever
+    # hands out work. Round-robin assignment reads it through the socket, so
+    # `automations` never imports this module either.
     integrations=(
         IntegrationSpec(Socket.NON_WORKING_DAYS, "leave_holidays", impl=HolidayCalendar()),
+        IntegrationSpec(Socket.PERSON_AVAILABILITY, "leave_absences", impl=LeaveAvailability()),
     ),
 )

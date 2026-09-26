@@ -16,48 +16,52 @@ Three decisions live in this file, and each is load-bearing:
   inactive members are passed over on the way to the next eligible one; the cursor
   lands on whoever the ticket went to. A run with no eligible member leaves the
   cursor where it was — nothing was assigned, so there is nothing to advance past.
-* **Leave is optional.** The away check is a DEFERRED, feature-detected import,
-  exactly like `email_action.py`'s reach for mailintake's `contact` role: the
-  `leave` module may be unloaded, and then away-skipping is simply off (inactive
-  accounts are still skipped) rather than a crash.
+* **Away is asked, never imported (RADD-1387).** Who is away comes from the
+  kernel's PERSON_AVAILABILITY socket — `leave` provides it — and every
+  provider's answer unions. With none registered (leave disabled at runtime,
+  or never installed) nobody is away and inactive accounts are still skipped.
+  This used to import `leave.service` behind a `settings.modules` check, which
+  reads BOOT config: a leave plugin switched off in the plugin manager kept
+  deciding who got tickets.
 """
 
+import logging
 import uuid
+from collections.abc import Collection
 from datetime import date
-from types import ModuleType
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
+from radd.kernel import sockets
 from radd.modules.teams import service as teams_service
 from radd.modules.teams.models import Team
 
 from .models import TeamAssignmentCursor
 
-LEAVE_MODULE = "radd.modules.leave"
+logger = logging.getLogger(__name__)
 
 
-def leave_service() -> ModuleType | None:
-    """leave's public seam, or None when the module is not loaded.
+async def away_user_ids(
+    session: AsyncSession, day: date, user_ids: Collection[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Which of `user_ids` are away on `day` — the UNION over every live
+    PERSON_AVAILABILITY provider, or nobody when none is registered.
 
-    Feature-detection mirrors `email_action.mailintake_service`: an optional,
-    disableable module reached DEFERRED, so an instance without it does not import
-    it and away-skipping degrades to off rather than erroring."""
-    if LEAVE_MODULE not in settings.modules:
-        return None
-    from radd.modules.leave import service as leave_svc
-
-    return leave_svc
-
-
-async def _away_user_ids(session: AsyncSession) -> set[uuid.UUID]:
-    """The users away TODAY, or the empty set when leave is unloaded."""
-    leave = leave_service()
-    if leave is None:
+    A provider that raises is logged and skipped rather than failing the
+    assignment: a broken calendar degrades toward "nobody is away", which is
+    what an instance without leave does anyway — the ticket still gets an owner.
+    """
+    if not user_ids:
         return set()
-    return {entry.user_id for entry in await leave.current(session, date.today())}
+    away: set[uuid.UUID] = set()
+    for name, provider in sockets.providers(sockets.Socket.PERSON_AVAILABILITY).items():
+        try:
+            away.update(await provider.away_user_ids(session, day, user_ids))
+        except Exception:  # noqa: BLE001 — one bad calendar must not stop triage
+            logger.exception("round robin: availability provider %r failed — ignored", name)
+    return away
 
 
 async def pick_next(session: AsyncSession, team: Team) -> uuid.UUID | None:
@@ -68,10 +72,10 @@ async def pick_next(session: AsyncSession, team: Team) -> uuid.UUID | None:
     the first eligible member whose id sorts strictly after the stored cursor,
     wrapping to the first when the cursor is unset or names the last of the lap.
     """
-    members = await teams_service.list_team_members(session, team.id)
-    away = await _away_user_ids(session)
+    members = [user for user in await teams_service.list_team_members(session, team.id) if user.active]
+    away = await away_user_ids(session, date.today(), [user.id for user in members])
     eligible = sorted(
-        (user for user in members if user.active and user.id not in away),
+        (user for user in members if user.id not in away),
         key=lambda user: user.id,
     )
     if not eligible:

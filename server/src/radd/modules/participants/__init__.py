@@ -9,6 +9,7 @@ from radd.modules.items.models import WorkItem
 
 from .models import ItemParticipant
 from . import mcptools, service
+from .automation import ADD_PARTICIPANT_NODE
 from .audience import ParticipantTeamAudience
 from .router import router
 from .types import PARTICIPANT_MANAGE, TEAM_AUDIENCE, ParticipantEvent
@@ -58,6 +59,10 @@ plugin = RaddPlugin(
     routers=(router,),
     # RADD-1236: the roster over MCP — by item key, person by email, team by name.
     mcp_tools=mcptools.MCP_TOOLS,
+    # RADD-1387: Add participant is this plugin's automation action (key
+    # `action.add_participant`, kept from when it was built in) — disabled,
+    # it leaves the catalog with the plugin instead of being called anyway.
+    automation_nodes=(ADD_PARTICIPANT_NODE,),
     relations=(ITEM_PARTICIPANT,),
     # RADD-1304: sharing an issue is a grant, not an identity check. `@own`
     # means "issues they reported" — the atom takes the ITEM's relations.

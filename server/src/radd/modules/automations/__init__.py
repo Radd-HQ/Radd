@@ -123,7 +123,10 @@ plugin = RaddPlugin(
         "Automations: rules that react to events or run on a schedule and change issues, notify people or call out."
     ),
     depends_on=("projects", "auth", "workflow", "labels", "cycles", "releases", "items", "comments", "teams", "events", "fields", "itemtypes",),
-    weak_depends=("mailintake", "notify", "leave", "participants", "pages", "forms"),
+    # RADD-1387: no longer leave, mailintake or participants — away-skipping
+    # reads the PERSON_AVAILABILITY socket, and send_email / add_participant
+    # are nodes those plugins contribute themselves.
+    weak_depends=("notify", "pages", "forms"),
     routers=(router, intake_router),
     exception_handlers=(
         (ValidationBlocked, _validation_blocked_handler),

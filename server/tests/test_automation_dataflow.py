@@ -1133,41 +1133,36 @@ async def test_a_rendered_create_item_field_the_schema_refuses_is_a_skip(db, adm
     assert "title" in plan.detail and "500" in plan.detail
 
 
-async def test_a_newline_in_a_rendered_header_is_collapsed(db, admin):
+async def test_a_newline_in_a_rendered_header_is_collapsed(db, admin, monkeypatch):
     """`EmailMessage` under the default policy REFUSES a header with a newline,
     so a subject rendered from model output could raise inside the transport —
-    a dry run saying "Would apply" and a live run that never sent anything."""
-    from radd.modules.automations.planning import _plan
-    from radd.modules.automations.types import PlanKind
-    from radd.config import settings as config_settings
+    a dry run saying "Would apply" and a live run that never sent anything.
 
+    Send email is mailintake's node since RADD-1387, so it renders through the
+    engine's node context — the same seam, and the same collapsing."""
+    from radd.modules.mailintake import automation_email, service as mail_service
+
+    async def configured(_session):
+        return True
+
+    monkeypatch.setattr(mail_service, "outbound_configured", configured)
     project = await _fixture_project(db, admin)
     item = await _fixture_item(db, admin, project)
-    original = config_settings.smtp_host
-    config_settings.smtp_host = "smtp.example.com"
-    try:
-        plan = await _plan(
-            db,
-            {
-                "type": "send_email",
-                "params": {
-                    "to": "someone@example.com",
-                    "subject": "[{{triage.tag}}] a report",
-                    "body": "line one\n{{triage.tag}}\nline three",
-                },
-            },
-            item,
-            project,
-            admin,
-            facts=FACTS,
-            rule_name="t",
-            variables={"triage": {"tag": "urgent\nX-Injected: yes"}},
-        )
-    finally:
-        config_settings.smtp_host = original
+    node = Node(
+        id="m", kind=AutomationNodeKind.ACTION, type=automation_email.NODE_KEY,
+        params={
+            "to": "someone@example.com",
+            "subject": "[{{triage.tag}}] a report",
+            "body": "line one\n{{triage.tag}}\nline three",
+        },
+    )
+    packet = Packet.of(FACTS, item=[item.id]).with_vars("triage", {"tag": "urgent\nX-Injected: yes"})
+    plan = await automation_email.plan_send(
+        executor._NodeContext(session=db, node=node, packet=packet, actor=admin, subject_ids=(item.id,))
+    )
 
-    assert plan.kind is PlanKind.EMAIL
-    _address, _name, subject, body, _thread = plan.email
+    assert plan.resolves
+    subject, body = plan.subject, plan.body
     assert "\n" not in subject and subject == "[urgent X-Injected: yes] a report"
     # The BODY keeps every newline — its own two, plus the one inside the token.
     # Collapsing there would ruin every multi-line message, and a body is not a

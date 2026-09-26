@@ -493,7 +493,7 @@ async def _create_validated(
 ) -> ItemRead:
     """Create the item through intake validation (spec 119) when it is available.
 
-    Deferred and feature-detected, the `email_action.py` shape: `automations` is
+    Deferred, a reverse reach declared in `weak_depends`: `automations` is
     optional and loads AFTER forms, so this module cannot name it at import
     time. With it absent the submit is exactly what it always was — one
     `create_item` — rather than a form that stops working because an optional

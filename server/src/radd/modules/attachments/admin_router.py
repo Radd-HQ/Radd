@@ -182,6 +182,15 @@ async def list_rules(session: Session, user: CurrentUser) -> list[StorageRuleRea
     return [StorageRuleRead.model_validate(r) for r in await routing_store.ordered_rules(session)]
 
 
+@router.get("/rule-types", response_model=list[str])
+async def list_rule_types(user: CurrentUser) -> list[str]:
+    """The rule types a new rule may use — the live providers on the routing
+    socket (RADD-1387): `llm` only while the `ai` plugin is enabled. A stored
+    rule of a withdrawn type stays listed under /rules and is skipped."""
+    _require_instance_admin(user)
+    return routing_store.rule_types()
+
+
 @router.post("/rules", response_model=StorageRuleRead, status_code=201)
 async def create_rule(data: StorageRuleCreate, session: Session, user: CurrentUser) -> StorageRuleRead:
     _require_instance_admin(user)

@@ -1,7 +1,8 @@
 """Rule-chain evaluation (spec 102): enabled rules by position, first non-None
 answer wins, everything else lands on the default host. A rule that cannot run
-(unknown type after a plugin uninstall, stale config, a host that vanished)
-falls through — routing degrades toward the default, never toward an error."""
+falls through — a type with no live provider (its plugin disabled or
+uninstalled: `ai`'s `llm` with `ai` off), a stale config, a host that vanished —
+so routing degrades toward the default, never toward an error."""
 
 import logging
 import uuid
@@ -36,10 +37,12 @@ async def choice_reachable(
     user-choice rule — or is it captured first (spec 102 "ask only when the
     answer matters")? Returns (reachable, name of the pre-empting rule).
 
-    Prediction mirrors `decide`: a CIDR rule matching the caller's IP captures
-    everything; an LLM rule captures the types its prefixes cover (when its
-    feature is live). Unknown/plugin rule types are conservatively treated as
-    non-capturing — over-asking beats silently discarding an answer.
+    Prediction mirrors `decide`, and each rule TYPE answers for itself through
+    the socket's optional `captured_types` (RADD-1387): a CIDR rule matching the
+    caller's IP captures everything; the `ai` plugin's llm rule captures the
+    types its prefixes cover while its feature is live. A type without the
+    method — or with no provider at all, its plugin disabled — is treated as
+    non-capturing: over-asking beats silently discarding an answer.
     """
     remaining = set(content_types) or {""}
     for rule in await ordered_rules(session):
@@ -48,38 +51,25 @@ async def choice_reachable(
         if rule.rule_type == RuleType.USER_CHOICE.value:
             return True, None
         handler = handler_for(rule.rule_type)
-        if handler is None:
+        captured_types = getattr(handler, "captured_types", None)
+        if captured_types is None:
             continue
         try:
             config = handler.config_model(**(rule.config or {}))
         except ValidationError:
             continue
-        if rule.rule_type == RuleType.CIDR.value:
-            from .rules import match_cidr
-
-            if match_cidr(source_ip, config.ranges) is not None:
-                return False, rule.name  # the network decides; nothing reaches the ask
-        elif rule.rule_type == RuleType.LLM.value:
-            if not await _llm_live(session):
-                continue
-            covered = {
-                ct
-                for ct in remaining
-                if any(ct.startswith(prefix) for prefix in config.content_type_prefixes)
-            }
-            remaining -= covered
-            if not remaining:
-                return False, rule.name
+        remaining -= await captured_types(
+            session, config, source_ip=source_ip, content_types=frozenset(remaining)
+        )
+        if not remaining:
+            return False, rule.name  # decided before the ask; nothing reaches it
     return False, None  # no enabled user-choice rule in the chain at all
 
 
-async def _llm_live(session: AsyncSession) -> bool:
-    try:
-        from radd.modules.ai import features as ai_features
-        from radd.modules.ai.types import AiFeature
-    except ImportError:
-        return False
-    return await ai_features.feature_enabled(session, AiFeature.STORAGE_ROUTING)
+def rule_types() -> list[str]:
+    """Every rule type a new rule may use — the LIVE providers on the socket,
+    so a type whose plugin is disabled is not offered (RADD-1387)."""
+    return sorted(sockets.providers(sockets.Socket.STORAGE_ROUTING_RULE))
 
 
 async def decide(session: AsyncSession, ctx: RoutingContext) -> StorageHost:

@@ -146,6 +146,8 @@ export const ApiPath = {
   storageHosts: "/storage/hosts",
   // Storage routing chain + move jobs (spec 102) — instance admin.
   storageRules: "/storage/rules",
+  // RADD-1387: the rule types a new rule may use — the live socket providers.
+  storageRuleTypes: "/storage/rule-types",
   storageRulesOrder: "/storage/rules/order",
   storageMoveJobs: "/storage/move-jobs",
   // Pre-upload storage context (spec 102) — any authenticated user.

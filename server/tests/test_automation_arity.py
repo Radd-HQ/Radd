@@ -81,7 +81,6 @@ def test_the_arity_table_reproduces_the_historical_item_action_split():
         ActionType.LINK_ITEM,
         ActionType.ARCHIVE_ITEM,
         ActionType.ADD_WATCHER,
-        ActionType.ADD_PARTICIPANT,
         ActionType.MOVE_TO_PROJECT,
     }
     assert set(ITEM_ACTIONS) == historical | added

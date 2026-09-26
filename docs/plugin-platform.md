@@ -345,6 +345,14 @@ These are named "sockets": a plugin declares it *provides* or *consumes* a socke
 - **TaskBackend** — the Celery ask (§6): a plugin *provides* a queue backend the kernel *consumes*.
 - **NonWorkingDaysProvider** (built, RADD-1031) — calendar dates nobody works; `leave` provides, the
   SLA clock consumes, every provider's answer UNIONs.
+- **PersonAvailabilityProvider** (built, RADD-1387) — which PEOPLE are away on a date
+  (`away_user_ids(session, day, user_ids)`); `leave` provides, round-robin assignment consumes,
+  answers UNION, and with no provider nobody is away. The per-person sibling of NonWorkingDays —
+  one answers for the instance, this one for a person, and neither stands in for the other.
+- **RoutingRule** (built, spec 102) — one storage routing-rule type; `attachments` provides
+  `user_choice`/`cidr`, `ai` provides `llm` (RADD-1387), and an optional `captured_types` lets a
+  type say which uploads it decides ahead of "ask the uploader". A stored rule whose type has no
+  live provider is skipped.
 - **TransitionCheckProvider** (built, RADD-1383) — one workflow transition-rule `check` a plugin
   serves (`validate` on write, `prepare` + pure `failure` at evaluation, `moved` after a state
   change). `approvals` provides `require_approval`. A stored rule whose provider is gone FAILS

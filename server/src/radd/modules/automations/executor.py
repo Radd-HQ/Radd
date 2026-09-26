@@ -672,31 +672,66 @@ class _NodeContext:
     #: What the node MADE, per subject, for the `created` port (RADD-1322).
     created: dict[str, list[uuid.UUID]] = field(default_factory=dict)
 
+    def _item_ids(self) -> tuple[uuid.UUID, ...]:
+        """The items this invocation speaks for: the one it was handed at
+        per-item arity, else the packet's."""
+        if self.node.kind is AutomationNodeKind.ACTION and arity_of(self.node) is NodeArity.ITEM:
+            return self.subject_ids
+        return self.packet.item_ids
+
     async def render(self, text: Any, *, line: bool = False) -> str:
         """Substitute `{{tokens}}` in a contributed node's text exactly as a
         built-in action's are (RADD-1324): the event's roots, every registered
-        provider's (`page`, `comment`, a plugin's), the variable bag, and
-        `{{item.*}}` when the packet holds exactly one item. `line=True`
-        collapses whitespace — for a value that NAMES something or becomes a
-        header, never for a body. Missing named outputs refuse execution;
-        absent optional event fields remain verbatim."""
-        from .planning import _item_ctx, load_item_facts
-        from .templating import Renderer
+        provider's (`page`, `comment`, a plugin's), the variable bag,
+        `{{item.*}}` when the invocation speaks for exactly one item, and the
+        set tokens `{{items.*}}` over everything it speaks for (RADD-1387 — a
+        contributed send_email's digest body needs `{{items.list}}`).
+        `line=True` collapses whitespace — for a value that NAMES something or
+        becomes a header, never for a body. Missing named outputs refuse
+        execution; absent optional event fields remain verbatim."""
+        from .planning import _item_ctx, items_ctx, load_item_facts
+        from .templating import TOKEN_RE, Renderer
 
-        item_ctx = None
-        ids = self.subject_ids if self.node.kind is AutomationNodeKind.ACTION and arity_of(self.node) is NodeArity.ITEM else self.packet.item_ids
-        if len(ids) == 1:
-            loaded = await _load(self.session, ids)
-            if loaded:
+        ids = self._item_ids()
+        wants_set = any(match.group(1).startswith("items.") for match in TOKEN_RE.finditer(str(text)))
+        item_ctx, items = None, [] if wants_set else None
+        if ids and (len(ids) == 1 or wants_set):
+            # Memoised per node: a subject, a body and a recipient are three
+            # renders over the same items, not three loads.
+            memo = self.cache.setdefault("render.loaded", {})
+            if ids not in memo:
+                loaded = await _load(self.session, ids)
+                memo[ids] = (loaded, await load_item_facts(self.session, loaded))
+            loaded, facts = memo[ids]
+            if len(loaded) == 1:
                 item, project = loaded[0]
-                facts = (await load_item_facts(self.session, loaded)).get(item.id)
-                item_ctx = _item_ctx(item, project, facts)
-        renderer = Renderer(self.packet.facts, item_ctx, None, self.packet.vars)
+                item_ctx = _item_ctx(item, project, facts.get(item.id))
+            if wants_set:
+                items = items_ctx(loaded, facts)
+        renderer = Renderer(self.packet.facts, item_ctx, items, self.packet.vars)
         result = renderer.line(text) if line else renderer(text)
         self.resolved.update(renderer.resolved)
         if renderer.misses:
             raise MissingTemplateOutput("; ".join(renderer.misses))
         return result
+
+    async def target_item(self) -> WorkItem | None:
+        """The ONE item this invocation is about, or None when it speaks for
+        several or none — the item a role like `reporter` resolves on."""
+        ids = self._item_ids()
+        return await self.session.get(WorkItem, ids[0]) if len(ids) == 1 else None
+
+    async def person(self, value: Any):
+        """A PERSON param read as the built-ins read one (RADD-1387): a role
+        (`reporter`/`assignee`) on the target item, else an email — rendered
+        first, so `{{triage.owner}}` works. Returns `roles.Person` or None, and
+        the node words its own skip, so a plugin's action (participants'
+        Add participant) needs no import of this module."""
+        from .roles import is_role, resolve_person
+
+        raw = str(value or "")
+        named = raw if is_role(raw) else await self.render(raw, line=True)
+        return await resolve_person(self.session, named, await self.target_item())
 
     async def render_draft(self, text: str) -> str:
         """Only the original draft's title may cross the submitter boundary.

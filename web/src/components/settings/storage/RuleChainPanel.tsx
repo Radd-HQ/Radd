@@ -3,7 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, CornerDownRight, Pencil, Plus, Trash2 } from "lucide-react";
 import { api } from "../../../lib/api";
 import { ApiPath, apiStorageRulePath } from "../../../lib/constants";
-import { queryKeys, storageHostsQuery, storageRulesQuery } from "../../../lib/queries";
+import {
+  queryKeys,
+  storageHostsQuery,
+  storageRulesQuery,
+  storageRuleTypesQuery,
+} from "../../../lib/queries";
 import {
   StorageRuleType,
   type StorageRuleRead,
@@ -49,6 +54,11 @@ function ruleSummary(rule: StorageRuleRead, hostName: (id: string) => string): s
 export function RuleChainPanel() {
   const rules = useQuery(storageRulesQuery());
   const hosts = useQuery(storageHostsQuery());
+  // RADD-1387: a stored rule whose type no plugin provides any more (the ai
+  // plugin's `llm` with ai disabled) is skipped by every upload — say so.
+  const ruleTypes = useQuery(storageRuleTypesQuery());
+  const unavailable = (rule: StorageRuleRead) =>
+    ruleTypes.data !== undefined && !ruleTypes.data.includes(rule.rule_type);
   const queryClient = useQueryClient();
   const [confirmDialog, confirm] = useConfirm();
   const [editing, setEditing] = useState<StorageRuleRead | null>(null);
@@ -164,8 +174,16 @@ export function RuleChainPanel() {
                     {rule.name}
                   </span>
                   <span className="rounded bg-elevated px-1.5 py-px text-[10px] text-fg-secondary">
-                    {TYPE_LABELS[rule.rule_type]}
+                    {TYPE_LABELS[rule.rule_type] ?? rule.rule_type}
                   </span>
+                  {unavailable(rule) && (
+                    <span
+                      className="text-[10px] text-fg-muted"
+                      title="The plugin that provides this rule type is disabled, so uploads skip this rule."
+                    >
+                      Unavailable · skipped
+                    </span>
+                  )}
                 </span>
                 <span className="block truncate text-xs text-fg-muted">
                   {ruleSummary(rule, hostName)}

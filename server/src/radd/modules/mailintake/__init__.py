@@ -11,6 +11,7 @@ from .router import router
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .rules_router import router as rules_router
 from .automation import RESOLUTION_NODE
+from .automation_email import NOTIFY_REPORTER_ON_DONE, SEND_EMAIL_NODE
 from .notify_transport import NotificationMailTransport
 from .types import MAIL_TRANSPORT_NAME, MailEvent, OUTBOUND_CONSUMER_NAME
 
@@ -41,8 +42,9 @@ plugin = RaddPlugin(
     ),
     # RADD-961: the AI routing rule reaches `ai` DEFERRED and feature-detected —
     # the module is optional and disableable, and a missing one must fall through
-    # to the next rule rather than cost a customer their email. Same edge
-    # `attachments` declares for its own LLM storage rule.
+    # to the next rule rather than cost a customer their email. (The LLM
+    # STORAGE rule took the other road in RADD-1387: `ai` provides it on a
+    # socket, so `attachments` has no edge to `ai` at all.)
     # csat (RADD-982/1368): it depends_on THIS module, so the resolution
     # notice's "yield to the survey" question can only be asked the deferred
     # way — and a disabled csat answering by absence is exactly right.
@@ -50,7 +52,11 @@ plugin = RaddPlugin(
     routers=(router, config_router, rules_router, signature_router),
     # The resolution notice as a node too, for rules that want it on their own
     # conditions; it shares `resolved.py`'s guards and wording.
-    automation_nodes=(RESOLUTION_NODE,),
+    # RADD-1387: Send email is this plugin's node (key `action.send_email`, kept
+    # from when it was built in, so stored graphs load unchanged) — disabled,
+    # the action and its template leave the catalog with the plugin.
+    automation_nodes=(RESOLUTION_NODE, SEND_EMAIL_NODE),
+    automation_templates=(NOTIFY_REPORTER_ON_DONE,),
     # RADD-1385: notification email rides this plugin through the kernel socket;
     # disabling it withdraws the transport and notify records email undeliverable.
     integrations=(

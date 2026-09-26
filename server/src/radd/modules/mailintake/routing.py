@@ -173,7 +173,7 @@ class LlmVerdict(NamedTuple):
 async def _match_llm(session: AsyncSession, plan: EmailPlan, config: dict) -> LlmVerdict:
     """Classify the CONTENT into one of an enumerated set of projects (RADD-961).
 
-    Mirrors `attachments/routing/rules.py::LlmRule`, including the part that
+    Mirrors `ai/storage_rule.py::LlmRule`, including the part that
     matters more than the classification: **every classification failure returns
     no project and the chain continues.** The ai module is optional and
     disableable, the toggle can be off, the provider can time out, and the model

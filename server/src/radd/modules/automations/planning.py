@@ -54,7 +54,7 @@ from radd.modules.teams import service as teams_service
 from radd.modules.workflow import service as workflow
 
 from . import catalog, conditions, round_robin
-from .email_action import is_role, outbound_available, resolve_recipient, resolve_user
+from .roles import is_role, resolve_user
 from .templating import Renderer
 from .types import (
     CLEAR_VALUE,
@@ -199,9 +199,6 @@ class _Plan:
     http: tuple[str, dict[str, Any], dict[str, str]] | None = None
     # (user_id, message) for notify_user.
     notify: tuple[uuid.UUID, str] | None = None
-    # (to_address, to_name, subject, body, thread) for send_email (spec 66;
-    # `thread` RADD-1318 — send on the issue's email thread).
-    email: tuple[str, str, str, str, bool] | None = None
     # (team_id, assigned_user_id) for assign_round_robin (RADD-1044): applied
     # ALONGSIDE the item_update, so the rotation advances in the same SAVEPOINT as
     # the assignment it describes. Read-only here — the write is `_apply_plan`'s.
@@ -212,7 +209,7 @@ class _Plan:
     link: tuple[uuid.UUID, str] | None = None
     # True/False for archive_item.
     archive: bool | None = None
-    # user id for add_watcher / add_participant.
+    # user id for add_watcher.
     person: uuid.UUID | None = None
     # target project id for move_to_project.
     move_to: uuid.UUID | None = None
@@ -685,22 +682,6 @@ async def _plan_action(
                 f"notify_user {target_user}",
                 notify=(user.id, text(params["message"])),
             )
-        case ActionType.SEND_EMAIL:
-            if not await outbound_available(session):
-                return _Plan(
-                    PlanKind.SKIP,
-                    "send_email: no outbound mail sender is configured (Settings → Email)",
-                )
-            recipient = await resolve_recipient(session, text.line(params["to"]), item)
-            if recipient is None:
-                return _Plan(PlanKind.SKIP, f"send_email: no recipient resolves for {params['to']!r}")
-            address, name = recipient
-            thread = bool(params.get("thread")) and item is not None
-            return _Plan(
-                PlanKind.EMAIL,
-                f"send_email -> {address}" + (" (on the issue's thread)" if thread else ""),
-                email=(address, name, text.line(params["subject"]), text(params["body"]), thread),
-            )
         case ActionType.SET_STATE:
             # Every named target below renders as a TEMPLATE first (spec 120), so
             # `{{triage.state}}` is a state name the same way a literal is. The
@@ -909,7 +890,7 @@ async def _plan_action(
             if bool(item.archived_at) == archived:
                 return _Plan(PlanKind.SKIP, f"archive_item: already {'archived' if archived else 'live'}")
             return _Plan(PlanKind.ARCHIVE, "archive_item" if archived else "archive_item -> restore", archive=archived)
-        case ActionType.ADD_WATCHER | ActionType.ADD_PARTICIPANT:
+        case ActionType.ADD_WATCHER:
             verb = action_type.value
             target_user = params["user"]
             if is_role(target_user):
@@ -923,8 +904,7 @@ async def _plan_action(
                 if user is None:
                     return _Plan(PlanKind.SKIP, f"{verb}: no user {email!r}")
                 user_id, who = user.id, email
-            kind = PlanKind.WATCH if action_type is ActionType.ADD_WATCHER else PlanKind.PARTICIPANT
-            return _Plan(kind, f"{verb} {who}", person=user_id)
+            return _Plan(PlanKind.WATCH, f"{verb} {who}", person=user_id)
         case ActionType.MOVE_TO_PROJECT:
             key = text.line(params["project"])
             target = await _project_by_key(session, key)

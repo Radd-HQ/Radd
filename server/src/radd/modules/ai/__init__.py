@@ -7,7 +7,7 @@ from radd.kernel import NavItemSpec, PluginUiManifest, RaddPlugin
 from radd.kernel import SettingSpec
 from radd.kernel.sockets import Socket
 
-from . import registry
+from . import registry, storage_rule
 from .admin_router import router as admin_router
 from .editor_router import router as editor_router
 from .embeddings.candidates import SemanticCandidates
@@ -19,6 +19,7 @@ from .types import (
     AiInvalidQueryError,
     AiRole,
     AiUpstreamError,
+    StorageRuleType,
 )
 
 
@@ -299,7 +300,13 @@ plugin = RaddPlugin(
     # RADD-1384: meaning-ranked candidates for search (hybrid /search,
     # deflection, Ask mode), served on the kernel socket — search imports
     # nothing from here, and disabling this plugin leaves it full-text only.
+    # RADD-1387: the `llm` storage routing rule is this plugin's provider on the
+    # socket `attachments` reads — so `attachments` never imports `ai`, and
+    # disabling this plugin withdraws the rule type (stored rules fall through).
     integrations=(
         IntegrationSpec(Socket.SEMANTIC_CANDIDATES, "ai_embeddings", impl=SemanticCandidates()),
+        IntegrationSpec(
+            Socket.STORAGE_ROUTING_RULE, StorageRuleType.LLM.value, impl=storage_rule.LlmRule()
+        ),
     ),
 )

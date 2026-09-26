@@ -13,10 +13,12 @@ from radd.kernel import changes
 from radd.modules.events import service as events
 
 from ..models import StorageRule
-from ..types import AttachmentEntity, AttachmentEvent, RuleType
-from .engine import handler_for, ordered_rules
+from ..types import AttachmentEntity, AttachmentEvent
+from .engine import handler_for, ordered_rules, rule_types
 
-__all__ = ["ordered_rules", "get_rule", "create_rule", "update_rule", "delete_rule", "reorder"]
+__all__ = [
+    "ordered_rules", "rule_types", "get_rule", "create_rule", "update_rule", "delete_rule", "reorder",
+]
 
 
 class RuleConfigError(Exception):
@@ -62,16 +64,16 @@ async def create_rule(
     session: AsyncSession,
     *,
     name: str,
-    rule_type: RuleType,
+    rule_type: str,
     config: dict,
     enabled: bool = True,
     actor_id: uuid.UUID | None = None,
 ) -> StorageRule:
-    validated = validate_config(rule_type.value, config)
+    validated = validate_config(rule_type, config)
     tail = await session.execute(select(StorageRule.position).order_by(StorageRule.position.desc()).limit(1))
     position = (tail.scalar() or 0) + 1
     rule = StorageRule(
-        name=name, rule_type=rule_type.value, config=validated, enabled=enabled, position=position
+        name=name, rule_type=str(rule_type), config=validated, enabled=enabled, position=position
     )
     session.add(rule)
     await session.flush()

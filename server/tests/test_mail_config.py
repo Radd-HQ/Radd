@@ -945,10 +945,10 @@ async def test_the_ack_and_the_reply_both_leave_from_the_source_they_arrived_at(
     await db.flush()
     item_id = await _arrived(db, source, project, sender_email=departed.email)
 
-    from radd.modules.automations import engine
     from radd.modules.items import service as items_service
+    from radd.modules.mailintake import automation_email
 
-    await engine._send_email(
+    await automation_email.deliver(
         db, departed.email, "Cass Customer", f"[{project.key}-1] Printer on fire", "Received.",
         thread_on=await items_service.require_item(db, item_id),
     )

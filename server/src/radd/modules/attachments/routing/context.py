@@ -16,6 +16,6 @@ class RoutingContext:
     entity_type: str
     entity_id: uuid.UUID
     project_id: uuid.UUID | None  # None for wiki parents
-    # Lazy accessor over the buffered upload — only the LLM rule reads bytes,
+    # Lazy accessor over the buffered upload — only a classifier (ai's llm) reads bytes,
     # so the common path never copies them.
     content: Callable[[], bytes] | None = None

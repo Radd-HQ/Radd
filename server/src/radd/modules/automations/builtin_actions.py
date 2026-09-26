@@ -8,9 +8,14 @@ not. Now every action — `set_state` as much as `page.comment` — is one spec 
 executor runs through ONE path: `plan` records what it would do (so the dry run
 is free), `apply` runs inside the savepoint, the budget and the loop guard.
 
-Twenty-eight specs share one planner and one applier: the per-action logic
+Twenty-six specs share one planner and one applier: the per-action logic
 still lives in `planning._plan` / `engine._apply_plan`, which is the actions'
 own implementation, not a dispatch the executor has to know about.
+
+Two actions that used to be here are CONTRIBUTED by their owners since
+RADD-1387, under the same keys: `action.send_email` (mailintake) and
+`action.add_participant` (participants). Built in, they imported those optional
+plugins behind a boot-config check that a runtime disable never changed.
 """
 
 from __future__ import annotations
@@ -53,13 +58,11 @@ LABELS: dict[ActionType, str] = {
     ActionType.LINK_ITEM: "Link to issue",
     ActionType.ARCHIVE_ITEM: "Archive / restore",
     ActionType.ADD_WATCHER: "Add watcher",
-    ActionType.ADD_PARTICIPANT: "Add participant",
     ActionType.MOVE_TO_PROJECT: "Move to project",
     ActionType.CREATE_ITEM: "Create issue",
     ActionType.SEND_WEBHOOK: "Send webhook",
     ActionType.POST_CHAT: "Post to chat",
     ActionType.NOTIFY_USER: "Notify user",
-    ActionType.SEND_EMAIL: "Send email",
 }
 
 #: Params a fresh node needs to be valid enough to save — the action union
@@ -86,13 +89,11 @@ DEFAULT_PARAMS: dict[ActionType, dict[str, Any]] = {
     ActionType.LINK_ITEM: {"target": "", "link_type": "relates"},
     ActionType.ARCHIVE_ITEM: {"archived": True},
     ActionType.ADD_WATCHER: {"user": "assignee"},
-    ActionType.ADD_PARTICIPANT: {"user": ""},
     ActionType.MOVE_TO_PROJECT: {"project": ""},
     ActionType.CREATE_ITEM: {"project": "", "title": ""},
     ActionType.SEND_WEBHOOK: {"url": "https://"},
     ActionType.POST_CHAT: {"webhook_url": "https://", "message": ""},
     ActionType.NOTIFY_USER: {"user": "", "message": ""},
-    ActionType.SEND_EMAIL: {"to": "reporter", "subject": "", "body": ""},
 }
 
 #: `create_item` is the one built-in producer: the new issue's key is what makes
@@ -181,17 +182,17 @@ async def _apply_entry(ctx: Any, plan) -> None:
 def _check(action: ActionType):
     """Write-time validation: the action union type-checks the params (a pydantic
     `ValidationError` propagates as the 422 it always was), and a ROLE recipient
-    needs per-item arity — `send_email` to `reporter` at set arity resolves no
+    needs per-item arity — `notify_user` to `reporter` at set arity resolves no
     recipient and skip-logs on every run (RADD-918)."""
 
     def check(params: dict[str, Any]) -> None:
-        from .email_action import is_role
+        from .roles import is_role
         from .schemas import ActionAdapter
         from .types import ARITY_PARAM
 
         ActionAdapter.validate_python({"type": action.value, "params": params})
-        if action in (ActionType.SEND_EMAIL, ActionType.NOTIFY_USER):
-            target = str(params.get("to") or params.get("user") or "")
+        if action is ActionType.NOTIFY_USER:
+            target = str(params.get("user") or "")
             arity = str(params.get(ARITY_PARAM) or ACTION_ARITY_DEFAULT[action].value)
             if is_role(target) and arity != NodeArity.ITEM.value:
                 raise ValueError(

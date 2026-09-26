@@ -46,7 +46,7 @@ from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.events import service as events_service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
-from radd.modules.mailintake import service as mail_service, transport
+from radd.modules.mailintake import automation_email, service as mail_service, transport
 from radd.modules.mailintake.models import MailSender
 from radd.modules.mailintake.types import MailEvent, MailSenderKind
 from radd.modules.notify import emailer, service as notify_service
@@ -285,8 +285,10 @@ async def test_the_send_email_action_leaves_through_the_sender_row(
     db, sender_row, rows_only
 ):
     """`_apply_plan`'s EMAIL branch dialled `radd.smtp` directly, which made it
-    the third sender a rows-only instance silently never sent from."""
-    await automations_engine._send_email(
+    the third sender a rows-only instance silently never sent from. (The action
+    is mailintake's node since RADD-1387; withdrawn with the plugin, it leaves
+    the catalog — test_optional_plugin_withdrawal.py.)"""
+    await automation_email.deliver(
         db, "customer@example.com", "Cust Omer", "Your ticket", "We are on it."
     )
 
@@ -295,25 +297,6 @@ async def test_the_send_email_action_leaves_through_the_sender_row(
     assert str(message["From"]) == ROW_FROM
     assert str(message["Subject"]) == "Your ticket"
     assert "customer@example.com" in str(message["To"])
-
-
-async def test_the_send_email_action_skip_logs_without_the_mail_module(
-    db, sender_row, rows_only, monkeypatch, caplog
-):
-    """mailintake is optional and disableable. Absent, the action skips with a
-    line rather than raising — the `contact` role's posture, and the opposite of
-    the silence this whole issue is about."""
-    monkeypatch.setattr(settings, "modules", tuple(
-        m for m in settings.modules if m != "radd.modules.mailintake"
-    ))
-
-    with caplog.at_level("INFO"):
-        await automations_engine._send_email(
-            db, "customer@example.com", "Cust Omer", "Your ticket", "We are on it."
-        )
-
-    assert rows_only.sent == [] and rows_only.dialled == []
-    assert any("mailintake module is not loaded" in record.message for record in caplog.records)
 
 
 async def test_an_automations_own_mail_event_cannot_retrigger_it(db, sender_row, rows_only):
@@ -332,7 +315,7 @@ async def test_an_automations_own_mail_event_cannot_retrigger_it(db, sender_row,
 
     before = await events_service.latest_event_id(db)
     with events.automated():
-        await automations_engine._send_email(
+        await automation_email.deliver(
             db, "customer@example.com", "", "Your ticket", "We are on it."
         )
     await db.flush()
@@ -381,7 +364,7 @@ async def test_a_service_account_is_never_a_send_email_recipient(db, world):
     """`resolve_recipient` asked `user.active`, which a spec-113 SERVICE account
     passes. The rule now comes from `mailintake.service.mailable_user`, so CSAT
     and this action cannot disagree about who has a mailbox."""
-    from radd.modules.automations.email_action import resolve_recipient
+    from radd.modules.mailintake.automation_email import resolve_recipient
 
     _agent, project, _item = world
     robot = User(

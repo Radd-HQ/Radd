@@ -11,7 +11,7 @@ defined now; a concrete second provider arrives when the first consuming plugin 
 actually built. `StorageBackend` and `TaskBackend` already have real providers.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import date
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
@@ -22,9 +22,11 @@ from .registry import registries
 
 class Socket(StrEnum):
     STORAGE_BACKEND = "storage_backend"  # filesystem | s3 (attachments)
-    STORAGE_ROUTING_RULE = "storage_routing_rule"  # user_choice | cidr | llm (spec 102)
+    # user_choice | cidr (attachments), llm (ai) — spec 102, RADD-1387
+    STORAGE_ROUTING_RULE = "storage_routing_rule"
     TASK_BACKEND = "task_backend"  # localloop (default) | celery
     NON_WORKING_DAYS = "non_working_days"  # calendar dates nobody works (RADD-1031)
+    PERSON_AVAILABILITY = "person_availability"  # who is away on a date (RADD-1387)
     TRANSITION_CHECK = "transition_check"  # a workflow transition-rule check (RADD-1383)
     SEARCH_DOCUMENTS = "search_documents"  # non-item hits search shows (RADD-1384)
     SEMANTIC_CANDIDATES = "semantic_candidates"  # meaning-ranked ids for a query (RADD-1384)
@@ -70,7 +72,17 @@ class RoutingRule(Protocol):
     against an admin-authored config and answers with a host id, or None to
     fall through to the next rule in the chain. `config_model` is the pydantic
     class validating the rule's stored JSON config. A plugin rule type is one
-    IntegrationSpec on this socket."""
+    IntegrationSpec on this socket (`ai` provides `llm`, RADD-1387).
+
+    `captured_types(session, config, *, source_ip, content_types)` — the subset
+    of `content_types` this rule would decide WITHOUT reaching an "ask the
+    uploader" rule behind it, so the upload form prompts only when the answer
+    can matter. OPTIONAL: a type that does not implement it is treated as
+    capturing nothing (over-asking beats silently discarding an answer).
+
+    A stored rule whose type has no provider — the plugin disabled — is
+    skipped: routing degrades toward the default host, never toward an error.
+    """
 
     config_model: Any
 
@@ -97,6 +109,28 @@ class NonWorkingDaysProvider(Protocol):
     """
 
     async def non_working_dates(self, session: Any, start: date, end: date) -> set[date]: ...
+
+
+@runtime_checkable
+class PersonAvailabilityProvider(Protocol):
+    """Which PEOPLE are away on a date (RADD-1387).
+
+    `NON_WORKING_DAYS` answers for the INSTANCE — a date nobody works, so a
+    clock attached to an item can stop. This answers per PERSON: somebody's
+    leave, or a holiday that covers their team. The consumer is whatever hands
+    work to people (round-robin assignment skips whoever is away), and it must
+    never read these answers as instance-wide.
+
+    `away_user_ids(session, day, user_ids)` — which of `user_ids` are away on
+    `day`. "Is this person away" is the one-element question. Batched because
+    a consumer asks about a whole team at once.
+
+    Every provider is asked and the answers UNION: a person is away if any
+    calendar says so. With no provider — `leave` disabled — nobody is away,
+    which is exactly the behaviour of an instance that never recorded leave.
+    """
+
+    async def away_user_ids(self, session: Any, day: date, user_ids: Collection[Any]) -> set[Any]: ...
 
 
 @runtime_checkable

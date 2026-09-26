@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { api, errorMessage } from "../../../lib/api";
 import { ApiPath, apiStorageRulePath } from "../../../lib/constants";
-import { queryKeys } from "../../../lib/queries";
+import { queryKeys, storageRuleTypesQuery } from "../../../lib/queries";
 import {
   StorageRuleType,
   type CidrRange,
@@ -82,6 +82,12 @@ export function RuleDialog({
   const answerRows = useKeyedRows(answers, setAnswers);
 
   const hostOptions = hosts.map((host) => ({ value: host.id, label: host.name }));
+  // RADD-1387: only the types the server offers — `llm` is the ai plugin's
+  // and absent while it is disabled. Until the answer arrives every known type
+  // shows; an existing rule always shows its own.
+  const ruleTypes = useQuery(storageRuleTypesQuery());
+  const offered = (type: StorageRuleTypeValue) =>
+    !ruleTypes.data || ruleTypes.data.includes(type) || existing?.rule_type === type;
 
   const save = useMutation({
     mutationFn: (body: StorageRuleCreatePayload | StorageRuleUpdatePayload) =>
@@ -137,9 +143,13 @@ export function RuleDialog({
           title={existing ? "The rule type is fixed after creation" : undefined}
           hint={existing ? "Fixed after creation — add a new rule to change type." : undefined}
         >
-          <option value={StorageRuleType.userChoice}>Ask the uploader</option>
-          <option value={StorageRuleType.cidr}>Uploader network (CIDR)</option>
-          <option value={StorageRuleType.llm}>AI classifier</option>
+          {offered(StorageRuleType.userChoice) && (
+            <option value={StorageRuleType.userChoice}>Ask the uploader</option>
+          )}
+          {offered(StorageRuleType.cidr) && (
+            <option value={StorageRuleType.cidr}>Uploader network (CIDR)</option>
+          )}
+          {offered(StorageRuleType.llm) && <option value={StorageRuleType.llm}>AI classifier</option>}
         </SelectField>
 
         {ruleType === StorageRuleType.userChoice && (

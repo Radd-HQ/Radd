@@ -75,7 +75,9 @@ export interface StorageHostHealth {
   detail: string;
 }
 
-/** Builtin routing-rule types (spec 102); plugins can contribute more later. */
+/** Routing-rule types this page has a form for (spec 102): attachments' own
+ * two, and the ai plugin's `llm` (RADD-1387). Which are OFFERED is the
+ * server's answer — GET /storage/rule-types — not this list. */
 export const StorageRuleType = {
   userChoice: "user_choice",
   cidr: "cidr",

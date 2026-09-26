@@ -56,12 +56,13 @@ class AttachmentParentType(StrEnum):
 
 
 class RuleType(StrEnum):
-    """Builtin routing-rule types; plugins contribute more via the
-    STORAGE_ROUTING_RULE socket (spec 102)."""
+    """This module's own routing-rule types; plugins contribute more via the
+    STORAGE_ROUTING_RULE socket (spec 102) — `ai` provides `llm` (RADD-1387).
+    A rule's `rule_type` is therefore a string validated against the LIVE
+    providers, not a member of this enum."""
 
     USER_CHOICE = "user_choice"
     CIDR = "cidr"
-    LLM = "llm"
 
 
 class MoveJobState(StrEnum):
