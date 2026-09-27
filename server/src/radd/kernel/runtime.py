@@ -5,7 +5,10 @@ work has drained (`kernel.admission`, RADD-1372). Every other plugin keeps
 serving and ticking while it happens.
 
 - **enable** closes the plugin, registers and mounts it, starts it, then opens
-  it: its routes and ticks admit nothing until its startup has finished.
+  it: its routes and ticks admit nothing until its startup has finished. A
+  failure rolls back only what happened: the shutdown hooks run when the start
+  began, and a hook that then fails is logged and noted on the original error,
+  never reported in its place.
 - **disable** closes the plugin and keeps it closed until it is enabled again.
   A drain that times out, or a shutdown hook that fails, leaves it registered
   and closed for the reconciler to retry; reopening in between would admit the
@@ -70,12 +73,18 @@ class PluginRuntime:
 
         start = len(self.app.routes)
         owned = [Depends(admission.admission(plugin.id))]
-        for router in plugin.routers:
-            self.app.include_router(router, prefix=settings.api_prefix, dependencies=owned)
-        for spec in plugin.entities:
-            entities.register_entity(spec)
-            self.app.include_router(entities.crud_router(spec), prefix=settings.api_prefix,
-                                    dependencies=owned)
+        try:
+            for router in plugin.routers:
+                self.app.include_router(router, prefix=settings.api_prefix, dependencies=owned)
+            for spec in plugin.entities:
+                entities.register_entity(spec)
+                self.app.include_router(entities.crud_router(spec), prefix=settings.api_prefix,
+                                        dependencies=owned)
+        except BaseException:
+            # A router included before the failure is not this plugin's yet
+            # (`self.routes` is written below), so `unmount` could not find it.
+            del self.app.routes[start:]
+            raise
         added = self.app.routes[start:]
         del self.app.routes[start:]
         # API routes precede the plugin-assets/SPA fallback, including late enables.
@@ -105,34 +114,59 @@ class PluginRuntime:
                 break
             node = getattr(node, "app", None)
 
+    def _started(self, plugin) -> bool:
+        return any(p.id == plugin.id for p in self.started)
+
+    def _forget(self, plugin) -> None:
+        self.started[:] = [p for p in self.started if p.id != plugin.id]
+        self.stopping.discard(plugin.id)
+
     async def start_plugin(self, plugin):
+        """Run the startup hooks, then schedule the loops. The plugin counts as
+        STARTED from the first hook: a start that fails halfway has hooks to
+        undo, so `stop_plugin` must run for it. Loops are scheduled only when
+        none of an earlier start survive (a stop that failed on a hook has
+        already dropped its handles; one that failed on a loop has not), so a
+        resume never runs two copies of one loop."""
         # The owner is copied into every task started here, so a loop's ticks
         # and a hook's spawned jobs are counted against this plugin.
         token = owner.set(plugin.id)
-        self.loops.setdefault(plugin.id, [])
+        handles = self.loops.setdefault(plugin.id, [])
+        if not self._started(plugin):
+            self.started.append(plugin)
         try:
             for hook in plugin.on_startup:
                 await hook()
-            for loop in schedule_tasks(plugin):
-                self.loops[plugin.id].append(loop)
-                await loop.start()
-            self.started.append(plugin)
+            if handles:
+                logger.warning("Plugin %s keeps %d loop(s) an earlier stop could not end",
+                               plugin.id, len(handles))
+            else:
+                for loop in schedule_tasks(plugin):
+                    handles.append(loop)
+                    await loop.start()
         finally:
             owner.reset(token)
 
     async def stop_plugin(self, plugin):
+        """Stop a started plugin: each loop is forgotten as it stops, then the
+        shutdown hooks run. A plugin whose start never began has nothing to
+        undo, so its hooks do not run either. A hook that raises leaves the
+        plugin `stopping` for the retry, with its loops already gone."""
+        if not self._started(plugin) and not self.loops.get(plugin.id):
+            return
         self.stopping.add(plugin.id)
         token = owner.set(plugin.id)
         try:
-            for loop in reversed(self.loops.get(plugin.id, [])):
-                await loop.stop()
+            handles = self.loops.get(plugin.id, [])
+            while handles:
+                await handles[-1].stop()
+                handles.pop()
+            self.loops.pop(plugin.id, None)
             for hook in plugin.on_shutdown:
                 await hook()
         finally:
             owner.reset(token)
-        self.loops.pop(plugin.id, None)
-        self.started[:] = [p for p in self.started if p.id != plugin.id]
-        self.stopping.discard(plugin.id)
+        self._forget(plugin)
 
     def unmount(self, plugin):
         owned = {id(r) for r in self.routes.pop(plugin.id, [])}
@@ -164,10 +198,16 @@ class PluginRuntime:
                 _check_subjects(list(registries.plugins.values()))
                 await entities.ensure_tables()
                 await self.start_plugin(plugin)
-            except BaseException:
+            except BaseException as exc:
                 try:
+                    # A no-op unless its start began: a mount failure has no hooks to undo.
                     await self.stop_plugin(plugin)
+                except Exception as stop_exc:
+                    # The original failure is the one to report; the hook's rides along.
+                    logger.exception("Stopping plugin %s after its failed enable also failed", plugin.id)
+                    exc.add_note(f"stopping it afterwards also failed: {stop_exc!r}")
                 finally:
+                    self._forget(plugin)  # rolled back below: nothing of it is left to stop
                     for name, value in snapshot.items():
                         target = getattr(registries, name)
                         target.clear()

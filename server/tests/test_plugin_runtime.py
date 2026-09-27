@@ -1,6 +1,7 @@
 """RADD-1341/1372: route lifecycles, per-owner draining, failures, and the lease."""
 import asyncio
 import sys
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -380,3 +381,76 @@ async def test_plugin_websocket_closes_and_shutdown_flushes(harness, monkeypatch
     assert {'type': 'websocket.close', 'code': 1012} in messages
     flush.assert_awaited_once()
     assert not admission.gate.sockets
+
+
+async def test_a_mount_failure_runs_no_shutdown_hook_and_stays_the_reported_error(harness, monkeypatch):
+    """`enable` used to stop a plugin whose start never began: its shutdown hooks
+    ran against nothing, and a hook that raised replaced the mount error, so the
+    row reported the flush instead of the mount."""
+    from radd.modules.pluginmgr import live
+    _, manager = harness
+    stop = AsyncMock(side_effect=RuntimeError('nothing to flush'))
+    plugin = RaddPlugin(name='unmountable', core=False, on_shutdown=(stop,))
+    path = package(monkeypatch, plugin)
+
+    def mount(plugin):
+        raise LookupError('mount failed')
+    monkeypatch.setattr(manager, 'mount', mount)
+    with pytest.raises(LookupError, match='mount failed'):
+        await manager.enable(plugin, path)
+    stop.assert_not_awaited()
+    assert plugin.id not in registries.plugins
+    assert not manager.started and not manager.stopping and plugin.id not in manager.loops
+    # The reconciler attributes THAT error to the row.
+    monkeypatch.setattr(live, '_runtime', manager)
+    for name, empty in (('_errors', {}), ('_backoff', {}), ('_pending', set())):
+        monkeypatch.setattr(live, name, empty)
+    await live._attempt(plugin.id, True, partial(live._enable, plugin, path))
+    assert live._errors[plugin.id].startswith('LookupError')
+    stop.assert_not_awaited()
+
+
+async def test_a_startup_failure_after_a_hook_still_runs_the_shutdown_hooks(harness, monkeypatch):
+    """The counterpart: a start that began has hooks to undo, and a shutdown hook
+    that then fails rides along on the original error instead of replacing it."""
+    _, manager = harness
+    stop = AsyncMock(side_effect=RuntimeError('flush failed'))
+    plugin = RaddPlugin(name='half-started', core=False,
+                        on_startup=(AsyncMock(), AsyncMock(side_effect=ValueError('startup failed'))),
+                        on_shutdown=(stop,))
+    with pytest.raises(ValueError, match='startup failed') as failure:
+        await manager.enable(plugin, package(monkeypatch, plugin))
+    stop.assert_awaited_once()
+    assert any('flush failed' in note for note in failure.value.__notes__)
+    assert not manager.started and not manager.stopping
+
+
+async def test_a_raising_shutdown_hook_leaves_no_loop_behind_and_resume_starts_each_once(harness, monkeypatch):
+    """`stop_plugin` reached `loops.pop` only when every hook succeeded, and a
+    resume then re-stopped the stopped loops and appended a second copy of each."""
+    _, manager = harness
+    scheduled = []
+
+    def schedule(name, run, interval, gate=None):
+        loop = SimpleNamespace(start=AsyncMock(), stop=AsyncMock())
+        scheduled.append(loop)
+        return loop
+    monkeypatch.setattr('radd.kernel.sockets.provider', lambda *a: SimpleNamespace(schedule=schedule))
+    hook = AsyncMock(side_effect=RuntimeError('half stopped'))
+    plugin = RaddPlugin(name='looping-stop', core=False, on_shutdown=(hook,),
+                        tasks=(TaskSpec(name='loop-a', run=AsyncMock(), interval=60),
+                               TaskSpec(name='loop-b', run=AsyncMock(), interval=60)))
+    await manager.enable(plugin, package(monkeypatch, plugin))
+    assert len(manager.loops[plugin.id]) == 2
+    with pytest.raises(RuntimeError, match='half stopped'):
+        await manager.disable(plugin)
+    assert plugin.id not in manager.loops, 'every loop stopped before the hook raised'
+    assert [loop.stop.await_count for loop in scheduled] == [1, 1]
+    assert plugin.id in manager.stopping
+    hook.side_effect = None
+    await manager.resume(plugin)
+    assert len(scheduled) == 4 and len(manager.loops[plugin.id]) == 2, 'one fresh handle per loop'
+    assert [loop.start.await_count for loop in scheduled] == [1, 1, 1, 1]
+    assert plugin.id not in manager.stopping
+    await manager.disable(plugin)
+    assert not manager.loops and [loop.stop.await_count for loop in scheduled] == [1, 1, 1, 1]
