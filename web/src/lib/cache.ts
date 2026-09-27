@@ -5,7 +5,7 @@ import { invalidateEntities as invalidateTagged } from "@radd/plugin-sdk";
  * Invalidation by ENTITY, not query key: a read declares what it caches
  * (`meta: entityMeta(Entity.item)`), a mutation invalidates by entity
  * (`invalidateEntities(qc, Entity.item)`), so queries added later are covered
- * automatically. See docs/modules.md → "Cache invalidation".
+ * automatically. See docs/modules.md → "Frontend cache invalidation".
  */
 
 /** One tag per cacheable domain entity — extend this as modules are added. */
