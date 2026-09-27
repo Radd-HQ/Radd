@@ -13,7 +13,7 @@ from radd.modules.projects import service as projects_service
 
 from . import service
 from .schemas import ResolvedSetting, ScopedSettingRead, ScopedSettingWrite
-from .types import SettingKey, SettingScope
+from .types import SettingKey, SettingScope, setting_spec
 
 router = APIRouter(prefix="/scoped-settings", tags=["settings"])
 
@@ -41,7 +41,11 @@ async def resolve_setting(
 ) -> ResolvedSetting:
     """One key's effective value through the cascade (spec 70) — readable by any
     member (item.read on the project when given), unlike the manage-gated scope
-    editors above. The SPA's `usePointsEnabled` gate reads this."""
+    editors above. The SPA's `usePointsEnabled` gate reads this. Never a secret:
+    this route answers Anyone, and a secret is read only on the admin-gated list
+    (RADD-1424)."""
+    if setting_spec(key).secret:
+        raise ForbiddenError("a secret setting is readable only on its settings page")
     if project_id is not None:
         project = await projects_service.get_project(session, project_id)
         await authz.require(session, user, Permission.ITEM_READ, project=project)

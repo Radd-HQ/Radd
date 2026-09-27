@@ -6,8 +6,9 @@ one key to protect and carry through a restore, and a derived key keeps that
 story true while guaranteeing backup ciphertext and row ciphertext never share
 key material. Values are stored as `enc1:<b64(nonce || AES-256-GCM box)>`;
 anything without the prefix is legacy plaintext and passes through `decrypt`
-unchanged, which is what makes adoption lazy — the webhooks startup hook
-re-encrypts stragglers whenever the key is available.
+unchanged, which is what makes adoption lazy: a row's secret takes its encrypted
+form (`adopt`) on its next save, and each owner's startup hook re-encrypts the
+stragglers whenever the key is available.
 """
 
 import base64
@@ -56,6 +57,19 @@ def encrypt(plain: str) -> str:
     nonce = os.urandom(_NONCE_BYTES)
     box = AESGCM(_key()).encrypt(nonce, plain.encode(), None)
     return _PREFIX + base64.b64encode(nonce + box).decode()
+
+
+def seal(plain: str) -> str:
+    """`encrypt`, except that "" stays "" — a row answers "is one set?" with
+    `bool(stored)`, which an encrypted empty string would falsely answer yes."""
+    return encrypt(plain) if plain else ""
+
+
+def adopt(stored: str) -> str:
+    """A stored secret in its encrypted form: legacy plaintext is encrypted,
+    ciphertext and "" come back unchanged (the same object, so an ORM
+    attribute assigned its own value stays clean)."""
+    return stored if not stored or is_encrypted(stored) else encrypt(stored)
 
 
 def decrypt(stored: str) -> str:

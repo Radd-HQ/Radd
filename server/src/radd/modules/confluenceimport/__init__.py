@@ -51,6 +51,8 @@ plugin = RaddPlugin(
         "projects",
     ),
     on_startup=(
+        # RADD-1424: a credential saved before encryption landed is sealed now.
+        connections.encrypt_plaintext_credentials,
         connections.seed_from_env,
         # A download or a run executes as an in-process asyncio task; a restart
         # abandons it, so anything left mid-flight is failed rather than sitting

@@ -109,7 +109,7 @@ async def test_an_empty_credential_on_update_keeps_the_stored_one(db):
     await connections.update_connection(
         db, connection.id, JiraConnectionUpdate(name="renamed", credential="")
     )
-    assert connection.credential == "secret-token"
+    assert connections.creds_of(connection).credential == "secret-token"
     assert connection.name == "renamed"
 
 
@@ -117,7 +117,7 @@ async def test_a_new_credential_on_update_replaces_it(db):
     await db.execute(text("DELETE FROM jira_connections"))
     connection = await connections.create_connection(db, _create(credential="old"))
     await connections.update_connection(db, connection.id, JiraConnectionUpdate(credential="new"))
-    assert connection.credential == "new"
+    assert connections.creds_of(connection).credential == "new"
 
 
 async def test_the_read_shape_exposes_only_whether_a_credential_is_stored(db):
@@ -184,7 +184,7 @@ async def test_env_seeding_creates_one_connection_from_a_spec_90_deploy(
     seeded = rows[0]
     assert seeded.base_url == "https://jira.corp.example.com"
     assert seeded.auth_mode == JiraAuthMode.PAT.value
-    assert seeded.credential == "env-token"
+    assert connections.creds_of(seeded).credential == "env-token"
     assert seeded.is_default is True
     assert seeded.source == JiraConnectionSource.ENV.value
     # Named after the host, so a deploy that has pointed at several instances over
@@ -218,7 +218,7 @@ async def test_env_seeding_falls_back_to_basic_auth(monkeypatch, clean_connectio
     async with SessionLocal() as session:
         seeded = (await connections.list_connections(session))[0]
     assert seeded.auth_mode == JiraAuthMode.BASIC.value
-    assert seeded.username == "svc" and seeded.credential == "pw"
+    assert seeded.username == "svc" and connections.creds_of(seeded).credential == "pw"
 
 
 async def test_env_seeding_never_resurrects_a_deleted_connection(

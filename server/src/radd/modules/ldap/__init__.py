@@ -71,8 +71,8 @@ plugin = RaddPlugin(
             scopes=("instance",),
             label="Bind account password",
             description=(
-                "Stored as an instance setting readable by instance admins — the "
-                "same trust level as the person who set it."
+                "Stored encrypted; readable only by instance admins, on this page — "
+                "the same trust level as the person who set it."
             ),
             secret=True,
         ),

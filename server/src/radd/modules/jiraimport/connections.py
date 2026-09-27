@@ -1,6 +1,8 @@
 """Jira connections — CRUD, default resolution, and env seeding. Everything
 downstream resolves a connection here, then works from a `JiraCreds` value
-object, never the ORM row (REST calls run in worker threads)."""
+object, never the ORM row (REST calls run in worker threads). The credential is
+secretbox ciphertext at rest (RADD-1424): sealed on write, decrypted only by
+`creds_of`."""
 
 from __future__ import annotations
 
@@ -10,6 +12,7 @@ import uuid
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.kernel import changes
@@ -38,11 +41,12 @@ def placeholder_email_domain(connection: JiraConnection) -> str:
 
 
 def creds_of(connection: JiraConnection) -> JiraCreds:
-    """The thread-safe value object for one connection row."""
+    """The thread-safe value object for one connection row — the one place the
+    credential is decrypted."""
     return JiraCreds(
         base_url=connection.base_url,
         auth_mode=JiraAuthMode(connection.auth_mode),
-        credential=connection.credential,
+        credential=secretbox.decrypt(connection.credential),
         username=connection.username,
         verify_ssl=connection.verify_ssl,
         timeout_seconds=settings.jira_timeout_seconds,
@@ -135,7 +139,7 @@ async def create_connection(
         base_url=str(data.base_url).rstrip("/"),
         auth_mode=data.auth_mode.value,
         username=data.username,
-        credential=data.credential,
+        credential=secretbox.seal(data.credential),
         verify_ssl=data.verify_ssl,
         source=source.value,
     )
@@ -157,6 +161,9 @@ async def update_connection(
     actor_id: uuid.UUID | None = None,
 ) -> JiraConnection:
     connection = await get_connection(session, connection_id)
+    # A credential stored before RADD-1424 takes its encrypted form on this save —
+    # before the snapshot, so the adoption itself is not recorded as a change.
+    connection.credential = secretbox.adopt(connection.credential)
     before = changes.snapshot(connection, changes.column_fields(connection, exclude=_UNDIFFED))
     fields = data.model_dump(exclude_unset=True)
     if "name" in fields and fields["name"] != connection.name:
@@ -171,7 +178,7 @@ async def update_connection(
     # An empty credential means "keep the stored one" — the read shape is redacted,
     # so a form that saves an untouched connection sends nothing back.
     if fields.get("credential"):
-        connection.credential = fields["credential"]
+        connection.credential = secretbox.seal(fields["credential"])
     if "verify_ssl" in fields:
         connection.verify_ssl = fields["verify_ssl"]
     await session.flush()
@@ -224,7 +231,19 @@ async def _count(session: AsyncSession) -> int:
     return len(list(result.scalars()))
 
 
-# --- env seeding (startup) ----------------------------------------------------
+# --- startup -------------------------------------------------------------------
+
+
+async def encrypt_plaintext_credentials() -> None:
+    """Credentials saved before RADD-1424 take their encrypted form. A missing
+    secretbox key logs and skips — boot never waits on it."""
+    try:
+        async with SessionLocal() as session:
+            for connection in await list_connections(session):
+                connection.credential = secretbox.adopt(connection.credential)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("jiraimport: connection credentials stay plaintext this boot: %s", exc)
 
 
 async def seed_from_env() -> None:

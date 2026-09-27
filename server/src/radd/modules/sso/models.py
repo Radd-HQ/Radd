@@ -33,9 +33,10 @@ from .types import SsoProviderSource
 
 
 class SsoProvider(Base, TimestampMixin):
-    """One configured identity provider. `client_secret` is stored as-is (it must
-    be replayed on every token exchange — the webhook-secret/AI-key precedent);
-    reads expose `has_client_secret` instead."""
+    """One configured identity provider. `client_secret` is replayed on every token
+    exchange, so it is stored recoverably — as secretbox ciphertext (RADD-1424;
+    `idp.exchange_tokens` decrypts, legacy plaintext is encrypted on the row's next
+    save or boot); reads expose `has_client_secret` instead."""
 
     __tablename__ = "sso_providers"
     __table_args__ = (UniqueConstraint("name"),)

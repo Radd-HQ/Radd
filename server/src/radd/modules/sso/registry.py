@@ -12,6 +12,7 @@ import uuid
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
@@ -160,7 +161,7 @@ async def create_provider(
         position=data.position,
         issuer=(data.issuer or "").strip().rstrip("/"),
         client_id=(data.client_id or "").strip(),
-        client_secret=(data.client_secret or "").strip(),
+        client_secret=secretbox.seal((data.client_secret or "").strip()),
         scopes=(data.scopes or "").strip(),
         auto_provision=data.auto_provision,
         allowed_signup_domains=_clean_domains(data.allowed_signup_domains),
@@ -253,6 +254,9 @@ async def update_provider(
     actor_id: uuid.UUID | None = None,
 ) -> SsoProvider:
     provider = await get_provider(session, provider_id)
+    # A secret stored before RADD-1424 takes its encrypted form on this save —
+    # before the snapshot, so the adoption itself is not recorded as a change.
+    provider.client_secret = secretbox.adopt(provider.client_secret)
     before = changes.snapshot(provider, changes.column_fields(provider, exclude=_UNDIFFED))
     patch = data.model_dump(exclude_unset=True)
     if "name" in patch and (patch["name"] or "").strip():
@@ -271,7 +275,7 @@ async def update_provider(
     # An EMPTY secret on update means "keep the stored one" — the read model
     # never returns it, so a round-tripped form would otherwise blank it.
     if patch.get("client_secret"):
-        provider.client_secret = patch["client_secret"].strip()
+        provider.client_secret = secretbox.seal(patch["client_secret"].strip())
     if not provider.name:
         provider.name = KIND_DEFAULTS[SsoKind(provider.kind)].name
     await session.flush()
@@ -295,7 +299,19 @@ async def delete_provider(
     await session.flush()
 
 
-# --- env seeding (startup) ----------------------------------------------------
+# --- startup -------------------------------------------------------------------
+
+
+async def encrypt_plaintext_secrets() -> None:
+    """Client secrets saved before RADD-1424 take their encrypted form. A missing
+    secretbox key logs and skips — boot never waits on it."""
+    try:
+        async with SessionLocal() as session:
+            for provider in await list_providers(session):
+                provider.client_secret = secretbox.adopt(provider.client_secret)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("sso: provider client secrets stay plaintext this boot: %s", exc)
 
 
 async def seed_from_env() -> None:

@@ -13,6 +13,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from radd import secretbox
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole, UserSource
@@ -273,7 +274,7 @@ async def test_empty_secret_on_update_keeps_the_stored_one(db):
 
     await registry.update_provider(db, provider.id, SsoProviderUpdate(client_secret=""))
 
-    assert provider.client_secret == "secret-1"
+    assert secretbox.decrypt(provider.client_secret) == "secret-1"
 
 
 async def test_duplicate_names_are_rejected(db):

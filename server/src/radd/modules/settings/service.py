@@ -1,19 +1,28 @@
 """Scalar settings resolution (specs 50/67): project → instance → env. `resolve()` is the
 single read seam; with no override row it returns the env/config default, so switching a
-consumer over is behaviour-preserving. Per-key policy is the owner's `kernel.SettingSpec`."""
+consumer over is behaviour-preserving. Per-key policy is the owner's `kernel.SettingSpec`.
 
+A `secret` spec's stored value is secretbox ciphertext (RADD-1424): sealed by `set_value`,
+decrypted by `resolve`, recorded in the audit ledger only as "changed"; a row stored before
+that is read as-is and encrypted on its next write or at boot."""
+
+import logging
 import uuid
 from typing import Any
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
+from radd.db import SessionLocal
 from radd.exceptions import ConflictError
 from radd.kernel import SettingSpec, changes, registries
 from radd.modules.events import service as events
 
 from .models import ScopedSetting
 from .types import SettingEvent, SettingKey, SettingScope, SettingsEntity, SettingType, setting_spec
+
+logger = logging.getLogger(__name__)
 
 
 def _coerce(spec: SettingSpec, value: Any) -> Any:
@@ -32,6 +41,24 @@ def _coerce(spec: SettingSpec, value: Any) -> Any:
             reason=f"'{spec.key}' must be one of: {', '.join(spec.choices)}",
         )
     return text
+
+
+def _sealed(spec: SettingSpec, value: Any) -> Any:
+    """The form a value is stored in: a secret's ciphertext, anything else as-is."""
+    return secretbox.seal(value) if spec.secret and isinstance(value, str) else value
+
+
+def _revealed(spec: SettingSpec, stored: Any) -> Any:
+    """A stored value as the cascade serves it. A secret that no longer decrypts
+    (a restore without its key) reads as unset rather than failing every read of
+    the settings page and every directory sign-in: the admin re-enters it."""
+    if not spec.secret or not isinstance(stored, str):
+        return stored
+    try:
+        return secretbox.decrypt(stored)
+    except secretbox.SecretBoxError as exc:
+        logger.warning("setting %r does not decrypt and reads as unset: %s", spec.key, exc)
+        return ""
 
 
 def _lookup_order(spec: SettingSpec, project_id: uuid.UUID | None) -> list[tuple[str, uuid.UUID | None]]:
@@ -64,7 +91,7 @@ async def _resolve_spec(
     found = {(scope, scope_id): value for scope, scope_id, value in rows}
     for scope, scope_id in order:
         if (scope, scope_id) in found:
-            return _coerce(spec, found[(scope, scope_id)])
+            return _coerce(spec, _revealed(spec, found[(scope, scope_id)]))
     return spec.default
 
 
@@ -109,13 +136,16 @@ async def set_value(
             ScopedSetting.key == key.value,
         )
     )
-    previous = existing.value if existing is not None else None
+    previous = _revealed(spec, existing.value) if existing is not None else None
+    # A restated secret is still rewritten: that is how a legacy plaintext row adopts
+    # encryption on its next save. It emits nothing — the value did not change.
+    stored = _sealed(spec, coerced)
     if existing is None:
         session.add(
-            ScopedSetting(scope=scope.value, scope_id=scope_id, key=key.value, value=coerced)
+            ScopedSetting(scope=scope.value, scope_id=scope_id, key=key.value, value=stored)
         )
     else:
-        existing.value = coerced
+        existing.value = stored
     await session.flush()
     await _emit_changed(session, spec, key, scope, scope_id, previous, coerced, actor_id)
     return coerced
@@ -158,10 +188,13 @@ async def _emit_changed(
 ) -> None:
     """Spec 123: one `setting.changed` per effective change. A write that
     restates the stored value emits nothing — an audit row with an empty diff
-    is noise to everyone downstream (the RADD-1009 rule)."""
+    is noise to everyone downstream (the RADD-1009 rule). A secret is recorded
+    only as "changed", never its value."""
     entry = changes.change(key.value, old, new, name=spec.label)
     if entry is None:
         return
+    if spec.secret:
+        entry = changes.hidden_change(key.value, name=spec.label)
     await events.emit(
         session,
         event_type=SettingEvent.CHANGED,
@@ -215,3 +248,21 @@ async def list_for_scope(
             }
         )
     return result
+
+
+async def encrypt_plaintext_secrets() -> None:
+    """Startup: secret settings saved before RADD-1424 take their encrypted form. A
+    missing secretbox key logs and skips — boot never waits on it."""
+    keys = [key for key, spec in registries.settings.items() if spec.secret]
+    if not keys:
+        return
+    try:
+        async with SessionLocal() as session:
+            for row in await session.scalars(
+                select(ScopedSetting).where(ScopedSetting.key.in_(keys))
+            ):
+                if isinstance(row.value, str):
+                    row.value = secretbox.adopt(row.value)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("settings: secret settings stay plaintext this boot: %s", exc)

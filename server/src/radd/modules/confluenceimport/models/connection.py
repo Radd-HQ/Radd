@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, String, UniqueConstraint, false, true
+from sqlalchemy import Boolean, String, Text, UniqueConstraint, false, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base, TimestampMixin
@@ -10,7 +10,9 @@ from ..types import ConfluenceAuthMode, ConnectionSource
 
 class ConfluenceConnection(Base, TimestampMixin):
     """One Confluence instance to import from. The credential is replayed per
-    request, so it is stored recoverably and never returned (`has_credential`)."""
+    request, so it is stored recoverably — as secretbox ciphertext (RADD-1424;
+    `connections.creds_of` decrypts, legacy plaintext is encrypted on the row's next
+    save or boot) — and never returned (`has_credential`)."""
 
     __tablename__ = "confluence_connections"
     __table_args__ = (UniqueConstraint("name"),)
@@ -20,7 +22,7 @@ class ConfluenceConnection(Base, TimestampMixin):
     base_url: Mapped[str] = mapped_column(String(500))
     auth_mode: Mapped[str] = mapped_column(String(20), default=ConfluenceAuthMode.PAT.value)
     username: Mapped[str] = mapped_column(String(200), default="")  # basic auth only
-    credential: Mapped[str] = mapped_column(String(500), default="")  # PAT or password
+    credential: Mapped[str] = mapped_column(Text, default="")  # PAT or password, sealed
     # Internal CAs and self-signed certs are the norm on a self-hosted DC instance.
     verify_ssl: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
     is_default: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)

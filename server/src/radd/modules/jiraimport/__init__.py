@@ -40,6 +40,8 @@ plugin = RaddPlugin(
     # than somebody submitting a request.
     weak_depends=("automations",),
     on_startup=(
+        # RADD-1424: a credential saved before encryption landed is sealed now.
+        connections.encrypt_plaintext_credentials,
         # Seed a connection row from RADD_JIRA_* once (env is seed-only).
         connections.seed_from_env,
         # A run/download executes as an in-process asyncio task; a restart abandons

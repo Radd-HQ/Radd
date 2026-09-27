@@ -17,6 +17,7 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 
+from radd import secretbox
 from radd.config import settings
 from radd.exceptions import ForbiddenError
 
@@ -124,7 +125,7 @@ async def exchange_tokens(provider: SsoProvider, code: str, flow: dict, redirect
                 "code": code,
                 "redirect_uri": redirect_uri,
                 "client_id": provider.client_id,
-                "client_secret": provider.client_secret,
+                "client_secret": secretbox.decrypt(provider.client_secret),
                 "code_verifier": flow["verifier"],
             },
             headers=JSON_ACCEPT,

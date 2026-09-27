@@ -8,6 +8,7 @@ from .router import router
 
 
 async def _startup() -> None:
+    await registry.encrypt_plaintext_secrets()  # RADD-1424
     await registry.seed_from_env()
 
 
