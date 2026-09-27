@@ -213,7 +213,7 @@ export function QueryBar({
           {active && draft.isPending ? (
             <p className="text-[11px] text-fg-faint">{active.busyLabel ?? "Working…"}</p>
           ) : failed ? (
-            <p className="text-[11px] text-red-400">{errorMessage(draft.error)}</p>
+            <p className="text-[11px] text-status-danger-ink">{errorMessage(draft.error)}</p>
           ) : (
             <p className="text-[11px] text-fg-faint" data-query-explanation>{draft.data?.explanation}</p>
           )}

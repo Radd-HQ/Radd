@@ -135,7 +135,7 @@ export function AiResultsBody({ request, onOpen }: { request: AiResultRequest; o
 
   if (request.kind === "similar") {
     if (similarResult.isPending) return <p className="text-xs text-fg-muted">Looking for similar issues…</p>;
-    if (similarResult.isError) return <p className="text-xs text-red-400">{aiErrorText(similarResult.error)}</p>;
+    if (similarResult.isError) return <p className="text-xs text-status-danger-ink">{aiErrorText(similarResult.error)}</p>;
     if ((similarResult.data?.candidates.length ?? 0) === 0) return <p className="text-xs text-fg-faint">No similar issues found.</p>;
     return (
       <>
@@ -161,7 +161,7 @@ export function AiResultsBody({ request, onOpen }: { request: AiResultRequest; o
   }
   if (request.kind === "item-summary" && streamOn === false) {
     if (itemSummary.isPending || itemSummary.isIdle) return <p className="text-xs text-fg-muted">Reading the issue…</p>;
-    if (itemSummary.isError) return <p className="text-xs text-red-400">{aiErrorText(itemSummary.error)}</p>;
+    if (itemSummary.isError) return <p className="text-xs text-status-danger-ink">{aiErrorText(itemSummary.error)}</p>;
     return <Markdown text={itemSummary.data?.summary ?? ""} />;
   }
   if (streamState === "error") return <ErrorText error={streamError} />;

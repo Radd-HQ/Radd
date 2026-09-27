@@ -20,7 +20,7 @@ export function PageHistory({ page, canWrite }: { page: Page; canWrite: boolean 
   if (versions.isPending) return <Loading label="Loading history…" />;
   if (versions.isError) {
     return (
-      <p className="mt-3 text-xs text-red-400">
+      <p className="mt-3 text-xs text-status-danger-ink">
         Failed to load history: {errorMessage(versions.error)}
       </p>
     );

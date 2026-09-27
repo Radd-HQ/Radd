@@ -94,7 +94,7 @@ try {
   const first = truth.providers[0];
   await session.click(`button[aria-label=${JSON.stringify(`Edit ${first.name}`)}]`, () => true);
   const form = await waitFor(session, `(() => { const d = document.querySelector("[role=dialog]"); if (!d) return null;
-    return { reasoning: Boolean(d.querySelector("input[type=checkbox]")) || ${JSON.stringify(first.wire_shape)} === "local",
+    return { reasoning: Boolean(d.querySelector("[data-ai-provider-reasoning] [role=switch]")) || ${JSON.stringify(first.wire_shape)} === "local",
       text: d.textContent.includes("Wire shape") && d.textContent.includes("Default model") }; })()`);
   check("the provider form opens with its fields", form?.reasoning && form?.text, JSON.stringify(form));
   await session.click("[role=dialog] button", (text) => text.trim() === "Cancel");
@@ -115,6 +115,10 @@ try {
   check("the switch reads off after the refetch",
     await waitFor(session, `document.querySelector('[data-ai-preset=${JSON.stringify(tag)}] [role=switch]')?.getAttribute("aria-checked") === "false"`));
   await session.click(`button[aria-label=${JSON.stringify(`Delete ${tag}`)}]`, () => true);
+  // RADD-1463: Delete asks first; the confirm dialog's own Delete is the irreversible step.
+  check("Delete asks before removing", await waitFor(session,
+    `[...document.querySelectorAll("[role=dialog] button")].some((b) => b.textContent.trim() === "Delete")`));
+  await session.click("[role=dialog] button", (text) => text.trim() === "Delete");
   const gone = await waitFor(session, `(async () => (await ${presetFromApi}) === null)()`);
   created = !gone;
   check("Delete removes it", gone);

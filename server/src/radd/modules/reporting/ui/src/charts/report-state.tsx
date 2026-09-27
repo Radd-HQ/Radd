@@ -44,7 +44,7 @@ export function CardBody({
       </div>
     );
   }
-  if (error) return <p className="py-6 text-sm text-red-400">Failed to load: {error}</p>;
+  if (error) return <p className="py-6 text-sm text-status-danger-ink">Failed to load: {error}</p>;
   if (empty) return <p className="py-8 text-center text-sm text-fg-faint">{emptyMessage}</p>;
   return <>{children}</>;
 }

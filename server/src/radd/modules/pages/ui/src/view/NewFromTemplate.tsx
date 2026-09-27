@@ -84,7 +84,7 @@ export function NewFromTemplate({ params }: { params: Record<string, unknown> })
         </Button>
       )}
       {create.isError && (
-        <p className="mt-1 text-xs text-red-400">
+        <p className="mt-1 text-xs text-status-danger-ink">
           Could not create the page — is there a template called “{template}”?
         </p>
       )}

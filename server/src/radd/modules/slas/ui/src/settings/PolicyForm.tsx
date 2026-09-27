@@ -18,7 +18,7 @@ import { durationText, minutesLabel, minutesToTime, parseClockMinutes, timeToMin
 
 const timeInputClasses =
   "h-8 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading " +
-  "focus:outline-2 focus:outline-offset-1 focus:outline-focus [color-scheme:dark]";
+  "focus:outline-2 focus:outline-offset-1 focus:outline-focus";
 
 /** ONE create-and-edit form for an SLA policy (two forms over one resource drift). The project,
  *  and so the issue types and states offered, come from the page. */

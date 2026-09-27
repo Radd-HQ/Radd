@@ -118,7 +118,7 @@ async function main() {
     context.afterPost = afterPost;
     checks.postingClosesTheComposerOntoTheReply = afterPost.composer === false && afterPost.toggle === "Hide 1 reply";
     await openComposer(setup.publicRoot.id);
-    await session.eval(`document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-internal]').click()`);
+    await session.eval(`document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-internal] [data-option="internal"]').click()`);
     await sleep(200);
     await typeReply(setup.publicRoot.id, "Staff-only aside");
     const submitLabel = await session.eval(`document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] button[type="submit"]')?.textContent?.trim()`);

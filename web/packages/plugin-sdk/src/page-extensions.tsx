@@ -170,7 +170,7 @@ export function UnknownExtension({ name }: { name: string }) {
 export function ExtensionError({ name, error }: { name: string; error: string }) {
   return (
     <ExtensionCard label={`radd:${name}`} data-extension-error>
-      <p className="text-[13px] text-red-400">Could not read this block's parameters: {error}</p>
+      <p className="text-[13px] text-status-danger-ink">Could not read this block's parameters: {error}</p>
     </ExtensionCard>
   );
 }

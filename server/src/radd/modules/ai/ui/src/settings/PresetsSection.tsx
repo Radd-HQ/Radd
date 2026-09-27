@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, WandSparkles } from "lucide-react";
 import { api, errorMessage, Button, EmptyState, ErrorText, IconButton, QueryError, Switch, TableSkeleton, TextArea,
-  TextField } from "@radd/plugin-sdk";
+  TextField, useConfirm } from "@radd/plugin-sdk";
 import { useAiPresets, useInvalidateAi } from "./queries";
 import { AiEntity, AiPath, sectionHeadClasses, type AiPreset } from "./types";
 
@@ -21,6 +21,17 @@ export function PresetsSection() {
     mutationFn: (preset: AiPreset) => api.patch<AiPreset>(AiPath.preset(preset.id), { enabled: !preset.enabled }),
     onSettled: () => invalidate(AiEntity.preset),
   });
+  // RADD-1463: a delete is irreversible (the prompt text lives only here), so it asks first.
+  const [confirmDialog, confirm] = useConfirm();
+  const removePreset = async (preset: AiPreset) => {
+    const ok = await confirm({
+      title: `Delete ${preset.name}?`,
+      message: "The preset leaves every editor's AI menu and its prompt is not kept.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (ok) remove.mutate(preset.id);
+  };
 
   const list = presets.data ?? [];
 
@@ -53,7 +64,7 @@ export function PresetsSection() {
                       onClick={() => setEditing(editing === preset.id ? null : preset.id)}>
                       <Pencil size={13} aria-hidden />
                     </IconButton>
-                    <IconButton danger aria-label={`Delete ${preset.name}`} onClick={() => remove.mutate(preset.id)}>
+                    <IconButton danger aria-label={`Delete ${preset.name}`} onClick={() => void removePreset(preset)}>
                       <Trash2 size={13} aria-hidden />
                     </IconButton>
                   </div>
@@ -68,6 +79,7 @@ export function PresetsSection() {
       )}
       {remove.isError && <ErrorText className="mt-2" error={remove.error} />}
       {toggle.isError && <ErrorText className="mt-2" error={toggle.error} />}
+      {confirmDialog}
     </section>
   );
 }

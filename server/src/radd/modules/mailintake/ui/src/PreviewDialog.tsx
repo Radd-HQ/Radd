@@ -96,8 +96,8 @@ function PreviewResult({ result }: { result: RoutingPreviewResult }) {
     <div className="flex flex-col gap-2">
       {crashed.length > 0 && (
         // RADD-993: the `--callout-danger-*` scale, whose ink is TUNED to its
-        // own fill (4.51:1 light, 4.56:1 dark). The raw `text-red-400` on
-        // `bg-red-500/10` it replaces was a tint the light remap only half
+        // own fill (4.51:1 light, 4.56:1 dark). The raw red-400 text on a
+        // red-500/10 tint it replaces was a tint the light remap only half
         // reached, and the loudest thing on the panel was the least legible.
         <div className="rounded-md border border-callout-danger-border/60 bg-callout-danger-fill px-3 py-2 text-[13px]">
           <span className="font-medium text-callout-danger-ink">

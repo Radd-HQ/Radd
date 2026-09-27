@@ -17,7 +17,15 @@ import { Button } from "../Button";
 import { CommentHistory } from "../CommentHistory";
 import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
 import { escapeBelongsInside } from "./escape";
+import { SegmentedChoice } from "./SegmentedChoice";
 import { repliesLabel } from "./ThreadResolution";
+
+/** The reply's audience, in the issue composer's words and colours (RADD-1463): the warning callout's
+ *  tokens mark an internal reply — they hold 4.5:1 in both themes where the raw amber did not. */
+const REPLY_AUDIENCES = [
+  { value: CommentVisibility.public, label: "Public reply" },
+  { value: CommentVisibility.internal, label: "Internal reply", activeClassName: "bg-callout-warning-fill text-callout-warning-ink" },
+] as const;
 
 /** A second view of the same thread (the page rail and its popover, an issue and its peek) reads
  *  the replies the first one loaded; a post or a live update invalidates them either way. */
@@ -207,7 +215,7 @@ export function CommentReplies({
                     data-reply-visibility={reply.visibility}
                     className={
                       "border-l-2 pl-2 " +
-                      (isInternal ? "border-amber-400/40 bg-amber-500/5 py-1" : "border-subtle")
+                      (isInternal ? "border-callout-warning-border/60 bg-callout-warning-fill py-1" : "border-subtle")
                     }
                   >
                     <p className="text-xs">
@@ -216,7 +224,7 @@ export function CommentReplies({
                         {relativeTime(reply.created_at)}
                       </span>
                       {isInternal && (
-                        <span className="ml-1.5 rounded bg-amber-500/15 px-1.5 py-px text-[10px] font-medium text-amber-300">
+                        <span className="ml-1.5 rounded border border-callout-warning-border/60 px-1.5 py-px text-[10px] font-medium text-callout-warning-ink">
                           Internal
                         </span>
                       )}
@@ -284,15 +292,13 @@ export function CommentReplies({
                   </span>
                 )}
                 {canInternal && !internalLocked && (
-                  <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-fg-muted">
-                    <input
-                      type="checkbox"
-                      checked={internal}
-                      onChange={(event) => setInternal(event.target.checked)}
-                      data-reply-internal
-                    />
-                    Internal reply
-                  </label>
+                  <SegmentedChoice
+                    label="Reply visibility"
+                    value={internal ? CommentVisibility.internal : CommentVisibility.public}
+                    options={REPLY_AUDIENCES}
+                    onChange={(audience) => setInternal(audience === CommentVisibility.internal)}
+                    data-reply-internal
+                  />
                 )}
                 <span className="ml-auto flex items-center gap-2">
                   <Button variant="ghost" onClick={closeComposer} data-reply-cancel>

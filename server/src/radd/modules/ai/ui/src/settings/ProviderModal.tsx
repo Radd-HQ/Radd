@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { api, errorMessage, Button, Modal, SelectField, TextArea, TextField } from "@radd/plugin-sdk";
+import { api, errorMessage, Button, Modal, SelectField, Switch, TextArea, TextField } from "@radd/plugin-sdk";
 import { useInvalidateAi } from "./queries";
 import { AiEntity, AiPath, AiWireShape, type AiProviderPayload, type AiProviderRead, type AiWireShapeValue,
   type LocalEmbedInfo } from "./types";
@@ -128,22 +128,18 @@ export function ProviderModal({ existing, onClose }: { existing: AiProviderRead 
         )}
         {!local && (
           <>
-            <label className="flex items-start gap-2 text-xs text-fg">
-              <input type="checkbox" className="mt-0.5" checked={reasoning}
-                onChange={(event) => setReasoning(event.target.checked)} />
-              <span>
-                <span className="font-medium text-heading">Reasoning</span>
-                <span className="mt-0.5 block text-fg-muted">
-                  Off (the default) asks a thinking model not to think before it answers — every reply comes back in a
-                  fraction of the time and none of the token budget goes to a hidden monologue. On leaves the model to
-                  its own default. Sent as{" "}
-                  <code className="rounded bg-elevated px-1">
-                    {wireShape === AiWireShape.anthropic ? "thinking" : "chat_template_kwargs.enable_thinking"}
-                  </code>
-                  ; api.openai.com rejects that key, so an OpenAI-hosted provider keeps this on.
-                </span>
-              </span>
-            </label>
+            <div className="flex flex-col gap-1 text-xs text-fg" data-ai-provider-reasoning>
+              <Switch checked={reasoning} onChange={setReasoning} label="Reasoning" />
+              <p className="text-fg-muted">
+                Off (the default) asks a thinking model not to think before it answers — every reply comes back in a
+                fraction of the time and none of the token budget goes to a hidden monologue. On leaves the model to
+                its own default. Sent as{" "}
+                <code className="rounded bg-elevated px-1">
+                  {wireShape === AiWireShape.anthropic ? "thinking" : "chat_template_kwargs.enable_thinking"}
+                </code>
+                ; api.openai.com rejects that key, so an OpenAI-hosted provider keeps this on.
+              </p>
+            </div>
             <TextArea label="Extra request parameters (JSON)" value={requestParams}
               onChange={(event) => setRequestParams(event.target.value)} rows={3} spellCheck={false}
               placeholder={'{ "temperature": 0.2 }'} className="font-mono" error={paramsError ?? undefined}

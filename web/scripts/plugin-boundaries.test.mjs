@@ -635,3 +635,23 @@ test('the survey page is csat\'s and a mailed body reads as mailintake draws it:
   assert(nodes(`${mail}/ui/src/index.tsx`).some(n=>n.type==='Identifier'&&n.name==='signedBody'),'the remote lists the claim');
   for (const manifest of [`${csat}/__init__.py`,`${mail}/__init__.py`]) assert.match(readFileSync(manifest,'utf8'),/ui_api_version="1\.19\.0"/,manifest);
 });
+
+test('raw palette utilities stay out of every UI tree: plugin UIs, the SDK and the example use the semantic tokens (RADD-1463)',()=>{
+  // `text-amber-300` reads in dark and fails 4.5:1 in light: the remap under the semantic tokens
+  // (web/src/index.css) is what makes a colour hold in both themes, and a raw palette class bypasses
+  // it. Every plugin UI, the SDK and examples/ are held to the whole palette; the host keeps its
+  // documented invariant (zero zinc/indigo). `text-black` on a fixed, un-themed fill is the exception.
+  const prefixes='(?:bg|text|border|ring|from|to|via)';
+  const palette=`\\b${prefixes}-(?:zinc|indigo|amber|red|emerald|green|blue|yellow|orange|sky|slate|gray|neutral|stone|rose|pink|purple|violet|fuchsia|cyan|teal|lime)-\\d{2,3}\\b`;
+  const remap=`\\b${prefixes}-(?:zinc|indigo)-\\d{2,3}\\b`;
+  for (const sample of ['bg-amber-500/15','text-red-400','hover:text-emerald-300','border-zinc-800']) assert.match(sample,new RegExp(palette),sample);
+  for (const sample of ['text-black','text-status-danger-ink','bg-callout-warning-fill','border-subtle','--color-zinc-800','text-fg-muted']) assert.doesNotMatch(sample,new RegExp(palette),sample);
+  const scan=(fileList,pattern)=>fileList.flatMap(file=>[...readFileSync(file,'utf8').matchAll(new RegExp(pattern,'g'))].map(m=>`${file}: ${m[0]}`));
+  const pluginUis=[...readdirSync('server/src/radd/modules').map(m=>`server/src/radd/modules/${m}/ui/src`).filter(existsSync).flatMap(files),
+    ...files('web/packages/plugin-sdk/src'),...files('examples').filter(f=>f.includes('/ui/src/'))];
+  assert(pluginUis.length>200,'the scan reaches every plugin UI, the SDK and the example');
+  assert.deepEqual(scan(pluginUis,palette),[]);
+  const host=files('web/src');
+  assert(host.length>300,'the scan reaches the whole host');
+  assert.deepEqual(scan(host,remap),[]);
+});

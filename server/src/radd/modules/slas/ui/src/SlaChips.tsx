@@ -19,7 +19,7 @@ function timerStatus(timer: TimerState): { label: string; state: string; classNa
       : { label: "Met", state: "met", className: "bg-status-success/15 text-status-success-ink" };
   }
   if (timer.breached) return { label: "Breached", state: "breached", className: "bg-status-danger/15 text-status-danger-ink" };
-  if (timer.paused) return { label: "Paused", state: "paused", className: "bg-strong/60 text-fg" };
+  if (timer.paused) return { label: "Paused", state: "paused", className: "bg-elevated text-fg" };
   return { label: formatRemaining(timer.remaining_seconds), state: "ticking", className: "bg-accent/15 text-accent-text" };
 }
 

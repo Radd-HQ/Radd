@@ -60,7 +60,7 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
       {open && (
         <div className="mt-3 flex flex-col gap-2">
           {items.isError ? (
-            <p className="text-xs text-red-400">
+            <p className="text-xs text-status-danger-ink">
               Failed to load links: {errorMessage(items.error)}
             </p>
           ) : list.length === 0 ? (
@@ -130,7 +130,7 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
                 <Plus size={12} aria-hidden />
                 Link
               </Button>
-              {add.isError && <span className="text-xs text-red-400">{errorMessage(add.error)}</span>}
+              {add.isError && <span className="text-xs text-status-danger-ink">{errorMessage(add.error)}</span>}
             </form>
           )}
         </div>

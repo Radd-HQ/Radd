@@ -8,7 +8,7 @@ import { UserContributionToggles, tokens } from "@radd/plugin-sdk";
  */
 export function NotesProfileSection() {
   return (
-    <section className="mt-8 border-t border-zinc-800 pt-6" data-plugin-profile="acme-notes">
+    <section className="mt-8 border-t border-subtle pt-6" data-plugin-profile="acme-notes">
       <h2 style={{ fontSize: 13, fontWeight: 600, color: tokens.heading, marginBottom: 4 }}>
         Notes plugin
       </h2>

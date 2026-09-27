@@ -23,7 +23,7 @@ const { session, close, baseUrl, loginStatus, hoverCapable } = await startProof(
 });
 const checks = { hoverCapable, loggedIn: loginStatus === 204 };
 const dialogTextarea = '[role=dialog] textarea';
-const dialogCheckbox = '[role=dialog] input[type=checkbox]';
+const dialogSwitch = '[role=dialog] [data-ai-provider-reasoning] [role=switch]';
 const dialogSubmit = '[role=dialog] button[type=submit]';
 
 /** Type into the dialog's textarea the way React sees it (native setter + input event). */
@@ -60,8 +60,8 @@ try {
   // --- the form: switch present and unchecked, textarea present, a value saves
   await openEdit();
   checks.dialogOpened = await session.eval('!!document.querySelector("[role=dialog]")');
-  checks.reasoningSwitchPresent = await session.eval(`!!document.querySelector(${JSON.stringify(dialogCheckbox)})`);
-  checks.reasoningDefaultOff = await session.eval(`!document.querySelector(${JSON.stringify(dialogCheckbox)}).checked`);
+  checks.reasoningSwitchPresent = await session.eval(`!!document.querySelector(${JSON.stringify(dialogSwitch)})`);
+  checks.reasoningDefaultOff = await session.eval(`document.querySelector(${JSON.stringify(dialogSwitch)}).getAttribute("aria-checked") === "false"`);
   checks.paramsFieldPresent = await setTextarea('{ "temperature": 0.2 }');
   await session.screenshot(output + "/provider-form.png");
   await session.click(dialogSubmit, () => true);
