@@ -271,8 +271,11 @@ async def update_item(
     # Workflow transition guards (spec 61): checked AFTER every patch field is
     # applied (values arriving in the same PATCH count) and only on a REAL state
     # change. Applies to every actor including automations/SYSTEM.
+    gating_checks: frozenset[str] = frozenset()
     if item.state_id != old_state_id:
-        await workflow.check_transition(session, project, item, old_state_id, item.state_id)
+        gating_checks = await workflow.check_transition(
+            session, project, item, old_state_id, item.state_id
+        )
 
     # Import (project.manage): restore the source's last-touched time. Assigning
     # the attribute puts it in the UPDATE's SET clause, which is what suppresses
@@ -285,9 +288,9 @@ async def update_item(
 
     await session.flush()
     if item.state_id != old_state_id:
-        # RADD-1383: workflow tells whichever plugins serve transition checks
+        # RADD-1383: workflow tells the plugins whose checks gated this move
         # (approvals spends the unlock this move used) — items imports none.
-        await workflow.state_moved(session, item.id, item.state_id)
+        await workflow.state_moved(session, item.id, item.state_id, checks=gating_checks)
     if data.title is not None or data.description is not None:
         await sync_mention_links(session, item)  # text changed → re-derive #[…] backlinks
     # The EVENT carries the historical time too, not just the row: item history,

@@ -217,14 +217,16 @@ async def _move_one(
     # spec-112 "require a release to enter Done" shape — and a STRICT project
     # refuses arrivals with no wildcard edge, exactly as it refuses any
     # undefined transition. Checked after the patch is applied, like update_item.
-    await workflow.check_transition(session, target, item, old_state_id, item.state_id)
+    gating_checks = await workflow.check_transition(
+        session, target, item, old_state_id, item.state_id
+    )
 
     session.add(ItemKeyAlias(old_key=old_key.upper(), item_id=item.id))
     await session.flush()
 
-    # RADD-1383: arriving is a state change like any other — the check plugins
-    # hear about it through workflow, mirroring the single-item path.
-    await workflow.state_moved(session, item.id, item.state_id)
+    # RADD-1383: arriving is a state change like any other — the plugins whose
+    # checks gated it hear about it through workflow, mirroring the single-item path.
+    await workflow.state_moved(session, item.id, item.state_id, checks=gating_checks)
 
     # The SOURCE permissions decide internal visibility on both sides of the diff.
     after = await _hydrate_one(session, item, target, actor, permissions)

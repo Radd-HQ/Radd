@@ -150,13 +150,16 @@ class TransitionCheckProvider(Protocol):
     * `validate(session, params)` — write path: normalized params, or ConflictError;
     * `prepare(session, item)` — per-item data `failure` needs, fetched once;
     * `failure(params, prepared, to_state_id)` — pure: None, or the mover's sentence;
-    * `moved(session, item_id, to_state_id)` — told after every state change (an
-      approval is spent by the move it unlocked).
+    * `moved(session, item_id, to_state_id)` — told after a state change whose governing
+      transition rule NAMED this check (an approval is spent by the move it unlocked, not
+      by a move through a row with no approval rule); a provider with
+      `observes_all_moves = True` is told about every state change instead.
 
     A stored rule whose provider is gone FAILS CLOSED in workflow."""
 
     check: str
     sort_last: bool
+    observes_all_moves: bool
 
     async def validate(self, session: Any, params: dict[str, Any]) -> dict[str, Any]: ...
     async def prepare(self, session: Any, item: Any) -> Any: ...

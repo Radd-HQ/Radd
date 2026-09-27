@@ -106,3 +106,47 @@ async def test_withdrawn_approvals_fail_closed_and_registered_unlock_one_move(db
     assert banked.status == ApprovalStatus.APPLIED.value  # spent by that move
     await items.update_item(db, item.id, ItemUpdate(state_id=triage), actor)
     assert await _blocked(db, item.id, done, actor) == ["approval required (Gate Keeper)"]
+
+
+async def test_a_banked_approval_survives_a_move_no_approval_rule_gated(db, actor):
+    """`state_moved` told every provider about every move, so `ApprovalGate.moved`
+    spent a banked approval on a move into its target through a row with no
+    require_approval rule (RADD-1458). Only the providers the governing row's
+    rules name are told; the gated move still spends it."""
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"GS{uuid.uuid4().hex[:4].upper()}", name="Gate scope")
+    )
+    await settings_service.set_value(
+        db, SettingKey.WORKFLOW_TRANSITION_MODE, SettingScope.PROJECT, project.id,
+        TransitionMode.GUARDS.value,
+    )
+    states = {s.name: s for s in await workflow.list_states(db, project.id)}
+    triage, in_progress, done = states["Triage"].id, states["In Progress"].id, states["Done"].id
+    # Any state → Done needs an approval; In Progress → Done is an exact row, which
+    # outranks the wildcard, and asks for nothing.
+    await transitions.create_transition(
+        db, TransitionCreate(project_id=project.id, to_state_id=done, rules=[approval(actor)])
+    )
+    await transitions.create_transition(
+        db, TransitionCreate(project_id=project.id, from_state_id=in_progress, to_state_id=done)
+    )
+    item = await items.create_item(db, ItemCreate(project_id=project.id, title="scoped"), actor)
+    request = await approvals.create_request(
+        db, item.id, ApprovalRequestCreate(to_state_id=done), actor
+    )
+    banked = await db.get(ApprovalRequest, request.id)
+    banked.status = ApprovalStatus.APPROVED.value
+    await db.flush()
+
+    await items.update_item(db, item.id, ItemUpdate(state_id=in_progress), actor)
+    moved = await items.update_item(db, item.id, ItemUpdate(state_id=done), actor)
+    assert moved.state.name == "Done"
+    assert banked.status == ApprovalStatus.APPROVED.value, "spent by a move no approval rule gated"
+
+    # Out and back in through the gated wildcard row: the same approval unlocks
+    # that move, and that move is the one that spends it.
+    await items.update_item(db, item.id, ItemUpdate(state_id=triage), actor)
+    await items.update_item(db, item.id, ItemUpdate(state_id=done), actor)
+    assert banked.status == ApprovalStatus.APPLIED.value
+    await items.update_item(db, item.id, ItemUpdate(state_id=triage), actor)
+    assert await _blocked(db, item.id, done, actor) == ["approval required (Gate Keeper)"]

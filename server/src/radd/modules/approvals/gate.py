@@ -28,6 +28,9 @@ class ApprovalGate:
     check = ApprovalCheck.REQUIRE_APPROVAL.value
     # A gate someone else clears: its failure reads after the data the mover can fix.
     sort_last = True
+    # `moved` is told only about moves a require_approval rule gated: a banked
+    # approval for Done survives a move into Done through an ungated row.
+    observes_all_moves = False
 
     async def validate(self, session: AsyncSession, params: dict[str, Any]) -> dict[str, Any]:
         """Spec 107: per-entry approver rules — every entry names a real subject

@@ -5,12 +5,12 @@ withdraws its registration and the rules it served FAIL CLOSED
 (`guards.unprovided_failure`): a gate an admin configured must not open because
 a plugin was switched off. `providers()` feeds both write-validation and
 evaluation, so they cannot disagree about what exists; `prepare` builds each
-provider's per-item snapshot data; `state_moved` tells every provider after a
-successful state change (how an approval is spent).
+provider's per-item snapshot data; `state_moved` tells the providers whose rules
+gated a successful state change (how an approval is spent).
 """
 
 import uuid
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,9 +45,19 @@ async def prepare(session: AsyncSession, item, checks: Iterable[str]) -> dict[st
 
 
 async def state_moved(
-    session: AsyncSession, item_id: uuid.UUID, to_state_id: uuid.UUID
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    to_state_id: uuid.UUID,
+    *,
+    checks: Collection[str],
 ) -> None:
     """A state change happened (items calls this after the move is flushed, on
-    both the single-item and the cross-project path)."""
-    for provider in providers().values():
-        await provider.moved(session, item_id, to_state_id)
+    both the single-item and the cross-project path). `checks` are the plugin
+    check keys the governing transition's rules named — what `check_transition`
+    returned for this move. Only THOSE providers hear about it (RADD-1458): an
+    approval banked for a target is spent by the gated move, not by a move into
+    the same state through a row with no approval rule. A provider declaring
+    `observes_all_moves = True` hears about every move (none does today)."""
+    for check, provider in providers().items():
+        if check in checks or getattr(provider, "observes_all_moves", False):
+            await provider.moved(session, item_id, to_state_id)

@@ -554,20 +554,24 @@ async def check_transition(
     item,
     old_state_id: uuid.UUID,
     new_state_id: uuid.UUID,
-) -> None:
+) -> frozenset[str]:
     """Raise TransitionError when the project's mode/rules forbid this state
     change. Called by items.update_item AFTER the patch is applied (so values in
     the same PATCH count) and only on a REAL state change. Applies to every actor
-    including automations/SYSTEM (predictability over convenience)."""
+    including automations/SYSTEM (predictability over convenience).
+
+    Returns the PLUGIN check keys the governing row's rules named (RADD-1458) —
+    what the caller hands `state_moved` once the move is flushed, so a provider
+    hears only about moves its rule gated. Empty when no row governed the move."""
     mode = await resolve_mode(session, project)
     if mode is TransitionMode.OFF:
-        return
+        return frozenset()
     rows = await list_transitions(session, project.id)
     candidates = edge_candidates(rows, old_state_id, new_state_id)
     if not candidates:
         if mode is TransitionMode.STRICT and rows:
             raise await _no_transition(session, old_state_id, new_state_id, "is defined")
-        return
+        return frozenset()
     snapshot = await snapshot_for(session, project, item, candidates)
     row = governing_row(candidates, snapshot)
     if row is None:
@@ -575,10 +579,10 @@ async def check_transition(
         # follow-up): guards frees the move, strict blocks it.
         if mode is TransitionMode.STRICT:
             raise await _no_transition(session, old_state_id, new_state_id, "applies to this item")
-        return
+        return frozenset()
     rules = effective_rules(row)
     if not rules:
-        return
+        return frozenset()
     failures = guards.evaluate(
         rules, snapshot, to_state_id=str(new_state_id), providers=checks.providers()
     )
@@ -587,6 +591,7 @@ async def check_transition(
         raise TransitionError(
             failures, names.get(old_state_id, "?"), names.get(new_state_id, "?")
         )
+    return frozenset(guards.contributed_checks_in(rules))
 
 
 async def allowed_transitions(
