@@ -32,7 +32,7 @@ from radd.modules.jiraimport.types import JiraAuthMode, JiraEvent
 from radd.modules.ldap import service as ldap_service
 from radd.modules.settings import service as settings_service
 from radd.modules.settings.models import ScopedSetting
-from radd.modules.settings.types import SettingEvent, SettingKey, SettingScope
+from radd.modules.settings.types import SettingEvent, SettingKey, SettingScope, setting_spec
 from radd.modules.sso import idp
 from radd.modules.sso import registry as sso_registry
 from radd.modules.sso.models import SsoProvider
@@ -210,6 +210,58 @@ async def test_the_resolve_route_never_hands_out_a_secret_setting(db):
     assert refused.status_code == 403, refused.text
     assert "bind-password-plain" not in refused.text
     assert allowed.status_code == 200, allowed.text
+
+
+async def test_the_settings_list_marks_a_secret_as_set_and_never_carries_it(db, admin):
+    """RADD-1454: the admin-gated list (`GET /scoped-settings?scope=instance`, every
+    Directory-page load) says WHETHER a secret is set; the plaintext never reaches the
+    browser. A typed replacement round-trips, an empty write keeps the stored value,
+    and DELETE is the one way to clear it."""
+    from radd.app import create_app
+    from radd.db import get_session
+    from radd.modules.auth.deps import current_user
+
+    key = SettingKey.LDAP_BIND_PASSWORD
+    await settings_service.set_value(
+        db, key, SettingScope.INSTANCE, None, "bind-password-plain", actor_id=admin.id
+    )
+    await db.flush()
+
+    async def session_override():
+        yield db
+
+    app = create_app()
+    app.dependency_overrides[get_session] = session_override
+    app.dependency_overrides[current_user] = lambda: admin
+    path, scope = "/api/v1/scoped-settings", {"scope": SettingScope.INSTANCE.value}
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        listed = await client.get(path, params=scope)
+        assert listed.status_code == 200, listed.text
+        assert "bind-password-plain" not in listed.text
+        rows = {row["key"]: row for row in listed.json()}
+        secret = rows[key.value]
+        assert secret["secret"] is True and secret["set"] is True and secret["set_here"] is True
+        assert secret["value"] is None and secret["default"] is None
+        # A plain setting still carries its value; `set` is the secret's marker alone.
+        assert rows[SettingKey.LDAP_URL.value]["set"] is None
+
+        replaced = await client.put(path, json={**scope, "key": key.value, "value": "second-plain"})
+        assert replaced.status_code == 200, replaced.text
+        assert "second-plain" not in replaced.text and replaced.json()["set"] is True
+        assert await settings_service.resolve(db, key) == "second-plain"
+
+        kept = await client.put(path, json={**scope, "key": key.value, "value": ""})
+        assert kept.status_code == 200, kept.text
+        assert kept.json()["set"] is True
+        assert await settings_service.resolve(db, key) == "second-plain"
+
+        cleared = await client.delete(path, params={**scope, "key": key.value})
+        assert cleared.status_code == 204, cleared.text
+        after = next(r for r in (await client.get(path, params=scope)).json() if r["key"] == key.value)
+        assert after["set_here"] is False and after["value"] is None
+    assert await settings_service.resolve(db, key) == setting_spec(key).default
 
 
 # --- rows stored before encryption landed -------------------------------------

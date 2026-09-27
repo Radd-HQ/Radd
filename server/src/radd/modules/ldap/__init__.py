@@ -71,8 +71,9 @@ plugin = RaddPlugin(
             scopes=("instance",),
             label="Bind account password",
             description=(
-                "Stored encrypted; readable only by instance admins, on this page — "
-                "the same trust level as the person who set it."
+                "Stored encrypted and never sent back: this page shows only whether one "
+                "is set. Type a new password to replace it; Clear removes it so the "
+                "environment's (RADD_LDAP_BIND_PASSWORD) applies again."
             ),
             secret=True,
         ),

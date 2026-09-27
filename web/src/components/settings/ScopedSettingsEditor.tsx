@@ -87,6 +87,8 @@ const WEEK_DAYS = [
  * choices and day toggles write on change; text writes on blur or Enter and
  * Escape reverts. There is no Save button to hunt for — the row says
  * Saving… / Saved / what went wrong, and Reset returns it to the inherited value.
+ * A secret row (RADD-1454) never holds its value: it shows Set / Not set, writes only
+ * what is typed, and Clear is its Reset.
  */
 function SettingRow({
   row,
@@ -231,9 +233,42 @@ function SettingRow({
             disabled={disabled}
             className="min-h-24 flex-1 rounded-md border border-strong bg-surface px-2.5 py-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:opacity-50"
           />
+        ) : row.secret ? (
+          // RADD-1454: a secret never comes back from the server. The row says whether one
+          // is set, and the field only ever carries a REPLACEMENT: typed, it is written on
+          // blur/Enter and the field empties again; left empty, nothing is sent and the
+          // stored value stays. Clear (below) removes the override.
+          <>
+            <span
+              className={"shrink-0 text-xs " + (row.set ? "text-status-success-ink" : "text-fg-faint")}
+              data-secret-state={row.set ? "set" : "unset"}
+            >
+              {row.set ? "Set" : "Not set"}
+            </span>
+            <input
+              type="password"
+              autoComplete="new-password"
+              aria-label={row.label}
+              value={value}
+              placeholder={row.set ? "Type a new value to replace it" : "Type a value"}
+              onFocus={() => setEditing(true)}
+              onChange={(event) => setValue(event.target.value)}
+              onBlur={commitText}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") {
+                  setValue(stored);
+                  setEditing(false);
+                  event.currentTarget.blur();
+                }
+              }}
+              disabled={disabled}
+              className="h-8 flex-1 rounded-md border border-strong bg-surface px-2 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-focus disabled:opacity-50"
+            />
+          </>
         ) : (
           <input
-            type={row.type === "int" ? "number" : row.secret ? "password" : "text"}
+            type={row.type === "int" ? "number" : "text"}
             aria-label={row.label}
             value={value}
             onFocus={() => setEditing(true)}
@@ -260,10 +295,14 @@ function SettingRow({
             size="sm"
             onClick={() => reset.mutate()}
             disabled={busy}
-            title={`Reset to the inherited value (${String(row.default)})`}
+            title={
+              row.secret
+                ? "Clear the stored value; the environment's applies again"
+                : `Reset to the inherited value (${String(row.default)})`
+            }
           >
             <RotateCcw size={13} aria-hidden />
-            Reset
+            {row.secret ? "Clear" : "Reset"}
           </Button>
         )}
       </div>

@@ -677,8 +677,8 @@ class SettingSpec:
     # Enumerated STRING settings (spec 107): the only accepted values — a write
     # outside the set 409s, and the generic settings editor renders a select.
     choices: tuple[str, ...] | None = None
-    # The editor renders a masked input; the value itself stays admin-readable
-    # over the settings API (RADD-846's recorded decision).
+    # Sealed at rest and never read back over the settings API (RADD-1424, RADD-1454):
+    # the list reports only whether one is set, and the editor takes a replacement.
     secret: bool = False
     # RADD-1368: a STRING setting that holds prose (a mail body) — the editor
     # renders a textarea instead of a single-line input. Presentation only.

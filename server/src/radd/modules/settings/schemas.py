@@ -13,13 +13,17 @@ class ScopedSettingRead(BaseModel):
     type: str
     label: str
     description: str
-    value: Any
+    value: Any = None  # null for a secret: its value never leaves the server (RADD-1454)
+    # RADD-1454, secrets only: whether a non-empty value is in effect (from a row at this
+    # scope, a wider one, or the environment). Null on every other row.
+    set: bool | None = None
     set_here: bool  # an override exists at this exact scope (vs. inherited)
-    default: Any  # the env/config fallback, for "reset to default" affordances
+    default: Any = None  # the env/config fallback, for "reset to default"; null for a secret
     # Enumerated settings only (spec 107 cleanup): the accepted values — the
     # editor renders a select instead of a free-text input.
     choices: list[str] | None = None
-    # RADD-846: the editor masks the input (the value itself stays admin-readable).
+    # Sealed at rest and never read back (RADD-1424/RADD-1454): the editor shows `set`
+    # and takes a replacement; an empty write keeps the stored value.
     secret: bool = False
     # RADD-1368: prose — the editor renders a textarea.
     multiline: bool = False

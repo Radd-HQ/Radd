@@ -4,7 +4,9 @@ consumer over is behaviour-preserving. Per-key policy is the owner's `kernel.Set
 
 A `secret` spec's stored value is secretbox ciphertext (RADD-1424): sealed by `set_value`,
 decrypted by `resolve`, recorded in the audit ledger only as "changed"; a row stored before
-that is read as-is and encrypted on its next write or at boot."""
+that is read as-is and encrypted on its next write or at boot. It never leaves the server
+(RADD-1454): the settings list says only whether one is set, `set_value` reads an empty
+secret as "keep what is stored", and `clear_value` is the one way to remove it."""
 
 import logging
 import uuid
@@ -127,6 +129,11 @@ async def set_value(
             "scoped_setting", reason="instance scope takes no id; project scope requires one"
         )
     coerced = _coerce(spec, value)
+    if spec.secret and coerced == "":
+        # RADD-1454: the editor never reads a secret back, so it cannot restate one — an
+        # empty write means "keep what is stored" (the mail dialogs' convention); removing
+        # a secret is `clear_value`. Nothing is written, so nothing is audited.
+        return await _resolve_spec(session, spec, scope_id if scope is SettingScope.PROJECT else None)
     if spec.guard is not None:
         await spec.guard(session, coerced, actor_id)
     existing = await session.scalar(
@@ -211,7 +218,9 @@ async def list_for_scope(
     session: AsyncSession, scope: SettingScope, scope_id: uuid.UUID | None
 ) -> list[dict[str, Any]]:
     """Every registered setting applicable at `scope`, with its effective value
-    (resolved through the cascade) and whether it is overridden *here*."""
+    (resolved through the cascade) and whether it is overridden *here*. A secret's
+    value and default stay on the server (RADD-1454): its row carries `set` — whether a
+    non-empty value is in effect, from a row here, a wider scope or the environment."""
     project_id = scope_id if scope is SettingScope.PROJECT else None
     set_here = {
         row_key
@@ -237,9 +246,10 @@ async def list_for_scope(
                 "type": spec.type,
                 "label": spec.label,
                 "description": spec.description,
-                "value": effective,
+                "value": None if spec.secret else effective,
+                "set": bool(effective) if spec.secret else None,
                 "set_here": key in set_here,
-                "default": spec.default,
+                "default": None if spec.secret else spec.default,
                 "choices": list(spec.choices) if spec.choices else None,
                 "secret": spec.secret,
                 "multiline": spec.multiline,

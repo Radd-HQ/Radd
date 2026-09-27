@@ -13,12 +13,17 @@ export interface ScopedSetting {
   type: string;
   label: string;
   description: string;
+  /** Null for a secret: its value never leaves the server (RADD-1454). */
   value: unknown;
+  /** RADD-1454, secrets only: whether a non-empty value is in effect (here, inherited or from
+   * the environment). Null on every other row. */
+  set?: boolean | null;
   set_here: boolean; // overridden at THIS scope (vs inherited)
-  default: unknown; // the env/config fallback
+  default: unknown; // the env/config fallback; null for a secret
   /** Enumerated settings only: the accepted values — render a select. */
   choices?: string[] | null;
-  /** RADD-846: render a masked input (the value itself is admin-readable). */
+  /** Sealed at rest and never read back (RADD-1424/RADD-1454): the editor shows `set` and takes
+   * a replacement; an empty write keeps the stored value, Clear removes the override. */
   secret?: boolean;
   /** RADD-1368: prose (a mail body) — the editor renders a textarea. */
   multiline?: boolean;
