@@ -112,6 +112,10 @@ class PlannedAction:
     #: (RADD-1266) — a skip with a different owner: the project's rules said no,
     #: not the planner. The run history ranks it above "applied".
     refused: bool = False
+    #: True when the action RAISED (or its type is unknown): the one outcome that
+    #: halts the branch for its item (RADD-1450). A skip is "nothing to do
+    #: here" and a refusal is "the project said no"; neither is an error, and
+    #: the items behind them still reach the next node.
     failed: bool = False
 
 
@@ -315,12 +319,16 @@ async def _run_node(
     # work: filter -> label -> comment all act on the same set. What it MADE
     # leaves by a separate port, so "create a follow-up, then assign it" is a
     # wire rather than a special case.
+    # Only a FAILED invocation takes its item out of the packet (RADD-1450): a
+    # skip ("no assignee to watch") or a refusal leaves the item as it was, and
+    # the next node still has something true to act on. A set-arity failure has
+    # no single item to drop, so the whole branch stops.
     invocations = report.plans[planned_before:]
-    unsuccessful = [p for p in invocations if not p.resolves]
-    if any(p.item_id is None for p in unsuccessful):
+    failures = [p for p in invocations if p.failed]
+    if any(p.item_id is None for p in failures):
         return {}
-    if unsuccessful:
-        failed_ids = {p.item_id for p in unsuccessful}
+    if failures:
+        failed_ids = {p.item_id for p in failures}
         subject = (spec.subject if spec else "") or graph.ITEM_SUBJECT
         packet = packet.with_subject(subject, [i for i in packet.ids_of(subject) if i not in failed_ids])
         if not packet.ids_of(subject):

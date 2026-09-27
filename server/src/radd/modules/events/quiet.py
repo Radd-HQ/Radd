@@ -48,8 +48,9 @@ class AutomationCause:
 
     `depth` is 1 for a run a person's event started, else the trigger's depth + 1. An opted-in
     trigger fires only below `automation_max_chain_depth`, and never on its OWN automation's
-    events — what keeps chaining from looping. `rule_id` is None only for the engine's own
-    reports (`run_failed`)."""
+    events — what keeps chaining from looping. `rule_id` is None only for an anonymous cause
+    (a request on an engine-minted key that carried none); the engine's own `run_failed`
+    report names the rule whose run failed (RADD-1450)."""
 
     rule_id: uuid.UUID | None = None
     depth: int = 1

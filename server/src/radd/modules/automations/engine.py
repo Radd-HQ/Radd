@@ -328,13 +328,18 @@ async def run_graph(
     # Actions run as the automation's AUTHOR by default (spec 116 "act as"); a
     # node may name someone else, which needed `automation.act_as` on write.
     # Rows predating the column have no author and keep running as the system
-    # actor — exactly what they did before.
+    # actor — exactly what they did before (RADD-1450). Only an owner who WAS
+    # named and has since gone or been deactivated fails the run closed: the
+    # row keeps that identity so nothing silently falls back to the system.
     author = system_user
     owner_id = getattr(rule, "created_by_id", None)
-    found = await session.get(User, owner_id) if owner_id else None
-    owner_error = found is None or not found.active
-    if not owner_error:
-        author = found
+    owner_error = False
+    if owner_id is not None:
+        found = await session.get(User, owner_id)
+        if found is None or not found.active:
+            owner_error = True
+        else:
+            author = found
 
     trigger = next(
         (t for t in triggers if start_node_id is None or t.id == start_node_id), None
@@ -352,6 +357,7 @@ async def run_graph(
     # at what chain depth — one deeper than the event that started it, when that
     # event was itself another automation's change.
     depth = (int(getattr(event, "automation_depth", 0) or 0) if getattr(event, "automated", False) else 0) + 1
+    cause = events.AutomationCause(rule_id=rule.id, depth=depth)
     record = partial(
         runs.record,
         session,
@@ -366,7 +372,7 @@ async def run_graph(
     try:
         if owner_error:
             raise ValueError("The automation execution account is unavailable; explicitly assign an active owner")
-        with events.run_cause(events.AutomationCause(rule_id=rule.id, depth=depth)):
+        with events.run_cause(cause):
             report = await executor.walk(
                 session,
                 nodes=nodes,
@@ -385,7 +391,7 @@ async def run_graph(
         logger.exception("automations: %s failed while running", rule.name)
         error = f"{exc.__class__.__name__}: {exc}"
         await record(status=RunStatus.FAILED, result=None, error=error)
-        await _emit_run_failed(session, rule, trigger.id, error)
+        await _emit_run_failed(session, rule, trigger.id, error, cause)
         return None
     if apply:
         result = await _result_of(
@@ -400,20 +406,26 @@ async def run_graph(
             item_keys=[keys[i] for i in initial.item_ids if i in keys],
         )
         if failures:
-            await _emit_run_failed(session, rule, trigger.id, "; ".join(failures))
+            await _emit_run_failed(session, rule, trigger.id, "; ".join(failures), cause)
     return report
 
 
-async def _emit_run_failed(session: AsyncSession, rule, trigger_node_id: str, error: str) -> None:
-    await events.emit(
-        session,
-        event_type=AutomationEvent.RUN_FAILED,
-        entity_type=AutomationEntity.RULE,
-        entity_id=rule.id,
-        actor_id=SYSTEM_ACTOR_ID,
-        payload={"name": rule.name, "trigger_node_id": trigger_node_id, "error": error},
-        automated_cause=True,  # the engine's own report, whatever raised
-    )
+async def _emit_run_failed(
+    session: AsyncSession, rule, trigger_node_id: str, error: str, cause: events.AutomationCause
+) -> None:
+    """The engine's own report of a run that failed. It carries the RUN'S cause
+    (RADD-1450) — which rule, at what chain depth — so the audit log can say
+    whose run broke, and a trigger on it sits at the right depth; before, it was
+    emitted outside the run's scope and read as an anonymous depth-1 automation."""
+    with events.automated(cause=cause):
+        await events.emit(
+            session,
+            event_type=AutomationEvent.RUN_FAILED,
+            entity_type=AutomationEntity.RULE,
+            entity_id=rule.id,
+            actor_id=SYSTEM_ACTOR_ID,
+            payload={"name": rule.name, "trigger_node_id": trigger_node_id, "error": error},
+        )
 
 
 async def _system_actor(session: AsyncSession, event: Event) -> User | None:
