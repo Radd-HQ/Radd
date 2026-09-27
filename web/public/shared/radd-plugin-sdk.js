@@ -62,6 +62,7 @@ export const useIsAuthenticated = M["useIsAuthenticated"];
 export const useIsInstanceAdmin = M["useIsInstanceAdmin"];
 export const usePermissions = M["usePermissions"];
 export const useCapabilities = M["useCapabilities"];
+export const useCapabilitiesQuery = M["useCapabilitiesQuery"];
 export const useHasPlugin = M["useHasPlugin"];
 export const useItemsQuery = M["useItemsQuery"];
 export const useItemQuery = M["useItemQuery"];

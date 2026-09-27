@@ -60,13 +60,19 @@ export function usePermissions(): Permissions {
   };
 }
 
-export function useCapabilities(): CapabilitiesManifest | undefined {
-  const { data } = useQuery({
+/** The manifest query itself (`GET /capabilities`), shared with the host under the same key — for
+ *  a page that must SAY when the read failed and offer a retry (RADD-1459), rather than spin on
+ *  `undefined` forever. Most pages want `useCapabilities()`. */
+export function useCapabilitiesQuery() {
+  return useQuery({
     queryKey: ["capabilities"],
     queryFn: () => api.get<CapabilitiesManifest>("/capabilities"),
     staleTime: 60_000,
   });
-  return data;
+}
+
+export function useCapabilities(): CapabilitiesManifest | undefined {
+  return useCapabilitiesQuery().data;
 }
 
 /** True when a plugin is currently enabled (its UI should show). */

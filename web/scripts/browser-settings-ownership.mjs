@@ -4,7 +4,9 @@ import {mkdtemp} from 'node:fs/promises';
 import {openBrowser,until} from './lib/cdp.mjs';
 import {serveBuiltSpa} from './lib/spa-server.mjs';
 const enabled=new Set(); const broken=new Set(); const reads=[]; const writes=[];
-let rev=1, packages=[], hold='', release, aborted=0, denied=false;
+let rev=1, packages=[], hold='', release, aborted=0, denied=false, capsFail=false;
+// The settings nav each actual bundle contributes when enabled (ldap's Directory page joins for RADD-1459).
+const NAV={scripts:{label:'Scripts',icon:'Terminal',order:95,requires:['script.manage']},monitoring:{label:'Monitoring',icon:'Activity',order:115,requires:[],requires_admin:true},ldap:{label:'Directory',path:'/settings/directory',icon:'Building2',order:110,requires:[],requires_admin:true}};
 const interpreter={python_version:'3.12',status:'ready',resolved:'3.12.8',log:'Fixture built',built_at:'2026-09-25T12:00:00Z',path:'/managed/python',available:['3.12','3.13'],sdk_source:'radd-sdk',wheelhouses:[],operator_wheelhouse:'/wheels',index_url:'https://mirror.example/simple',offline:true};
 const overview={database:{ok:true,postgres_version:'16',size_bytes:1048576,active_connections:4},counts:[{key:'items',label:'Issues',count:42}],workers:[{name:'fixture.worker',description:'Description supplied by owner',registered:true,last_event_id:42,stream_head:42,lag:0,seconds_since_update:300}],workers_in_process:true};
 const coverage={enabled:true,items_total:42,items_embedded:30,docs_total:10,docs_embedded:10};
@@ -15,7 +17,10 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
  if(p.startsWith('/api/')) {
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:denied?'member':'admin',global_role:denied?'member':'admin',permissions:denied?[]:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${rev}`,ui_api_version:'1.3.0'})),nav:[...enabled].filter(x=>['scripts','monitoring'].includes(x)).map(name=>({key:name,plugin:name,label:name==='scripts'?'Scripts':'Monitoring',path:`/settings/${name}`,section:'settings',group:'Server',icon:name==='scripts'?'Terminal':'Activity',order:name==='scripts'?95:115,requires:name==='scripts'?['script.manage']:[],requires_admin:name==='monitoring'})),widget_types:[],view_types:[]};
+  else if(p.includes('capabilities')){
+   if(capsFail){res.writeHead(500,{'content-type':'application/json'});res.end(JSON.stringify({detail:'Status backend unavailable'}));return true;}
+   data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${rev}`,ui_api_version:'1.3.0'})),nav:[...enabled].filter(x=>x in NAV).map(name=>({key:name,plugin:name,path:`/settings/${name}`,section:'settings',group:'Server',...NAV[name]})),widget_types:[],view_types:[]};
+  }
   else if(/^\/api\/v1\/(scripts|monitoring|ai\/embeddings|mail\/health)/.test(p)) {
    reads.push(p);
    if(denied){res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({detail:'Operator permission required'}));return true;}
@@ -72,5 +77,14 @@ try{
  broken.add('monitoring');await change(()=>enabled.add('monitoring'));await until(s,()=>text('This plugin page could not be loaded.'),'Monitoring bundle failure');broken.delete('monitoring');await change(()=>{});await until(s,()=>text('Description supplied by owner'),'Monitoring recovery');checks.push('actual Monitoring bundle unavailable and recovered');
  await change(()=>{enabled.delete('monitoring');enabled.add('scripts');broken.add('scripts');});await s.navigate(base+'/settings/scripts');await until(s,()=>text('This plugin page could not be loaded.'),'Scripts bundle failure');broken.delete('scripts');await change(()=>{});await until(s,()=>text('Package index'),'Scripts recovery');checks.push('actual Scripts bundle unavailable and recovered');
  denied=true;await s.navigate(base+'/settings/scripts');await until(s,()=>text('Operator permission required'),'permission error visible');assert(!await s.eval(`document.querySelector('[data-scripts-index]')!==null`));checks.push('permission denial hides actionable forms');
+ // RADD-1459: the actual Directory bundle SAYS when the capabilities read fails and offers a retry, instead of
+ // spinning forever. `resetQueries` puts the shared manifest query back to no-data, so the refetch's 500 is
+ // the page's first answer — the state a lost backend leaves a mounted page in.
+ denied=false;await change(()=>enabled.add('ldap'));await s.navigate(base+'/settings/directory');await until(s,()=>s.eval(`document.querySelectorAll('[data-directory-status]').length===3`),'Directory status rows');
+ capsFail=true;await s.eval(`void window.__RADD_QUERY_CLIENT__.resetQueries({queryKey:['capabilities']})`);
+ await until(s,()=>text('Failed to load server status'),'capabilities failure said');assert(await s.eval(`document.querySelector('[data-directory-page]')!==null`),'page stays mounted');
+ assert.equal(await s.eval(`document.querySelectorAll('[data-directory-status]').length`),0);assert(!await s.eval(`document.body.innerText.includes('Loading status')`),'no spinner over a failure');
+ capsFail=false;await s.click('[data-directory-status-error] button',t=>t.trim()==='Retry status');await until(s,()=>s.eval(`document.querySelectorAll('[data-directory-status]').length===3`),'status rows back after retry');
+ assert(!await s.eval(`document.querySelector('[data-directory-status-error]')!==null`));checks.push('Directory reports a failed capabilities read and recovers on Retry');
  console.log(JSON.stringify({passed:true,checks}));
 }finally{release?.();if(browser)await browser.close();await spa.close();}

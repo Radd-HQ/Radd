@@ -4,10 +4,18 @@ registered set and what each check reads.
 
 from radd.config import settings
 from radd.kernel import capabilities as kcaps
+from radd.modules.auth.models import User
+from radd.modules.auth.types import InstanceRole
 
 
 def _map():
     return kcaps.capability_map()
+
+
+def _admin() -> User:
+    """An instance admin the route can be called with directly — in memory, no session.
+    `active` is set because an unflushed row has none, and the bypass reads it."""
+    return User(email="caps-admin@example.com", name="Caps Admin", instance_role=InstanceRole.ADMIN.value, active=True)
 
 
 def test_all_expected_capabilities_registered():
@@ -138,13 +146,13 @@ async def test_navigation_carries_ownership_and_generic_display_constraints(monk
     plugin = RaddPlugin(name="fixture", ui=PluginUiManifest(nav=(nav,)))
     monkeypatch.setattr(registries, "plugins", {"fixture": plugin})
     monkeypatch.setattr(registries, "nav", [nav])
-    manifest = await get_capabilities(None)
+    manifest = await get_capabilities(_admin())
     assert manifest.nav[0].plugin == "fixture"
     assert manifest.nav[0].group == "Server"
     assert manifest.nav[0].requires_admin is True
     monkeypatch.setattr(registries, "plugins", {})
     monkeypatch.setattr(registries, "nav", [])
-    assert (await get_capabilities(None)).nav == []
+    assert (await get_capabilities(_admin())).nav == []
 
 
 async def test_each_capability_names_its_owner():
@@ -152,8 +160,35 @@ async def test_each_capability_names_its_owner():
     says who declared it — and outbound email is mailintake's, not the aggregator's."""
     from radd.modules.capabilities.router import get_capabilities
 
-    owners = {c.key: c.plugin for c in (await get_capabilities(None)).capabilities}
+    owners = {c.key: c.plugin for c in (await get_capabilities(_admin())).capabilities}
     assert owners["outbound_mail"] == "mailintake"
     assert owners["workers"] == "capabilities"
     assert owners["ldap"] == "ldap"
     assert all(owners.values()), "every loaded capability has a loaded owner"
+
+
+async def test_capability_detail_travels_to_instance_admins_only(db):
+    """RADD-1459: `/capabilities` answers every actor — a member, a public-project
+    visitor — so the on/off flags, the plugin set, the nav and the remotes reach all of
+    them; what a plugin's check() reports beyond that (the AI provider's name, whether a
+    bind account exists, the `summary` line) is operational status for the Server status
+    page and the plugin admin pages, and reaches instance admins alone."""
+    from _factories import make_user
+    from radd.modules.auth import principals
+    from radd.modules.auth.deps import anyone_user
+    from radd.modules.capabilities.router import get_capabilities
+
+    await principals.ensure_principals(db)
+    member = await make_user(db)
+    admin = await make_user(db, role=InstanceRole.ADMIN)
+    admin_view = {c.key: c for c in (await get_capabilities(admin)).capabilities}
+    assert {"bind_account", "summary"} <= set(admin_view["ldap"].detail)
+    assert "summary" in admin_view["sso"].detail and "provider" in admin_view["ai"].detail
+    for actor in (member, await anyone_user(db)):
+        manifest = await get_capabilities(actor)
+        assert manifest.plugins and manifest.nav is not None
+        assert all(c.detail == {} for c in manifest.capabilities), "no operational detail"
+        # The same rows, the same flags — only the detail is withheld.
+        assert {c.key: (c.enabled, c.plugin) for c in manifest.capabilities} == {
+            key: (c.enabled, c.plugin) for key, c in admin_view.items()
+        }

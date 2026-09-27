@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Lock } from "lucide-react";
-import { EmptyState, ScopedSettings, SettingsPage, Spinner, useCapabilities, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
+import { Button, EmptyState, QueryError, ScopedSettings, SettingsPage, Spinner, useCapabilitiesQuery, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { GroupsTab } from "./GroupsTab";
 import { StatusRow } from "./StatusRow";
 import { sectionHeadClasses } from "./sync";
@@ -14,7 +14,8 @@ export function DirectorySettingsPage() {
   const [tab, setTab] = useState<DirectoryTab>("connection");
   const me = useCurrentUser();
   const isInstanceAdmin = useIsInstanceAdmin();
-  const caps = useCapabilities();
+  const capsQuery = useCapabilitiesQuery();
+  const caps = capsQuery.data;
   const capability = (key: string) => caps?.capabilities.find((c) => c.key === key);
   const directoryReady = Boolean(capability("ldap")?.detail?.bind_account);
 
@@ -31,14 +32,20 @@ export function DirectorySettingsPage() {
         <div className="flex flex-col gap-8" data-directory-page>
           <section>
             <h2 className={sectionHeadClasses}>Status</h2>
-            {!caps ? (
-              <Spinner label="Loading status…" />
-            ) : (
+            {caps ? (
               <div className="grid gap-2 sm:grid-cols-3">
                 <StatusRow label="LDAP / AD sign-in" on={Boolean(capability("ldap")?.enabled)} />
                 <StatusRow label="Bind (service) account" on={directoryReady} />
                 <StatusRow label="Background workers" on={Boolean(capability("workers")?.enabled)} />
               </div>
+            ) : capsQuery.isError ? (
+              // RADD-1459: a failed read is said, with a retry — a spinner that never ends reads as a hung page.
+              <div className="space-y-2" data-directory-status-error>
+                <QueryError label="server status" error={capsQuery.error} />
+                <Button variant="secondary" onClick={() => void capsQuery.refetch()}>Retry status</Button>
+              </div>
+            ) : (
+              <Spinner label="Loading status…" />
             )}
           </section>
 

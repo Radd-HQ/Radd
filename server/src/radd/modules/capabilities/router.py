@@ -5,6 +5,7 @@ from fastapi import APIRouter
 
 from radd.kernel import capabilities as kcaps
 from radd.kernel import registries
+from radd.modules.auth import authz
 from radd.modules.auth.deps import Actor
 
 from .schemas import (
@@ -43,9 +44,20 @@ router = APIRouter(tags=["capabilities"])
 async def get_capabilities(user: Actor) -> CapabilitiesRead:
     """The backend-assembled UI manifest (docs/plugin-platform.md §3.2/§8a): each enabled
     plugin's evaluated `CapabilitySpec`, and plugin-contributed `nav` the SPA gates by `requires`
-    against the user's atoms. The pre-sign-in subset is `/instance/login-options`."""
+    against the user's atoms. The pre-sign-in subset is `/instance/login-options`.
+
+    This route answers every actor — a member, a public-project visitor — so the on/off flags,
+    the plugin set, the nav and the remotes travel to all of them: that is what the SPA draws
+    itself from. A capability's `detail` (RADD-1459) — the AI provider's name, whether a bind
+    account exists, the storage backend, the `summary` line — is what a plugin's `check()`
+    reports beyond on/off: operational status for the Server status page and the plugin admin
+    pages, and it travels to instance admins only."""
+    admin = authz.is_instance_admin(user)
     return CapabilitiesRead(
-        capabilities=[CapabilityRead(**c, plugin=_owner(c["key"])) for c in kcaps.evaluate()],
+        capabilities=[
+            CapabilityRead(**{**c, "detail": c["detail"] if admin else {}}, plugin=_owner(c["key"]))
+            for c in kcaps.evaluate()
+        ],
         nav=[
             NavItemRead(
                 key=n.key, label=n.label, path=n.path, icon=n.icon,

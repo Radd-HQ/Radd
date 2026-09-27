@@ -82,6 +82,7 @@ export {
   useIsInstanceAdmin,
   usePermissions,
   useCapabilities,
+  useCapabilitiesQuery,
   useHasPlugin,
   useItemsQuery,
   useItemQuery,
