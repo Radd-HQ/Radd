@@ -81,7 +81,7 @@ export function SegmentedChoice<T extends string>({
             className={
               "rounded px-2 py-0.5 text-[11px] font-medium cursor-pointer transition-colors " +
               "focus-visible:outline-2 focus-visible:outline-focus " +
-              (active ? option.activeClassName ?? "bg-elevated text-heading" : "text-fg-muted hover:text-fg")
+              (active ? option.activeClassName ?? "bg-elevated text-heading" : "text-fg-secondary hover:text-fg")
             }
           >
             {option.label}
