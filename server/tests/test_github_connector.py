@@ -19,18 +19,24 @@ from sqlalchemy import func, select
 from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ConflictError, ForbiddenError
-from radd.modules.github import backfill, parsing, service
+from radd.modules.github import parsing
 from radd.modules.github.models import GithubConnection
 from radd.modules.github.router import router as github_router
-from radd.modules.github.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
+from radd.modules.github.service import store as service, verify_signature
 from radd.modules.github.types import GITHUB_COM, GITHUB_COM_API, GithubTrigger
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+from radd.modules.vcs import triggers
+from radd.modules.vcs.connector_kit import github_shape
+from radd.modules.vcs.connector_kit.schemas import ConnectionUpdate, RepoCreate, RepoUpdate
 from radd.modules.vcs.models import ItemVcsLink
 from radd.modules.vcs.triggers import RefAction
 from radd.modules.vcs.types import VcsRefType
+
+#: GitHub's POST body: the base URL defaults to github.com.
+ConnectionCreate = service.connection_create
 
 
 def _sign(body: bytes, secret: str) -> str:
@@ -91,11 +97,11 @@ def _pr(*, state: str, merged: bool, merged_at: str | None = None) -> dict:
 
 
 def test_plan_pull_request_status_and_keys():
-    links = parsing.plan_pull_request(_pr(state="closed", merged=True))
+    links = github_shape.plan_pull_request(_pr(state="closed", merged=True))
     assert {link.item_key for link in links} == {"TD-5", "DEV-3"}
     assert all(link.external_id == "pr:radd-hq/radd:7" and link.status == "merged" for link in links)
     assert links[0].ref_type is VcsRefType.PULL_REQUEST
-    links = parsing.plan_pull_request(_pr(state="open", merged=False))
+    links = github_shape.plan_pull_request(_pr(state="open", merged=False))
     assert links[0].status == "open"
 
 
@@ -103,7 +109,7 @@ def test_pr_action_reads_the_action_never_the_state():
     """RADD-1309: a merge is `closed` + merged; an edit of a merged PR still says
     merged and must fire nothing."""
     def action(name, **pr):
-        return parsing.pr_action({**_pr(**pr), "action": name})
+        return github_shape.pr_action({**_pr(**pr), "action": name})
 
     assert action("closed", state="closed", merged=True) is RefAction.MERGED
     # GitHub sometimes omits `merged` on re-deliveries but always carries merged_at.
@@ -132,11 +138,11 @@ def test_plan_ci_covers_the_three_shapes():
 def test_signature_accepts_prefixed_and_bare_hex():
     body = b'{"x":1}'
     hexdigest = hmac.new(b"s", body, hashlib.sha256).hexdigest()
-    assert service.verify_signature(body, "sha256=" + hexdigest, "s")
-    assert service.verify_signature(body, hexdigest, "s")
-    assert not service.verify_signature(body, "sha256=" + hexdigest, "other")
-    assert not service.verify_signature(body, "", "s")
-    assert not service.verify_signature(body, hexdigest, "")
+    assert verify_signature(body, "sha256=" + hexdigest, "s")
+    assert verify_signature(body, hexdigest, "s")
+    assert not verify_signature(body, "sha256=" + hexdigest, "other")
+    assert not verify_signature(body, "", "s")
+    assert not verify_signature(body, hexdigest, "")
 
 
 def test_api_url_is_derived_from_the_web_host():
@@ -252,7 +258,7 @@ async def test_release_guard_fires_only_for_published_non_draft(monkeypatch):
     async def fake_emit(session, event_type, **kwargs):
         fired.append({"event_type": event_type, **kwargs})
 
-    monkeypatch.setattr(github_router_module.triggers, "emit_release", fake_emit)
+    monkeypatch.setattr(triggers, "emit_release", fake_emit)
     project_id = uuid.uuid4()
     repo = SimpleNamespace(id=uuid.uuid4(), project_id=project_id, publish_on_release=False)
     base = {
@@ -305,8 +311,8 @@ async def test_backfill_is_idempotent_and_uses_canonical_ids(db):
     from radd.modules.events.models import Event
 
     head = (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
-    first = await backfill.run(db, connection, repo, transport=transport)
-    second = await backfill.run(db, connection, repo, transport=transport)
+    first = await service.backfill(db, connection, repo, transport=transport)
+    second = await service.backfill(db, connection, repo, transport=transport)
     # RADD-1314: a backfill replays history quietly.
     emitted = list((await db.execute(select(Event).where(Event.id > head))).scalars())
     assert emitted and all(e.silent for e in emitted)

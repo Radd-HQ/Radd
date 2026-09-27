@@ -23,11 +23,12 @@ from radd.exceptions import ForbiddenError
 from radd.modules.alertmanager import planner, service as alert_service
 from radd.modules.alertmanager.router import router as alertmanager_router
 from radd.modules.alertmanager.types import AlertAction
-from radd.modules.forgejo import parsing as forgejo_parsing, service as forgejo_service
+from radd.modules.forgejo import parsing as forgejo_parsing
 from radd.modules.forgejo.router import router as forgejo_router
-from radd.modules.forgejo.service import verify_signature
+from radd.modules.forgejo.service import store as forgejo_store, verify_signature
 from radd.modules.mailintake.parsing import extract_reply_key, parse_email
 from radd.modules.mailintake.types import BODY_MAX_CHARS
+from radd.modules.vcs.connector_kit import github_shape
 from radd.modules.vcs.triggers import RefAction
 from radd.modules.vcs.types import VcsRefType
 
@@ -113,28 +114,33 @@ def _forgejo_pr_payload(*, state: str, merged: bool, action: str) -> dict:
 
 
 def test_forgejo_plan_pull_request_open():
+    """Forgejo sends GitHub's pull_request shape, so one parser reads both; its
+    PRs are PULL_REQUEST links, as its backfill writes them (RADD-1435)."""
     payload = _forgejo_pr_payload(state="open", merged=False, action="opened")
-    links = forgejo_parsing.plan_pull_request(payload)
-    assert forgejo_parsing.pr_action(payload) is RefAction.OPENED
+    links = github_shape.plan_pull_request(payload)
+    assert github_shape.pr_action(payload) is RefAction.OPENED
     assert [link.item_key for link in links] == ["TD-7", "DEV-3"]
-    assert all(link.ref_type is VcsRefType.MERGE_REQUEST for link in links)
+    assert all(link.ref_type is VcsRefType.PULL_REQUEST for link in links)
     assert links[0].external_id == "pr:pipe/tools:12"
     assert links[0].status == "open"
+    assert links[0].title == "Fix render farm (TD-7) (#12)"  # the backfill's spelling too
 
 
 def test_forgejo_plan_pull_request_merged():
     payload = _forgejo_pr_payload(state="closed", merged=True, action="closed")
-    links = forgejo_parsing.plan_pull_request(payload)
-    assert forgejo_parsing.pr_action(payload) is RefAction.MERGED
+    links = github_shape.plan_pull_request(payload)
+    assert github_shape.pr_action(payload) is RefAction.MERGED
     assert links[0].status == "merged"
 
 
 def test_forgejo_plan_pull_request_closed_unmerged():
     payload = _forgejo_pr_payload(state="closed", merged=False, action="closed")
-    links = forgejo_parsing.plan_pull_request(payload)
-    assert forgejo_parsing.pr_action(payload) is RefAction.CLOSED
+    links = github_shape.plan_pull_request(payload)
+    assert github_shape.pr_action(payload) is RefAction.CLOSED
     # An edit of a closed PR is "updated", never "closed" again (RADD-1309/1330).
-    assert forgejo_parsing.pr_action({**payload, "action": "edited"}) is RefAction.UPDATED
+    assert github_shape.pr_action({**payload, "action": "edited"}) is RefAction.UPDATED
+    # Forgejo spells new commits `synchronized`, GitHub `synchronize`: both update.
+    assert github_shape.pr_action({**payload, "action": "synchronized"}) is RefAction.UPDATED
     assert links[0].status == "closed"
 
 
@@ -189,7 +195,7 @@ def _connections(monkeypatch, *secrets: str, active: bool = True) -> None:
     async def fake_list(session):
         return rows
 
-    monkeypatch.setattr(forgejo_service, "list_connections", fake_list)
+    monkeypatch.setattr(forgejo_store, "list_connections", fake_list)
 
 
 # A push referencing no item keys: the endpoint accepts it without touching the DB.

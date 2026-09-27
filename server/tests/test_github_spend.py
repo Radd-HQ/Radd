@@ -23,9 +23,9 @@ from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.github import service, spend
+from radd.modules.github import spend
 from radd.modules.github.router import router as github_router
-from radd.modules.github.schemas import ConnectionCreate, RepoCreate
+from radd.modules.github.service import store as service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
@@ -33,6 +33,7 @@ from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import categories, enablement
 from radd.modules.timelogging.models import Worklog
 from radd.modules.vcs import timemirror
+from radd.modules.vcs.connector_kit.schemas import RepoCreate
 from radd.modules.vcs.models import VcsPendingWorklog
 from radd.modules.vcs.types import VcsProvider
 
@@ -71,7 +72,7 @@ async def world(db):
     await enablement.set_enabled(db, project.id, True, actor_id=admin.id)
     item = await items_service.create_item(db, ItemCreate(project_id=project.id, title="t"), actor=admin)
     await categories.ensure_default_categories(db)
-    connection = await service.create_connection(db, ConnectionCreate(name=f"gh-{suffix}", webhook_secret=SECRET))
+    connection = await service.create_connection(db, service.connection_create(name=f"gh-{suffix}", webhook_secret=SECRET))
     repo = await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="acme/widgets"))
     repo.mirror_time = True  # RADD-1321: the switch is off by default; these tests are the ON case
     await db.flush()

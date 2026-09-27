@@ -46,3 +46,31 @@ class VcsUserLinkEvent(StrEnum):
 
     CREATED = "vcs_user_link.created"
     DELETED = "vcs_user_link.deleted"
+
+
+class VcsSocket(StrEnum):
+    """The socket a code-host connector provides its `ConnectorSpec` on (RADD-1435).
+    vcs reads it for what is loaded NOW, so a disabled connector's tab goes too."""
+
+    CONNECTOR = "vcs_connector"
+
+
+class DeliveryCredential(StrEnum):
+    """How a host authenticates a webhook delivery — what a refusal names."""
+
+    SIGNATURE = "signature"  # an HMAC of the raw body (Forgejo, GitHub)
+    TOKEN = "token"  # the secret echoed back verbatim (GitLab)
+
+
+class ConnectorSetting(StrEnum):
+    """A connector's `config.Settings` keys, named `<provider>_<key>` (`ConnectorSpec.setting`)."""
+
+    # Seed-only: the env seeds ONE connection (+ repository) once (the spec-101 rule).
+    WEBHOOK_SECRET = "webhook_secret"
+    BASE_URL = "base_url"
+    API_TOKEN = "api_token"
+    REPO = "repo"
+    # Tunables.
+    HTTP_TIMEOUT = "http_timeout_seconds"
+    PAGE_SIZE = "api_page_size"
+    MAX_COMMITS = "backfill_max_commits"

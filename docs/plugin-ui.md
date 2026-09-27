@@ -776,9 +776,10 @@ vocabulary).
   each contribution's `match` (its check key) to tell a served rule from one whose plugin is gone: that
   one shows a fail-closed notice with Remove, because the server refuses every move it governs.
   Approvals' "Require approval" is the worked example (`approval-rule-editor-proof.mjs`).
-- **VCS connectors (RADD-1366).** VCS owns `/settings/vcs`; each connector remote contributes one tab
-  to `vcs.provider-settings` and renders it through `vcs.host-settings` with a `VcsHostConfig` from
-  `@radd-plugin-ui/vcs/host-contract`. The config is WORDING only (title, description, webhook and token
-  guidance, what a change is called); REST paths, cache tags and audited entity types follow from the
-  provider key by one VCS convention, so a connector cannot restate them wrong, and nothing enumerates
-  the installed connectors.
+- **VCS connectors (RADD-1366, reshaped by RADD-1435).** VCS owns `/settings/vcs` and draws one tab per
+  loaded connector from `GET /vcs/connectors` (global.manage); a connector ships no UI. Its wording
+  (title, description, webhook and token guidance, what a change is called) comes from the
+  `ConnectorSpec` the connector's Python manifest provides on the `vcs_connector` socket, and REST
+  paths, cache tags and audited entity types follow from the provider key by one VCS convention.
+  Disabling a connector removes its tab on the next refetch; no connector bundle is ever requested
+  (`browser-vcs-settings.mjs`).

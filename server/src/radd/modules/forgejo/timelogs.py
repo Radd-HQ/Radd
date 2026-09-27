@@ -36,12 +36,9 @@ class ForgejoTimeClient:
     def __init__(
         self, connection: ForgejoConnection, transport: httpx.AsyncBaseTransport | None = None
     ) -> None:
-        self._base = connection.base_url.rstrip("/")
-        headers = {"Accept": "application/json"}
-        if connection.api_token:
-            headers["Authorization"] = f"token {connection.api_token}"
+        self._base = connection.api_url
         self._client = httpx.AsyncClient(
-            headers=headers,
+            headers=connection.api_headers,
             verify=connection.verify_ssl,
             timeout=settings.forgejo_http_timeout_seconds,
             transport=transport,
@@ -60,7 +57,7 @@ class ForgejoTimeClient:
         limit = settings.forgejo_api_page_size
         while True:
             response = await self._client.get(
-                f"{self._base}/api/v1/repos/{full_name}/issues/{index}/times",
+                f"{self._base}/repos/{full_name}/issues/{index}/times",
                 params={"page": page, "limit": limit},
             )
             if response.status_code == 404:  # time tracking off for the repo, or no PR
@@ -78,7 +75,7 @@ class ForgejoTimeClient:
         if username not in self._emails:
             email = ""
             try:
-                response = await self._client.get(f"{self._base}/api/v1/users/{username}")
+                response = await self._client.get(f"{self._base}/users/{username}")
                 if response.status_code < 400:
                     email = str(response.json().get("email") or "")
             except httpx.HTTPError as exc:

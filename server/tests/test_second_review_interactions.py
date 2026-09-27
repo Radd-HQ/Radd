@@ -185,7 +185,7 @@ async def test_a_vcs_merge_automation_uses_sample_event_payload(world):
     """A merge rule gated on the repository previews against a sample payload.
     (It was the per-host template until RADD-1369 made that behaviour a
     repository switch; the graph is spelled out here instead.)"""
-    github_router = importlib.import_module("radd.modules.github.router")
+    from radd.modules.github.types import GithubTrigger
     from radd.modules.automations.graph import Packet
     from radd.modules.automations.conditions import EventFacts
 
@@ -194,7 +194,7 @@ async def test_a_vcs_merge_automation_uses_sample_event_payload(world):
         db, ItemCreate(project_id=project.id, title="Preview merge"), admin
     )
     nodes = [
-        {"id": "merge", "kind": "trigger", "type": "trigger.event", "params": {"event": str(github_router.TRIGGERS.merged)}},
+        {"id": "merge", "kind": "trigger", "type": "trigger.event", "params": {"event": str(GithubTrigger.PR_MERGED)}},
         {"id": "repo", "kind": "gate", "type": "gate.payload", "params": {"path": "repo", "operator": "eq", "value": "team/repo"}},
         {"id": "move", "kind": "action", "type": "action.set_state", "params": {"state": "Done"}},
     ]
@@ -225,8 +225,8 @@ async def test_a_vcs_merge_automation_uses_sample_event_payload(world):
 
 
 async def test_same_repository_name_on_two_connections_authenticates_each_host(world):
-    from radd.modules.gitlab import service
-    from radd.modules.gitlab.schemas import ConnectionCreate, RepoCreate
+    from radd.modules.gitlab.service import store as service
+    from radd.modules.vcs.connector_kit.schemas import ConnectionCreate, RepoCreate
 
     db, admin, project = world
     connections = [
@@ -247,7 +247,7 @@ async def test_same_repository_name_on_two_connections_authenticates_each_host(w
         )
     results = [
         await service.resolve_for_payload(
-            db, {"project": {"path_with_namespace": name}}, f"secret{i}"
+            db, {"project": {"path_with_namespace": name}}, b"", f"secret{i}"
         )
         for i in range(2)
     ]
@@ -278,7 +278,7 @@ async def test_ref_identity_is_separate_for_each_host(world):
 
 
 async def test_pr_mention_removed_keeps_historical_link_current(world):
-    from radd.modules.github import parsing
+    from radd.modules.vcs.connector_kit import github_shape
 
     db, admin, project = world
     item = await items.create_item(
@@ -297,12 +297,12 @@ async def test_pr_mention_removed_keeps_historical_link_current(world):
         },
     }
     await receiving.link_planned(
-        db, parsing.plan_pull_request(payload), provider=VcsProvider.GITHUB, actor_id=admin.id
+        db, github_shape.plan_pull_request(payload), provider=VcsProvider.GITHUB, actor_id=admin.id
     )
     payload["pull_request"].update(title="Fix something", state="closed", merged=True)
     payload["action"] = "closed"
     assert await receiving.link_planned(
-        db, parsing.plan_pull_request(payload), provider=VcsProvider.GITHUB, actor_id=admin.id
+        db, github_shape.plan_pull_request(payload), provider=VcsProvider.GITHUB, actor_id=admin.id
     )
     links = await vcs.list_for_item(db, item.id)
     assert len(links) == 1 and links[0].status == "merged"
@@ -372,8 +372,9 @@ async def test_github_ci_aggregates_checks_and_ignores_repeats_and_older_runs(wo
 async def test_deleted_vcs_env_seed_stays_deleted(world, monkeypatch):
     from contextlib import asynccontextmanager
     from radd.config import settings
-    from radd.modules.forgejo import service
+    from radd.modules.forgejo.service import store as service
     from radd.modules.forgejo.models import ForgejoConnection
+    from radd.modules.vcs.connector_kit import store as connector_store
     from sqlalchemy import delete
 
     db, admin, project = world
@@ -386,7 +387,7 @@ async def test_deleted_vcs_env_seed_stays_deleted(world, monkeypatch):
     async def commit():
         await db.flush()
 
-    monkeypatch.setattr(service, "SessionLocal", factory)
+    monkeypatch.setattr(connector_store, "SessionLocal", factory)
     monkeypatch.setattr(db, "commit", commit)
     monkeypatch.setattr(settings, "forgejo_webhook_secret", "review-seed")
     await service.seed_from_env()
@@ -459,8 +460,9 @@ async def test_preview_explicitly_reports_created_branches_as_unavailable(world)
 
 
 async def test_repo_scope_and_deleting_repo_stop_ingestion(world):
-    from radd.modules.gitlab import service, parsing
-    from radd.modules.gitlab.schemas import ConnectionCreate, RepoCreate
+    from radd.modules.gitlab import parsing
+    from radd.modules.gitlab.service import store as service
+    from radd.modules.vcs.connector_kit.schemas import ConnectionCreate, RepoCreate
     from radd.modules.projects import service as projects
     from radd.modules.projects.schemas import ProjectCreate
 
@@ -492,7 +494,7 @@ async def test_repo_scope_and_deleting_repo_stop_ingestion(world):
             }
         ],
     }
-    assert await service.resolve_for_payload(db, payload, "review-scope") is not None
+    assert await service.resolve_for_payload(db, payload, b"", "review-scope") is not None
     repo.link_all_projects = False
     await db.flush()
     links = await receiving.link_planned(
@@ -506,9 +508,9 @@ async def test_repo_scope_and_deleting_repo_stop_ingestion(world):
     assert not links
     repo.enabled = False
     await db.flush()
-    assert await service.resolve_for_payload(db, payload, "review-scope") is None
+    assert await service.resolve_for_payload(db, payload, b"", "review-scope") is None
     await service.delete_repo(db, repo.id)
-    resolved = await service.resolve_for_payload(db, payload, "review-scope")
+    resolved = await service.resolve_for_payload(db, payload, b"", "review-scope")
     assert resolved is None
 
 

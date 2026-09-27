@@ -356,6 +356,10 @@ test('VCS settings and connector transport are owned by plugins',()=>{
   }
   assert.deepEqual(violations,[]);
   for(const file of ['web/src/routes/settings/vcs.tsx','web/src/components/settings/vcs-hosts.ts','web/src/components/settings/VcsHostSettings.tsx','web/src/components/settings/VcsIdentityMap.tsx'])assert(!existsSync(file),file);
+  // RADD-1435: a connector's tab is its manifest's wording, served by vcs (`GET /vcs/connectors`); no connector ships a UI.
+  for(const plugin of ['forgejo','github','gitlab'])assert(!existsSync(`server/src/radd/modules/${plugin}/ui`),`${plugin} ships no UI package`);
+  const page=nodes('server/src/radd/modules/vcs/ui/src/queries.ts');
+  assert(page.some(n=>n.type==='StringLiteral'&&n.value==='/vcs/connectors'),'the vcs page asks the server which connectors are loaded');
 });
 
 test('Directory settings and directory administration transport are owned by the ldap plugin (RADD-1381)',()=>{

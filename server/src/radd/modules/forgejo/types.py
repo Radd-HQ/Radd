@@ -42,23 +42,6 @@ class ForgejoTrigger(StrEnum):
     RELEASE_PUBLISHED = "forgejo.release.published"
 
 
-class PrAction(StrEnum):
-    """`action` values of a pull_request delivery that fire a trigger. Forgejo
-    reports a merge as `closed` with `pull_request.merged: true`."""
-
-    OPENED = "opened"
-    REOPENED = "reopened"
-    CLOSED = "closed"
-    EDITED = "edited"  # RADD-1330: fires "updated"
-    SYNCHRONIZE = "synchronized"  # new commits pushed: "updated" with changes=["commits"]
-
-
-class ReleaseAction(StrEnum):
-    """Only `published` publishes — a draft or a deletion must not."""
-
-    PUBLISHED = "published"
-
-
 class ForgejoEvent(StrEnum):
     """Spec 123: connection + repository administration, audited with a diff.
     Tokens and webhook secrets appear only as "changed". Not triggers."""

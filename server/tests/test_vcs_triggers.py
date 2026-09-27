@@ -31,6 +31,7 @@ from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.releases.models import Release
+from radd.modules.vcs.connector_kit import schemas
 from radd.modules.workflow import service as workflow, transitions
 from radd.modules.workflow.schemas import StateCreate, TransitionCreate
 from radd.modules.workflow.types import StateCategory
@@ -87,7 +88,7 @@ async def _events(db, head: int, event_type: str) -> list[Event]:
 
 @pytest.mark.parametrize("host", HOSTS, ids=lambda h: h.name)
 async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, host: Host):
-    service, schemas, types = host.module("service"), host.module("schemas"), host.module("types")
+    service, types = host.module("service").store, host.module("types")
     trigger = types.GithubTrigger if host.name == "github" else types.ForgejoTrigger
     secret = f"s-{uuid.uuid4().hex[:8]}"
     repo_name = f"acme/{host.name}-{uuid.uuid4().hex[:6]}"
@@ -202,7 +203,7 @@ async def test_switched_on_a_merge_moves_to_waiting_and_a_release_ships(db, host
     are ON — the merged PR moves its issue to the project's waiting state, a
     second merge naming an issue already done leaves it alone, and the
     published release records the version and sweeps the waiting issue."""
-    service, schemas = host.module("service"), host.module("schemas")
+    service = host.module("service").store
     secret = f"s-{uuid.uuid4().hex[:8]}"
     repo_name = f"acme/{host.name}-{uuid.uuid4().hex[:6]}"
     connection = await service.create_connection(

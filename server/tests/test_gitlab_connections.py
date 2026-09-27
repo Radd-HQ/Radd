@@ -19,10 +19,10 @@ from sqlalchemy import select
 
 from radd.db import get_session
 from radd.exceptions import ConflictError, ForbiddenError
-from radd.modules.gitlab import service
 from radd.modules.gitlab.models import GitlabConnection
 from radd.modules.gitlab.router import router as gitlab_router
-from radd.modules.gitlab.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
+from radd.modules.gitlab.service import store as service
+from radd.modules.vcs.connector_kit.schemas import ConnectionUpdate, RepoCreate, RepoUpdate
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
@@ -31,6 +31,9 @@ from radd.modules.vcs.models import ItemVcsLink
 from radd.modules.vcs.models import VcsUserLink
 from radd.modules.vcs import timemirror
 from radd.modules.vcs.types import VcsProvider
+
+#: GitLab's POST body: the base URL defaults to gitlab.com.
+ConnectionCreate = service.connection_create
 
 
 def _payload(path: str = "") -> dict:
@@ -60,39 +63,39 @@ async def test_known_project_is_verified_against_its_own_connection(db):
     second = await _connection(db, f"second-{uuid.uuid4().hex[:6]}", "secret-two")
     await service.create_repo(db, RepoCreate(connection_id=first.id, full_name="acme/sub/widgets"))
 
-    resolved = await service.resolve_for_payload(db, _payload("acme/sub/widgets"), "secret-one")
+    resolved = await service.resolve_for_payload(db, _payload("acme/sub/widgets"), b"", "secret-one")
     assert resolved is not None and resolved[0].id == first.id
     assert resolved[1] is not None and resolved[1].full_name == "acme/sub/widgets"
     # The OTHER host's genuine token must not authorise writes here.
-    assert await service.resolve_for_payload(db, _payload("acme/sub/widgets"), "secret-two") is None
+    assert await service.resolve_for_payload(db, _payload("acme/sub/widgets"), b"", "secret-two") is None
     assert second.active is True
 
 
 async def test_unknown_project_requires_registration(db):
     await _connection(db, f"host-{uuid.uuid4().hex[:6]}", "secret-one")
-    resolved = await service.resolve_for_payload(db, _payload("nobody/knows"), "secret-one")
+    resolved = await service.resolve_for_payload(db, _payload("nobody/knows"), b"", "secret-one")
     assert resolved is None
-    assert await service.resolve_for_payload(db, _payload("nobody/knows"), "nope") is None
+    assert await service.resolve_for_payload(db, _payload("nobody/knows"), b"", "nope") is None
 
 
 async def test_inactive_connection_and_empty_token_verify_nothing(db):
     connection = await _connection(db, f"off-{uuid.uuid4().hex[:6]}", "secret-one", active=False)
     await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="acme/off"))
-    assert await service.resolve_for_payload(db, _payload("acme/off"), "secret-one") is None
-    assert await service.resolve_for_payload(db, _payload("someone/else"), "secret-one") is None
+    assert await service.resolve_for_payload(db, _payload("acme/off"), b"", "secret-one") is None
+    assert await service.resolve_for_payload(db, _payload("someone/else"), b"", "secret-one") is None
     on = await _connection(db, f"on-{uuid.uuid4().hex[:6]}", "secret-three")
     await service.create_repo(db, RepoCreate(connection_id=on.id, full_name="acme/on"))
-    assert await service.resolve_for_payload(db, _payload("acme/on"), "") is None
+    assert await service.resolve_for_payload(db, _payload("acme/on"), b"", "") is None
     # A connection with NO secret accepts nothing, rather than everything.
     bare = await _connection(db, f"bare-{uuid.uuid4().hex[:6]}", "")
     await service.create_repo(db, RepoCreate(connection_id=bare.id, full_name="acme/bare"))
-    assert await service.resolve_for_payload(db, _payload("acme/bare"), "") is None
+    assert await service.resolve_for_payload(db, _payload("acme/bare"), b"", "") is None
 
 
 async def test_project_lookup_is_case_insensitive_and_strips_slashes(db):
     connection = await _connection(db, f"case-{uuid.uuid4().hex[:6]}", "secret-one")
     await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="/Acme/Widgets/"))
-    resolved = await service.resolve_for_payload(db, _payload("acme/widgets"), "secret-one")
+    resolved = await service.resolve_for_payload(db, _payload("acme/widgets"), b"", "secret-one")
     assert resolved is not None and resolved[1] is not None and resolved[1].full_name == "Acme/Widgets"
 
 
@@ -463,7 +466,9 @@ async def test_switched_on_a_merge_moves_to_waiting_and_a_release_ships(db):
         response = await client.post("/integrations/gitlab", content=merged, headers=headers)
         assert response.json() == {"linked": 1, "triggered": 1, "moved": 1}
         assert (await items_service.require_item(db, item.id)).state_id == waiting.id
-        assert (await client.post("/integrations/gitlab", content=release, headers=headers)).json()["triggered"] == 1
+        # RADD-1435: the release answer is every connector's — it says what shipped.
+        shipped = await client.post("/integrations/gitlab", content=release, headers=headers)
+        assert shipped.json() == {"linked": 0, "triggered": 1, "shipped": 1}
     version = await db.scalar(select(Release).where(Release.project_id == project.id))
     assert version is not None and version.version == "5.0.0"
     shipped = await items_service.require_item(db, item.id)

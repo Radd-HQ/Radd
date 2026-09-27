@@ -1,84 +1,41 @@
-"""GitLab hosts and their projects as rows; the env secret only seeds one.
-Credentials are stored as-is (replayed on every call); reads expose has_token/has_secret."""
+"""GitLab hosts and their projects as rows (RADD-1253); the env secret only seeds one.
+The columns are the connector kit's (`vcs.connector_kit.columns`); a repository's
+`full_name` is GitLab's `path_with_namespace` (`group/subgroup/project`)."""
 
-import uuid
-from datetime import datetime
-
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, false, true
-from sqlalchemy.orm import Mapped, mapped_column
-
-from radd.db import Base, TimestampMixin
+from radd.db import Base
+from radd.modules.vcs.connector_kit.columns import ConnectionColumns, RepoColumns
 
 from .types import GITLAB_COM
 
 
-class GitlabConnection(Base, TimestampMixin):
-    """One GitLab host Radd talks to — gitlab.com, or a self-managed instance."""
+class GitlabConnection(ConnectionColumns, Base):
+    """One GitLab host — gitlab.com, or a self-managed instance. The hook's
+    "Secret token" comes back verbatim as `X-Gitlab-Token` (no HMAC). An ADMIN's
+    `read_api` token also exposes other users' emails, which is what makes
+    worklog author matching automatic on an LDAP-backed host."""
 
     __tablename__ = "gitlab_connections"
-    __table_args__ = (UniqueConstraint("name"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(100))
-    #: The WEB base: https://gitlab.com or https://gitlab.example.com. REST and
-    #: GraphQL bases are derived, so an admin enters one URL.
-    base_url: Mapped[str] = mapped_column(String(500), default=GITLAB_COM)
-    #: Personal/project/group access token with `read_api`. The backfill, the
-    #: connection test and the timelog fetch need it; webhooks work with it
-    #: empty. An ADMIN's token also exposes other users' emails, which is what
-    #: makes worklog author matching automatic on an LDAP-backed host.
-    api_token: Mapped[str] = mapped_column(String(500), default="")
-    #: The "Secret token" entered on the hook; GitLab sends it back verbatim as
-    #: `X-Gitlab-Token` (no HMAC).
-    webhook_secret: Mapped[str] = mapped_column(String(200), default="")
-    active: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
-    verify_ssl: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
+    @property
+    def _web(self) -> str:
+        return (self.base_url or GITLAB_COM).rstrip("/")
 
     @property
     def api_url(self) -> str:
-        return f"{(self.base_url or GITLAB_COM).rstrip('/')}/api/v4"
+        return f"{self._web}/api/v4"
 
     @property
     def graphql_url(self) -> str:
-        return f"{(self.base_url or GITLAB_COM).rstrip('/')}/api/graphql"
+        return f"{self._web}/api/graphql"
+
+    @property
+    def api_headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/json"}
+        if self.api_token:
+            headers["PRIVATE-TOKEN"] = self.api_token
+        return headers
 
 
-class GitlabRepo(Base, TimestampMixin):
-    """A project on a connection, and the Radd project its releases belong to.
-
-    `full_name` is GitLab's `path_with_namespace` (`group/subgroup/project`),
-    named like the other connectors' column. `project_id` is the DEFAULT project
-    — the one a release creates a version in. When link_all_projects is false, it
-    also bounds issue linking and mirrored time.
-    """
-
+class GitlabRepo(RepoColumns, Base):
     __tablename__ = "gitlab_repos"
-    __table_args__ = (UniqueConstraint("connection_id", "full_name"),)
-
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    link_all_projects: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    connection_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("gitlab_connections.id", ondelete="CASCADE"), index=True
-    )
-    full_name: Mapped[str] = mapped_column(String(300))
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL"), index=True, default=None
-    )
-    default_branch: Mapped[str] = mapped_column(String(200), default="main")
-    last_backfill_at: Mapped[datetime | None] = mapped_column(default=None)
-    # RADD-1258: the work category a worklog mirrored from this project's merge
-    # requests carries. NULL = the instance's `Development`.
-    time_category_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("work_categories.id", ondelete="SET NULL"), default=None
-    )
-    # RADD-1321: copy time logged on this repository's merge/pull requests into
-    # worklogs. OFF by default — nothing mirrors until someone switches it on.
-    mirror_time: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    # RADD-1369: what a delivery from this repository DOES, beyond linking and
-    # firing triggers. Both OFF until someone switches them on (Settings →
-    # Version control): move every issue a merged change names to its project's
-    # waiting-for-release state; record a published release as a version of the
-    # default project and sweep what is waiting into it.
-    move_on_merge: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    publish_on_release: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    __connection_table__ = "gitlab_connections"

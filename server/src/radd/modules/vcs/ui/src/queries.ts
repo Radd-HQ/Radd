@@ -1,5 +1,23 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api, useCapabilities } from "@radd/plugin-sdk";
+import type { VcsConnector } from "./types";
+
+/** The connector plugins loaded now, one tab each (`GET /vcs/connectors`). Keyed on
+ * the enabled plugins, so enabling or disabling one asks again; a connector the
+ * capabilities stopped listing leaves at once rather than after the answer.
+ * `settling` = a new answer is on its way and the previous one is showing. */
+export function useConnectors(enabled: boolean) {
+  const caps = useCapabilities();
+  const loaded = caps?.plugins ?? [];
+  const result = useQuery<VcsConnector[]>({
+    queryKey: ["vcs", "connectors", loaded.join(",")],
+    enabled: enabled && caps !== undefined,
+    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) => api.get<VcsConnector[]>("/vcs/connectors", { signal }),
+  });
+  const data = result.isError ? undefined : result.data?.filter((connector) => loaded.includes(connector.provider));
+  return { ...result, data, settling: result.isPlaceholderData };
+}
 
 /** The one convention every connector's admin API follows (`<provider>/admin_router.py`). */
 export function hostPaths(provider: string) {

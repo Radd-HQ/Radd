@@ -45,7 +45,7 @@ In load order (`Settings.modules`), then the installable plugins. **Depends on**
 | [forms](#forms) | core | bundled | projects, auth, teams, fields, workflow, labels, cycles, releases, items, events, comments, itemtypes | attachments, automations |
 | [automations](#automations) | core | bundled | projects, auth, workflow, labels, cycles, releases, items, comments, teams, events, fields, itemtypes | notify, forms |
 | [timelogging](#timelogging) | core | bundled | events, projects, auth, teams, items, settings | — |
-| [vcs](#vcs) | core | bundled | projects, auth, events, items, timelogging, workflow, releases | — |
+| [vcs](#vcs) | core | bundled | projects, auth, events, items, timelogging, workflow, releases, automations | — |
 | [audit](#audit) | core | bundled | events, auth, projects, items | — |
 | [backup](#backup) | core | bundled | auth, events | — |
 | [notify](#notify) | core | host | events, projects, auth, items, comments, teams | — |
@@ -55,15 +55,15 @@ In load order (`Settings.modules`), then the installable plugins. **Depends on**
 | [avatars](#avatars) | core | host | auth, attachments | — |
 | [canned](#canned) | core | host | events, projects, auth, items | — |
 | [slas](#slas) | optional | remote | events, projects, auth, settings, workflow, items, comments, automations, reporting, teams | csat |
-| [gitlab](#gitlab) | optional | remote | events, projects, auth, items, vcs, automations | — |
+| [gitlab](#gitlab) | optional | none | events, projects, auth, items, vcs, automations | — |
 | [sso](#sso) | optional | remote | events, projects, auth, teams | — |
 | [ldap](#ldap) | optional | remote | events, projects, auth, settings, groups, teams | — |
 | [pages](#pages) | core | bundled | events, projects, auth, workflow, items, attachments, labels, comments, notify, access, groups, search, teams, settings | — |
 | [collab](#collab) | optional | remote | auth, pages | — |
 | [ai](#ai) | optional | remote | auth, projects, items, fields, workflow, comments, search, settings, events, pages, timelogging, attachments | — |
 | [mcp](#mcp) | optional | none | auth, projects, fields, linktypes | pages |
-| [forgejo](#forgejo) | optional | remote | events, projects, auth, items, vcs, automations | — |
-| [github](#github) | optional | remote | events, projects, auth, items, vcs, automations | — |
+| [forgejo](#forgejo) | optional | none | events, projects, auth, items, vcs, automations | — |
+| [github](#github) | optional | none | events, projects, auth, items, vcs, automations | — |
 | [alertmanager](#alertmanager) | optional | remote | projects, auth, items, events, automations, comments, workflow | — |
 | [mailintake](#mailintake) | optional | remote | projects, auth, items, comments, automations, events, attachments, settings, workflow, notify | ai, csat |
 | [csat](#csat) | optional | remote | projects, auth, items, settings, events, mailintake, workflow | — |
@@ -522,14 +522,14 @@ Owns `sla_policies` (per project, ordered by `position`) and `sla_item_states`, 
 
 ### gitlab
 
-**optional** · UI: remote · load order 37
+**optional** · UI: none · load order 37
 
-GitLab integration: links branches, commits and merge requests to issues, mirrors time spent on them, and offers merges and releases as automation triggers.
+GitLab integration: links branches, commits and merge requests to issues, shows CI status, mirrors time spent on merge requests, and offers merges, CI results, deployments and releases as automation triggers.
 
 GitLab does not sign bodies: the hook echoes its secret as `X-Gitlab-Token`, compared constant-time by `service.verify_token`. A merge request's trigger follows the delivery's `action`, never its `state`, which every later edit of a merged request repeats (`parsing.mr_action`). Time has no webhook: a delivery whose `total_time_spent` changed makes `timelogs.reconcile_merge_request` read the GraphQL timelogs, and only an admin's token reveals authors' emails. Trap: GitLab removes time by appending a NEGATIVE timelog, so `timelogs.net_entries` folds removals in creation (gid) order; sorting by `spentAt` lets a reset eat entries logged after it.
 
 - **Events:** `gitlab_connection.created`, `gitlab_connection.updated`, `gitlab_connection.deleted`, `gitlab_repo.created`, `gitlab_repo.updated`, `gitlab_repo.deleted`, `gitlab.merge_request.opened`, `gitlab.merge_request.merged`, `gitlab.merge_request.closed`, `gitlab.merge_request.updated`, `gitlab.push`, `gitlab.ci.completed`, `gitlab.release.published`, `gitlab.deployment.finished`
-- **Contributes:** capabilities `gitlab`
+- **Contributes:** socket providers `vcs_connector: gitlab`; capabilities `gitlab`
 - **Data:** audit links `gitlab_connection`, `gitlab_repo`
 
 ### sso
@@ -607,26 +607,26 @@ No tables. `POST /mcp` is a hand-rolled JSON-RPC 2.0 server authenticated by the
 
 ### forgejo
 
-**optional** · UI: remote · load order 44
+**optional** · UI: none · load order 44
 
-Forgejo and Gitea integration: links branches, commits and pull requests to issues, and offers merges, CI results and releases as automation triggers.
+Forgejo and Gitea integration: links branches, commits and pull requests to issues, shows CI status, mirrors time tracked on pull requests, and offers merges, CI results and releases as automation triggers.
 
 Also serves Gitea. Deliveries carry a hex HMAC-SHA256 of the raw body in `X-Forgejo-Signature` or `X-Gitea-Signature` (`service.verify_signature`). Forgejo tracks time on a pull request but has no time webhook and no total on the payload, so with a token and `mirror_time` on, every `pull_request` delivery re-reads the pull request's tracked times through `timelogs.py` and reconciles. Trap: a tracked-time entry has only a `created` timestamp, so a mirrored worklog is dated the UTC day the time was recorded, not the day the work was done.
 
 - **Events:** `forgejo_connection.created`, `forgejo_connection.updated`, `forgejo_connection.deleted`, `forgejo_repo.created`, `forgejo_repo.updated`, `forgejo_repo.deleted`, `forgejo.pull_request.opened`, `forgejo.pull_request.merged`, `forgejo.pull_request.closed`, `forgejo.pull_request.updated`, `forgejo.push`, `forgejo.ci.completed`, `forgejo.release.published`
-- **Contributes:** capabilities `forgejo`
+- **Contributes:** socket providers `vcs_connector: forgejo`; capabilities `forgejo`
 - **Data:** audit links `forgejo_connection`, `forgejo_repo`
 
 ### github
 
-**optional** · UI: remote · load order 45
+**optional** · UI: none · load order 45
 
-GitHub integration: links branches, commits and pull requests to issues, shows CI status, and offers merges, CI results and releases as automation triggers.
+GitHub integration: links branches, commits and pull requests to issues, shows CI status, mirrors time logged with /spend on pull requests, and offers merges, CI results and releases as automation triggers.
 
 Deliveries are verified from `X-Hub-Signature-256` (`service.verify_signature`); CI events stamp state, and only a `published` release fires the release trigger. GitHub has no time tracking, so time rides pull-request comments: `spend.py` parses `/spend` lines and `timelogs.py` keys each entry by comment id and line, so editing a comment updates its entries and deleting it removes them. Trap: GitHub pairs an email with a login only in push commit authors (`timelogs.record_commit_authors` fills the identity map from them), so `/spend` time from someone who has not pushed parks as unmatched until an admin maps the login.
 
 - **Events:** `github_connection.created`, `github_connection.updated`, `github_connection.deleted`, `github_repo.created`, `github_repo.updated`, `github_repo.deleted`, `github.pull_request.opened`, `github.pull_request.merged`, `github.pull_request.closed`, `github.pull_request.updated`, `github.push`, `github.ci.completed`, `github.release.published`
-- **Contributes:** capabilities `github`
+- **Contributes:** socket providers `vcs_connector: github`; capabilities `github`
 - **Data:** audit links `github_connection`, `github_repo`
 
 ### alertmanager
@@ -791,6 +791,7 @@ Named interfaces one plugin provides and others read instead of importing it (`k
 | `notification_subject` | pages (`page`) | notify |
 | `notification_audience` | participants (`participant_teams`) | notify |
 | `mail_transport` | mailintake (`mailintake`) | notify |
+| `vcs_connector` | gitlab (`gitlab`), forgejo (`forgejo`), github (`github`) | — |
 
 ## Connection rules
 

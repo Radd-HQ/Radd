@@ -17,7 +17,6 @@ from radd.modules.vcs.ids import pr_external_id
 from radd.modules.vcs.types import VcsProvider
 
 from . import spend
-from .backfill import api_headers
 from .models import GithubConnection, GithubRepo
 
 logger = logging.getLogger(__name__)
@@ -74,7 +73,7 @@ async def _public_emails(connection: GithubConnection, logins: set[str]) -> dict
         return {}
     emails: dict[str, str] = {}
     async with httpx.AsyncClient(
-        headers=api_headers(connection), verify=connection.verify_ssl,
+        headers=connection.api_headers, verify=connection.verify_ssl,
         timeout=settings.github_http_timeout_seconds,
     ) as client:
         for login in logins:

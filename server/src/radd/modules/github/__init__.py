@@ -1,51 +1,26 @@
-from radd.kernel import PluginUiManifest
-from radd.kernel import EntityLinkSpec
-from radd.kernel import CapabilitySpec, RaddPlugin
-from radd.kernel import EventTypeSpec
+from radd.kernel import RaddPlugin
+from radd.modules.vcs.connector_kit import manifest
+from radd.modules.vcs.connector_kit.admin import admin_router
 
-from . import service
-from .admin_router import router as admin_router
 from .models import GithubConnection, GithubRepo  # noqa: F401 — Alembic autogenerate
-from .router import TRIGGERS, router
-from .types import GithubEvent
-
-
-def _admin_event(event_type: GithubEvent, label: str, entity: str) -> EventTypeSpec:
-    """Spec 123: connector administration is audited with a diff; not a trigger."""
-    return EventTypeSpec(
-        event_type, label, "Admin",
-        has_changes=event_type.endswith(".updated"), trigger=False, entity_type=entity,
-    )
+from .router import router
+from .service import CONNECTOR, store
 
 plugin = RaddPlugin(
     name="github",
-    ui=PluginUiManifest(remote="/plugins/github/remoteEntry.js", ui_api_version="1.13.0"),
-    entity_links=(
-        EntityLinkSpec('github_connection', ('/settings/vcs?host=github',)),
-        EntityLinkSpec('github_repo', ('/settings/vcs?host=github',)),
-    ),
+    # RADD-1435: the Settings → Version control tab is vcs's, drawn from CONNECTOR.
+    entity_links=manifest.entity_links(CONNECTOR),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="GitHub integration: links branches, commits and pull requests to issues, shows CI status, and offers merges, CI results and releases as automation triggers.",
+    description=(
+        "GitHub integration: links branches, commits and pull requests to issues, shows CI status, mirrors"
+        " time logged with /spend on pull requests, and offers merges, CI results and releases as automation"
+        " triggers."
+    ),
     depends_on=("events", "projects", "auth", "items", "vcs", "automations"),
-    event_types=(
-        _admin_event(GithubEvent.CONNECTION_CREATED, "GitHub connection created", "github_connection"),
-        _admin_event(GithubEvent.CONNECTION_UPDATED, "GitHub connection updated", "github_connection"),
-        _admin_event(GithubEvent.CONNECTION_DELETED, "GitHub connection deleted", "github_connection"),
-        _admin_event(GithubEvent.REPO_CREATED, "GitHub repository added", "github_repo"),
-        _admin_event(GithubEvent.REPO_UPDATED, "GitHub repository updated", "github_repo"),
-        _admin_event(GithubEvent.REPO_DELETED, "GitHub repository removed", "github_repo"),
-        # RADD-1309: GitHub's own automation triggers; beyond linking it acts only on a repository's switches (RADD-1369).
-        *TRIGGERS.specs(),
-    ),
-    routers=(router, admin_router),
+    event_types=(*manifest.admin_event_types(CONNECTOR), *CONNECTOR.triggers.specs()),
+    routers=(router, admin_router(store)),
+    integrations=(manifest.integration(CONNECTOR),),
     # RADD_GITHUB_WEBHOOK_SECRET seeds ONE connection row, once (the spec-101 rule).
-    on_startup=(service.seed_from_env,),
-    capabilities=(
-        CapabilitySpec(
-            "github",
-            "GitHub connector",
-            "connector",
-            check=lambda: {"enabled": service.active_connection_count() > 0},
-        ),
-    ),
+    on_startup=(store.seed_from_env,),
+    capabilities=(store.capability(),),
 )

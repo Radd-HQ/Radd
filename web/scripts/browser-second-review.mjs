@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { openBrowser, until } from "./lib/cdp.mjs";
 import { CORE_PLUGINS } from "./lib/core-plugins.mjs";
 import { serveBuiltSpa } from "./lib/spa-server.mjs";
+import { vcsConnectors } from "./lib/vcs-connectors.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const fixture = JSON.parse(execFileSync(path.join(root, "server/.venv/bin/python"),
@@ -55,8 +56,8 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     else if (url.pathname.includes("/samples/events")) data = {sampled:0,subjects:[],declared_schema:{},paths:[],declared_paths:[],changed_fields:[]};
     else if (url.pathname.endsWith("/projects/summary") || url.pathname.endsWith("/page-spaces/summary")) data = {total:0,permissions:[],related_count:0};
     else if (url.pathname.endsWith("/preferences")) data = {};
-    else if (url.pathname.includes("capabilities")) data = {capabilities:[],nav:[],plugins:[...CORE_PLUGINS,"github"],ui:[],
-      remotes:[{name:"github",remote_entry:"/plugins/github/remoteEntry.js",ui_api_version:"1.13.0"}]};
+    else if (url.pathname === "/api/v1/vcs/connectors") data = vcsConnectors(["github"]);
+    else if (url.pathname.includes("capabilities")) data = {capabilities:[],nav:[],plugins:[...CORE_PLUGINS,"github"],ui:[],remotes:[]};
     else if (url.pathname.includes("/notifications")) data = {items:[],notifications:[],unread_count:0,total:0};
     else if (url.pathname.endsWith("/ai/status")) data = {enabled:false,features:{}};
     else if (url.pathname.endsWith("/instance")) data = {work_week_days:["mon"],timelog_hours_per_day:8,timelog_days_per_week:5};

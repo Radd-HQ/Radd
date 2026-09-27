@@ -1,23 +1,36 @@
-"""What every receiver does after parsing: resolve planned keys to issues, upsert the
-links, and fire the connector's triggers once per issue."""
+"""Every connector's receiver, around its parser (RADD-1435): `accept` authenticates
+and claims a delivery; `deliver_push`/`deliver_change` link the refs the parser
+planned and fire the connector's triggers once per issue; `release_published`
+handles a published release. The parser and the per-host CI and time handling
+stay with the connector."""
 
-import uuid
 import hashlib
-from collections.abc import Iterable, Mapping
+import json
+import uuid
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.exceptions import ForbiddenError
+from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.items import service as items
 
-from . import service
+from . import policies, service, triggers
+from .keys import PlannedLink
 from .models import ItemVcsLink, VcsDelivery
-from .triggers import HostAuthor, RefAction, emit_ref, ref_of
+from .triggers import HostAuthor, RefAction, emit_ref, host_author, ref_of
 from .types import VcsProvider, VcsRefType
 
 #: Linked issues → the links this delivery wrote for each, in delivery order.
 LinksByItem = dict[uuid.UUID, list[ItemVcsLink]]
+
+
+def nothing() -> dict[str, Any]:
+    """Nothing linked, nothing fired — the answer to a delivery a receiver ignores."""
+    return {"linked": 0, "triggered": 0}
 
 
 async def claim_delivery(session, *, provider, connection_id, delivery_id, event_type, body):
@@ -34,20 +47,65 @@ async def claim_delivery(session, *, provider, connection_id, delivery_id, event
                                 .on_conflict_do_nothing().returning(VcsDelivery.digest)) is not None
 
 
-class Planned(Protocol):
-    """The shape of `keys.PlannedLink` (the backfills build SimpleNamespace ones)."""
+@dataclass(frozen=True)
+class Delivery:
+    """An authenticated, claimed webhook delivery."""
 
-    item_key: str
-    ref_type: VcsRefType
-    external_id: str
-    title: str
-    url: str
-    status: str
+    spec: Any  # the connector's ConnectorSpec
+    payload: dict
+    connection: Any
+    #: The enabled repository the payload names on the signing connection; None
+    #: when the payload names none.
+    repo: Any | None
+    kind: str
+    #: The repository as the payload spells it (what the triggers carry).
+    repo_name: str
+
+    @property
+    def provider(self) -> VcsProvider:
+        return self.spec.provider
+
+    @property
+    def author(self) -> HostAuthor | None:
+        return host_author(self.payload, self.connection.id)
+
+
+async def accept(
+    session: AsyncSession,
+    store: Any,
+    *,
+    raw_body: bytes,
+    credential: str,
+    delivery_id: str,
+    kind_of: Callable[[dict], str],
+) -> Delivery | None:
+    """Parse, authenticate (`ConnectorStore.resolve_for_payload`: the one active
+    host whose secret verifies, and the named repository enabled on THAT host)
+    and claim a delivery. Refuses with 403; None = already processed."""
+    spec = store.spec
+    provider = spec.provider.value
+    try:
+        payload = json.loads(raw_body)
+    except ValueError:
+        raise ForbiddenError(f"{provider} webhook body is not JSON") from None
+    if not isinstance(payload, dict):
+        raise ForbiddenError(f"{provider} webhook body is not an object")
+    resolved = await store.resolve_for_payload(session, payload, raw_body, credential)
+    if resolved is None:
+        # Nothing configured, the wrong credential, an inactive host, or a
+        # repository not enabled on the verifying host: one answer.
+        raise ForbiddenError(f"bad {provider} webhook {spec.credential}")
+    connection, repo = resolved
+    kind = kind_of(payload)
+    if not await claim_delivery(session, provider=spec.provider, connection_id=connection.id,
+            delivery_id=delivery_id, event_type=kind, body=raw_body):
+        return None
+    return Delivery(spec, payload, connection, repo, kind, spec.repo_name(payload))
 
 
 async def link_planned(
     session: AsyncSession,
-    planned: Iterable[Planned],
+    planned: Iterable[PlannedLink],
     *,
     provider: VcsProvider,
     actor_id: uuid.UUID | None,
@@ -56,7 +114,7 @@ async def link_planned(
 ) -> LinksByItem:
     """Upsert every planned link whose key names an existing issue; a key that
     names nothing is skipped silently (text is full of things shaped like keys)."""
-    by_ref: dict[str, list[Planned]] = {}
+    by_ref: dict[str, list[PlannedLink]] = {}
     for plan in planned:
         by_ref.setdefault(plan.external_id, []).append(plan)
     out: LinksByItem = {}
@@ -86,6 +144,89 @@ async def link_planned(
 
 def count(links: LinksByItem) -> int:
     return sum(len(rows) for rows in links.values())
+
+
+async def _link(session: AsyncSession, delivery: Delivery, planned: Iterable[PlannedLink]) -> LinksByItem:
+    return await link_planned(
+        session, planned, provider=delivery.provider, actor_id=SYSTEM_ACTOR_ID,
+        connection_id=delivery.connection.id, repo=delivery.repo,
+    )
+
+
+async def deliver_push(session: AsyncSession, delivery: Delivery, planned: Iterable[PlannedLink]) -> dict[str, Any]:
+    """A push: link its branch and commits, and fire the connector's push
+    trigger once per issue they name."""
+    links = await _link(session, delivery, planned)
+    fired = await fire_push(
+        session, delivery.spec.triggers.pushed, links,
+        provider=delivery.provider, repo=delivery.repo_name,
+        branch=str(delivery.payload.get("ref") or "").removeprefix("refs/heads/"),
+        actor_id=SYSTEM_ACTOR_ID, author=delivery.author,
+    )
+    return {"linked": count(links), "triggered": fired}
+
+
+async def deliver_change(
+    session: AsyncSession,
+    delivery: Delivery,
+    planned: Iterable[PlannedLink],
+    *,
+    action: RefAction | None,
+    ref_extra: Mapping[str, Any],
+    changes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """A merge/pull request delivery: link it, fire the trigger for what the
+    delivery DID (None = nothing a trigger is for), and — when the repository's
+    own switch is on (RADD-1369) — move the issues a merge names to waiting."""
+    links = await _link(session, delivery, planned)
+    result: dict[str, Any] = {"linked": count(links), "triggered": 0}
+    if action is None:
+        return result
+    result["triggered"] = await fire_ref_action(
+        session, delivery.spec.triggers.for_action(action), links,
+        provider=delivery.provider, repo=delivery.repo_name, action=action,
+        ref_extra=ref_extra, actor_id=SYSTEM_ACTOR_ID, author=delivery.author, changes=changes,
+    )
+    if action is RefAction.MERGED and getattr(delivery.repo, "move_on_merge", False):
+        result["moved"] = await policies.move_merged(session, delivery.repo, list(links), actor_id=SYSTEM_ACTOR_ID)
+    return result
+
+
+async def release_published(
+    session: AsyncSession,
+    spec: Any,
+    repo: Any | None,
+    *,
+    repo_name: str,
+    tag: str,
+    name: str,
+    notes: str,
+    url: str,
+) -> dict[str, Any]:
+    """A release the host PUBLISHED (the connector decides which deliveries are
+    that): fire "<Host>: release published", and record the version and sweep
+    waiting work only when the repository's "Publish version on release" switch
+    is on (RADD-1369) — otherwise that is an automation's call (RADD-1310)."""
+    version = triggers.version_from_tag(tag)
+    if not version:
+        return nothing()
+    await triggers.emit_release(
+        session, spec.triggers.release_published,
+        connection_id=getattr(repo, "connection_id", None),
+        entity_type=spec.entities.REPO,
+        entity_id=repo.id if repo is not None else repo_name,
+        provider=spec.provider,
+        repo=repo_name,
+        project_id=getattr(repo, "project_id", None),
+        actor_id=SYSTEM_ACTOR_ID,
+        version=version,
+        tag=tag,
+        name=name,
+        notes=notes,
+        url=url,
+    )
+    shipped = await policies.publish_release(session, repo, version=version, actor_id=SYSTEM_ACTOR_ID, name=name, notes=notes)
+    return {"linked": 0, "triggered": 1, **({"shipped": shipped} if getattr(repo, "publish_on_release", False) else {})}
 
 
 async def fire_ref_action(

@@ -47,22 +47,6 @@ class GithubTrigger(StrEnum):
     RELEASE_PUBLISHED = "github.release.published"
 
 
-class PrAction(StrEnum):
-    """Pull-request actions that fire a trigger; a merge is `closed` with `merged: true`."""
-
-    OPENED = "opened"
-    REOPENED = "reopened"
-    CLOSED = "closed"
-    EDITED = "edited"  # RADD-1330: fires "updated"
-    SYNCHRONIZE = "synchronize"  # new commits pushed: "updated" with changes=["commits"]
-
-
-class ReleaseAction(StrEnum):
-    """Only `published` publishes — a draft, an edit or a deletion must not."""
-
-    PUBLISHED = "published"
-
-
 class GithubEvent(StrEnum):
     """Spec 123: connection + repository administration, audited with a diff.
     Tokens and webhook secrets appear only as "changed". Not triggers."""

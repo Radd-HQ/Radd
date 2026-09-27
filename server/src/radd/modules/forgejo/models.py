@@ -1,68 +1,27 @@
-"""Forgejo/Gitea hosts and their repositories as rows; the env secret only seeds one.
-Credentials are stored as-is (replayed on every call); reads expose has_token/has_secret."""
+"""Forgejo/Gitea hosts and their repositories as rows (spec 111); the env secret only
+seeds one. The columns are the connector kit's (`vcs.connector_kit.columns`)."""
 
-import uuid
-from datetime import datetime
-
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, false, true
-from sqlalchemy.orm import Mapped, mapped_column
-
-from radd.db import Base, TimestampMixin
+from radd.db import Base
+from radd.modules.vcs.connector_kit.columns import ConnectionColumns, RepoColumns
 
 
-class ForgejoConnection(Base, TimestampMixin):
-    """One Forgejo/Gitea host Radd talks to."""
+class ForgejoConnection(ConnectionColumns, Base):
+    """One Forgejo/Gitea host; it signs webhook bodies with HMAC-SHA256."""
 
     __tablename__ = "forgejo_connections"
-    __table_args__ = (UniqueConstraint("name"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(100))
-    base_url: Mapped[str] = mapped_column(String(500))  # https://git.example.com
-    #: Read-only API token. Only the backfill and CI polling need it; a host that
-    #: only pushes webhooks works with this empty.
-    api_token: Mapped[str] = mapped_column(String(500), default="")
-    #: The shared secret the host signs webhook bodies with (HMAC-SHA256).
-    webhook_secret: Mapped[str] = mapped_column(String(200), default="")
-    active: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
-    verify_ssl: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
+    @property
+    def api_url(self) -> str:
+        return f"{self.base_url.rstrip('/')}/api/v1"
+
+    @property
+    def api_headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/json"}
+        if self.api_token:
+            headers["Authorization"] = f"token {self.api_token}"
+        return headers
 
 
-class ForgejoRepo(Base, TimestampMixin):
-    """A repository on a connection, and the project its releases belong to.
-
-    `project_id` is the DEFAULT project — the one a published release creates a
-    version in. When link_all_projects is false, it also bounds issue linking
-    and mirrored time; otherwise issue keys can link across projects.
-    """
-
+class ForgejoRepo(RepoColumns, Base):
     __tablename__ = "forgejo_repos"
-    __table_args__ = (UniqueConstraint("connection_id", "full_name"),)
-
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    link_all_projects: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    connection_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("forgejo_connections.id", ondelete="CASCADE"), index=True
-    )
-    full_name: Mapped[str] = mapped_column(String(300))  # owner/repo, as the payload names it
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL"), index=True, default=None
-    )
-    default_branch: Mapped[str] = mapped_column(String(200), default="main")
-    last_backfill_at: Mapped[datetime | None] = mapped_column(default=None)
-    # RADD-1258: the work category a worklog mirrored from this repository's
-    # merge/pull requests carries. NULL = the instance's `Development`.
-    time_category_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("work_categories.id", ondelete="SET NULL"), default=None
-    )
-    # RADD-1321: copy time logged on this repository's merge/pull requests into
-    # worklogs. OFF by default — nothing mirrors until someone switches it on.
-    mirror_time: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    # RADD-1369: what a delivery from this repository DOES, beyond linking and
-    # firing triggers. Both OFF until someone switches them on (Settings →
-    # Version control): move every issue a merged change names to its project's
-    # waiting-for-release state; record a published release as a version of the
-    # default project and sweep what is waiting into it.
-    move_on_merge: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    publish_on_release: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    __connection_table__ = "forgejo_connections"

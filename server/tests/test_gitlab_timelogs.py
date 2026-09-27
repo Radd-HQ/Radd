@@ -18,14 +18,15 @@ from sqlalchemy import select
 
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.gitlab import backfill, service, timelogs
-from radd.modules.gitlab.schemas import ConnectionCreate, RepoCreate
+from radd.modules.gitlab import backfill, timelogs
+from radd.modules.gitlab.service import store as service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import categories, enablement
 from radd.modules.timelogging.models import Worklog
+from radd.modules.vcs.connector_kit.schemas import ConnectionCreate, RepoCreate
 from radd.modules.vcs.models import ItemVcsLink
 
 
@@ -232,15 +233,17 @@ async def test_backfill_walks_merge_requests_and_imports_their_time_once(db, wor
     # RADD-1321: with the repository's switch OFF the walk still links, and
     # mirrors nothing — the default for every repository.
     world["repo"].mirror_time = False
-    off = await backfill.run(db, world["connection"], world["repo"], transport=transport)
+    off = await service.backfill(db, world["connection"], world["repo"], transport=transport)
     assert off.linked == 4 and not off.worklogs.get("created")
     assert await _worklogs(db, world["item"].id) == []
     world["repo"].mirror_time = True
 
     head = (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
-    first = await backfill.run(db, world["connection"], world["repo"], transport=transport)
-    assert (first.branches, first.merge_requests, first.commits, first.linked) == (1, 2, 1, 4)
-    assert first.timed_merge_requests == 1 and first.worklogs.get("created") == 1
+    first = await service.backfill(db, world["connection"], world["repo"], transport=transport)
+    report = first.as_dict()
+    assert (report["branches"], report["merge_requests"], report["commits"], report["linked"]) == (1, 2, 1, 4)
+    assert report["pull_requests"] == 2  # the shared page reads this name
+    assert report["timed_merge_requests"] == 1 and first.worklogs.get("created") == 1
     # RADD-1314: history is recorded, and nothing may react to it — every event
     # the backfill emitted (links AND the mirrored worklog) is silent.
     emitted = list((await db.execute(select(Event).where(Event.id > head))).scalars())
@@ -248,7 +251,7 @@ async def test_backfill_walks_merge_requests_and_imports_their_time_once(db, wor
     assert {"worklog.created"} <= {e.event_type for e in emitted}
     assert all(e.silent for e in emitted), [e.event_type for e in emitted if not e.silent]
 
-    second = await backfill.run(db, world["connection"], world["repo"], transport=transport)
+    second = await service.backfill(db, world["connection"], world["repo"], transport=transport)
     assert second.linked == 4 and second.worklogs.get("created", 0) == 0 and second.worklogs.get("unchanged") == 1
 
     links = list((await db.execute(select(ItemVcsLink).where(ItemVcsLink.item_id == world["item"].id))).scalars())

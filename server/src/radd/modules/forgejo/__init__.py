@@ -1,57 +1,26 @@
-from radd.kernel import PluginUiManifest
-from radd.kernel import EntityLinkSpec
-from radd.kernel import CapabilitySpec
-from radd.kernel import EventTypeSpec
 from radd.kernel import RaddPlugin
+from radd.modules.vcs.connector_kit import manifest
+from radd.modules.vcs.connector_kit.admin import admin_router
 
-from . import service
-from .admin_router import router as admin_router
 from .models import ForgejoConnection, ForgejoRepo  # noqa: F401 — Alembic autogenerate
-from .router import TRIGGERS, router
-from .types import ForgejoEvent
-
-
-def _admin_event(event_type: ForgejoEvent, label: str, entity: str) -> EventTypeSpec:
-    """Spec 123: connector administration is audited with a diff; not a trigger."""
-    return EventTypeSpec(
-        event_type, label, "Admin",
-        has_changes=event_type.endswith(".updated"), trigger=False, entity_type=entity,
-    )
+from .router import router
+from .service import CONNECTOR, store
 
 plugin = RaddPlugin(
     name="forgejo",
-    ui=PluginUiManifest(remote="/plugins/forgejo/remoteEntry.js", ui_api_version="1.13.0"),
-    entity_links=(
-        EntityLinkSpec('forgejo_connection', ('/settings/vcs?host=forgejo',)),
-        EntityLinkSpec('forgejo_repo', ('/settings/vcs?host=forgejo',)),
-    ),
-    # Spec 111 declared the `vcsconn.*` atoms here; RADD-1258 moved them to `vcs`
-    # (always loaded), since GitHub and GitLab gate on them too.
+    # RADD-1435: the Settings → Version control tab is vcs's, drawn from CONNECTOR.
+    entity_links=manifest.entity_links(CONNECTOR),
     core=False,  # optional plugin — disableable via the plugin manager
-    description="Forgejo and Gitea integration: links branches, commits and pull requests to issues, and offers merges, CI results and releases as automation triggers.",
+    description=(
+        "Forgejo and Gitea integration: links branches, commits and pull requests to issues, shows CI"
+        " status, mirrors time tracked on pull requests, and offers merges, CI results and releases as"
+        " automation triggers."
+    ),
     depends_on=("events", "projects", "auth", "items", "vcs", "automations"),
-    event_types=(
-        _admin_event(ForgejoEvent.CONNECTION_CREATED, "Forgejo connection created", "forgejo_connection"),
-        _admin_event(ForgejoEvent.CONNECTION_UPDATED, "Forgejo connection updated", "forgejo_connection"),
-        _admin_event(ForgejoEvent.CONNECTION_DELETED, "Forgejo connection deleted", "forgejo_connection"),
-        _admin_event(ForgejoEvent.REPO_CREATED, "Forgejo repository added", "forgejo_repo"),
-        _admin_event(ForgejoEvent.REPO_UPDATED, "Forgejo repository updated", "forgejo_repo"),
-        _admin_event(ForgejoEvent.REPO_DELETED, "Forgejo repository removed", "forgejo_repo"),
-        # RADD-1309: Forgejo's own automation triggers; beyond linking it acts only on a repository's switches (RADD-1369).
-        *TRIGGERS.specs(),
-    ),
-    routers=(router, admin_router),
-    # Spec 111: the env secret seeds ONE connection row, once (the spec-100/101 rule),
-    # so an existing deployment keeps verifying webhooks across the upgrade.
-    on_startup=(service.seed_from_env,),
-    capabilities=(
-        CapabilitySpec(
-            "forgejo",
-            "Forgejo connector",
-            "connector",
-            # Spec 111 made connections rows and the env secret SEED-ONLY, so the
-            # pill counts ACTIVE rows (snapshot: sync check, refreshed on writes).
-            check=lambda: {"enabled": service.active_connection_count() > 0},
-        ),
-    ),
+    event_types=(*manifest.admin_event_types(CONNECTOR), *CONNECTOR.triggers.specs()),
+    routers=(router, admin_router(store)),
+    integrations=(manifest.integration(CONNECTOR),),
+    # Spec 111: the env secret seeds ONE connection row, once (the spec-101 rule).
+    on_startup=(store.seed_from_env,),
+    capabilities=(store.capability(),),
 )

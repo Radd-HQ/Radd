@@ -1,30 +1,19 @@
-"""Connection + repository CRUD, env seeding, webhook resolution. A body must verify
-against exactly ONE active connection; a named repository must be recorded and enabled."""
+"""GitHub's connector spec and its rows through the vcs connector kit: a delivery is
+signed (`X-Hub-Signature-256: sha256=<hex>` of the raw body) with its connection's
+secret."""
 
-from radd.modules.vcs import setup as vcs_setup
 import hashlib
 import hmac
-import logging
-import uuid
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from radd.modules.vcs.connector_kit import github_shape
+from radd.modules.vcs.connector_kit.spec import ConnectorSpec, HostWording, Paging, Probe
+from radd.modules.vcs.connector_kit.store import ConnectorStore
+from radd.modules.vcs.triggers import ConnectorTriggers
+from radd.modules.vcs.types import DeliveryCredential, VcsProvider
 
-from radd.config import settings
-from radd.db import SessionLocal
-from radd.kernel import changes
-from radd.modules.events import service as events
-from radd.modules.projects import service as projects_service
-from radd.exceptions import ConflictError, NotFoundError
-from radd.modules.vcs import timemirror
-from radd.modules.vcs.types import VcsProvider
-from radd.snapshot import Snapshot
-
+from . import backfill
 from .models import GithubConnection, GithubRepo
-from .schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
-from .types import GithubEvent, GITHUB_COM, GithubEntity
-
-logger = logging.getLogger(__name__)
+from .types import GITHUB_COM, GithubEntity, GithubEvent, GithubTrigger
 
 _SIGNATURE_PREFIX = "sha256="
 
@@ -35,324 +24,66 @@ def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
     prefix does not silently break every delivery."""
     if not secret or not signature:
         return False
-    provided = signature.strip()
-    if provided.startswith(_SIGNATURE_PREFIX):
-        provided = provided[len(_SIGNATURE_PREFIX):]
+    provided = signature.strip().removeprefix(_SIGNATURE_PREFIX)
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(provided, expected)
 
 
-# --- connections ---
+def _probe(connection: GithubConnection) -> Probe:
+    """With a token: `GET /user`, reporting the login the token belongs to.
+    Without: `GET /meta`, proving the API host answers."""
+    if connection.api_token:
+        return Probe(f"{connection.api_url}/user", lambda body: f"user {body.get('login')}")
+    return Probe(f"{connection.api_url}/meta", lambda _body: connection.api_url)
 
 
-async def list_connections(session: AsyncSession) -> list[GithubConnection]:
-    rows = await session.execute(select(GithubConnection).order_by(GithubConnection.name))
-    return list(rows.scalars())
-
-
-async def get_connection(session: AsyncSession, connection_id: uuid.UUID) -> GithubConnection:
-    connection = await session.get(GithubConnection, connection_id)
-    if connection is None:
-        raise NotFoundError(GithubEntity.CONNECTION, connection_id)
-    return connection
-
-
-#: Never in an event payload — a diff records that a credential CHANGED, no value.
-SECRET_FIELDS: tuple[str, ...] = ("api_token", "webhook_secret")
-
-
-async def _emit_connection(
-    session: AsyncSession,
-    event_type: GithubEvent,
-    connection: GithubConnection,
-    actor_id: uuid.UUID | None,
-    diff: list[dict] | None = None,
-) -> None:
-    await events.emit(
-        session,
-        event_type=event_type,
-        entity_type=GithubEntity.CONNECTION,
-        entity_id=connection.id,
-        actor_id=actor_id,
-        payload={"name": connection.name, "base_url": connection.base_url},
-        changes=diff,
-    )
-
-
-async def _repo_snapshot(session: AsyncSession, repo: GithubRepo) -> dict:
-    """What an auditor reads for a repo: the project's KEY, not its uuid."""
-    ref = await projects_service.project_ref(session, repo.project_id) if repo.project_id else None
-    return {
-        "full_name": repo.full_name,
-        "project": ref["key"] if ref else None,
-        "default_branch": repo.default_branch,
-        "time_category_id": str(repo.time_category_id) if repo.time_category_id else None,
-        "mirror_time": repo.mirror_time,
-        "move_on_merge": repo.move_on_merge,
-        "publish_on_release": repo.publish_on_release,
-        "enabled": repo.enabled, "link_all_projects": repo.link_all_projects,
-    }
-
-
-async def _emit_repo(
-    session: AsyncSession,
-    event_type: GithubEvent,
-    repo: GithubRepo,
-    actor_id: uuid.UUID | None,
-    diff: list[dict] | None = None,
-) -> None:
-    await events.emit(
-        session,
-        event_type=event_type,
-        entity_type=GithubEntity.REPO,
-        entity_id=repo.id,
-        actor_id=actor_id,
-        payload={"full_name": repo.full_name, "connection_id": str(repo.connection_id)},
-        subjects={"project": repo.project_id},
-        changes=diff,
-    )
-
-
-async def create_connection(
-    session: AsyncSession, data: ConnectionCreate, *, actor_id: uuid.UUID | None = None
-) -> GithubConnection:
-    existing = await session.execute(
-        select(GithubConnection).where(GithubConnection.name == data.name)
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise ConflictError(GithubEntity.CONNECTION, data.name)
-    await vcs_setup.claim_seed(session, "github")
-    connection = GithubConnection(
-        name=data.name,
-        base_url=(data.base_url or GITHUB_COM).rstrip("/"),
-        api_token=data.api_token,
-        webhook_secret=data.webhook_secret,
-        active=data.active,
-        verify_ssl=data.verify_ssl,
-    )
-    await vcs_setup.require_distinct_secret(session, GithubConnection, connection)
-    session.add(connection)
-    await session.flush()
-    await refresh_connection_snapshot(session)
-    await _emit_connection(session, GithubEvent.CONNECTION_CREATED, connection, actor_id)
-    return connection
-
-
-async def update_connection(
-    session: AsyncSession,
-    connection_id: uuid.UUID,
-    data: ConnectionUpdate,
-    *,
-    actor_id: uuid.UUID | None = None,
-) -> GithubConnection:
-    connection = await get_connection(session, connection_id)
-    before = changes.snapshot(connection, changes.column_fields(connection))
-    if data.name is not None:
-        connection.name = data.name
-    if data.base_url is not None:
-        connection.base_url = data.base_url.rstrip("/")
-    # Empty string = keep the stored credential (the ai_providers convention).
-    if data.api_token:
-        connection.api_token = data.api_token
-    if data.webhook_secret:
-        connection.webhook_secret = data.webhook_secret
-    if data.active is not None:
-        connection.active = data.active
-    if data.verify_ssl is not None:
-        connection.verify_ssl = data.verify_ssl
-    await vcs_setup.require_distinct_secret(session, GithubConnection, connection)
-    await session.flush()
-    await refresh_connection_snapshot(session)
-    await _emit_connection(
-        session,
-        GithubEvent.CONNECTION_UPDATED,
-        connection,
-        actor_id,
-        changes.diff_object(connection, before, hidden=SECRET_FIELDS),
-    )
-    return connection
-
-
-async def delete_connection(
-    session: AsyncSession, connection_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
-) -> None:
-    connection = await get_connection(session, connection_id)
-    await _emit_connection(session, GithubEvent.CONNECTION_DELETED, connection, actor_id)
-    # RADD-1258: the identity map and parked time entries keyed by this connection.
-    await timemirror.forget_connection(
-        session, provider=VcsProvider.GITHUB, connection_id=connection.id
-    )
-    await session.delete(connection)
-    await session.flush()
-    await refresh_connection_snapshot(session)
-
-
-async def repo_count(session: AsyncSession, connection_id: uuid.UUID) -> int:
-    rows = await session.execute(
-        select(func.count()).select_from(GithubRepo).where(GithubRepo.connection_id == connection_id)
-    )
-    return int(rows.scalar_one())
-
-
-# --- repositories ---
-
-
-async def list_repos(
-    session: AsyncSession, connection_id: uuid.UUID | None = None
-) -> list[GithubRepo]:
-    query = select(GithubRepo).order_by(GithubRepo.full_name)
-    if connection_id is not None:
-        query = query.where(GithubRepo.connection_id == connection_id)
-    return list((await session.execute(query)).scalars())
-
-
-async def get_repo(session: AsyncSession, repo_id: uuid.UUID) -> GithubRepo:
-    repo = await session.get(GithubRepo, repo_id)
-    if repo is None:
-        raise NotFoundError(GithubEntity.REPO, repo_id)
-    return repo
-
-
-async def find_repo(session: AsyncSession, full_name: str, connection_id: uuid.UUID | None = None) -> GithubRepo | None:
-    """By `owner/repo`, case-insensitively — GitHub treats names that way."""
-    query = select(GithubRepo).where(func.lower(GithubRepo.full_name) == full_name.lower())
-    if connection_id is not None:
-        query = query.where(GithubRepo.connection_id == connection_id)
-    return await session.scalar(query)
-
-
-
-async def create_repo(
-    session: AsyncSession, data: RepoCreate, *, actor_id: uuid.UUID | None = None
-) -> GithubRepo:
-    await get_connection(session, data.connection_id)  # 404s an unknown connection
-    existing = await session.execute(
-        select(GithubRepo).where(
-            GithubRepo.connection_id == data.connection_id,
-            func.lower(GithubRepo.full_name) == data.full_name.lower(),
-        )
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise ConflictError(GithubEntity.REPO, data.full_name)
-    repo = GithubRepo(
-        connection_id=data.connection_id,
-        full_name=data.full_name.strip().strip("/"),
-        project_id=data.project_id,
-        default_branch=data.default_branch,
-    )
-    session.add(repo)
-    await session.flush()
-    await _emit_repo(session, GithubEvent.REPO_CREATED, repo, actor_id)
-    return repo
-
-
-async def update_repo(
-    session: AsyncSession, repo_id: uuid.UUID, data: RepoUpdate, *, actor_id: uuid.UUID | None = None
-) -> GithubRepo:
-    repo = await get_repo(session, repo_id)
-    before = await _repo_snapshot(session, repo)
-    if "project_id" in data.model_fields_set:  # explicit null clears the mapping
-        repo.project_id = data.project_id
-    if data.default_branch is not None:
-        repo.default_branch = data.default_branch
-    if "time_category_id" in data.model_fields_set:  # explicit null = the default
-        repo.time_category_id = data.time_category_id
-    if data.mirror_time is not None:
-        repo.mirror_time = data.mirror_time
-    if data.move_on_merge is not None:
-        repo.move_on_merge = data.move_on_merge
-    if data.publish_on_release is not None:
-        repo.publish_on_release = data.publish_on_release
-    if data.enabled is not None:
-        repo.enabled = data.enabled
-    if data.link_all_projects is not None:
-        repo.link_all_projects = data.link_all_projects
-    await session.flush()
-    diff = changes.diff(before, await _repo_snapshot(session, repo))
-    await _emit_repo(session, GithubEvent.REPO_UPDATED, repo, actor_id, diff)
-    return repo
-
-
-async def delete_repo(
-    session: AsyncSession, repo_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
-) -> None:
-    repo = await get_repo(session, repo_id)
-    await _emit_repo(session, GithubEvent.REPO_DELETED, repo, actor_id)
-    await session.delete(repo)
-    await session.flush()
-
-
-# --- webhook routing ---
-
-
-async def resolve_for_payload(
-    session: AsyncSession, payload: dict, raw_body: bytes, signature: str
-) -> tuple[GithubConnection, GithubRepo | None] | None:
-    """Authenticate one active host, then require its repository to be enabled.
-
-    Secrets shared by multiple hosts are ambiguous and therefore rejected.
-    """
-    full_name = str((payload.get("repository") or {}).get("full_name") or "").strip().strip("/")
-    verified = [c for c in await list_connections(session) if c.active and verify_signature(raw_body, signature, c.webhook_secret)]
-    if len(verified) != 1:
-        return None  # shared secrets cannot identify a host unambiguously
-    connection = verified[0]
-    repo = await find_repo(session, full_name, connection.id) if full_name else None
-    if full_name and (repo is None or not repo.enabled):
-        return None
-    return connection, repo
-
-
-# --- capability snapshot (RADD-899 idiom) ---
-
-
-async def _load_active_count() -> int:
-    async with SessionLocal() as session:
-        rows = await session.execute(
-            select(func.count()).select_from(GithubConnection).where(GithubConnection.active)
-        )
-        return int(rows.scalar_one())
-
-
-_active_snapshot: Snapshot[int] = Snapshot(
-    "github.active-connections", _load_active_count, initial=0
+CONNECTOR = ConnectorSpec(
+    provider=VcsProvider.GITHUB,
+    wording=HostWording(
+        title="GitHub",
+        description=(
+            "Repositories whose pushes, branches, pull requests and check runs link themselves to issues by key."
+            " Map a repository to a project to make it the project its release triggers name. GitHub has no"
+            " time tracking, so a pull-request comment carries it: “/spend 1h30”, “/spend 45m 2026-09-18"
+            " note”, “/spend 1h KEY-12” to log to another issue, “/unspend” to forget yours on that PR — copied"
+            " into the linked issue by the mapped account, for a repository with “Mirror time” switched on."
+        ),
+        webhook_path=(
+            "/api/v1/integrations/github (content type application/json, events: push, pull requests,"
+            " releases, check suites, workflow runs)"
+        ),
+        name_placeholder="GitHub",
+        base_url_placeholder="https://github.com",
+        default_base_url=GITHUB_COM,
+        secret_hint="The secret entered on the webhook; GitHub signs every delivery with it (X-Hub-Signature-256).",
+        token_hint=(
+            "Read-only. A fine-grained token with Contents and Pull requests read access; needed for backfill"
+            " and the connection test."
+        ),
+        change_noun="pull request",
+        order=20,
+    ),
+    connection_model=GithubConnection,
+    repo_model=GithubRepo,
+    events=GithubEvent,
+    entities=GithubEntity,
+    triggers=ConnectorTriggers(
+        host="GitHub",
+        change="pull request",
+        opened=GithubTrigger.PR_OPENED,
+        merged=GithubTrigger.PR_MERGED,
+        closed=GithubTrigger.PR_CLOSED,
+        updated=GithubTrigger.PR_UPDATED,
+        pushed=GithubTrigger.PUSHED,
+        release_published=GithubTrigger.RELEASE_PUBLISHED,
+        ci_completed=GithubTrigger.CI_COMPLETED,
+    ),
+    credential=DeliveryCredential.SIGNATURE,
+    authenticate=verify_signature,
+    repo_name=github_shape.repo_full_name,
+    probe=_probe,
+    walk=backfill.walk,
+    paging=Paging(size_param="per_page"),
 )
 
-
-def active_connection_count() -> int:
-    return _active_snapshot.get()
-
-
-async def refresh_connection_snapshot(session: AsyncSession) -> None:
-    rows = await session.execute(
-        select(func.count()).select_from(GithubConnection).where(GithubConnection.active)
-    )
-    _active_snapshot.set(int(rows.scalar_one()))
-
-
-# --- env seed (the spec-101 rule: the env key seeds ONE row, once) ---
-
-
-async def seed_from_env() -> None:
-    """Seed one connection from `RADD_GITHUB_*` once, then warm the capability snapshot."""
-    secret = settings.github_webhook_secret.strip()
-    async with SessionLocal() as session:
-        rows = await session.execute(select(func.count()).select_from(GithubConnection))
-        empty = int(rows.scalar_one()) == 0
-        claimed = await vcs_setup.claim_seed(session, "github") if secret or not empty else False
-        if secret and empty and claimed:
-            connection = GithubConnection(
-                name="GitHub",
-                base_url=(settings.github_base_url or GITHUB_COM).rstrip("/"),
-                api_token=settings.github_api_token.strip(),
-                webhook_secret=secret,
-                active=True,
-            )
-            session.add(connection)
-            await session.flush()
-            repo_name = settings.github_repo.strip().strip("/")
-            if repo_name:
-                session.add(GithubRepo(connection_id=connection.id, full_name=repo_name))
-            logger.info("github: seeded one connection from RADD_GITHUB_WEBHOOK_SECRET")
-        await session.commit()
-        await refresh_connection_snapshot(session)
+store = ConnectorStore(CONNECTOR)

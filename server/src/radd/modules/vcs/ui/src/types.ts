@@ -1,4 +1,23 @@
-/** Shared VCS connection protocol; each connector owns its endpoint declarations. */
+/** Shared VCS connection protocol; every connector serves the same shapes (RADD-1435). */
+
+/** One loaded connector's tab (`GET /vcs/connectors`): the wording its manifest declares. */
+export type VcsConnector = {
+  /** The VcsProvider it writes links as — also its plugin name and route prefix. */
+  provider: string;
+  title: string;
+  description: string;
+  /** Where to register the webhook on the host, shown in the empty state. */
+  webhook_path: string;
+  name_placeholder: string;
+  base_url_placeholder: string;
+  /** Set: the base URL is optional and defaults to this public host ("" = required). */
+  default_base_url: string;
+  token_hint: string;
+  secret_hint: string;
+  /** What a merged change is called on this host ("merge request", "pull request"). */
+  change_noun: string;
+};
+
 export type HostConnection = {
   id: string;
   name: string;

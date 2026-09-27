@@ -65,7 +65,7 @@ class GitlabTimelogClient:
     ) -> None:
         self._connection = connection
         self._client = httpx.AsyncClient(
-            headers={"PRIVATE-TOKEN": connection.api_token, "Accept": "application/json"},
+            headers=connection.api_headers,
             verify=connection.verify_ssl,
             timeout=settings.gitlab_http_timeout_seconds,
             transport=transport,

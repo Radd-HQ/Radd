@@ -10,8 +10,7 @@
     "@radd-plugin-ui/timelogging": "*"
   },
   "exports": {
-    ".": "./src/index.tsx",
-    "./host-contract": "./src/host-contract.ts"
+    ".": "./src/index.tsx"
   },
   "radd": {
     "bundled": true

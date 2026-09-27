@@ -1,5 +1,5 @@
-"""Identity map + unmatched authors per (provider, connection) (RADD-1258);
-provider-neutral, gated on the `vcsconn.*` atoms."""
+"""The loaded connectors, and the identity map + unmatched authors per (provider,
+connection) (RADD-1258); provider-neutral, gated on the `vcsconn.*` atoms."""
 
 import uuid
 from typing import Annotated
@@ -14,12 +14,36 @@ from radd.modules.auth.deps import CurrentUser
 from radd.modules.timelogging import service as timelog_service
 
 from . import timemirror
+from .connector_kit.manifest import loaded_connectors
+from .connector_kit.schemas import ConnectorRead
 from .schemas import ReplayResult, UnmatchedAuthorRead, UserLinkRead, UserLinkSet
 from .types import VcsProvider
 
 router = APIRouter(prefix="/vcs", tags=["vcs"])
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+
+
+@router.get("/connectors", response_model=list[ConnectorRead])
+async def list_connectors(session: Session, user: CurrentUser) -> list[ConnectorRead]:
+    """One entry per connector plugin loaded NOW, in tab order — Settings →
+    Version control renders a tab each, so disabling a connector removes its tab."""
+    await authz.require(session, user, authz.Permission.GLOBAL_MANAGE)
+    return [
+        ConnectorRead(
+            provider=spec.provider.value,
+            title=spec.wording.title,
+            description=spec.wording.description,
+            webhook_path=spec.wording.webhook_path,
+            name_placeholder=spec.wording.name_placeholder,
+            base_url_placeholder=spec.wording.base_url_placeholder,
+            default_base_url=spec.wording.default_base_url,
+            token_hint=spec.wording.token_hint,
+            secret_hint=spec.wording.secret_hint,
+            change_noun=spec.wording.change_noun,
+        )
+        for spec in loaded_connectors()
+    ]
 
 
 async def _reads(session: AsyncSession, links) -> list[UserLinkRead]:

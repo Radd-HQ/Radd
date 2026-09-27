@@ -1,77 +1,33 @@
-"""GitHub hosts and their repositories as rows; the env secret only seeds one.
-Credentials are stored as-is (replayed on every call); reads expose has_token/has_secret."""
+"""GitHub hosts and their repositories as rows (RADD-1129); the env secret only seeds
+one. The columns are the connector kit's (`vcs.connector_kit.columns`)."""
 
-import uuid
-from datetime import datetime
-
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, false, true
-from sqlalchemy.orm import Mapped, mapped_column
-
-from radd.db import Base, TimestampMixin
+from radd.db import Base
+from radd.modules.vcs.connector_kit.columns import ConnectionColumns, RepoColumns
 
 from .types import GITHUB_COM, GITHUB_COM_API
 
 
-class GithubConnection(Base, TimestampMixin):
-    """One GitHub host Radd talks to — github.com, or a GitHub Enterprise Server."""
+class GithubConnection(ConnectionColumns, Base):
+    """One GitHub host — github.com, or a GitHub Enterprise Server. It signs
+    webhook bodies with its secret (`X-Hub-Signature-256`)."""
 
     __tablename__ = "github_connections"
-    __table_args__ = (UniqueConstraint("name"),)
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(100))
-    #: The WEB base: https://github.com, or https://ghe.example.com. The API base
-    #: is derived (api.github.com, or <host>/api/v3) so an admin enters one URL.
-    base_url: Mapped[str] = mapped_column(String(500), default=GITHUB_COM)
-    #: Read-only API token (fine-grained: Contents + Pull requests read). Only the
-    #: backfill and the connection test need it; webhooks work with it empty.
-    api_token: Mapped[str] = mapped_column(String(500), default="")
-    #: The secret GitHub signs webhook bodies with (X-Hub-Signature-256).
-    webhook_secret: Mapped[str] = mapped_column(String(200), default="")
-    active: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
-    verify_ssl: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
 
     @property
     def api_url(self) -> str:
+        """api.github.com for github.com, `<host>/api/v3` for Enterprise Server —
+        derived, so an admin enters one URL."""
         web = (self.base_url or GITHUB_COM).rstrip("/")
         return GITHUB_COM_API if web == GITHUB_COM else f"{web}/api/v3"
 
+    @property
+    def api_headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+        return headers
 
-class GithubRepo(Base, TimestampMixin):
-    """A repository on a connection, and the project its releases belong to.
 
-    `project_id` is the DEFAULT project — the one a published release creates a
-    version in. When link_all_projects is false, it also bounds issue linking
-    and mirrored time; otherwise issue keys can link across projects.
-    """
-
+class GithubRepo(RepoColumns, Base):
     __tablename__ = "github_repos"
-    __table_args__ = (UniqueConstraint("connection_id", "full_name"),)
-
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    link_all_projects: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    connection_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("github_connections.id", ondelete="CASCADE"), index=True
-    )
-    full_name: Mapped[str] = mapped_column(String(300))  # owner/repo, as GitHub names it
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("projects.id", ondelete="SET NULL"), index=True, default=None
-    )
-    default_branch: Mapped[str] = mapped_column(String(200), default="main")
-    last_backfill_at: Mapped[datetime | None] = mapped_column(default=None)
-    # RADD-1258: the work category a worklog mirrored from this repository's
-    # merge/pull requests carries. NULL = the instance's `Development`.
-    time_category_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("work_categories.id", ondelete="SET NULL"), default=None
-    )
-    # RADD-1321: copy time logged on this repository's merge/pull requests into
-    # worklogs. OFF by default — nothing mirrors until someone switches it on.
-    mirror_time: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    # RADD-1369: what a delivery from this repository DOES, beyond linking and
-    # firing triggers. Both OFF until someone switches them on (Settings →
-    # Version control): move every issue a merged change names to its project's
-    # waiting-for-release state; record a published release as a version of the
-    # default project and sweep what is waiting into it.
-    move_on_merge: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
-    publish_on_release: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    __connection_table__ = "github_connections"

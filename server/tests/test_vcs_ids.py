@@ -26,14 +26,14 @@ from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.auth.models import User
-from radd.modules.forgejo import service as forgejo_service
 from radd.modules.forgejo.router import router as forgejo_router
-from radd.modules.forgejo.schemas import ConnectionCreate
+from radd.modules.forgejo.service import store as forgejo_service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.vcs import service as vcs
+from radd.modules.vcs.connector_kit.schemas import ConnectionCreate, RepoCreate
 from radd.modules.vcs.ids import commit_external_id
 from radd.modules.vcs.models import ItemVcsLink
 from radd.modules.vcs.types import VcsProvider, VcsRefType
@@ -91,7 +91,6 @@ async def test_receiver_writes_one_row_per_commit_and_ci_finds_it(db):
     connection = await forgejo_service.create_connection(
         db, ConnectionCreate(name=f"c-{uuid.uuid4().hex[:6]}", base_url=HOST, webhook_secret=secret)
     )
-    from radd.modules.forgejo.schemas import RepoCreate
     await forgejo_service.create_repo(db, RepoCreate(connection_id=connection.id, full_name=REPO))
     push = {
         "ref": "refs/heads/main",

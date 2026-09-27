@@ -4,6 +4,7 @@ import {mkdtemp} from 'node:fs/promises';
 import {openBrowser,until} from './lib/cdp.mjs';
 import {CORE_PLUGINS} from './lib/core-plugins.mjs';
 import {serveBuiltSpa} from './lib/spa-server.mjs';
+import {vcsConnectors} from './lib/vcs-connectors.mjs';
 const plugins = ['github','forgejo','gitlab'].map(name => ({id:name,name,version:'1',core:false,state:'enabled',active:true,runtime_state:"enabled",pending_processes:0,runtime_errors:[],can_toggle:true,capabilities:[],origin:'builtin',dependencies:[],problems:[],description:`${name} connector`}));
 let catalogReads=0, templateReads=0;
 const connectorReads=[];
@@ -19,9 +20,9 @@ const spa=await serveBuiltSpa((req,res,url)=>{
    const row=plugins.find(x=>p.includes(`/${x.id}/`));row.state='disabled';row.runtime_state='applying';row.pending_processes=1;data=plugins;
   }
   // Core plugins (vcs, automations) are bundled and always loaded, with the nav their servers declare;
-  // the connectors are optional remotes that contribute the Version control tabs, so each active one
-  // serves its real bundle.
-  else if(p.includes('capabilities'))data={capabilities:[],nav:[{plugin:'vcs',key:'vcs',icon:'git-branch',path:'/settings/vcs',section:'settings',group:'Issues',label:'Version control',requires:[]},{plugin:'automations',key:'automations',icon:'workflow',path:'/settings/automations',section:'settings',group:'Server',label:'Automations',requires:[]}],plugins:[...CORE_PLUGINS,...active().map(x=>x.name)],remotes:active().map(x=>({name:x.name,remote_entry:`/plugins/${x.name}/remoteEntry.js`,ui_api_version:'1.13.0'})),widget_types:[],view_types:[]};
+  // the connectors ship no UI: vcs draws a Version control tab for each one the server lists (RADD-1435).
+  else if(p==='/api/v1/vcs/connectors')data=vcsConnectors(active().map(x=>x.name));
+  else if(p.includes('capabilities'))data={capabilities:[],nav:[{plugin:'vcs',key:'vcs',icon:'git-branch',path:'/settings/vcs',section:'settings',group:'Issues',label:'Version control',requires:[]},{plugin:'automations',key:'automations',icon:'workflow',path:'/settings/automations',section:'settings',group:'Server',label:'Automations',requires:[]}],plugins:[...CORE_PLUGINS,...active().map(x=>x.name)],remotes:[],widget_types:[],view_types:[]};
   else if(p==='/api/v1/automations/catalog'){
    catalogReads++;
    data={triggers:[{event_type:'item.updated',label:'Issue updated',group:'Items',item_scoped:true},...active().map(x=>({event_type:`${x.name}.push`,label:`${titles[x.name]} push`,group:titles[x.name],item_scoped:false}))],nodes:[],operators:[],schedule_kinds:[],trigger_kinds:[],tokens:[],payload_paths:[],node_arity:[],manual_trigger:"__manual__",schedule_trigger:"__schedule__",can_act_as:false,max_chain_depth:5};
@@ -72,8 +73,8 @@ try{
  const initialTemplateReads=templateReads;
  for(const p of plugins.filter(x=>x.name!=='gitlab')){p.active=false;p.runtime_state='disabled';p.pending_processes=0;}
  await until(s,()=>s.eval('document.querySelectorAll("[role=tab]").length===1 && document.querySelector("[role=tab]").innerText.includes("GitLab")'),'inactive provider tabs removed');
- // The page carries no ?host=, so the one remaining connector is the selected tab (RADD-1366: the
- // tabs are the connectors' own contributions, not a host list rewritten into the URL).
+ // The page carries no ?host=, so the one remaining connector is the selected tab (the tabs are the
+ // loaded connectors, not a host list rewritten into the URL).
  assert(await s.eval('document.querySelector("[role=tab][aria-selected=true]")?.innerText.includes("GitLab")'));
  await go('/settings/automations');
  await until(s,()=>text('New rule'),'return to automations');
@@ -87,7 +88,7 @@ try{
  await until(s,async()=>templateReads>initialTemplateReads&&await templates()==='gitlab.sample','templates refreshed without reload');
  await closeDialog();
  await s.navigate(base+'/settings/vcs?host=github');
- // A deep link to a withdrawn connector waits for the remotes, then says it fell back instead of
+ // A deep link to a withdrawn connector waits for the connector list, then says it fell back instead of
  // silently showing another host's settings.
  await until(s,()=>s.eval('document.querySelectorAll("[role=tab]").length===1 && document.querySelector("[role=tab][aria-selected=true]")?.innerText.includes("GitLab")'),'disabled deep link falls back');
  assert(await text('The requested connector is unavailable. Showing GitLab.'));

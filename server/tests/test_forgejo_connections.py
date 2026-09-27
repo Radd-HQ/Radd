@@ -16,9 +16,9 @@ import uuid
 
 import pytest
 
-from radd.modules.forgejo import service
 from radd.modules.forgejo.models import ForgejoConnection
-from radd.modules.forgejo.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
+from radd.modules.forgejo.service import store as service
+from radd.modules.vcs.connector_kit.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
 from radd.exceptions import ConflictError
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate

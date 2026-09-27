@@ -1,30 +1,20 @@
-"""Connection + project CRUD, env seeding, webhook resolution. A body must verify
-against exactly ONE active connection; a named project must be recorded and enabled.
-GitLab does not sign bodies: `X-Gitlab-Token` is compared constant-time."""
+"""GitLab's connector spec and its rows through the vcs connector kit. GitLab does
+not sign bodies: the hook's secret comes back as `X-Gitlab-Token`, compared
+constant-time against each active connection's."""
 
-from radd.modules.vcs import setup as vcs_setup
 import hmac
-import logging
-import uuid
 
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from radd.modules.vcs.connector_kit.spec import ConnectorSpec, HostWording, Paging, Probe
+from radd.modules.vcs.connector_kit.store import ConnectorStore
+from radd.modules.vcs.triggers import ConnectorTriggers
+from radd.modules.vcs.types import DeliveryCredential, VcsProvider
 
-from radd.config import settings
-from radd.db import SessionLocal
-from radd.exceptions import ConflictError, NotFoundError
-from radd.kernel import changes
-from radd.modules.events import service as events
-from radd.modules.projects import service as projects_service
-from radd.modules.vcs import timemirror
-from radd.modules.vcs.types import VcsProvider
-from radd.snapshot import Snapshot
-
+from . import backfill, parsing
 from .models import GitlabConnection, GitlabRepo
-from .schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
-from .types import GITLAB_COM, GitlabEntity, GitlabEvent
+from .types import GITLAB_COM, GitlabEntity, GitlabEvent, GitlabTrigger
 
-logger = logging.getLogger(__name__)
+#: The next-page header GitLab's offset paging answers (empty on the last page).
+NEXT_PAGE_HEADER = "X-Next-Page"
 
 
 def verify_token(provided: str, secret: str) -> bool:
@@ -36,322 +26,61 @@ def verify_token(provided: str, secret: str) -> bool:
     return hmac.compare_digest(provided.strip(), secret)
 
 
-# --- connections ---
+def _probe(connection: GitlabConnection) -> Probe:
+    """With a token: `GET /version`. Without: a one-row public project listing,
+    proving the API host answers."""
+    if connection.api_token:
+        return Probe(f"{connection.api_url}/version", lambda body: f"GitLab {body.get('version', '?')}")
+    return Probe(f"{connection.api_url}/projects?per_page=1", lambda _body: connection.api_url)
 
 
-async def list_connections(session: AsyncSession) -> list[GitlabConnection]:
-    rows = await session.execute(select(GitlabConnection).order_by(GitlabConnection.name))
-    return list(rows.scalars())
-
-
-async def get_connection(session: AsyncSession, connection_id: uuid.UUID) -> GitlabConnection:
-    connection = await session.get(GitlabConnection, connection_id)
-    if connection is None:
-        raise NotFoundError(GitlabEntity.CONNECTION, connection_id)
-    return connection
-
-
-#: Never in an event payload — a diff records that a credential CHANGED, no value.
-SECRET_FIELDS: tuple[str, ...] = ("api_token", "webhook_secret")
-
-
-async def _emit_connection(
-    session: AsyncSession,
-    event_type: GitlabEvent,
-    connection: GitlabConnection,
-    actor_id: uuid.UUID | None,
-    diff: list[dict] | None = None,
-) -> None:
-    await events.emit(
-        session,
-        event_type=event_type,
-        entity_type=GitlabEntity.CONNECTION,
-        entity_id=connection.id,
-        actor_id=actor_id,
-        payload={"name": connection.name, "base_url": connection.base_url},
-        changes=diff,
-    )
-
-
-async def _repo_snapshot(session: AsyncSession, repo: GitlabRepo) -> dict:
-    ref = await projects_service.project_ref(session, repo.project_id) if repo.project_id else None
-    return {
-        "full_name": repo.full_name,
-        "project": ref["key"] if ref else None,
-        "default_branch": repo.default_branch,
-        "time_category_id": str(repo.time_category_id) if repo.time_category_id else None,
-        "mirror_time": repo.mirror_time,
-        "move_on_merge": repo.move_on_merge,
-        "publish_on_release": repo.publish_on_release,
-        "enabled": repo.enabled, "link_all_projects": repo.link_all_projects,
-    }
-
-
-async def _emit_repo(
-    session: AsyncSession,
-    event_type: GitlabEvent,
-    repo: GitlabRepo,
-    actor_id: uuid.UUID | None,
-    diff: list[dict] | None = None,
-) -> None:
-    await events.emit(
-        session,
-        event_type=event_type,
-        entity_type=GitlabEntity.REPO,
-        entity_id=repo.id,
-        actor_id=actor_id,
-        payload={"full_name": repo.full_name, "connection_id": str(repo.connection_id)},
-        subjects={"project": repo.project_id},
-        changes=diff,
-    )
-
-
-async def create_connection(
-    session: AsyncSession, data: ConnectionCreate, *, actor_id: uuid.UUID | None = None
-) -> GitlabConnection:
-    existing = await session.execute(
-        select(GitlabConnection).where(GitlabConnection.name == data.name)
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise ConflictError(GitlabEntity.CONNECTION, data.name)
-    await vcs_setup.claim_seed(session, "gitlab")
-    connection = GitlabConnection(
-        name=data.name,
-        base_url=(data.base_url or GITLAB_COM).rstrip("/"),
-        api_token=data.api_token,
-        webhook_secret=data.webhook_secret,
-        active=data.active,
-        verify_ssl=data.verify_ssl,
-    )
-    await vcs_setup.require_distinct_secret(session, GitlabConnection, connection)
-    session.add(connection)
-    await session.flush()
-    await refresh_connection_snapshot(session)
-    await _emit_connection(session, GitlabEvent.CONNECTION_CREATED, connection, actor_id)
-    return connection
-
-
-async def update_connection(
-    session: AsyncSession,
-    connection_id: uuid.UUID,
-    data: ConnectionUpdate,
-    *,
-    actor_id: uuid.UUID | None = None,
-) -> GitlabConnection:
-    connection = await get_connection(session, connection_id)
-    before = changes.snapshot(connection, changes.column_fields(connection))
-    if data.name is not None:
-        connection.name = data.name
-    if data.base_url is not None:
-        connection.base_url = data.base_url.rstrip("/")
-    # Empty string = keep the stored credential (the ai_providers convention).
-    if data.api_token:
-        connection.api_token = data.api_token
-    if data.webhook_secret:
-        connection.webhook_secret = data.webhook_secret
-    if data.active is not None:
-        connection.active = data.active
-    if data.verify_ssl is not None:
-        connection.verify_ssl = data.verify_ssl
-    await vcs_setup.require_distinct_secret(session, GitlabConnection, connection)
-    await session.flush()
-    await refresh_connection_snapshot(session)
-    await _emit_connection(
-        session,
-        GitlabEvent.CONNECTION_UPDATED,
-        connection,
-        actor_id,
-        changes.diff_object(connection, before, hidden=SECRET_FIELDS),
-    )
-    return connection
-
-
-async def delete_connection(
-    session: AsyncSession, connection_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
-) -> None:
-    connection = await get_connection(session, connection_id)
-    await _emit_connection(session, GitlabEvent.CONNECTION_DELETED, connection, actor_id)
-    # RADD-1258: the identity map and parked time entries keyed by this connection.
-    await timemirror.forget_connection(
-        session, provider=VcsProvider.GITLAB, connection_id=connection.id
-    )
-    await session.delete(connection)
-    await session.flush()
-    await refresh_connection_snapshot(session)
-
-
-async def repo_count(session: AsyncSession, connection_id: uuid.UUID) -> int:
-    rows = await session.execute(
-        select(func.count()).select_from(GitlabRepo).where(GitlabRepo.connection_id == connection_id)
-    )
-    return int(rows.scalar_one())
-
-
-# --- projects (repositories) ---
-
-
-async def list_repos(
-    session: AsyncSession, connection_id: uuid.UUID | None = None
-) -> list[GitlabRepo]:
-    query = select(GitlabRepo).order_by(GitlabRepo.full_name)
-    if connection_id is not None:
-        query = query.where(GitlabRepo.connection_id == connection_id)
-    return list((await session.execute(query)).scalars())
-
-
-async def get_repo(session: AsyncSession, repo_id: uuid.UUID) -> GitlabRepo:
-    repo = await session.get(GitlabRepo, repo_id)
-    if repo is None:
-        raise NotFoundError(GitlabEntity.REPO, repo_id)
-    return repo
-
-
-async def find_repo(session: AsyncSession, full_name: str, connection_id: uuid.UUID | None = None) -> GitlabRepo | None:
-    """By `path_with_namespace`, case-insensitively — GitLab paths are."""
-    query = select(GitlabRepo).where(func.lower(GitlabRepo.full_name) == full_name.lower())
-    if connection_id is not None:
-        query = query.where(GitlabRepo.connection_id == connection_id)
-    return await session.scalar(query)
-
-
-
-async def create_repo(
-    session: AsyncSession, data: RepoCreate, *, actor_id: uuid.UUID | None = None
-) -> GitlabRepo:
-    await get_connection(session, data.connection_id)  # 404s an unknown connection
-    full_name = data.full_name.strip().strip("/")
-    existing = await session.execute(
-        select(GitlabRepo).where(
-            GitlabRepo.connection_id == data.connection_id,
-            func.lower(GitlabRepo.full_name) == full_name.lower(),
-        )
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise ConflictError(GitlabEntity.REPO, data.full_name)
-    repo = GitlabRepo(
-        connection_id=data.connection_id,
-        full_name=full_name,
-        project_id=data.project_id,
-        default_branch=data.default_branch,
-    )
-    session.add(repo)
-    await session.flush()
-    await _emit_repo(session, GitlabEvent.REPO_CREATED, repo, actor_id)
-    return repo
-
-
-async def update_repo(
-    session: AsyncSession, repo_id: uuid.UUID, data: RepoUpdate, *, actor_id: uuid.UUID | None = None
-) -> GitlabRepo:
-    repo = await get_repo(session, repo_id)
-    before = await _repo_snapshot(session, repo)
-    if "project_id" in data.model_fields_set:  # explicit null clears the mapping
-        repo.project_id = data.project_id
-    if data.default_branch is not None:
-        repo.default_branch = data.default_branch
-    if "time_category_id" in data.model_fields_set:  # explicit null = the default
-        repo.time_category_id = data.time_category_id
-    if data.mirror_time is not None:
-        repo.mirror_time = data.mirror_time
-    if data.move_on_merge is not None:
-        repo.move_on_merge = data.move_on_merge
-    if data.publish_on_release is not None:
-        repo.publish_on_release = data.publish_on_release
-    if data.enabled is not None:
-        repo.enabled = data.enabled
-    if data.link_all_projects is not None:
-        repo.link_all_projects = data.link_all_projects
-    await session.flush()
-    diff = changes.diff(before, await _repo_snapshot(session, repo))
-    await _emit_repo(session, GitlabEvent.REPO_UPDATED, repo, actor_id, diff)
-    return repo
-
-
-async def delete_repo(
-    session: AsyncSession, repo_id: uuid.UUID, *, actor_id: uuid.UUID | None = None
-) -> None:
-    repo = await get_repo(session, repo_id)
-    await _emit_repo(session, GitlabEvent.REPO_DELETED, repo, actor_id)
-    await session.delete(repo)
-    await session.flush()
-
-
-# --- webhook routing ---
-
-
-def payload_project_path(payload: dict) -> str:
-    project = payload.get("project") or {}
-    return str(project.get("path_with_namespace") or "").strip().strip("/")
-
-
-async def resolve_for_payload(
-    session: AsyncSession, payload: dict, token: str
-) -> tuple[GitlabConnection, GitlabRepo | None] | None:
-    """Authenticate one active host, then require its repository to be enabled.
-
-    Secrets shared by multiple hosts are ambiguous and therefore rejected.
-    """
-    full_name = payload_project_path(payload)
-    verified = [c for c in await list_connections(session) if c.active and verify_token(token, c.webhook_secret)]
-    if len(verified) != 1:
-        return None  # shared secrets cannot identify a host unambiguously
-    connection = verified[0]
-    repo = await find_repo(session, full_name, connection.id) if full_name else None
-    if full_name and (repo is None or not repo.enabled):
-        return None
-    return connection, repo
-
-
-# --- capability snapshot (RADD-899 idiom) ---
-
-
-async def _load_active_count() -> int:
-    async with SessionLocal() as session:
-        rows = await session.execute(
-            select(func.count()).select_from(GitlabConnection).where(GitlabConnection.active)
-        )
-        return int(rows.scalar_one())
-
-
-_active_snapshot: Snapshot[int] = Snapshot(
-    "gitlab.active-connections", _load_active_count, initial=0
+CONNECTOR = ConnectorSpec(
+    provider=VcsProvider.GITLAB,
+    wording=HostWording(
+        title="GitLab",
+        description=(
+            "Hosts whose pushes, branches and merge requests link themselves to issues by key (the key in a"
+            " branch name, a commit message or a merge request title). For a repository with “Mirror time”"
+            " switched on, time logged on a merge request with /spend is copied into the linked issue's"
+            " worklogs, and the backfill imports that history once."
+        ),
+        webhook_path=(
+            "/api/v1/integrations/gitlab (project or group hook; triggers: push, merge request, pipeline,"
+            " deployment, releases; paste the same secret token here)"
+        ),
+        name_placeholder="GitLab",
+        base_url_placeholder="https://gitlab.example.com",
+        default_base_url=GITLAB_COM,
+        secret_hint="The hook's Secret token; GitLab sends it back on every delivery (X-Gitlab-Token).",
+        token_hint=(
+            "A read_api token. Needed for backfill, the connection test and time mirroring; an administrator's"
+            " token also matches authors by email automatically."
+        ),
+        change_noun="merge request",
+        repo_noun="project",
+        order=30,
+    ),
+    connection_model=GitlabConnection,
+    repo_model=GitlabRepo,
+    events=GitlabEvent,
+    entities=GitlabEntity,
+    triggers=ConnectorTriggers(
+        host="GitLab",
+        change="merge request",
+        opened=GitlabTrigger.MR_OPENED,
+        merged=GitlabTrigger.MR_MERGED,
+        closed=GitlabTrigger.MR_CLOSED,
+        updated=GitlabTrigger.MR_UPDATED,
+        pushed=GitlabTrigger.PUSHED,
+        release_published=GitlabTrigger.RELEASE_PUBLISHED,
+        ci_completed=GitlabTrigger.CI_COMPLETED,  # RADD-1255
+    ),
+    credential=DeliveryCredential.TOKEN,
+    authenticate=lambda _raw_body, token, secret: verify_token(token, secret),
+    repo_name=parsing.project_path,
+    probe=_probe,
+    walk=backfill.walk,
+    paging=Paging(size_param="per_page", next_page_header=NEXT_PAGE_HEADER),
 )
 
-
-def active_connection_count() -> int:
-    return _active_snapshot.get()
-
-
-async def refresh_connection_snapshot(session: AsyncSession) -> None:
-    rows = await session.execute(
-        select(func.count()).select_from(GitlabConnection).where(GitlabConnection.active)
-    )
-    _active_snapshot.set(int(rows.scalar_one()))
-
-
-# --- env seed (the spec-101 rule: the env key seeds ONE row, once) ---
-
-
-async def seed_from_env() -> None:
-    """Seed one connection from `RADD_GITLAB_*` once, then warm the capability snapshot."""
-    secret = settings.gitlab_webhook_secret.strip()
-    async with SessionLocal() as session:
-        rows = await session.execute(select(func.count()).select_from(GitlabConnection))
-        empty = int(rows.scalar_one()) == 0
-        claimed = await vcs_setup.claim_seed(session, "gitlab") if secret or not empty else False
-        if secret and empty and claimed:
-            connection = GitlabConnection(
-                name="GitLab",
-                base_url=(settings.gitlab_base_url or GITLAB_COM).rstrip("/"),
-                api_token=settings.gitlab_api_token.strip(),
-                webhook_secret=secret,
-                active=True,
-            )
-            session.add(connection)
-            await session.flush()
-            repo_name = settings.gitlab_repo.strip().strip("/")
-            if repo_name:
-                session.add(GitlabRepo(connection_id=connection.id, full_name=repo_name))
-            logger.info("gitlab: seeded one connection from RADD_GITLAB_WEBHOOK_SECRET")
-        await session.commit()
-        await refresh_connection_snapshot(session)
+store = ConnectorStore(CONNECTOR)

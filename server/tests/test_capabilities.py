@@ -35,8 +35,8 @@ async def test_storage_ai_sso_and_forgejo_capabilities_reflect_their_db_snapshot
     the process-local snapshots the startup hooks (and admin writes) refresh."""
     from radd.modules.ai import registry as ai_registry
     from radd.modules.attachments import hosts
-    from radd.modules.forgejo import service as forgejo_service
-    from radd.modules.gitlab import service as gitlab_service
+    from radd.modules.forgejo.service import store as forgejo_service
+    from radd.modules.gitlab.service import store as gitlab_service
     from radd.modules.sso import registry as sso_registry
 
     await hosts.seed_from_env()  # empty table in a fresh test DB -> seeds one host
@@ -67,7 +67,7 @@ def test_connectors_derive_generically_from_the_connector_category():
         "gitlab", "forgejo", "github", "alertmanager", "email_intake",
     }
     # gitlab is row-backed since RADD-1253, like forgejo (asserted in the snapshot test above).
-    from radd.modules.gitlab import service as gitlab_service
+    from radd.modules.gitlab.service import store as gitlab_service
 
     assert connectors["gitlab"] == (gitlab_service.active_connection_count() > 0)
     # alertmanager is row-backed since RADD-1317 (receivers).

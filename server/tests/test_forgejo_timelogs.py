@@ -22,15 +22,16 @@ from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
-from radd.modules.forgejo import backfill, service, timelogs
+from radd.modules.forgejo import timelogs
 from radd.modules.forgejo.router import router as forgejo_router
-from radd.modules.forgejo.schemas import ConnectionCreate, RepoCreate
+from radd.modules.forgejo.service import store as service
 from radd.modules.items import service as items_service
 from radd.modules.items.schemas import ItemCreate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.timelogging import categories, enablement
 from radd.modules.timelogging.models import Worklog
+from radd.modules.vcs.connector_kit.schemas import ConnectionCreate, RepoCreate
 
 
 @pytest.fixture
@@ -171,8 +172,8 @@ async def test_backfill_reconciles_each_pull_request_once(db, world):
             return httpx.Response(200, json=[{"number": 7, "title": f"{world['key']} PR", "body": "", "state": "open", "merged": False, "head": {"ref": "x"}, "html_url": "u"}])
         return r
     transport = httpx.MockTransport(keyed)
-    first = await backfill.run(db, world["connection"], world["repo"], transport=transport)
-    second = await backfill.run(db, world["connection"], world["repo"], transport=transport)
+    first = await service.backfill(db, world["connection"], world["repo"], transport=transport)
+    second = await service.backfill(db, world["connection"], world["repo"], transport=transport)
     assert first.pull_requests == 1 and first.worklogs.get("created") == 1
     assert second.worklogs.get("created", 0) == 0 and second.worklogs.get("unchanged") == 1
     assert len(await _worklogs(db, world["item"].id)) == 1

@@ -5,9 +5,7 @@ from radd.kernel import CrudResourceSpec, EventTypeSpec, RaddPlugin
 from .admin_router import router as admin_router
 from .models import VcsPendingWorklog, VcsUserLink  # noqa: F401 — Alembic autogenerate
 from .router import router
-from .types import VcsEvent, VcsUserLinkEvent
-
-from .types import VcsEntity  # noqa: E402 — RADD-1328
+from .types import VcsEntity, VcsEvent, VcsUserLinkEvent
 
 plugin = RaddPlugin(
     name="vcs",
@@ -25,8 +23,9 @@ plugin = RaddPlugin(
         CrudResourceSpec("vcsconn", "global", "version-control connections", "global.manage"),
     ),
     # RADD-1369: releases + workflow for a repository's own "move merged issues"
-    # and "publish version on release" switches (`policies.py`).
-    depends_on=("projects", "auth", "events", "items", "timelogging", "workflow", "releases"),
+    # and "publish version on release" switches (`policies.py`). RADD-1435:
+    # automations for the system actor the connector kit writes as.
+    depends_on=("projects", "auth", "events", "items", "timelogging", "workflow", "releases", "automations"),
     routers=(router, admin_router),
     event_types=(
         EventTypeSpec(VcsEvent.LINKED, "VCS ref linked", "Links", item_scoped=True),

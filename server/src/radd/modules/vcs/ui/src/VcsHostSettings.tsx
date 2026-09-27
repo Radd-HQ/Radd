@@ -4,16 +4,16 @@ import { CheckCircle2, Plus, Server, Trash2, XCircle } from "lucide-react";
 import { api, errorMessage, invalidateEntities, useConfirm, useContributedQuery, useListFilter,
   Button, EmptyState, IconButton, ListSearchInput, QueryError, TableSkeleton, TextField } from "@radd/plugin-sdk";
 import type { WorkCategoryChoice } from "@radd-plugin-ui/timelogging/lookup-contract";
-import type { HostConnection, HostConnectionTest, HostRepo } from "./types";
-import type { VcsHostConfig } from "./host-contract";
+import type { HostConnection, HostConnectionTest, HostRepo, VcsConnector } from "./types";
 import { hostEntities, hostPaths, useHostQuery } from "./queries";
 import { RepoRow, type Categories } from "./RepoRow";
 import { VcsIdentityMap } from "./VcsIdentityMap";
 
 /** One connector's tab on Settings → Version control: its hosts, their
- * repositories and identity maps (spec 111, RADD-1258/1366). The page is
- * instance-admin only; the tab renders nothing a reader could not change. */
-export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
+ * repositories and identity maps (spec 111, RADD-1258/1366), in the wording the
+ * connector declares (RADD-1435). The page is instance-admin only; the tab
+ * renders nothing a reader could not change. */
+export function VcsHostSettings({ config }: { config: VcsConnector }) {
   const connections = useHostQuery<HostConnection[]>(config.provider, "connections");
   const repos = useHostQuery<HostRepo[]>(config.provider, "repos");
   const categoryQuery = useContributedQuery<WorkCategoryChoice[]>("timelogging.categories");
@@ -44,7 +44,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
         <>
           {list.length === 0 ? (
             <EmptyState icon={Server}
-              message={`No hosts connected. Add one, then register a webhook on it pointing at ${config.webhookPath}.`} />
+              message={`No hosts connected. Add one, then register a webhook on it pointing at ${config.webhook_path}.`} />
           ) : (
             <div className="space-y-4">
               {list.map((connection) => (
@@ -70,7 +70,7 @@ export function VcsHostSettings({ config }: { config: VcsHostConfig }) {
 }
 
 function ConnectionCard({ config, connection, repos, categories, onEdit }: {
-  config: VcsHostConfig;
+  config: VcsConnector;
   connection: HostConnection;
   repos: HostRepo[];
   categories: Categories;
@@ -145,7 +145,7 @@ function ConnectionCard({ config, connection, repos, categories, onEdit }: {
           <li className="px-4 py-3 text-xs text-fg-muted">No repositories match “{search.filter.trim()}”.</li>
         )}
         {search.filtered.map((repo) => (
-          <RepoRow key={repo.id} provider={config.provider} changeNoun={config.changeNoun} connection={connection} repo={repo}
+          <RepoRow key={repo.id} provider={config.provider} changeNoun={config.change_noun} connection={connection} repo={repo}
             categories={categories} />
         ))}
         <li>
@@ -172,7 +172,7 @@ function ConnectionCard({ config, connection, repos, categories, onEdit }: {
 
 /** Add a host, or edit one — a blank secret or token keeps the stored value. */
 function HostForm({ config, connection, onDone }: {
-  config: VcsHostConfig;
+  config: VcsConnector;
   connection: HostConnection | null;
   onDone: () => void;
 }) {
@@ -180,7 +180,7 @@ function HostForm({ config, connection, onDone }: {
   const paths = hostPaths(config.provider);
   const [form, setForm] = useState({
     name: connection?.name ?? "",
-    base_url: connection?.base_url ?? config.defaultBaseUrl ?? "",
+    base_url: connection?.base_url ?? config.default_base_url,
     webhook_secret: "",
     api_token: "",
   });
@@ -202,15 +202,15 @@ function HostForm({ config, connection, onDone }: {
       event.preventDefault();
       save.mutate();
     }}>
-      <TextField label="Name" value={form.name} placeholder={config.namePlaceholder}
+      <TextField label="Name" value={form.name} placeholder={config.name_placeholder}
         onChange={(event) => setForm({ ...form, name: event.target.value })} />
-      <TextField label={config.defaultBaseUrl ? "Base URL (leave for the public host)" : "Base URL"} value={form.base_url}
-        placeholder={config.baseUrlPlaceholder} onChange={(event) => setForm({ ...form, base_url: event.target.value })} />
+      <TextField label={config.default_base_url ? "Base URL (leave for the public host)" : "Base URL"} value={form.base_url}
+        placeholder={config.base_url_placeholder} onChange={(event) => setForm({ ...form, base_url: event.target.value })} />
       <TextField label="Webhook secret" type="password" value={form.webhook_secret}
-        hint={connection ? "Leave blank to keep the stored secret; enter a value to rotate it." : config.secretHint}
+        hint={connection ? "Leave blank to keep the stored secret; enter a value to rotate it." : config.secret_hint}
         onChange={(event) => setForm({ ...form, webhook_secret: event.target.value })} />
       <TextField label="API token (optional)" type="password" value={form.api_token}
-        hint={connection ? "Leave blank to keep the stored token; enter a value to rotate it." : config.tokenHint}
+        hint={connection ? "Leave blank to keep the stored token; enter a value to rotate it." : config.token_hint}
         onChange={(event) => setForm({ ...form, api_token: event.target.value })} />
       <div className="flex gap-2">
         <Button type="submit" disabled={save.isPending}>{connection ? "Save host" : "New host"}</Button>
