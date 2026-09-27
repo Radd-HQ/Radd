@@ -132,6 +132,16 @@ try{
  await s.navigate(`${spa.origin}/p/DEV/v/planning`,2000);
  await until(s,async()=> (await s.eval('document.body.innerText')).includes('Overdue queue item'));
  assert.ok(requests.some(r=>r.queue));assert.ok(!requests.some(r=>r.pathname?.endsWith('/items')));
+ // RADD-1466 (RADD-687's measurement, dropped with pager-proof in RADD-1410): the pager states the
+ // TRUE total of the seeded rows (201 here), never a truncated page count or "200+".
+ const SEEDED_QUEUE_ROWS=201;
+ // The total is the nav's own span ("201 entries"); the page-number buttons would glue their digits onto it.
+ const pagerText=()=>s.eval(`(document.querySelector('nav[aria-label="Pagination"] > span:not([data-page-size])')?.textContent ?? '').replace(/[,\\u202f\\u00a0]/g,'')`);
+ await until(s,async()=>/\d{3,}/.test(await pagerText()),'pager with a total');
+ const pager=await pagerText();
+ const statedTotal=Math.max(...pager.match(/\d{3,}/g).map(Number));
+ assert.ok(statedTotal>=SEEDED_QUEUE_ROWS,`the pager states a true total (${statedTotal} >= ${SEEDED_QUEUE_ROWS}; text: ${pager})`);
+ console.log(`PASS: the pager states a true total (${statedTotal} >= ${SEEDED_QUEUE_ROWS}).`);
  assert.ok(!requests.some(r=>r.group),'A list-surface plugin type is flat: its stored axis is ignored');
  await s.click('button[aria-label="Next page"]');
  await until(s,async()=> (await s.eval('document.body.innerText')).includes('Later queue page'));

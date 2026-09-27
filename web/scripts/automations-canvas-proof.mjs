@@ -36,6 +36,21 @@ const branching = {
 };
 const created = await session.eval(pageFetch("POST", "/automations", branching));
 const rule = parsed(created);
+// RADD-1466 (a measurement RADD-1410 dropped with automations-graph-proof): the saved graph keeps
+// BOTH of the filter's fork ports — an API round-trip, so a serializer that flattened the branch
+// back to a linear chain is caught before the canvas is even opened.
+const forkPorts = rule ? new Set(rule.edges.filter((e) => e.source === "f").map((e) => e.port)) : new Set();
+
+// …and the list must render with a branching rule in it — this is where a naive
+// `rule.actions.length` over a graph once threw a white screen.
+await session.navigate(`${baseUrl}/settings/automations`, 2200);
+let listRenders = false;
+for (let i = 0; i < 20 && !listRenders; i++) {
+  await sleep(500);
+  listRenders = await session.eval(
+    `!!document.querySelector("main") && !!document.querySelector(${JSON.stringify(`[aria-label="Edit ${branching.name}"]`)})`,
+  );
+}
 
 await openEditor(session, baseUrl, branching.name);
 
@@ -79,6 +94,8 @@ const consoleErrors = session.consoleErrors.filter((e) => !/favicon|404/i.test(e
 const checks = {
   loginStatus,
   createStatus: created.status,
+  branchingKeptBothPorts: forkPorts.size,
+  listRendersWithBranchingRule: listRenders,
   nodesRendered: boxes.length,
   nodeKinds: boxes.map((b) => b.kind).sort(),
   distinctPositions,
@@ -96,6 +113,8 @@ console.log(JSON.stringify(checks, null, 2));
 const ok =
   loginStatus === 204 &&
   created.status < 300 &&
+  forkPorts.size === 2 &&
+  listRenders &&
   boxes.length === 4 &&
   distinctPositions === 4 && // stacked-at-0,0 is the classic silent layout failure
   allVisible &&
@@ -104,7 +123,11 @@ const ok =
   measured?.edgesHaveVisibleStroke &&
   (measured?.handles ?? 0) >= 4 && // trigger 1 + filter 2 + two actions 1 each
   consoleErrors.length === 0;
-report({ "node canvas draws a branching automation": ok }, "spec 116 phase 3");
+report({
+  "a saved branched rule keeps both fork ports": forkPorts.size === 2,
+  "the automations list renders with a branching rule": listRenders,
+  "node canvas draws a branching automation": ok,
+}, "spec 116 phase 3");
 
 close();
 process.exit(ok ? 0 : 1);

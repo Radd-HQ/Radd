@@ -394,3 +394,39 @@ def test_the_plugin_manager_is_the_only_switch():
 
     assert plugin.core is False
     assert "mcp_enabled" not in type(settings).model_fields
+
+
+async def test_disabling_mcp_through_the_plugin_manager_withdraws_the_endpoint(db, monkeypatch):
+    """RADD-1466: the switch has to be seen to turn something off. The plugin
+    manager records the desired state (`pluginmgr.service.disable` on the `mcp`
+    row); the reconciler applies it through `live._disable` → `PluginRuntime.disable`,
+    which unmounts the plugin's routes. Before: an anonymous POST meets the auth
+    gate (401). After: the endpoint is ABSENT — 404 from the API guard, never the
+    SPA shell and never 401, because a disabled plugin's routes must look gone."""
+    from radd.app import create_app
+    from radd.kernel import admission
+    from radd.modules.mcp import plugin
+    from radd.modules.pluginmgr import live
+    from radd.modules.pluginmgr import service as pluginmgr
+    from radd.modules.pluginmgr.types import PluginState
+
+    # This test's own gate: `PluginRuntime.disable` closes the plugin's admissions until an
+    # enable, and the module-scoped `app` above must keep answering 401, not 503.
+    monkeypatch.setattr(admission, "gate", admission.RuntimeGate())
+    app = create_app()
+    live.bind(app.state.plugin_runtime)  # what the lifespan does at startup
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            before = await client.post("/api/v1/mcp", content=request_body("initialize"))
+            assert before.status_code == 401
+
+            row = await pluginmgr.disable(db, plugin.id)
+            assert row.state == PluginState.DISABLED.value
+            await live._disable(plugin)
+
+            after = await client.post("/api/v1/mcp", content=request_body("initialize"))
+            assert after.status_code == 404, after.text
+            assert "text/html" not in after.headers.get("content-type", "")
+    finally:
+        live.bind(None)

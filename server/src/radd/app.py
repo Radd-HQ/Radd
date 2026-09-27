@@ -107,6 +107,9 @@ def create_app() -> FastAPI:
 
     from radd.kernel.runtime import PluginRuntime, RuntimeMiddleware
     runtime = PluginRuntime(app)
+    # Reachable for tooling and tests (RADD-1466): the lifespan binds it to the reconciler at
+    # startup; a test that applies a plugin state change without the lifespan binds it itself.
+    app.state.plugin_runtime = runtime
     app.add_middleware(RuntimeMiddleware)
     for plugin in plugins:
         runtime.mount(plugin)
@@ -166,15 +169,20 @@ def _mount_spa(app: FastAPI) -> None:
     if not index.is_file():
         return
 
-    api_root = settings.api_prefix.lstrip("/") + "/"
+    # An unknown API path must 404 for EVERY method, never serve the SPA shell: a disabled
+    # plugin's endpoints have to look ABSENT (the spec-46 dormant convention), and a 200
+    # text/html "response" masks real client bugs. This used to be a check inside the GET-only
+    # catch-all below, so a POST to a withdrawn plugin route answered 405 (RADD-1466).
+    @app.api_route(
+        f"{settings.api_prefix.rstrip('/')}/{{path:path}}",
+        methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        include_in_schema=False,
+    )
+    async def absent_api_path(path: str) -> None:
+        raise HTTPException(status_code=404)
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str) -> FileResponse:
-        # An unknown API path must 404, never serve the SPA shell: a disabled
-        # plugin's endpoints have to look ABSENT (the spec-46 dormant
-        # convention), and a 200 text/html "response" masks real client bugs.
-        if path.startswith(api_root):
-            raise HTTPException(status_code=404)
         candidate = (web_dist / path).resolve()
         if candidate.is_file() and candidate.is_relative_to(web_dist.resolve()):
             # Hashed build assets are immutable; the /shared shims + everything else revalidate so a

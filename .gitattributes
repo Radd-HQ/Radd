@@ -1,3 +1,10 @@
 # Checked-in generated files: plugin-boundaries.test.mjs compares them with their generators.
 web/public/shared/*.js linguist-generated=true
 web/src/plugins/static.generated.ts linguist-generated=true
+
+# Source files are text (RADD-1466): a stray control byte shows in a diff, never as "Binary files differ".
+*.ts text diff
+*.tsx text diff
+*.py text diff
+*.mjs text diff
+*.css text diff

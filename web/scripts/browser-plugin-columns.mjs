@@ -175,14 +175,27 @@ try {
   await closeOverlays(); await closeOverlays();
   checks.push('the columns picker offers contributed attributes and refuses ids outside the plugin namespace (a builtin, cf.*, another plugin, a bare name)');
 
-  // 2. The board over the same rows: the card cell, and the batch is shared, not re-asked.
+  // 2. The board over the same rows: the card cell, and the page is never re-asked as a whole.
+  const listBatches = batches.length;
   await go('/p/TEST/v/view-board');
   await wait(async () => (await count('[data-sla-cell]')) === 2 && (await count('[role=button][draggable=true]')) === 3, 'board cards with SLA cells');
   const cardChips = await s.eval("[...document.querySelectorAll('[role=button][draggable=true]')].map((card) => [card.textContent.match(/TEST-\\d/)?.[0], card.querySelector('[data-sla-chip]')?.dataset.slaChip ?? null])");
   assert.deepEqual(Object.fromEntries(cardChips), { 'TEST-1': 'breached', 'TEST-2': 'ticking', 'TEST-3': null });
-  assert.equal(batches.length, 1, 'the board shares the list\'s read of the same rows');
+  // RADD-1466: `assert.equal(batches.length, 1)` here raced the board's second column. The board's
+  // rows arrive one `/items/grouped` column at a time, and useStableItemBatches asks only for ids no
+  // chunk of this mount holds yet: when both columns land in one render the list's chunk is reused
+  // (no request); when they land in two, one chunk is appended per late column. Which happens is
+  // scheduling, so the count is read once it settles, and what is asserted is the invariant either
+  // way — every appended chunk is a strict subset of the page and no id or chunk is asked twice.
+  const settled = async (read, quiet = 400) => { let last = read(); for (;;) { await new Promise((r) => setTimeout(r, quiet)); const now = read(); if (now === last) return now; last = now; } };
+  await settled(() => batches.length);
+  const page = ['item-1', 'item-2', 'item-3'];
+  const boardBatches = batches.slice(listBatches);
+  for (const { ids } of boardBatches) assert(ids.length < page.length && ids.every((id) => page.includes(id)), `an appended chunk asks only for page ids, never the whole page again: ${ids}`);
+  assert.equal(new Set(boardBatches.flatMap((b) => b.ids)).size, boardBatches.flatMap((b) => b.ids).length, 'the board asks for no id twice');
+  assert.equal(new Set(batches.map((b) => b.ids.join())).size, batches.length, 'no chunk is asked twice');
   await s.screenshot('/tmp/radd-plugin-columns-board.png');
-  checks.push('board cards draw the SLA cell from the remote (no cell for an item without timers), sharing the one batch');
+  checks.push(`board cards draw the SLA cell from the remote (no cell for an item without timers); ${boardBatches.length === 0 ? 'the list\'s one batch is shared' : `${boardBatches.length} chunk(s) appended for a column that landed late, the page never re-asked whole`}`);
 
   // 3. The card designer: palette offers it, the preview shows the owner's sample.
   await openDisplay();

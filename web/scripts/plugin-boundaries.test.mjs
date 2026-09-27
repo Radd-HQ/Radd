@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from '@babel/parser';
+import { execFileSync } from 'node:child_process';
 
 function files(root) {
   return readdirSync(root,{withFileTypes:true}).flatMap(entry => {
@@ -665,4 +666,20 @@ test('raw palette utilities stay out of every UI tree: plugin UIs, the SDK and t
   const host=files('web/src');
   assert(host.length>300,'the scan reaches the whole host');
   assert.deepEqual(scan(host,remap),[]);
+});
+
+test('no tracked source file carries control bytes: four NULs sat in plugin-sdk/src/slots.tsx until fbec1008 (RADD-1466)',()=>{
+  // A NUL survives tsc, vite and every AST scan above (it is whitespace to nobody and an error to
+  // nobody), so the bytes are checked directly: everything git tracks under the source extensions.
+  const control=(buffer)=>{for (let i=0;i<buffer.length;i++) if (buffer[i]<=0x08) return i; return -1;};
+  assert.equal(control(Buffer.from('const a = 1;\n\t')),-1,'tab and newline are not control bytes here');
+  assert.equal(control(Buffer.from('const a\x00 = 1;')),7,'the detector sees a NUL');
+  const tracked=execFileSync('git',['ls-files','-z','--','*.ts','*.tsx','*.py','*.mjs','*.css'],{encoding:'utf8'}).split('\0').filter(Boolean);
+  assert(tracked.length>1500,`the scan reaches the tracked sources (${tracked.length})`);
+  assert(tracked.includes('web/packages/plugin-sdk/src/slots.tsx'),'the file that carried the NULs is in the scan');
+  const found=tracked.filter(existsSync).map(file=>[file,control(readFileSync(file))]).filter(([,at])=>at>=0).map(([file,at])=>`${file}: byte ${at}`);
+  assert.deepEqual(found,[]);
+  // .gitattributes keeps those extensions text so a stray byte shows in a diff instead of "Binary files differ".
+  const attributes=readFileSync('.gitattributes','utf8');
+  for (const extension of ['ts','tsx','py','mjs','css']) assert.match(attributes,new RegExp(`^\\*\\.${extension} text diff$`,'m'),extension);
 });
