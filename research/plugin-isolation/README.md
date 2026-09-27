@@ -176,7 +176,7 @@ Which modules are core or optional, where each one's UI lives and what it `depen
 
 **Remaining:**
 - **RADD-1398:** a plain home load fetches ~210 script chunks. Measure it before changing anything.
-- **RADD-1395 live-provider proof:** it is unverified because the model host refused connections from the build machine. Rerun `editor-ai-proof.mjs` when it is reachable.
+- **RADD-1395 live-provider proof:** verified on 2026-09-27 against a live qwen3.8-27b served at localhost:8221 (`editor-ai-proof.mjs`, all checks; `ai-protect-proof`, `ai-provider-options-proof` and `ai-settings-page-proof` too). It had been unverified until then because the model host refused connections from the build machine.
 - **SDK peer dependencies:** it does not declare `prosemirror-*` as peer dependencies, so an external plugin that binds the editor must install them itself (RADD-1397).
 - **Per-file ledger** (`scripts/plugin_inventory.py`): it stays an on-demand tool writing to an ignored path (RADD-1374). File-by-file ownership of migrations, build and deploy config (RADD-1344) was not re-audited.
 
