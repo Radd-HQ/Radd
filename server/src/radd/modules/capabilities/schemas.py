@@ -40,6 +40,9 @@ class PluginRemoteRead(BaseModel):
     name: str  # the stable plugin enable-key
     remote_entry: str  # URL of the remote's ESM bundle to import()
     ui_api_version: str  # the SDK major it targets; the host version-gates on it
+    # Entity types the remote serves live documents for (`PluginUiManifest.live_documents`): the host
+    # holds those documents' own editor back while this remote is still loading.
+    live_documents: list[str] = []
 
 
 class TypeOptionRead(BaseModel):

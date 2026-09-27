@@ -6,7 +6,8 @@ const PLACEHOLDER =
   "Write the page… use the toolbar for headings, tables, code — or type markdown.";
 
 /** Edit mode: a live session's shared editor with Done, or (no session) Save with `expected_version` and
- *  reload-or-overwrite on a 409 — see `usePageEditing`. */
+ *  reload-or-overwrite on a 409 — see `usePageEditing`. A session that appears while the page's own
+ *  editor is open is offered ("Join and merge"), never swapped in over the draft (RADD-1461). */
 export function PageEditPanel({
   draft,
   onDraft,
@@ -14,6 +15,8 @@ export function PageEditPanel({
   attachTo,
   live,
   legacy,
+  liveOffered,
+  onJoinLive,
   editVersion,
   conflict,
   saving,
@@ -33,6 +36,10 @@ export function PageEditPanel({
   live: LiveDocument;
   /** Run the single-editor flow (no live session: none offered, refused, or a visitor). */
   legacy: boolean;
+  /** A live session became available while the page's own editor is open. */
+  liveOffered: boolean;
+  /** Join it, taking the draft along. */
+  onJoinLive: () => void;
   editVersion: number;
   conflict: boolean;
   saving: boolean;
@@ -73,6 +80,17 @@ export function PageEditPanel({
 
   return (
     <div aria-label="Edit page content" className="mt-3 flex flex-col gap-2">
+      {liveOffered && (
+        <Callout kind="info">
+          <div className="flex items-center gap-2">
+            <span>
+              This page can now be edited together. Your draft stays yours until you join; joining
+              brings it into the shared page as your change.
+            </span>
+            <Button size="sm" className="ml-auto shrink-0" onClick={onJoinLive}>Join and merge</Button>
+          </div>
+        </Callout>
+      )}
       {conflict && (
         <Callout kind="warning">
           <div className="flex items-center gap-2">

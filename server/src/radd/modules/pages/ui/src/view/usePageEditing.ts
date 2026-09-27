@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError, CommentSection, LiveStatus, api, errorMessage, invalidateEntities, toast, useCommentFeed,
@@ -29,6 +29,12 @@ export function usePageEditing(page: Page, canWrite: boolean) {
   // A read action's transform pending for the session about to open — the editor's initial run.
   const [pendingTransform, setPendingTransform] = useState<EditorTransform | null>(null);
   const [finishing, setFinishing] = useState(false);
+  // RADD-1461: the page's OWN editor was opened with no live session in sight. A session that shows
+  // up later (the plugin enabled mid-edit) is offered, never imposed — the bound editor would replace
+  // the draft with the shared copy. While set, this client is in the room as a READER; `joinLive`
+  // turns that into an editor session that keeps the draft.
+  const [ownEditor, setOwnEditor] = useState(false);
+  const [keepDraft, setKeepDraft] = useState(false);
 
   // RADD-1274: the open inline comments, handed to the editor so a transform review can count
   // the passages it removes. The same feed the rail reads, and only while editing.
@@ -66,41 +72,67 @@ export function usePageEditing(page: Page, canWrite: boolean) {
     entityType: "page",
     entityId: page.id,
     canWrite,
-    editing,
+    editing: editing && !ownEditor,
+    keepDraft,
     getMarkdown: () => draftRef.current,
     save: liveSave,
   });
+  /** Back to reading, whichever editor was open. */
+  const leaveEditor = () => {
+    setEditing(false);
+    setOwnEditor(false);
+    setKeepDraft(false);
+    setPendingTransform(null);
+  };
   const save = useMutation({
     mutationFn: (body: PageUpdate) => api.patch<Page>(pagePath(page.id), body),
-    onSuccess: () => { setEditing(false); setConflict(false); },
+    onSuccess: () => { leaveEditor(); setConflict(false); },
     onError: (error) => { if (error instanceof ApiError && error.status === 409) setConflict(true); },
     onSettled: invalidate,
   });
+  /** A live session became available while the page's own editor is open. */
+  const liveOffered = editing && ownEditor && live.status !== LiveStatus.none;
+  // Nothing typed yet: the session costs the person nothing, so it is joined without asking.
+  useEffect(() => {
+    if (liveOffered && draft === page.body) setOwnEditor(false);
+  }, [liveOffered, draft, page.body]);
 
   return {
-    editing, draft, editVersion, conflict, pendingTransform, finishing, live, inlineAnchors, save,
-    /** No live session: the single-editor flow. */
-    legacy: live.status === LiveStatus.none,
+    editing, draft, editVersion, conflict, pendingTransform, finishing, live, inlineAnchors, save, liveOffered,
+    /** No live session: the single-editor flow. Once the page's own editor is open it stays the
+     *  page's own until the person joins a session that appeared later (`joinLive`). */
+    legacy: ownEditor || live.status === LiveStatus.none,
     onDraft: (markdown: string) => { draftRef.current = markdown; setDraft(markdown); },
     open: (transform: EditorTransform | null) => {
       draftRef.current = page.body;
       setDraft(page.body);
       setEditVersion(page.version);
       setPendingTransform(transform);
+      // No session in sight — none offered, none still arriving — is the page's own editor from the
+      // start; a session that turns up afterwards is offered, not imposed.
+      setOwnEditor(live.status === LiveStatus.none);
+      setKeepDraft(false);
       setEditing(true);
+    },
+    /** Join the session that appeared while the page's own editor was open, draft and all: it seeds
+     *  an empty shared copy, or lands in a non-empty one as this person's change. */
+    joinLive: () => {
+      setKeepDraft(true);
+      // The first editor already ran it; its result is in the draft.
+      setPendingTransform(null);
+      setOwnEditor(false);
     },
     /** Leave the session: the final write first, when this client is the one that saves. */
     done: async () => {
       setFinishing(true);
       try { await live.finish(); } finally {
         setFinishing(false);
-        setEditing(false);
-        setPendingTransform(null);
+        leaveEditor();
         invalidate();
       }
     },
-    cancel: () => { setEditing(false); setConflict(false); setPendingTransform(null); },
-    reload: () => { setConflict(false); setEditing(false); invalidate(); },
+    cancel: () => { leaveEditor(); setConflict(false); },
+    reload: () => { setConflict(false); leaveEditor(); invalidate(); },
     resolveDetached: (ids: string[]) => resolveDetached.mutate(ids),
     invalidate,
   };

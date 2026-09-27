@@ -11,7 +11,9 @@
  *     deactivated and unregistered, so its slots vanish live. A remote that fails to load is
  *     QUARANTINED: logged, marked errored, and skipped.
  * While any remote is loading, `setRemotesLoading(true)` lets an empty `Slot` render its `pending`
- * state instead of its "unavailable" fallback.
+ * state instead of its "unavailable" fallback, and `setLiveDocumentsArriving` names the entity types
+ * a loading remote declares live documents for, so their surfaces wait for it rather than open the
+ * editor whose draft the arriving session would replace (RADD-1461).
  */
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -20,6 +22,7 @@ import {
   registerDataSource,
   registerLiveDocumentSource,
   registerQuerySource, registerCommandSource, unregisterCommandSources,
+  setLiveDocumentsArriving,
   setRemotesLoading,
   unregisterQuerySources,
   unregisterDataSources,
@@ -47,6 +50,9 @@ interface LoadedRemote {
   error?: string;
   cancelled: boolean;
   pending?: Promise<void>;
+  /** The entity types this remote DECLARES live documents for (the manifest's `live_documents`);
+   *  while it loads, their surfaces wait for it instead of opening their own editor (RADD-1461). */
+  liveDocuments: readonly string[];
 }
 
 /** Optional plugins' remotes, by plugin name. */
@@ -62,7 +68,11 @@ let states: RemoteState[] = [];
 const listeners = new Set<() => void>();
 function publish() {
   states = [...loaded.values()].map(({ name, status, error }) => ({ name, status, error }));
-  setRemotesLoading(!synced || [...loaded.values()].some((entry) => entry.status === RemoteStatus.loading));
+  const loading = [...loaded.values()].filter((entry) => entry.status === RemoteStatus.loading);
+  setRemotesLoading(!synced || loading.length > 0);
+  // Only a remote still LOADING holds a document surface back; one that failed or was refused is
+  // gone, and the surface runs its own editor as if the plugin were off.
+  setLiveDocumentsArriving(synced, loading.flatMap((entry) => entry.liveDocuments));
   for (const listener of listeners) listener();
 }
 export function readRemoteStates(): RemoteState[] { return states; }
@@ -189,7 +199,7 @@ export function syncStaticPlugins(enabled?: readonly string[]): void {
       withdraw(name);
       void deactivate(current, () => false);
     } else if (wanted && !current) {
-      const entry: LoadedRemote = { name, identity: "bundled", status: RemoteStatus.loaded, cancelled: false };
+      const entry: LoadedRemote = { name, identity: "bundled", status: RemoteStatus.loaded, cancelled: false, liveDocuments: [] };
       statics.set(name, entry);
       activate(entry, mod, () => statics.get(name) === entry).catch((error) => {
         console.error(`[radd] bundled plugin UI "${name}" failed to activate:`, error);
@@ -220,6 +230,7 @@ export async function syncPluginRemotes(remotes: PluginRemote[] | undefined): Pr
     if (loaded.has(remote.name)) continue;
     const entry: LoadedRemote = {
       name: remote.name, identity: identity(remote), status: RemoteStatus.loading, cancelled: false,
+      liveDocuments: remote.live_documents ?? [],
     };
     loaded.set(remote.name, entry);
     entry.pending = loadRemote(remote, entry).finally(() => { entry.pending = undefined; });

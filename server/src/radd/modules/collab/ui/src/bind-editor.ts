@@ -18,8 +18,19 @@ import { COLLAB_FRAGMENT, whenDocumentReady, type CollabRoom } from "./room";
  * The seed rule: wait for the room, and only the client the join elected
  * seeds — and only into a fragment that is STILL empty after sync, or two
  * first joiners would double the page.
+ *
+ * A draft the editor must KEEP (`keepDraft`, RADD-1461: the person typed in
+ * the page's own editor before choosing to join) seeds an empty room like any
+ * first joiner; in a room that already has content it is applied as this
+ * client's own change once the shared copy has rendered — through the sync
+ * plugin, so colleagues receive it and Mod-z takes it back.
  */
-export async function bindRoom(editor: BindableEditor, room: CollabRoom, signal: AbortSignal): Promise<() => void> {
+export async function bindRoom(
+  editor: BindableEditor,
+  room: CollabRoom,
+  signal: AbortSignal,
+  { keepDraft = false }: { keepDraft?: boolean } = {},
+): Promise<() => void> {
   await whenDocumentReady(room, signal);
   if (signal.aborted) return () => {};
   const fragment = room.doc.getXmlFragment(COLLAB_FRAGMENT);
@@ -28,8 +39,18 @@ export async function bindRoom(editor: BindableEditor, room: CollabRoom, signal:
     applyUpdate(room.doc, encodeStateAsUpdate(template));
     template.destroy();
   }
+  // Parsed before the bind: `editor.markdown` is the draft the editor opened with, and the
+  // document it shows is about to become the room's. Applied a tick after the first render —
+  // the sync plugin fires that from inside the editor's own state update, and a transaction
+  // dispatched there would nest one state update in another.
+  const draft = keepDraft && fragment.length > 0 ? editor.parse(editor.markdown) : null;
+  const applyDraft = () => queueMicrotask(() => {
+    const { view } = editor;
+    if (!draft || signal.aborted || view.isDestroyed) return;
+    view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, draft.content));
+  });
   return editor.addPlugins([
-    ySyncPlugin(fragment),
+    ySyncPlugin(fragment, { onFirstRender: applyDraft }),
     // The Yjs undo manager replaces the editor's history: Mod-z undoes YOUR
     // edits to the shared document, not a colleague's.
     yUndoPlugin(),

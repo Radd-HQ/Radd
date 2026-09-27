@@ -85,6 +85,7 @@ async def get_capabilities(user: Actor) -> CapabilitiesRead:
                     name=p.name,
                     remote_entry=_versioned_remote(p.name, p.ui.remote),
                     ui_api_version=p.ui.ui_api_version or DEFAULT_UI_API_VERSION,
+                    live_documents=list(p.ui.live_documents),
                 )
                 for p in registries.plugins.values()
                 if p.ui is not None and p.ui.remote

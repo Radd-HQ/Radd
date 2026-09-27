@@ -42,6 +42,10 @@ export interface LiveDocumentRequest {
   canWrite: boolean;
   /** The viewer is editing it (an editor session); otherwise they are reading (an observer). */
   editing: boolean;
+  /** The editor holds UNSAVED changes the session must keep: they seed an empty shared copy, and
+   *  are applied to a non-empty one as this viewer's own change. Without it the shared copy wins
+   *  over whatever the editor opened with. */
+  keepDraft?: boolean;
   /** The editor's markdown now — read when the session saves, never a captured value. */
   getMarkdown: () => string;
   /** Write `markdown` as the session's save, through the document's own write path. Resolves
@@ -127,20 +131,43 @@ export function unregisterLiveDocumentSources(plugin: string): void {
   if (removed) changed();
 }
 
+// Providers still on their way: the host loader names the entity types every remote that DECLARES a
+// live-document source (the manifest's `live_documents`) will serve while that remote is loading. A
+// surface shows its joining state for those instead of its own editor, so a draft typed during the
+// load is never replaced by the shared copy once the provider lands. Before the manifest has answered
+// every entity type counts as arriving; with no remote declaring one, none does.
+let arriving: { synced: boolean; entityTypes: ReadonlySet<string> } = { synced: false, entityTypes: new Set() };
+
+/** The host loader's report: whether the manifest has answered, and which entity types a remote
+ *  still loading will serve live. */
+export function setLiveDocumentsArriving(synced: boolean, entityTypes: Iterable<string>): void {
+  const next = new Set(entityTypes);
+  if (synced === arriving.synced && next.size === arriving.entityTypes.size && [...next].every((t) => arriving.entityTypes.has(t))) return;
+  arriving = { synced, entityTypes: next };
+  changed();
+}
+
+const isArriving = (entityType: string) => !arriving.synced || arriving.entityTypes.has(entityType);
+
 const NONE: LiveDocument = {
   status: LiveStatus.none, role: null, binding: null, presence: null, saving: null, finish: async () => undefined,
 };
+/** A provider declared by a remote still loading: the surface waits as it would for a session. */
+const ARRIVING: LiveDocument = { ...NONE, status: LiveStatus.joining };
 
 /**
  * The live session for a document while the surface shows it (`null` = stay out). It reopens when
- * the document, editing intent, write access or viewer changes, and closes on unmount or
- * withdrawal. No provider is `none` at once, even while bundles load: an optional plugin must never
- * hold up the document's own editor. A provider that arrives mid-edit opens its session then (the
- * surface keeps its draft, which seeds an empty shared copy).
+ * the document, editing intent, write access, draft-keeping or viewer changes, and closes on unmount
+ * or withdrawal. No provider is `none` at once — unless a remote that DECLARES one is still loading:
+ * then the answer is `joining` until it lands or fails, because an editor opened in that window
+ * would have its draft replaced by the shared copy the moment the provider arrives. A provider
+ * arriving later than that (enabled mid-edit) is the surface's to accept: it keeps its draft and
+ * asks for the session with `keepDraft` when the person chooses to join.
  */
 export function useLiveDocument(request: LiveDocumentRequest | null): LiveDocument {
   const entityType = request?.entityType ?? "";
   const entry = useSyncExternalStore(subscribe, () => entries.get(entityType));
+  const waiting = useSyncExternalStore(subscribe, () => entries.get(entityType) === undefined && isArriving(entityType));
   const me = useCurrentUser();
   const viewer: LiveViewer | null = me && !me.anonymous
     ? { id: me.id, name: me.name, avatar_color: me.avatar_color ?? null, avatar_emoji: me.avatar_emoji ?? null }
@@ -150,7 +177,7 @@ export function useLiveDocument(request: LiveDocumentRequest | null): LiveDocume
   const handle = useRef<LiveDocumentHandle | null>(null);
 
   const identity = request && viewer && entry
-    ? [entry.generation, request.entityType, request.entityId, request.canWrite, request.editing,
+    ? [entry.generation, request.entityType, request.entityId, request.canWrite, request.editing, request.keepDraft === true,
         viewer.id, viewer.name, viewer.avatar_color, viewer.avatar_emoji]
     : null;
   const key = identity ? JSON.stringify(identity) : null;
@@ -164,6 +191,7 @@ export function useLiveDocument(request: LiveDocumentRequest | null): LiveDocume
       entityId: request.entityId,
       canWrite: request.canWrite,
       editing: request.editing,
+      keepDraft: request.keepDraft === true,
       viewer,
       // The latest request's functions, so a surface's re-render never reopens the session.
       getMarkdown: () => latest.current?.getMarkdown() ?? "",
@@ -192,8 +220,11 @@ export function useLiveDocument(request: LiveDocumentRequest | null): LiveDocume
   const finish = useCallback(() => handle.current?.finish() ?? Promise.resolve(), []);
   const state = held && held.key === key ? held.state : null;
   const plugin = entry?.plugin ?? null;
+  // A signed-in viewer waits for a declared provider; a visitor never joins, so nothing to wait for.
+  const awaited = waiting && request !== null && viewer !== null;
   return useMemo<LiveDocument>(() => {
-    if (!key || state?.status === "unavailable") return NONE;
+    if (!key) return awaited ? ARRIVING : NONE;
+    if (state?.status === "unavailable") return NONE;
     const frame = (node: ReactNode) => (node && plugin ? <ContributionFrame plugin={plugin}>{node}</ContributionFrame> : null);
     return {
       status: state?.status === "live" ? LiveStatus.live : LiveStatus.joining,
@@ -203,5 +234,5 @@ export function useLiveDocument(request: LiveDocumentRequest | null): LiveDocume
       saving: frame(state?.saving),
       finish,
     };
-  }, [key, state, plugin, finish]);
+  }, [key, awaited, state, plugin, finish]);
 }

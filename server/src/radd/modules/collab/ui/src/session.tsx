@@ -11,8 +11,9 @@ import { startSaver, type Saver } from "./saver";
 /**
  * A page's live session: editing → editor on the shared doc, reading → observer; editing without
  * write access has no session. A new request is a new session (the server's seed grant is keyed on
- * it). `unavailable` = join refused or a 44xx close → the page's single-editor flow; 4403/4409
- * rejoin first, bounded. `finish` writes the final save so `close` skips it.
+ * it). `unavailable` = join refused, a 44xx close, or an editor that could not bind → the page's
+ * single-editor flow; 4403/4409 rejoin first, bounded. `finish` writes the final save so `close`
+ * skips it. `keepDraft` on the request travels to the binding: the editor's draft is kept (RADD-1461).
  */
 export function openPageSession(
   request: LiveDocumentOpen,
@@ -37,7 +38,9 @@ export function openPageSession(
     update({
       status,
       role,
-      binding: current && role === CollabRole.editor ? roomBinding(current) : null,
+      binding: current && role === CollabRole.editor
+        ? roomBinding(current, { keepDraft: request.keepDraft === true, onFailed: (error) => bindFailed(current, error) })
+        : null,
       ...chrome,
     });
   };
@@ -52,6 +55,17 @@ export function openPageSession(
     presence.detach();
     if (current) void stopping.finally(() => current.close());
   };
+
+  /** The editor could not bind to `failed` (RADD-1461): leave it and hand the page back to its own
+   *  editor — a session whose editor refuses typing behind an enabled Done is worse than none. A
+   *  later room (a rejoin) or a closed session is not this failure's to undo. */
+  function bindFailed(failed: CollabRoom, error: unknown): void {
+    if (closed || room !== failed) return;
+    console.error("[radd-collab] the editor could not bind to the room; the page keeps its own editor", error);
+    // Nothing was ever bound, so there is no final write to make.
+    leave(false);
+    push("unavailable");
+  }
 
   const join = () => {
     const mine = ++attempt;

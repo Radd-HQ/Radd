@@ -741,3 +741,7 @@ class PluginUiManifest:
     # Minimum @radd/plugin-sdk version the remote needs; the host refuses another major or a
     # newer minor/patch.
     ui_api_version: str = ""
+    # The entity types the remote's UI serves LIVE documents for (its `definePlugin({ liveDocuments })`
+    # sources, e.g. "page"). Declared here so the host can hold a document's own editor back while the
+    # remote is still loading — a session that lands after typing began would replace the draft.
+    live_documents: tuple[str, ...] = ()

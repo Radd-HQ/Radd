@@ -90,6 +90,9 @@ export interface PluginRemote {
   name: string;
   remote_entry: string;
   ui_api_version: string;
+  /** The entity types the remote serves live documents for (the manifest's `live_documents`), so a
+   *  document surface can wait for it instead of opening its own editor while the bundle loads. */
+  live_documents?: string[];
 }
 
 /** The backend-assembled UI manifest (GET /capabilities). */

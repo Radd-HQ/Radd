@@ -9,7 +9,13 @@
  *   2. with collab dropped from capabilities, the same page edits with Save and Cancel, the save
  *      carries `expected_version`, and nothing asks for /plugins/collab/ or /collab/;
  *   3. re-listing collab restores the session exactly once — one join, one socket, one presence
- *      strip, one bound editor.
+ *      strip, one bound editor;
+ *   4. (RADD-1461) a bind that FAILS (the binding chunk cannot be fetched) hands the page back to
+ *      its own editor: Save with `expected_version` works, nothing stays read-only behind Done;
+ *   5. (RADD-1461) while the collab remote is still LOADING, Edit shows the joining state — never
+ *      the page's own editor — and the bound editor follows once the remote arrives;
+ *   6. (RADD-1461) collab arriving after typing began in the page's own editor keeps the draft and
+ *      offers "Join and merge", which carries the draft into a room that already has content.
  */
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
@@ -19,6 +25,8 @@ import { createMockLiveRoom } from "./lib/mock-live-room.mjs";
 import { serveBuiltSpa } from "./lib/spa-server.mjs";
 
 let collabEnabled = true, collabVersion = 1;
+// Phase 4: the binding chunk cannot be fetched. Phase 5: the remote's entry is held until released.
+let blockBinding = false, remoteGate = null, remotesHeld = 0;
 const user = { id: "admin", name: "Fixture Editor", email: "fixture@example.test", global_role: "admin", permissions: ["*"], timezone: "UTC" };
 const colleague = { id: "grace", name: "Grace Fixture", color: "var(--chart-todo)", emoji: null };
 const space = { id: "space", slug: "handbook", name: "Handbook", permissions: ["*"], position: 0, page_count: 1 };
@@ -33,6 +41,8 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/plugins/")) {
     requests.push({ route: url.pathname, method: req.method });
     if (!url.pathname.startsWith("/plugins/collab/")) { res.writeHead(404); res.end(); return true; }
+    if (url.pathname === "/plugins/collab/bind-editor.js" && blockBinding) { res.writeHead(404); res.end(); return true; }
+    if (url.pathname === "/plugins/collab/remoteEntry.js" && remoteGate) { remotesHeld += 1; await remoteGate; }
     return false;
   }
   if (url.pathname.startsWith("/api/")) {
@@ -44,7 +54,9 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     if (route === "/auth/me") data = user;
     else if (route.includes("capabilities")) data = { capabilities: [], nav: [], ui: [],
       plugins: [...CORE_PLUGINS, ...(collabEnabled ? ["collab"] : [])],
-      remotes: collabEnabled ? [{ name: "collab", remote_entry: `/plugins/collab/remoteEntry.js?v=${collabVersion}`, ui_api_version: "2.0.0" }] : [] };
+      // `live_documents`: the manifest says which documents the remote serves live, so the host holds
+      // the page's own editor back while the remote is still loading (RADD-1461).
+      remotes: collabEnabled ? [{ name: "collab", remote_entry: `/plugins/collab/remoteEntry.js?v=${collabVersion}`, ui_api_version: "2.0.0", live_documents: ["page"] }] : [] };
     else if (/^\/collab\/pages\/page\/join$/.test(route)) {
       // The backend's rule, in miniature: an editor seeds a room whose document is still empty.
       const session = `session-${++sessions}`;
@@ -210,8 +222,110 @@ try {
   await until(s, `!document.querySelector('[aria-label="Edit page content"]')`, "Done again");
   checks.push("re-listing collab restores the session exactly once: one observer join and one socket, one presence strip, then one bound editor with Done");
 
-  const errors = s.consoleErrors.filter((error) => !/Failed to load resource/.test(error));
-  assert.deepEqual(errors, [], "no console errors");
+  // --- 4. a bind that fails hands the page back to its own editor (RADD-1461) ---
+  // A fresh document: a failed module fetch is remembered by the module map for the document's life.
+  blockBinding = true; collabVersion += 1;
+  await s.navigate(`${spa.origin}/pages/handbook/live-page`);
+  await until(s, `${PRESENCE}.includes("1 editing")`, "the reader is back in the room");
+  const failedBefore = { joins: joins.length, patches: patches.length };
+  await s.click("button", (text) => text.trim() === "Edit page");
+  await until(s, `${EDITOR}?.getAttribute("contenteditable") === "true"`, "the page's own editor takes over once the bind fails", { timeoutMs: 15_000 });
+  const handedBack = await s.eval(`(() => {
+    const panel = document.querySelector('[aria-label="Edit page content"]');
+    return { buttons: [...panel.querySelectorAll("button")].map((b) => b.textContent.trim()),
+      bar: panel.querySelector(".radd-rich-editor")?.innerText ?? "" };
+  })()`);
+  assert(handedBack.buttons.includes("Save") && handedBack.buttons.includes("Cancel") && !handedBack.buttons.includes("Done"), JSON.stringify(handedBack.buttons));
+  assert.match(handedBack.bar, /Switch to plain text editing/, "the mode bar is the page's own editor's");
+  assert.equal(joins.length - failedBefore.joins, 1, "one editor join was attempted: " + JSON.stringify(joins.slice(failedBefore.joins)));
+  assert(requests.some((r) => r.route === "/plugins/collab/bind-editor.js"), "the binding chunk was asked for (and refused)");
+  await typeAtEnd(" Saved after the bind failed.");
+  await new Promise((r) => setTimeout(r, 400));
+  const versionAtFailure = page.version;
+  await s.click("button", (text) => text.trim() === "Save");
+  await until(s, `!document.querySelector('[aria-label="Edit page content"]')`, "Save leaves edit mode");
+  const afterFailure = patches.at(-1);
+  assert.equal(patches.length - failedBefore.patches, 1, "one write: the page's own Save, no autosave from a room nobody bound to: " + JSON.stringify(patches.slice(failedBefore.patches)));
+  assert.equal(afterFailure.expected_version, versionAtFailure, JSON.stringify(afterFailure));
+  assert.equal(afterFailure.collab_session, undefined, "a save after the bind failed carries no session voucher");
+  assert.match(afterFailure.body, /Saved after the bind failed\./);
+  assert(s.consoleErrors.some((error) => /bind/i.test(error)), "the failure was reported: " + JSON.stringify(s.consoleErrors.slice(-5)));
+  await s.screenshot("/tmp/radd-live-editing-bind-failed.png");
+  checks.push("a bind whose chunk cannot be fetched hands the page back to its own editor: typing works, the mode bar offers plain text, Save writes with expected_version and no session voucher, and the failure is reported to the console");
+
+  // --- 5. a remote still loading: the joining state, never the page's own editor (RADD-1461) ---
+  blockBinding = false; collabVersion += 1;
+  let releaseRemote;
+  remoteGate = new Promise((resolve) => { releaseRemote = resolve; });
+  const heldBefore = remotesHeld;
+  await s.navigate(`${spa.origin}/pages/handbook/live-page`);
+  await until(s, `[...document.querySelectorAll("button")].some((b) => b.textContent.trim() === "Edit page")`, "the page renders before the remote has loaded");
+  assert.equal(remotesHeld - heldBefore, 1, "the remote's entry is being held");
+  await s.click("button", (text) => text.trim() === "Edit page");
+  await until(s, `(document.querySelector('[aria-label="Edit page content"]')?.innerText ?? "").includes("Joining the page")`,
+    "Edit shows the joining state while the remote is still loading", { timeoutMs: 15_000 });
+  assert.equal(await count('[aria-label="Edit page content"] .ProseMirror'), 0, "no editor accepts typing before the room is known");
+  await new Promise((r) => setTimeout(r, 600));
+  assert((await s.eval(`document.querySelector('[aria-label="Edit page content"]').innerText`)).includes("Joining the page"), "…and keeps showing it");
+  releaseRemote(); remoteGate = null;
+  await until(s, `${EDITOR}?.getAttribute("contenteditable") === "true"`, "the bound editor follows once the remote has loaded");
+  const followed = await s.eval(`(() => {
+    const panel = document.querySelector('[aria-label="Edit page content"]');
+    return { buttons: [...panel.querySelectorAll("button")].map((b) => b.textContent.trim()), bar: panel.querySelector(".radd-rich-editor").innerText };
+  })()`);
+  assert(followed.buttons.includes("Done") && !followed.buttons.includes("Save"), JSON.stringify(followed.buttons));
+  assert.match(followed.bar, /Editing together/);
+  await until(s, `${PRESENCE}.includes("2 editing")`, "both editors are present");
+  const lateTyped = " Typed after the remote arrived.";
+  await typeAtEnd(lateTyped);
+  for (let i = 0; i < 150 && !patches.some((p) => p.collab_session && (p.body ?? "").includes(lateTyped.trim())); i++) await new Promise((r) => setTimeout(r, 40));
+  const lateSave = patches.find((p) => p.collab_session && (p.body ?? "").includes(lateTyped.trim()));
+  assert(lateSave, "the shared typing is saved through the session: " + JSON.stringify(patches.slice(-3)));
+  assert.equal(lateSave.collab_session, joins.at(-1).session);
+  await s.screenshot("/tmp/radd-live-editing-joining.png");
+  checks.push("with the collab remote still loading, Edit shows the joining state and no editor accepts typing; once the remote arrives the bound editor follows, and typing is saved through the session");
+  await s.click("button", (text) => text.trim() === "Done");
+  await until(s, `!document.querySelector('[aria-label="Edit page content"]')`, "Done leaves edit mode");
+
+  // --- 6. collab arrives after typing began: the draft stays, Join and merge carries it (RADD-1461) ---
+  collabEnabled = false; await refresh();
+  await until(s, `!document.querySelector('[aria-label^="In this page:"]')`, "the presence strip is withdrawn");
+  await s.click("button", (text) => text.trim() === "Edit page");
+  await until(s, `${EDITOR}?.getAttribute("contenteditable") === "true"`, "the page's own editor");
+  const kept = " Kept from my draft.";
+  await typeAtEnd(kept);
+  await new Promise((r) => setTimeout(r, 400));
+  assert(!room.empty, "the room already holds content");
+  const joinsBeforeArrival = joins.length;
+  collabEnabled = true; collabVersion += 1; await refresh();
+  await until(s, `${PRESENCE}.includes("1 editing") && ${PRESENCE}.includes("1 viewing")`, "the room shows while the draft is open: this client is present as a reader", { timeoutMs: 15_000 });
+  const offered = await s.eval(`(() => {
+    const panel = document.querySelector('[aria-label="Edit page content"]');
+    return { buttons: [...panel.querySelectorAll("button")].map((b) => b.textContent.trim()), text: panel.querySelector(".ProseMirror")?.innerText ?? "",
+      bar: panel.querySelector(".radd-rich-editor")?.innerText ?? "" };
+  })()`);
+  assert(offered.text.includes(kept.trim()), "the draft is still in the page's own editor: " + JSON.stringify(offered.text.slice(-80)));
+  assert(offered.buttons.includes("Save") && offered.buttons.includes("Join and merge") && !offered.buttons.includes("Done"), JSON.stringify(offered.buttons));
+  assert.match(offered.bar, /Switch to plain text editing/);
+  assert.deepEqual(joins.slice(joinsBeforeArrival).map((j) => j.role), ["observer"], "arriving mid-edit joins as a reader; nothing replaces the draft");
+  await s.screenshot("/tmp/radd-live-editing-offer.png");
+  await s.click("button", (text) => text.trim() === "Join and merge");
+  await until(s, `${EDITOR}?.getAttribute("contenteditable") === "true" && document.querySelector('[aria-label="Edit page content"] .radd-rich-editor').innerText.includes("Editing together")`, "Join and merge binds the editor");
+  await until(s, `${EDITOR}.innerText.includes(${JSON.stringify(kept.trim())})`, "the draft is kept in the shared copy");
+  assert.equal(joins.at(-1).role, "editor");
+  for (let i = 0; i < 100 && !room.doc.getXmlFragment("prosemirror").toString().includes(kept.trim()); i++) await new Promise((r) => setTimeout(r, 40));
+  assert(room.doc.getXmlFragment("prosemirror").toString().includes(kept.trim()), "the room's document carries the draft as this client's change");
+  for (let i = 0; i < 150 && !patches.some((p) => p.collab_session === joins.at(-1).session && (p.body ?? "").includes(kept.trim())); i++) await new Promise((r) => setTimeout(r, 40));
+  assert(patches.some((p) => p.collab_session === joins.at(-1).session && (p.body ?? "").includes(kept.trim())), "the saver writes the merged copy through the session: " + JSON.stringify(patches.slice(-3)));
+  await until(s, `${PRESENCE}.includes("2 editing")`, "both editors are present after joining");
+  await s.screenshot("/tmp/radd-live-editing-merged.png");
+  checks.push("collab arriving after typing began keeps the draft in the page's own editor (this client present as a reader) and offers Join and merge; joining binds the editor, carries the draft into a room that already had content as this client's change, and the saver writes it through the session");
+  await s.click("button", (text) => text.trim() === "Done");
+  await until(s, `!document.querySelector('[aria-label="Edit page content"]')`, "Done leaves edit mode");
+
+  // Phase 4's bind failure is the one reported error this proof expects.
+  const errors = s.consoleErrors.filter((error) => !/Failed to load resource|bind/i.test(error));
+  assert.deepEqual(errors, [], "no console errors beyond the reported bind failure");
   console.log(JSON.stringify({ passed: true, checks, requests: requests.length, joins: joins.length, patches: patches.length }));
 } catch (error) {
   console.error(JSON.stringify({ errors: browser?.session.consoleErrors, joins, patches: patches.slice(-5),

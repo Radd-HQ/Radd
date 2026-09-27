@@ -125,6 +125,8 @@ export function PageView({
                   attachTo={{ entityType: "page", entityId: page.id }}
                   live={edit.live}
                   legacy={edit.legacy}
+                  liveOffered={edit.liveOffered}
+                  onJoinLive={edit.joinLive}
                   editVersion={edit.editVersion}
                   conflict={edit.conflict}
                   saving={save.isPending}

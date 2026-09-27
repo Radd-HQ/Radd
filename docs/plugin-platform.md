@@ -500,7 +500,14 @@ ProseMirror, while yjs, y-protocols and y-websocket are the remote's own — not
 touches a Y.Doc, so there is no second copy to disagree with. Milkdown is not shared: it is the host
 editor's wrapper, and a binding needs only ProseMirror. The host keeps a feature-neutral mechanism —
 `RichEditor`'s `binding` and the `liveDocuments` contribution — and `web/src` names no co-editing
-code at all (boundary test).
+code at all (boundary test). A remote that serves live documents DECLARES their entity types in its
+manifest (`PluginUiManifest.live_documents`, reported per remote by `/capabilities`): while such a
+remote is still loading, `useLiveDocument` answers `joining` for those documents instead of `none`,
+so the surface waits rather than opening the editor whose draft the arriving session would replace.
+A session that appears later than that (the plugin enabled mid-edit) is the surface's to offer; it
+asks for it with `keepDraft`, and the binding seeds an empty shared copy from the draft or applies it
+to a non-empty one as the person's own change. A bind that fails hands the document back the same way
+a refused join does: the source pushes `unavailable`.
 
 Remote builds externalize the shared modules through Rolldown's `esmExternalRequirePlugin`
 (`packages/plugin-sdk/vite.mjs`) and substitute `process.env.NODE_ENV`, so bundled CommonJS

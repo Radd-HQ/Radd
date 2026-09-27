@@ -195,7 +195,7 @@ export {
 } from "./editor-extensions";
 // Live documents (RADD-1397): a document surface asks for a live session; a plugin provides it.
 export {
-  LiveStatus, LiveRole, useLiveDocument, registerLiveDocumentSource, unregisterLiveDocumentSources,
+  LiveStatus, LiveRole, useLiveDocument, registerLiveDocumentSource, unregisterLiveDocumentSources, setLiveDocumentsArriving,
   type LiveStatusValue, type LiveRoleValue, type LiveSave, type LiveDocumentRequest, type LiveViewer,
   type LiveDocumentOpen, type LiveDocumentState, type LiveDocumentHandle, type LiveDocumentSource, type LiveDocument,
 } from "./live-documents";

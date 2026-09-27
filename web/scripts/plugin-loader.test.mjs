@@ -24,17 +24,20 @@ async function fixture(importer, statics = {}) {
     registerLiveDocumentSource: (name) => liveDocuments.add(name),
     unregisterLiveDocumentSources: (name) => liveDocuments.delete(name),
     setRemotesLoading: (value) => { globalThis[key].loading = value; },
+    // RADD-1461: `[synced, entity types a loading remote declares live documents for]`.
+    setLiveDocumentsArriving: (synced, entityTypes) => { globalThis[key].arriving = [synced, [...entityTypes].sort()]; },
     loading: undefined,
+    arriving: undefined,
     statics,
     importer,
   };
   const loader = await importTs('web/src/lib/plugin-loader.ts', (source) => source
     .replace(/import \{[\s\S]*?\} from "@radd\/plugin-sdk";/,
-      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources, registerLiveDocumentSource, unregisterLiveDocumentSources, setRemotesLoading} = globalThis.${key};`)
+      `const {isUiApiCompatible, registerSlot, unregisterPlugin, registerDataSource, unregisterDataSources, registerQuerySource, unregisterQuerySources, registerCommandSource, unregisterCommandSources, registerLiveDocumentSource, unregisterLiveDocumentSources, setRemotesLoading, setLiveDocumentsArriving} = globalThis.${key};`)
     // Bundled core plugins are exercised by the browser proofs; the remote lifecycle is tested here.
     .replace(/import \{ STATIC_PLUGINS \} from "[^"]+";/, `const STATIC_PLUGINS = globalThis.${key}.statics;`)
     .replace('import(/* @vite-ignore */ url)', `globalThis.${key}.importer(url)`));
-  return { ...loader, slots, dataSources, querySources, commandSources, liveDocuments };
+  return { ...loader, slots, dataSources, querySources, commandSources, liveDocuments, arriving: () => globalThis[key].arriving };
 }
 const remote = (url = 'v1') => [{ name: 'fixture', remote_entry: url, ui_api_version: '1.0' }];
 const contribution = { slot: 'issue.tab', title: 'Example' };
@@ -200,6 +203,32 @@ test('a live-document-only remote registers, withdraws with its plugin and retur
   await f.syncPluginRemotes(remote('v2'));assert.deepEqual([...f.liveDocuments],['fixture']);
   const failed=await fixture(async()=>({liveDocuments:[source],activate(){throw Error('failure');}}));
   await failed.syncPluginRemotes(remote());assert.equal(failed.liveDocuments.size,0,'a failed activation leaves no provider');
+});
+
+test('a remote declaring live documents holds their surfaces only while it loads (RADD-1461)', async () => {
+  const declaring = (url = 'v1') => [{ name: 'fixture', remote_entry: url, ui_api_version: '1.0', live_documents: ['page'] }];
+  const source = { id: 'fixture.pages', entityType: 'page', open() {} };
+  const wait = deferred();
+  const f = await fixture(() => wait.promise);
+  assert.deepEqual(f.arriving(), [false, []], 'before the manifest answers nothing is known, and every surface waits');
+  const loading = f.syncPluginRemotes(declaring());
+  assert.deepEqual(f.arriving(), [true, ['page']], 'the declared entity type is arriving while the import is pending');
+  wait.resolve({ liveDocuments: [source] });
+  await loading;
+  assert.deepEqual(f.arriving(), [true, []], 'landed: the provider is registered and nothing is arriving');
+  assert.deepEqual([...f.liveDocuments], ['fixture']);
+  // A remote that fails releases the surface too: it runs its own editor, as if the plugin were off.
+  const failing = await fixture(async () => { throw Error('fixture failure'); });
+  await failing.syncPluginRemotes(declaring());
+  assert.deepEqual(failing.arriving(), [true, []]);
+  assert.equal(failing.readRemoteStates()[0].status, 'errored');
+  // A remote declaring none holds nothing, even while it loads.
+  const later = deferred();
+  const plain = await fixture(() => later.promise);
+  const plainLoading = plain.syncPluginRemotes(remote());
+  assert.deepEqual(plain.arriving(), [true, []]);
+  later.resolve({ contributions: [contribution] });
+  await plainLoading;
 });
 
 test('bundled plugins register at boot, follow the enabled set, and never load as a remote (RADD-1373)', async () => {

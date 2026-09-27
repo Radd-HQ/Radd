@@ -200,6 +200,7 @@ export const LiveRole = M["LiveRole"];
 export const useLiveDocument = M["useLiveDocument"];
 export const registerLiveDocumentSource = M["registerLiveDocumentSource"];
 export const unregisterLiveDocumentSources = M["unregisterLiveDocumentSources"];
+export const setLiveDocumentsArriving = M["setLiveDocumentsArriving"];
 export const CommentReplies = M["CommentReplies"];
 export const CommentComposer = M["CommentComposer"];
 export const CommentComposerMode = M["CommentComposerMode"];
