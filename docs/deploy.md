@@ -118,6 +118,27 @@ Three rules that keep this boring:
   app` until uvicorn starts serving. The app refuses traffic until the
   schema converges, which is the correct failure mode.
 
+### Upgrading to v0.49.0
+
+v0.49.0 moves several built-in behaviours behind switches that migrate **off** for
+existing rows (the integration-settings decision of RADD-1367: integrations record
+data and fire triggers; a behaviour is something an admin switched on). Nothing breaks,
+but each of these stops until it is switched back on, and the release notes are
+generated from commits, so this list is the operator's record:
+
+| Stops after upgrade | Where to switch it back on |
+|---|---|
+| Publishing a Radd version and sweeping issues to Done when a GitHub/GitLab/Forgejo release is published | Settings → Version control → the repository row → **Publish a version on release** |
+| Moving merged issues to the project's waiting-for-release state | Same row → **Move merged issues to waiting** |
+| Mirroring VCS time entries into worklogs | Same row → **Mirror time** |
+| The receipt mailed to a reporter when an emailed ticket is created, and the resolution notice | Settings → Email → **Automatic messages** (`mail_send_ack`, `mail_send_resolved`; a custom receipt body is kept) |
+| Notification mail on an instance that set `RADD_SMTP_*` but has the **mailintake** plugin disabled | Enable mailintake (the notify module no longer carries its own SMTP fallback); notifications that found no transport are recorded as undeliverable, not sent |
+
+Two of this release's migrations cannot be downgraded (`d1329verdict` rewrites
+automation graphs into verdict nodes; `d1334review` scopes VCS data per
+connection) — `alembic downgrade` refuses with a message. Rolling back this
+release means restoring the backup you took first, as the rule above says.
+
 ## Sizing
 
 Radd is one Python process plus Postgres; the database is what you feed.

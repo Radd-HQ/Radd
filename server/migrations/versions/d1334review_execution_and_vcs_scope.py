@@ -1,7 +1,5 @@
 """Fail-closed automation owners and connection-scoped VCS ingestion."""
 
-import uuid
-
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -16,16 +14,51 @@ def upgrade():
     op.drop_constraint("fk_automations_created_by_id_users", "automations", type_="foreignkey")
     connection = op.get_bind()
     users = dict(connection.execute(sa.text("SELECT email, id FROM users")).all())
-    for row in connection.execute(sa.text("SELECT id, nodes FROM automations")).mappings().all():
-        changed = False
-        for node in row["nodes"] or []:
+
+    def resolve_act_as(nodes: list[dict]) -> tuple[bool, list[str]]:
+        """Stamp `act_as_id` from the `act_as` email where it resolves. Returns
+        (changed, unresolved emails). An email nobody has is LEFT without an id
+        (RADD-1453): the old version wrote `uuid4()` here, which fails closed at
+        run time but plants a fabricated id in stored data."""
+        changed, unresolved = False, []
+        for node in nodes or []:
             params = node.get("params") or {}
             if params.get("act_as") and not params.get("act_as_id"):
-                params["act_as_id"] = str(users.get(params["act_as"]) or uuid.uuid4())
+                found = users.get(params["act_as"])
+                if found is None:
+                    unresolved.append(str(params["act_as"]))
+                    continue
+                params["act_as_id"] = str(found)
                 changed = True
+        return changed, unresolved
+
+    for row in connection.execute(
+        sa.text("SELECT id, name, nodes FROM automations")
+    ).mappings().all():
+        changed, unresolved = resolve_act_as(row["nodes"])
+        if unresolved:
+            # The rule cannot run as an account that does not exist; disabling it
+            # is the honest state, and the name says which rule to revisit.
+            print(
+                f"d1334review: automation {row['name']!r} acts as {', '.join(unresolved)}, "
+                "which no account matches; the automation is disabled until someone picks one"
+            )
+        if changed or unresolved:
+            connection.execute(
+                sa.text(
+                    "UPDATE automations SET nodes = :nodes, enabled = enabled AND :keep WHERE id = :id"
+                ).bindparams(sa.bindparam("nodes", type_=postgresql.JSONB())),
+                {"nodes": row["nodes"], "keep": not unresolved, "id": row["id"]},
+            )
+    # Saved versions carry the same graphs; stamp the ids that resolve so a
+    # restored version is not one act-as lookup behind the live row.
+    for row in connection.execute(
+        sa.text("SELECT id, nodes FROM automation_versions")
+    ).mappings().all():
+        changed, _ = resolve_act_as(row["nodes"])
         if changed:
             connection.execute(
-                sa.text("UPDATE automations SET nodes = :nodes WHERE id = :id").bindparams(
+                sa.text("UPDATE automation_versions SET nodes = :nodes WHERE id = :id").bindparams(
                     sa.bindparam("nodes", type_=postgresql.JSONB())
                 ),
                 {"nodes": row["nodes"], "id": row["id"]},

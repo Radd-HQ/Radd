@@ -6,8 +6,10 @@ person) replaces "the author is the SYSTEM user" as the test the outbound relay
 and the SLA use. Backfill: a SYSTEM-authored comment the mail store links to an
 INBOUND message is `inbound_mail` (a recognised sender's mail is their own
 comment and stays NULL); any other SYSTEM-authored comment was an
-automation's. The `mail_ack_body` / `mail_send_resolved` overrides go with the
-settings — both behaviours are automation templates now.
+automation's. The `mail_ack_body` / `mail_send_resolved` rows are LEFT IN PLACE:
+this migration used to delete them when both behaviours became automation
+templates, but RADD-1368 brought the settings back under the same keys (default
+OFF) and a deleted override is a destroyed receipt text (RADD-1453).
 
 Revision ID: d1318mailorigin
 Revises: d1317alertrecv
@@ -41,7 +43,6 @@ def upgrade() -> None:
         WHERE origin IS NULL AND author_id = '{SYSTEM_ACTOR_ID}'
         """
     )
-    op.execute("DELETE FROM scoped_settings WHERE key IN ('mail_ack_body', 'mail_send_resolved')")
 
 
 def downgrade() -> None:

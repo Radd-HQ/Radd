@@ -226,4 +226,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass  # the old shapes are not executable any more; nothing to restore to
+    # The rewritten graphs (verdict nodes, no trigger `mode`) are not executable by
+    # the previous image, and the old shapes are not recoverable from the new
+    # ones. A `pass` here would report success and hand that image graphs it
+    # cannot run; refusing is the honest answer (RADD-1453).
+    raise RuntimeError(
+        "d1329verdict cannot be downgraded: restore the database backup taken before "
+        "this release instead (see docs/deploy.md, Upgrading to v0.49.0)"
+    )
