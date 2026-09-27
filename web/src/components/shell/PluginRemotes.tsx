@@ -12,7 +12,10 @@ const MANIFEST_POLL_MS = 15_000;
  *  manifest's enabled set (so enable/disable is live) and loads the user's contribution prefs. */
 export function PluginRemotes() {
   const { data } = useQuery({...capabilitiesQuery, refetchInterval: MANIFEST_POLL_MS});
-  const remotes = data?.remotes;
+  // Once the manifest has answered, a missing list means NO remotes — the loader must still
+  // mark the manifest synced, or every live-document surface waits for a remote that never
+  // comes (RADD-1461 follow-up found by browser-page-comments).
+  const remotes = data ? data.remotes ?? [] : undefined;
   const plugins = data?.plugins;
   const authenticated = useIsAuthenticated();
   useEffect(() => {
