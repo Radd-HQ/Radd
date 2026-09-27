@@ -33,8 +33,10 @@ export function hostPaths(provider: string) {
   };
 }
 
-/** Cache tags a connector's rows carry, as the realtime hub names them. */
-export const hostEntities = (provider: string) => [`${provider}Connection`, `${provider}Repo`];
+/** Cache tags for a host's connection and repository queries: the SERVER's entity types, so a
+ *  realtime event about either reaches these queries and the history panel speaks the same
+ *  names (RADD-1468; the old `gitlabConnection` spelling existed nowhere else). */
+export const hostEntities = (provider: string) => [`${provider}_connection`, `${provider}_repo`];
 
 /** Audited entity types for the page's "Change history" footer (spec 123). */
 export const historyEntities = (provider: string) => [`${provider}_connection`, `${provider}_repo`, "vcs_user_link"];
