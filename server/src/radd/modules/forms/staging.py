@@ -10,16 +10,20 @@ claims, each verified to sit on the caller's own area (multi-tab safe).
 from __future__ import annotations
 
 import uuid
+from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.clock import utcnow
+from radd.config import settings
+from radd.db import SessionLocal
 from radd.exceptions import ConflictError
 from radd.modules.attachments import parents, service as attachments_service
 from radd.modules.attachments.types import AttachmentParentType
 from radd.modules.auth.models import User
+from radd.modules.events import service as events
 
 from .types import FormEntity, FormEvent
-from radd.clock import utcnow
 
 #: Fixed namespace for deriving a person's staging id. A constant, not a
 #: setting: changing it would strand every file already staged.
@@ -96,7 +100,7 @@ async def claim(
 
 
 async def sweep_abandoned(
-    session: AsyncSession, older_than_days: int = 7
+    session: AsyncSession, older_than_days: int | None = None
 ) -> list[uuid.UUID]:
     """Staging areas nobody came back to — emit `form.staging.deleted` for each
     and the ordinary spec-102 cascade removes the rows AND the bytes.
@@ -112,13 +116,33 @@ async def sweep_abandoned(
     stages something every week simply keeps their area, which is correct — they
     are using it.
 
-    A week is deliberately generous. Reclaiming a file somebody is still looking
-    at is a worse failure than storing it a little longer.
+    The age is `form_staging_retention_days` (a week by default), deliberately
+    generous: reclaiming a file somebody is still looking at is a worse failure
+    than storing it a little longer.
     """
-    from datetime import timedelta
-
-    cutoff = utcnow() - timedelta(days=older_than_days)
+    days = settings.form_staging_retention_days if older_than_days is None else older_than_days
+    cutoff = utcnow() - timedelta(days=days)
     rows = await attachments_service.newest_per_parent(
         session, AttachmentParentType.FORM_SUBMISSION.value
     )
-    return [area_id for area_id, newest in rows if newest < cutoff]
+    abandoned = [area_id for area_id, newest in rows if newest < cutoff]
+    for area_id in abandoned:
+        # Never quiet: the cascade consumer skips silent events, and this one
+        # exists only to be consumed.
+        await events.emit(
+            session,
+            event_type=FormEvent.STAGING_DELETED,
+            entity_type=AttachmentParentType.FORM_SUBMISSION,
+            entity_id=area_id,
+            silent=False,
+        )
+    return abandoned
+
+
+async def run_sweep() -> int:
+    """The scheduled tick (the plugin's `forms.staging-sweep` TaskSpec): one
+    transaction, so the events land with nothing else. Returns the area count."""
+    async with SessionLocal() as session:
+        swept = await sweep_abandoned(session)
+        await session.commit()
+    return len(swept)

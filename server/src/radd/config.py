@@ -181,6 +181,11 @@ class Settings(BaseSettings):
     # 5 GiB: wiki imports carry recordings (spec 117). Uploads spool to disk, so disk,
     # not RAM, is the limit.
     attachment_max_bytes: int = 5 * 1024 * 1024 * 1024
+    # Files attached to an intake form that was never submitted (forms/staging.py,
+    # RADD-1426): a staging area is reclaimed once its NEWEST file is this many days
+    # old; the sweep looks this often.
+    form_staging_retention_days: int = Field(default=7, gt=0)
+    form_staging_sweep_interval_seconds: float = Field(default=3600.0, gt=0)
 
     # Spec 117: downloaded Confluence snapshots are working files on local disk (one rmtree
     # to delete), not object-store blobs; bytes reach storage when a run imports them.

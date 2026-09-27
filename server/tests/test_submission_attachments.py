@@ -155,3 +155,75 @@ async def test_a_recently_used_area_is_left_alone(db, host):
     await db.flush()
 
     assert staging.staging_id_for(alice) not in await staging.sweep_abandoned(db, older_than_days=7)
+
+
+async def test_the_scheduled_sweep_reclaims_an_abandoned_area_with_its_bytes(
+    db, tmp_path, monkeypatch
+):
+    """RADD-1426: `sweep_abandoned` promised to emit `form.staging.deleted` but
+    returned ids, and nothing ever called it, so every abandoned screenshot stayed
+    on its storage host forever. Driven end to end: the plugin's scheduled task,
+    then the real cascade consumer — rows AND bytes of the abandoned area go, a
+    live area keeps both."""
+    import io
+    from contextlib import asynccontextmanager
+    from datetime import timedelta
+    from pathlib import Path
+
+    from fastapi import UploadFile
+
+    from radd.clock import utcnow
+    from radd.kernel.registry import registries
+    from radd.modules.attachments import gc, hosts, service as attachments_service
+    from radd.modules.attachments.schemas import StorageHostCreate
+    from radd.modules.attachments.types import DeliveryMode, StorageHostType
+    from radd.modules.events import cascade, runner, service as events_service
+
+    store = await hosts.create_host(
+        db,
+        StorageHostCreate(
+            name=f"stage-{uuid.uuid4().hex[:6]}",
+            host_type=StorageHostType.FILESYSTEM,
+            root_dir=str(tmp_path / "store"),
+            delivery_mode=DeliveryMode.PROXY,
+        ),
+    )
+
+    async def upload(owner: User, name: str) -> Attachment:
+        return await attachments_service.save_upload(
+            db,
+            entity_type=AttachmentParentType.FORM_SUBMISSION.value,
+            entity_id=staging.staging_id_for(owner),
+            upload=UploadFile(file=io.BytesIO(b"png-bytes"), filename=name),
+            actor_id=owner.id,
+            host=store,
+        )
+
+    alice, bob = await make_user(db, name="Alice"), await make_user(db, name="Bob")
+    abandoned, live = await upload(alice, "closed-the-tab.png"), await upload(bob, "typing.png")
+    abandoned.created_at = utcnow() - timedelta(days=30)
+    await db.flush()
+    abandoned_id, abandoned_bytes = abandoned.id, Path(store.root_dir) / abandoned.storage_name
+    live_bytes = Path(store.root_dir) / live.storage_name
+    assert abandoned_bytes.exists() and live_bytes.exists()
+
+    # Every step opens its own session; hand each the test transaction instead.
+    @asynccontextmanager
+    async def borrowed():
+        yield db
+
+    for module in (staging, runner, gc):
+        monkeypatch.setattr(module, "SessionLocal", borrowed)
+    monkeypatch.setattr(db, "commit", db.flush)
+    await events_service.set_offset(
+        db, cascade.CONSUMER_NAME, await events_service.latest_event_id(db)
+    )
+
+    assert await registries.tasks["forms.staging-sweep"].run() >= 1
+    assert await cascade.run_once() >= 1
+
+    assert await db.get(Attachment, abandoned_id) is None
+    assert not abandoned_bytes.exists()
+    await db.refresh(live)
+    assert live.entity_id == staging.staging_id_for(bob)
+    assert live_bytes.read_bytes() == b"png-bytes"
