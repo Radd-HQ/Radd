@@ -12,7 +12,7 @@ _consumer_loop = PeriodicLoop(
     enabled=lambda: settings.run_workers,  # web-only process skips (spec 48 worker split)
 )
 # RADD-968: the fast half of the email pair — the types that earn their own
-# message the moment they happen. It stamps `emailed_at`, which is exactly what
+# message the moment they happen. It settles `delivery`, which is exactly what
 # the digest's selection already skips, so the two never double-send.
 _mail_loop = PeriodicLoop(
     mailer.run_once,

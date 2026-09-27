@@ -121,8 +121,30 @@ PARTICIPANT_ADDED_EVENT = "item.participant_added"
 SYSTEM_ACTOR_ID = uuid.UUID("00000000-0000-0000-0000-000000a70a70")
 
 
+class NotificationDelivery(StrEnum):
+    """What the EMAIL channel did with a row (RADD-1457). `emailed_at` is set by
+    SENT alone: it is the moment a transport accepted the message, never a
+    bookkeeping stamp.
+
+    * PENDING — not settled: never attempted, or waiting out a retry rung;
+    * SENT — a transport accepted a message carrying it;
+    * UNDELIVERABLE — no mail transport was live to carry it; retried while the
+      row is younger than `notify_undeliverable_retry_hours` once one is registered;
+    * DROPPED — the channel closed the row without a message and will not
+      reopen it: read in the app first, past the age window, digest opted out,
+      no mailbox, or refused past the retry ladder.
+    """
+
+    PENDING = "pending"
+    SENT = "sent"
+    UNDELIVERABLE = "undeliverable"
+    DROPPED = "dropped"
+
+
 class NotifyEvent(StrEnum):
     NOTIFICATION_CREATED = "notification.created"
+    #: RADD-1457: a queued email had no transport to carry it (payload: user, kind).
+    NOTIFICATION_UNDELIVERABLE = "notification.undeliverable"
     ITEM_WATCHED = "item.watched"
     ITEM_UNWATCHED = "item.unwatched"
 

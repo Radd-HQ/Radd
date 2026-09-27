@@ -378,7 +378,9 @@ async def test_queued_notification_is_dropped_after_access_revocation(db, monkey
     else:
         sent = await emailer.run_batch(db)
     assert sent == 0 and not captured
-    assert row.emailed_at is not None
+    from radd.modules.notify.types import NotificationDelivery
+
+    assert row.delivery == NotificationDelivery.DROPPED.value and row.emailed_at is None
 
 
 @pytest.mark.parametrize("key_scope", [{"global": []}, {"global": ["item.update@own"]}])

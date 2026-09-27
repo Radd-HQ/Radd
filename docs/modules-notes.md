@@ -147,7 +147,7 @@ The engine lives in `radd/backup/` (with the `python -m radd.backup` CLI) and im
 
 ### notify
 
-Owns `item_watchers`, the per-person `notifications` rows (stamped `inbox`/`email` when written) and `notification_rules`, sparse per-scope `{kind: channel}` maps. The consumer (`notify/consumer.py`) plans each event purely, picks the channel with the pure `rules.resolve` (the most specific scope with an opinion wins), then checks each recipient may read that row, so following never widens access. `service.create_notification` is the one write seam for every producer; `service.add_watchers` makes someone follow an issue. Pages, participant teams and mail reach notify only through sockets. Trap: mark-read touches inbox rows only, because the mailer skips read rows and an email-only row can never be opened.
+Owns `item_watchers`, the per-person `notifications` rows (`inbox`/`email` stamped at write, `delivery` settled by the mail loops) and `notification_rules`, sparse per-scope `{kind: channel}` maps. The consumer (`notify/consumer.py`) plans each event purely, picks the channel with the pure `rules.resolve` (the most specific scope with an opinion wins), then checks each recipient may read that row, so following never widens access. `service.create_notification` is the one write seam for every producer; `service.add_watchers` makes someone follow an issue. Pages, participant teams and mail reach notify only through sockets. Trap: mark-read touches inbox rows only, because the mailer skips read rows and an email-only row can never be opened.
 
 ### realtime
 

@@ -26,6 +26,12 @@ plugin = RaddPlugin(
             NotifyEvent.NOTIFICATION_CREATED, "Notification created", "System",
             trigger=False, entity_type="notification", audited=False,
         ),
+        # RADD-1457: the email had no transport to carry it — the row says so
+        # instead of claiming it was emailed; Monitoring can count these.
+        EventTypeSpec(
+            NotifyEvent.NOTIFICATION_UNDELIVERABLE, "Notification undeliverable", "System",
+            trigger=False, entity_type="notification", audited=False,
+        ),
         # Auto-watch emits too (`auto: true`); the watcher is a subject.
         EventTypeSpec(NotifyEvent.ITEM_WATCHED, "Item watched", "Items", item_scoped=True, subjects=("item", "user")),
         EventTypeSpec(NotifyEvent.ITEM_UNWATCHED, "Item unwatched", "Items", item_scoped=True, subjects=("item", "user")),

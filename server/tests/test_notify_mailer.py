@@ -44,6 +44,7 @@ from radd.modules.notify.types import (
     CONSUMER_NAME,
     RELATIONSHIP_SCOPES,
     Channel,
+    NotificationDelivery,
     NotificationType,
 )
 from radd.modules.participants import service as participants
@@ -114,13 +115,13 @@ def env_relay(monkeypatch):
 
 @pytest.fixture
 async def quiet_backlog(db):
-    """Stamp every pending notification: `run_batch` selects GLOBALLY, so another
-    test's committed row could be mailed here or push this test's rows out of the
-    batch. Inside the transaction, so it rolls back."""
+    """Drop every notification the channel still owes: `run_batch` selects
+    GLOBALLY, so another test's committed row could be mailed here or push this
+    test's rows out of the batch. Inside the transaction, so it rolls back."""
     await db.execute(
         update(Notification)
-        .where(Notification.emailed_at.is_(None))
-        .values(emailed_at=mailer.utcnow())
+        .where(Notification.delivery != NotificationDelivery.SENT.value)
+        .values(delivery=NotificationDelivery.DROPPED.value)
     )
 
 
@@ -434,7 +435,7 @@ async def test_which_types_mail_immediately_is_each_recipients_own_answer(
     # And what was not mailed is left UNSTAMPED: the digest is the other half of
     # the choice, not a fallback. Stamping here would silence it outright.
     unmailed = {
-        user.id: sorted(row.type for row in await _rows(db, user.id) if row.emailed_at is None)
+        user.id: sorted(row.type for row in await _rows(db, user.id) if row.delivery == NotificationDelivery.PENDING.value)
         for user in (only_comments, everything, inbox_only)
     }
     assert unmailed == {
@@ -448,8 +449,8 @@ async def test_inbox_only_still_reaches_the_mailbox_through_the_digest_once(
     db, world, relay, sender_row, quiet_backlog
 ):
     """`email_types: []` with the digest on still mails, once. The digest loop opens
-    its own session and cannot see uncommitted rows, so its SELECTION (`emailed_at IS
-    NULL`, verbatim) and composition are asserted: two rows in, two lines out."""
+    its own session and cannot see uncommitted rows, so its SELECTION (`delivery =
+    pending`, verbatim) and composition are asserted: two rows in, two lines out."""
     _agent, _project, item = world
     inbox_only = await make_user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
     await _channels(db, inbox_only, email_types=[])
@@ -463,7 +464,7 @@ async def test_inbox_only_still_reaches_the_mailbox_through_the_digest_once(
 
     result = await db.execute(
         select(Notification).where(
-            Notification.emailed_at.is_(None), Notification.user_id == inbox_only.id
+            Notification.delivery == NotificationDelivery.PENDING.value, Notification.user_id == inbox_only.id
         )
     )
     pending = list(result.scalars())
@@ -498,7 +499,7 @@ async def test_a_user_who_never_saved_a_preference_gets_the_default_set(
 
     (message,) = _addressed(relay, newcomer.email)
     assert "Ada Agent mentioned you in the comment" in _text(message)
-    unmailed = [row.type for row in await _rows(db, newcomer.id) if row.emailed_at is None]
+    unmailed = [row.type for row in await _rows(db, newcomer.id) if row.delivery == NotificationDelivery.PENDING.value]
     assert unmailed == [NotificationType.STATE_CHANGED.value]
 
 
@@ -551,7 +552,7 @@ async def test_a_preference_saved_before_the_type_existed_does_not_mail_it(
     assert _addressed(relay, settled.email) == []
     (row,) = await _rows(db, settled.id)
     assert row.type == NotificationType.PARTICIPANT_ADDED.value
-    assert row.emailed_at is None, "the digest can no longer see it"
+    assert row.delivery == NotificationDelivery.PENDING.value, "the digest can no longer see it"
 
 
 async def test_a_type_mailed_from_a_non_comment_event_does_not_crash_the_tick(
@@ -623,8 +624,8 @@ async def test_an_item_update_reaches_its_assignee_and_the_people_it_mentions(
 async def test_a_mailed_row_is_stamped_so_the_digest_never_repeats_it(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """The dedup between the two channels is `emailed_at`, which the digest's
-    selection already filters on — no new column, no new query."""
+    """The dedup between the two channels is `delivery`: a SENT row (the one
+    verdict that also sets `emailed_at`) is outside the digest's selection."""
     agent, project, item = world
     watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
     await notify_service.add_watchers(db, item.id, [watcher.id])
@@ -635,11 +636,11 @@ async def test_a_mailed_row_is_stamped_so_the_digest_never_repeats_it(
     await mailer.run_batch(db)
 
     (row,) = await _rows(db, watcher.id)
-    assert row.emailed_at is not None
+    assert row.delivery == NotificationDelivery.SENT.value and row.emailed_at is not None
     # The digest's own predicate, verbatim.
     pending = await db.execute(
         select(Notification.id).where(
-            Notification.emailed_at.is_(None), Notification.user_id == watcher.id
+            Notification.delivery == NotificationDelivery.PENDING.value, Notification.user_id == watcher.id
         )
     )
     assert list(pending.scalars()) == []
@@ -652,8 +653,8 @@ async def test_a_mailed_row_is_stamped_so_the_digest_never_repeats_it(
 async def test_a_type_the_recipient_did_not_ask_for_is_left_for_the_digest(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """A row the mailer skips must keep its `emailed_at` NULL, or the digest —
-    whose selection is exactly that — would never see it either and the
+    """A row the mailer skips must stay PENDING, or the digest — whose
+    selection is exactly that — would never see it either and the
     notification would reach nobody at all. The two channels are a partition."""
     _agent, _project, item = world
     watcher = await make_user(db, name="Ava", email=f"a-{uuid.uuid4().hex[:8]}@example.com")
@@ -663,7 +664,7 @@ async def test_a_type_the_recipient_did_not_ask_for_is_left_for_the_digest(
     assert await mailer.run_batch(db) == 0
 
     (row,) = await _rows(db, watcher.id)
-    assert row.emailed_at is None, "the digest can no longer see it"
+    assert row.delivery == NotificationDelivery.PENDING.value, "the digest can no longer see it"
     assert _addressed(relay, watcher.email) == []
 
 
@@ -692,7 +693,7 @@ async def test_a_recipient_with_no_mailbox_is_stamped_rather_than_retried_foreve
 
     for user in (departed, addressless):
         (row,) = await _rows(db, user.id)
-        assert row.emailed_at is not None
+        assert row.delivery == NotificationDelivery.DROPPED.value and row.emailed_at is None
     assert relay == []
 
 
@@ -727,7 +728,8 @@ async def test_a_service_account_is_stamped_without_the_relay_being_dialled(
 
     assert _FakeSmtp.dials == 0, "the relay was dialled for an address that does not receive"
     (row,) = await _rows(db, robot.id)
-    assert row.emailed_at is not None, "unstamped means the digest tries the same address"
+    assert row.delivery == NotificationDelivery.DROPPED.value, "left pending, the digest tries the same address"
+    assert row.emailed_at is None, "nothing was sent, so nothing says it was"
     # The control: the same batch, one line later, with a person on it.
     human = await make_user(db, name="Hana", email=f"h-{uuid.uuid4().hex[:8]}@example.com")
     await _notify(db, human, NotificationType.COMMENTED, item, excerpt="Any update?")
@@ -752,9 +754,11 @@ async def test_the_digest_skips_a_service_account_and_stamps_it(
 
     assert _addressed(relay, robot.email) == []
     assert len(_addressed(relay, human.email)) == 1
-    for user in (robot, human):
-        (row,) = await _rows(db, user.id)
-        assert row.emailed_at is not None, "the backlog must drain either way"
+    (robot_row,) = await _rows(db, robot.id)
+    (human_row,) = await _rows(db, human.id)
+    assert robot_row.delivery == NotificationDelivery.DROPPED.value, "the backlog must drain either way"
+    assert robot_row.emailed_at is None
+    assert human_row.delivery == NotificationDelivery.SENT.value and human_row.emailed_at is not None
 
 
 # --- every user-addressed email says how to stop it (RADD-985) ----------------
@@ -852,15 +856,15 @@ async def test_a_failed_send_waits_out_a_delay_instead_of_retrying_every_tick(
     assert await mailer.run_batch(db) == 1
 
     assert len(_addressed(relay, watcher.email)) == 1
-    assert row.emailed_at is not None
+    assert row.delivery == NotificationDelivery.SENT.value and row.emailed_at is not None
     assert row.email_attempts == 1, "a success does not rewrite what happened before it"
 
 
 async def test_the_ladder_ends_in_a_stamp_and_exactly_two_failure_events(
     db, world, relay, sender_row, quiet_backlog
 ):
-    """Giving up stamps the row — unstamped, the digest (`emailed_at IS NULL`) would
-    retry an address that refused four times. `mail.failed` fires on the FIRST and
+    """Giving up DROPS the row — left pending, the digest would retry an address
+    that refused four times. `mail.failed` fires on the FIRST and
     LAST failure only: it answers "did this person hear from us"."""
     _agent, _project, item = world
     watcher = await make_user(db, name="Wanda", email=f"w-{uuid.uuid4().hex[:8]}@example.com")
@@ -872,11 +876,12 @@ async def test_the_ladder_ends_in_a_stamp_and_exactly_two_failure_events(
         assert await mailer.run_batch(db) == 0
         (row,) = await _rows(db, watcher.id)
         assert row.email_attempts == attempt + 1
-        if row.emailed_at is None:
+        if row.delivery == NotificationDelivery.PENDING.value:
             row.email_next_try = mailer.utcnow() - timedelta(seconds=1)
             await db.flush()
 
-    assert row.emailed_at is not None, "the ladder must end, or the row lives for a day"
+    assert row.delivery == NotificationDelivery.DROPPED.value, "the ladder must end, or the row lives for a day"
+    assert row.emailed_at is None, "given up is not sent"
     assert row.email_attempts == len(retry.EMAIL_RETRY_DELAYS) + 1
     assert len(await _failures(db, item.id)) == 2
 
@@ -887,7 +892,7 @@ async def test_the_ladder_ends_in_a_stamp_and_exactly_two_failure_events(
     # …and not the digest, whose selection is exactly the stamp.
     pending = await db.execute(
         select(Notification.id).where(
-            Notification.emailed_at.is_(None), Notification.user_id == watcher.id
+            Notification.delivery == NotificationDelivery.PENDING.value, Notification.user_id == watcher.id
         )
     )
     assert list(pending.scalars()) == []
@@ -921,7 +926,8 @@ async def test_a_failed_digest_takes_the_same_ladder(
         await db.flush()
         assert await emailer.run_batch(db) == 0
 
-    assert row.emailed_at is not None, "an address that refuses forever is given up on"
+    assert row.delivery == NotificationDelivery.DROPPED.value, "an address that refuses forever is given up on"
+    assert row.emailed_at is None
 
 
 # --- transport ----------------------------------------------------------------
@@ -1146,7 +1152,7 @@ async def test_an_inbox_only_row_is_never_selected_by_the_mailer(
 ):
     """The other half of the partition, now decided in SQL rather than by a
     per-recipient pass in Python. What the mailer skips stays UNSTAMPED, so the
-    digest — whose selection is `emailed_at IS NULL` — still carries it."""
+    digest — whose selection is `delivery = pending` — still carries it."""
     _agent, _project, item = world
     quiet = await make_user(db, name="Cyd", email=f"c-{uuid.uuid4().hex[:8]}@example.com")
     await _cell(db, quiet, NotificationType.COMMENTED, Channel.INBOX)
@@ -1156,4 +1162,4 @@ async def test_an_inbox_only_row_is_never_selected_by_the_mailer(
     assert _addressed(relay, quiet.email) == []
     (row,) = await _rows(db, quiet.id)
     assert (row.inbox, row.email) == (True, False)
-    assert row.emailed_at is None, "the digest can no longer see it"
+    assert row.delivery == NotificationDelivery.PENDING.value, "the digest can no longer see it"

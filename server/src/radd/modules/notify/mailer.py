@@ -3,11 +3,16 @@
 A row has already passed planner precedence, the channel verdict and
 `consumer._allowed`; re-planning from the event would be a second copy of that
 policy. Only rows whose stamped verdict says `email` are selected; inbox-only
-rows are left for the digest. Sent rows are stamped `emailed_at`, which the
-digest's selection already skips, so the two channels never double-send.
+rows are left for the digest. Every row ends with a `delivery` verdict
+(`NotificationDelivery`): SENT (and `emailed_at`, the moment the transport
+accepted it) or DROPPED, and both loops select on it, so the two channels never
+double-send.
 
 Delivery is the kernel `MAIL_TRANSPORT` socket (`transport.py`). With no
-transport, pending rows are stamped undeliverable and the inbox is untouched.
+transport, pending rows are recorded UNDELIVERABLE (`notification.undeliverable`
+is emitted per row) and the inbox is untouched; once a transport is registered
+the next batch retries the rows still younger than
+`notify_undeliverable_retry_hours`.
 """
 
 from __future__ import annotations
@@ -15,9 +20,9 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Mapping
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd import mailrender
@@ -35,7 +40,7 @@ from . import lines, retry, service, transport as mail
 from .authorization import notification_readable
 from .models import Notification
 from .transport import MailFailureReport, NotificationMail, NotificationMailKind
-from .types import NotificationType
+from .types import NotificationDelivery, NotificationType, NotifyEntity, NotifyEvent
 
 logger = logging.getLogger(__name__)
 
@@ -51,29 +56,33 @@ async def run_once() -> int:
 async def run_batch(session: AsyncSession) -> int:
     """Mail one batch of pending immediate-email notifications. The caller owns
     the commit, so a test can drive the whole tick against uncommitted rows."""
-    rows = await _pending(session)
+    transport = mail.mail_transport()
+    # With a transport live, rows recorded undeliverable while there was none get
+    # their retry; without one, only rows not yet recorded are selected, so the
+    # same rows are not recorded (and announced) again every tick.
+    rows = await _pending(session, retry_undeliverable=transport is not None)
     if not rows:
         return 0
-    transport = mail.mail_transport()
     if transport is None:
         await record_undeliverable(session, rows, NotificationMailKind.NOTIFICATION)
         return 0
     if not await transport.configured(session):
-        # Nothing to send FROM. Leave the rows unstamped: the digest loop is
-        # gated the same way and will stamp them when it can.
+        # Nothing to send FROM. Leave the rows pending: the digest loop is
+        # gated the same way and will settle them when it can.
         return 0
     actor_names = await _actor_names(session, rows)
     users = await auth.users_by_ids(session, {row.user_id for row in rows})
     now = utcnow()
     sent = 0
-    stamped: list[uuid.UUID] = []
+    delivered: list[uuid.UUID] = []
+    dropped: list[uuid.UUID] = []
     for row in rows:
         user = users.get(row.user_id)
         if not service.mailable_user(user) or not await notification_readable(session, row, user):
             # Inactive, address-less, a spec-113 SERVICE account or the system
             # actor (RADD-996) — none of them a mailbox. Nowhere to send it;
             # never retry it.
-            stamped.append(row.id)
+            dropped.append(row.id)
             continue
         if await _send(
             session,
@@ -84,23 +93,59 @@ async def run_batch(session: AsyncSession) -> int:
             failure=retry.failure_report(row.email_attempts),
         ):
             sent += 1
-            stamped.append(row.id)
+            delivered.append(row.id)
         elif retry.record_failure(row, now):
-            # RADD-997: a delivery failure retries on the ladder; exhausted, stamp.
-            stamped.append(row.id)
-    if stamped:
-        await session.execute(
-            update(Notification).where(Notification.id.in_(stamped)).values(emailed_at=now)
-        )
+            # RADD-997: a delivery failure retries on the ladder; exhausted, drop.
+            dropped.append(row.id)
+    await settle(session, delivered, NotificationDelivery.SENT, sent_at=now)
+    await settle(session, dropped, NotificationDelivery.DROPPED)
     return sent
 
 
-async def _pending(session: AsyncSession) -> list[Notification]:
-    """Rows whose stamped verdict says EMAIL, unemailed, unread and recent
-    (`notify_email_max_age_hours` — a worker down for a week must not flush its
-    backlog; stale rows are the digest's to stamp), and not backed off. The
-    backoff is in SQL so failing rows cannot fill `notify_mail_batch` and starve
-    healthy ones (RADD-997).
+def eligible(now: datetime, *, retry_undeliverable: bool):
+    """The SQL for "the email channel still owes this row an answer": PENDING, or —
+    with a transport live — recorded UNDELIVERABLE while there was none and still
+    inside `notify_undeliverable_retry_hours`. Shared with the digest so the two
+    loops cannot disagree about which rows are theirs."""
+    pending = Notification.delivery == NotificationDelivery.PENDING.value
+    if not retry_undeliverable:
+        return pending
+    retry_cutoff = now - timedelta(hours=settings.notify_undeliverable_retry_hours)
+    return or_(
+        pending,
+        and_(
+            Notification.delivery == NotificationDelivery.UNDELIVERABLE.value,
+            Notification.created_at >= retry_cutoff,
+        ),
+    )
+
+
+async def settle(
+    session: AsyncSession,
+    ids: list[uuid.UUID],
+    outcome: NotificationDelivery,
+    *,
+    sent_at: datetime | None = None,
+) -> None:
+    """Record the channel's verdict on `ids`. `emailed_at` comes with SENT and with
+    nothing else: it says when a transport accepted the message, so a row that was
+    dropped or never carried keeps it NULL."""
+    if (outcome is NotificationDelivery.SENT) != (sent_at is not None):
+        raise ValueError("emailed_at is set by a SENT verdict, and only by one")
+    if not ids:
+        return
+    values: dict[str, object] = {"delivery": outcome.value}
+    if sent_at is not None:
+        values["emailed_at"] = sent_at
+    await session.execute(update(Notification).where(Notification.id.in_(ids)).values(**values))
+
+
+async def _pending(session: AsyncSession, *, retry_undeliverable: bool) -> list[Notification]:
+    """Rows whose stamped verdict says EMAIL, owed an answer (`eligible`), unread
+    and recent (`notify_email_max_age_hours` — a worker down for a week must not
+    flush its backlog; stale rows are the digest's to drop), and not backed off.
+    The backoff is in SQL so failing rows cannot fill `notify_mail_batch` and
+    starve healthy ones (RADD-997).
     """
     now = utcnow()
     cutoff = now - timedelta(hours=settings.notify_email_max_age_hours)
@@ -108,7 +153,7 @@ async def _pending(session: AsyncSession) -> list[Notification]:
         select(Notification)
         .where(
             Notification.email.is_(True),
-            Notification.emailed_at.is_(None),
+            eligible(now, retry_undeliverable=retry_undeliverable),
             Notification.read_at.is_(None),
             Notification.created_at >= cutoff,
             or_(
@@ -134,17 +179,32 @@ async def _actor_names(
 async def record_undeliverable(
     session: AsyncSession, rows: list[Notification], kind: NotificationMailKind
 ) -> None:
-    """No transport: stamp the rows (the channel is finished with them — not a
-    claim anything was sent) so a returning mail plugin cannot flush a backlog.
-    The inbox half is untouched. Public: the digest records its rows the same way."""
-    await session.execute(
-        update(Notification)
-        .where(Notification.id.in_([row.id for row in rows]))
-        .values(emailed_at=utcnow())
-    )
+    """No transport: record the rows UNDELIVERABLE — a verdict, not a claim that
+    anything was sent (`emailed_at` stays NULL) — and say so with one
+    `notification.undeliverable` event per row. A returning transport retries
+    them while they are inside `notify_undeliverable_retry_hours` and no longer;
+    only rows still PENDING are recorded, so a row is announced once. The inbox
+    half is untouched. Public: the digest records its rows the same way."""
+    fresh = [row for row in rows if row.delivery == NotificationDelivery.PENDING.value]
+    if not fresh:
+        return
+    await settle(session, [row.id for row in fresh], NotificationDelivery.UNDELIVERABLE)
+    for row in fresh:
+        await events.emit(
+            session,
+            event_type=NotifyEvent.NOTIFICATION_UNDELIVERABLE,
+            entity_type=NotifyEntity.NOTIFICATION,
+            entity_id=row.id,
+            payload={
+                "user_id": str(row.user_id),
+                "type": row.type,
+                "item_id": str(row.item_id) if row.item_id else None,
+                "kind": kind.value,
+            },
+        )
     logger.info(
         "notify: no mail transport registered — %d %s email(s) recorded undeliverable",
-        len(rows),
+        len(fresh),
         kind.value,
     )
 

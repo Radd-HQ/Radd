@@ -5,10 +5,13 @@ plugin manager does (`registries.unregister_plugin`):
 * pages withdrawn — a page comment plans nothing and does not raise, a queued page
   row fails the mail re-check; registered, the event reaches the page's watcher;
 * mailintake withdrawn — an email-channel notification still lands in the inbox and
-  both mail loops record it UNDELIVERABLE (relay never dialled), not held.
+  both mail loops record it UNDELIVERABLE (relay never dialled, `emailed_at` NULL,
+  one `notification.undeliverable` each); registered again, the next batch carries
+  the rows still inside the retry window and leaves the older ones as they were.
 """
 
 import uuid
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import select, update
@@ -29,7 +32,8 @@ from radd.modules.mailintake.models import MailSender
 from radd.modules.notify import consumer, emailer, mailer, service as notify_service
 from radd.modules.notify.authorization import notification_readable
 from radd.modules.notify.models import Notification
-from radd.modules.notify.types import NotificationType
+from radd.modules.notify.transport import NotificationMailKind
+from radd.modules.notify.types import NotificationDelivery, NotificationType, NotifyEvent
 from radd.modules.pages import plugin as pages_plugin, service as pages_service, spaces
 from radd.modules.pages import watchers as page_watchers
 from radd.modules.pages.schemas import PageCreate, PageSpaceCreate
@@ -77,10 +81,12 @@ def relay(monkeypatch):
 
 
 async def _quiet(db) -> None:
-    """Both loops select GLOBALLY: stamp what other tests left pending, and
-    disable their sender rows — inside this transaction, so it rolls back."""
+    """Both loops select GLOBALLY: drop what other tests left the channel owing,
+    and disable their sender rows — inside this transaction, so it rolls back."""
     await db.execute(
-        update(Notification).where(Notification.emailed_at.is_(None)).values(emailed_at=mailer.utcnow())
+        update(Notification)
+        .where(Notification.delivery != NotificationDelivery.SENT.value)
+        .values(delivery=NotificationDelivery.DROPPED.value)
     )
     await db.execute(update(MailSender).values(enabled=False))
 
@@ -141,8 +147,16 @@ async def test_a_withdrawn_wiki_notifies_nobody_and_a_registered_one_its_watcher
         registries.register_plugin(pages_plugin)
 
 
+async def _undeliverable_events(db, after: int) -> dict[uuid.UUID, str]:
+    return {
+        uuid.UUID(event.entity_id): event.payload["kind"]
+        for event in await events_service.read_after(db, after, 500)
+        if event.event_type == NotifyEvent.NOTIFICATION_UNDELIVERABLE.value
+    }
+
+
 async def test_without_a_transport_email_is_recorded_undeliverable_and_the_inbox_is_not(
-    db, relay
+    db, relay, monkeypatch
 ):
     await _quiet(db)
     agent, assignee = (
@@ -177,21 +191,58 @@ async def test_without_a_transport_email_is_recorded_undeliverable_and_the_inbox
         assert await emailer.run_batch(db) == 0
         await db.refresh(row)
         await db.refresh(digest_row)
-        assert row.emailed_at is not None and digest_row.emailed_at is not None, (
-            "recorded undeliverable, not held for a transport that may never return"
-        )
+        for undeliverable in (row, digest_row):
+            assert undeliverable.delivery == NotificationDelivery.UNDELIVERABLE.value
+            assert undeliverable.emailed_at is None, "recorded undeliverable, not as emailed"
+        assert await _undeliverable_events(db, head) == {
+            row.id: NotificationMailKind.NOTIFICATION.value,
+            digest_row.id: NotificationMailKind.DIGEST.value,
+        }
+        # The next tick without a transport has nothing new to record or announce.
+        assert await mailer.run_batch(db) == 0 and await emailer.run_batch(db) == 0
+        assert len(await _undeliverable_events(db, head)) == 2
         assert relay.dials == 0
         inbox = await notify_service.list_notifications(db, assignee.id)
         assert {n.id for n in inbox} == {row.id, digest_row.id}
     finally:
         registries.register_plugin(mailintake_plugin)
 
-    # The control: registered, the same shape of row goes out — so the zero
-    # above is the missing transport and not an unmailable row.
+    # Registered again: the next batch carries the rows recorded undeliverable —
+    # the mailer the email-channel row, the digest the inbox-only one — beside a
+    # fresh row (the control: the zero above was the missing transport, not an
+    # unmailable row), and only a send sets `emailed_at`.
     again = await notify_service.create_notification(
         db, user_id=assignee.id, type_=NotificationType.ASSIGNED, event_id=None,
         item_id=item.id, actor_id=agent.id, payload={"item_key": item.key, "item_title": item.title},
     )
     assert again is not None and again.email
-    assert await mailer.run_batch(db) == 1
-    assert relay.dials == 1
+    assert await mailer.run_batch(db) == 2
+    assert relay.dials == 2
+    await db.refresh(row)
+    assert row.delivery == NotificationDelivery.SENT.value and row.emailed_at is not None
+    assert await emailer.run_batch(db) == 1
+    assert relay.dials == 3
+    await db.refresh(digest_row)
+    assert digest_row.delivery == NotificationDelivery.SENT.value and digest_row.emailed_at is not None
+
+    # A row recorded undeliverable longer ago than the retry window is not retried:
+    # a transport re-enabled after a week must not flush a week of mail.
+    monkeypatch.setattr(settings, "notify_undeliverable_retry_hours", 1)
+    stale = await notify_service.create_notification(
+        db, user_id=assignee.id, type_=NotificationType.ASSIGNED, event_id=None,
+        item_id=item.id, actor_id=agent.id, payload={"item_key": item.key, "item_title": item.title},
+    )
+    registries.unregister_plugin(mailintake_plugin)
+    try:
+        assert await mailer.run_batch(db) == 0
+    finally:
+        registries.register_plugin(mailintake_plugin)
+    await db.execute(
+        update(Notification)
+        .where(Notification.id == stale.id)
+        .values(created_at=mailer.utcnow() - timedelta(hours=2))
+    )
+    assert await mailer.run_batch(db) == 0 and await emailer.run_batch(db) == 0
+    await db.refresh(stale)
+    assert stale.delivery == NotificationDelivery.UNDELIVERABLE.value and stale.emailed_at is None
+    assert relay.dials == 3

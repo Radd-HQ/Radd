@@ -143,6 +143,10 @@ class Settings(BaseSettings):
     # `emailed_at` so the digest skips them.
     notify_mail_poll_interval: float = 5.0
     notify_mail_batch: int = 100
+    # RADD-1457: a row recorded undeliverable (no mail transport was live) is retried by the
+    # next batch once a transport is registered, while it is younger than this; older rows
+    # stay undeliverable, so a mail plugin re-enabled after a week flushes no backlog.
+    notify_undeliverable_retry_hours: int = 24
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_username: str = ""

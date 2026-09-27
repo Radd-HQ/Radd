@@ -33,7 +33,7 @@ from radd.modules.mailintake.types import MailEvent, MailSenderKind
 from radd.modules.notify import emailer, service as notify_service
 from radd.modules.notify.models import Notification
 from radd.modules.notify.transport import MailFailureReport, NotificationMailKind
-from radd.modules.notify.types import NotificationType
+from radd.modules.notify.types import NotificationDelivery, NotificationType
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 
@@ -129,12 +129,14 @@ async def world(db):
 
 @pytest.fixture
 async def quiet_backlog(db):
-    """Stamp every notification already pending. `run_batch` selects GLOBALLY,
+    """Drop every notification already pending. `run_batch` selects GLOBALLY,
     exactly as the loop does, so a row another file committed would otherwise be
     mailed here — and could fill the batch and push this file's own rows out of
     it, producing a failure that depends on which tests ran first."""
     await db.execute(
-        update(Notification).where(Notification.emailed_at.is_(None)).values(emailed_at=utcnow())
+        update(Notification)
+        .where(Notification.delivery != NotificationDelivery.SENT.value)
+        .values(delivery=NotificationDelivery.DROPPED.value)
     )
 
 

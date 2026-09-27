@@ -2,8 +2,8 @@
 
 A failed send used to stay selectable on the next 5-second tick for the whole
 24-hour age window. Each failure now bumps `email_attempts` and sets
-`email_next_try`; past the last rung the row is STAMPED `emailed_at` (not
-given a far-future retry), because the digest selects `emailed_at IS NULL` and
+`email_next_try`; past the last rung the row is DROPPED (`delivery`, not a
+far-future retry), because the digest selects the rows still owed an answer and
 would otherwise retry an address that already refused four times. The ladder
 is a module constant: a policy shape, not an operator knob.
 """
@@ -49,7 +49,7 @@ def failure_report(attempts: int) -> MailFailureReport:
 
 
 def record_failure(row: Notification, now: datetime) -> bool:
-    """Bank one failed send against `row`; True = exhausted, the caller STAMPS
+    """Bank one failed send against `row`; True = exhausted, the caller DROPS
     it. Shared so the two loops cannot drift."""
     next_try = after_failure(row.email_attempts, now)
     row.email_attempts += 1

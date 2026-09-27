@@ -3,8 +3,8 @@
 Notify decides who is mailed what; a transport (today `mailintake`) carries it.
 The shared vocabulary is notify's: `NotificationMailKind`, and what a failure
 means to a retry ladder (`MailFailureReport`). No transport = no email: both
-loops stamp pending rows undeliverable, so re-enabling a mail plugin does not
-flush a backlog.
+loops record pending rows UNDELIVERABLE, and a re-enabled mail plugin picks up
+only the rows still inside `notify_undeliverable_retry_hours`, never a backlog.
 """
 
 from __future__ import annotations

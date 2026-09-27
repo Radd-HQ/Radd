@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from radd.db import Base
 
+from .types import NotificationDelivery
+
 
 class ItemWatcher(Base):
     """A user following an item — added manually or auto-watched (assign/comment/create)."""
@@ -48,6 +50,13 @@ class Notification(Base):
     inbox: Mapped[bool] = mapped_column(default=True, server_default="true")
     email: Mapped[bool] = mapped_column(default=False, server_default="false")
     read_at: Mapped[datetime | None]
+    #: RADD-1457: the email channel's verdict (`NotificationDelivery`); the mail
+    #: loops select on it. `emailed_at` is set only when a transport accepted it.
+    delivery: Mapped[str] = mapped_column(
+        String(20),
+        default=NotificationDelivery.PENDING.value,
+        server_default=NotificationDelivery.PENDING.value,
+    )
     emailed_at: Mapped[datetime | None]
     # RADD-997: send backoff (`retry.py`); NULL next_try = eligible now.
     email_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
