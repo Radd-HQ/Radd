@@ -127,6 +127,11 @@ class Settings(BaseSettings):
     # Event-cascade consumer (see radd/modules/events/cascade.py) — events read
     # per iteration when draining kernel-registered cascades.
     event_cascade_batch: int = 50
+    # RADD-1452: how far back (in event ids) the trigger inspector looks for a real
+    # ref of a subject type (`events.latest_ref`). The lookup has no payload index;
+    # with the declaring event types and this window it is a bounded PK range scan
+    # instead of a walk over the whole ledger per subject per inspector open.
+    events_latest_ref_scan_rows: int = 50_000
 
     # Notifications (see radd/modules/notify)
     notify_poll_interval: float = 1.0
@@ -173,6 +178,10 @@ class Settings(BaseSettings):
     # Search indexer (see radd/modules/search)
     search_poll_interval: float = 1.0
     search_batch: int = 200
+    # RADD-1327/1452: a declared entity's search (kernel/entities.py) reads candidate
+    # rows in batches of max(50, limit * this) before the read gate trims them — the
+    # gate runs per row, so the scan is bounded, not the result.
+    entity_search_scan_factor: int = 5
 
     # Attachments (see radd/modules/attachments). Storage backend: "filesystem"
     # (default; attachments_dir) or "s3" (any S3-compatible store — Garage, AWS).

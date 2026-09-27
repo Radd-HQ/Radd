@@ -5,6 +5,7 @@ import uuid
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.db import ilike_term
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -61,7 +62,7 @@ async def link_search(
         query = query.where(WorkItem.id != exclude_id)
     term = q.strip()
     if term:
-        conditions = [WorkItem.title.ilike(f"%{term}%")]
+        conditions = [WorkItem.title.ilike(ilike_term(term))]
         number = _search_number(term)
         if number is not None:
             conditions.append(WorkItem.number == number)

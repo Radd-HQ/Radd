@@ -29,11 +29,23 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
 
+#: The LIKE escape character every pattern this codebase builds relies on —
+#: Postgres's default, so a bare `.ilike(pattern)` reads it without `escape=`.
+LIKE_ESCAPE = "\\"
+
+
+def escape_like(text: str) -> str:
+    """User text as a LIKE literal: `%`, `_` and the escape itself escaped
+    (RADD-883, RADD-1452). The one escape helper — the SLQ dialects re-export it
+    from `items.slq`, the kernel's entity search and every directory read it here —
+    so `a_b` matches `a_b` and never `aXb`."""
+    return text.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2).replace("%", r"\%").replace("_", r"\_")
+
+
 def ilike_term(q: str) -> str:
     """A user-supplied search term as a contains-ILIKE pattern, wildcards
-    escaped (RADD-883) — searching for "100%" must not match everything."""
-    escaped = q.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
-    return f"%{escaped}%"
+    escaped — searching for "100%" must not match everything."""
+    return f"%{escape_like(q.strip())}%"
 
 
 def _connect_args() -> dict[str, str]:

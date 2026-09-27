@@ -11,6 +11,9 @@ from typing import Any
 
 from sqlalchemy import ColumnElement, not_
 
+# Re-exported (RADD-1452): the SLQ dialects' LIKE escaping is `radd.db`'s, the same
+# helper the kernel's entity search and every directory use — one definition.
+from radd.db import LIKE_ESCAPE, escape_like  # noqa: F401
 from radd.modules.fields.models import FieldDefinition
 
 from ..filters import NONE_LITERAL
@@ -27,7 +30,6 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TODAY_LITERAL = "today"
 RELATIVE_DATE_RE = re.compile(r"^today(?:(?P<sign>[+-])(?P<count>\d+)(?P<unit>[dw]))?$")
 RELATIVE_UNIT_DAYS = {"d": 1, "w": 7}
-LIKE_ESCAPE = "\\"
 
 
 @dataclass(frozen=True)
@@ -218,7 +220,3 @@ def compare(column: ColumnElement[Any], op: CompareOp, value: Any) -> ColumnElem
         case CompareOp.LE:
             return column <= value
     raise TypeError(op)  # pragma: no cover
-
-
-def escape_like(text: str) -> str:
-    return text.replace(LIKE_ESCAPE, LIKE_ESCAPE * 2).replace("%", r"\%").replace("_", r"\_")

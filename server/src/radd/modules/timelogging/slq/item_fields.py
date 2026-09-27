@@ -6,6 +6,7 @@ Itemless worklogs never match."""
 from sqlalchemy import or_, select
 from sqlalchemy.sql import Select
 
+from radd.db import escape_like
 from radd.kernel import SlqFieldContext
 from radd.modules.auth.models import User
 
@@ -26,6 +27,7 @@ def logged_by_item_ids(contains: bool, value: str, ctx: SlqFieldContext) -> Sele
 
     stmt = stmt.join(User, User.id == Worklog.author_id)
     if contains:
-        needle = f"%{value}%"
+        needle = f"%{escape_like(value)}%"
         return stmt.where(or_(User.email.ilike(needle), User.name.ilike(needle)))
-    return stmt.where(or_(User.email.ilike(value), User.name.ilike(value)))
+    exact = escape_like(value)
+    return stmt.where(or_(User.email.ilike(exact), User.name.ilike(exact)))

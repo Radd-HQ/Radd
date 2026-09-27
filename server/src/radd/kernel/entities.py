@@ -38,7 +38,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.db import Base, get_session
+from radd.db import Base, get_session, ilike_term
 
 from . import changes as changes_module
 from .hosts import entity_host
@@ -171,11 +171,6 @@ def _ref_builder(spec: EntitySpec, model: type):
     return ref
 
 
-#: How many candidate rows a derived search reads before the read gate trims
-#: them — the gate runs per row, so the scan is bounded, not the result.
-SEARCH_SCAN_FACTOR = 5
-
-
 def _search_builder(spec: EntitySpec, model: type):
     """A `SearchableSpec.search` for a declared entity (RADD-1327): a
     case-insensitive match on the naming field and any text field, filtered
@@ -187,10 +182,13 @@ def _search_builder(spec: EntitySpec, model: type):
     text_fields = [f.name for f in spec.fields if f.type == "text" and f.name != label_field]
 
     async def search(session, actor, q: str, limit: int = 10) -> list[dict]:
+        from radd.config import settings
+
         needle = q.strip()
         if not needle or label_field is None:
             return []
-        term = f"%{needle}%"
+        # Wildcards escaped (RADD-1452): `a_b` finds `a_b`, not every `aXb`.
+        term = ilike_term(needle)
         columns = [getattr(model, label_field), *(getattr(model, name) for name in text_fields)]
         stmt = (
             select(model)
@@ -203,7 +201,7 @@ def _search_builder(spec: EntitySpec, model: type):
             stmt = stmt.where(model.project_id.in_(project_ids))
             # Scan in bounded batches until enough authorized matches exist.
             # Limiting candidates once makes private rows hide readable results.
-            batch_size = max(50, limit * SEARCH_SCAN_FACTOR)
+            batch_size = max(50, limit * settings.entity_search_scan_factor)
             offset = 0
             while len(rows) < limit:
                 batch = list((await session.scalars(stmt.limit(batch_size).offset(offset))).all())

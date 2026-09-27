@@ -5,9 +5,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd.config import settings
 from radd.db import ilike_term
 from radd.kernel import changes as kchanges, registries
 
@@ -160,16 +161,46 @@ async def read_after(session: AsyncSession, after: int, limit: int) -> list[Even
     return list(result.scalars())
 
 
-async def latest_ref(session: AsyncSession, entity_type: str) -> dict[str, Any] | None:
-    """The most recent subject REF of this entity type any event carried
-    (RADD-1331) — a real `{id, key, title, …}` to show which fields a ref of
-    that type has, without inventing one. None when no event ever named one."""
-    row = await session.scalar(
+def declaring_event_types(entity_type: str) -> list[str]:
+    """The registered event types that carry a ref of `entity_type`: those that
+    name it in `subjects`, and those ABOUT it (`emit` adds the event's own
+    entity as a subject when a ref spec exists)."""
+    return sorted(
+        event_type
+        for event_type, spec in registries.event_types.items()
+        if entity_type in spec.subjects or spec.entity_type == entity_type
+    )
+
+
+def latest_ref_statement(entity_type: str, *, newest_id: int) -> Select | None:
+    """The bounded lookup behind `latest_ref` (RADD-1452): only the event types
+    that declare the subject, within the newest `events_latest_ref_scan_rows`
+    ids — a PK range scan, not a walk over the whole ledger. None when no
+    registered type carries the subject, so nothing is queried at all."""
+    declaring = declaring_event_types(entity_type)
+    if not declaring:
+        return None
+    return (
         select(Event.payload[entity_type])
-        .where(Event.payload.has_key(entity_type))
+        .where(
+            Event.event_type.in_(declaring),
+            Event.id > newest_id - settings.events_latest_ref_scan_rows,
+            Event.payload.has_key(entity_type),
+        )
         .order_by(Event.id.desc())
         .limit(1)
     )
+
+
+async def latest_ref(session: AsyncSession, entity_type: str) -> dict[str, Any] | None:
+    """The most recent subject REF of this entity type a recent event carried
+    (RADD-1331) — a real `{id, key, title, …}` to show which fields a ref of
+    that type has, without inventing one. None when no recent event named one."""
+    newest_id = await session.scalar(select(func.max(Event.id)))
+    statement = latest_ref_statement(entity_type, newest_id=newest_id) if newest_id is not None else None
+    if statement is None:
+        return None
+    row = await session.scalar(statement)
     return row if isinstance(row, dict) and row.get("id") else None
 
 

@@ -72,3 +72,33 @@ def test_the_registry_holds_issues_pages_and_the_derived_milestone():
     assert searchables["milestone"].mentionable is True
     # The entity ref carries the url a mention and an audit entry link to.
     assert registries.entity_refs["milestone"].url == "/milestones#milestone-{id}"
+
+
+async def test_a_search_for_a_underscore_b_does_not_match_a_x_b(db):
+    """RADD-1452: the needle is a LIKE literal — `_` and `%` in what someone typed
+    are characters, not wildcards."""
+    from radd.db import LIKE_ESCAPE, escape_like, ilike_term
+
+    assert escape_like("a_b 100% c\\d") == "a\\_b 100\\% c\\\\d"
+    assert ilike_term(" a_b ") == "%a\\_b%"
+    assert LIKE_ESCAPE == "\\"
+
+    admin = User(email=f"ms-{uuid.uuid4().hex[:8]}@example.com", name="Reader", instance_role=InstanceRole.ADMIN.value)
+    db.add(admin)
+    await db.flush()
+    project = await projects_service.create_project(
+        db, ProjectCreate(key=f"MS{uuid.uuid4().hex[:4].upper()}", name="Milestones")
+    )
+    stem = uuid.uuid4().hex[:6]
+    model = kentities.model_for("milestone")
+    literal = model(project_id=project.id, title=f"{stem}a_b launch", status="open")
+    wildcard = model(project_id=project.id, title=f"{stem}aXb launch", status="open")
+    db.add_all([literal, wildcard])
+    await db.flush()
+
+    found = await _search(db, admin, f"{stem}a_b", types="milestone")
+    [group] = found.groups
+    assert [hit.id for hit in group.hits] == [str(literal.id)]
+    # And the wildcard-shaped title is still found by its own text.
+    found = await _search(db, admin, f"{stem}aXb", types="milestone")
+    assert [hit.id for hit in found.groups[0].hits] == [str(wildcard.id)]

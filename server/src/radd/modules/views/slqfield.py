@@ -15,6 +15,8 @@ actor could already read.
 
 import uuid
 
+from radd.db import escape_like
+
 from sqlalchemy import false, select
 from sqlalchemy.sql import Select
 
@@ -35,5 +37,5 @@ def roadmap_member_item_ids(contains: bool, value: str, ctx: SlqFieldContext) ->
             pass
     stmt = stmt.join(View, View.id == ViewMember.view_id)
     if contains:
-        return stmt.where(View.name.ilike(f"%{value}%"))
-    return stmt.where(View.name.ilike(value))
+        return stmt.where(View.name.ilike(f"%{escape_like(value)}%"))
+    return stmt.where(View.name.ilike(escape_like(value)))

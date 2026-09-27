@@ -11,7 +11,9 @@ from a real ref of that type (never an invented one).
 import importlib
 import uuid
 
+from sqlalchemy.dialects import postgresql
 
+from radd.config import settings
 from radd.modules.auth.models import User
 from radd.modules.automations import samples
 from radd.modules.events import service as events
@@ -55,3 +57,29 @@ def test_schema_paths_walk_nested_objects_and_arrays():
     }}
     found = {entry.path: entry.repeated for entry in samples.schema_paths(schema)}
     assert found == {"ci.state": False, "ci.url": False, "changes.field": True, "changes.to": True, "repo": False}
+
+
+def test_the_latest_ref_lookup_is_bounded_to_declaring_types_and_a_recent_window():
+    """RADD-1452: `payload ? subject` has no index, so the lookup filters by the
+    event types that declare the subject (indexed) and a window of recent ids
+    (the primary key) — never a walk over the whole ledger."""
+    from radd.kernel import load_plugins
+
+    load_plugins(settings.modules)
+    declaring = events.declaring_event_types("item")
+    assert "item.updated" in declaring and "gitlab.merge_request.merged" in declaring
+    assert not any(et.startswith(("page.", "comment.")) for et in declaring), "those carry no item ref"
+
+    statement = events.latest_ref_statement("item", newest_id=1_000_000)
+    compiled = statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    sql = str(compiled)
+    assert "events.event_type IN (" in sql and "'item.updated'" in sql
+    assert f"events.id > {1_000_000 - settings.events_latest_ref_scan_rows}" in sql
+    assert "ORDER BY events.id DESC" in sql and "LIMIT 1" in sql
+
+    # A subject no registered event type carries is not queried at all.
+    assert events.latest_ref_statement("no_such_subject", newest_id=1_000_000) is None
+
+
+async def test_an_undeclared_subject_and_an_empty_ledger_answer_none(db):
+    assert await events.latest_ref(db, "no_such_subject") is None
