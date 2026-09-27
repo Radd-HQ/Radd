@@ -17,10 +17,8 @@ import {
 } from "../../lib/types";
 import { ApiPath as Api, apiStatePath as statePath } from "../../lib/constants";
 import { Modal } from "../../components/Modal";
-import { useCurrentUser } from "../../lib/hooks";
-import { InstanceRole } from "../../lib/types";
 import { Button } from "../../components/Button";
-import { EmptyState, TableSkeleton, IconButton, ErrorText } from "@radd/plugin-sdk";
+import { EmptyState, TableSkeleton, IconButton, ErrorText, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { Select } from "../../components/Select";
 import { SelectField } from "../../components/SelectField";
 import { TextField } from "../../components/TextField";
@@ -42,8 +40,7 @@ export function StatesSettingsPage({ projectId }: { projectId?: string }) {
   const canManage = perms.project(project, Permission.stateManage);
   const states = useQuery({ ...statesQuery(projectId ?? ""), enabled: Boolean(projectId) });
   const categories = useQuery(stateCategoriesQuery());
-  const me = useCurrentUser();
-  const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
+  const isInstanceAdmin = useIsInstanceAdmin();
   const sorted = useMemo(
     () => [...(states.data ?? [])].sort((a, b) => a.position - b.position),
     [states.data],

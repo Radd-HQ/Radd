@@ -443,6 +443,17 @@ test('plugin UIs ask the SDK whether the user is an instance admin, never `insta
   assert(reads('web/packages/plugin-sdk/src/hooks.ts').length>0,'the scan must see the SDK\'s own read');
   const found=[...files('server/src/radd/modules'),...files('examples')].filter(f=>f.includes('/ui/src/')).flatMap(reads);
   assert.deepEqual(found,[]);
+  // RADD-1464: the host's own pages are held to the same rule. Two files may name the column: the
+  // type that declares it, and the Users page, which EDITS other accounts' ladder — reading a row's
+  // `instance_role` there is the feature, not a permission check. Its gate on the caller is the hook.
+  const hostAllowed=new Set(['web/src/lib/types/users.ts','web/src/routes/settings/users.tsx']);
+  const hostFound=files('web/src').filter(f=>!hostAllowed.has(f)).flatMap(reads);
+  assert.deepEqual(hostFound,[]);
+  const users=nodes('web/src/routes/settings/users.tsx');
+  assert(users.some(n=>n.type==='CallExpression'&&n.callee?.name==='useIsInstanceAdmin'),'the Users page gates on the hook');
+  const callerReads=users.filter(n=>['MemberExpression','OptionalMemberExpression'].includes(n.type)&&n.property?.name==='instance_role'&&n.object?.name==='me');
+  assert.deepEqual(callerReads.map(n=>n.loc.start.line),[],'the Users page never reads the caller\'s column');
+  assert(reads('web/src/routes/settings/users.tsx').length>0,'the allowance is not stale: the ladder still reads rows');
 });
 
 test('every plugin nav icon is a name the one icon registry ships (RADD-1390)',()=>{

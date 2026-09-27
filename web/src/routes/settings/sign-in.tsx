@@ -1,8 +1,7 @@
 import { Lock } from "lucide-react";
-import { useCurrentUser } from "../../lib/hooks";
-import { InstanceRole, SettingScope } from "../../lib/types";
+import { SettingScope } from "../../lib/types";
 import { SettingsSection } from "../../lib/constants";
-import { EmptyState, Slot, SlotId } from "@radd/plugin-sdk";
+import { EmptyState, Slot, SlotId, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 
@@ -16,8 +15,7 @@ import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEd
  * plugin withdraws its section and leaves the page.
  */
 export function SignInSettingsPage() {
-  const me = useCurrentUser();
-  const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
+  const isInstanceAdmin = useIsInstanceAdmin();
 
   return (
     <SettingsPage history={{ entities: ["scoped_setting"] }}

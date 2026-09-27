@@ -1,5 +1,5 @@
-import { useCurrentUser } from "../../lib/hooks";
-import { InstanceRole, SettingScope } from "../../lib/types";
+import { SettingScope } from "../../lib/types";
+import { useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { ScopedSettingsEditor } from "../../components/settings/ScopedSettingsEditor";
 import { SettingsPage } from "../../components/settings/SettingsPage";
 
@@ -10,8 +10,7 @@ import { SettingsPage } from "../../components/settings/SettingsPage";
  * instance-scope, so the page (and its nav entry) is instance-admin only.
  */
 export function GeneralSettingsPage() {
-  const user = useCurrentUser();
-  const isAdmin = user?.instance_role === InstanceRole.admin;
+  const isAdmin = useIsInstanceAdmin();
 
   return (
     <SettingsPage history={{ entities: ["scoped_setting"] }}

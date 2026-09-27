@@ -1,7 +1,5 @@
 import { Lock } from "lucide-react";
-import { useCurrentUser } from "../../lib/hooks";
-import { InstanceRole } from "../../lib/types";
-import { EmptyState } from "@radd/plugin-sdk";
+import { EmptyState, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { HostsPanel } from "../../components/settings/storage/HostsPanel";
 import { RuleChainPanel } from "../../components/settings/storage/RuleChainPanel";
 import { SettingsPage } from "../../components/settings/SettingsPage";
@@ -12,8 +10,7 @@ import { SettingsPage } from "../../components/settings/SettingsPage";
  * routing chain that decides which host each upload lands on.
  */
 export function StorageSettingsPage() {
-  const me = useCurrentUser();
-  const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
+  const isInstanceAdmin = useIsInstanceAdmin();
 
   return (
     <SettingsPage history={{ entities: ["storage_host", "storage_rule"] }}

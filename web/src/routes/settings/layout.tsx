@@ -1,7 +1,7 @@
 import { fieldSettingsSummaryQuery } from "../../lib/queries/field-settings";
 import { Link, Outlet } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useDisabledNavPaths } from "@radd/plugin-sdk";
+import { useDisabledNavPaths, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import {
   Bell,
   Blocks,
@@ -28,7 +28,7 @@ import { RoutePath } from "../../lib/constants";
 import { iconOrFallback } from "../../lib/icons";
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { capabilitiesQuery } from "../../lib/queries";
-import { InstanceRole, Permission, type PermissionValue, type CapabilitiesManifest } from "../../lib/types";
+import { Permission, type PermissionValue, type CapabilitiesManifest } from "../../lib/types";
 
 /** Predicate helpers a nav item uses to decide whether the viewer may see it. */
 interface NavGate {
@@ -245,6 +245,7 @@ function settingsPageAt(path: string, manifest?: CapabilitiesManifest): { to: st
 export function SettingsLayout() {
   const perms = usePermissions();
   const user = useCurrentUser();
+  const instanceAdmin = useIsInstanceAdmin();
   const { data: manifest } = useQuery(capabilitiesQuery);
 
   const fields = useQuery({ ...fieldSettingsSummaryQuery(), enabled: manifest?.plugins.includes("fields") ?? false });
@@ -254,7 +255,7 @@ export function SettingsLayout() {
     global: (permission) => perms.global(permission),
     any: perms.anyProject,
     anySpace: perms.anySpace,
-    instanceAdmin: user?.instance_role === InstanceRole.admin,
+    instanceAdmin,
     managesTeams: Boolean(user?.manages_teams),
   };
   // `plugins` is what is MOUNTED now; while the manifest is in flight every gated tab is hidden —

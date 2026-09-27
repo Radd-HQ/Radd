@@ -3,10 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, Link2, Pencil, Plus, Trash2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import { useCurrentUser } from "../../lib/hooks";
-import { useListFilter, useConfirm, EmptyState, ErrorText } from "@radd/plugin-sdk";
+import { useListFilter, useConfirm, EmptyState, ErrorText, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { linkTypesQuery, queryKeys } from "../../lib/queries";
-import { InstanceRole, LinkDirection, type LinkDirectionValue, type LinkTypeCreate, type LinkTypeDef } from "../../lib/types";
+import { LinkDirection, type LinkDirectionValue, type LinkTypeCreate, type LinkTypeDef } from "../../lib/types";
 import { Button } from "../../components/Button";
 import { ListSearchInput } from "../../components/ListSearchInput";
 import { Modal } from "../../components/Modal";
@@ -25,8 +24,7 @@ import type { Project } from "@radd-plugin-ui/projects/types";
  * ScopePicker. Instance-admin only.
  */
 export function LinkTypesSettingsPage() {
-  const me = useCurrentUser();
-  const isAdmin = me?.instance_role === InstanceRole.admin;
+  const isAdmin = useIsInstanceAdmin();
   const types = useQuery(linkTypesQuery());
   const projects = useQuery(projectsQuery());
   const [editing, setEditing] = useState<LinkTypeDef | null>(null);

@@ -15,7 +15,7 @@ import {
   type User,
   type UserAdminUpdate,
 } from "../../lib/types";
-import { EmptyState, useConfirm, TableSkeleton, Table, TBody, Td, THead, Th, ErrorText, formatDateTime, Pager, useDebounced } from "@radd/plugin-sdk";
+import { EmptyState, useConfirm, TableSkeleton, Table, TBody, Td, THead, Th, ErrorText, formatDateTime, Pager, useDebounced, useIsInstanceAdmin } from "@radd/plugin-sdk";
 import { SelectField } from "../../components/SelectField";
 import { TextField } from "../../components/TextField";
 import { QueryError } from "../../components/QueryError";
@@ -39,7 +39,7 @@ import { settingsPathForPlugin } from "./layout";
 export function UsersSettingsPage() {
   const me = useCurrentUser();
   const perms = usePermissions();
-  const isInstanceAdmin = me?.instance_role === InstanceRole.admin;
+  const isInstanceAdmin = useIsInstanceAdmin();
   const canView = isInstanceAdmin || perms.global(Permission.globalManage);
   // The AD import is the ldap plugin's page (RADD-1381): pointed at only while it is enabled.
   const manifest = useQuery(capabilitiesQuery);

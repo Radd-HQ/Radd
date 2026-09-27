@@ -53,17 +53,17 @@ interface PinnedEntry {
 }
 
 const LINK_ICONS: [prefix: string, icon: LucideIcon][] = [
-  ["/inbox", Inbox],
-  ["/starred", Star],
-  ["/timesheet", Clock],
-  ["/reports", BarChart3],
+  [RoutePath.inbox, Inbox],
+  [RoutePath.starred, Star],
+  [RoutePath.timesheet, Clock],
+  [RoutePath.reports, BarChart3],
   [PageRoute.pages, BookOpen],
   ["/dashboards", LayoutDashboard],
   ["/cycles", CalendarRange],
-  ["/portal", ConciergeBell],
-  ["/projects", Layers],
+  [RoutePath.portal, ConciergeBell],
+  [RoutePath.projects, Layers],
   ["/p/", Layers],
-  ["/settings", Settings],
+  [RoutePath.settings, Settings],
 ];
 
 /** Every pinned tab carries an icon — labels alone read as text, not nav. A view's is its type's,
