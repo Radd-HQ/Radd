@@ -24,7 +24,7 @@ from radd.modules.workflow.types import StateEntity
 
 from ..enums import REQUIRED_PARENT_KIND, ItemEntity, ItemKind
 from ..models import ItemLabel, WorkItem
-from .queries import require_item
+from .queries import require_readable_item
 
 
 # --- relation validation ---
@@ -56,9 +56,11 @@ async def _resolve_type(
 
 
 async def _resolve_parent(
-    session: AsyncSession, kind: ItemKind, parent_id: uuid.UUID | None
+    session: AsyncSession, kind: ItemKind, parent_id: uuid.UUID | None, actor: User
 ) -> None:
-    """Enforce epic ← issue ← subtask (max depth 3); the parent may live in another project."""
+    """Enforce epic ← issue ← subtask (max depth 3); the parent may live in another project.
+    The parent resolves through the read seam (RADD-1455): one the actor cannot see
+    answers exactly as a missing id, so a parent field is no existence oracle."""
     required = REQUIRED_PARENT_KIND.get(kind)
     if parent_id is None:
         if kind == ItemKind.SUBTASK:
@@ -66,7 +68,7 @@ async def _resolve_parent(
         return
     if required is None:
         raise ConflictError(ItemEntity.ITEM, reason=f"{kind} cannot have a parent")
-    parent = await require_item(session, parent_id)
+    parent, _project, _permissions = await require_readable_item(session, parent_id, actor)
     if parent.kind != required:
         raise ConflictError(
             ItemEntity.ITEM, reason=f"{kind} parent must be of kind {required}, not {parent.kind}"

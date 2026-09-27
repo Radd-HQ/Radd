@@ -20,7 +20,7 @@ from .visibility import relation_read_clause
 from ..mentions import parse_issue_keys
 from ..models import ItemLink, WorkItem
 from ..schemas import ItemLinkCreate, ItemLinkSearchResult, ItemRead
-from .queries import find_item_by_key, require_item, require_item_permission
+from .queries import find_item_by_key, require_item_permission, require_readable_item
 from .read import _finish, _hydrate_one
 from .visibility import _field_ctx
 
@@ -88,21 +88,29 @@ async def link_search(
 
 
 async def _resolve_link_target(
-    session: AsyncSession, project: Project, data: ItemLinkCreate
+    session: AsyncSession, project: Project, data: ItemLinkCreate, actor: User
 ) -> WorkItem:
     """Resolve the link target by id or by per-project number (exactly one required).
     `target_number` means "in the SOURCE item's project" (the bare-number form);
-    addressing by `target_id` may cross projects (spec 80)."""
+    addressing by `target_id` may cross projects (spec 80). Either way the target goes
+    through the read seam (RADD-1455): one the actor cannot see answers exactly as a
+    missing one, so a link is no existence oracle."""
     if data.target_id is not None:
-        return await require_item(session, data.target_id)
+        target, _project, _permissions = await require_readable_item(session, data.target_id, actor)
+        return target
     if data.target_number is not None:
-        target = await session.scalar(
-            select(WorkItem).where(
+        key = f"{project.key}-{data.target_number}"
+        target_id = await session.scalar(
+            select(WorkItem.id).where(
                 WorkItem.project_id == project.id, WorkItem.number == data.target_number
             )
         )
-        if target is None:
-            raise NotFoundError(ItemEntity.ITEM, f"{project.key}-{data.target_number}")
+        if target_id is None:
+            raise NotFoundError(ItemEntity.ITEM, key)
+        try:
+            target, _project, _permissions = await require_readable_item(session, target_id, actor)
+        except NotFoundError:
+            raise NotFoundError(ItemEntity.ITEM, key) from None
         return target
     raise ConflictError(ItemEntity.LINK, reason="target_id or target_number is required")
 
@@ -201,7 +209,7 @@ async def add_item_link(
         raise ConflictError(
             ItemEntity.LINK, reason=f"the '{definition.key}' link type isn't available in this project"
         )
-    target = await _resolve_link_target(session, project, data)
+    target = await _resolve_link_target(session, project, data, actor)
     await _check_link_rules(
         session, item, target, data.link_type,
         symmetric=linktypes_service.is_symmetric(catalog, data.link_type),

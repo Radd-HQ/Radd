@@ -20,9 +20,9 @@ from radd.modules.auth.types import BuiltinRoleKey
 from radd.modules import workflow as _workflow  # noqa: F401
 from radd.modules.items import bulk, service as items
 from radd.modules.items.filters import ItemListFilters
-from radd.modules.items.enums import ItemKind
-from radd.modules.items.models import ItemStar
-from radd.modules.items.schemas import ItemCreate, ItemLinkCreate, ItemUpdate
+from radd.modules.items.enums import BulkSkipReason, ItemKind
+from radd.modules.items.models import ItemStar, WorkItem
+from radd.modules.items.schemas import ItemBulkMove, ItemCreate, ItemLinkCreate, ItemUpdate
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
 from radd.modules.search import indexer, service as search_service
@@ -160,6 +160,68 @@ async def test_stars_are_no_existence_oracle(db, scenario):
     with pytest.raises(NotFoundError):
         await items.star_item(db, fixture["other"].id, restricted)
     assert await db.get(ItemStar, (restricted.id, fixture["other"].id)) is None
+
+
+async def test_bulk_move_reports_a_forbidden_row_instead_of_moving_it(db, scenario):
+    """RADD-1455: a move is an item.update on each SOURCE row, so `@own` moves my
+    issue and reports the stranger's FORBIDDEN — never silently, never moved. An
+    unknown id is reported too (NOT_FOUND), as bulk_update already did."""
+    project, restricted, _admin, fixture = scenario
+    target = await projects_service.create_project(
+        db, ProjectCreate(key=f"IT{uuid.uuid4().hex[:4].upper()}", name="T")
+    )
+    await _grant(db, restricted, project, ["item.read", "item.update@own"])
+    await _grant(db, restricted, target, ["item.read", "item.create"])
+    unknown = uuid.uuid4()
+    result = await bulk.bulk_move_items(
+        db,
+        ItemBulkMove(
+            item_ids=[fixture["own"].id, fixture["other"].id, unknown], target_project_id=target.id
+        ),
+        restricted,
+    )
+    assert [moved.item_id for moved in result.moved] == [fixture["own"].id]
+    skipped = {row.item_id: row for row in result.skipped}
+    assert skipped[fixture["other"].id].reason is BulkSkipReason.FORBIDDEN
+    assert skipped[fixture["other"].id].key == fixture["other"].key
+    assert skipped[unknown].reason is BulkSkipReason.NOT_FOUND
+    assert (await db.get(WorkItem, fixture["other"].id)).project_id == project.id
+    assert (await db.get(WorkItem, fixture["own"].id)).project_id == target.id
+
+
+async def test_link_and_parent_targets_hide_like_missing_items(db, scenario):
+    """RADD-1455: naming a hidden item as a link target (by id or by number) or as
+    a parent answers the 404 a made-up id gets — both resolve through the read seam,
+    so neither field is an existence oracle. A visible target still works."""
+    project, restricted, _admin, fixture = scenario
+    await _grant(db, restricted, project, ["item.read@own", "item.update@own", "item.create"])
+    hidden, missing = fixture["other"], uuid.uuid4()
+    for target_id in (hidden.id, missing):
+        with pytest.raises(NotFoundError):
+            await items.add_item_link(
+                db, fixture["own"].id, ItemLinkCreate(target_id=target_id, link_type="blocks"), restricted
+            )
+    with pytest.raises(NotFoundError):
+        await items.add_item_link(
+            db, fixture["own"].id,
+            ItemLinkCreate(target_number=hidden.number, link_type="blocks"), restricted,
+        )
+    for parent_id in (hidden.id, missing):
+        with pytest.raises(NotFoundError):
+            await items.create_item(
+                db,
+                ItemCreate(
+                    project_id=project.id, title="under a hidden parent",
+                    kind=ItemKind.SUBTASK, parent_id=parent_id,
+                ),
+                restricted,
+            )
+    child = await items.create_item(
+        db,
+        ItemCreate(project_id=project.id, title="under mine", kind=ItemKind.SUBTASK, parent_id=fixture["own"].id),
+        restricted,
+    )
+    assert child.parent is not None and child.parent.id == fixture["own"].id
 
 
 async def test_search_inherits_the_relation_filter(db, scenario):

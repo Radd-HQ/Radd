@@ -49,7 +49,7 @@ from .service.scope import visible_ids_query
 # Package-private helpers — reached through their concern module, not the service
 # barrel, which exports only the items module's public surface.
 from .service.read import _hydrate_one, event_item
-from .service.visibility import _check_builtin_field_rules, _field_ctx
+from .service.visibility import _check_builtin_field_rules, _field_ctx, ensure_item_relation
 from radd.modules.events import service as events
 
 logger = logging.getLogger(__name__)
@@ -148,20 +148,6 @@ async def bulk_update_items(
 # --- bulk move ---
 
 
-async def _selected_items(
-    session: AsyncSession, ids: Sequence[uuid.UUID]
-) -> list[WorkItem]:
-    """The selected items, deduped, in selection order (unknown ids dropped)."""
-    unique = list(dict.fromkeys(ids))
-    rows = {
-        row.id: row
-        for row in (
-            await session.execute(select(WorkItem).where(WorkItem.id.in_(unique)))
-        ).scalars()
-    }
-    return [rows[item_id] for item_id in unique if item_id in rows]
-
-
 async def _move_one(
     session: AsyncSession,
     item: WorkItem,
@@ -176,6 +162,10 @@ async def _move_one(
     permissions,
     target_permissions,
 ) -> BulkMovedItem:
+    # RADD-1455: a move WRITES the source row, so it passes the row gate every
+    # single-item write passes (`require_item_permission`): an `item.update@own`
+    # holder moves their own issues and the stranger's is reported FORBIDDEN.
+    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
     old_key = await _item_key(session, item)
     before = await _hydrate_one(session, item, source, actor, permissions)
     old_state_id = item.state_id
@@ -278,29 +268,34 @@ async def bulk_move_items(
         d.key for d in await fields.definitions_for_project(session, target)
     }
 
-    selected_ids = [item.id for item in await _selected_items(session, data.item_ids)]
     projects: dict[uuid.UUID, Project] = {}
     perms: dict[uuid.UUID, frozenset[Permission]] = {}
 
     result = BulkMoveResult()
     target_id = target.id
-    for item_id in selected_ids:
-        # Re-fetched per iteration: a previous item's savepoint rollback expires
+    for item_id in dict.fromkeys(data.item_ids):
+        # Fetched per iteration: a previous item's savepoint rollback expires
         # every instance that savepoint touched — the item, and the target
         # project whose item-number counter it incremented — and a sync
         # attribute access on an expired ORM object cannot lazy-load in async
         # context. `get` refreshes only when needed.
         item = await session.get(WorkItem, item_id)
         target = await session.get(Project, target_id)
-        if item is None or item.project_id == target_id:
-            continue  # gone, or already home — nothing to do
+        if item is None:
+            # Reported, as bulk_update reports it — a selection is never quietly shortened.
+            result.skipped.append(_skip(item_id, None, BulkSkipReason.NOT_FOUND))
+            continue
+        if item.project_id == target_id:
+            continue  # already home — nothing to do
         source = projects.get(item.project_id)
         if source is None:
             source = await projects_service.get_project(session, item.project_id)
             projects[source.id] = source
             perms[source.id] = await authz.effective_permissions(session, actor, project=source)
         key = f"{source.key}-{item.number}"
-        if Permission.ITEM_UPDATE not in perms[source.id]:
+        # The project gate; a relation-qualified form (`item.update@own`) HOLDS the
+        # base — the row gate in `_move_one` is what narrows it to the actor's rows.
+        if not authz.holds_base(perms[source.id], Permission.ITEM_UPDATE):
             result.skipped.append(_skip(item_id, key, BulkSkipReason.FORBIDDEN))
             continue
         try:

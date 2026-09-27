@@ -85,7 +85,7 @@ async def convert_item_kind(
         new_parent_id: uuid.UUID | None = keep
     else:
         new_parent_id = parent_id  # type: ignore[assignment]
-    await _resolve_parent(session, kind, new_parent_id)
+    await _resolve_parent(session, kind, new_parent_id, actor)
 
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
