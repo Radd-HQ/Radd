@@ -4,7 +4,7 @@ import { MessageSquarePlus } from "lucide-react";
 import {
   Button, CommentHistory, CommentSection, RichEditor, api, errorMessage, invalidateEntities, locateAnchor,
   rangeForOffsets, renderedText, revealTextOffset, scrollRangeIntoView, useCommentFeed, useConfirm,
-  useLandOnComment, useLinkedComment, type CommentRow, type TextAnchor,
+  useLandOnComment, useLinkedComment, useThreadExpansion, type CommentRow, type TextAnchor,
 } from "@radd/plugin-sdk";
 import { commentPath, pageCommentsPath } from "../endpoints";
 import { Tag } from "../queries";
@@ -85,20 +85,24 @@ export function PageInlineComments({
 
   const floating = useCommentPointer(bodyRef, hits, editing, setFocusedId);
   const floatingRow = inline.find(row => row.id === floating.pointer?.id && !row.resolved_at);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // RADD-1448: replies show unless a thread is resolved — here, the Resolved group.
+  const expansion = useThreadExpansion(linkedInline?.root_id);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
-  // RADD-1297: focus the linked thread (its passage lights up), show the
-  // resolved group if that is where it lives, open it for a reply, land on it.
+  // RADD-1297: focus the linked thread (its passage lights up), show the resolved group if that
+  // is where it lives, and land on it; the expansion opens it.
   const linkedRootResolved = !!linkedInline && inline.some((row) => row.id === linkedInline.root_id && row.resolved_at);
   useEffect(() => {
     if (!linkedInline) return;
     setFocusedId(linkedInline.root_id);
     if (linkedRootResolved) setShowResolved(true);
-    if (linkedInline.id !== linkedInline.root_id) setExpandedId(linkedInline.root_id);
   }, [linkedInline, linkedRootResolved]);
   useLandOnComment(linkedInline?.id);
-  const replyProps = (row: CommentRow) => ({
-    canReply: canComment,
+  // One composer per thread: while the popover holds a thread open, its rail card offers no Reply
+  // (two editors over one draft would each overwrite the other's text).
+  const pinnedId = floating.pointer?.pinned ? floating.pointer.id : null;
+  const replyProps = (row: CommentRow, inPopover = false) => ({
+    expansion,
+    canReply: canComment && (inPopover || row.id !== pinnedId),
     draft: replyDrafts[row.id] ?? "",
     onDraft: (value: string) => setReplyDrafts(previous => ({...previous, [row.id]: value})),
   });
@@ -128,8 +132,6 @@ export function PageInlineComments({
   const threadFor = ({ row, orphaned }: (typeof located)[number], resolvedView = false) => (
     <Thread
       key={row.id}
-      expanded={expandedId === row.id && (resolvedView || !floating.pointer?.pinned)}
-      onToggle={() => { if (!resolvedView) floating.close(); setExpandedId(expandedId === row.id ? null : row.id); }}
       {...replyProps(row)}
       row={row}
       orphaned={orphaned}
@@ -152,9 +154,10 @@ export function PageInlineComments({
       {floating.pointer && floatingRow && (
         <PageCommentPopover pointer={floating.pointer} onClose={floating.close} onKeep={floating.keep}
           onLeave={floating.leave} onPin={floating.pin}>
+          {/* The hover card previews the comment; pinned (a click, or Open thread) it is the thread. */}
           <Thread row={floatingRow} orphaned={null} focused canResolve={floating.pointer.pinned && canResolveRow(floatingRow)}
             onResolve={() => {floating.close(); setFocusedId(null); resolve.mutate({id: floatingRow.id, resolved: true});}}
-            expanded={floating.pointer.pinned} onToggle={floating.pointer.pinned ? floating.close : floating.pin} {...replyProps(floatingRow)} />
+            preview={!floating.pointer.pinned} {...replyProps(floatingRow, true)} />
         </PageCommentPopover>
       )}
       {selectionAt && canComment && (

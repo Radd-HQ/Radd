@@ -14,6 +14,7 @@ import type { AttachmentTarget } from "./lib/types";
 import { useImageUploader } from "./lib/useAttachmentUploader";
 import { apiParentCommentsPath } from "./lib/constants";
 import { CommentHistory } from "./components/CommentHistory";
+import { CommentComposer } from "./components/comments/CommentComposer";
 import { CopyCommentLink } from "./components/comments/CopyCommentLink";
 import { ResolveThreadButton, ThreadBadge, ThreadFilter, repliesLabel, threadRuleClass } from "./components/comments/ThreadResolution";
 import { useThreadExpansion } from "./components/comments/useThreadExpansion";
@@ -78,12 +79,15 @@ provideHostComponents({
   ReadingPane,
   EditorToolbarButton: ToolbarExtraButton,
 
-  // The comment kit's rows come from the same API as the host's `Comment`.
+  // The comment kit's rows come from the same API as the host's `Comment`. Mounted under every
+  // comment (it draws the thread footer), so its first load shows nothing rather than a status
+  // line per comment.
   CommentReplies: (props) => (
-    <Suspense fallback={<p role="status" className="text-xs text-fg-muted">Loading replies…</p>}>
+    <Suspense fallback={null}>
       <CommentReplies {...(props as unknown as ComponentProps<typeof CommentReplies>)} />
     </Suspense>
   ),
+  CommentComposer,
   CommentHistory,
   CopyCommentLink,
   ThreadBadge,

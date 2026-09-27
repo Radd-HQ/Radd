@@ -1,11 +1,11 @@
-import { ChevronDown, ChevronRight, MessageSquare, MessagesSquare, Send, Trash2 } from "lucide-react";
+import { MessageSquare, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Avatar, Button, CommentHistory, CommentReplies, CommentSection, CopyCommentLink, ResolveThreadButton, RichEditor,
-  RichViewer, ThreadBadge, ThreadFilter, api, commentHref, errorMessage, invalidateEntities, relativeTime,
-  repliesLabel, threadRuleClass, useCommentFeed, useConfirm, useCurrentUser, useIsAuthenticated,
-  useLandOnComment, useLinkedComment, useThreadExpansion,
+  Avatar, CommentComposer, CommentComposerMode, CommentHistory, CommentReplies, CommentSection, CopyCommentLink,
+  IconButton, ResolveThreadButton, RichEditor, RichViewer, ThreadBadge, ThreadFilter, api, commentHref, errorMessage,
+  invalidateEntities, relativeTime, threadRuleClass, useCommentFeed, useConfirm, useCurrentUser, useIsAuthenticated,
+  useLandOnComment, useLinkedComment, useThreadExpansion, type CommentComposerModeValue,
 } from "@radd/plugin-sdk";
 import { commentPath, pageCommentsPath } from "../endpoints";
 import { Tag } from "../queries";
@@ -17,6 +17,8 @@ import { usePeople } from "./people";
  * permissions, `/` actions, canned responses, internal visibility), none of which a page has.
  * Page comments are public only — internal visibility hides a comment from a REQUESTER, and a page
  * has none. Resolvable threads as on an issue; who may resolve is the server's `can_resolve`.
+ * RADD-1448: the issue's model — replies show unless a thread is resolved, Reply is an action in
+ * each comment's footer, and the composer is a Comment / Start thread row until one is pressed.
  */
 export function PageComments({ pageId, canComment }: { pageId: string; canComment: boolean }) {
   const user = useCurrentUser();
@@ -32,7 +34,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   const comments = history.comments;
   const users = usePeople(useIsAuthenticated());
   const [body, setBody] = useState("");
-  const [composerKey, setComposerKey] = useState(0);
+  const [mode, setMode] = useState<CommentComposerModeValue | null>(null);
   const [confirmDialog, confirm] = useConfirm();
   // RADD-1246: a discussion comment is a thread like an annotation is.
   const expansion = useThreadExpansion(linkedDiscussion?.root_id);
@@ -45,7 +47,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
     mutationFn: (isThread: boolean) => api.post(pageCommentsPath(pageId), { body, is_thread: isThread }),
     onSuccess: () => {
       setBody("");
-      setComposerKey((key) => key + 1); // the editor is uncontrolled — remount to clear
+      setMode(null);
     },
     onSettled: invalidate,
   });
@@ -53,6 +55,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
     mutationFn: (id: string) => api.delete<void>(commentPath(id)),
     onSettled: invalidate,
   });
+  const thread = mode === CommentComposerMode.thread;
 
   return (
     <section className="mt-6 border-t border-subtle pt-4" data-page-discussion>
@@ -95,52 +98,40 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                   <ThreadBadge comment={comment} />
                   <CopyCommentLink href={commentHref(comment.id)} className="ml-auto" />
                   {(!!comment.author && comment.author.id === user?.id) && (
-                    <button
-                      type="button"
+                    <IconButton
+                      danger
                       onClick={() =>
                         void confirm({
                           title: "Delete comment",
-                          message: "Delete this comment?",
+                          // Deleting a root removes its replies too.
+                          message: comment.reply_count
+                            ? `Delete this comment and its ${comment.reply_count === 1 ? "reply" : `${comment.reply_count} replies`}?`
+                            : "Delete this comment?",
                           confirmLabel: "Delete",
                           danger: true,
                         }).then((ok) => ok && remove.mutate(comment.id))
                       }
                       aria-label="Delete comment"
-                      className="rounded p-0.5 text-fg-faint hover:text-red-400 cursor-pointer"
+                      title="Delete comment"
                     >
                       <Trash2 size={11} aria-hidden />
-                    </button>
+                    </IconButton>
                   )}
                 </p>
                 <div className="mt-0.5 rounded-md border border-subtle bg-surface px-2 py-1">
                   <RichViewer text={comment.body} onToggleTask={ownTaskToggle(comment, user?.id, queryClient)} />
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-3">
-                  {user && (
-                    <button
-                      type="button"
-                      onClick={() => expansion.toggle(comment)}
-                      aria-expanded={expansion.isOpen(comment)}
-                      data-thread-toggle={comment.id}
-                      className="inline-flex min-h-8 items-center gap-1 rounded px-1 text-sm font-medium text-fg-secondary hover:bg-elevated hover:text-fg cursor-pointer"
-                    >
-                      {expansion.isOpen(comment) ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-                      {repliesLabel(comment, expansion.isOpen(comment), canComment)}
-                    </button>
-                  )}
-                  {comment.can_resolve && <ResolveThreadButton comment={comment} />}
-                </div>
-                {expansion.isOpen(comment) && (
-                  <CommentReplies
-                    row={comment}
-                      linkedReplyId={linkedDiscussion?.root_id === comment.id ? linkedDiscussion.id : undefined}
-                    canReply={canComment}
-                    draft={replyDrafts[comment.id] ?? ""}
-                    onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}
-                    canResolve={!!comment.can_resolve}
-                    linkFor={commentHref}
-                  />
-                )}
+                <CommentReplies
+                  row={comment}
+                  expansion={expansion}
+                  actions={comment.can_resolve && <ResolveThreadButton comment={comment} />}
+                  linkedReplyId={linkedDiscussion?.root_id === comment.id ? linkedDiscussion.id : undefined}
+                  canReply={canComment}
+                  draft={replyDrafts[comment.id] ?? ""}
+                  onDraft={(value) => setReplyDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}
+                  canResolve={!!comment.can_resolve}
+                  linkFor={commentHref}
+                />
               </div>
             </li>
           );
@@ -149,28 +140,27 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
       </CommentHistory>
 
       {canComment ? (
-        <div className="mt-4 flex flex-col gap-2">
-          <RichEditor
-            key={composerKey}
-            value={body}
-            onChange={setBody}
-            placeholder="Add to the discussion…"
-            className="[&_.ProseMirror]:min-h-[5rem]"
-          />
-          <div className="flex items-center justify-end gap-2">
-            {post.isError && (
-              <span className="mr-auto text-xs text-status-danger-ink">{errorMessage(post.error)}</span>
-            )}
-            <Button size="sm" variant="secondary" data-start-thread
-              onClick={() => post.mutate(true)} disabled={!body.trim() || post.isPending}>
-              <MessagesSquare size={13} aria-hidden />
-              Start thread
-            </Button>
-            <Button size="sm" onClick={() => post.mutate(false)} disabled={!body.trim() || post.isPending}>
-              <Send size={13} aria-hidden />
-              {post.isPending ? "Posting…" : "Comment"}
-            </Button>
-          </div>
+        <div className="mt-4">
+          <CommentComposer
+            mode={mode}
+            onMode={(next) => {
+              post.reset();
+              setMode(next);
+            }}
+            submitLabel={thread ? "Start thread" : "Comment"}
+            canSubmit={!!body.trim()}
+            pending={post.isPending}
+            error={post.isError ? errorMessage(post.error) : undefined}
+            onSubmit={() => post.mutate(thread)}
+          >
+            <RichEditor
+              value={body}
+              onChange={setBody}
+              autoFocus
+              placeholder={thread ? "Start a thread…" : "Add to the discussion…"}
+              className="[&_.ProseMirror]:min-h-[5rem]"
+            />
+          </CommentComposer>
         </div>
       ) : (
         // Disable up front rather than let the post 403 (the house rule).

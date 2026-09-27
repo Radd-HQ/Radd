@@ -116,8 +116,11 @@ try {
   }
   assert(requests.some(r => r.route === "/plugins/ai/remoteEntry.js"), "the remote bundle was loaded");
   assert.equal(await count('[aria-label="AI actions for the description"]'), 1);
-  // The comment composer's toolbar carries the remote's button before any edit starts.
-  assert.equal(await count('.radd-rich-editor [role="toolbar"] svg.radd-ai-toolbar-icon'), 1);
+  // The comment composer's toolbar carries the remote's button before any edit starts. The composer
+  // is hidden until asked for (RADD-1448): open it, and it stays open for the rest of the proof.
+  assert.equal(await count('.radd-rich-editor [role="toolbar"] svg.radd-ai-toolbar-icon'), 0);
+  await s.click("[data-open-comment]");
+  await until(s, () => count('.radd-rich-editor [role="toolbar"] svg.radd-ai-toolbar-icon').then((n) => n === 1), "the opened composer's AI button");
   checks.push("with ai listed, the read menus (description, comment), the rail card and the composer's toolbar button render, and every editor/read/rail/draft slot's only owner is the ai remote");
 
   // A read action answers in the HOST's reading pane.

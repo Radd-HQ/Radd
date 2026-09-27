@@ -74,7 +74,7 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
       replies.push(data);
       if (body.unresolve) comments = comments.map(c => c.id === id ? {...c, resolved_at: null, resolved_by: null, resolver_name: null} : c);
     }
-    else if (route.endsWith("/replies")) data = {comments: replies, older_cursor: null};
+    else if (route.endsWith("/replies")) data = {comments: replies.filter(r => r.parent_comment_id === route.split("/")[2]), older_cursor: null};
     else if (route.endsWith("/allowed-transitions")) data = {mode: "guards", targets: states.map(s => ({state_id: s.id, allowed: s.id === states[0].id || !comments.some(c => c.is_thread && !c.resolved_at), failures: []}))};
     else if (route === "/projects/project/transitions") data = [transition];
     else if (route === "/projects/project/thread-resolution") data = threadPolicy = req.method === "PUT" ? body : threadPolicy;
@@ -102,11 +102,17 @@ try {
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute('aria-expanded')`), "true");
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="locked"]').getAttribute('aria-expanded')`), "false");
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-replies="thread"] [contenteditable=true]')`), false, "reading replies opened composer");
-  assert.equal(await s.eval(`getComputedStyle(document.querySelector('[data-thread-toggle="thread"]')).fontSize`), "14px");
+  // RADD-1335's readable controls, on the kit (RADD-1448): the disclosure and the Reply action are
+  // full-size buttons — 32px targets with 13px words.
+  const control = (selector) => `(() => { const b = document.querySelector('${selector}'); return b && [getComputedStyle(b).fontSize, b.getBoundingClientRect().height]; })()`;
+  assert.deepEqual(await s.eval(control('[data-thread-toggle="thread"]')), ["13px", 32]);
+  assert.deepEqual(await s.eval(control('[data-open-reply="thread"]')), ["13px", 32]);
   await s.click('[data-thread-toggle="locked"]');
   assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute('aria-expanded')`), "true", "opening another thread closed first");
   await new Promise(resolve => setTimeout(resolve, 4500));
   assert(await s.eval(`!!document.querySelector('[data-comment-id="reply"][data-comment-linked]')`), "highlight disappeared before ten seconds");
+  // The composer is hidden until asked for (RADD-1448): open it to reach its toolbar.
+  await s.click('[data-open-comment]');
   await until(s, () => s.eval(`!!document.querySelector('[aria-label="Emoji and symbols"]')`), "symbol picker unavailable");
   await s.click('[aria-label="Emoji and symbols"]');
   await s.click('[aria-label="warning attention"]');

@@ -4,7 +4,9 @@
  *
  *   node web/scripts/comment-replies-proof.mjs http://127.0.0.1:8000 admin@example.com change-me
  *
- *   1. an issue comment takes a reply from the page; the toggle counts it;
+ *   1. an issue comment takes a reply from the page (RADD-1448: a comment with no replies shows no
+ *      disclosure, only a Reply action; one click opens the composer; posting closes it onto the
+ *      reply, and the disclosure then counts it);
  *   2. under a PUBLIC issue comment the reply form offers "Internal reply";
  *      posting one lands with the internal marking;
  *   3. under an INTERNAL issue comment the form is locked to internal and
@@ -45,27 +47,32 @@ async function main() {
     spaceId = setup.space.id;
     context.setup = { item: setup.item.key, publicRoot: setup.publicRoot?.id, internalRoot: setup.internalRoot?.id, discussion: setup.discussion?.id };
 
-    // RADD-1335: the composer opens from the thread's Reply button (and stays open after a post).
+    // RADD-1448: Reply is the comment footer's action; one click opens the composer, and posting
+    // closes it — so every reply starts from the button.
     const openComposer = async (rootId) => {
-      await waitForSelector(session, `[data-comment-replies="${rootId}"] [data-open-reply], [data-comment-replies="${rootId}"] [data-reply-composer]`);
-      if (await session.eval(`!!document.querySelector('[data-comment-replies="${rootId}"] [data-open-reply]')`)) {
-        await session.click(`[data-comment-replies="${rootId}"] [data-open-reply]`, () => true);
+      await waitForSelector(session, `[data-open-reply="${rootId}"]`);
+      if (!(await session.eval(`!!document.querySelector('[data-comment-replies="${rootId}"] [data-reply-composer]')`))) {
+        await session.click(`[data-open-reply="${rootId}"]`);
       }
+      await waitForSelector(session, `[data-comment-replies="${rootId}"] [data-reply-composer]`);
     };
+    // What a comment nobody has answered offers: a Reply action, and no disclosure over nothing.
+    const footerOf = (rootId) => session.eval(`({
+      toggle: document.querySelector('[data-thread-toggle="${rootId}"]')?.textContent?.trim() ?? null,
+      reply: document.querySelector('[data-open-reply="${rootId}"]')?.textContent?.trim() ?? null,
+    })`);
     // --- 1 + 2: a reply, then an INTERNAL reply, under a public issue comment ----
     await session.navigate(`${baseUrl}/issues/${setup.item.key}`, 2500);
-    await waitForSelector(session, `[data-thread-toggle="${setup.publicRoot.id}"]`);
-    const toggleBefore = await session.eval(`document.querySelector('[data-thread-toggle="${setup.publicRoot.id}"]')?.textContent?.trim() ?? null`);
-    await session.click(`[data-thread-toggle="${setup.publicRoot.id}"]`, () => true);
-    await sleep(800);
+    await waitForSelector(session, `[data-open-reply="${setup.publicRoot.id}"]`);
+    const footerBefore = await footerOf(setup.publicRoot.id);
     await openComposer(setup.publicRoot.id);
-    await waitForSelector(session, `[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]`);
     const form = await session.eval(`(() => {
       const box = document.querySelector('[data-comment-replies="${setup.publicRoot.id}"]');
       return box ? { present: true, internalSwitch: Boolean(box.querySelector("[data-reply-internal]")), locked: Boolean(box.querySelector('[data-reply-audience="locked"]')) } : { present: false };
     })()`);
-    context.publicForm = { toggleBefore, ...form };
-    checks.publicThreadOffersAnInternalSwitch = toggleBefore === "Reply" && form.present && form.internalSwitch && !form.locked;
+    context.publicForm = { footerBefore, ...form };
+    checks.aCommentWithoutRepliesOffersReplyAndNoDisclosure = footerBefore.toggle === null && footerBefore.reply === "Reply";
+    checks.publicThreadOffersAnInternalSwitch = form.present && form.internalSwitch && !form.locked;
     // The reply composer is the rich editor: focus its document, then type.
     const typeReply = async (rootId, text) => {
       await openComposer(rootId);
@@ -80,13 +87,16 @@ async function main() {
       await waitForSelector(session, `[data-comment-replies="${rootId}"] button[type="submit"]:not([disabled])`);
     };
     // Parity with the top-level composer: same editor, same affordances (the
-    // AI toolbar icon is the marker the render proofs already use).
+    // AI toolbar icon is the marker the render proofs already use). The top-level
+    // composer is hidden until asked for (RADD-1448), so open it for the comparison.
     await openComposer(setup.publicRoot.id);
     await waitForSelector(session, `[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer] .ProseMirror`);
+    await session.click("[data-open-comment]");
+    await waitForSelector(session, '[data-comment-composer="open"] .ProseMirror');
     await sleep(300);
     const parity = await session.eval(`(() => {
       const reply = document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]');
-      const main = document.querySelector("form .ProseMirror")?.closest("form");
+      const main = document.querySelector('[data-comment-composer="open"]');
       return {
         replyEditor: Boolean(reply?.querySelector(".ProseMirror")),
         replyAi: Boolean(reply?.querySelector(".radd-ai-toolbar-icon")),
@@ -95,9 +105,19 @@ async function main() {
     })()`);
     context.parity = parity;
     checks.replyComposerIsTheRichEditorWithTheSameAiToolbar = parity.replyEditor && parity.replyAi === parity.mainAi;
+    await session.click("[data-composer-cancel]");
     await typeReply(setup.publicRoot.id, "Answering in public");
     await session.click(`[data-comment-replies="${setup.publicRoot.id}"] button[type="submit"]`, () => true);
-    await sleep(1500);
+    // Posting closes the composer onto the new reply, with the disclosure now counting it.
+    await waitForSelector(session, `[data-comment-replies="${setup.publicRoot.id}"] [data-reply-visibility="public"]`);
+    await sleep(500);
+    const afterPost = await session.eval(`({
+      composer: Boolean(document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-composer]')),
+      toggle: document.querySelector('[data-thread-toggle="${setup.publicRoot.id}"]')?.textContent?.trim() ?? null,
+    })`);
+    context.afterPost = afterPost;
+    checks.postingClosesTheComposerOntoTheReply = afterPost.composer === false && afterPost.toggle === "Hide 1 reply";
+    await openComposer(setup.publicRoot.id);
     await session.eval(`document.querySelector('[data-comment-replies="${setup.publicRoot.id}"] [data-reply-internal]').click()`);
     await sleep(200);
     await typeReply(setup.publicRoot.id, "Staff-only aside");
@@ -113,10 +133,7 @@ async function main() {
     await session.screenshot(outputPath("comment-replies-proof-issue.png"));
 
     // --- 3: the internal thread is locked, and the server refuses a public reply ---
-    await session.click(`[data-thread-toggle="${setup.internalRoot.id}"]`, () => true);
-    await sleep(800);
     await openComposer(setup.internalRoot.id);
-    await waitForSelector(session, `[data-comment-replies="${setup.internalRoot.id}"] [data-reply-composer]`);
     const locked = await session.eval(`(() => {
       const box = document.querySelector('[data-comment-replies="${setup.internalRoot.id}"]');
       return box ? { locked: Boolean(box.querySelector('[data-reply-audience="locked"]')), internalSwitch: Boolean(box.querySelector("[data-reply-internal]")), label: box.querySelector('button[type="submit"]')?.textContent?.trim() } : null;
@@ -161,19 +178,21 @@ async function main() {
 
     // --- 4: a page discussion comment takes a reply ----------------------------
     await session.navigate(`${baseUrl}/pages/${SLUG}/${setup.page.path}`, 2500);
-    await waitForSelector(session, `[data-thread-toggle="${setup.discussion.id}"]`);
-    const pageToggle = await session.eval(`document.querySelector('[data-thread-toggle="${setup.discussion.id}"]')?.textContent?.trim() ?? null`);
-    await session.click(`[data-thread-toggle="${setup.discussion.id}"]`, () => true);
-    await sleep(800);
+    await waitForSelector(session, `[data-open-reply="${setup.discussion.id}"]`);
+    const pageFooter = await footerOf(setup.discussion.id);
     await typeReply(setup.discussion.id, "Discussion reply");
+    // Read while the composer is open: posting closes it, which would make "no switch" vacuous.
+    const pageInternalSwitch = await session.eval(`Boolean(document.querySelector('[data-comment-replies="${setup.discussion.id}"] [data-reply-internal]'))`);
     await session.click(`[data-comment-replies="${setup.discussion.id}"] button[type="submit"]`, () => true);
-    await sleep(1500);
+    await waitForSelector(session, `[data-comment-replies="${setup.discussion.id}"] [data-reply-visibility]`);
+    await sleep(500);
     const pageReplies = await session.eval(`({
       replies: [...document.querySelectorAll('[data-comment-replies="${setup.discussion.id}"] [data-reply-visibility]')].length,
-      internalSwitch: Boolean(document.querySelector('[data-comment-replies="${setup.discussion.id}"] [data-reply-internal]')),
+      internalSwitch: ${pageInternalSwitch},
     })`);
-    context.page = { pageToggle, ...pageReplies };
-    checks.pageDiscussionTakesAPublicReply = pageToggle === "Reply" && pageReplies.replies === 1 && pageReplies.internalSwitch === false;
+    context.page = { pageFooter, ...pageReplies };
+    checks.pageDiscussionTakesAPublicReply = pageFooter.toggle === null && pageFooter.reply === "Reply"
+      && pageReplies.replies === 1 && pageReplies.internalSwitch === false;
     await session.screenshot(outputPath("comment-replies-proof-page.png"));
   } finally {
     await session.eval(`(async () => { ${PAGE_API}

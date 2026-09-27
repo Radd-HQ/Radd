@@ -72,6 +72,12 @@ async function main() {
         ambiguousInGroup: !!group?.contains(cardOf(${JSON.stringify(page.ambiguous)})),
         ambiguousLabel: label(${JSON.stringify(page.ambiguous)}),
         resolveAll: [...(group?.querySelectorAll("button") ?? [])].map((b) => b.textContent.trim()).find((t) => /^Resolve all$/.test(t)) ?? null,
+        // RADD-1448: a detached card keeps the thread footer — Reply and Resolve — and no
+        // disclosure over replies it does not have.
+        detachedFooters: [${JSON.stringify(page.removed)}, ${JSON.stringify(page.ambiguous)}].map((id) => {
+          const footer = cardOf(id)?.querySelector("[data-thread-footer]");
+          return footer ? [...footer.querySelectorAll("button")].map((b) => b.textContent.trim()).join("|") : null;
+        }),
         oldFootnote: /no longer match the page text/.test(rail.textContent),
       };
     })()`);
@@ -81,6 +87,7 @@ async function main() {
     checks.removedCardLabelled = rail.removedInGroup && rail.removedLabel === "Passage removed";
     checks.ambiguousCardLabelled = rail.ambiguousInGroup && rail.ambiguousLabel === "Passage ambiguous";
     checks.resolveAllOffered = rail.resolveAll === "Resolve all";
+    checks.detachedCardsKeepReplyAndResolve = rail.detachedFooters.every((buttons) => buttons === "Reply|Resolve");
     checks.oldFootnoteGone = rail.oldFootnote === false;
     await session.screenshot(output + "/detached.png");
 

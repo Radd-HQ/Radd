@@ -46,7 +46,7 @@ export function ResolveThreadButton({ comment }: { comment: ThreadRow }) {
   const resolved = !!comment.resolved_at;
   return (
     <>
-      <Button size="sm" variant="secondary" disabled={change.isPending} onClick={() => change.mutate()}
+      <Button variant="secondary" disabled={change.isPending} onClick={() => change.mutate()}
         data-thread-resolution={comment.id}>
         {resolved ? <RotateCcw size={12} aria-hidden /> : <Check size={12} aria-hidden />}
         {resolved ? "Unresolve thread" : "Resolve thread"}
@@ -79,9 +79,19 @@ export function threadRuleClass(comment: ThreadRow): string {
   return " border-l-2 " + (comment.resolved_at ? "border-l-status-success" : "border-l-accent");
 }
 
-/** The label of the toggle that opens a thread: what is there, or what you can do. */
-export function repliesLabel(row: Pick<Comment, "reply_count">, expanded: boolean, canReply: boolean): string {
-  if (expanded) return row.reply_count ? `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}` : "Hide replies";
-  if (row.reply_count) return `${row.reply_count} ${row.reply_count === 1 ? "reply" : "replies"}`;
-  return canReply ? "Reply" : "View thread";
+/**
+ * The words of the disclosure over a comment's replies (RADD-1448): "Hide 3 replies", "Show 1
+ * reply", and "Show 3 replies · resolved" for the thread that is collapsed because it was resolved.
+ * Drawn only when there ARE replies; replying is the separate Reply action, so what you can do no
+ * longer changes these words (`_canReply` stays for the SDK's signature).
+ */
+export function repliesLabel(
+  row: Pick<Comment, "reply_count" | "is_thread" | "resolved_at">,
+  expanded: boolean,
+  _canReply?: boolean,
+): string {
+  const count = row.reply_count ?? 0;
+  const noun = `${count} ${count === 1 ? "reply" : "replies"}`;
+  if (expanded) return `Hide ${noun}`;
+  return `Show ${noun}${row.is_thread && row.resolved_at ? " · resolved" : ""}`;
 }

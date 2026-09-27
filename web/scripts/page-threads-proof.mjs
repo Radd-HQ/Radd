@@ -2,9 +2,11 @@
  * RADD-1283 against a running Radd: resolvable threads in a page's Discussion,
  * and a project's who-may-resolve rule reaching what a reader is told.
  *
- * Page: Start thread (lit only with text) makes a marked thread; Resolve marks it
- * "Resolved by …"; a plain Reply keeps it resolved; Reply and unresolve reopens
- * it; the Unresolved filter hides an ordinary comment.
+ * Page: the composer is a Comment / Start thread row until asked for (RADD-1448); Start thread
+ * opens it in Thread mode with one submit (lit only with text) that makes a marked thread; Resolve
+ * marks it "Resolved by …"; Reply on the collapsed thread opens it with the composer; a plain reply
+ * keeps it resolved and closes the composer; Reply and unresolve reopens it; the Unresolved filter
+ * hides an ordinary comment.
  *
  * Rule: on a fresh project, a member-scoped key (item.read + comment.write, no
  * project.manage) reads its OWN thread as resolvable under the default, and as
@@ -22,6 +24,9 @@ const output = process.env.RADD_PROOF_OUTPUT_DIR || "/tmp/radd-page-threads-proo
 /** Type into a just-mounted editor; retry until `lit` holds (a fresh Milkdown can
  *  take focus before its listener is attached, dropping the first keystrokes). */
 async function typeInto(session, editorSelector, text, lit) {
+  // The rich editor is lazy-loaded: on a real instance its chunk can land after the composer's
+  // buttons do, so wait for the editable before clicking it.
+  await waitFor(session, `!!document.querySelector(${JSON.stringify(editorSelector)})`, { attempts: 40 });
   for (let attempt = 0; attempt < 5; attempt++) {
     await session.click(editorSelector);
     await session.send("Input.insertText", { text });
@@ -55,10 +60,18 @@ async function main() {
       return { id: page.id, slug: page.slug, space: spaces[0].slug };`);
     await session.navigate(`${baseUrl}/pages/${page.space}/${page.slug}`, 2500);
     checks.discussionLoaded = await waitFor(session, `!!document.querySelector('${D} [data-start-thread]')`);
-    checks.startThreadDarkWhenEmpty = await session.eval(`document.querySelector('${D} [data-start-thread]').disabled`);
-    checks.startThreadLightsWithText = await typeInto(session, `${D} [contenteditable="true"]`, "Is this page still accurate?",
-      `!document.querySelector('${D} [data-start-thread]').disabled`);
+    checks.composerHiddenUntilAsked = await session.eval(`(() => {
+      const row = document.querySelector('${D} [data-comment-composer="closed"]');
+      return !!row && [...row.querySelectorAll("button")].map((b) => b.textContent.trim()).join("|") === "Comment|Start thread"
+        && !document.querySelector('${D} [data-comment-composer] [contenteditable="true"]');
+    })()`);
     await session.click(`${D} [data-start-thread]`);
+    const submit = `document.querySelector('${D} [data-comment-composer="open"] button[type="submit"]')`;
+    checks.startThreadDarkWhenEmpty = await waitFor(session, `${submit}?.textContent.trim() === "Start thread" && ${submit}.disabled
+      && document.querySelectorAll('${D} [data-comment-composer="open"] button[type="submit"]').length === 1`);
+    checks.startThreadLightsWithText = await typeInto(session, `${D} [data-comment-composer="open"] [contenteditable="true"]`, "Is this page still accurate?",
+      `!${submit}.disabled`);
+    await session.click(`${D} [data-comment-composer="open"] button[type="submit"]`);
     checks.threadMarked = await waitFor(session, `[...document.querySelectorAll('${D} [data-thread="unresolved"]')].some(li => li.textContent.includes("still accurate"))
       && [...document.querySelectorAll('${D} [data-thread-state]')].some(chip => chip.textContent.trim() === "Unresolved thread")`);
     const threadId = await session.eval(`[...document.querySelectorAll('${D} [data-thread]')].find(li => li.textContent.includes("still accurate"))?.dataset.commentId`);
@@ -69,15 +82,19 @@ async function main() {
       && ${card(threadId)}.querySelector('[data-thread-state]').textContent.includes("Resolved by")`);
     await session.screenshot(output + "/resolved.png");
 
-    await session.click(`${D} [data-thread-toggle="${threadId}"]`);
+    // Resolved, the thread folds its replies away; Reply opens them with the composer in one click.
+    await session.click(`${D} [data-open-reply="${threadId}"]`);
     const replyEditor = `${D} [data-comment-replies="${threadId}"] [contenteditable="true"]`;
     checks.replyComposerOnResolved = await waitFor(session, `!!document.querySelector('${replyEditor}') && !!document.querySelector('${D} [data-reply-unresolve]')`);
     await typeInto(session, replyEditor, "Checked the first half.",
       `!document.querySelector('${D} [data-reply-unresolve]').disabled`);
     await session.click(`${D} [data-comment-replies="${threadId}"] button[type="submit"]`);
+    // The composer closing is what says the post landed; until then its own text would match.
+    checks.postingClosesTheReplyComposer = await waitFor(session, `!document.querySelector('${D} [data-reply-composer]')`);
     checks.plainReplyKeepsResolved = await waitFor(session, `${card(threadId)}?.querySelector('[data-comment-replies]')?.textContent.includes("Checked the first half.")`)
       && await session.eval(`${card(threadId)}.dataset.thread === "resolved"`);
-    await waitFor(session, `document.querySelector('${D} [data-reply-composer]')?.dataset.composerKey === "1"`);
+    await session.click(`${D} [data-open-reply="${threadId}"]`);
+    await waitFor(session, `!!document.querySelector('${replyEditor}')`);
     await typeInto(session, replyEditor, "The second half is out of date.",
       `!document.querySelector('${D} [data-reply-unresolve]').disabled`);
     await session.click(`${D} [data-reply-unresolve]`);

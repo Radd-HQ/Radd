@@ -17,7 +17,7 @@
  * Usage: node scripts/inline-comments-proof.mjs <baseUrl> <spaceSlug> <email> <password>
  */
 import { resolve } from "node:path";
-import { openBrowser, report, sleep } from "./lib/cdp.mjs";
+import { openBrowser, report, sleep, waitFor } from "./lib/cdp.mjs";
 
 const [baseUrl, spaceSlug, email, password] = process.argv.slice(2);
 
@@ -67,7 +67,16 @@ async function main() {
     throw new Error("page body never rendered");
   };
 
-  const probe = async () => session.eval(`(() => {
+  // The rail loads its comments after the page renders; on a real instance that lands later than
+  // the body, so a probe taken early reads "Loading comments…" and no threads at all.
+  // …and each card's footer (Reply / Resolve) follows the permission read, so wait for it too:
+  // every open thread card must carry its Reply action before the rail counts as settled.
+  const railSettled = () => waitFor(session, `(() => {
+    const rail = document.querySelector('[data-inline-comment-rail]'); if (!rail) return false;
+    if ((rail.textContent || '').includes('Loading comments')) return false;
+    return [...rail.querySelectorAll('[data-thread]')].every((card) => card.dataset.thread === 'resolved' || card.querySelector('[data-open-reply]'));
+  })()`, { attempts: 60 });
+  const probe = async () => (await railSettled(), session.eval(`(() => {
     const rail = document.querySelector('[data-inline-comment-rail]');
     const highlight = CSS.highlights.get("radd-inline-comment");
     return {
@@ -79,8 +88,11 @@ async function main() {
       threads: rail ? rail.querySelectorAll('[data-thread]').length : 0,
       railText: rail ? (rail.textContent || "").replace(/\\s+/g, " ") : "",
       resolvedToggle: rail ? /Resolved \\(\\d+\\)/.test(rail.textContent || "") : false,
+      // RADD-1448: Reply is an action on every card; the disclosure exists only over replies.
+      replyActions: rail ? rail.querySelectorAll('[data-thread] [data-open-reply]').length : 0,
+      disclosures: rail ? rail.querySelectorAll('[data-thread] [data-thread-toggle]').length : 0,
     };
-  })()`);
+  })()`));
 
   await openPage();
 
@@ -151,6 +163,8 @@ async function main() {
     "and the highlight covers the right words":
       (afterPost.highlightedText[0] || "").includes(QUOTE),
     "a thread appears beside it": afterPost.railText.includes("Is this still true"),
+    "it offers Reply as an action, with no disclosure over no replies":
+      afterPost.threads === 1 && afterPost.replyActions === 1 && afterPost.disclosures === 0,
     // The reason the anchor is a quote and not an offset.
     "an edit ABOVE leaves it anchored": afterEditAbove.highlighted === 1,
     "still on the same sentence":

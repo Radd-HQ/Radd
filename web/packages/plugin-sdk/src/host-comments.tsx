@@ -66,6 +66,8 @@ export interface CommentLocation {
   anchored: boolean;
 }
 
+/** Which comments show their replies. Open by default, except a resolved thread; a reader's own
+ *  choice survives refreshes until the thread's resolution changes. */
 export interface ThreadExpansion {
   isOpen: (row: CommentRow) => boolean;
   toggle: (row: CommentRow) => void;
@@ -74,11 +76,50 @@ export interface ThreadExpansion {
 export interface CommentRepliesProps {
   row: CommentRow;
   canReply: boolean;
+  /** The unsent reply; a composer that mounts with one opens on it. */
   draft: string;
   onDraft: (value: string) => void;
   canResolve: boolean;
   linkedReplyId?: string;
   linkFor?: (commentId: string) => string;
+  /**
+   * RADD-1448 — the comment's whole thread footer. Given, mount this under EVERY comment: it draws
+   * the "Hide 3 replies" disclosure (only when there are replies), a Reply action (when `canReply`)
+   * that opens the composer under the replies in one click, `actions` beside them, the replies
+   * while open, and the reply composer while replying (Cancel or Escape closes it and keeps the
+   * draft; posting closes and clears it). Omitted: the older block, which the caller mounts only
+   * while its own toggle is open, with Reply at its foot.
+   */
+  expansion?: ThreadExpansion;
+  /** Footer controls after Reply, e.g. `ResolveThreadButton`. Only with `expansion`. */
+  actions?: ReactNode;
+}
+
+/** What the discussion composer posts: an ordinary comment, or a resolvable thread. */
+export const CommentComposerMode = { comment: "comment", thread: "thread" } as const;
+export type CommentComposerModeValue = (typeof CommentComposerMode)[keyof typeof CommentComposerMode];
+
+/**
+ * RADD-1448 — a discussion's composer. Closed (`mode` null) it is a row of two buttons, Comment and
+ * Start thread; open, a Comment | Thread switch, `controls`, `children` (the editor, autofocused by
+ * its caller), and ONE submit with a Cancel. Cancel and Escape call `onMode(null)` — keep the draft,
+ * so reopening shows it; close and clear it once the post lands.
+ */
+export interface CommentComposerProps {
+  mode: CommentComposerModeValue | null;
+  /** Open from the row, switch mode, or close (null). */
+  onMode: (mode: CommentComposerModeValue | null) => void;
+  /** The submit's words for this mode and audience: "Comment", "Start internal thread"… */
+  submitLabel: string;
+  /** False while there is nothing to post. */
+  canSubmit: boolean;
+  pending?: boolean;
+  error?: string;
+  onSubmit: () => void;
+  /** Beside the mode switch: an audience control, where the surface has one. */
+  controls?: ReactNode;
+  /** The editor, and anything that sits above it (a team audience, a canned-response picker). */
+  children: ReactNode;
 }
 
 export interface CommentHistoryProps {
@@ -92,6 +133,7 @@ export interface CommentHistoryProps {
 /** What the host provides for comments. */
 export interface CommentHost {
   CommentReplies?: ComponentType<CommentRepliesProps>;
+  CommentComposer?: ComponentType<CommentComposerProps>;
   CommentHistory?: ComponentType<CommentHistoryProps>;
   CopyCommentLink?: ComponentType<{ href: string; className?: string }>;
   ThreadBadge?: ComponentType<{ comment: CommentRow }>;
@@ -108,6 +150,8 @@ export interface CommentHost {
 }
 
 export const CommentReplies = bridged("CommentReplies", () => null);
+
+export const CommentComposer = bridged("CommentComposer", () => null);
 
 /** A comment list that keeps its place while older comments prepend. */
 export const CommentHistory = bridged("CommentHistory", (props) =>
@@ -128,8 +172,11 @@ const NO_FEED: CommentFeed = {
 const noFeed = (): CommentFeed => NO_FEED;
 const noLinked = (): CommentLocation | null => null;
 const noLanding = (): boolean => false;
-const closedThreads: ThreadExpansion = { isOpen: () => false, toggle: () => undefined };
-const noExpansion = (): ThreadExpansion => closedThreads;
+const defaultThreads: ThreadExpansion = {
+  isOpen: (row) => !(row.is_thread && row.resolved_at),
+  toggle: () => undefined,
+};
+const noExpansion = (): ThreadExpansion => defaultThreads;
 
 /** A parent's comments, one section, newest window first. */
 export function useCommentFeed(options: CommentFeedOptions): CommentFeed {
@@ -146,7 +193,8 @@ export function useLandOnComment(commentId: string | null | undefined): boolean 
   return (providedNow().useLandOnComment ?? noLanding)(commentId);
 }
 
-/** Which threads show their replies: manual choices survive refreshes; a linked one opens. */
+/** Which comments show their replies: open unless a resolved thread; manual choices survive
+ *  refreshes; a linked one opens. */
 export function useThreadExpansion(linkedRoot?: string): ThreadExpansion {
   return (providedNow().useThreadExpansion ?? noExpansion)(linkedRoot);
 }
@@ -160,10 +208,18 @@ export function commentHref(commentId: string): string {
   return url.toString();
 }
 
-/** "3 replies" / "Reply" / "Hide replies" — the thread toggle's words. */
+/**
+ * The words of the disclosure that shows or hides a comment's replies: "Hide 3 replies", "Show 1
+ * reply", "Show 3 replies · resolved". Only for a comment that HAS replies — Reply is a separate
+ * action, never this toggle. `canReply` no longer changes the words; it stays for the signature.
+ */
 export function repliesLabel(row: CommentRow, expanded: boolean, canReply: boolean): string {
   const host = providedNow().repliesLabel;
-  return host ? host(row, expanded, canReply) : expanded ? "Hide replies" : canReply ? "Reply" : "View thread";
+  if (host) return host(row, expanded, canReply);
+  const count = row.reply_count ?? 0;
+  const noun = `${count} ${count === 1 ? "reply" : "replies"}`;
+  if (expanded) return `Hide ${noun}`;
+  return `Show ${noun}${row.is_thread && row.resolved_at ? " · resolved" : ""}`;
 }
 
 /** The rule that marks a thread card (a leading space, or "" for a plain comment). */

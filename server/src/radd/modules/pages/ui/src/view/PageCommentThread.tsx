@@ -1,8 +1,8 @@
 import { Check, RotateCcw, Unlink } from "lucide-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
-  CommentReplies, CopyCommentLink, RichViewer, commentHref, invalidateEntities, relativeTime, repliesLabel,
-  sendTaskToggle, useCurrentUser, type CommentRow, type TaskToggle,
+  Button, CommentReplies, CopyCommentLink, RichViewer, commentHref, invalidateEntities, relativeTime, sendTaskToggle,
+  useCurrentUser, type CommentRow, type TaskToggle, type ThreadExpansion,
 } from "@radd/plugin-sdk";
 import { commentTasksPath } from "../endpoints";
 import { Tag } from "../queries";
@@ -25,6 +25,11 @@ export function ownTaskToggle(row: CommentRow, meId: string | undefined, queryCl
   };
 }
 
+/**
+ * One inline comment: its quote, the comment, and (RADD-1448) the same thread footer as every other
+ * comment — its replies unless resolved, a Reply action, and Resolve. A `preview` (the hover card)
+ * shows the comment and how many replies it has, and fetches nothing; opening it shows the thread.
+ */
 export function PageCommentThread({
   row,
   orphaned,
@@ -34,8 +39,8 @@ export function PageCommentThread({
   onFocus,
   onNavigate,
   onResolve,
-  expanded = false,
-  onToggle,
+  preview = false,
+  expansion,
   canReply,
   draft,
   onDraft,
@@ -49,14 +54,16 @@ export function PageCommentThread({
   onFocus?: () => void;
   onNavigate?: () => void;
   onResolve: () => void;
-  expanded?: boolean;
-  onToggle: () => void;
+  preview?: boolean;
+  /** Whose replies show; required unless `preview`. */
+  expansion?: ThreadExpansion;
   canReply: boolean;
   draft: string;
   onDraft: (value: string) => void;
 }) {
   const me = useCurrentUser();
   const queryClient = useQueryClient();
+  const replyCount = row.reply_count ?? 0;
   return (
     <div
       data-thread
@@ -91,20 +98,30 @@ export function PageCommentThread({
       <div className="mt-0.5">
         <RichViewer text={row.body} onToggleTask={ownTaskToggle(row, me?.id, queryClient)} />
       </div>
-      <button type="button" onClick={onToggle} aria-expanded={expanded}
-        className="mt-2 min-h-8 rounded px-1 text-sm font-medium text-fg-secondary hover:bg-elevated hover:text-fg">
-        {repliesLabel(row, expanded, canReply)}
-      </button>
-      {expanded && <CommentReplies row={row} canReply={canReply} draft={draft} onDraft={onDraft} canResolve={canResolve} linkFor={commentHref} />}
-      {canResolve && (
-        <button
-          type="button"
-          onClick={onResolve}
-          className="mt-1 flex items-center gap-1 rounded px-1 text-[11px] text-fg-muted hover:text-fg cursor-pointer"
-        >
-          {resolvedView ? <RotateCcw size={10} aria-hidden /> : <Check size={10} aria-hidden />}
-          {resolvedView ? "Unresolve" : "Resolve"}
-        </button>
+      {preview ? (
+        replyCount > 0 && (
+          <p className="mt-1 text-[11px] text-fg-muted" data-reply-count>
+            {replyCount} {replyCount === 1 ? "reply" : "replies"}
+          </p>
+        )
+      ) : (
+        <CommentReplies
+          row={row}
+          expansion={expansion}
+          canReply={canReply}
+          draft={draft}
+          onDraft={onDraft}
+          canResolve={canResolve}
+          linkFor={commentHref}
+          actions={
+            canResolve && (
+              <Button variant="ghost" onClick={onResolve} data-thread-resolution={row.id}>
+                {resolvedView ? <RotateCcw size={12} aria-hidden /> : <Check size={12} aria-hidden />}
+                {resolvedView ? "Unresolve" : "Resolve"}
+              </Button>
+            )
+          }
+        />
       )}
     </div>
   );

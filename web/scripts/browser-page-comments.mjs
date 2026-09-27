@@ -71,6 +71,15 @@ try {
   const s = browser.session;
   const quote = text => `[aria-label=${JSON.stringify(`Go to passage: ${text}`)}]`;
   const visit = () => s.navigate(`${spa.origin}/pages/handbook/long-page`);
+  // RADD-1448: the rail shows replies, which load after it and render in two steps (a plain
+  // placeholder, then the viewer): each moves what is under the rail, on mobile the page itself.
+  // Click a passage once the rail has stopped moving, or the click lands where it used to be.
+  const railSettled = () => until(s, () => s.eval(`new Promise((resolve) => {
+    const rail = document.querySelector('[data-inline-comment-rail]');
+    const height = rail?.getBoundingClientRect().height;
+    const loading = () => !!rail?.querySelector('[aria-busy="true"], [role="status"]');
+    setTimeout(() => resolve(!!rail && !loading() && rail.getBoundingClientRect().height === height), 300);
+  })`), "the inline comment rail never settled");
   const focusedRect = `(() => {const r = [...CSS.highlights.get('radd-inline-comment-focus')][0]?.getBoundingClientRect(); return r && {top:r.top,bottom:r.bottom};})()`;
   await visit();
   await until(s, `!!document.querySelector(${JSON.stringify(quote(late))}) && !document.querySelector(${JSON.stringify(quote(late))}).disabled`);
@@ -101,10 +110,26 @@ try {
   await s.eval(`document.querySelector(${JSON.stringify(quote(late))}).focus({preventScroll:true})`);
   await until(s, `CSS.highlights.get('radd-inline-comment-focus') && [...CSS.highlights.get('radd-inline-comment-focus')][0]?.toString() === ${JSON.stringify(late)}`);
   const replyRequests = () => requests.filter(request => request.route.endsWith('/replies'));
-  assert.equal(replyRequests().length, 0, "page rendering must not eagerly fetch threads");
+  // RADD-1448: replies show without a click, so the rail loads them — for the ONE thread that has
+  // replies, never for the four nobody answered, and a comment without replies has no disclosure.
+  await until(s, `document.querySelector('[data-inline-comment-rail] [data-comment-replies="comment-0"]')?.textContent.includes('The original reply')`);
+  assert.deepEqual([...new Set(replyRequests().map(request => request.route))], ["/comments/comment-0/replies"], "page rendering must fetch replies only where there are some");
+  const railFooters = await s.eval(`(() => {
+    const rail = document.querySelector('[data-inline-comment-rail]');
+    const toggle = rail.querySelector('[data-thread-toggle="comment-0"]');
+    return {toggle: toggle && [toggle.getAttribute('aria-expanded'), toggle.textContent.trim()],
+      quietToggle: !!rail.querySelector('[data-thread-toggle="comment-1"]'), quietArea: !!rail.querySelector('[data-comment-replies="comment-1"]'),
+      quietReply: rail.querySelector('[data-open-reply="comment-1"]')?.textContent.trim() ?? null};
+  })()`);
+  assert.deepEqual(railFooters, {toggle: ["true", "Hide 1 reply"], quietToggle: false, quietArea: false, quietReply: "Reply"});
+  const loaded = replyRequests().length;
   await s.send("Input.dispatchMouseEvent", {type: "mouseMoved", ...point});
   await until(s, `!!document.querySelector('[aria-label="Inline comment preview"]')`);
-  assert.equal(replyRequests().length, 0, "hover must reuse loaded annotation data");
+  assert.equal(replyRequests().length, loaded, "hover must reuse loaded annotation data");
+  // The hover card previews the comment and counts its replies; the thread opens on a click.
+  assert.deepEqual(await s.eval(`(() => {const p = document.querySelector('[data-page-comment-popover]');
+    return {count: p.querySelector('[data-reply-count]')?.textContent.trim(), reply: !!p.querySelector('[data-open-reply]'), editor: !!p.querySelector('[data-reply-composer]')};})()`),
+    {count: "1 reply", reply: false, editor: false});
   const preview = await s.eval(`(() => {const r = document.querySelector('[data-page-comment-popover]').getBoundingClientRect(); return {x:r.left+20,y:r.top+20,left:r.left,top:r.top};})()`);
   assert(Math.abs(preview.left - point.x) < 350 && Math.abs(preview.top - point.y) < 450, "preview should be near the pointer");
   await s.send("Input.dispatchMouseEvent", {type: "mouseMoved", x: preview.x, y: preview.y});
@@ -114,18 +139,28 @@ try {
   await s.send("Input.dispatchMouseEvent", {type: "mousePressed", button: "left", clickCount: 1, ...point});
   await s.send("Input.dispatchMouseEvent", {type: "mouseReleased", button: "left", clickCount: 1, ...point});
   await until(s, `document.querySelector('[data-comment-id="comment-0"]').classList.contains('border-strong')`);
-  await until(s, `document.querySelector('[aria-label="Inline comment thread"]')?.textContent.includes('The original reply')`);
-  // RADD-1246: the reply composer is the rich editor, not a textarea.
-  await until(s, `!!document.querySelector('[data-page-comment-popover] [data-comment-replies] [data-open-reply]')`);
-  await s.click('[data-page-comment-popover] [data-comment-replies] [data-open-reply]');
+  // Pinned, it is the thread: replies open, and Reply beside them.
+  await until(s, `document.querySelector('[aria-label="Inline comment thread"] [data-comment-replies]')?.textContent.includes('The original reply')`);
+  // RADD-1246: the reply composer is the rich editor, not a textarea — one click on Reply opens it.
+  await until(s, `!!document.querySelector('[data-page-comment-popover] [data-open-reply]')`);
+  await s.click('[data-page-comment-popover] [data-open-reply]');
   await until(s, `!!document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror')`);
+  // One composer per thread: the rail's card offers no Reply while the popover holds it.
+  assert.equal(await s.eval(`!!document.querySelector('[data-inline-comment-rail] [data-open-reply="comment-0"]')`), false, "two composers over one draft");
   await s.click('[data-page-comment-popover] [data-reply-composer] .ProseMirror');
   await s.send("Input.insertText", {text: "My persistent reply"});
   // The editor reports its markdown on its own tick: the Reply button enabling
-  // is the signal the draft reached state before the popover is dismissed.
+  // is the signal the draft reached state before the composer is dismissed.
   await until(s, `document.querySelector('[data-page-comment-popover] button[type="submit"]')?.disabled === false`);
-  await s.send("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape"});
+  // Escape closes the reply composer first (back to its Reply button), and the thread second.
+  await s.send("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+  await s.send("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+  await until(s, `!!document.querySelector('[data-page-comment-popover]') && !document.querySelector('[data-page-comment-popover] [data-reply-composer]')
+    && document.activeElement?.hasAttribute('data-open-reply')`);
+  await s.send("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+  await s.send("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
   await until(s, `!document.querySelector('[data-page-comment-popover]')`);
+  // The draft outlives both: reopening the thread reopens the composer on it.
   await s.send("Input.dispatchMouseEvent", {type: "mousePressed", button: "left", clickCount: 1, ...point});
   await s.send("Input.dispatchMouseEvent", {type: "mouseReleased", button: "left", clickCount: 1, ...point});
   await until(s, `document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror')?.textContent === 'My persistent reply'`);
@@ -135,7 +170,8 @@ try {
   assert.equal(await s.eval(`document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror').textContent`), "My persistent reply");
   failReply = false;
   await s.click('[data-page-comment-popover] button[type="submit"]');
-  await until(s, `document.querySelector('[data-page-comment-popover] [data-reply-composer] .ProseMirror')?.textContent === '' && document.querySelector('[data-page-comment-popover]').textContent.includes('My persistent reply')`);
+  // Posting closes the composer, and the reply appears in the thread.
+  await until(s, `!document.querySelector('[data-page-comment-popover] [data-reply-composer]') && document.querySelector('[data-page-comment-popover] [data-comment-replies]')?.textContent.includes('My persistent reply')`);
   // The rich editor serialises a paragraph with a trailing newline.
   assert.equal(replies.filter(reply => reply.body.trim() === "My persistent reply").length, 1);
   await s.screenshot('/tmp/radd-page-comment-thread.png');
@@ -147,6 +183,7 @@ try {
   await until(s, `!document.body.innerText.includes('Resolved (1)')`);
   await s.click('[aria-label="Edit page"]');
   await until(s, `!!document.querySelector('[contenteditable="true"].ProseMirror') && document.querySelector('[contenteditable="true"].ProseMirror').textContent.includes(${JSON.stringify(late)})`);
+  await railSettled();
   await s.click(quote(late));
   await until(s, `(${focusedRect})?.top > 100 && (${focusedRect})?.bottom < innerHeight - 100`);
   // Genuine editor input mutates the document; highlights must follow it.
@@ -158,6 +195,7 @@ try {
   await s.send("Emulation.setDeviceMetricsOverride", {width: 390, height: 844, deviceScaleFactor: 1, mobile: false});
   await visit();
   await until(s, `!!document.querySelector(${JSON.stringify(quote(late))}) && !document.querySelector(${JSON.stringify(quote(late))}).disabled`);
+  await railSettled();
   await s.click(quote(late));
   await until(s, `(${focusedRect})?.top > document.querySelector('[data-page-comment-sidebar]').getBoundingClientRect().bottom && (${focusedRect})?.bottom < innerHeight`);
   assert(await s.eval(`document.documentElement.scrollWidth <= innerWidth`), "mobile horizontal overflow");
@@ -165,15 +203,15 @@ try {
   const mobilePoint = await s.eval(`(() => {const r = [...CSS.highlights.get('radd-inline-comment-focus')][0].getClientRects()[0]; return {x:r.left+5,y:r.top+r.height/2};})()`);
   await s.send("Input.dispatchMouseEvent", {type: "mousePressed", button: "left", clickCount: 1, ...mobilePoint});
   await s.send("Input.dispatchMouseEvent", {type: "mouseReleased", button: "left", clickCount: 1, ...mobilePoint});
-  await until(s, `!!document.querySelector('[aria-label="Inline comment thread"] [data-comment-replies] [data-open-reply]')`);
-  await s.click('[aria-label="Inline comment thread"] [data-comment-replies] [data-open-reply]');
+  await until(s, `!!document.querySelector('[aria-label="Inline comment thread"] [data-open-reply]')`);
+  await s.click('[aria-label="Inline comment thread"] [data-open-reply]');
   await until(s, `!!document.querySelector('[aria-label="Inline comment thread"] [data-reply-composer] .ProseMirror')`);
   // Opening the composer grows the popover; its ResizeObserver re-places it on a later task, so the
   // grown popover is briefly below the fold. The property is the SETTLED position: wait for it.
   await until(s, `(() => {const p=document.querySelector('[data-page-comment-popover]'); if (!p?.querySelector('[data-reply-composer] .ProseMirror')) return false; const r=p.getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && r.top>=0 && r.bottom<=innerHeight;})()`);
   await s.screenshot('/tmp/radd-page-comment-thread-mobile.png');
   assert.equal(s.consoleErrors.filter(e => e.startsWith("EXCEPTION:")).length, 0, s.consoleErrors.join("\n"));
-  console.log("Page annotations: sidebar, prose/code jumps, hover previews, pinned threads, lazy replies, preserved drafts, failed reply retry, keyboard dismissal, orphan safety, resolve/reopen, editor input and mobile bounds passed.");
+  console.log("Page annotations: sidebar, prose/code jumps, hover previews that count replies, pinned threads with replies open, replies fetched only where they exist, Reply as a one-click action, one composer per thread, layered Escape, preserved drafts, failed reply retry, posting closes the composer, keyboard dismissal, orphan safety, resolve/reopen, editor input and mobile bounds passed.");
 } catch (error) {
   await browser?.session.screenshot("/tmp/radd-page-comments-failure.png");
   console.error(await browser?.session.eval(`JSON.stringify({viewport:{width:innerWidth,height:innerHeight},popover:document.querySelector('[data-page-comment-popover]')?.getBoundingClientRect(),sidebar:document.querySelector('[data-page-comment-sidebar]')?.getBoundingClientRect(),focus:[...(CSS.highlights.get('radd-inline-comment-focus')??[])].map(r=>r.getBoundingClientRect())})`));

@@ -199,11 +199,13 @@ export {
   type LiveDocumentOpen, type LiveDocumentState, type LiveDocumentHandle, type LiveDocumentSource, type LiveDocument,
 } from "./live-documents";
 export {
-  CommentReplies, CommentHistory, CopyCommentLink, ThreadBadge, ThreadFilter, ResolveThreadButton, CommentSection,
+  CommentReplies, CommentComposer, CommentComposerMode, CommentHistory, CopyCommentLink, ThreadBadge, ThreadFilter,
+  ResolveThreadButton, CommentSection,
   useCommentFeed, useLinkedComment, useLandOnComment, useThreadExpansion, commentHref, repliesLabel, threadRuleClass,
   sendTaskToggle,
   type CommentRow, type CommentAnchor, type CommentSectionValue, type CommentFeed, type CommentFeedOptions,
   type CommentLocation, type ThreadExpansion, type CommentRepliesProps, type CommentHistoryProps,
+  type CommentComposerProps, type CommentComposerModeValue,
 } from "./host-comments";
 export {
   DropdownMenu, Popover, AccessGrantsEditor, ScopedAccess, StateCategoryDot, SidebarSection, SidebarLink, useDismiss,

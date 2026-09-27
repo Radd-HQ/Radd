@@ -21,8 +21,12 @@ let comments = [{id: "ordinary", body: "An informational comment with a reply", 
   {id: "thread", body: "Has the delivery been verified?", is_thread: true, reply_count: 1, can_resolve: true},
   // RADD-1283: the project's rule does not let this reader resolve this one.
   {id: "locked", body: "Managers sign this off", is_thread: true, reply_count: 1, can_resolve: false,
-    resolved_at: "2026-09-20T09:00:00Z", resolver_name: "A Manager"}].map(row => ({...row, entity_type: "item", entity_id: item.id, author: user, visibility: "public", visible_to_teams: [], anchor: null, parent_comment_id: null, resolved_at: null, resolved_by: null, created_at: "2026-01-01", updated_at: "2026-01-01", ...row}));
-const replies = [{...comments[0], id: "reply", parent_comment_id: "thread", body: "Checking the delivery now.", is_thread: false}];
+    resolved_at: "2026-09-20T09:00:00Z", resolver_name: "A Manager"},
+  // RADD-1448: nobody answered this one — it shows no disclosure and no empty replies area.
+  {id: "quiet", body: "A note nobody answered", is_thread: false, reply_count: 0}].map(row => ({...row, entity_type: "item", entity_id: item.id, author: user, visibility: "public", visible_to_teams: [], anchor: null, parent_comment_id: null, resolved_at: null, resolved_by: null, created_at: "2026-01-01", updated_at: "2026-01-01", ...row}));
+const reply = (parent, id, body) => ({...comments[0], id, parent_comment_id: parent, body, is_thread: false, reply_count: 0});
+const replies = [reply("ordinary", "reply-ordinary", "Noted, thanks."), reply("thread", "reply", "Checking the delivery now."),
+  reply("locked", "reply-locked", "Signed off last week.")];
 let transition = {id: "transition", project_id: project.id, from_state_id: null, to_state_id: states[1].id, position: 0,
   applies_when: [], rules: [{check: "require_field", params: {kind: "builtin", key: "assignee", op: "set"}},
     {check: "require_approval", params: {approvers: [{kind: "user", id: user.id, name: user.name}]}},
@@ -66,11 +70,12 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     }
     else if (route.endsWith("/replies") && req.method === "POST") {
       const id = route.split("/")[2];
-      data = {...replies[0], id: `reply-${replies.length}`, body: body.body};
+      data = reply(id, `reply-${replies.length}`, body.body);
       replies.push(data);
-      if (body.unresolve) comments = comments.map(c => c.id === id ? {...c, resolved_at: null, resolved_by: null, resolver_name: null} : c);
+      comments = comments.map(c => c.id === id ? {...c, reply_count: replies.filter(r => r.parent_comment_id === id).length,
+        ...(body.unresolve ? {resolved_at: null, resolved_by: null, resolver_name: null} : {})} : c);
     }
-    else if (route.endsWith("/replies")) data = {comments: replies, older_cursor: null};
+    else if (route.endsWith("/replies")) data = {comments: replies.filter(r => r.parent_comment_id === route.split("/")[2]), older_cursor: null};
     else if (route.endsWith("/allowed-transitions")) data = {mode: "guards", targets: states.map(s => ({state_id: s.id, allowed: s.id === states[0].id || !comments.some(c => c.is_thread && !c.resolved_at), failures: []}))};
     else if (route === "/projects/project/transitions") data = [transition];
     else if (route === "/projects/project/thread-resolution") data = threadPolicy = req.method === "PUT" ? body : threadPolicy;
@@ -91,6 +96,18 @@ let browser;
 try {
   browser = await openBrowser({port: 18849, profile: await mkdtemp("/tmp/radd-resolvable-threads-"), scale: 1});
   const s = browser.session;
+  // RADD-1448: replies now render under every open comment, and each rendered body swaps its plain
+  // placeholder for the viewer as it nears the viewport — moving everything below it, the composer
+  // included. Click a control once it has stopped moving, or the click lands where it used to be.
+  const steadyClick = async (selector) => {
+    await until(s, () => s.eval(`new Promise((resolve) => {
+      const at = () => document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect().top;
+      const before = at();
+      setTimeout(() => resolve(before !== undefined && at() === before
+        && !document.querySelector('[data-comment-id] [aria-busy="true"]')), 250);
+    })`), `${selector} kept moving`);
+    return s.click(selector);
+  };
   const base = spa.origin;
   await s.navigate(base + "/issues/THR-1");
   await until(s, () => s.eval(`!!document.querySelector('[data-thread-resolution="thread"]')`), "thread lifecycle did not render");
@@ -107,54 +124,81 @@ try {
     };
   })()`);
   assert.deepEqual(look, {threadState: "unresolved", threadChip: "Unresolved thread", threadRule: "2px", ordinaryState: null, ordinaryChip: false});
+  // RADD-1448: replies show without a click; the disclosure is there only when replies are, and
+  // Reply is an action beside it — never the toggle.
+  await until(s, () => s.eval(`document.querySelector('[data-comment-replies="thread"]')?.innerText.includes('Checking the delivery now.')
+    && document.querySelector('[data-comment-replies="ordinary"]')?.innerText.includes('Noted, thanks.')`), "replies are not visible by default");
+  const footers = await s.eval(`(() => {
+    const toggle = (id) => document.querySelector('[data-thread-toggle="' + id + '"]');
+    const state = (id) => toggle(id) && [toggle(id).getAttribute("aria-expanded"), toggle(id).textContent.trim()];
+    return {
+      thread: state("thread"), ordinary: state("ordinary"), locked: state("locked"),
+      lockedHidden: !document.body.innerText.includes("Signed off last week."),
+      quietToggle: !!toggle("quiet"), quietArea: !!document.querySelector('[data-comment-replies="quiet"]'),
+      quietReply: document.querySelector('[data-open-reply="quiet"]')?.textContent.trim() ?? null,
+      replyIsNoDisclosure: [...document.querySelectorAll("[data-open-reply]")].every((b) => !b.hasAttribute("aria-expanded")),
+    };
+  })()`);
+  assert.deepEqual(footers, {thread: ["true", "Hide 1 reply"], ordinary: ["true", "Hide 1 reply"], locked: ["false", "Show 1 reply · resolved"],
+    lockedHidden: true, quietToggle: false, quietArea: false, quietReply: "Reply", replyIsNoDisclosure: true});
+  // One click on Reply opens a focused composer with ONE submit; Escape closes it back to Reply.
+  await steadyClick('[data-open-reply="quiet"]');
+  await until(s, () => s.eval(`!!document.querySelector('[data-comment-replies="quiet"] [data-reply-composer] [contenteditable="true"]')
+    && !!document.activeElement?.closest('[data-reply-composer]')`), "one click on Reply did not open a focused composer");
+  assert.deepEqual(await s.eval(`[...document.querySelectorAll('[data-comment-replies="quiet"] button[type="submit"]')].map((b) => b.textContent.trim())`), ["Reply"]);
+  await s.send("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+  await s.send("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+  await until(s, () => s.eval(`!document.querySelector('[data-reply-composer]') && document.activeElement?.dataset.openReply === "quiet"
+    && !document.querySelector('[data-comment-replies="quiet"]')`), "Escape did not close the composer back to its Reply button");
   // A thread the rule keeps from this reader: marked, but no Resolve and no Reply and unresolve.
   assert.equal(await s.eval(`document.querySelector('[data-comment-id="locked"] [data-thread-state]').textContent.trim()`), "Resolved by A Manager");
   assert.equal(await s.eval(`!!document.querySelector('[data-thread-resolution="locked"]')`), false, "Resolve offered against the rule");
-  await s.click('[data-thread-toggle="locked"]');
-  await until(s, () => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-open-reply]')`), "reply action missing");
-  await s.click('[data-comment-replies="locked"] [data-open-reply]');
-  await until(s, () => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [contenteditable="true"]')`), "locked thread reply composer missing");
+  // Reply on a collapsed (resolved) thread opens its replies with the composer under them.
+  await steadyClick('[data-open-reply="locked"]');
+  await until(s, () => s.eval(`!!document.querySelector('[data-comment-replies="locked"] [contenteditable="true"]')
+    && document.querySelector('[data-comment-replies="locked"]').innerText.includes("Signed off last week.")
+    && document.querySelector('[data-thread-toggle="locked"]').getAttribute("aria-expanded") === "true"`), "locked thread reply composer missing");
   assert.equal(await s.eval(`!!document.querySelector('[data-comment-replies="locked"] [data-reply-unresolve]')`), false, "Reply and unresolve offered against the rule");
-  await s.click('[data-thread-toggle="locked"]');
-  if (await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute("aria-expanded") === "false"`)) await s.click('[data-thread-toggle="thread"]');
-  await until(s, () => s.eval(`document.body.innerText.includes('Checking the delivery now.')`), "reply history missing");
+  await steadyClick('[data-comment-replies="locked"] [data-reply-cancel]');
+  await until(s, () => s.eval(`!document.querySelector('[data-reply-composer]') && document.activeElement?.dataset.openReply === "locked"`), "Cancel did not return to Reply");
   failResolve = true;
-  await s.click('[data-thread-resolution="thread"]');
+  await steadyClick('[data-thread-resolution="thread"]');
   await until(s, () => s.eval(`document.body.innerText.includes('Thread resolution refused')`), "resolution error missing");
   assert.equal(comments[1].resolved_at, null);
   failResolve = false;
   const before = requests.filter(r => r.route.endsWith("/allowed-transitions")).length;
-  await s.click('[data-thread-resolution="thread"]');
+  await steadyClick('[data-thread-resolution="thread"]');
   await until(s, () => s.eval(`document.querySelector('[data-thread-resolution="thread"]').textContent.includes('Unresolve thread')
     && document.querySelector('[data-comment-id="thread"] [data-thread-state]').textContent.includes('Resolved by Review Owner')`), "resolution did not update controls");
   await until(s, () => requests.filter(r => r.route.endsWith("/allowed-transitions")).length > before, "resolution did not refresh transitions");
-  assert.equal(await s.eval(`document.querySelector('[data-thread-toggle="thread"]').getAttribute('aria-expanded')`), 'false');
-  await s.click('[data-thread-toggle="thread"]');
-  await until(s, () => s.eval(`!!document.querySelector('[data-comment-replies="thread"] [data-open-reply]')`), "reply action missing");
-  await s.click('[data-comment-replies="thread"] [data-open-reply]');
+  // Resolving collapses the thread: its toggle says why.
+  assert.deepEqual(await s.eval(`(() => { const t = document.querySelector('[data-thread-toggle="thread"]'); return [t.getAttribute('aria-expanded'), t.textContent.trim()]; })()`),
+    ["false", "Show 1 reply · resolved"]);
+  await steadyClick('[data-open-reply="thread"]');
   // A resolved thread still takes replies: Reply keeps it resolved, Reply and unresolve reopens it.
   await until(s, () => s.eval(`!!document.querySelector('[data-reply-unresolve]')`), "resolved thread offers no Reply and unresolve");
   assert.equal(await s.eval(`document.querySelector('[data-reply-unresolve]').disabled`), true, "Reply and unresolve lit before any text");
-  await s.click('[data-reply-composer] [contenteditable="true"]');
+  await steadyClick('[data-reply-composer] [contenteditable="true"]');
   await s.send("Input.insertText", {text: "Late note"});
   await until(s, () => s.eval(`!document.querySelector('[data-reply-unresolve]').disabled`), "Reply and unresolve did not light up");
   await s.screenshot("/tmp/radd-thread-resolved.png");
-  await s.click('[data-comment-replies="thread"] button[type="submit"]');
+  await steadyClick('[data-comment-replies="thread"] button[type="submit"]');
   await until(s, () => requests.some(r => r.method === "POST" && r.route === "/comments/thread/replies" && r.body.body.includes("Late note") && !r.body.unresolve), "plain reply not sent");
   await until(s, () => s.eval(`document.querySelector('[data-comment-id="thread"]').dataset.thread === "resolved"`), "plain reply reopened the thread");
-  // Wait for the REMOUNT (composer key 0 → 1), not merely an editor: typing into the
-  // outgoing one loses the text when the fresh editor replaces it.
-  await until(s, () => s.eval(`document.querySelector('[data-reply-composer]')?.dataset.composerKey === "1"
-    && !!document.querySelector('[data-reply-composer] [contenteditable="true"]')`), "reply composer did not reset");
+  // Posting closes the composer, and the reply appears under the thread.
+  await until(s, () => s.eval(`!document.querySelector('[data-reply-composer]')
+    && document.querySelector('[data-comment-replies="thread"]')?.innerText.includes("Late note")`), "posting did not close the composer onto the new reply");
+  await steadyClick('[data-open-reply="thread"]');
   // A just-mounted editor can take focus before Milkdown's listener is attached,
   // so the first keystrokes never reach the draft; retry until the button lights.
+  await until(s, () => s.eval(`!!document.querySelector('[data-reply-composer] [contenteditable="true"]')`), "reply composer did not reopen");
   for (let attempt = 0; attempt < 5; attempt++) {
-    await s.click('[data-reply-composer] [contenteditable="true"]');
+    await steadyClick('[data-reply-composer] [contenteditable="true"]');
     await s.send("Input.insertText", {text: "Not done after all"});
     if (await s.eval(`new Promise(r => setTimeout(() => r(!document.querySelector('[data-reply-unresolve]').disabled), 400))`)) break;
   }
   await until(s, () => s.eval(`!document.querySelector('[data-reply-unresolve]').disabled`), "second reply did not light up");
-  await s.click('[data-reply-unresolve]');
+  await steadyClick('[data-reply-unresolve]');
   await until(s, () => requests.some(r => r.method === "POST" && r.route === "/comments/thread/replies" && r.body.unresolve === true), "reply-and-unresolve not sent");
   await until(s, () => s.eval(`document.querySelector('[data-comment-id="thread"]').dataset.thread === "unresolved"
     && !document.querySelector('[data-reply-unresolve]')`), "reply-and-unresolve did not reopen the thread");
@@ -163,25 +207,56 @@ try {
   assert(requests.some(r => r.route.endsWith("/comments/feed") && r.query.includes("unresolved=true")));
   await s.click('[data-comment-filter="all"]');
   await until(s, () => s.eval(`!!document.querySelector('[data-comment-id="ordinary"]')`), "all comments not restored");
-  // Close the reply composer so the issue composer is the sole editable editor.
-  await s.click('[data-thread-toggle="thread"]');
-  await until(s, () => s.eval(`!!document.querySelector('[contenteditable="true"]')`), "composer did not load");
-  // No checkbox: Start thread sits beside Comment and lights up with the text, as Comment does.
-  assert.equal(await s.eval(`!!document.querySelector('form input[type="checkbox"]')`), false, "composer still has a checkbox");
-  assert.equal(await s.eval(`document.querySelector('[data-start-thread]').disabled`), true, "Start thread lit on an empty composer");
-  await s.click('[contenteditable="true"]');
-  await s.send("Input.insertText", {text: "Please verify the checklist"});
-  await until(s, () => s.eval(`!document.querySelector('[data-start-thread]').disabled`), "Start thread did not light up");
-  await s.click('[data-start-thread]');
-  await until(s, () => comments.some(c => c.body.includes("Please verify") && c.is_thread), "composer did not create thread");
-  await until(s, () => s.eval(`!!document.querySelector('[contenteditable="true"]') && document.querySelector('[data-start-thread]').disabled`), "fresh composer missing");
+  // RADD-1448: the composer is hidden until asked for — a row of two buttons, and no editor.
+  const composerRow = await s.eval(`(() => {
+    const row = document.querySelector('[data-comment-composer="closed"]');
+    return row && {buttons: [...row.querySelectorAll("button")].map((b) => b.textContent.trim()),
+      editors: document.querySelectorAll('[data-comment-composer] [contenteditable="true"]').length,
+      hint: row.querySelector("[data-start-thread]")?.title};
+  })()`);
+  assert.deepEqual(composerRow, {buttons: ["Comment", "Start thread"], editors: 0,
+    hint: "A thread can be resolved: use it for a question that needs an answer"});
+  await steadyClick('[data-start-thread]');
+  const composer = `document.querySelector('[data-comment-composer="open"]')`;
+  const submit = `${composer}?.querySelector('button[type="submit"]')`;
+  await until(s, () => s.eval(`${composer}?.dataset.mode === "thread" && !!${composer}.querySelector('[contenteditable="true"]')
+    && !!document.activeElement?.closest('[data-comment-composer]')`), "Start thread did not open a focused composer");
+  // One submit, named for what it posts; no checkbox (the mode is a switch); dark until there is text.
+  const opened = await s.eval(`(() => { const c = ${composer}; return {
+    submits: [...c.querySelectorAll('button[type="submit"]')].map((b) => b.textContent.trim()),
+    checkbox: !!c.querySelector('input[type="checkbox"]'), disabled: c.querySelector('button[type="submit"]').disabled,
+    mode: c.querySelector('[data-composer-mode] [aria-checked="true"]')?.textContent.trim() }; })()`);
+  assert.deepEqual(opened, {submits: ["Start thread"], checkbox: false, disabled: true, mode: "Thread"}, "Start thread lit on an empty composer");
+  // The mode switch changes the submit's words: a wrong choice needs no Cancel.
+  await steadyClick('[data-composer-mode] [data-option="comment"]');
+  await until(s, () => s.eval(`${submit}?.textContent.trim() === "Comment" && ${composer}.dataset.mode === "comment"`), "mode switch did not relabel the submit");
+  await steadyClick('[data-composer-mode] [data-option="thread"]');
+  await until(s, () => s.eval(`${submit}?.textContent.trim() === "Start thread"`), "mode switch did not switch back");
   for (let attempt = 0; attempt < 5; attempt++) {
-    await s.click('[contenteditable="true"]');
-    await s.send("Input.insertText", {text: "An ordinary follow-up"});
-    if (await s.eval(`new Promise(r => setTimeout(() => r(Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === 'Comment' && !b.disabled)), 400))`)) break;
+    await steadyClick('[data-comment-composer="open"] [contenteditable="true"]');
+    await s.send("Input.insertText", {text: "Please verify the checklist"});
+    if (await s.eval(`new Promise(r => setTimeout(() => r(!(${submit})?.disabled), 400))`)) break;
   }
-  await until(s, () => s.eval(`Array.from(document.querySelectorAll("button")).some(b => b.textContent.trim() === "Comment" && !b.disabled)`), "comment submit did not enable");
-  await s.click('button', text => text.trim() === "Comment");
+  await until(s, () => s.eval(`!(${submit})?.disabled`), "Start thread did not light up");
+  // Cancel keeps the draft: the row returns (focus on the button it came from), reopening shows it.
+  await steadyClick('[data-composer-cancel]');
+  await until(s, () => s.eval(`!!document.querySelector('[data-comment-composer="closed"]') && document.activeElement?.hasAttribute("data-start-thread")`), "Cancel did not return to the row");
+  await steadyClick('[data-start-thread]');
+  await until(s, () => s.eval(`${composer}?.querySelector('[contenteditable="true"]')?.textContent.includes("Please verify the checklist") && !(${submit})?.disabled`), "Cancel lost the draft");
+  await steadyClick('[data-comment-composer="open"] button[type="submit"]');
+  await until(s, () => comments.some(c => c.body.includes("Please verify") && c.is_thread), "composer did not create thread");
+  // Posting closes and clears it: Comment reopens an empty composer in Comment mode.
+  await until(s, () => s.eval(`!!document.querySelector('[data-comment-composer="closed"]')`), "posting did not close the composer");
+  await steadyClick('[data-open-comment]');
+  await until(s, () => s.eval(`${composer}?.dataset.mode === "comment" && ${composer}.querySelector('[contenteditable="true"]')?.textContent === ""
+    && (${submit})?.disabled && (${submit})?.textContent.trim() === "Comment"`), "fresh composer missing");
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await steadyClick('[data-comment-composer="open"] [contenteditable="true"]');
+    await s.send("Input.insertText", {text: "An ordinary follow-up"});
+    if (await s.eval(`new Promise(r => setTimeout(() => r(!(${submit})?.disabled), 400))`)) break;
+  }
+  await until(s, () => s.eval(`!(${submit})?.disabled`), "comment submit did not enable");
+  await steadyClick('[data-comment-composer="open"] button[type="submit"]');
   await until(s, () => comments.some(c => c.body.includes("ordinary follow-up") && !c.is_thread), "ordinary comment was marked as a thread");
   await s.screenshot("/tmp/radd-resolvable-threads.png");
   await s.navigate(base + "/p/THR/settings/workflow");
@@ -231,7 +306,15 @@ try {
   await until(s, () => s.eval(`!!document.querySelector('[data-thread-rule="type-bug"]')`), "issue-type rule row missing");
   assert.equal(threadPolicy.default, "author");
   await s.screenshot("/tmp/radd-thread-workflow.png");
-  console.log(JSON.stringify({passed: true, checks: ["ordinary comments have no lifecycle", "a thread looks like a thread", "the rule hides resolve controls", "reply keeps a resolved thread resolved", "reply and unresolve reopens", "replies persist", "resolution error", "resolve/reopen", "transition refresh", "unresolved filter", "composer creates explicit thread", "composer resets", "workflow preserves independent rules", "approval editor is the approvals remote", "withdrawn plugin rule fails closed and can be removed"], screenshots: ["/tmp/radd-thread-resolved.png", "/tmp/radd-resolvable-threads.png", "/tmp/radd-thread-workflow.png"]}));
+  console.log(JSON.stringify({passed: true, checks: ["ordinary comments have no lifecycle", "a thread looks like a thread",
+    "replies show without a click", "no disclosure on a comment nobody answered", "a resolved thread starts collapsed and says why",
+    "Reply opens a focused composer in one click", "Escape and Cancel return to Reply", "Reply on a collapsed thread opens it",
+    "the rule hides resolve controls", "reply keeps a resolved thread resolved", "posting closes the composer onto the reply",
+    "reply and unresolve reopens", "replies persist", "resolution error", "resolve/reopen", "transition refresh", "unresolved filter",
+    "the composer is a Comment / Start thread row until asked", "the open composer has one submit", "the mode switch relabels the submit",
+    "Cancel keeps the draft", "composer creates explicit thread", "composer resets", "workflow preserves independent rules",
+    "approval editor is the approvals remote", "withdrawn plugin rule fails closed and can be removed"],
+    screenshots: ["/tmp/radd-thread-resolved.png", "/tmp/radd-resolvable-threads.png", "/tmp/radd-thread-workflow.png"]}));
 } catch (error) {
   if (browser) {
     await browser.session.screenshot("/tmp/radd-threads-failure.png");
