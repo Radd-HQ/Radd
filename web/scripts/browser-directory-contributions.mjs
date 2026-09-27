@@ -23,7 +23,7 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
  if(p.startsWith('/api/')){
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...alwaysLoaded,...enabled],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version:'1.4.0'}],nav:[{key:'fixture',plugin:'fixture',path:'/settings/directory-proof',section:'settings',label:'Directory proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...alwaysLoaded,...enabled],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version: '2.0.0'}],nav:[{key:'fixture',plugin:'fixture',path:'/settings/directory-proof',section:'settings',label:'Directory proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/users/directory')||p.endsWith('/teams')||p.includes('-candidates')){
    // Ignore unrelated host directory reads, which lack pagination parameters.
    if(url.searchParams.has('limit')){

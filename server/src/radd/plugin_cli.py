@@ -117,7 +117,7 @@ exclude = ["**/node_modules/**", "**/ui/vendor/**"]
         imports += ', PluginUiManifest, NavItemSpec'
         ui_manifest = f'''    ui=PluginUiManifest(
         nav=(NavItemSpec(key="{name}", label="{name}", path="/{name}", section="main"),),
-        remote="/plugins/{name}/remoteEntry.js", ui_api_version="1.0.0",
+        remote="/plugins/{name}/remoteEntry.js", ui_api_version="2.0.0",
     ),
 '''
     (source / "__init__.py").write_text(f'''{imports}

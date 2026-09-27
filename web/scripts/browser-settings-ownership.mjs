@@ -19,7 +19,7 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:denied?'member':'admin',global_role:denied?'member':'admin',permissions:denied?[]:['*']};
   else if(p.includes('capabilities')){
    if(capsFail){res.writeHead(500,{'content-type':'application/json'});res.end(JSON.stringify({detail:'Status backend unavailable'}));return true;}
-   data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${rev}`,ui_api_version:'1.3.0'})),nav:[...enabled].filter(x=>x in NAV).map(name=>({key:name,plugin:name,path:`/settings/${name}`,section:'settings',group:'Server',...NAV[name]})),widget_types:[],view_types:[]};
+   data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${rev}`,ui_api_version:'2.0.0'})),nav:[...enabled].filter(x=>x in NAV).map(name=>({key:name,plugin:name,path:`/settings/${name}`,section:'settings',group:'Server',...NAV[name]})),widget_types:[],view_types:[]};
   }
   else if(/^\/api\/v1\/(scripts|monitoring|ai\/embeddings|mail\/health)/.test(p)) {
    reads.push(p);

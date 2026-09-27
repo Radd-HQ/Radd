@@ -22,5 +22,5 @@ plugin = RaddPlugin(
     on_startup=(hub.start,),
     on_shutdown=(hub.shutdown,),
     # UI API 1.17.0: live documents + the editor binding (RADD-1397).
-    ui=PluginUiManifest(remote="/plugins/collab/remoteEntry.js", ui_api_version="1.17.0"),
+    ui=PluginUiManifest(remote="/plugins/collab/remoteEntry.js", ui_api_version="2.0.0"),
 )

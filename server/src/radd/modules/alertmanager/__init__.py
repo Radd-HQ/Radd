@@ -33,7 +33,7 @@ plugin = RaddPlugin(
     # RADD-1370: the settings page is this plugin's own remote; disabling the
     # plugin withdraws the page and its nav entry with it.
     ui=PluginUiManifest(
-        remote="/plugins/alertmanager/remoteEntry.js", ui_api_version="1.13.0",
+        remote="/plugins/alertmanager/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="alertmanager", label="Alertmanager", path="/settings/alertmanager",
                          section="settings", group="Server", icon="bell-ring", order=99, requires_admin=True),),
     ),

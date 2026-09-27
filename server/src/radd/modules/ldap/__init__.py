@@ -20,7 +20,7 @@ plugin = RaddPlugin(
     # RADD-1381: Settings → Directory is this plugin's own remote; disabling the
     # plugin withdraws the page and its nav entry with it.
     ui=PluginUiManifest(
-        remote="/plugins/ldap/remoteEntry.js", ui_api_version="1.14.0",
+        remote="/plugins/ldap/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="directory", label="Directory", path="/settings/directory",
                          section="settings", group="Server", icon="folder-tree", order=55, requires_admin=True),),
     ),

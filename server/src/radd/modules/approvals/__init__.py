@@ -45,5 +45,5 @@ plugin = RaddPlugin(
     # the approver editor on the workflow transitions editor (RADD-1383, the slot
     # workflow's UI package publishes in transition-rule-contract.ts), and the My Work
     # widget. 1.15.0: it links and peeks items through the SDK's host bridge.
-    ui=PluginUiManifest(remote="/plugins/approvals/remoteEntry.js", ui_api_version="1.15.0"),
+    ui=PluginUiManifest(remote="/plugins/approvals/remoteEntry.js", ui_api_version="2.0.0"),
 )

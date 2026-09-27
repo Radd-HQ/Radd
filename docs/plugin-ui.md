@@ -61,11 +61,12 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `AutomationNodeInspectorProps` (`{node, params, schema, onChange, …}`, exported by the SDK) | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `server/src/radd/modules/automations/ui/src/GraphInspector.tsx` |
 
 **Host components (RADD-1325).** An inspector should look and behave like the host's own forms
-without bundling heavy editors. `@radd/plugin-sdk` exports `CodeEditor`, `TokenList` and
-`SchemaForm`: thin wrappers the host fills at boot via `provideHostComponents` (the SPA's
-CodeMirror, lazy-loaded; the `{{token}}` picker; the `params_schema` form). A plugin imports them
-from the SDK like any primitive; outside the host they degrade to plain inputs. The `ai` and
-`scripts` plugins' inspectors are the worked examples (`modules/ai/ui`, `modules/scripts/ui`).
+without bundling heavy editors. `@radd/plugin-sdk` exports `CodeEditor` and `TokenList`: thin
+wrappers the host fills at boot via `provideHostComponents` (the SPA's CodeMirror, lazy-loaded;
+the `{{token}}` picker). A plugin imports them from the SDK like any primitive; outside the host
+they degrade to plain inputs. `SchemaForm` (the `params_schema` form) is the SDK's own since
+RADD-1409 — it renders anywhere and is not a host-filled slot. The `ai` and `scripts` plugins'
+inspectors are the worked examples (`modules/ai/ui`, `modules/scripts/ui`).
 
 A plugin's settings PAGE reaches three more platform surfaces the same way (RADD-1377):
 `ScopedSettings` (the settings-cascade editor for the `section` the plugin declared: effective
@@ -552,7 +553,29 @@ content. There is no `origin` on the wire that marks a mailed body — `comments
 deliberately NULL for a person's mailed reply (RADD-1318) and items carry none — so the annotation
 itself is what the claim reads.
 
-Remotes that use either declare `ui_api_version="1.19.0"`.
+Remotes that use either declared `ui_api_version="1.19.0"` when they shipped; see 2.0.0 below.
+
+## SDK 2.0.0 (RADD-1465): the removed exports
+
+The first MAJOR. `isUiApiCompatible` refuses a remote whose declared major differs, so a remote
+built against any 1.x is refused by a 2.x host, and vice versa; every in-repo remote and
+`examples/acme-notes` declare `ui_api_version="2.0.0"`, and a remote that declares nothing is taken
+to need the current contract (`DEFAULT_UI_API_VERSION` in `modules/capabilities/router.py`). What
+went, and where its job lives now:
+
+- `paletteAnswerQuery` — the palette's answer query is internal to `usePaletteAnswer`
+  (`palette-modes.ts`); a mode supplies `answer`, the SDK runs it.
+- `ANCHOR_CONTEXT_CHARS` — a private constant of `anchoring.ts`; `makeAnchor` decides the context.
+- `textNodesOf` — a private helper of `dom-text.ts`; the exported `renderedText`,
+  `rangeForOffsets` and `offsetsForSelection` walk the nodes for the caller.
+- `SlotId.sidebarNav` (`sidebar.nav`) — sidebar entries come from the backend manifest's
+  `NavItemSpec`, never from a UI slot; a folding section is `SlotId.sidebarSection`.
+- `SlotId.itemAction` (`item.action`) — an item's actions are contributed commands
+  (`registerCommandSource` in `commands.ts`, read by the issue's quick actions through
+  `useContributedCommands`).
+- `HostComponents.SchemaForm` — `SchemaForm` is the SDK's own component (RADD-1409, above), so the
+  host no longer provides one at boot; `provideHostComponents` fills `CodeEditor`, `TokenList`,
+  `ScopedSettings` and `RoleGrants`.
 
 **Named exception (RADD-1401).** The issue's History tab (`components/items/HistoryTab.tsx`) still
 words `csat.*` and `mail.*` events itself. It is a ledger: one switch words every plugin's events
@@ -625,7 +648,7 @@ template. A plugin is:
   ui/                          # the UI, colocated with the plugin
     package.json               # depends on @radd/plugin-sdk
     vite.config.mjs            # `export default raddRemote(dirname(...))` — config from the SDK
-    tsconfig.json
+    tsconfig.json              # { "extends": "@radd/plugin-sdk/tsconfig.plugin.json", "include": ["src"] } — nothing else
     src/index.tsx              # export default definePlugin({ activate(ctx){ ctx.registerSlot(...) } })
     src/<components>.tsx        # your UI — imports ONLY @radd/plugin-sdk (+ react/react-query)
     dist/remoteEntry.js         # built output, served at /plugins/<name>/ from HERE
@@ -642,7 +665,7 @@ plugin = RaddPlugin(
         nav=(NavItemSpec(key="acme-notes", label="Notes", path="/notes", section="main",
                          requires=("item.read",)),),        # section="settings" ⇒ a Settings tab
         remote="/plugins/acme-notes/remoteEntry.js",        # the UI bundle URL
-        ui_api_version="1.0.0",                              # host version-gates this
+        ui_api_version="2.0.0",                              # host version-gates this (the SDK major)
     ),
 )
 ```
@@ -693,7 +716,7 @@ then enable it in **Settings → Plugins** — its UI and backend contributions 
 - View and widget types are backend registries (`registries.view_types` / `widget_types`, from
   `ViewTypeSpec` / `WidgetTypeSpec`); the `viewType` / `dashboardWidget` slots are their UI half.
 
-Settings pages may host other plugins' sections with `<Slot id={SlotId.settingsSection} match="monitoring" />`. A contribution owns its data request as well as its UI. For polling that is useful only while visible, consume the query `signal` and use `gcTime: 0` / `staleTime: 0` to abort on withdrawal and fetch fresh data on reactivation. Mutations already accepted by the backend may finish; do not discard saved configuration on disable. Navigation requirements are presentation gates; the owning endpoint must enforce authorization too.
+Settings pages may host other plugins' sections with `<Slot id={SlotId.settingsSection} match="monitoring" />`. A contribution owns its data request as well as its UI. Use shared, stable query keys and the SDK's normal stale times (`useContributedQueries`, `usePluginData` and the directory controls default to 30s): two surfaces reading the same rows then share one request, and a page revisited within the window renders from cache. Do not set `gcTime: 0` / `staleTime: 0` to "abort on withdrawal" — the loader already drops a withdrawn optional plugin's cache and aborts its in-flight reads (RADD-1345, RADD-1377), and a zero window only makes every mount refetch. Consume the query `signal` so an aborted read stops. Mutations already accepted by the backend may finish; do not discard saved configuration on disable. Navigation requirements are presentation gates; the owning endpoint must enforce authorization too.
 
 Built-in remotes use the shared Tailwind sheet, whose source scan includes every module's `ui/src` directory. External bundles should use SDK primitives/tokens or supply their own styles; adding a plugin must never require a named entry in the host stylesheet.
 

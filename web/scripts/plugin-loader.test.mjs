@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { importTs } from './lib/load-ts.mjs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 
 let serial = 0;
 async function fixture(importer, statics = {}) {
@@ -138,10 +139,23 @@ test('a stalled import becomes a visible error and cannot register after timeout
 });
 
 
-test('SDK version gate rejects remotes requiring newer APIs', async () => {
+test('SDK version gate rejects remotes requiring newer APIs or another major', async () => {
   const sdk = await importTs('web/packages/plugin-sdk/src/version.ts');
-  for (const version of ['1.0.0','1.1.0','1.2.0','1.3.0',sdk.UI_API_VERSION]) assert(sdk.isUiApiCompatible(version));
-  for (const version of ['2.0.0','1.999.0',sdk.UI_API_VERSION.replace(/\d+$/, n => String(Number(n) + 1)),'','1.garbage.0']) assert(!sdk.isUiApiCompatible(version));
+  assert.equal(sdk.UI_API_VERSION, '2.0.0', 'RADD-1465: the first major; bump this line with the ledger in docs/plugin-ui.md');
+  for (const version of ['2.0.0', sdk.UI_API_VERSION]) assert(sdk.isUiApiCompatible(version), version);
+  // Every 1.x is refused (the removed exports would be undefined at runtime), as is anything newer.
+  for (const version of ['1.0.0','1.19.0','1.999.0','3.0.0','2.999.0',sdk.UI_API_VERSION.replace(/\d+$/, n => String(Number(n) + 1)),'','2.garbage.0']) assert(!sdk.isUiApiCompatible(version), version);
+});
+
+test('every in-repo remote, the example and the host defaults declare a ui_api_version the SDK accepts (RADD-1465)', async () => {
+  // A manifest that still pins 1.x builds, type-checks and is refused by the loader at runtime — a
+  // wire constant with no compiler behind it — so the declared versions are checked here.
+  const sdk = await importTs('web/packages/plugin-sdk/src/version.ts');
+  const manifests = [...readdirSync('server/src/radd/modules').map(m => `server/src/radd/modules/${m}/__init__.py`),
+    'examples/acme-notes/src/acme_notes/__init__.py', 'server/src/radd/plugin_cli.py', 'server/src/radd/modules/capabilities/router.py'].filter(existsSync);
+  const declared = manifests.flatMap(file => [...readFileSync(file, 'utf8').matchAll(/(?:ui_api_version="|DEFAULT_UI_API_VERSION = ")(\d+\.\d+\.\d+)"/g)].map(m => [file, m[1]]));
+  assert(declared.length >= 15, `the scan reaches the remotes' manifests (${declared.length})`);
+  assert.deepEqual(declared.filter(([, version]) => !sdk.isUiApiCompatible(version)), []);
 });
 
 

@@ -54,7 +54,7 @@ plugin = RaddPlugin(
     # The page is this plugin's remote; its link sits in the settings "Import"
     # group. Disabling the plugin withdraws both.
     ui=PluginUiManifest(
-        remote="/plugins/jiraimport/remoteEntry.js", ui_api_version="1.14.0",
+        remote="/plugins/jiraimport/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="jiraimport", label="Jira", path="/settings/jira-import",
                          section="settings", group="Import", icon="database-zap", order=10,
                          requires_admin=True),),

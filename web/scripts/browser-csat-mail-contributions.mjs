@@ -59,8 +59,8 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     if (route === "/auth/me") data = signedIn ? admin : anyone;
     else if (route === "/capabilities") data = {capabilities: [], nav: [], view_types: [], widget_types: [],
       plugins: [...CORE_PLUGINS, ...(csatOn ? ["csat"] : []), ...(mailOn ? ["mailintake"] : [])],
-      remotes: [...(csatOn ? [{name: "csat", remote_entry: "/plugins/csat/remoteEntry.js", ui_api_version: "1.19.0"}] : []),
-        ...(mailOn ? [{name: "mailintake", remote_entry: "/plugins/mailintake/remoteEntry.js", ui_api_version: "1.19.0"}] : [])]};
+      remotes: [...(csatOn ? [{name: "csat", remote_entry: "/plugins/csat/remoteEntry.js", ui_api_version: "2.0.0"}] : []),
+        ...(mailOn ? [{name: "mailintake", remote_entry: "/plugins/mailintake/remoteEntry.js", ui_api_version: "2.0.0"}] : [])]};
     else if (route === `/public/csat/${TOKEN}`) {
       if (req.method === "POST") {submissions.push(body); survey = {...survey, rating: body.rating, responded_at: "2026-09-26T10:00:00Z"};}
       data = survey;

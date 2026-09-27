@@ -142,7 +142,7 @@ plugin = RaddPlugin(
     # Federated UI: Settings → Email, the Monitoring mail card, the requester chip
     # in the issue rail, and a `content.body` claim folding signatures (RADD-1401).
     ui=PluginUiManifest(
-        remote="/plugins/mailintake/remoteEntry.js", ui_api_version="1.19.0",
+        remote="/plugins/mailintake/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="email", label="Email", path="/settings/email", section="settings",
                          group="Server", icon="mail", order=45, requires_admin=True),),
     ),

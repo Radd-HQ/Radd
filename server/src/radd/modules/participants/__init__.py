@@ -80,5 +80,5 @@ plugin = RaddPlugin(
         EventTypeSpec(ParticipantEvent.REMOVED, "Participant removed", "Service desk", item_scoped=True),
     ),
     # Federated UI: the issue rail's Participants card (issue.panel.section slot).
-    ui=PluginUiManifest(remote="/plugins/participants/remoteEntry.js", ui_api_version="1.0.0"),
+    ui=PluginUiManifest(remote="/plugins/participants/remoteEntry.js", ui_api_version="2.0.0"),
 )

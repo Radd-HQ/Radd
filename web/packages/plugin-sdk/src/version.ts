@@ -3,8 +3,9 @@
  * against a specific major; the host runtime loader refuses to load a remote whose declared
  * `ui_api_version` requires a newer version or a different MAJOR — a clean version gate, mirroring the backend
  * `api_version` gate. Bump the major on a breaking SDK change; the minor on additive changes.
+ * 2.0.0 (RADD-1465) is the first major: docs/plugin-ui.md keeps the ledger of what each version removed.
  */
-export const UI_API_VERSION = "1.19.0";
+export const UI_API_VERSION = "2.0.0";
 
 function versionParts(version: string): number[] | null {
   if (!/^\d+\.\d+(?:\.\d+)?$/.test(version)) return null;

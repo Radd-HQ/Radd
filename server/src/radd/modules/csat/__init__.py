@@ -41,5 +41,5 @@ plugin = RaddPlugin(
     # Federated UI (spec 94, csat/ui): the rating chip in the issue rail (issue.panel.section) and,
     # since RADD-1401, the public rating page the survey email links to — a `public.page` matched
     # by pattern (UI API 1.19.0), outside the shell and the sign-in gate.
-    ui=PluginUiManifest(remote="/plugins/csat/remoteEntry.js", ui_api_version="1.19.0"),
+    ui=PluginUiManifest(remote="/plugins/csat/remoteEntry.js", ui_api_version="2.0.0"),
 )

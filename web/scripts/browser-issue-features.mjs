@@ -46,7 +46,7 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     else if (route === "/comments/reply/locate") data = {id:"reply", root_id:"thread", entity_type:"item", entity_id:"issue", anchored:false};
     else if (route === "/auth/me") data = user;
     else if (route.includes("capabilities")) data = {capabilities: [], nav: [], plugins: [...CORE_PLUGINS, "mailintake"],
-      remotes: [{name: "mailintake", remote_entry: "/plugins/mailintake/remoteEntry.js", ui_api_version: "1.19.0"}]};
+      remotes: [{name: "mailintake", remote_entry: "/plugins/mailintake/remoteEntry.js", ui_api_version: "2.0.0"}]};
     else if (route.endsWith("/mail-contacts")) data = [];
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};

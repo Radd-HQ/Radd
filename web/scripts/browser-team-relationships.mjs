@@ -24,7 +24,7 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
    if(hold===type){res.on('close',()=>{if(!res.writableEnded)aborted++;});await new Promise(resolve=>{release=resolve;});}
    if(refuse){sendJson(res,{detail:'Team names denied'},403);return true;}
   }else if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...CORE_PLUGINS.filter(name=>name!=='teams'),'fixture',...(enabled?['teams']:[])],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version:'1.7.0'}],nav:[{key:'fixture',plugin:'fixture',path:'/settings/team-proof',section:'settings',label:'Team proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...CORE_PLUGINS.filter(name=>name!=='teams'),'fixture',...(enabled?['teams']:[])],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version: '2.0.0'}],nav:[{key:'fixture',plugin:'fixture',path:'/settings/team-proof',section:'settings',label:'Team proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/summary'))data={total:0,related_count:0,permissions:[]};
   else if(p.includes('notifications'))data={items:[],notifications:[],unread_count:0,total:0};
   else if(p.includes('preferences'))data={};

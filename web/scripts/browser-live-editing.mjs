@@ -44,7 +44,7 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     if (route === "/auth/me") data = user;
     else if (route.includes("capabilities")) data = { capabilities: [], nav: [], ui: [],
       plugins: [...CORE_PLUGINS, ...(collabEnabled ? ["collab"] : [])],
-      remotes: collabEnabled ? [{ name: "collab", remote_entry: `/plugins/collab/remoteEntry.js?v=${collabVersion}`, ui_api_version: "1.17.0" }] : [] };
+      remotes: collabEnabled ? [{ name: "collab", remote_entry: `/plugins/collab/remoteEntry.js?v=${collabVersion}`, ui_api_version: "2.0.0" }] : [] };
     else if (/^\/collab\/pages\/page\/join$/.test(route)) {
       // The backend's rule, in miniature: an editor seeds a room whose document is still empty.
       const session = `session-${++sessions}`;

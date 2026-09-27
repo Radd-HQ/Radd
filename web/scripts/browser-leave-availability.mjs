@@ -22,7 +22,7 @@ const spa = await serveBuiltSpa(async(req,res,url) => {
   if (p.startsWith('/api/')) {
     let data = [];
     if (p.endsWith('/auth/me')) data = user;
-    else if (p.includes('capabilities')) data = {capabilities:[],nav:[],plugins:enabled?[...CORE_PLUGINS,'leave']:[...CORE_PLUGINS],remotes:enabled?[{name:'leave',remote_entry:brokenRemote?'/plugins/leave/missing.js':'/plugins/leave/remoteEntry.js',ui_api_version:'1.0.0'}]:[],widget_types:[],view_types:[]};
+    else if (p.includes('capabilities')) data = {capabilities:[],nav:[],plugins:enabled?[...CORE_PLUGINS,'leave']:[...CORE_PLUGINS],remotes:enabled?[{name:'leave',remote_entry:brokenRemote?'/plugins/leave/missing.js':'/plugins/leave/remoteEntry.js',ui_api_version: '2.0.0'}]:[],widget_types:[],view_types:[]};
     else if (p === '/api/v1/leave' && req.method === 'POST') {
       let raw = ''; for await (const chunk of req) raw += chunk;
       data = { ...period, ...JSON.parse(raw), id: 'created' }; saved.push(data); writes.push(JSON.parse(raw));

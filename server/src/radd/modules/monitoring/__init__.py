@@ -5,7 +5,7 @@ from .router import router
 plugin = RaddPlugin(
     name="monitoring",
     ui=PluginUiManifest(
-        remote="/plugins/monitoring/remoteEntry.js", ui_api_version="1.3.0",
+        remote="/plugins/monitoring/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="monitoring", label="Monitoring", path="/settings/monitoring",
                          section="settings", group="Server", icon="activity", order=115,
                          requires_admin=True),),

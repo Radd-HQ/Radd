@@ -8,6 +8,7 @@ third-party plugins are discoverable via the `radd.plugins` entry point.
 from radd.config import settings
 from radd.kernel import PluginUiManifest, registries
 from radd.kernel.loader import load_plugins
+from radd.modules.capabilities.router import DEFAULT_UI_API_VERSION
 from radd.modules.pluginmgr import discovery
 
 
@@ -24,7 +25,7 @@ def test_participants_plugin_declares_a_federated_ui_remote():
     participants = registries.plugins["participants"]
     assert participants.ui is not None
     assert participants.ui.remote == "/plugins/participants/remoteEntry.js"
-    assert participants.ui.ui_api_version == "1.0.0"
+    assert participants.ui.ui_api_version == "2.0.0"  # RADD-1465: the first major; the SDK refuses 1.x
 
 
 def test_plugin_ui_bundle_is_served_from_the_plugin_dir():
@@ -40,12 +41,12 @@ def test_capabilities_remotes_reflect_enabled_plugins_with_ui():
     """The shape the /capabilities router builds: one remote per enabled plugin that ships UI."""
     load_plugins(settings.modules)
     remotes = {
-        p.name: (p.ui.remote, p.ui.ui_api_version or "1.0.0")
+        p.name: (p.ui.remote, p.ui.ui_api_version or DEFAULT_UI_API_VERSION)
         for p in registries.plugins.values()
         if p.ui is not None and p.ui.remote
     }
     assert "participants" in remotes
-    assert remotes["participants"] == ("/plugins/participants/remoteEntry.js", "1.0.0")
+    assert remotes["participants"] == ("/plugins/participants/remoteEntry.js", "2.0.0")
 
 
 def test_plugin_view_and_widget_types_register_and_teardown():

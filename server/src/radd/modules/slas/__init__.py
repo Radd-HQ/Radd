@@ -59,7 +59,7 @@ plugin = RaddPlugin(
             ),
         ),
         remote="/plugins/slas/remoteEntry.js",
-        ui_api_version="1.16.0",
+        ui_api_version="2.0.0",
     ),
     view_types=(
         ViewTypeSpec(

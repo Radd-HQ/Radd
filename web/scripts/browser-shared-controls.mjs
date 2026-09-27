@@ -28,7 +28,7 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
  if(p.startsWith('/api/')){
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]}`,ui_api_version:'1.5.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/controls-proof',section:'settings',label:'Controls proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]}`,ui_api_version: '2.0.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/controls-proof',section:'settings',label:'Controls proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/projects/summary')||p.endsWith('/page-spaces/summary'))data={total:0,related_count:0,permissions:[]};
   else if(p.includes('notifications'))data={items:[],notifications:[],unread_count:0,total:0};
   else if(p.includes('preferences'))data={};

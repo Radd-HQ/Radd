@@ -39,7 +39,7 @@ async function main() {
   }
 
   const uiApiVersionGate = await session.eval(
-    `(()=>{const m=globalThis.__RADD_SHARED__&&globalThis.__RADD_SHARED__["@radd/plugin-sdk"];return m?{compatible_1:m.isUiApiCompatible("1.4.0"),incompatible_2:m.isUiApiCompatible("2.0.0"),version:m.UI_API_VERSION}:null;})()`);
+    `(()=>{const m=globalThis.__RADD_SHARED__&&globalThis.__RADD_SHARED__["@radd/plugin-sdk"];return m?{compatibleMajor:m.isUiApiCompatible("2.0.0"),incompatibleMajor:m.isUiApiCompatible("1.4.0"),version:m.UI_API_VERSION}:null;})()`);
 
   // LIVE disable → the section must vanish without a reload; then re-enable → it returns.
   async function toggle(action) {
@@ -71,7 +71,7 @@ async function main() {
   const ok = loginStatus === 204 &&
     Array.isArray(manifestRemotes) && manifestRemotes.some((r) => r.name === "participants") &&
     activePlugins.includes("participants") && domFound && importMap &&
-    uiApiVersionGate && uiApiVersionGate.compatible_1 === true && uiApiVersionGate.incompatible_2 === false &&
+    uiApiVersionGate && uiApiVersionGate.compatibleMajor === true && uiApiVersionGate.incompatibleMajor === false &&
     disappearedOnDisable && reappearedOnEnable;
   process.exit(ok ? 0 : 1);
 }

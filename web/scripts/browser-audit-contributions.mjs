@@ -28,7 +28,7 @@ const spa=await serveBuiltSpa((req,res,url)=>{
   }
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'viewer',name:'Viewer',email:'viewer@example.test',instance_role:admin?'admin':'member',global_role:admin?'admin':'member',permissions:admin?['*']:[]};
-  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].filter(name=>!core.has(name)).map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.11.0'})),nav:[{plugin:'fixture',key:'fixture',path:'/settings/history-proof',section:'settings',label:'History proof',requires:[]},...(enabled.has('audit')?[{plugin:'audit',key:'audit',path:'/settings/audit',section:'settings',group:'Server',label:'Audit log',requires:[],requires_any_project:['project.manage']}]:[])],widget_types:[],view_types:[]};
+  else if(p.endsWith('/capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].filter(name=>!core.has(name)).map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version: '2.0.0'})),nav:[{plugin:'fixture',key:'fixture',path:'/settings/history-proof',section:'settings',label:'History proof',requires:[]},...(enabled.has('audit')?[{plugin:'audit',key:'audit',path:'/settings/audit',section:'settings',group:'Server',label:'Audit log',requires:[],requires_any_project:['project.manage']}]:[])],widget_types:[],view_types:[]};
   else if(p==='/api/v1/leave/current')data=[{user_id:'viewer',kind:'leave',label:'Audit absence',until:'2026-09-27'}];
   else if(p==='/api/v1/projects') {data=[project];res.setHeader('X-Total-Count','1');requests.push({p,...Object.fromEntries(url.searchParams)});}
   else if(p==='/api/v1/projects/p-1')data=project;

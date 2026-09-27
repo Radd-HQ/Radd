@@ -103,7 +103,7 @@ plugin = RaddPlugin(
     # Every AI surface (Settings → AI, node inspectors, editor/read-mode actions,
     # the palette's Ask, the query bar's NL mode) is this remote's.
     ui=PluginUiManifest(
-        remote="/plugins/ai/remoteEntry.js", ui_api_version="1.18.0",
+        remote="/plugins/ai/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="ai", label="AI", path="/settings/ai", section="settings",
                          group="Server", icon="sparkles", order=25, requires_admin=True),),
     ),

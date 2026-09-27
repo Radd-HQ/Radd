@@ -28,7 +28,7 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
  if(p.startsWith('/api/')){
   let data=[];
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version:'1.4.0'}],nav:[{key:'automations',plugin:'automations',path:'/settings/automations',section:'settings',label:'Automations',requires:[]},{key:'fixture',plugin:'fixture',path:'/settings/automation-proof',section:'settings',label:'Canvas proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version: '2.0.0'}],nav:[{key:'automations',plugin:'automations',path:'/settings/automations',section:'settings',label:'Automations',requires:[]},{key:'fixture',plugin:'fixture',path:'/settings/automation-proof',section:'settings',label:'Canvas proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/automations/catalog'))data=catalog;
   else if(p.endsWith('/automations'))data=[savedRule];
   else if(p.endsWith('/automations/saved/versions'))data=[oldVersion];

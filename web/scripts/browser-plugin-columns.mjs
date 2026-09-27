@@ -75,7 +75,7 @@ function api(req, url, body) {
   const p = url.pathname.replace(/^\/api\/v1/, '');
   if (p === '/auth/me') return { id: 'admin', name: 'Admin', email: 'admin@example.test', instance_role: 'admin', global_role: 'admin', permissions: ['*'], preferences: {} };
   if (p === '/capabilities') return { capabilities: [], plugins: [...enabled], nav: [], widget_types: [], view_types: [],
-    remotes: [...enabled].filter((n) => OPTIONAL.has(n)).map((name) => ({ name, remote_entry: `/plugins/${name}/remoteEntry.js`, ui_api_version: '1.15.0' })) };
+    remotes: [...enabled].filter((n) => OPTIONAL.has(n)).map((name) => ({ name, remote_entry: `/plugins/${name}/remoteEntry.js`, ui_api_version: '2.0.0' })) };
   if (p === '/items/sla/batch') {
     batches.push({ ids: [...body.item_ids] });
     return Object.fromEntries(body.item_ids.filter((id) => SLA[id]).map((id) => [id, SLA[id]]));

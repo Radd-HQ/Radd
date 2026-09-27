@@ -46,7 +46,7 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     if (route === "/auth/me") data = user;
     else if (route.includes("capabilities")) data = {capabilities: [], nav: [], ui: [],
       plugins: [...CORE_PLUGINS, ...(approvalsEnabled ? ["approvals"] : [])],
-      remotes: approvalsEnabled ? [{name: "approvals", remote_entry: "/plugins/approvals/remoteEntry.js", ui_api_version: "1.0.0"}] : []};
+      remotes: approvalsEnabled ? [{name: "approvals", remote_entry: "/plugins/approvals/remoteEntry.js", ui_api_version: "2.0.0"}] : []};
     else if (route === "/items/issue/approvals") data = {live: [], history: [], requestable_to_states: []};
     else if (route === "/projects/summary") data = {total: 1, related_count: 0, permissions: ["*"]};
     else if (route === "/page-spaces/summary") data = {total: 0, permissions: []};

@@ -14,7 +14,7 @@ plugin = RaddPlugin(
     ),
     depends_on=("auth", "teams", "events"),
     routers=(router,),
-    ui=PluginUiManifest(remote="/plugins/leave/remoteEntry.js", ui_api_version="1.2.0"),
+    ui=PluginUiManifest(remote="/plugins/leave/remoteEntry.js", ui_api_version="2.0.0"),
     event_types=(
         # RADD-1320: WHO is away — a person or a team, never both (holidays neither).
         EventTypeSpec(LeaveEvent.CREATED, "Leave recorded", "People", subjects=("user", "team")),

@@ -644,7 +644,7 @@ test('the survey page is csat\'s and a mailed body reads as mailintake draws it:
   assert.match(signed,/contentBody\(\{\s*id: "mailintake\.signature"/,'mailintake claims mailed bodies');
   assert.match(signed,/\/mail\/signatures\/\$\{context\.entityType\}\/\$\{context\.entityId\}\/restore/,'mailintake owns the restore route');
   assert(nodes(`${mail}/ui/src/index.tsx`).some(n=>n.type==='Identifier'&&n.name==='signedBody'),'the remote lists the claim');
-  for (const manifest of [`${csat}/__init__.py`,`${mail}/__init__.py`]) assert.match(readFileSync(manifest,'utf8'),/ui_api_version="1\.19\.0"/,manifest);
+  for (const manifest of [`${csat}/__init__.py`,`${mail}/__init__.py`]) assert.match(readFileSync(manifest,'utf8'),/ui_api_version="2\.0\.0"/,manifest);
 });
 
 test('raw palette utilities stay out of every UI tree: plugin UIs, the SDK and the example use the semantic tokens (RADD-1463)',()=>{

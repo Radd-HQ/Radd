@@ -17,7 +17,7 @@ const spa=await serveBuiltSpa((req,res,url)=>{
   if(p==='/api/v1/fields/settings-summary')hostSummaryReads.push(p);
   else if(p.startsWith('/api/v1/fields'))fieldReads++;
   if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...CORE_PLUGINS.filter(name=>name!=='fields'),'fixture',...(enabled?['fields']:[])],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version:'1.8.0'}],nav:[{key:'fixture',plugin:'fixture',path:'/settings/fields-proof',section:'settings',label:'Fields proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...CORE_PLUGINS.filter(name=>name!=='fields'),'fixture',...(enabled?['fields']:[])],remotes:[{name:'fixture',remote_entry:'/plugins/fixture/remoteEntry.js',ui_api_version: '2.0.0'}],nav:[{key:'fixture',plugin:'fixture',path:'/settings/fields-proof',section:'settings',label:'Fields proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/summary'))data={total:0,related_count:0,permissions:[]};else if(p.includes('notifications'))data={items:[],notifications:[],unread_count:0,total:0};else if(p.includes('preferences'))data={};sendJson(res,data);return true;}
 });
 let browser;const checks=[];

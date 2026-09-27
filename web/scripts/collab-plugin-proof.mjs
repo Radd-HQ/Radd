@@ -79,8 +79,8 @@ try {
   check("the browser reports a hover-capable pointer", await one.session.eval(`matchMedia("(hover: hover)").matches`));
   const caps = await one.session.eval(`fetch("/api/v1/capabilities").then((r) => r.json())`);
   const remote = caps.remotes.find((r) => r.name === "collab");
-  check("collab is enabled and declares its remote at UI API 1.17.0",
-    remote?.remote_entry.startsWith("/plugins/collab/remoteEntry.js") && remote.ui_api_version === "1.17.0", JSON.stringify(remote));
+  check("collab is enabled and declares its remote at UI API 2.0.0",
+    remote?.remote_entry.startsWith("/plugins/collab/remoteEntry.js") && remote.ui_api_version === "2.0.0", JSON.stringify(remote));
 
   created = await one.session.eval(`(async () => { ${PAGE_API}
     const space = (await api("POST", "/page-spaces", { name: "Collab plugin proof ${STAMP}", slug: "collab-plugin-${STAMP}" })).body;

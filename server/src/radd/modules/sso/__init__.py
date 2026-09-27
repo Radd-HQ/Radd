@@ -26,7 +26,7 @@ plugin = RaddPlugin(
     # the page also carries the core auth module's MFA policy and must outlive
     # a disabled sso. The login page's buttons stay in the host: they render
     # before sign-in, when no remote can load.
-    ui=PluginUiManifest(remote="/plugins/sso/remoteEntry.js", ui_api_version="1.14.0"),
+    ui=PluginUiManifest(remote="/plugins/sso/remoteEntry.js", ui_api_version="2.0.0"),
     on_startup=(_startup,),
     # Spec 123: provider administration is audited with a diff; not a trigger.
     event_types=(

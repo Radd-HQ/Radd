@@ -63,7 +63,7 @@ plugin = RaddPlugin(
     routers=(router, pipeline_router),
     # The page is this plugin's remote, its link in the settings "Import" group.
     ui=PluginUiManifest(
-        remote="/plugins/confluenceimport/remoteEntry.js", ui_api_version="1.14.0",
+        remote="/plugins/confluenceimport/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="confluenceimport", label="Confluence", path="/settings/confluence-import",
                          section="settings", group="Import", icon="book-up", order=20, requires_admin=True),),
     ),

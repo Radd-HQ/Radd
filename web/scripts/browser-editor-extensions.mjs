@@ -63,7 +63,7 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     if (route === "/auth/me") data = user;
     else if (route.includes("capabilities")) data = {capabilities: [], nav: [], ui: [],
       plugins: [...CORE_PLUGINS, ...(aiEnabled ? ["ai"] : [])],
-      remotes: aiEnabled ? [{name: "ai", remote_entry: `/plugins/ai/remoteEntry.js?v=${aiVersion}`, ui_api_version: "1.16.0"}] : []};
+      remotes: aiEnabled ? [{name: "ai", remote_entry: `/plugins/ai/remoteEntry.js?v=${aiVersion}`, ui_api_version: "2.0.0"}] : []};
     else if (route === "/ai/status") data = {enabled: true, stream_responses: true, features: {editor_actions: true, summarize: true, similar_rerank: false}};
     else if (route === "/ai/editor/actions") data = [{id: "improve_writing", label: "Improve writing", kind: "builtin"},
       {id: "summarize_selection", label: "Summarize", kind: "builtin"}];

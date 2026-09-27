@@ -176,13 +176,13 @@ Which modules are core or optional, where each one's UI lives and what it `depen
 
 **Remaining:**
 - **RADD-1398:** a plain home load fetches ~210 script chunks. Measure it before changing anything.
-- **RADD-1395 live-provider proof:** verified on 2026-09-27 against a live qwen3.8-27b served at localhost:8221 (`editor-ai-proof.mjs`, all checks; `ai-protect-proof`, `ai-provider-options-proof` and `ai-settings-page-proof` too). It had been unverified until then because the model host refused connections from the build machine.
 - **SDK peer dependencies:** it does not declare `prosemirror-*` as peer dependencies, so an external plugin that binds the editor must install them itself (RADD-1397).
 - **Per-file ledger** (`scripts/plugin_inventory.py`): it stays an on-demand tool writing to an ignored path (RADD-1374). File-by-file ownership of migrations, build and deploy config (RADD-1344) was not re-audited.
 
 **Resolved since the first audit:**
 - The host router no longer imports optional settings pages, the Pages/Dashboards routes or the public CSAT page (RADD-1378–1382, 1392, 1393, 1401). Route contributions match patterns (`$name` segments), and a `public.page` slot serves pre-auth plugin pages.
 - Core modules no longer reach optional plugins, and a test refuses the class (RADD-1349).
+- **RADD-1395 live-provider proof:** verified on 2026-09-27 against a live qwen3.8-27b served at localhost:8221 (`editor-ai-proof.mjs`, all checks; `ai-protect-proof`, `ai-provider-options-proof` and `ai-settings-page-proof` too). It had been unverified until then because the model host refused connections from the build machine.
 
 ## RADD-1345 verification
 

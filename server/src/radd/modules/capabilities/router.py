@@ -18,6 +18,10 @@ from .schemas import (
     WidgetTypeOptionRead,
 )
 
+#: What a remote that declares no `ui_api_version` is taken to need: the SDK's CURRENT contract
+#: (`web/packages/plugin-sdk/src/version.ts`, bumped with it — the host refuses another major).
+DEFAULT_UI_API_VERSION = "2.0.0"
+
 
 def _versioned_remote(name: str, remote: str) -> str:
     """Append a build-version query (`?v=<mtime>`) to a remote's url so a REBUILT bundle is fetched
@@ -80,7 +84,7 @@ async def get_capabilities(user: Actor) -> CapabilitiesRead:
                 PluginRemoteRead(
                     name=p.name,
                     remote_entry=_versioned_remote(p.name, p.ui.remote),
-                    ui_api_version=p.ui.ui_api_version or "1.0.0",
+                    ui_api_version=p.ui.ui_api_version or DEFAULT_UI_API_VERSION,
                 )
                 for p in registries.plugins.values()
                 if p.ui is not None and p.ui.remote

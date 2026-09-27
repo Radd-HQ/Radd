@@ -36,7 +36,7 @@ const spa=await serveBuiltSpa(async(req,res,url)=>{
    if(refuse===family){res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({detail:`${family} denied`}));return true;}
    if(data===undefined){res.writeHead(404,{'content-type':'application/json'});res.end(JSON.stringify({detail:'Not found'}));return true;}
   }else if(p.endsWith('/auth/me'))data={id:'admin',name:'Admin',email:'admin@example.test',instance_role:'admin',global_role:'admin',permissions:['*']};
-  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version:'1.7.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/picker-proof',section:'settings',label:'Picker proof',requires:[]}],widget_types:[],view_types:[]};
+  else if(p.includes('capabilities'))data={capabilities:[],plugins:[...enabled],remotes:[...enabled].map(name=>({name,remote_entry:`/plugins/${name}/remoteEntry.js?v=${versions[name]??1}`,ui_api_version: '2.0.0'})),nav:[{key:'fixture',plugin:'fixture',path:'/settings/picker-proof',section:'settings',label:'Picker proof',requires:[]}],widget_types:[],view_types:[]};
   else if(p.endsWith('/projects/summary'))data={total:125,related_count:0,permissions:[]};
   else if(p.endsWith('/page-spaces/summary'))data={total:0,related_count:0,permissions:[]};
   else if(p.includes('notifications'))data={items:[],notifications:[],unread_count:0,total:0};

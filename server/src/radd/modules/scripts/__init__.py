@@ -12,7 +12,7 @@ from .types import PERM_MANAGE, ScriptEvent
 plugin = RaddPlugin(
     # The node inspectors ship in this remote (`automation.node.inspector`).
     ui=PluginUiManifest(
-        remote="/plugins/scripts/remoteEntry.js", ui_api_version="1.5.0",
+        remote="/plugins/scripts/remoteEntry.js", ui_api_version="2.0.0",
         nav=(NavItemSpec(key="scripts", label="Scripts", path="/settings/scripts",
                          section="settings", group="Server", icon="terminal", order=95,
                          requires=(PERM_MANAGE,)),),

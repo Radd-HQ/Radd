@@ -49,6 +49,22 @@ For a UI plugin, first enter `/work/acme-tools/src/acme_tools/ui`, run
 `npm install` and commit `package-lock.json`. Then run `npm run build`.
 The generated frontend uses Node 22.12+ and the target release's SDK/toolchain.
 
+The UI's `tsconfig.json` is one line and stays that way:
+
+```json
+{ "extends": "@radd/plugin-sdk/tsconfig.plugin.json", "include": ["src"] }
+```
+
+The SDK's `tsconfig.plugin.json` carries the compiler options every plugin UI
+shares (the JSX runtime, module resolution, strictness); a plugin adds nothing
+to it, so a toolchain change lands in every plugin through the SDK. Every
+in-repo plugin UI and `examples/acme-notes` are exactly that line. A builtin
+plugin's third-party dependencies are declared in `web/package.json` — one
+`npm ci` in `web/` installs every remote's modules (`build-all` links each
+`ui/node_modules` to it) — so a builtin's own `package.json` names them for the
+record, but only the host manifest installs them. An external plugin installs
+its own.
+
 Open **Settings → Plugins**, find `acme-tools`, click **Install**, then **Enable**.
 Restart the RADD web and worker processes. Its page appears in the sidebar.
 The status distinguishes requested activation from what this server has loaded.
