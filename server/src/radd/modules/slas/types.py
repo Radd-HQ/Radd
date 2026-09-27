@@ -25,6 +25,19 @@ class SlaViewType(StrEnum):
     QUEUE = "slas.queue"
 
 
+class SlaWidgetType(StrEnum):
+    """The dashboard widget types this plugin contributes (RADD-1462) — the stored
+    `widget_type`, and the `match` of the remote's `dashboard.widget` contribution."""
+
+    #: The service-desk SLA report card over `GET /sla-report`. The value predates the
+    #: contribution (it was a dashboards builtin): saved widgets keep working unchanged.
+    REPORT = "report_sla"
+
+
+#: The add-widget picker's name for the report widget.
+REPORT_WIDGET_LABEL = "Service desk SLA"
+
+
 #: The queue's rows: the `/items` paging contract, ordered by live SLA urgency (`queue.py`).
 QUEUE_ROWS_PATH = "/sla-queue-items"
 #: A queue starts with the reporter and the SLA timer beside the triage basics (spec 64).

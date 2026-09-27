@@ -17,9 +17,6 @@ WIDGET_MIN_WIDTH = 2
 WIDGET_MAX_WIDTH = 12
 # slq_list renders a compact card — hard row cap (spec 75).
 SLQ_LIST_MAX_LIMIT = 20
-# Mirrors GET /sla-report's `weeks` bound. The report is the slas plugin's
-# (RADD-1386), an optional plugin dashboards cannot import.
-SLA_MAX_WEEKS = 26
 DASHBOARD_MAX_SHARES = 50
 
 _width_field = Field(default=4, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
@@ -57,13 +54,6 @@ class ReportBurnupConfig(BaseModel):
     measure: ReportMeasure = ReportMeasure.COUNT
 
 
-class ReportSlaConfig(BaseModel):
-    """report_sla — {project_id?, weeks?} (spec 86: global scope)."""
-
-    project_id: uuid.UUID | None = None
-    weeks: int = Field(default=12, ge=1, le=SLA_MAX_WEEKS)
-
-
 class SlqCountConfig(BaseModel):
     """slq_count — a big-number card over GET /items/count. '' = everything in
     scope; `label` is the number's caption (falls back to the widget title)."""
@@ -97,7 +87,6 @@ WIDGET_CONFIG_MODELS: dict[WidgetType, type[BaseModel]] = {
     WidgetType.REPORT_TIME_IN_STATE: ReportTimeInStateConfig,
     WidgetType.REPORT_VELOCITY: ReportVelocityConfig,
     WidgetType.REPORT_BURNUP: ReportBurnupConfig,
-    WidgetType.REPORT_SLA: ReportSlaConfig,
     WidgetType.SLQ_COUNT: SlqCountConfig,
     WidgetType.SLQ_LIST: SlqListConfig,
     WidgetType.VIEW_COUNT: ViewCountConfig,
@@ -143,11 +132,6 @@ class BurnupWidget(_WidgetBase):
     config: ReportBurnupConfig
 
 
-class SlaWidget(_WidgetBase):
-    widget_type: Literal[WidgetType.REPORT_SLA]
-    config: ReportSlaConfig
-
-
 class SlqCountWidget(_WidgetBase):
     widget_type: Literal[WidgetType.SLQ_COUNT]
     config: SlqCountConfig
@@ -169,7 +153,6 @@ WidgetCreate = Annotated[
     | TimeInStateWidget
     | VelocityWidget
     | BurnupWidget
-    | SlaWidget
     | SlqCountWidget
     | SlqListWidget
     | ViewCountWidget,
@@ -179,9 +162,10 @@ WidgetCreate = Annotated[
 
 class PluginWidget(_WidgetBase):
     """A plugin-contributed widget type (spec 94): `widget_type` is a key in
-    `registries.widget_types` and `config` is a free-form dict the plugin owns +
-    interprets. The discriminated union above can't carry a catch-all, so the
-    create endpoint validates a non-builtin type against this instead."""
+    `registries.widget_types` and `config` is a dict the plugin owns + interprets —
+    shape-checked against the spec's `config_model` when it names one (RADD-1462),
+    free-form otherwise. The discriminated union above can't carry a catch-all, so
+    the create endpoint validates a non-builtin type against this instead."""
 
     widget_type: str
     config: dict[str, Any] = Field(default_factory=dict)

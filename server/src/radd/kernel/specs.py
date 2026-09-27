@@ -49,7 +49,9 @@ class ViewTypeSpec:
 @dataclass(frozen=True)
 class WidgetTypeSpec:
     """A dashboard widget TYPE a plugin contributes (spec 94), rendered by the plugin's own
-    `dashboard.widget` UI slot (keyed by `key`). Config is a free-form dict the plugin interprets.
+    `dashboard.widget` UI slot (keyed by `key`); its settings form, when it has one, is the
+    plugin's `dashboard.widget.config` slot. Config is a dict the plugin interprets — shape-checked
+    at write against `config_model` when the plugin names one, free-form otherwise.
     Inverts the hardcoded `WidgetType` enum + its discriminated-union config."""
 
     key: str  # the stored widget_type value, e.g. "acme.recent-notes"
@@ -61,6 +63,10 @@ class WidgetTypeSpec:
     #: person's suggested defaults (approvals: when something awaits their verdict). A personal
     #: widget without it is offered, never suggested. Withdrawn with the plugin like the type.
     suggest: Callable[[Any, Any], Awaitable[bool]] | None = None
+    #: A pydantic model the stored `config` must fit (RADD-1462): dashboards validates a create,
+    #: a PATCH and a layout save against it and answers 422 otherwise, exactly as it does for its
+    #: own types. Render-time visibility stays with the widget's own endpoint. None = free-form.
+    config_model: type | None = None
 
 
 @dataclass(frozen=True)

@@ -26,6 +26,7 @@ export {
   GlobalContributionToggles,
   type SlotContribution,
   type SlotIdValue,
+  type DashboardWidgetConfigProps,
   type ContributionInfo,
   type ToggleScope,
 } from "./slots";

@@ -5,12 +5,13 @@ Render-time visibility stays with each widget's own endpoint ("Unavailable").
 """
 
 import uuid
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.kernel import changes
+from radd.kernel import changes, registries
 from radd.exceptions import ConflictError, NotFoundError, RaddError
 from radd.modules.auth import authz
 from radd.modules.auth.authz import Permission
@@ -28,7 +29,6 @@ from .schemas import (
     PluginWidget,
     ReportBurnupConfig,
     ReportProjectConfig,
-    ReportSlaConfig,
     ReportTimeInStateConfig,
     SlqCountConfig,
     SlqListConfig,
@@ -37,7 +37,7 @@ from .schemas import (
     WidgetLayoutSave,
     WidgetUpdate,
 )
-from .types import DashboardEntity, DashboardEvent, WidgetType
+from .types import BUILTIN_WIDGET_TYPES, DashboardEntity, DashboardEvent, WidgetType
 
 
 class WidgetConfigError(RaddError):
@@ -76,10 +76,10 @@ async def _check_references(
                 raise ConflictError(
                     DashboardEntity.DASHBOARD, reason=f"no such cycle {config.cycle_id}"
                 ) from None
-        case ReportSlaConfig() | SlqCountConfig() | SlqListConfig():
+        case SlqCountConfig() | SlqListConfig():
             if config.project_id is not None:
                 await _readable_project(session, actor, config.project_id)
-            if isinstance(config, (SlqCountConfig, SlqListConfig)) and config.q.strip():
+            if config.q.strip():
                 # Compile against the scope registry — SlqError propagates as
                 # the spec-10 422 {detail, position} (items module handler).
                 await items_service.validate_slq(
@@ -95,9 +95,30 @@ async def _check_references(
                 ) from None
 
 
+def _config_error(widget_type: str, exc: ValidationError) -> str:
+    first = exc.errors()[0]
+    where = ".".join(str(part) for part in first["loc"]) or "config"
+    return f"{widget_type} config: {where}: {first['msg']}"
+
+
+def plugin_config(widget_type: str, config: dict[str, Any]) -> dict[str, Any]:
+    """A contributed type's config as stored: shape-checked against the spec's
+    `config_model` when the plugin names one (RADD-1462; a misfit is the same 422 a
+    builtin gets), else verbatim. A type whose plugin is off right now has no spec
+    and keeps what it had — the row outlives the plugin (see personal.save)."""
+    spec = registries.widget_types.get(widget_type)
+    model = spec.config_model if spec is not None else None
+    if model is None:
+        return dict(config)
+    try:
+        return model.model_validate(config).model_dump(mode="json")
+    except ValidationError as exc:
+        raise WidgetConfigError(_config_error(widget_type, exc)) from None
+
+
 def _write_widget(widget: DashboardWidget, data: WidgetCreate | PluginWidget, position: int) -> None:
     """Write a validated create body onto a row. A plugin-contributed type's config
-    is free-form and stored verbatim (the column is a String, so the key persists)."""
+    is the plugin's (`plugin_config`); the column is a String, so the key persists."""
     plugin = isinstance(data, PluginWidget)
     widget.widget_type = data.widget_type if plugin else WidgetType(data.widget_type).value
     widget.title = data.title
@@ -105,7 +126,9 @@ def _write_widget(widget: DashboardWidget, data: WidgetCreate | PluginWidget, po
     widget.height = data.height
     widget.collapsed = data.collapsed
     widget.position = position
-    widget.config = dict(data.config) if plugin else data.config.model_dump(mode="json")
+    widget.config = (
+        plugin_config(data.widget_type, data.config) if plugin else data.config.model_dump(mode="json")
+    )
 
 
 async def create_widget(
@@ -163,18 +186,16 @@ async def update_widget(
         widget.collapsed = data.collapsed
     if data.position is not None:
         widget.position = data.position
-    if data.config is not None:
+    if data.config is not None and widget.widget_type in BUILTIN_WIDGET_TYPES:
         model = WIDGET_CONFIG_MODELS[WidgetType(widget.widget_type)]
         try:
             config = model.model_validate(data.config)
         except ValidationError as exc:
-            first = exc.errors()[0]
-            where = ".".join(str(part) for part in first["loc"]) or "config"
-            raise WidgetConfigError(
-                f"{widget.widget_type} config: {where}: {first['msg']}"
-            ) from None
+            raise WidgetConfigError(_config_error(widget.widget_type, exc)) from None
         await _check_references(session, actor, dashboard, config)
         widget.config = config.model_dump(mode="json")
+    elif data.config is not None:
+        widget.config = plugin_config(widget.widget_type, data.config)
     await session.flush()
     diff = changes.diff_object(widget, before, hidden=("config",), labels={
         "title": f"{_label(widget)} title",

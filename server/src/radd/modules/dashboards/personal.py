@@ -78,7 +78,7 @@ def _personal_widget(raw) -> PluginWidget:
 
 async def save(session, user, data: WidgetLayoutSave):
     from .router import _parse_widget_body
-    from .widgets import _check_references
+    from .widgets import _check_references, plugin_config
 
     await session.execute(
         select(User)
@@ -104,7 +104,10 @@ async def save(session, user, data: WidgetLayoutSave):
             parsed = _personal_widget(raw)
         else:
             parsed = _parse_widget_body(raw)
-            if hasattr(parsed.config, "model_dump"):
+            if isinstance(parsed, PluginWidget):
+                # A contributed type's config fits its plugin's model, on My Work as anywhere.
+                parsed.config = plugin_config(parsed.widget_type, parsed.config)
+            else:
                 await _check_references(session, user, None, parsed.config)
         row = {**parsed.model_dump(mode="json"), "id": str(uuid.UUID(raw["id"])), "position": index}
         if row["id"] in ids:

@@ -1,14 +1,14 @@
 /** Composable dashboards (spec 75) and My Work's layout — the `/dashboards` wire shapes. */
 
-/** The builtin widget types a shared dashboard carries — mirror of the backend `WidgetType`. */
+/** The builtin widget types a shared dashboard carries — mirror of the backend `WidgetType`. A
+ *  plugin's type is a manifest `WidgetTypeSpec`, listed by `/capabilities`, drawn and configured
+ *  through `dashboard.widget` / `dashboard.widget.config`; this package names none. */
 export const WidgetType = {
   reportThroughput: "report_throughput",
   reportCfd: "report_cfd",
   reportTimeInState: "report_time_in_state",
   reportVelocity: "report_velocity",
   reportBurnup: "report_burnup",
-  /** Builtin, but the slas plugin draws it through `dashboard.widget`. */
-  reportSla: "report_sla",
   slqCount: "slq_count",
   slqList: "slq_list",
   viewCount: "view_count",
@@ -49,7 +49,6 @@ export interface WidgetConfig {
   kind?: ItemKindValue | null;
   last?: number;
   measure?: ReportMeasureValue;
-  weeks?: number;
   q?: string;
   label?: string | null;
   limit?: number;

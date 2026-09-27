@@ -1,7 +1,10 @@
-import { definePlugin, itemAttribute, SlotId, type Item, type ProjectSettingsPageProps } from "@radd/plugin-sdk";
+import {
+  definePlugin, itemAttribute, SlotId, type DashboardWidgetConfigProps, type Item, type ProjectSettingsPageProps,
+} from "@radd/plugin-sdk";
 import { REPORT_SECTION_SLOT, type ReportSectionProps } from "@radd-plugin-ui/reporting/report-contract";
 import { SLA_WIDGET_TYPE, type SlaWidgetConfig } from "./report";
 import { SlaReportCard } from "./SlaReportCard";
+import { SlaWidgetConfigFields } from "./SlaWidgetConfigFields";
 import { SlaPanel } from "./SlaPanel";
 import { SlaRowChip } from "./SlaChips";
 import { SlaKind, timersSource, type SlaBatchTimer } from "./timers";
@@ -42,6 +45,15 @@ export default definePlugin({
           <SlaReportCard projectId={config.project_id ?? undefined} initialWeeks={config.weeks} q={filterQuery} />
         );
       },
+    },
+    {
+      // RADD-1462: the widget's settings form, drawn inside dashboards' Add/Edit widget dialog.
+      id: "widget-config",
+      slot: SlotId.dashboardWidgetConfig,
+      match: SLA_WIDGET_TYPE,
+      toggleable: false,
+      label: "Service desk SLA widget settings",
+      render: (props) => <SlaWidgetConfigFields {...(props as unknown as DashboardWidgetConfigProps)} />,
     },
     {
       id: "rail",

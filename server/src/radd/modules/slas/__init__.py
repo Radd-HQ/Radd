@@ -7,17 +7,21 @@ from radd.kernel import RaddPlugin
 from radd.kernel import CrudResourceSpec
 from radd.kernel import ViewListSpec
 from radd.kernel import ViewTypeSpec
+from radd.kernel import WidgetTypeSpec
 from radd.modules.auth.types import Permission
 
 from . import engine
 from .router import router
+from .schemas import SlaWidgetConfig
 from .types import (
     QUEUE_COLUMNS,
     QUEUE_REFRESH_SECONDS,
     QUEUE_ROWS_PATH,
+    REPORT_WIDGET_LABEL,
     SETTINGS_PAGE_SEGMENT,
     SlaEvent,
     SlaViewType,
+    SlaWidgetType,
 )
 
 plugin = RaddPlugin(
@@ -69,6 +73,15 @@ plugin = RaddPlugin(
                 rows_path=QUEUE_ROWS_PATH, columns=QUEUE_COLUMNS,
                 refresh_seconds=QUEUE_REFRESH_SECONDS,
             ),
+        ),
+    ),
+    # RADD-1462: the "Service desk SLA" dashboard widget is this plugin's contribution — its
+    # card over GET /sla-report and its settings form are the remote's `dashboard.widget` and
+    # `dashboard.widget.config` slots, its config fits `SlaWidgetConfig`. Disabling slas
+    # withdraws the type: a saved widget then reads as a missing plugin's, like any other.
+    widget_types=(
+        WidgetTypeSpec(
+            key=SlaWidgetType.REPORT.value, label=REPORT_WIDGET_LABEL, config_model=SlaWidgetConfig
         ),
     ),
     on_startup=(engine.start,),

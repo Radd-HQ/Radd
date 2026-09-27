@@ -6,9 +6,8 @@ import { REPORT_TYPES } from "./widget-meta";
 
 /**
  * One widget's body: builtin SLQ/view widgets read the owners' endpoints, report types are the
- * host's cards (SDK `ReportWidget`), and everything else — a plugin's type or a builtin a plugin
- * draws (report_sla) — renders through `dashboard.widget`. A refused fetch reads as Unavailable;
- * the dashboard never dies.
+ * host's cards (SDK `ReportWidget`), and everything else — a plugin's type — renders through
+ * `dashboard.widget`. A refused fetch reads as Unavailable; the dashboard never dies.
  */
 export function WidgetBody({ widget, filterQuery }: {
   widget: DashboardWidget;

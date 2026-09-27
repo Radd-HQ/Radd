@@ -623,7 +623,12 @@ todo`). Supported operators: `=`, `!=`, `~` (contains). The example registers `n
 Likewise a plugin adds a whole **saved-view type** (`view_types=(ViewTypeSpec(key, label),)`) or a
 **dashboard widget type** (`widget_types=(WidgetTypeSpec(key, label),)`). The backend accepts the new
 type on view/widget create + lists it in `/capabilities`; the frontend Type dropdowns show it, and the
-plugin renders it via the `view.type` / `dashboard.widget` slot (matched by the key). A widget that
+plugin renders it via the `view.type` / `dashboard.widget` slot (matched by the key). A widget with
+settings contributes its form to `dashboard.widget.config` (matched by the key; props
+`DashboardWidgetConfigProps`: the config bag, `onChange`, `onValidity`) — the host's Add/Edit widget
+dialog draws it in place of its own fields — and names a pydantic `config_model` on the
+`WidgetTypeSpec`, which dashboards validates every write against (422), as it does for its own types
+(slas' "Service desk SLA" report widget is the worked example, RADD-1462). A widget that
 shows the viewer's OWN work is a **My Work widget**: `WidgetTypeSpec(key, label, personal=True,
 suggest=…)` — offered only in My Work's picker, refused on shared dashboards, and put on a person's
 suggested layout whenever the async `suggest(session, user)` answers True (approvals' "Awaiting my

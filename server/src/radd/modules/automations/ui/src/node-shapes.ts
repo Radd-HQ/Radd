@@ -15,7 +15,9 @@ export function useNodeShapes(nodes: ShapeNode[], catalog: AutomationCatalog | u
   const capabilities = useCapabilities();
   const plugins = capabilities?.plugins ?? [];
   const loaded = plugins.join(",");
-  const active = enabled && plugins.includes("automations");
+  // Bundled with the host and registered only while the server loads automations: no gate on the
+  // manifest, which would keep every dynamic node port-less until it answered (RADD-1462).
+  const active = enabled;
   const requested = useMemo(() => JSON.stringify(active ? nodes.flatMap((node): Request[] => {
     const spec = catalog?.nodes.find((entry) => entry.key === node.type);
     if (!spec || (!spec.dynamic_ports && !spec.dynamic_outputs)) return [];

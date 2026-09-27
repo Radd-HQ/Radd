@@ -517,7 +517,7 @@ Owns `sla_policies` (per project, ordered by `position`) and `sla_item_states`, 
 - **Events:** `sla_policy.created`, `sla_policy.updated`, `sla_policy.deleted`, `sla.breached`, `sla.due_soon`, `sla.met`
 - **Nav:** `SLAs → sla (project_settings)`
 - **Access:** CRUD resources `sla (project, project.manage)`
-- **Contributes:** view types `slas.queue`
+- **Contributes:** view types `slas.queue`; widget types `report_sla`
 - **Data:** audit links `sla_policy`
 
 ### gitlab

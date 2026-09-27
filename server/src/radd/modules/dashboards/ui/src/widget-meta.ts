@@ -19,14 +19,14 @@ export const CARD_LABELS: Record<string, string> = {
   [WidgetType.reportTimeInState]: "Time in state",
   [WidgetType.reportVelocity]: "Velocity",
   [WidgetType.reportBurnup]: "Burnup",
-  [WidgetType.reportSla]: "Service desk SLA",
 };
 
 /** My Work's own kinds, offered only on My Work. */
 export const PERSONAL_OPTIONS: readonly { value: string; label: string }[] =
   Object.values(PersonalWidgetType).map((value) => ({ value, label: CARD_LABELS[value] }));
 
-/** The builtin types a shared dashboard (and My Work) offers — "cycles", never "sprint". */
+/** This package's OWN types, offered on a shared dashboard and on My Work — "cycles", never "sprint".
+ *  A plugin's types join the picker from `/capabilities` (`widget_types`), never from here. */
 export const WIDGET_TYPE_OPTIONS: readonly { value: string; label: string }[] = [
   { value: WidgetType.slqCount, label: "Issue count (SLQ)" },
   { value: WidgetType.slqList, label: "Issue list (SLQ)" },
@@ -36,8 +36,11 @@ export const WIDGET_TYPE_OPTIONS: readonly { value: string; label: string }[] = 
   { value: WidgetType.reportTimeInState, label: "Time in state" },
   { value: WidgetType.reportVelocity, label: "Velocity across cycles" },
   { value: WidgetType.reportBurnup, label: "Cycle burnup" },
-  { value: WidgetType.reportSla, label: "Service desk SLA" },
 ];
+
+/** Whether `type` is one this package draws and configures itself (else it is a plugin's). */
+export const isOwnType = (type: string): boolean =>
+  (Object.values(WidgetType) as string[]).includes(type) || (Object.values(PersonalWidgetType) as string[]).includes(type);
 
 /** The host's report cards draw these (the SDK's ReportWidget bridge). */
 export const REPORT_TYPES: readonly string[] = [
@@ -46,7 +49,7 @@ export const REPORT_TYPES: readonly string[] = [
 ];
 export const PROJECT_TYPES: readonly string[] = [WidgetType.reportThroughput, WidgetType.reportCfd, WidgetType.reportTimeInState];
 export const OPTIONAL_PROJECT_TYPES: readonly string[] = [
-  WidgetType.reportSla, PersonalWidgetType.activity, WidgetType.slqCount, WidgetType.slqList,
+  PersonalWidgetType.activity, WidgetType.slqCount, WidgetType.slqList,
 ];
 export const SLQ_TYPES: readonly string[] = [WidgetType.slqCount, WidgetType.slqList];
 export const MEASURE_TYPES: readonly string[] = [WidgetType.reportVelocity, WidgetType.reportBurnup];
@@ -67,8 +70,6 @@ export const KIND_OPTIONS: readonly { value: ItemKindValue; label: string }[] = 
   { value: ItemKind.subtask, label: "Subtasks" },
 ];
 export const VELOCITY_LAST_OPTIONS: readonly number[] = [3, 5, 8, 12];
-/** GET /sla-report caps the window at 26 weeks. */
-export const SLA_WEEKS_OPTIONS: readonly number[] = [4, 8, 12, 26];
 export const SLQ_LIST_ROWS: readonly number[] = [5, 10, 15, 20];
 
 /** A widget's effective query: its own `q` AND the page-wide filter, keeping its ORDER BY last. */

@@ -17,6 +17,16 @@ SLA_REPORT_MAX_WEEKS = 26
 BUSINESS_MINUTE_MAX = 24 * 60 - 1  # last valid minute-from-midnight (23:59)
 
 
+class SlaWidgetConfig(BaseModel):
+    """The `report_sla` dashboard widget's stored config (RADD-1462): the report's own
+    scope — one project or every readable one — and its window, bounded like the
+    endpoint's `weeks`. Dashboards validates a write against this; who may READ the
+    project is the endpoint's question at render time."""
+
+    project_id: uuid.UUID | None = None
+    weeks: int = Field(default=SLA_REPORT_DEFAULT_WEEKS, ge=1, le=SLA_REPORT_MAX_WEEKS)
+
+
 class PolicyCreate(BaseModel):
     # Spec 67: policies are project-level. PolicyUpdate cannot move a policy to
     # another project.

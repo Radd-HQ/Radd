@@ -284,6 +284,46 @@ async def test_widget_config_validation(db):
     assert patched.widgets[0].width == 3 and patched.widgets[0].config["q"] == ""
 
 
+async def test_contributed_widget_config_fits_its_plugins_model(db):
+    """RADD-1462: the SLA report widget is the slas plugin's `WidgetTypeSpec`, not a
+    dashboards builtin, and a contributed type's config is shape-checked against the
+    plugin's `config_model` on create and on PATCH — the 422 a builtin gets — while a
+    type without one stays free-form."""
+    from radd.kernel import registries
+    from radd.kernel.loader import load_plugins
+    from radd.modules.dashboards.schemas import PluginWidget
+    from radd.modules.dashboards.widgets import WidgetConfigError
+    from radd.modules.slas.types import SlaWidgetType
+
+    load_plugins(settings.modules)
+    key = SlaWidgetType.REPORT.value
+    assert key not in {t.value for t in WidgetType}, "dashboards names no plugin's widget"
+    spec = registries.widget_types[key]
+    assert spec.config_model is not None and not spec.personal
+    assert registries.widget_types["approvals"].config_model is None, "the check needs a free-form type too"
+
+    owner = await make_user(db, name="Owner")
+    dashboard = await dashboards.create_dashboard(db, DashboardCreate(name="Service desk"), actor=owner)
+    with pytest.raises(WidgetConfigError):
+        await dashboard_widgets.create_widget(
+            db, dashboard.id, PluginWidget(widget_type=key, config={"weeks": 99}), actor=owner
+        )
+    read = await dashboard_widgets.create_widget(
+        db, dashboard.id, PluginWidget(widget_type=key, config={}), actor=owner
+    )
+    widget = read.widgets[0]
+    assert widget.widget_type == key
+    assert widget.config == {"project_id": None, "weeks": 12}, "the model's defaults are what is stored"
+    with pytest.raises(WidgetConfigError):
+        await dashboard_widgets.update_widget(
+            db, dashboard.id, widget.id, WidgetUpdate(config={"weeks": 0}), actor=owner
+        )
+    patched = await dashboard_widgets.update_widget(
+        db, dashboard.id, widget.id, WidgetUpdate(config={"weeks": 8}), actor=owner
+    )
+    assert patched.widgets[0].config["weeks"] == 8
+
+
 async def test_items_count_matches_ids_total_under_visibility(db):
     run = uuid.uuid4().hex[:8]
     seeder = await make_user(db, role=InstanceRole.ADMIN, name="Seeder")

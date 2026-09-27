@@ -177,6 +177,34 @@ try {
   check("dashboard widget: the charts render inside the widget", widgetCharts.trend && widgetCharts.csat,
     JSON.stringify(widgetCharts));
 
+  // 4d. The widget's type and settings form are the slas plugin's (RADD-1462): /capabilities lists the
+  // type, the dashboards dialog draws the contributed form through dashboard.widget.config, and a
+  // change is saved through the plugin's config model.
+  const caps = (await session.eval(`(async () => { ${PAGE_API} return api("GET", "/capabilities"); })()`)).body;
+  const slaType = caps.widget_types.find((t) => t.key === "report_sla");
+  check("/capabilities lists report_sla as a contributed (non-personal) widget type labelled by slas",
+    slaType && slaType.personal === false && slaType.label === "Service desk SLA", JSON.stringify(caps.widget_types));
+  await session.eval(`[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Customize")?.click()`);
+  await waitFor(session, `Boolean(document.querySelector('[aria-label="Configure widget"]'))`);
+  await session.eval(`document.querySelector('[aria-label="Configure widget"]').click()`);
+  const dialog = await waitFor(session, `(() => { const d = document.querySelector('[role="dialog"]');
+    return d && d.innerText.includes("Window") ? d.innerText.slice(0, 400) : null; })()`);
+  check("Edit widget draws the slas remote's settings form (project scope, window) under the plugin's type",
+    dialog && /Service desk SLA/.test(dialog) && /Project \(optional\)/.test(dialog) && /Last 12 weeks/.test(dialog), JSON.stringify(dialog));
+  // The house SelectField labels its trigger with <label htmlFor>; the Type select is first and disabled.
+  const windowSelect = `(() => { const label = [...document.querySelectorAll('[role="dialog"] label')].find((l) => l.textContent.trim() === "Window");
+    return label && document.getElementById(label.htmlFor); })()`;
+  await session.eval(`${windowSelect}.click()`);
+  await session.click('[role="option"]', (text) => text.trim() === "Last 8 weeks");
+  await session.eval(`[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.trim() === "Save widget").click()`);
+  await waitFor(session, `!document.querySelector('[role="dialog"]')`);
+  await session.eval(`[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Save")?.click()`);
+  const stored = await waitFor(session, `(async () => { ${PAGE_API} const d = await api("GET", "/dashboards/${world.dashboardId}");
+    const w = d.body?.widgets?.[0]; return w && w.config.weeks === 8 ? w : null; })()`);
+  check("the window picked in the plugin's form is saved through its config model (weeks 8, project kept)",
+    stored && stored.config.project_id === world.projectId, JSON.stringify(stored?.config));
+  await waitFor(session, `document.querySelectorAll('.dashboard-widget [data-sla-report] [data-sla-tile]').length === 4`);
+
   check("no console errors", session.consoleErrors.length === 0, JSON.stringify(session.consoleErrors));
 } finally {
   // 5. Clean up: the fixture rows cascade with the project's issues and policy.

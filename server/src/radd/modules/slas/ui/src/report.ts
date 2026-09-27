@@ -15,10 +15,12 @@ const SLA_REPORT_STALE_MS = 60_000;
 /** The csat plugin: its ratings are on the report only while it is loaded (a weak edge). */
 export const CSAT_PLUGIN = "csat";
 
-/** The dashboard widget type this plugin renders (a builtin dashboards type; slas draws it). */
+/** The dashboard widget type this plugin CONTRIBUTES (`SlaWidgetType.REPORT` on the manifest's
+ *  `WidgetTypeSpec`, RADD-1462): drawn through `dashboard.widget`, configured through
+ *  `dashboard.widget.config`. The value predates the contribution, so saved widgets keep working. */
 export const SLA_WIDGET_TYPE = "report_sla";
 
-/** A `report_sla` widget's stored config. */
+/** A `report_sla` widget's stored config — the server's `SlaWidgetConfig`. */
 export interface SlaWidgetConfig {
   project_id?: string | null;
   weeks?: number;

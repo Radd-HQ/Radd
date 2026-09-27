@@ -683,3 +683,48 @@ test('no tracked source file carries control bytes: four NULs sat in plugin-sdk/
   const attributes=readFileSync('.gitattributes','utf8');
   for (const extension of ['ts','tsx','py','mjs','css']) assert.match(attributes,new RegExp(`^\\*\\.${extension} text diff$`,'m'),extension);
 });
+
+test('a bundled core UI names no optional plugin and keeps no per-mount lifetime (RADD-1462)',async()=>{
+  // A core UI is bundled with the host and registered while the server loads its module, so it never
+  // gates on the manifest naming itself (that blanked Automations until /capabilities answered) and
+  // never names an OPTIONAL plugin or a key that plugin owns: what it needs from one is a contribution
+  // (dashboards draws `report_sla` through `dashboard.widget`, it does not spell it). `staleTime: 0`
+  // refetches on every mount; a surface that needs fresher data says so per query, not as a default.
+  const {discover}=await import('./plugin-packages.mjs');
+  const bundled=discover().filter(p=>p.bundled);
+  assert(bundled.length>=15,'the scan reaches the core packages bundled into the host');
+  // The optional plugins and the widget/view type keys they own, from the generated module map (pinned
+  // to the manifests by tests/test_modules_map.py): `**optional**` marks a module's section.
+  const vocabulary=new Set();
+  for (const section of readFileSync('docs/modules.md','utf8').split(/^### /m).slice(1)) {
+    const name=section.slice(0,section.indexOf('\n'));
+    if (!section.startsWith(`${name}\n\n**optional**`)) continue;
+    vocabulary.add(name);
+    const contributes=/^- \*\*Contributes:\*\* (.*)$/m.exec(section)?.[1]??'';
+    for (const [,kind,keys] of contributes.matchAll(/(widget|view) types ((?:`[^`]+`(?:, )?)+)/g)) {
+      assert(kind);
+      for (const [,key] of keys.matchAll(/`([^`]+)`/g)) vocabulary.add(key);
+    }
+  }
+  for (const word of ['slas','approvals','collab','report_sla','slas.queue']) assert(vocabulary.has(word),`the map must yield ${word}`);
+  assert(!vocabulary.has('dashboards')&&!vocabulary.has('automations'),'core modules are not vocabulary');
+  const violations=[];
+  for (const pkg of bundled) for (const file of files(path.join(pkg.dir,'src'))) for (const node of nodes(file)) {
+    const where=`${path.relative(process.cwd(),file)}:${node.loc?.start.line}`;
+    if (node.type==='StringLiteral' && vocabulary.has(node.value)) violations.push(`${where}: "${node.value}"`);
+    if (node.type==='ObjectProperty' && (node.key.name??node.key.value)==='staleTime') {
+      const value=node.value.type==='LogicalExpression'?node.value.right:node.value;
+      if (value.type==='NumericLiteral' && value.value===0) violations.push(`${where}: staleTime 0`);
+    }
+  }
+  assert.deepEqual(violations,[]);
+  // …and it is not vacuous: the SLA widget is the slas remote's — its type on the manifest, its card
+  // and its settings form on the two dashboard slots — and the host dialog draws the form through the slot.
+  const manifest=readFileSync('server/src/radd/modules/slas/__init__.py','utf8');
+  assert.match(manifest,/WidgetTypeSpec\(\s*key=SlaWidgetType\.REPORT\.value/);
+  const remote=readFileSync('server/src/radd/modules/slas/ui/src/index.tsx','utf8');
+  assert.match(remote,/slot: SlotId\.dashboardWidget,\s*match: SLA_WIDGET_TYPE/);
+  assert.match(remote,/slot: SlotId\.dashboardWidgetConfig,\s*match: SLA_WIDGET_TYPE/);
+  assert.match(readFileSync('server/src/radd/modules/dashboards/ui/src/WidgetModal.tsx','utf8'),/useSlotMatch\(SlotId\.dashboardWidgetConfig, type\)/);
+  assert(!/REPORT_SLA/.test(readFileSync('server/src/radd/modules/dashboards/types.py','utf8')),'dashboards has no SLA member');
+});

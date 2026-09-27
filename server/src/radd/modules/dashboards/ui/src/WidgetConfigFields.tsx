@@ -4,13 +4,14 @@ import { CycleSelect, LabeledControl, ProjectSelect, Segmented } from "./control
 import { PersonalWidgetType, ReportInterval, ReportMeasure, WidgetType, type ItemKindValue, type ReportIntervalValue, type ReportMeasureValue, type WidgetConfig } from "./types";
 import {
   INTERVAL_OPTIONS, KIND_OPTIONS, MEASURE_OPTIONS, MEASURE_TYPES, OPTIONAL_PROJECT_TYPES, PROJECT_TYPES,
-  SLA_WEEKS_OPTIONS, SLQ_LIST_ROWS, SLQ_TYPES, VELOCITY_LAST_OPTIONS,
+  SLQ_LIST_ROWS, SLQ_TYPES, VELOCITY_LAST_OPTIONS,
 } from "./widget-meta";
 
-/** The form's working copy — strings for every select, one bag for every type. */
+/** The form's working copy — strings for every select, one bag for every type of this package's own.
+ *  A plugin's type keeps its own config (`dashboard.widget.config`), never a field here. */
 interface ConfigDraft {
   project_id: string; interval: ReportIntervalValue; kind: ItemKindValue | ""; last: string;
-  measure: ReportMeasureValue; cycle_id: string; weeks: string; q: string; label: string;
+  measure: ReportMeasureValue; cycle_id: string; q: string; label: string;
   limit: string; start: string; end: string; view_id: string;
 }
 
@@ -18,7 +19,7 @@ export function draftOf(config: WidgetConfig = {}): ConfigDraft {
   return {
     project_id: config.project_id ?? "", interval: config.interval ?? ReportInterval.week, kind: config.kind ?? "",
     last: String(config.last ?? 5), measure: config.measure ?? ReportMeasure.count, cycle_id: config.cycle_id ?? "",
-    weeks: String(config.weeks ?? 12), q: config.q ?? "", label: config.label ?? "", limit: String(config.limit ?? 10),
+    q: config.q ?? "", label: config.label ?? "", limit: String(config.limit ?? 10),
     start: config.start ?? "", end: config.end ?? "", view_id: config.view_id ?? "",
   };
 }
@@ -31,7 +32,6 @@ export function configOf(type: string, d: ConfigDraft): WidgetConfig {
     case WidgetType.reportTimeInState: return { project_id: d.project_id, kind: d.kind || null };
     case WidgetType.reportVelocity: return { last: Number(d.last), measure: d.measure };
     case WidgetType.reportBurnup: return { cycle_id: d.cycle_id, measure: d.measure };
-    case WidgetType.reportSla: return { project_id: d.project_id || null, weeks: Number(d.weeks) };
     case WidgetType.slqCount: return { project_id: d.project_id || null, q: d.q, label: d.label.trim() || null };
     case WidgetType.slqList: return { project_id: d.project_id || null, q: d.q, limit: Number(d.limit) };
     case WidgetType.viewCount: return { view_id: d.view_id };
@@ -84,11 +84,6 @@ export function WidgetConfigFields({ type, draft, onChange, onSlqValidity }: {
       <LabeledControl label="Measure">
         <Segmented ariaLabel="Measure" value={draft.measure} options={MEASURE_OPTIONS} onChange={(v) => set("measure", v)} />
       </LabeledControl>
-    )}
-    {type === WidgetType.reportSla && (
-      <SelectField label="Window" value={draft.weeks} onChange={(e) => set("weeks", e.target.value)}>
-        {SLA_WEEKS_OPTIONS.map((n) => <option key={n} value={String(n)}>Last {n} weeks</option>)}
-      </SelectField>
     )}
     {SLQ_TYPES.includes(type) && (
       <SlqField label="Query (blank = everything in scope)" value={draft.q} onChange={(q) => set("q", q)}

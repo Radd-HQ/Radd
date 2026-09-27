@@ -85,6 +85,10 @@ export const SlotId = {
   /** A dashboard widget type. Props: { config, widget, filterQuery }. A manifest
    *  `WidgetTypeSpec(personal=True)` puts it on My Work instead of shared dashboards. */
   dashboardWidget: "dashboard.widget",
+  /** The settings form of a contributed widget type, `match` = the widget type key, drawn inside
+   *  the host's Add/Edit widget dialog. Props: `DashboardWidgetConfigProps`. A type without one
+   *  takes no settings (its config stays `{}`). */
+  dashboardWidgetConfig: "dashboard.widget.config",
   /** A list column + board-card cell, `match` = the attribute id; build with `itemAttribute`. */
   itemAttribute: "item.attribute",
   /** A command-palette mode; build with `paletteMode(spec)`. */
@@ -98,6 +102,15 @@ export const SlotId = {
 } as const;
 
 export type SlotIdValue = (typeof SlotId)[keyof typeof SlotId];
+
+/** What a `dashboard.widget.config` contribution draws with: the dialog's working copy of the
+ *  widget's config (the plugin's own shape), replaced whole on every change. `onValidity` gates the
+ *  dialog's Add/Save button; unreported means valid. The server re-checks the shape on save. */
+export interface DashboardWidgetConfigProps {
+  config: Record<string, unknown>;
+  onChange: (config: Record<string, unknown>) => void;
+  onValidity?: (valid: boolean) => void;
+}
 
 /** A single contribution to a slot. `render` receives the slot's props. */
 export interface SlotContribution<P = Record<string, unknown>> {
