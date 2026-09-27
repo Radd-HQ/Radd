@@ -203,11 +203,19 @@ test('schedule arithmetic UI is generic and both owners supply their own transpo
     assert(!ast.some(n=>n.type==='StringLiteral'&&/automations|backups|Create issue/.test(n.value)),file);
   }
   assert(!files('web/src').includes('web/src/components/ScheduleEditor.tsx'));
+  // The host reaches Backup's editor through a thin slot adapter. Automations' editor is drawn only
+  // inside its own bundled package, so the host has no adapter for it at all.
+  assert(!existsSync('web/src/components/automations'),'the host keeps no automations adapter');
+  const adapter=nodes('web/src/components/backup/ScheduleEditor.tsx');
+  const adapterImports=adapter.filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
+  assert(adapterImports.length>0&&adapterImports.every(s=>s==='@radd/plugin-sdk'||s.endsWith('/schedule-contract')),adapterImports.join());
+  assert(!adapter.some(n=>n.type==='CallExpression'&&['useState','useEffect','useQuery'].includes(n.callee?.name)));
+  // Each owner's implementation: the SDK's generic editor and its own contract, over its own endpoint.
   for(const owner of ['automations','backup']){
-    const ast=owner === "automations" ? [] : nodes(`web/src/components/${owner}/ScheduleEditor.tsx`);
-    assert(ast.filter(n=>n.type==='ImportDeclaration').every(n=>n.source.value==='@radd/plugin-sdk'||n.source.value.endsWith('/schedule-contract')));
-    assert(!ast.some(n=>n.type==='CallExpression'&&['useState','useEffect','useQuery'].includes(n.callee?.name)));
     const implementation=nodes(`server/src/radd/modules/${owner}/ui/src/ScheduleEditor.tsx`);
+    const imports=implementation.filter(n=>n.type==='ImportDeclaration').map(n=>n.source.value);
+    assert(imports.includes('@radd/plugin-sdk')&&imports.every(s=>s==='@radd/plugin-sdk'||s==='./schedule-contract'),`${owner}: ${imports}`);
+    assert(!implementation.some(n=>n.type==='CallExpression'&&['useState','useEffect','useQuery'].includes(n.callee?.name)),owner);
     const endpoints=implementation.filter(n=>n.type==='StringLiteral'&&n.value.startsWith('/')).map(n=>n.value);
     assert.deepEqual(endpoints,[owner==='backup'?'/backups/schedule/preview':'/automations/schedule/preview']);
   }

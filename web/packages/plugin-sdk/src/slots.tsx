@@ -91,8 +91,9 @@ export const SlotId = {
   paletteMode: "palette.mode",
   /** A query-bar input mode (free text in, SLQ out); build with `queryInputMode(spec)`. */
   queryInputMode: "query.input.mode",
-  /** One automation node type's inspector, `match` = the node type. Props: { node, params,
-   *  onChange }; without one the host renders a form from the node's `params_schema`. */
+  /** One automation node type's inspector, `match` = the node type. Props:
+   *  `AutomationNodeInspectorProps`; without one the host renders a form from the node's
+   *  `params_schema`. */
   automationNodeInspector: "automation.node.inspector",
 } as const;
 

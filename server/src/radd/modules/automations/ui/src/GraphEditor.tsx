@@ -18,7 +18,7 @@ import {
   type RuleTestResult,
 } from "./types";
 import { Callout, CalloutKind } from "@radd/plugin-sdk";
-import { incompleteActionNodeIds } from "./ActionsBuilder";
+import { incompleteActionNodeIds } from "./builtin-actions";
 import { usePickerData } from "./ActionsBuilder";
 import { GraphInspector } from "./GraphInspector";
 import { LazyGraphCanvas } from "./LazyGraphCanvas";

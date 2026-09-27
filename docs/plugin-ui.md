@@ -58,7 +58,7 @@ All ids are members of `SlotId` in `@radd/plugin-sdk`. `props` are what the host
 | `itemAttribute` | A list COLUMN and a board-card CELL (RADD-1394) | `{item, value, surface}` | `match` = the attribute id; build it with `itemAttribute(spec)` — see "Item attributes" below | `components/views/ColumnCells.tsx`, `components/board/card-cells.tsx` |
 | `paletteMode` | A face of the command palette (RADD-1400) | `{report}` (the gate) | build it with `paletteMode(spec)`; the palette draws its entry row and its answer — see "Modes" below | `components/CommandPalette.tsx` |
 | `queryInputMode` | An input mode of the query bar: free text in, SLQ out (RADD-1400) | `{report}` (the gate) | build it with `queryInputMode(spec)`; the bar draws the toggle — see "Modes" below | `components/views/QueryBar.tsx` |
-| `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `{node, params, schema, onChange}` | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `server/src/radd/modules/automations/ui/src/GraphInspector.tsx` |
+| `automationNodeInspector` | The automation editor's inspector for YOUR node type (RADD-1325) | `AutomationNodeInspectorProps` (`{node, params, schema, onChange, …}`, exported by the SDK) | `match` = the node type (`AutomationNodeSpec.key`); with none registered the host renders a form generated from the node's `params_schema` | `server/src/radd/modules/automations/ui/src/GraphInspector.tsx` |
 
 **Host components (RADD-1325).** An inspector should look and behave like the host's own forms
 without bundling heavy editors. `@radd/plugin-sdk` exports `CodeEditor`, `TokenList` and

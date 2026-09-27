@@ -149,3 +149,14 @@ export interface RoutingPreviewResult {
   /** The whole chain, in order: consulted, skipped (disabled) or never reached. */
   outcomes: RoutingRuleOutcome[];
 }
+
+/** The Send email automation node (RADD-1387). Its key is stored in saved graphs: never rename it. */
+export const SEND_EMAIL_NODE = "action.send_email";
+
+/** Roles Send email's `to` may name; anything else is a literal address. Mirrors `mailintake/types.py`
+ *  `EmailRecipient`. Each resolves on ONE issue, so a role recipient runs once per item. */
+export const EmailRecipient = {
+  reporter: "reporter",
+  assignee: "assignee",
+  contact: "contact",
+} as const;

@@ -97,6 +97,23 @@ try{
  rule={...rule,name:'Saved unavailable trigger',nodes:[{...seedNodes[0],params:{event:'github.push'}},seedNodes[1]]};enabled.delete('github');await invalidate();await refresh();await until(s,()=>exists('[aria-label="Edit Saved unavailable trigger"]'),'saved unknown rule');await s.click('[aria-label="Edit Saved unavailable trigger"]');await until(s,()=>s.eval('document.querySelector(".react-flow__node[data-id=trigger]")&&getComputedStyle(document.querySelector(".react-flow__node[data-id=trigger]")).visibility==="visible"'),'unknown trigger measured');await s.click('[data-node-id="trigger"]');await until(s,()=>has('github.push (unavailable trigger)'),'saved unknown trigger remains visible');checks.push('a saved trigger from an unavailable owner stays visible without changing the saved graph');
  admin=false;await s.eval("window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['radd-sdk','me']})");await until(s,()=>has('You need the automation.manage permission'),'permission withdrawal');assert(!await exists('input[placeholder="Auto-triage blockers"]'));admin=true;await s.eval("window.__RADD_QUERY_CLIENT__.invalidateQueries({queryKey:['radd-sdk','me']})");await until(s,()=>exists('[aria-label="Edit Saved unavailable trigger"]'),'permission recovery');assert(!await exists('input[placeholder="Auto-triage blockers"]'));checks.push('loss of management permission closes the editor; restored permission returns to a fresh authorized list');
 
+ // RADD-1425: a plugin's action is drawn by that plugin and never blocks the save. Send email is the
+ // mailintake remote's inspector (its built ui/dist); Add participant's remote is not loaded, so it
+ // reads as provided by participants and saves with its person still blank — the server decides.
+ remotes.add('mailintake');enabled.add('participants');
+ rule={...rule,name:'Mail the reporter',nodes:[seedNodes[0],{id:'mail',type:'action.send_email',kind:'action',params:{to:'reporter',subject:'',body:''}},{id:'share',type:'action.add_participant',kind:'action',params:{user:''}}],edges:[{source:'trigger',port:'out',target:'mail'},{source:'mail',port:'out',target:'share'}]};
+ await invalidate();await refresh();await until(s,()=>exists('[aria-label="Edit Mail the reporter"]'),'contributed-action rule');await s.click('[aria-label="Edit Mail the reporter"]');
+ const saveDisabled=()=>s.eval("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Save changes')?.disabled");
+ await until(s,()=>s.eval('!!document.querySelector(".react-flow__node[data-id=mail]")&&getComputedStyle(document.querySelector(".react-flow__node[data-id=mail]")).visibility==="visible"'),'mail node measured');await s.click('[data-node-id="mail"]');
+ await until(s,()=>exists('[data-send-email-inspector]'),'mailintake draws the Send email inspector');assert(await exists('[data-send-email-per-item]'),'a role recipient says it runs per issue');
+ await until(s,()=>s.eval(`[...document.querySelectorAll('[role="radiogroup"][aria-label="Run"] [role="radio"]')].find(b=>b.getAttribute('aria-checked')==='true')?.textContent.includes('per issue')`),'a role recipient runs per issue');
+ await fill('Subject','[{{item.key}}] is done');await fill('Body','Your issue {{item.key}} is done.');assert.equal(await saveDisabled(),false,'a contributed action does not block Save');await s.screenshot('/tmp/radd-automation-editor-send-email.png');
+ await s.click('[data-node-id="share"]');await until(s,()=>exists('[data-node-provider="participants"]'),'an action with no inspector names its plugin');assert(await has('Provided by the participants plugin.'));assert.equal(await saveDisabled(),false,'a blank contributed action still saves');
+ await button('Save changes');await until(s,()=>rule.nodes.find(node=>node.id==='mail')?.params.subject==='[{{item.key}}] is done','contributed action saved');
+ assert.deepEqual(writes.at(-1).body.nodes.find(node=>node.id==='mail').params,{to:'reporter',subject:'[{{item.key}}] is done',body:'Your issue {{item.key}} is done.',arity:'item'});
+ assert.deepEqual(writes.at(-1).body.nodes.find(node=>node.id==='share').params,{user:''});
+ checks.push('a mail plugin action shows the mailintake inspector (role recipient → per issue) and saves; an action with no inspector names its plugin and does not block Save');
+
 
  await s.screenshot('/tmp/radd-automation-editor-dark.png');await s.eval("document.documentElement.classList.add('light')");await s.screenshot('/tmp/radd-automation-editor-light.png');
  assert(!s.consoleErrors.some(error=>/Invalid hook|Maximum update depth|not exported/.test(error)));console.log(JSON.stringify({passed:true,checks,requests:requests.length,writes:writes.length,aborted:aborted.length}));

@@ -1,6 +1,8 @@
 /** The node catalogue behind both the panel and the right-click menu, built from the served catalog. */
 import { defaultsFromSchema } from "@radd/plugin-sdk";
+import { ACTION_TYPE_PREFIX } from "./builtin-actions";
 import {
+  ActionType,
   NodeArity,
   NodeKind,
   type AutomationCatalog,
@@ -181,28 +183,19 @@ export function searchTemplates(templates: NodeTemplate[], query: string): NodeT
   });
 }
 
-/** Recipient values that name a ROLE rather than an address. Mirrors the
- * server's `EmailRecipient`; `notify_user` has no `contact` because a mail
- * contact has no account to notify in-app. */
-const EMAIL_ROLES = new Set(["reporter", "assignee", "contact"]);
+/** Person values `notify_user` resolves against ONE issue rather than as an address. Mirrors the server's
+ * `PersonRole`. A plugin's action keeps a rule like this in its own inspector. */
 const NOTIFY_ROLES = new Set(["reporter", "assignee"]);
 
 /** Why arity is not a choice right now, or "". A role recipient is a property of ONE issue: at set arity,
- * `send_email` to `reporter` resolves nobody and skip-logs. The server refuses the pairing. */
+ * `notify_user` to `reporter` resolves nobody and skip-logs. The server refuses the pairing. */
 export function arityForcedReason(node: {
   type: string;
   params: Record<string, unknown>;
 }): string {
-  const target = String(
-    node.type === "action.send_email" ? node.params.to ?? "" : node.params.user ?? "",
-  ).toLowerCase();
-  const roles =
-    node.type === "action.send_email"
-      ? EMAIL_ROLES
-      : node.type === "action.notify_user"
-        ? NOTIFY_ROLES
-        : null;
-  if (!roles || !roles.has(target)) return "";
+  if (node.type !== `${ACTION_TYPE_PREFIX}${ActionType.notifyUser}`) return "";
+  const target = String(node.params.user ?? "").toLowerCase();
+  if (!NOTIFY_ROLES.has(target)) return "";
   return `“${target}” is a property of one issue, so this runs once per item. Name an address to send a single digest instead.`;
 }
 
@@ -237,7 +230,7 @@ export function instantiate(
     type: template.type,
     // A producer arrives named (`generate_1`) so its output is reachable.
     name: template.produces ? suggestNodeName(template.type, existing) : undefined,
-    // Cloned (no shared params) and normalised: send_email's default `reporter` implies per-item.
+    // Cloned (no shared params) and normalised: a role recipient implies per-item.
     params: normalizeActionParams(template, structuredClone(template.params)),
     x: at.x,
     y: at.y,

@@ -9,11 +9,10 @@ import { Braces } from "lucide-react";
 import { AUTOMATION_CLEAR_VALUE } from "./constants";
 import {
   ActionType,
-  EmailRecipient,
   type ActionParamValue as CustomFieldValue,
   type RuleAction,
 } from "./types";
-import { CheckField, CustomFieldControl } from "./controls";
+import { CustomFieldControl } from "./controls";
 import { SelectField } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";
 import type { PickerData } from "./ActionsBuilder";
@@ -338,7 +337,6 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
         </SelectField>
       );
     case ActionType.addWatcher:
-    case ActionType.addParticipant:
       return (
         <div className="flex flex-col gap-1">
           <OptionSelect resource={OptionResource.user} label="Person" value={str(p.user)}
@@ -427,8 +425,6 @@ export function ActionParams({ action, pickers, listId, onParams }: ActionParams
           />
         </div>
       );
-    case ActionType.sendEmail:
-      return <SendEmailParams pickers={pickers} params={p} set={set} str={str} />;
     default:
       return null;
   }
@@ -481,52 +477,6 @@ interface CommentControlProps {
   params: Record<string, CustomFieldValue>;
   set: (patch: Record<string, CustomFieldValue>) => void;
   str: (value: CustomFieldValue) => string;
-}
-
-/** send_email (spec 66): recipient (role or literal address) + templated
- * subject/body. Roles remain small static suggestions; active users are
- * searched only when requested, without restricting literal addresses or tokens. */
-function SendEmailParams({
-  pickers,
-  params,
-  set,
-  str,
-}: ParamsControlProps & Pick<CommentControlProps, "str">) {
-  return (
-    <div className="flex flex-col gap-2.5">
-      <OptionTextField resource={OptionResource.user} canBrowse={pickers.canChoosePeople}
-        label="To" value={str(params.to)} suggestions={Object.values(EmailRecipient)}
-        placeholder="reporter / assignee / contact / someone@example.com"
-        hint="A role, a literal email address, or a template token."
-        onChange={to => set({ to })} />
-      <TextField
-        label="Subject"
-        value={str(params.subject)}
-        placeholder="[{{item.key}}] {{item.title}}"
-        hint={TEMPLATE_HINT}
-        onChange={(event) => set({ subject: event.target.value })}
-      />
-      <div className="flex flex-col gap-1.5">
-        <label className="text-xs font-medium text-fg-secondary">Body</label>
-        <textarea
-          value={str(params.body)}
-          onChange={(event) => set({ body: event.target.value })}
-          rows={2}
-          placeholder="{{actor.name}} updated {{item.key}}…"
-          className="rounded-md border border-strong bg-surface px-2.5 py-1.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
-        />
-      </div>
-      {/* RADD-1318: the old receipt's shape, as an opt-in — on the ticket's
-          email thread, so the requester's reply lands back on the issue. */}
-      <CheckField
-        data-send-email-thread
-        label="Send on the issue's email thread"
-        hint={<>Replies come back to the issue, and the message reads as from the desk. Keep [{"{{item.key}}"}] in the subject.</>}
-        checked={Boolean(params.thread)}
-        onChange={(thread) => set({ thread })}
-      />
-    </div>
-  );
 }
 
 /** add_comment: body + public/internal visibility. */

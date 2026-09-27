@@ -6,6 +6,7 @@
   "type": "module",
   "dependencies": {
     "@radd/plugin-sdk": "*",
-    "@radd-plugin-ui/projects": "*"
+    "@radd-plugin-ui/projects": "*",
+    "@radd-plugin-ui/automations": "*"
   }
 }

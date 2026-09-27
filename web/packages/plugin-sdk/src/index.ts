@@ -188,7 +188,8 @@ export {
 export {
   ReadingPaneContext, useReadingPane,
   type EditorRange, type EditorSelection, type EditorTransform, type EditorTransformInput, type EditorTransformResult,
-  type EditorHandle, type EditorToolbarActionProps, type EditorSelectionActionProps, type ContentContext,
+  type EditorHandle, type EditorToolbarActionProps, type EditorSelectionActionProps, type AutomationNodeInspectorProps,
+  type ContentContext,
   type ReadActionProps, type ItemDraftAssistProps, type ReadingPanel, type BindableEditor, type EditorBinding,
 } from "./editor-extensions";
 // Live documents (RADD-1397): a document surface asks for a live session; a plugin provides it.

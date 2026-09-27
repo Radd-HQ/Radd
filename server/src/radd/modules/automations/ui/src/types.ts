@@ -151,7 +151,8 @@ export interface AutomationCatalog {
   can_act_as: boolean;
 }
 
-/** What a matching rule does to an item (mirror of backend `ActionType`). */
+/** The BUILT-IN actions, each an `action.<value>` node — a mirror of the backend `ActionType`. A
+ * plugin's action (`action.send_email`, `release.publish`) is a catalog node this package never names. */
 export const ActionType = {
   setState: "set_state",
   setPriority: "set_priority",
@@ -175,7 +176,6 @@ export const ActionType = {
   linkItem: "link_item",
   archiveItem: "archive_item",
   addWatcher: "add_watcher",
-  addParticipant: "add_participant",
   moveToProject: "move_to_project",
   // Universal actions (spec 58b) — run with or without a target item; their
   // text params accept {{event_type}}/{{actor.*}}/{{payload.*}}/{{item.*}}.
@@ -183,19 +183,8 @@ export const ActionType = {
   sendWebhook: "send_webhook",
   postChat: "post_chat",
   notifyUser: "notify_user",
-  sendEmail: "send_email",
 } as const;
 type ActionTypeValue = (typeof ActionType)[keyof typeof ActionType];
-
-/**
- * Role values the send_email action's `to` param may name (spec 66) — anything
- * else is a literal address. Roles resolve against the event's target item.
- */
-export const EmailRecipient = {
-  reporter: "reporter",
-  assignee: "assignee",
-  contact: "contact",
-} as const;
 
 /** An action node's params in the `{type, params}` shape `ActionParams` edits (`type` without the
  * `action.` prefix). Names resolve per item at apply time; `"none"` clears. */
@@ -318,6 +307,8 @@ export interface RuleCreate {
   orientation?: Orientation;
   nodes: AutomationNode[];
   edges: AutomationEdge[];
+  /** "Why" for the version this write makes (RADD-1268). */
+  note?: string;
 }
 
 /** PATCH /automations/{id} — omitted keys untouched. The graph is replaced whole
@@ -331,6 +322,8 @@ export interface RuleUpdate {
   orientation?: Orientation;
   nodes?: AutomationNode[];
   edges?: AutomationEdge[];
+  /** "Why" for the version this write makes, if it makes one (RADD-1268). */
+  note?: string;
 }
 
 /** One action's dry-run outcome (POST /automations/{id}/test). */

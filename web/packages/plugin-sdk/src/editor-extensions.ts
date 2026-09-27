@@ -115,6 +115,18 @@ export interface EditorSelectionActionProps {
   selection: EditorSelection | null;
 }
 
+/** `automation.node.inspector` props: the form for one node type a plugin contributes. */
+export interface AutomationNodeInspectorProps {
+  /** The node being edited. Its `type` is the contribution's `match`. */
+  node: { id: string; type: string; params: Record<string, unknown> };
+  /** The node's params — the same object as `node.params`. */
+  params: Record<string, unknown>;
+  /** Replace the node's params whole. Keep keys the form does not own (`arity`, `act_as`). */
+  onChange: (params: Record<string, unknown>) => void;
+  /** The node type's served `params_schema`, absent while the catalog is loading. */
+  schema?: Record<string, unknown>;
+}
+
 /** What rendered content belongs to: the entity it is (a comment, a page, an issue — whose
  *  content is its description), and the entity that holds it. */
 export interface ContentContext {

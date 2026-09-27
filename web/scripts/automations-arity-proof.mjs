@@ -124,6 +124,14 @@ await session.eval(clickPanelRow(/send email/i));
 await sleep(1300);
 const emailArityWithRole = await session.eval(readArity);
 
+// A role recipient is per-issue only. Since RADD-1425 the send_email inspector is mailintake's:
+// choosing "Once for all issues" snaps back to per issue instead of the option being greyed out.
+await session.eval(`(()=>{const group=document.querySelector('[role="radiogroup"][aria-label="Run"]');
+  const once=group && [...group.querySelectorAll('[role="radio"]')].find(b=>/all issues/i.test(b.textContent));
+  if(once) once.click(); return Boolean(once);})()`);
+await sleep(1200);
+const emailArityAfterOnce = await session.eval(readArity);
+
 // The recipient is a datalist-backed free-text field, so it is addressed by its
 // placeholder — the label is a sibling, not an ancestor.
 const typedAddress = await session.eval(`(()=>{
@@ -159,7 +167,7 @@ const checks = {
   badgeAfter,
   addLabelHasNoRunControl: labelArity === null,
   emailWithRole: checked(emailArityWithRole),
-  emailOnceLocked: (emailArityWithRole ?? []).some((o) => /all issues/i.test(o.label) && o.disabled),
+  emailOnceSnapsBack: /per issue/i.test(checked(emailArityAfterOnce) ?? ""),
   typedAddress,
   emailWithAddress: checked(emailArityWithAddress),
   emailUnlockedByAddress: (emailArityWithAddress ?? []).every((o) => !o.disabled),
@@ -190,7 +198,7 @@ const ok =
   badgeAfter?.trim() === "per issue" &&
   checks.addLabelHasNoRunControl &&
   checks.emailWithRole === "Once per issue" &&
-  checks.emailOnceLocked &&
+  checks.emailOnceSnapsBack &&
   typedAddress &&
   checks.emailUnlockedByAddress &&
   consoleErrors.length === 0;

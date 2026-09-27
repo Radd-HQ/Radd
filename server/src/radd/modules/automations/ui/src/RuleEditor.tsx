@@ -20,7 +20,7 @@ import {
 import { Button } from "@radd/plugin-sdk";
 import { ErrorText } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";
-import { incompleteActionNodeIds } from "./ActionsBuilder";
+import { incompleteActionNodeIds } from "./builtin-actions";
 import { GraphEditor } from "./GraphEditor";
 import { CheckField } from "./controls";
 import { seededTrigger } from "./automation-nodes";
@@ -80,18 +80,21 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = {
+      // Literals, so `satisfies` refuses a key the wire type does not declare.
+      const body = {
         name: name.trim(),
         enabled,
         orientation,
         nodes: graph.nodes,
         edges: graph.edges,
         note: note.trim(),
-        ...(adoptExecution ? { adopt_execution: true } : {}),
-      };
+      } satisfies RuleCreate;
       const saved = await (persistedId
-        ? api.patch<Rule>(apiAutomationPath(persistedId), payload satisfies RuleUpdate)
-        : api.post<Rule>(ApiPath.automations, payload satisfies RuleCreate));
+        ? api.patch<Rule>(
+            apiAutomationPath(persistedId),
+            { ...body, adopt_execution: adoptExecution || undefined } satisfies RuleUpdate,
+          )
+        : api.post<Rule>(ApiPath.automations, body));
       return { saved, submitted: content };
     },
     onSuccess: async ({ saved, submitted }) => {

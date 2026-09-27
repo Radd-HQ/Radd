@@ -28,7 +28,8 @@ import { ActionParams } from "./ActionParams";
 import { ArityField } from "./ArityField";
 import { CreateItemFields } from "./CreateItemFields";
 import { SchemaForm } from "@radd/plugin-sdk";
-import { Slot, SlotId } from "@radd/plugin-sdk";
+import { ACTION_TYPE_PREFIX, hasCoreEditor, isBuiltinAction } from "./builtin-actions";
+import { ContributedNodeFields } from "./ContributedNodeFields";
 import { useTokenTarget } from "./useTokenTarget";
 import { EventSamples } from "./EventSamples";
 import { SearchFields } from "./SearchFields";
@@ -44,7 +45,6 @@ import {
   ProjectGateFields,
 } from "./GateFields";
 import type { PickerData } from "./ActionsBuilder";
-const ACTION_TYPE_PREFIX = "action.";
 import { Button, ButtonVariant } from "@radd/plugin-sdk";
 import { TextField } from "@radd/plugin-sdk";
 import { SelectField } from "@radd/plugin-sdk";
@@ -77,28 +77,6 @@ interface GraphInspectorProps {
   hasItem?: boolean;
   onChange: (node: AutomationNode) => void;
   onDelete: (nodeId: string) => void;
-}
-
-/** Node types whose form lives in core — the built-in actions (`ActionParams`),
- * the named gates, the SLQ filter and source, the verdict nodes and the trigger.
- * Everything else renders from its served `params_schema`. */
-const CORE_EDITED_TYPES = new Set([
-  "trigger.event",
-  "filter.slq",
-  "search.slq",
-  "gate.payload",
-  "gate.project",
-  "gate.field_changed",
-  "gate.changed_by",
-  "gate.state_category",
-  "gate.comment",
-  "gate.page_space",
-  VERDICT_BLOCK_TYPE,
-  VERDICT_WARN_TYPE,
-]);
-
-function hasCoreEditor(type: string): boolean {
-  return CORE_EDITED_TYPES.has(type) || type.startsWith(ACTION_TYPE_PREFIX);
 }
 
 export function GraphInspector({
@@ -144,9 +122,12 @@ export function GraphInspector({
   const setActionParams = (params: Record<string, unknown>) =>
     setParams(normalizeActionParams(node, params));
   const arityRule = arityOf(catalog, node.type);
-  // Every node is a catalog entry (RADD-1322); core types carry their own forms, the rest a schema form.
+  // Every node is a catalog entry (RADD-1322); core types carry their own forms, the rest a plugin's.
   const contributed = catalog?.nodes?.find((entry) => entry.key === node.type);
   const coreEdited = hasCoreEditor(node.type);
+  // `action.*` nodes carry the action chrome (Act as, Run, insertable tokens) whoever draws their
+  // params: the built-ins here, a moved one (`action.send_email`, RADD-1387) in its plugin.
+  const actionNode = node.kind === NodeKind.action && node.type.startsWith(ACTION_TYPE_PREFIX);
   const forcedReason = arityForcedReason(node);
   // Asked of type AND params — `ai.generate` produces `text` before any field exists.
   const produces = isProducer(node, catalog, shapes);
@@ -362,20 +343,9 @@ export function GraphInspector({
       )}
 
       {/* A plugin node renders its own `automation.node.inspector`; else the served schema form. */}
-      {contributed && !coreEdited && (
+      {contributed && !coreEdited && !actionNode && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-fg-secondary">{contributed.description}</p>
-          <Slot
-            id={SlotId.automationNodeInspector}
-            match={node.type}
-            node={node}
-            params={node.params}
-            schema={contributed.params_schema}
-            onChange={setParams}
-            fallback={
-              <SchemaForm schema={contributed.params_schema} params={node.params} onChange={setParams} />
-            }
-          />
+          <ContributedNodeFields node={node} entry={contributed} onChange={setParams} />
           {tokenPanel(false)}
         </div>
       )}
@@ -390,7 +360,7 @@ export function GraphInspector({
         />
       )}
 
-      {node.kind === NodeKind.action && node.type.startsWith(ACTION_TYPE_PREFIX) && (
+      {actionNode && (
         <div className="flex flex-col gap-2">
           {/* Only with automation.act_as — a field refused on save is worse than an absent one. */}
           {canActAs && (
@@ -403,10 +373,13 @@ export function GraphInspector({
             />
           )}
           <div className="text-xs text-fg-secondary">
-            {catalog?.nodes.find((entry) => entry.key === node.type)?.label ?? node.type}
+            {contributed?.label ?? node.type}
           </div>
           {node.type === "action.create_item" ? (
             <CreateItemFields params={node.params} pickers={pickers} onChange={setActionParams} />
+          ) : !isBuiltinAction(node.type) ? (
+            // Never blocks the save: the plugin's own inspector, or a line naming who provides it.
+            <ContributedNodeFields node={node} entry={contributed} onChange={setParams} showProvider />
           ) : (
           <ActionParams
             action={
