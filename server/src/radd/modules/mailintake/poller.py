@@ -10,6 +10,7 @@ import imaplib
 import logging
 import uuid
 
+from radd import secretbox
 from radd.db import SessionLocal
 from radd.modules.events import service as events
 
@@ -32,7 +33,8 @@ logger = logging.getLogger(__name__)
 def _connect(source: MailSource) -> imaplib.IMAP4_SSL:
     # Resolved, not raw (RADD-969): a preset row stores no host, port or username.
     imap = imaplib.IMAP4_SSL(resolve.source_host(source), resolve.source_port(source))
-    imap.login(resolve.source_username(source), source.secret)
+    # The one place a mailbox password is decrypted (RADD-1446).
+    imap.login(resolve.source_username(source), secretbox.decrypt(source.secret))
     imap.select(source.folder or DEFAULT_IMAP_FOLDER)
     return imap
 

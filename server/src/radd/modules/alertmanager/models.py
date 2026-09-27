@@ -10,13 +10,15 @@ from radd.db import Base, TimestampMixin
 class AlertReceiver(Base, TimestampMixin):
     """One Alertmanager webhook receiver (RADD-1317): its token and the project
     its alerts become issues in. Rows, not env vars — `RADD_ALERTMANAGER_TOKEN` +
-    `_PROJECT_KEY` seed one, once."""
+    `_PROJECT_KEY` seed one, once. The token is compared, never hashed, so it is
+    stored recoverably — as secretbox ciphertext (RADD-1446;
+    `service.receiver_for_token` is the one place it is decrypted)."""
 
     __tablename__ = "alertmanager_receivers"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), unique=True)
-    token: Mapped[str] = mapped_column(String(200))
+    token: Mapped[str] = mapped_column(Text)
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
     )

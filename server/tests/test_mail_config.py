@@ -16,7 +16,7 @@ import pytest
 from radd.modules.mailintake.types import SentMailKind
 from sqlalchemy import select, update
 
-from radd import smtp
+from radd import secretbox, smtp
 from radd.clock import utcnow
 from radd.config import settings
 from radd.exceptions import ConflictError
@@ -457,7 +457,8 @@ async def test_seeding_creates_a_source_and_sender_on_an_empty_instance(db, monk
     sources = await registry.list_sources(db)
     senders = await registry.list_senders(db)
     assert len(sources) == 1 and sources[0].host == "imap.example.com"
-    assert sources[0].secret == "pw", "the credential must carry over, not just the host"
+    assert secretbox.decrypt(sources[0].secret) == "pw", "the credential must carry over, not just the host"
+    assert secretbox.is_encrypted(sources[0].secret), "and it is sealed, like a typed one"
     assert len(senders) == 1 and senders[0].is_default is True
 
 

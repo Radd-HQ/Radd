@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from radd import secretbox
 from radd.db import get_session
 from radd.exceptions import ForbiddenError
 from radd.modules.alertmanager import service
@@ -111,7 +112,7 @@ async def test_an_empty_token_on_update_keeps_the_stored_one_and_the_diff_hides_
     token = uuid.uuid4().hex
     receiver = await service.create_receiver(db, ReceiverCreate(name=f"keep-{uuid.uuid4().hex[:6]}", token=token))
     await service.update_receiver(db, receiver.id, ReceiverUpdate(token="", name=receiver.name + "-x"))
-    assert receiver.token == token
+    assert secretbox.decrypt(receiver.token) == token
     head = (await db.execute(select(Event.id).order_by(Event.id.desc()).limit(1))).scalar() or 0
     await service.update_receiver(db, receiver.id, ReceiverUpdate(token="another-secret"))
     [updated] = await _events(db, head, AlertmanagerEvent.RECEIVER_UPDATED.value)

@@ -53,8 +53,9 @@ async def _user(db, *, role: InstanceRole = InstanceRole.MEMBER):
 
 async def _enrol(db, user) -> str:
     row = await auth_service.totp_setup(db, user)
-    await auth_service.totp_confirm(db, user, totp.code_at(row.secret, int(time.time())))
-    return row.secret
+    secret = auth_service.totp_secret(row)  # the column is ciphertext (RADD-1446)
+    await auth_service.totp_confirm(db, user, totp.code_at(secret, int(time.time())))
+    return secret
 
 
 async def _policy(db, on: bool) -> None:

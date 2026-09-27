@@ -70,7 +70,9 @@ export function HostDialog({
     existing?.host_type ?? StorageHostType.s3,
   );
   const [endpoint, setEndpoint] = useState(existing?.endpoint ?? "");
-  const [accessKey, setAccessKey] = useState(existing?.access_key ?? "");
+  // Reads carry only has_access_key / has_secret_key (RADD-1446): both fields start empty and
+  // "" on update keeps the stored value.
+  const [accessKey, setAccessKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [bucket, setBucket] = useState(existing?.bucket ?? "");
   const [region, setRegion] = useState(existing?.region ?? "");
@@ -120,8 +122,8 @@ export function HostDialog({
       ...(isS3
         ? {
             endpoint: endpoint.trim(),
+            // "" on update = keep the stored value (reads carry only has_*; RADD-1446).
             access_key: accessKey.trim(),
-            // "" on update = keep the stored secret (reads are redacted).
             secret_key: secretKey,
             bucket: bucket.trim(),
             region: region.trim(),
@@ -169,6 +171,8 @@ export function HostDialog({
               value={accessKey}
               onChange={(event) => setAccessKey(event.target.value)}
               maxLength={200}
+              placeholder={existing?.has_access_key ? "••••••••" : ""}
+              hint={existing ? "Leave empty to keep the stored key." : undefined}
             />
             <TextField
               label="Secret key"

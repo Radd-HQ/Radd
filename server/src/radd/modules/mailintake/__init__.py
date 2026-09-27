@@ -91,8 +91,9 @@ plugin = RaddPlugin(
             page_scopes=("instance",),
         ),
     ),
-    # Seed rows from env BEFORE the poller starts (RADD-958).
-    on_startup=(seeding.seed_from_env, dispatcher.start),
+    # Seed rows from env BEFORE the poller starts (RADD-958); legacy plaintext
+    # secrets take their encrypted form first (RADD-1446).
+    on_startup=(registry.encrypt_plaintext_secrets, seeding.seed_from_env, dispatcher.start),
     on_shutdown=(dispatcher.stop,),
     capabilities=(
         CapabilitySpec(

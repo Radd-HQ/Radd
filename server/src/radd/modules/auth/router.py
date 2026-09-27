@@ -132,10 +132,8 @@ async def totp_status(user: CurrentUser, session: Session) -> TotpStatusRead:
 @auth_router.post("/totp/setup", response_model=TotpSetupRead)
 async def totp_setup(user: CurrentUser, session: Session) -> TotpSetupRead:
     row = await service.totp_setup(session, user)
-    return TotpSetupRead(
-        secret=row.secret,
-        otpauth_uri=totp.provisioning_uri(row.secret, user.email),
-    )
+    secret = service.totp_secret(row)  # shown once, at enrolment
+    return TotpSetupRead(secret=secret, otpauth_uri=totp.provisioning_uri(secret, user.email))
 
 
 @auth_router.post("/totp/confirm", response_model=TotpRecoveryCodesRead)

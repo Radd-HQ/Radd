@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from radd import secretbox
 from radd.db import get_session
 from radd.exceptions import ConflictError, ForbiddenError
 from radd.modules.gitlab.models import GitlabConnection
@@ -107,11 +108,13 @@ async def test_empty_credential_on_update_keeps_the_stored_one(db):
     connection.api_token = "glpat-abc"
     await db.flush()
     await service.update_connection(db, connection.id, ConnectionUpdate(name="renamed"))
-    assert connection.webhook_secret == "secret-one" and connection.api_token == "glpat-abc"
+    assert secretbox.decrypt(connection.webhook_secret) == "secret-one"
+    assert secretbox.decrypt(connection.api_token) == "glpat-abc"
     await service.update_connection(db, connection.id, ConnectionUpdate(webhook_secret="", api_token=""))
-    assert connection.webhook_secret == "secret-one" and connection.api_token == "glpat-abc"
+    assert secretbox.decrypt(connection.webhook_secret) == "secret-one"
+    assert secretbox.decrypt(connection.api_token) == "glpat-abc"
     await service.update_connection(db, connection.id, ConnectionUpdate(webhook_secret="rotated"))
-    assert connection.webhook_secret == "rotated"
+    assert secretbox.decrypt(connection.webhook_secret) == "rotated"
 
 
 async def test_duplicate_names_and_projects_conflict(db):

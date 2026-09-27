@@ -38,9 +38,8 @@ async def enrollment_setup(
     user = await mfa_policy.user_for_ticket(session, data.ticket)
     check_login_attempt(request, user.email)
     row = await service.totp_setup(session, user)
-    return TotpSetupRead(
-        secret=row.secret, otpauth_uri=totp.provisioning_uri(row.secret, user.email)
-    )
+    secret = service.totp_secret(row)  # shown once, at enrolment
+    return TotpSetupRead(secret=secret, otpauth_uri=totp.provisioning_uri(secret, user.email))
 
 
 @mfa_enrollment_router.post("/confirm", response_model=TotpRecoveryCodesRead)

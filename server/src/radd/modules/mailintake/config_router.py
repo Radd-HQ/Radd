@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.db import get_session
 from radd.modules.auth import authz
 from radd.kernel import changes
@@ -140,12 +141,15 @@ async def _emit_config(
 
 async def _update_row(session, row, data, actor_id, save, event_type, entity_type):
     """Apply a write model to a source/sender row, save it and emit the diff."""
+    # A secret stored before RADD-1446 takes its encrypted form on this save —
+    # before the snapshot, so the adoption itself is not recorded as a change.
+    row.secret = secretbox.adopt(row.secret)
     before = changes.snapshot(row, changes.column_fields(row))
     for key, value in data.model_dump(exclude={"secret"}).items():
         setattr(row, key, value)
     # Omitted = unchanged, so a port edit does not require re-typing a password.
     if "secret" in data.model_fields_set and data.secret is not None:
-        row.secret = data.secret
+        row.secret = secretbox.seal(data.secret)
     saved = await save(session, row)
     await _emit_config(
         session, event_type, entity_type, saved, actor_id,
@@ -159,7 +163,7 @@ async def create_source(
     data: MailSourceWrite, session: Session, user: CurrentUser
 ) -> MailSourceRead:
     await require_mail_admin(session, user)
-    row = MailSource(**data.model_dump(exclude={"secret"}), secret=data.secret or "")
+    row = MailSource(**data.model_dump(exclude={"secret"}), secret=secretbox.seal(data.secret or ""))
     saved = await registry.save_source(session, row)
     await _emit_config(session, MailEvent.SOURCE_CREATED, MailEntity.SOURCE, saved, user.id)
     return _source_read(saved)
@@ -199,7 +203,7 @@ async def create_sender(
     data: MailSenderWrite, session: Session, user: CurrentUser
 ) -> MailSenderRead:
     await require_mail_admin(session, user)
-    row = MailSender(**data.model_dump(exclude={"secret"}), secret=data.secret or "")
+    row = MailSender(**data.model_dump(exclude={"secret"}), secret=secretbox.seal(data.secret or ""))
     saved = await registry.save_sender(session, row)
     await _emit_config(session, MailEvent.SENDER_CREATED, MailEntity.SENDER, saved, user.id)
     return _sender_read(saved)

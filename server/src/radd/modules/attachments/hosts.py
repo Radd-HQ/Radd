@@ -154,8 +154,8 @@ async def create_host(
         name=data.name,
         host_type=data.host_type.value,
         endpoint=data.endpoint,
-        access_key=data.access_key,
-        secret_key=data.secret_key,
+        access_key=secretbox.seal(data.access_key),
+        secret_key=secretbox.seal(data.secret_key),
         bucket=data.bucket,
         region=data.region,
         secure=data.secure,
@@ -183,6 +183,10 @@ async def update_host(
     actor_id: uuid.UUID | None = None,
 ) -> StorageHost:
     host = await get_host(session, host_id)
+    # Credentials stored before RADD-1446 take their encrypted form on this save —
+    # before the snapshot, so the adoption itself is not recorded as a change.
+    host.access_key = secretbox.adopt(host.access_key)
+    host.secret_key = secretbox.adopt(host.secret_key)
     before = changes.snapshot(host, changes.column_fields(host, exclude=_UNDIFFED))
     fields = data.model_dump(exclude_unset=True)
     if "name" in fields and fields["name"] != host.name:
@@ -191,11 +195,10 @@ async def update_host(
     for column in ("endpoint", "bucket", "region", "root_dir"):
         if column in fields:
             setattr(host, column, fields[column])
-    if "access_key" in fields:
-        host.access_key = fields["access_key"]
-    # `KEEP_SECRET` (the read shape is redacted) leaves the stored one alone.
-    if not secretbox.keeps_secret(fields.get("secret_key")):
-        host.secret_key = fields["secret_key"]
+    # `KEEP_SECRET` (the read shape is redacted) leaves the stored credential alone.
+    for credential in SECRET_FIELDS:
+        if not secretbox.keeps_secret(fields.get(credential)):
+            setattr(host, credential, secretbox.seal(fields[credential]))
     if "secure" in fields:
         host.secure = fields["secure"]
     if "delivery_mode" in fields:
@@ -328,7 +331,20 @@ async def refresh_default_snapshot(session: AsyncSession) -> None:
     _default_snapshot.set(_default_of(result.scalar_one_or_none()))
 
 
-# --- env seeding (startup) ----------------------------------------------------
+# --- startup ------------------------------------------------------------------
+
+
+async def encrypt_plaintext_credentials() -> None:
+    """Credentials saved before RADD-1446 take their encrypted form. A missing
+    secretbox key logs and skips — boot never waits on it."""
+    try:
+        async with SessionLocal() as session:
+            for host in await list_hosts(session):
+                host.access_key = secretbox.adopt(host.access_key)
+                host.secret_key = secretbox.adopt(host.secret_key)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("attachments: storage host credentials stay plaintext this boot: %s", exc)
 
 
 def seed_values() -> StorageHostCreate:

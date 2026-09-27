@@ -129,7 +129,7 @@ async def create_provider(
         name=data.name,
         wire_shape=data.wire_shape.value,
         base_url=data.base_url.rstrip("/"),
-        api_key=data.api_key,
+        api_key=secretbox.seal(data.api_key),
         default_model=data.default_model,
         source=source.value,
         reasoning=data.reasoning,
@@ -149,6 +149,9 @@ async def update_provider(
     actor_id: uuid.UUID | None = None,
 ) -> AiProviderRow:
     provider = await get_provider(session, provider_id)
+    # A key stored before RADD-1446 takes its encrypted form on this save — before
+    # the snapshot, so the adoption itself is not recorded as a change.
+    provider.api_key = secretbox.adopt(provider.api_key)
     before = changes.snapshot(provider, changes.column_fields(provider, exclude=_UNDIFFED))
     fields = data.model_dump(exclude_unset=True)
     if "name" in fields and fields["name"] != provider.name:
@@ -163,7 +166,7 @@ async def update_provider(
         provider.base_url = fields["base_url"].rstrip("/")
     # `secretbox.KEEP_SECRET` means "keep the stored one" — the read shape is redacted.
     if not secretbox.keeps_secret(fields.get("api_key")):
-        provider.api_key = fields["api_key"]
+        provider.api_key = secretbox.seal(fields["api_key"])
     if "default_model" in fields:
         provider.default_model = fields["default_model"]
     if "reasoning" in fields and fields["reasoning"] is not None:
@@ -329,7 +332,8 @@ async def resolve_role(session: AsyncSession, role: AiRole) -> ResolvedModel | N
 def resolved_from_row(provider: AiProviderRow, model: str | None = None) -> ResolvedModel | None:
     """The callable model on one provider row: `model`, else the row's default, else
     (LOCAL) the built-in default. None when no model is named anywhere — not callable.
-    The one builder, so the Test button sends what a real call would."""
+    The one builder, so the Test button sends what a real call would — and the one
+    place the api_key is decrypted."""
     model = model or provider.default_model
     if not model and provider.wire_shape == AiWireShape.LOCAL.value:
         from .localembed import DEFAULT_LOCAL_MODEL
@@ -340,7 +344,7 @@ def resolved_from_row(provider: AiProviderRow, model: str | None = None) -> Reso
     return ResolvedModel(
         wire_shape=AiWireShape(provider.wire_shape),
         base_url=provider.base_url,
-        api_key=provider.api_key,
+        api_key=secretbox.decrypt(provider.api_key),
         model=model,
         reasoning=bool(provider.reasoning),
         request_params=dict(provider.request_params or {}),
@@ -448,7 +452,19 @@ async def refresh_snapshot(session: AsyncSession) -> None:
     _role_snapshot.set(_roles_of(await list_roles(session)))
 
 
-# --- env seeding (startup) ----------------------------------------------------
+# --- startup ------------------------------------------------------------------
+
+
+async def encrypt_plaintext_secrets() -> None:
+    """API keys saved before RADD-1446 take their encrypted form. A missing
+    secretbox key logs and skips — boot never waits on it."""
+    try:
+        async with SessionLocal() as session:
+            for provider in await list_providers(session):
+                provider.api_key = secretbox.adopt(provider.api_key)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("ai: provider api keys stay plaintext this boot: %s", exc)
 
 
 async def seed_from_env() -> None:

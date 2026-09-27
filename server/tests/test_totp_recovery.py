@@ -30,10 +30,9 @@ async def _enrolled_user(db) -> tuple[User, str, list[str]]:
         ),
     )
     row = await auth_service.totp_setup(db, user)
-    codes = await auth_service.totp_confirm(
-        db, user, totp.code_at(row.secret, int(time.time()))
-    )
-    return user, row.secret, codes
+    secret = auth_service.totp_secret(row)  # the column is ciphertext (RADD-1446)
+    codes = await auth_service.totp_confirm(db, user, totp.code_at(secret, int(time.time())))
+    return user, secret, codes
 
 
 def test_code_shapes():
@@ -71,7 +70,7 @@ async def test_a_recovery_code_signs_in_exactly_once(db):
     # the TOTP code itself still works after a recovery sign-in
     row = await auth_service.totp_row(db, user.id)
     again = await auth_service.authenticate_with_totp(
-        db, user.email, PASSWORD, totp.code_at(row.secret, int(time.time()))
+        db, user.email, PASSWORD, totp.code_at(auth_service.totp_secret(row), int(time.time()))
     )
     assert again.id == user.id
 

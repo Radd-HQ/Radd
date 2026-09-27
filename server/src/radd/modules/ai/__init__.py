@@ -39,6 +39,7 @@ def _admin_event(event_type: AiEvent, label: str, entity_type: str, *, diff: boo
 
 
 async def _startup() -> None:
+    await registry.encrypt_plaintext_secrets()  # RADD-1446
     await registry.seed_from_env()
     # Embeddings schema is runtime-managed (see embeddings/__init__): created
     # here when the pgvector extension exists, silently absent otherwise.

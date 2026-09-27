@@ -34,6 +34,7 @@ def _storage_capability() -> dict[str, object]:
 
 
 async def _startup() -> None:
+    await hosts.encrypt_plaintext_credentials()  # RADD-1446
     await hosts.seed_from_env()
     await clients.ensure_all_ready()
 

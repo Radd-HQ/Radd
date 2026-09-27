@@ -207,12 +207,14 @@ async def test_deleting_last_seed_receiver_stays_deleted(world, monkeypatch):
     monkeypatch.setattr(settings, "alertmanager_token", token)
     monkeypatch.setattr(settings, "alertmanager_project_key", "")
     await service.seed_from_env()
-    first = await db.scalar(select(AlertReceiver).where(AlertReceiver.token == token))
+    # By the token's OWNER, not its value: the column is ciphertext under a fresh
+    # nonce, so no SQL predicate can find it; `receiver_for_token` decrypts.
+    first = await service.receiver_for_token(db, token)
     first_id = first.id
     await service.delete_receiver(db, first_id)
     await service.seed_from_env()
-    recreated = await db.scalar(select(AlertReceiver).where(AlertReceiver.token == token))
-    assert recreated is None
+    assert await service.receiver_for_token(db, token) is None
+    assert list((await db.scalars(select(AlertReceiver))).all()) == []
 
 
 async def test_private_search_candidates_do_not_hide_readable_milestone(world):

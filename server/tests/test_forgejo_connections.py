@@ -16,6 +16,7 @@ import uuid
 
 import pytest
 
+from radd import secretbox
 from radd.modules.forgejo.models import ForgejoConnection
 from radd.modules.forgejo.service import store as service
 from radd.modules.vcs.connector_kit.schemas import ConnectionCreate, ConnectionUpdate, RepoCreate, RepoUpdate
@@ -143,13 +144,16 @@ async def test_empty_credential_on_update_keeps_the_stored_one(db):
     await db.flush()
 
     await service.update_connection(db, connection.id, ConnectionUpdate(name="renamed"))
-    assert connection.webhook_secret == "secret-one" and connection.api_token == "token-abc"
+    assert secretbox.decrypt(connection.webhook_secret) == "secret-one"
+    # The token was written raw above (a pre-encryption row): the save adopted it.
+    assert secretbox.is_encrypted(connection.api_token)
+    assert secretbox.decrypt(connection.api_token) == "token-abc"
 
     await service.update_connection(db, connection.id, ConnectionUpdate(webhook_secret=""))
-    assert connection.webhook_secret == "secret-one"  # a round-tripped blank must not wipe it
+    assert secretbox.decrypt(connection.webhook_secret) == "secret-one"  # a round-tripped blank must not wipe it
 
     await service.update_connection(db, connection.id, ConnectionUpdate(webhook_secret="rotated"))
-    assert connection.webhook_secret == "rotated"
+    assert secretbox.decrypt(connection.webhook_secret) == "rotated"
 
 
 async def test_duplicate_names_and_repos_conflict(db):

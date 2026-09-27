@@ -12,8 +12,10 @@ from .types import AiProviderSource
 
 
 class AiProviderRow(Base, TimestampMixin):
-    """One reachable AI endpoint. The api_key is stored as-is (it must be replayed
-    on every request — the webhook-secret precedent); reads expose `has_api_key`."""
+    """One reachable AI endpoint. The api_key must be replayed on every request, so
+    it is stored recoverably — as secretbox ciphertext (RADD-1446;
+    `registry.resolved_from_row` is the one place it is decrypted). "" = no key;
+    reads expose `has_api_key`."""
 
     __tablename__ = "ai_providers"
     __table_args__ = (UniqueConstraint("name"),)

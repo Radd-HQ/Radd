@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ConflictError, ForbiddenError
@@ -192,7 +193,8 @@ async def test_empty_credential_on_update_keeps_the_stored_one_and_names_conflic
     name = f"cred-{uuid.uuid4().hex[:6]}"
     connection = await _connection(db, name, "secret-one", token="tok")
     await service.update_connection(db, connection.id, ConnectionUpdate(webhook_secret="", api_token=""))
-    assert connection.webhook_secret == "secret-one" and connection.api_token == "tok"
+    assert secretbox.decrypt(connection.webhook_secret) == "secret-one"
+    assert secretbox.decrypt(connection.api_token) == "tok"
     with pytest.raises(ConflictError):
         await service.create_connection(db, ConnectionCreate(name=name))
     repo = await service.create_repo(db, RepoCreate(connection_id=connection.id, full_name="acme/dup"))

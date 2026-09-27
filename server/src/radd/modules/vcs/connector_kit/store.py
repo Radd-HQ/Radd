@@ -13,6 +13,7 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.clock import utcnow
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
@@ -90,8 +91,8 @@ class ConnectorStore:
         connection = self._connection(
             name=data.name,
             base_url=(data.base_url or self.spec.wording.default_base_url).rstrip("/"),
-            api_token=data.api_token,
-            webhook_secret=data.webhook_secret,
+            api_token=secretbox.seal(data.api_token),
+            webhook_secret=secretbox.seal(data.webhook_secret),
             active=data.active,
             verify_ssl=data.verify_ssl,
         )
@@ -107,17 +108,20 @@ class ConnectorStore:
         actor_id: uuid.UUID | None = None,
     ) -> Any:
         connection = await self.get_connection(session, connection_id)
+        # Credentials stored before RADD-1446 take their encrypted form on this save —
+        # before the snapshot, so the adoption itself is not recorded as a change.
+        connection.api_token = secretbox.adopt(connection.api_token)
+        connection.webhook_secret = secretbox.adopt(connection.webhook_secret)
         before = changes.snapshot(connection, changes.column_fields(connection))
         if data.name is not None:
             connection.name = data.name
         if data.base_url is not None:
             connection.base_url = data.base_url.rstrip("/")
-        # Empty = keep the stored credential: a form round-tripping a redacted value
-        # must not blank the secret (the ai_providers convention).
-        if data.api_token:
-            connection.api_token = data.api_token
-        if data.webhook_secret:
-            connection.webhook_secret = data.webhook_secret
+        # `KEEP_SECRET` = keep the stored credential: a form round-tripping a redacted
+        # value must not blank the secret (the ai_providers convention).
+        for credential in SECRET_FIELDS:
+            if not secretbox.keeps_secret(getattr(data, credential)):
+                setattr(connection, credential, secretbox.seal(getattr(data, credential)))
         if data.active is not None:
             connection.active = data.active
         if data.verify_ssl is not None:
@@ -256,11 +260,14 @@ class ConnectorStore:
     ) -> tuple[Any, Any | None] | None:
         """The one active connection this delivery authenticates against, and the
         enabled repository it names on THAT connection (None when it names none).
-        A secret shared by several active hosts identifies none of them."""
+        A secret shared by several active hosts identifies none of them. The
+        connector's `authenticate` compares constant-time against the DECRYPTED
+        secret (RADD-1446) — the one place a webhook secret is decrypted."""
         full_name = normalize_path(self.spec.repo_name(payload))
         verified = [
             connection for connection in await self.list_connections(session)
-            if connection.active and self.spec.authenticate(raw_body, credential, connection.webhook_secret)
+            if connection.active
+            and self.spec.authenticate(raw_body, credential, secretbox.decrypt(connection.webhook_secret))
         ]
         if len(verified) != 1:
             return None
@@ -295,6 +302,22 @@ class ConnectorStore:
             check=lambda: {"enabled": self.active_connection_count() > 0},
         )
 
+    # --- startup ---
+
+    async def encrypt_plaintext_credentials(self) -> None:
+        """Credentials saved before RADD-1446 take their encrypted form. A missing
+        secretbox key logs and skips — boot never waits on it."""
+        try:
+            async with SessionLocal() as session:
+                for connection in await self.list_connections(session):
+                    connection.api_token = secretbox.adopt(connection.api_token)
+                    connection.webhook_secret = secretbox.adopt(connection.webhook_secret)
+                await session.commit()
+        except secretbox.SecretBoxError as exc:
+            logger.warning(
+                "%s: connection credentials stay plaintext this boot: %s", self.spec.provider.value, exc
+            )
+
     # --- env seed (the spec-101 rule: the env key seeds ONE row, once) ---
 
     async def seed_from_env(self) -> None:
@@ -310,8 +333,8 @@ class ConnectorStore:
                 connection = self._connection(
                     name=spec.wording.title,
                     base_url=(str(spec.setting(ConnectorSetting.BASE_URL)) or spec.wording.default_base_url).rstrip("/"),
-                    api_token=str(spec.setting(ConnectorSetting.API_TOKEN)).strip(),
-                    webhook_secret=secret,
+                    api_token=secretbox.seal(str(spec.setting(ConnectorSetting.API_TOKEN)).strip()),
+                    webhook_secret=secretbox.seal(secret),
                     active=True,
                 )
                 session.add(connection)

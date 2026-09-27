@@ -7,15 +7,17 @@ import uuid
 from datetime import datetime
 from typing import ClassVar
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, false, true
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint, false, true
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from radd.db import TimestampMixin
 
 
 class ConnectionColumns(TimestampMixin):
-    """One host a connector talks to. Credentials are stored as-is (replayed on
-    every call); reads expose only has_token/has_secret."""
+    """One host a connector talks to. Credentials must be replayed on every call,
+    so they are stored recoverably — as secretbox ciphertext (RADD-1446), decrypted
+    only by the connector's `api_headers` and the kit's webhook authentication;
+    reads expose only has_token/has_secret."""
 
     @declared_attr.directive
     def __table_args__(cls) -> tuple:
@@ -27,9 +29,9 @@ class ConnectionColumns(TimestampMixin):
     base_url: Mapped[str] = mapped_column(String(500))
     #: Read-only API token. The backfill, the connection test and time mirroring
     #: need it; a host that only sends webhooks works with it empty.
-    api_token: Mapped[str] = mapped_column(String(500), default="")
+    api_token: Mapped[str] = mapped_column(Text, default="")
     #: What the host signs deliveries with (Forgejo, GitHub) or echoes back (GitLab).
-    webhook_secret: Mapped[str] = mapped_column(String(200), default="")
+    webhook_secret: Mapped[str] = mapped_column(Text, default="")
     active: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
     verify_ssl: Mapped[bool] = mapped_column(Boolean, server_default=true(), default=True)
 

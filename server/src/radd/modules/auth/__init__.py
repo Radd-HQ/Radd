@@ -107,5 +107,6 @@ plugin = RaddPlugin(
     mcp_tools=mcptools.MCP_TOOLS,
     permissions=AUTH_PERMISSIONS,
     crud_resources=AUTH_CRUD_RESOURCES,
-    on_startup=(subscribers.ensure_seeded,),
+    # RADD-1446: TOTP seeds enrolled before at-rest encryption take their sealed form.
+    on_startup=(subscribers.ensure_seeded, service.encrypt_plaintext_totp_secrets),
 )

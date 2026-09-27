@@ -21,6 +21,6 @@ plugin = RaddPlugin(
     routers=(router, admin_router(store)),
     integrations=(manifest.integration(CONNECTOR),),
     # RADD_GITHUB_WEBHOOK_SECRET seeds ONE connection row, once (the spec-101 rule).
-    on_startup=(store.seed_from_env,),
+    on_startup=(store.encrypt_plaintext_credentials, store.seed_from_env),  # RADD-1446: sweep first
     capabilities=(store.capability(),),
 )

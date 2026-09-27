@@ -15,6 +15,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from radd import secretbox
 from radd.config import settings
 from radd.exceptions import ConflictError
 from radd.modules.attachments import hosts
@@ -128,7 +129,7 @@ async def test_update_with_empty_secret_keeps_the_stored_one(db):
     await hosts.update_host(
         db, host.id, StorageHostUpdate(secret_key="", name="renamed")
     )
-    assert host.secret_key == "stored-secret"
+    assert secretbox.decrypt(host.secret_key) == "stored-secret"
     assert host.name == "renamed"
 
 

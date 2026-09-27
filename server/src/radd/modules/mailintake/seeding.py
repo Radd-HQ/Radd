@@ -11,6 +11,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import SessionLocal
 
@@ -45,7 +46,7 @@ async def seed(session: AsyncSession) -> None:
                 host=settings.mail_imap_host,
                 port=settings.mail_imap_port,
                 username=settings.mail_imap_username,
-                secret=settings.mail_imap_password,
+                secret=secretbox.seal(settings.mail_imap_password),
                 folder=settings.mail_imap_folder,
                 default_project_id=await _project_id(session, settings.mail_project_key),
             )
@@ -59,7 +60,7 @@ async def seed(session: AsyncSession) -> None:
                 name="Webhook (from environment)",
                 kind=MailSourceKind.WEBHOOK.value,
                 address=settings.email_ingest_address,
-                secret=settings.email_ingest_secret,
+                secret=secretbox.seal(settings.email_ingest_secret),
                 default_project_id=await _project_id(session, settings.mail_project_key),
             )
         )
@@ -76,7 +77,7 @@ async def seed(session: AsyncSession) -> None:
                 host=settings.smtp_host,
                 port=settings.smtp_port,
                 username=settings.smtp_username,
-                secret=settings.smtp_password,
+                secret=secretbox.seal(settings.smtp_password),
                 starttls=settings.smtp_starttls,
             )
         )

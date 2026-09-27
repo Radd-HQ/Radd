@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 
-from radd import smtp
+from radd import secretbox, smtp
 
 from .. import resolve
 from ..providers import OutboundMessage
@@ -36,7 +36,9 @@ class SmtpSender:
                 host=resolve.sender_host(self._row),
                 port=resolve.sender_port(self._row),
                 username=resolve.sender_username(self._row),
-                password=self._row.secret,
+                # The one place an SMTP password is decrypted (RADD-1446); the env
+                # relay's `_EnvSender` carries plaintext, which passes through.
+                password=secretbox.decrypt(self._row.secret),
                 starttls=resolve.sender_starttls(self._row),
                 from_address=self._row.from_address,
             ),

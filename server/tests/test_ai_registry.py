@@ -216,7 +216,7 @@ async def test_update_with_empty_api_key_keeps_the_stored_one(db):
     await registry.update_provider(
         db, provider.id, AiProviderUpdate(api_key=secretbox.KEEP_SECRET, name="renamed")
     )
-    assert provider.api_key == "secret"
+    assert secretbox.decrypt(provider.api_key) == "secret"
     assert provider.name == "renamed"
 
 

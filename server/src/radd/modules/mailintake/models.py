@@ -112,7 +112,9 @@ class MailSource(Base, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     #: The address this source accepts mail for; also in the self-loop guard's set.
     address: Mapped[str] = mapped_column(String(320), default="")
-    #: webhook: the HMAC secret; imap: the mailbox password. Write-only over the API.
+    #: webhook: the HMAC secret; imap: the mailbox password. Write-only over the API,
+    #: secretbox ciphertext at rest (RADD-1446; decrypted by the ingest router and
+    #: the poller's login alone).
     secret: Mapped[str] = mapped_column(Text, default="")
     #: BLANK on a preset kind (gmail/outlook), which answers it at read time —
     #: `resolve.source_host`. Storing the preset's value would freeze it.
@@ -154,6 +156,7 @@ class MailSender(Base, TimestampMixin):
     host: Mapped[str] = mapped_column(String(255), default="")
     port: Mapped[int] = mapped_column(Integer, default=DEFAULT_SMTP_PORT)
     username: Mapped[str] = mapped_column(String(320), default="")
+    #: The SMTP password: secretbox ciphertext at rest (RADD-1446; `SmtpSender` decrypts).
     secret: Mapped[str] = mapped_column(Text, default="")
     starttls: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 

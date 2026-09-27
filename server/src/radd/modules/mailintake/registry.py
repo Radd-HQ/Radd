@@ -11,7 +11,9 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
+from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
 
 from . import resolve
@@ -33,6 +35,18 @@ def outbound_capability() -> dict:
     """Outbound email (RADD-1389): an enabled sender ROW exists — the env SMTP host
     only seeds a row."""
     return {"enabled": _configured["outbound"]}
+
+
+async def encrypt_plaintext_secrets() -> None:
+    """Mailbox passwords and ingest secrets saved before RADD-1446 take their
+    encrypted form. A missing secretbox key logs and skips — boot never waits on it."""
+    try:
+        async with SessionLocal() as session:
+            for row in [*await list_sources(session), *await list_senders(session)]:
+                row.secret = secretbox.adopt(row.secret)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("mailintake: source and sender secrets stay plaintext this boot: %s", exc)
 
 
 async def refresh_snapshot(session: AsyncSession) -> None:

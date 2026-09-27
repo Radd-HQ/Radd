@@ -10,6 +10,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
@@ -53,13 +54,22 @@ _TRIGGER_OF = {
 
 async def receiver_for_token(session: AsyncSession, token: str) -> AlertReceiver | None:
     """The ACTIVE receiver whose token this is — compared constant-time against
-    each, so the answer does not depend on how early the match is."""
+    each, so the answer does not depend on how early the match is. The one place
+    a token is decrypted (RADD-1446); a row that will not decrypt matches nothing
+    and is logged, so one damaged receiver never takes the webhook down."""
     supplied = (token or "").strip()
     if not supplied:
         return None
     found: AlertReceiver | None = None
     for receiver in (await session.execute(select(AlertReceiver).where(AlertReceiver.active))).scalars():
-        if receiver.token and hmac.compare_digest(supplied, receiver.token):
+        if not receiver.token:
+            continue
+        try:
+            stored = secretbox.decrypt(receiver.token)
+        except secretbox.SecretBoxError as exc:
+            logger.warning("alertmanager: receiver %r token does not decrypt: %s", receiver.name, exc)
+            continue
+        if hmac.compare_digest(supplied, stored):
             found = receiver
     return found
 
@@ -210,7 +220,7 @@ async def create_receiver(session: AsyncSession, data, *, actor_id: uuid.UUID | 
     if (await session.execute(select(AlertReceiver).where(AlertReceiver.name == data.name))).scalar_one_or_none():
         raise ConflictError(AlertEntity.RECEIVER, data.name)
     receiver = AlertReceiver(
-        name=data.name, token=data.token, project_id=data.project_id, active=data.active,
+        name=data.name, token=secretbox.seal(data.token), project_id=data.project_id, active=data.active,
         comment_updates=data.comment_updates, label=data.label.strip(), resolve_state_id=data.resolve_state_id,
     )
     await _check_resolve_state(session, receiver)
@@ -223,10 +233,15 @@ async def create_receiver(session: AsyncSession, data, *, actor_id: uuid.UUID | 
 
 async def update_receiver(session: AsyncSession, receiver_id: uuid.UUID, data, *, actor_id=None) -> AlertReceiver:
     receiver = await get_receiver(session, receiver_id)
+    # A token stored before RADD-1446 takes its encrypted form on this save — before
+    # the snapshot, so the adoption itself is not recorded as a change.
+    receiver.token = secretbox.adopt(receiver.token)
     before = changes.snapshot(receiver, _AUDITED)
     fields = data.model_dump(exclude_unset=True)
-    if not fields.get("token"):
-        fields.pop("token", None)  # empty on update keeps the stored token
+    if secretbox.keeps_secret(fields.get("token")):
+        fields.pop("token", None)  # `KEEP_SECRET` on update keeps the stored token
+    else:
+        fields["token"] = secretbox.seal(fields["token"])
     if fields.get("label") is not None:
         fields["label"] = fields["label"].strip()
     for key, value in fields.items():
@@ -251,7 +266,19 @@ async def delete_receiver(session: AsyncSession, receiver_id: uuid.UUID, *, acto
     await refresh_snapshot(session)
 
 
-# --- capability snapshot + env seed ------------------------------------------
+# --- capability snapshot, startup sweep + env seed ----------------------------
+
+
+async def encrypt_plaintext_tokens() -> None:
+    """Tokens saved before RADD-1446 take their encrypted form. A missing secretbox
+    key logs and skips — boot never waits on it."""
+    try:
+        async with SessionLocal() as session:
+            for receiver in await list_receivers(session):
+                receiver.token = secretbox.adopt(receiver.token)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("alertmanager: receiver tokens stay plaintext this boot: %s", exc)
 
 
 async def _load_active_count() -> int:
@@ -289,7 +316,9 @@ async def seed_from_env() -> None:
                     project_id = (await projects_service.get_by_key(session, key)).id
                 except NotFoundError:
                     logger.warning("alertmanager: seed project %s does not exist; receiver has no project", key)
-            session.add(AlertReceiver(name="Alertmanager", token=token, project_id=project_id, active=True))
+            session.add(
+                AlertReceiver(name="Alertmanager", token=secretbox.seal(token), project_id=project_id, active=True)
+            )
             logger.info("alertmanager: seeded one receiver from the environment")
         await session.commit()
         await refresh_snapshot(session)

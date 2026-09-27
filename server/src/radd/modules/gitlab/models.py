@@ -2,6 +2,7 @@
 The columns are the connector kit's (`vcs.connector_kit.columns`); a repository's
 `full_name` is GitLab's `path_with_namespace` (`group/subgroup/project`)."""
 
+from radd import secretbox
 from radd.db import Base
 from radd.modules.vcs.connector_kit.columns import ConnectionColumns, RepoColumns
 
@@ -31,8 +32,8 @@ class GitlabConnection(ConnectionColumns, Base):
     @property
     def api_headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json"}
-        if self.api_token:
-            headers["PRIVATE-TOKEN"] = self.api_token
+        if self.api_token:  # the one place the token is decrypted (RADD-1446)
+            headers["PRIVATE-TOKEN"] = secretbox.decrypt(self.api_token)
         return headers
 
 

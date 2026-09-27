@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import get_session
 from radd.exceptions import ForbiddenError, NotFoundError
@@ -56,9 +57,10 @@ async def ingest_email(
         return _status(response, 413, {"error": "message too large"})
 
     # The SOURCE row (by envelope recipient) decides the secret and the routing
-    # (RADD-958); the env secret only while no row exists.
+    # (RADD-958); the env secret only while no row exists. Decrypted here, the one
+    # place (RADD-1446); `verify_signature` compares constant-time.
     source = await registry.source_for_address(session, x_radd_envelope_to)
-    secret = source.secret if source is not None else settings.email_ingest_secret
+    secret = secretbox.decrypt(source.secret) if source is not None else settings.email_ingest_secret
     if not webhook.verify_signature(raw, x_radd_signature, secret):
         # Identical for no secret, no signature and a wrong one: which one it was
         # would tell a caller whether this instance is misconfigured.

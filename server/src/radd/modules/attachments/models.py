@@ -34,9 +34,10 @@ from .types import (
 
 class StorageHost(Base, TimestampMixin):
     """One place bytes can live: an S3-compatible endpoint+bucket, or a local
-    filesystem root. Credentials stored as-is (replayed on every request — the
-    webhook-secret precedent); reads expose `has_secret_key`. `updated_at`
-    doubles as the per-host client-cache fingerprint."""
+    filesystem root. Credentials must be replayed on every request, so they are
+    stored recoverably — as secretbox ciphertext (RADD-1446; `clients.S3Client` is
+    the one place they are decrypted). Reads expose `has_access_key` /
+    `has_secret_key`. `updated_at` doubles as the per-host client-cache fingerprint."""
 
     __tablename__ = "storage_hosts"
     __table_args__ = (UniqueConstraint("name"),)
@@ -45,7 +46,7 @@ class StorageHost(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(200))
     host_type: Mapped[str] = mapped_column(String(20))  # StorageHostType
     endpoint: Mapped[str] = mapped_column(String(500), default="")  # s3: host:port, no scheme
-    access_key: Mapped[str] = mapped_column(String(200), default="")
+    access_key: Mapped[str] = mapped_column(Text, default="")
     secret_key: Mapped[str] = mapped_column(Text, default="")
     bucket: Mapped[str] = mapped_column(String(200), default="")
     region: Mapped[str] = mapped_column(String(100), default="")
@@ -60,6 +61,10 @@ class StorageHost(Base, TimestampMixin):
     email_images_allowed: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     is_default: Mapped[bool] = mapped_column(Boolean, server_default=false(), default=False)
     source: Mapped[str] = mapped_column(String(10), default=StorageHostSource.USER.value)
+
+    @property
+    def has_access_key(self) -> bool:
+        return bool(self.access_key)
 
     @property
     def has_secret_key(self) -> bool:

@@ -45,8 +45,8 @@ class StorageHostCreate(BaseModel):
 class StorageHostUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     endpoint: str | None = Field(default=None, max_length=500)
+    # "" on update = keep the stored credential (reads are redacted, RADD-1446).
     access_key: str | None = Field(default=None, max_length=200)
-    # "" on update = keep the stored key (reads are redacted).
     secret_key: str | None = None
     bucket: str | None = Field(default=None, max_length=200)
     region: str | None = Field(default=None, max_length=100)
@@ -109,7 +109,8 @@ class StorageHostRead(BaseModel):
     name: str
     host_type: str
     endpoint: str
-    access_key: str
+    # Both credentials are write-only (RADD-1446): the read says whether one is set.
+    has_access_key: bool
     has_secret_key: bool
     bucket: str
     region: str

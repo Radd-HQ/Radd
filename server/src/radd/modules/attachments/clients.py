@@ -16,6 +16,7 @@ from typing import BinaryIO, Protocol, runtime_checkable
 from fastapi import UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
+from radd import secretbox
 from radd.config import settings
 
 from .models import Attachment, StorageHost
@@ -135,10 +136,11 @@ class S3Client:
         self._bucket = host.bucket
         self._delivery = DeliveryMode(host.delivery_mode)
         self._expiry = host.presign_expiry_seconds or settings.s3_presign_expiry_seconds
+        # The one place the host's credentials are decrypted (RADD-1446).
         self._client = Minio(
             host.endpoint,
-            access_key=host.access_key,
-            secret_key=host.secret_key,
+            access_key=secretbox.decrypt(host.access_key),
+            secret_key=secretbox.decrypt(host.secret_key),
             secure=host.secure,
             region=host.region or None,
         )

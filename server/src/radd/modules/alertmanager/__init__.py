@@ -54,7 +54,7 @@ plugin = RaddPlugin(
         _trigger(AlertTrigger.RESOLVED, "alert resolved"),
     ),
     # RADD_ALERTMANAGER_TOKEN (+ _PROJECT_KEY) seed ONE receiver row, once.
-    on_startup=(service.seed_from_env,),
+    on_startup=(service.encrypt_plaintext_tokens, service.seed_from_env),  # RADD-1446: sweep first
     capabilities=(
         CapabilitySpec(
             "alertmanager",

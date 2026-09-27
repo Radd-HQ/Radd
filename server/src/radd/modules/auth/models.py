@@ -8,6 +8,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -75,14 +76,17 @@ class User(Base, TimestampMixin):
 class UserTotp(Base, TimestampMixin):
     """TOTP enrollment (spec 48). A row with confirmed_at NULL is a pending
     setup (secret shown once, not yet verified); confirmed = MFA enforced on
-    password login. SSO/LDAP logins are untouched — the IdP owns MFA there."""
+    password login. SSO/LDAP logins are untouched — the IdP owns MFA there.
+    The seed must be replayed at every check, so it is stored recoverably — as
+    secretbox ciphertext of the base32 string (RADD-1446; `service.totp_secret`
+    is the one place it is decrypted)."""
 
     __tablename__ = "user_totp"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
-    secret: Mapped[str] = mapped_column(String(64))  # base32
+    secret: Mapped[str] = mapped_column(Text)
     confirmed_at: Mapped[datetime | None] = mapped_column()
 
 

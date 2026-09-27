@@ -29,7 +29,7 @@ export interface StorageHostRead {
   host_type: StorageHostTypeValue;
   /** s3 only: host:port, no scheme. */
   endpoint: string;
-  access_key: string;
+  has_access_key: boolean;
   has_secret_key: boolean;
   bucket: string;
   region: string;

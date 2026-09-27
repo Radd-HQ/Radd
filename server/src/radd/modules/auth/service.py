@@ -1,6 +1,7 @@
 """Users CRUD + TOTP/MFA, and the facade re-exporting sessions, tokens and
 merge/delete (`service_sessions`, `service_tokens`, `lifecycle`)."""
 
+import logging
 import time
 import uuid
 from collections.abc import Iterable
@@ -8,7 +9,8 @@ from collections.abc import Iterable
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.db import ilike_term
+from radd import secretbox
+from radd.db import SessionLocal, ilike_term
 from radd.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from radd.kernel import changes
 from radd.modules.events import service as events
@@ -52,6 +54,8 @@ from .types import (
     UserChange,
     UserSource,
 )
+
+logger = logging.getLogger(__name__)
 
 # Uniform for unknown email / wrong password / inactive user — reveals nothing.
 BAD_CREDENTIALS = "invalid email or password"
@@ -310,6 +314,25 @@ async def totp_row(session: AsyncSession, user_id: uuid.UUID) -> UserTotp | None
     return await session.get(UserTotp, user_id)
 
 
+def totp_secret(row: UserTotp) -> str:
+    """The base32 seed an authenticator app holds — the one place the stored
+    ciphertext is decrypted (RADD-1446): every code check and the one-time
+    enrolment display go through here."""
+    return secretbox.decrypt(row.secret)
+
+
+async def encrypt_plaintext_totp_secrets() -> None:
+    """Seeds enrolled before RADD-1446 take their encrypted form. A missing
+    secretbox key logs and skips — boot never waits on it."""
+    try:
+        async with SessionLocal() as session:
+            for row in (await session.execute(select(UserTotp))).scalars():
+                row.secret = secretbox.adopt(row.secret)
+            await session.commit()
+    except secretbox.SecretBoxError as exc:
+        logger.warning("auth: TOTP seeds stay plaintext this boot: %s", exc)
+
+
 async def totp_required(session: AsyncSession, user: User) -> bool:
     row = await totp_row(session, user.id)
     return row is not None and row.confirmed_at is not None
@@ -324,7 +347,7 @@ async def totp_setup(session: AsyncSession, user: User) -> UserTotp:
     if row is not None:
         await session.delete(row)
         await session.flush()
-    row = UserTotp(user_id=user.id, secret=totp.generate_secret())
+    row = UserTotp(user_id=user.id, secret=secretbox.seal(totp.generate_secret()))
     session.add(row)
     await session.flush()
     return row
@@ -338,7 +361,7 @@ async def totp_confirm(session: AsyncSession, user: User, code: str) -> list[str
     row = await totp_row(session, user.id)
     if row is None:
         raise NotFoundError(AuthEntity.USER, "no pending TOTP setup")
-    if not totp.verify_code(row.secret, code, int(time.time())):
+    if not totp.verify_code(totp_secret(row), code, int(time.time())):
         raise UnauthorizedError("invalid TOTP code")
     row.confirmed_at = security.utcnow()
     await session.flush()
@@ -366,7 +389,7 @@ async def regenerate_recovery_codes(session: AsyncSession, user: User, code: str
     row = await totp_row(session, user.id)
     if row is None or row.confirmed_at is None:
         raise NotFoundError(AuthEntity.USER, "TOTP is not enabled")
-    if not totp.verify_code(row.secret, code, int(time.time())):
+    if not totp.verify_code(totp_secret(row), code, int(time.time())):
         raise UnauthorizedError("invalid TOTP code")
     return await _mint_recovery_codes(session, user.id)
 
@@ -388,7 +411,7 @@ async def totp_disable(session: AsyncSession, user: User, code: str) -> None:
     row = await totp_row(session, user.id)
     if row is None:
         raise NotFoundError(AuthEntity.USER, "TOTP is not enabled")
-    if not totp.verify_code(row.secret, code, int(time.time())) and not (
+    if not totp.verify_code(totp_secret(row), code, int(time.time())) and not (
         await _consume_recovery_code(session, user.id, code)
     ):
         raise UnauthorizedError("invalid TOTP code")
@@ -426,7 +449,7 @@ async def authenticate_with_totp(
     row = await totp_row(session, user.id)
     if row is None or row.confirmed_at is None:
         raise UnauthorizedError(BAD_CREDENTIALS)
-    if totp.verify_code(row.secret, code, int(time.time())):
+    if totp.verify_code(totp_secret(row), code, int(time.time())):
         return user
     # RADD-677: a recovery code works wherever the TOTP code does — single-use,
     # burned before the session is minted. Same uniform 401 otherwise.
