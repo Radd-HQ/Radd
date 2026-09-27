@@ -14,6 +14,7 @@ from radd.modules.auth.models import User
 
 from .schemas import PluginWidget, WidgetLayoutSave, WidgetRead
 from .types import BUILTIN_WIDGET_TYPES
+from .widget_bodies import parse_widget_body
 
 TITLES = {
     "assigned": "Assigned to me",
@@ -77,7 +78,6 @@ def _personal_widget(raw) -> PluginWidget:
 
 
 async def save(session, user, data: WidgetLayoutSave):
-    from .router import _parse_widget_body
     from .widgets import _check_references, plugin_config
 
     await session.execute(
@@ -103,7 +103,7 @@ async def save(session, user, data: WidgetLayoutSave):
         if is_personal(widget_type) or (orphan and (str(raw.get("id")), widget_type) in kept):
             parsed = _personal_widget(raw)
         else:
-            parsed = _parse_widget_body(raw)
+            parsed = parse_widget_body(raw)
             if isinstance(parsed, PluginWidget):
                 # A contributed type's config fits its plugin's model, on My Work as anywhere.
                 parsed.config = plugin_config(parsed.widget_type, parsed.config)

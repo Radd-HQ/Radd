@@ -1,5 +1,5 @@
 /** Every `/dashboards` path and query key; the host's nav facts read `dashboardSummaryQuery` via `./queries`. */
-import { api } from "@radd/plugin-sdk";
+import { api, Entity } from "@radd/plugin-sdk";
 import type { Dashboard, DashboardWidget } from "./types";
 
 export const DASHBOARDS_PATH = "/dashboards";
@@ -18,7 +18,7 @@ export const dashboardKeys = {
 };
 
 /** A dashboard is readable through its owner, grants, roles and teams — any of them moves it. */
-const DASHBOARD_META = { entities: ["dashboard", "project", "role", "team", "member", "group", "accessGrant"] };
+const DASHBOARD_META = { entities: [Entity.dashboard, Entity.project, Entity.role, Entity.team, Entity.member, Entity.group, Entity.accessGrant] };
 
 export const SIDEBAR_PAGE_SIZE = 50;
 

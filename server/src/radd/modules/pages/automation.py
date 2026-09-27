@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from radd.sdk import AutomationNodeSpec, TokenProviderSpec
+from radd.sdk import AutomationNodeKind, AutomationNodeSpec, NodeArity, NodePort, TokenProviderSpec
 
 SPACE_GATE_KEY = "gate.page_space"
 COMMENT_NODE_KEY = "page.comment"
@@ -134,13 +134,13 @@ async def apply_move(ctx: Any, plan: _MovePlan) -> None:
 
 COMMENT_NODE = AutomationNodeSpec(
     key=COMMENT_NODE_KEY,
-    kind="action",
+    kind=AutomationNodeKind.ACTION.value,
     label="Comment on the page",
     description="Add a comment to the page this event is about.",
     group="Pages",
     params_schema=COMMENT_SCHEMA,
     subject="page",
-    arity="item",
+    arity=NodeArity.ITEM.value,
     needs_items=False,  # it needs a PAGE, not an item — see `subject`
     permission="comment.write",
     plan=plan_comment,
@@ -149,13 +149,13 @@ COMMENT_NODE = AutomationNodeSpec(
 
 MOVE_NODE = AutomationNodeSpec(
     key=MOVE_NODE_KEY,
-    kind="action",
+    kind=AutomationNodeKind.ACTION.value,
     label="Move the page",
     description="Move the page this event is about under another page in its space, or to the root.",
     group="Pages",
     params_schema=MOVE_SCHEMA,
     subject="page",
-    arity="item",
+    arity=NodeArity.ITEM.value,
     needs_items=False,
     permission="page.write",
     plan=plan_move,
@@ -188,12 +188,12 @@ async def _plan_space(ctx: Any) -> str:
 
 SPACE_GATE = AutomationNodeSpec(
     key=SPACE_GATE_KEY,
-    kind="gate",
+    kind=AutomationNodeKind.GATE.value,
     label="Page is in space",
     group="Gates",
     keywords="page wiki space docs runbook in space",
     default_params={"spaces": [], "negate": False},
-    ports=("true", "false"),
+    ports=(NodePort.TRUE.value, NodePort.FALSE.value),
     needs_items=False,
     reads_event=True,
     plan=_plan_space,

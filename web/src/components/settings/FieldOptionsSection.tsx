@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { api } from "../../lib/api";
 import { apiFieldOptionsPath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { queryKeys } from "../../lib/queries";
 import { TokenMultiSelect, ErrorText } from "@radd/plugin-sdk";
 import { Button, ButtonVariant } from "../Button";

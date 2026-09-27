@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "./api";
-import { Entity, invalidateEntities } from "./cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { API_BASE, apiAttachmentPath, apiAttachmentsPath } from "./constants";
 import type { Attachment, AttachmentTarget } from "./types";
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from radd.sdk import AutomationNodeSpec, TokenProviderSpec
+from radd.sdk import AutomationNodeKind, AutomationNodeSpec, TokenProviderSpec
 
 GATE_KEY = "gate.comment"
 THREAD_ANY, THREAD_ROOT, THREAD_REPLY = "any", "root", "reply"
@@ -40,7 +40,7 @@ async def _plan(ctx: Any) -> str:
 
 COMMENT_GATE = AutomationNodeSpec(
     key=GATE_KEY,
-    kind="gate",
+    kind=AutomationNodeKind.GATE.value,
     label="Comment is",
     group="Gates",
     keywords="comment reply root thread internal public discussion annotation",

@@ -1,4 +1,4 @@
-import { Button, Callout, LiveStatus, RichEditor, type EditorTransform, type InlineAnchorRef, type LiveDocument } from "@radd/plugin-sdk";
+import { Button, Callout, LiveStatus, RichEditor, type EditorTransform, type InlineAnchorRef, type LiveDocument, CalloutKind } from "@radd/plugin-sdk";
 import type { PageUpdate } from "../types";
 
 const EDITOR_CLASS = "[&_.ProseMirror]:min-h-[24rem]";
@@ -92,7 +92,7 @@ export function PageEditPanel({
         </Callout>
       )}
       {conflict && (
-        <Callout kind="warning">
+        <Callout kind={CalloutKind.warning}>
           <div className="flex items-center gap-2">
             This page changed since you opened it — reload it (discarding your draft) or
             overwrite.

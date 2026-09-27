@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Mapping
 
-from radd.kernel import AutomationNodeSpec, OutputField, OutputKind, valid_output_name
+from radd.kernel import AutomationNodeKind, AutomationNodeSpec, NodeArity, OutputField, OutputKind, valid_output_name
 
 from .automation_context import ask_structured, include_schema, preflight
 from .types import AiFeature
@@ -279,7 +279,7 @@ def check(params: Mapping[str, Any]) -> None:
 
 SPEC = AutomationNodeSpec(
     key=NODE_KEY,
-    kind="gate",  # routes on availability; see the module docstring
+    kind=AutomationNodeKind.GATE.value,  # routes on availability; see the module docstring
     label="Generate with AI",
     description=(
         "Work out several values about the item in one call — a priority, a "
@@ -295,7 +295,7 @@ SPEC = AutomationNodeSpec(
     #: A generation about no item has nothing to describe.
     needs_items=True,
     # SET only: the variable bag has one slot per node.
-    arity="set",
+    arity=NodeArity.SET.value,
     check=check,
     plan=plan,
 )

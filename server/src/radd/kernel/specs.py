@@ -358,13 +358,36 @@ class OutputField:
 
 
 # --- notification kinds (RADD-1326) -------------------------------------------
+class NotificationChannel(StrEnum):
+    """One preferences-matrix cell (spec 118). The two channels are independent:
+    EMAIL with no inbox row is reachable. `NotificationKindSpec.default_channel`
+    names one, which is why the vocabulary is the kernel's and notify's `Channel` is it."""
+
+    OFF = "off"
+    INBOX = "inbox"
+    EMAIL = "email"
+    BOTH = "both"
+
+    @property
+    def inbox(self) -> bool:
+        return self in (NotificationChannel.INBOX, NotificationChannel.BOTH)
+
+    @property
+    def email(self) -> bool:
+        return self in (NotificationChannel.EMAIL, NotificationChannel.BOTH)
+
+    @property
+    def silent(self) -> bool:
+        return self is NotificationChannel.OFF
+
+
 @dataclass(frozen=True)
 class NotificationKindSpec:
     """One kind of notification: a preferences-matrix row and, for a CONTRIBUTED kind,
     the `events` that produce it (notify's own kinds leave `events` empty).
 
     - `personal`: addressed AT the recipients (the `own` column only).
-    - `default_channel`: an unset relationship cell — "off" | "inbox" | "email" | "both".
+    - `default_channel`: an unset relationship cell — a `NotificationChannel` value.
     - `recipients(session, event) -> Iterable[uuid]`; the actor never hears their own action.
     - `render(payload, actor_name) -> {"headline", "link"}`, stored on the row.
 
@@ -374,7 +397,7 @@ class NotificationKindSpec:
     label: str
     description: str = ""
     personal: bool = True
-    default_channel: str = "inbox"
+    default_channel: str = NotificationChannel.INBOX.value
     events: tuple[str, ...] = ()
     recipients: Callable[..., Any] | None = None
     render: Callable[..., Any] | None = None
@@ -445,6 +468,56 @@ def _default_outputs_for(_params: Mapping[str, Any]) -> tuple["OutputField", ...
 
 
 # --- automation nodes (spec 116 phase 2: the canvas palette is contributed) ---
+class AutomationNodeKind(StrEnum):
+    """Node kinds (spec 116). FILTER answers per ITEM with a subset; GATE answers
+    ONCE for the packet ("changed by someone in QA" is not a property of an item).
+    SOURCE (RADD-919) PRODUCES items; every other kind can only narrow them.
+    """
+
+    TRIGGER = "trigger"
+    SOURCE = "source"
+    FILTER = "filter"
+    GATE = "gate"
+    ACTION = "action"
+
+
+class NodePort(StrEnum):
+    """Named outputs. A node's kind fixes which of these it has by default
+    (automations' `PORTS_BY_KIND`); a TYPE names its own through its spec's `ports` or
+    `ports_for` (RADD-1322: built-ins included). An edge naming a port the source cannot emit is
+    rejected on write."""
+
+    OUT = "out"
+    MATCHED = "matched"
+    UNMATCHED = "unmatched"
+    TRUE = "true"
+    FALSE = "false"
+    #: What `create_item` MADE, as opposed to what it was given. Without it the
+    #: new issue was unreachable — the action emitted its input, so nothing
+    #: downstream could assign, label or comment on what had just been created.
+    CREATED = "created"
+
+
+class NodeArity(StrEnum):
+    """How a node reads its input packet (RADD-918). There is no loop construct:
+    "for each" is how a node reads its input, not control flow.
+
+    * SET — runs once over the whole packet; a router sends it down ONE port.
+    * ITEM — runs once per item; a router PARTITIONS the set across its ports.
+
+    An action passes its input through either way, so arity changes how many
+    side effects happen, never the graph's shape.
+    """
+
+    SET = "set"
+    ITEM = "item"
+
+
+#: The subject every built-in node acts on — the work item's entity type. Named
+#: because `Packet.item_ids` and `AutomationNodeSpec.subject`'s default have to agree.
+ITEM_SUBJECT = "item"
+
+
 @dataclass(frozen=True)
 class AutomationNodeSpec:
     """A node type an automation graph can hold, contributed by a module.
@@ -458,7 +531,7 @@ class AutomationNodeSpec:
     `params_schema` is JSON Schema; the SPA generates a form when the plugin ships none."""
 
     key: str  # "filter.slq", "gate.field_changed", "ai.classify"
-    kind: str  # AutomationNodeKind value — fixes whether it filters, gates or acts
+    kind: str  # an `AutomationNodeKind` value — fixes whether it filters, gates or acts
     label: str
     description: str = ""
     group: str = "Other"  # palette section
@@ -493,16 +566,16 @@ class AutomationNodeSpec:
     shape_params: tuple[str, ...] | None = None
     #: False = runs even when nothing reached it (webhook, chat, "nothing matched").
     needs_items: bool = True
-    #: How the node reads its packet — a NodeArity value (a string: kernel purity):
+    #: How the node reads its packet — a `NodeArity` value (a string, like `kind`):
     #: "set" runs once, "item" per item (partitioning across ports).
-    arity: str = "set"
+    arity: str = NodeArity.SET.value
     #: Arities the author may choose between. Empty = fixed at `arity`, and the
     #: editor shows no control — a toggle with one setting teaches nothing.
     arity_options: tuple[str, ...] = ()
     #: Atom required to USE this node in an automation; "" = any author.
     permission: str = ""
     #: The entity type this node acts on (RADD-923); `ctx.subject_ids` holds ids of it.
-    subject: str = "item"
+    subject: str = ITEM_SUBJECT
     #: `plan(ctx) -> port name`, used at SET arity: one answer for the packet.
     #: On an ACTION node it returns a `NodePlan`-shaped object (`detail`,
     #: `resolves`) describing what it WOULD do, and writes nothing.

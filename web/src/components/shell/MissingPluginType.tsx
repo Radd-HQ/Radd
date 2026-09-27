@@ -1,4 +1,5 @@
 import { Callout } from "../Callout";
+import { CalloutKind } from "@radd/plugin-sdk";
 
 /**
  * Shown where a plugin-contributed surface can't render:
@@ -19,7 +20,7 @@ export function MissingPluginType({
 }) {
   return (
     <Callout
-      kind="warning"
+      kind={CalloutKind.warning}
       icon={null}
       data-plugin-missing={disabled ? undefined : kind}
       data-plugin-disabled={disabled ? kind : undefined}

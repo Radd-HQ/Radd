@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Database } from "lucide-react";
-import { Callout, EmptyState, ErrorText, SettingsPage, Spinner, useCurrentUser, useIsInstanceAdmin } from "@radd/plugin-sdk";
+import { Callout, EmptyState, ErrorText, SettingsPage, Spinner, useCurrentUser, useIsInstanceAdmin, CalloutKind } from "@radd/plugin-sdk";
 import { statusQuery } from "./api";
 import { Panel } from "./chrome";
 import { ConnectionsPanel } from "./ConnectionsPanel";
@@ -92,7 +92,7 @@ export function JiraImportPage() {
 
 function ConnectionNotice({ title, detail }: { title: string; detail: string }) {
   return (
-    <Callout kind="warning" className="p-3">
+    <Callout kind={CalloutKind.warning} className="p-3">
       <p className="text-[13px]">{title}</p>
       {detail && <p className="mt-1 text-fg-secondary">{detail}</p>}
     </Callout>

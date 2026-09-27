@@ -4,7 +4,7 @@
  * resolves to nothing (edges once shipped black on a dark canvas).
  */
 import { Filter, Flag, GitBranch, OctagonX, Play, Search, Zap, type LucideIcon } from "lucide-react";
-import { NodeKind, type NodeKindValue } from "./types";
+import { NodeKind, VERDICT_BLOCK_TYPE, VERDICT_WARN_TYPE, type NodeKindValue } from "./types";
 import { shapeOf, type NodeShapes } from "./shape-contract";
 
 export const NODE_KIND_ICON: Record<NodeKindValue, LucideIcon> = {
@@ -53,8 +53,8 @@ export const PORT_TONE: Record<string, string> = {
  * submission", amber for "Warn submitter". Terminal — no outlet.
  */
 export const VERDICT_VISUAL: Record<string, { icon: LucideIcon; tone: string; tag: string }> = {
-  "verdict.block": { icon: OctagonX, tone: "var(--status-danger-ink)", tag: "Blocks" },
-  "verdict.warn": { icon: Flag, tone: "var(--status-warning-ink)", tag: "Warns" },
+  [VERDICT_BLOCK_TYPE]: { icon: OctagonX, tone: "var(--status-danger-ink)", tag: "Blocks" },
+  [VERDICT_WARN_TYPE]: { icon: Flag, tone: "var(--status-warning-ink)", tag: "Warns" },
 };
 
 /** Words a port is SHOWN as, where its wire key would read badly. */

@@ -2,7 +2,7 @@ import { capabilitiesQuery } from "../../lib/queries";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Slot, SlotId, useSlot, useSlotMatch, useConfirm } from "@radd/plugin-sdk";
+import { Slot, SlotId, useSlot, useSlotMatch, useConfirm, CalloutKind, capabilitiesQueryKey } from "@radd/plugin-sdk";
 import { Blocks, ChevronDown, ChevronRight, Lock, SlidersHorizontal } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
@@ -40,7 +40,7 @@ function PluginRow({ plugin }: { plugin: Plugin }) {
     queryClient.invalidateQueries({ queryKey: queryKeys.plugins });
     // The nav/capabilities manifest reflects enabled plugins — refresh it so the
     // sidebar plugin nav appears/disappears immediately.
-    queryClient.invalidateQueries({ queryKey: ["capabilities"] });
+    queryClient.invalidateQueries({ queryKey: capabilitiesQueryKey });
   };
   // RADD-1101: install/uninstall always existed as endpoints; the page offered
   // only enable/disable, leaving the lifecycle's ends to curl.
@@ -274,14 +274,19 @@ function PackageUpload() {
   </div>;
 }
 
+/** An enable/disable is applied by every process on its own clock; the page watches it land. */
+const PLUGIN_LIST_POLL_MS = 2_000;
+/** The per-process reconcile report, shown once at the top rather than per row (RADD-1372). */
+const PLUGIN_PROCESSES_POLL_MS = 5_000;
+
 export function PluginsSettingsPage() {
-  const { data: plugins, isLoading, error } = useQuery({...pluginsQuery, refetchInterval: 2000});
+  const { data: plugins, isLoading, error } = useQuery({...pluginsQuery, refetchInterval: PLUGIN_LIST_POLL_MS});
   const client = useQueryClient();
   const activeKey = (plugins ?? []).filter(p => p.active).map(p => p.id).sort().join(",");
-  useEffect(() => {void client.invalidateQueries({queryKey: ["capabilities"]});}, [client, activeKey]);
-  const {data: peers} = useQuery({queryKey: ["plugin-processes"],
+  useEffect(() => {void client.invalidateQueries({queryKey: capabilitiesQueryKey});}, [client, activeKey]);
+  const {data: peers} = useQuery({queryKey: queryKeys.pluginProcesses,
     queryFn: () => api.get<PluginProcessReport[]>(`${ApiPath.plugins}/runtime`),
-    refetchInterval: 5000});
+    refetchInterval: PLUGIN_PROCESSES_POLL_MS});
   // RADD-1372: a process that cannot reconcile at all is shown ONCE, here — not
   // as "Apply failed" on every plugin row. Stale processes lost their lease
   // before their report went stale, so they no longer block anything.
@@ -296,13 +301,13 @@ export function PluginsSettingsPage() {
       title="Plugins"
       description="Upload and manage extensions. Enable and disable installed plugins without restarting. Changes apply across servers and workers."
     >
-      {pendingChanges.length > 0 && <Callout kind="info" role="status" className="mb-4 text-sm">
+      {pendingChanges.length > 0 && <Callout kind={CalloutKind.info} role="status" className="mb-4 text-sm">
         <strong>Applying plugin changes…</strong>
         <p>Waiting for running work to finish and for every server and worker to acknowledge {pendingChanges.map(plugin => plugin.name).join(", ")}.
           Stored settings and data are retained.</p>
       </Callout>}
       <PackageUpload />
-      {failing.length > 0 && <Callout kind="warning" role="status" className="mb-4 text-sm">
+      {failing.length > 0 && <Callout kind={CalloutKind.warning} role="status" className="mb-4 text-sm">
         <strong>{failing.length === 1 ? "A server or worker" : `${failing.length} servers or workers`} cannot read plugin changes</strong>
         <p>Plugins keep their current state on {failing.length === 1 ? "that process" : "those processes"} and changes are retried automatically.</p>
         <ul className="mt-1">

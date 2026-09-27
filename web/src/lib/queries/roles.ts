@@ -7,7 +7,7 @@ import {
   apiRoleGlobalGrantsPath,
 } from "../constants";
 import { queryKeys } from "./shared";
-import { Entity, entityMeta } from "../cache";
+import { Entity, entityMeta } from "@radd/plugin-sdk";
 import type {
   GlobalGrant,
   PermissionInfo,

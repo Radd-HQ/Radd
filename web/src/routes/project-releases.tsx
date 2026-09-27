@@ -8,7 +8,7 @@ import { usePermissions, useProjectByKey } from "../lib/hooks";
 import { RELEASE_STATUS_META } from "../lib/meta";
 import { queryKeys, releasesQuery, statesQuery, transitionsQuery } from "../lib/queries";
 import { RoutePath } from "../lib/constants";
-import { Entity, entityMeta, invalidateEntities } from "../lib/cache";
+import { Entity, entityMeta, invalidateEntities } from "@radd/plugin-sdk";
 import { pushToast, ToastKind } from "../lib/toast";
 import {
   Permission,

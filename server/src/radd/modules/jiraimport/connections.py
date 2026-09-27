@@ -175,9 +175,9 @@ async def update_connection(
         connection.auth_mode = JiraAuthMode(fields["auth_mode"]).value
     if "username" in fields:
         connection.username = fields["username"]
-    # An empty credential means "keep the stored one" — the read shape is redacted,
-    # so a form that saves an untouched connection sends nothing back.
-    if fields.get("credential"):
+    # `KEEP_SECRET` means "keep the stored one" — the read shape is redacted, so a
+    # form that saves an untouched connection sends nothing back.
+    if not secretbox.keeps_secret(fields.get("credential")):
         connection.credential = secretbox.seal(fields["credential"])
     if "verify_ssl" in fields:
         connection.verify_ssl = fields["verify_ssl"]

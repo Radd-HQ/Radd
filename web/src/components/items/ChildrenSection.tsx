@@ -3,7 +3,7 @@ import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tansta
 import { ChevronRight, Plus, Square, SquareCheckBig } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { api, errorMessage } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { ApiPath, RoutePath, apiItemPath } from "../../lib/constants";
 import { useOpenIssueRef, usePermissions } from "../../lib/hooks";
 import { CATEGORY_META } from "../../lib/meta";

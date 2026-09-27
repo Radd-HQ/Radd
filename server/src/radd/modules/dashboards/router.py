@@ -2,17 +2,15 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-import pydantic
 from fastapi import APIRouter, Body, Depends, Query, Response
-from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import get_session
 from radd.apitypes import TOTAL_COUNT_HEADER
-from radd.kernel import registries
 from radd.modules.auth.deps import CurrentUser
 
 from . import directory, service, widgets
+from .widget_bodies import parse_widget_body
 from .schemas import (
     DashboardCreate,
     DashboardSave,
@@ -20,13 +18,10 @@ from .schemas import (
     DashboardSharingUpdate,
     DashboardTransfer,
     DashboardUpdate,
-    PluginWidget,
-    WidgetCreate,
     WidgetUpdate,
     WidgetLayoutSave,
     WidgetRead,
 )
-from .types import BUILTIN_WIDGET_TYPES
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
 
@@ -164,35 +159,6 @@ _WIDGET_DOC = (
     "free-form config dict. Unknown types → 422. Returns the full updated dashboard."
 )
 
-def _parse_widget_body(body: dict[str, Any]) -> WidgetCreate | PluginWidget:
-    """Dispatch a raw widget-create body to its schema: a builtin widget_type
-    validates against the discriminated union (typed per-type config); a type
-    registered in registries.widget_types validates as a free-form PluginWidget —
-    unless it is PERSONAL (RADD-1393), which belongs on My Work only; anything
-    else is unknown → 422. A pydantic shape failure is surfaced as the same
-    RequestValidationError (422) FastAPI would have raised for the body."""
-    widget_type = body.get("widget_type")
-    spec = registries.widget_types.get(widget_type) if isinstance(widget_type, str) else None
-    try:
-        if widget_type in BUILTIN_WIDGET_TYPES:
-            return pydantic.TypeAdapter(WidgetCreate).validate_python(body)
-        if spec is not None and not spec.personal:
-            return PluginWidget.model_validate(body)
-    except pydantic.ValidationError as exc:
-        raise RequestValidationError(exc.errors()) from exc
-    reason = "is a My Work widget" if spec is not None else "is unknown"
-    raise RequestValidationError(
-        [
-            {
-                "type": "value_error",
-                "loc": ("body", "widget_type"),
-                "msg": f"widget_type {widget_type!r} {reason}",
-                "input": widget_type,
-            }
-        ]
-    )
-
-
 @router.post(
     "/{dashboard_id}/widgets",
     response_model=DashboardRead,
@@ -205,7 +171,7 @@ async def create_widget(
     session: Session,
     user: CurrentUser,
 ) -> DashboardRead:
-    return await widgets.create_widget(session, dashboard_id, _parse_widget_body(body), actor=user)
+    return await widgets.create_widget(session, dashboard_id, parse_widget_body(body), actor=user)
 
 
 @router.patch("/{dashboard_id}/widgets/{widget_id}", response_model=DashboardRead)
@@ -239,4 +205,4 @@ async def save_dashboard(
 async def replace_widgets(
     dashboard_id: uuid.UUID, data: WidgetLayoutSave, session: Session, user: CurrentUser
 ):
-    return await widgets.replace_widgets(session, dashboard_id, data, _parse_widget_body, actor=user)
+    return await widgets.replace_widgets(session, dashboard_id, data, parse_widget_body, actor=user)

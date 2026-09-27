@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookmarkPlus, Trash2 } from "lucide-react";
 import { api } from "../../../lib/api";
-import { Entity, invalidateEntities } from "../../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { ApiPath, apiCardLayoutPresetPath } from "../../../lib/constants";
 import { usePermissions } from "../../../lib/hooks";
 import { cardLayoutPresetsQuery } from "../../../lib/queries";

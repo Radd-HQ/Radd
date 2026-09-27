@@ -216,6 +216,22 @@ class MailRuleStatus(StrEnum):
 NO_MATCH_ANSWER = "None of these"
 
 
+class SignatureMethod(StrEnum):
+    """How `signatures.detect` decided, shown to the admin previewing a rule. The
+    AI fallback runs only after NONE_DETECTED; every other answer is final."""
+
+    SCAN_LIMIT = "Message exceeds signature scan limit"
+    UNKNOWN_DOMAIN = "Unrecognized sender domain; message preserved"
+    RULE_TIMED_OUT = "Rule timed out; message preserved"
+    EMPTY_MATCH = "Empty match ignored; message preserved"
+    DOMAIN_RULE = "Domain rule"
+    BUILT_IN = "Built-in detection"
+    NONE_DETECTED = "No signature detected"
+    AI = "AI detection"
+    AI_UNCERTAIN = "AI uncertain; message preserved"
+    AI_UNAVAILABLE = "AI unavailable; message preserved"
+
+
 class MailDirection(StrEnum):
     """Which way a `mail_messages` row went: threading resolves against OUTBOUND
     ids, dedup consults INBOUND ones."""

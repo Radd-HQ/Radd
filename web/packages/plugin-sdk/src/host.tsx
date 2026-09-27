@@ -1,14 +1,14 @@
 import { Slot, SlotId } from "./slots";
 import { TextArea, Select } from "./primitives";
 import { bridged } from "./bridge";
-import { providedNow, type ToastKindValue } from "./host-registry";
+import { providedNow, ToastKind, type ToastKindValue } from "./host-registry";
 
 /** Host-provided controls (CodeMirror, the token input, page chrome) — too heavy to bundle into every
  *  remote — rendered through these wrappers, each with a plain fallback. */
 
 export { provideHostComponents } from "./host-registry";
 export type { HostComponents, CodeEditorProps, TokenListProps, SchemaFormProps, SettingsPageProps, SelectFieldProps, ScopedSettingsProps, RoleGrantsProps, RoleGrantSubject, ToastKindValue } from "./host-registry";
-export { ToastKind } from "./host-registry";
+export { ToastKind, CalloutKind, type CalloutKindValue } from "./host-registry";
 
 /** A code editor — the host's CodeMirror, else a monospace text area. */
 export const CodeEditor = bridged("CodeEditor", (props) => (
@@ -41,7 +41,6 @@ export const SelectField = bridged("SelectField", (props) => {
   const { ariaLabel, hint: _hint, error: _error, onOpen: _onOpen, ...rest } = props;
   return <Select {...rest} aria-label={ariaLabel} />;
 });
-export const CalloutKind = { info: "info", success: "success", warning: "warning", danger: "danger" } as const;
 export const Callout = bridged("Callout", (props) => <div role="note">{props.children}</div>);
 export const QueryError = bridged("QueryError", (props) => <p role="alert">Failed to load {props.label}: {String(props.error)}</p>);
 
@@ -64,7 +63,7 @@ export const ScopedSettings = bridged("ScopedSettings", (props) => <p role="note
 export const RoleGrants = bridged("RoleGrants", () => null);
 
 /** Show a toast. Callable from mutation callbacks; a host without toasts logs instead. */
-export function toast(message: string, kind: ToastKindValue = "success"): void {
+export function toast(message: string, kind: ToastKindValue = ToastKind.success): void {
   const { toast: host } = providedNow();
   if (host) host(message, kind);
   else console.info(`[${kind}] ${message}`);

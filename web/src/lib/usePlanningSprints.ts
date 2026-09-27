@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { infiniteViewItemsQuery } from "./queries/views";
 import { api } from "./api";
-import { entityMeta, Entity } from "./cache";
+import { entityMeta, Entity } from "@radd/plugin-sdk";
 import type { View } from "./types";
 
 const AUTO_PAGES = 10;

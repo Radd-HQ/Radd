@@ -34,6 +34,9 @@ export type ValidationModeValue = (typeof ValidationMode)[keyof typeof Validatio
 export const VERDICT_BLOCK_TYPE = "verdict.block";
 export const VERDICT_WARN_TYPE = "verdict.warn";
 
+/** The one trigger node type (server `TYPE_TRIGGER_EVENT`); its `event` param names the trigger. */
+export const TRIGGER_EVENT_TYPE = "trigger.event";
+
 import type { ScheduleConfig as RuleSchedule, ScheduleKindValue } from "@radd/plugin-sdk";
 export type { RuleSchedule };
 

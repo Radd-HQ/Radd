@@ -440,7 +440,7 @@ def _seed_of(item_id, subject: str, subject_id) -> tuple[str, uuid.UUID]:
     """The one subject a manual run or dry run starts from: `item_id` (the
     original field) or `subject` + `subject_id` (RADD-1323)."""
     if subject_id is None and item_id is not None:
-        return "item", item_id
+        return graph.ITEM_SUBJECT, item_id
     if subject_id is None:
         raise ConflictError(
             AutomationEntity.RULE, reason="name what to run on: item_id, or subject and subject_id"

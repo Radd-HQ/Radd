@@ -14,7 +14,7 @@ import { api, errorMessage } from "../../lib/api";
 import { fieldInScope } from "../../lib/field-scope";
 import { TRANSITION_MODE_LABELS } from "../../lib/meta";
 import { ApiPath, apiTransitionPath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { usePermissions } from "../../lib/hooks";
 import { issueTypesQuery, queryKeys, releasesQuery, scopedSettingsQuery, teamsQuery, transitionsQuery, usersQuery } from "../../lib/queries";
 import { ConditionOp, ItemKind, Permission, Priority, SettingScope, TransitionCheck, TransitionMode, WORKFLOW_TRANSITION_MODE_KEY, type ConditionOpValue, type FieldConditionParams, type State, type Transition, type TransitionCreate, type TransitionRule, type TransitionUpdate } from "../../lib/types";

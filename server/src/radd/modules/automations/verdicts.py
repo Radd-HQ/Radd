@@ -13,7 +13,7 @@ from typing import Any, Mapping
 
 from radd.kernel.specs import AutomationNodeSpec
 
-from .types import TYPE_VERDICT_BLOCK, TYPE_VERDICT_WARN, NodeArity
+from .types import TYPE_VERDICT_BLOCK, TYPE_VERDICT_WARN, AutomationNodeKind, NodeArity
 
 #: The only token a verdict's own message may use: the draft's submitted title. Anything
 #: else — a search node's output, another node's variables — was read with the
@@ -76,7 +76,7 @@ def _check(params: Mapping[str, Any]) -> None:
 def _spec(key: str, label: str, blocking: bool, description: str, keywords: str) -> AutomationNodeSpec:
     return AutomationNodeSpec(
         key=key,
-        kind="action",
+        kind=AutomationNodeKind.ACTION.value,
         label=label,
         description=description,
         group="Validation",

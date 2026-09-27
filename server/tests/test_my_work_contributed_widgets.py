@@ -25,7 +25,7 @@ from radd.modules.approvals.types import ApprovalCheck, ApprovalWidget
 from radd.modules.auth.models import User
 from radd.modules.auth.types import InstanceRole
 from radd.modules.dashboards import personal
-from radd.modules.dashboards.router import _parse_widget_body
+from radd.modules.dashboards.widget_bodies import parse_widget_body
 from radd.modules.dashboards.schemas import WidgetLayoutSave
 from radd.modules.items import service as items
 from radd.modules.items.schemas import ItemCreate
@@ -117,4 +117,4 @@ async def test_registered_approvals_is_suggested_to_whoever_has_something_to_dec
     assert AWAITING not in {w["widget_type"] for w in await personal.suggested_defaults(db, bystander)}
     # It shows the viewer's own queue, so it belongs on My Work — never a shared dashboard.
     with pytest.raises(RequestValidationError, match="My Work widget"):
-        _parse_widget_body(_widget(str(uuid.uuid4())))
+        parse_widget_body(_widget(str(uuid.uuid4())))

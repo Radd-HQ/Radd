@@ -4,11 +4,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Pencil, ShieldCheck, Trash2 } from "lucide-react";
 import {
   api, ApiError, errorMessage, usePermissions, invalidateEntities, toast, Button, DirectoryPager, EmptyState, ErrorText,
-  IconButton, ListSearchInput, Modal, QueryError, ScopedAccess, SettingsPage, TableSkeleton, useConfirm,
-} from "@radd/plugin-sdk";
+  IconButton, ListSearchInput, Modal, QueryError, ScopedAccess, SettingsPage, TableSkeleton, useConfirm, Entity } from "@radd/plugin-sdk";
 import { PageApi, spacePath } from "../endpoints";
 import { PageRoute } from "../links";
-import { Tag } from "../queries";
 import { usePageSpaceDirectory } from "../directory";
 import { PagePermission, useSpacePermissions } from "../permissions";
 import type { PageSpace } from "../types";
@@ -40,7 +38,7 @@ export function PagesSettingsPage() {
           .then(ok => { if (ok) remove.mutate({ spaceId, force: true }); });
       } else setDeleteError(errorMessage(error));
     },
-    onSettled: () => invalidateEntities(queryClient, Tag.space, Tag.page),
+    onSettled: () => invalidateEntities(queryClient, Entity.docSpace, Entity.page),
   });
   const reindex = useMutation({
     mutationFn: () => api.post<{ backlinks: number; item_links: number }>(PageApi.reindex),

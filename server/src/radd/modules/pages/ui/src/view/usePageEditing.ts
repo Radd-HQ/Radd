@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ApiError, CommentSection, LiveStatus, api, errorMessage, invalidateEntities, toast, useCommentFeed,
-  useLiveDocument, type EditorTransform, type InlineAnchorRef, type LiveSave,
-} from "@radd/plugin-sdk";
+  useLiveDocument, type EditorTransform, type InlineAnchorRef, type LiveSave, Entity } from "@radd/plugin-sdk";
 import { commentPath, pagePath } from "../endpoints";
-import { Tag } from "../queries";
 import type { Page, PageUpdate } from "../types";
 
 /**
@@ -16,7 +14,7 @@ import type { Page, PageUpdate } from "../types";
  */
 export function usePageEditing(page: Page, canWrite: boolean) {
   const queryClient = useQueryClient();
-  const invalidate = () => void invalidateEntities(queryClient, Tag.page, Tag.space);
+  const invalidate = () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(page.body);
   // The live markdown as a ref: a session's save reads it at write time, and a captured value
@@ -50,7 +48,7 @@ export function usePageEditing(page: Page, canWrite: boolean) {
     onSuccess: (_result, ids) => toast(ids.length === 1
       ? "Resolved 1 comment whose passage was replaced."
       : `Resolved ${ids.length} comments whose passages were replaced.`),
-    onSettled: () => void invalidateEntities(queryClient, Tag.comment),
+    onSettled: () => void invalidateEntities(queryClient, Entity.comment),
   });
   /** A live session's save: this page's own write, vouched for by the session (spec 122's
    *  `collab_session` — the server skips the version check for a connected editor's writes). */

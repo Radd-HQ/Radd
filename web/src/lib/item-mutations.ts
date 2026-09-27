@@ -6,7 +6,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import { api, errorMessage } from "./api";
-import { Entity, invalidateEntities } from "./cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { pushToast } from "./toast";
 import { sendTaskToggle } from "./task-toggle";
 import {

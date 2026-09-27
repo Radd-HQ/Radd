@@ -5,6 +5,8 @@ import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from radd.kernel import NotificationChannel
+
 
 class NotificationType(StrEnum):
     ASSIGNED = "assigned"
@@ -56,26 +58,9 @@ RELATIONSHIP_SCOPES: tuple[RuleScope, ...] = (
 )
 
 
-class Channel(StrEnum):
-    """One matrix cell (spec 118). The two channels are independent: EMAIL with
-    no inbox row is reachable."""
-
-    OFF = "off"
-    INBOX = "inbox"
-    EMAIL = "email"
-    BOTH = "both"
-
-    @property
-    def inbox(self) -> bool:
-        return self in (Channel.INBOX, Channel.BOTH)
-
-    @property
-    def email(self) -> bool:
-        return self in (Channel.EMAIL, Channel.BOTH)
-
-    @property
-    def silent(self) -> bool:
-        return self is Channel.OFF
+#: One matrix cell (spec 118). The vocabulary is the kernel's, because a contributed
+#: `NotificationKindSpec.default_channel` names a member (RADD-1467); this is its name here.
+Channel = NotificationChannel
 
 
 # Wire strings for the slas module's timer events (specs 30/69). Constants, not

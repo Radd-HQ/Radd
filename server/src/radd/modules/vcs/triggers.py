@@ -17,7 +17,7 @@ from radd.modules.events import service as events
 
 from .connector_kit.changes import MrChangeField
 from .models import ItemVcsLink
-from .types import VcsEntity
+from .types import CiOutcome, VcsEntity
 
 
 class RefAction(StrEnum):
@@ -27,15 +27,6 @@ class RefAction(StrEnum):
     MERGED = "merged"
     CLOSED = "closed"
     UPDATED = "updated"
-
-
-class CiOutcome(StrEnum):
-    """The terminal CI states that fire `ci.completed`. A queued or running
-    report updates the link's badge and fires nothing."""
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    CANCELLED = "cancelled"
 
 
 _REF_SCHEMA: dict[str, Any] = {

@@ -25,6 +25,17 @@ _PREFIX = "enc1:"
 _DOMAIN = b"radd-secretbox-v1"
 _NONCE_BYTES = 12
 
+#: What an update payload's secret field carries to mean "keep what is stored"
+#: (RADD-1467, one spelling for the mail dialogs' convention). A redacted read never
+#: hands a secret back, so a form that round-trips one sends this; removing a secret
+#: is a separate, explicit operation (settings' `clear_value`).
+KEEP_SECRET = ""
+
+
+def keeps_secret(value: object) -> bool:
+    """Whether an update's secret field asks to keep the stored one: absent, null or `KEEP_SECRET`."""
+    return value is None or value == KEEP_SECRET
+
 _cached_key: bytes | None = None
 
 

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.exceptions import ConflictError
@@ -213,7 +214,7 @@ async def test_local_embed_dispatch(db, monkeypatch):
 async def test_update_with_empty_api_key_keeps_the_stored_one(db):
     provider = await registry.create_provider(db, _create(api_key="secret"))
     await registry.update_provider(
-        db, provider.id, AiProviderUpdate(api_key=registry.UNCHANGED_CREDENTIAL, name="renamed")
+        db, provider.id, AiProviderUpdate(api_key=secretbox.KEEP_SECRET, name="renamed")
     )
     assert provider.api_key == "secret"
     assert provider.name == "renamed"

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { apiCycleCompletePath } from "../../lib/constants";
 import { cycleLabel } from "../../lib/cycle-series";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { type CycleComplete, type CycleCompleteResult } from "../../lib/types";
 import { ToastKind, pushToast } from "../../lib/toast";
 import { Button } from "../Button";

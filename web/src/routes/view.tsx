@@ -23,7 +23,7 @@ import { Slot, SlotId, useDisabledMatches, Pager, useDebounced, useItemAttribute
 import { ItemAttributeContext, useItemAttributeValues } from "../lib/item-attribute-data";
 import { MissingPluginType } from "../components/shell/MissingPluginType";
 import { api, errorMessage } from "../lib/api";
-import { Entity, invalidateEntities } from "../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import {
   NEW_ITEM_HOTKEY,
   ROADMAP_EPICS_ONLY_QUERY,

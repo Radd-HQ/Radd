@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Mapping
 
-from radd.kernel import AutomationNodeSpec
+from radd.kernel import AutomationNodeKind, AutomationNodeSpec, NodeArity
 
 from .automation_context import ask_structured, include_schema, preflight
 from .types import AiFeature
@@ -227,7 +227,7 @@ async def _ask(ctx: Any, params: Mapping[str, Any]) -> Mapping[str, Any]:
 
 SPEC = AutomationNodeSpec(
     key=NODE_KEY,
-    kind="gate",  # routes the packet without changing the item set
+    kind=AutomationNodeKind.GATE.value,  # routes the packet without changing the item set
     label="AI check",
     description=(
         "Check a submission against a quality bar you describe. It leaves by pass, "
@@ -243,6 +243,6 @@ SPEC = AutomationNodeSpec(
     #: validation walk means an upstream filter excluded this draft.
     needs_items=True,
     # SET only: a validation walk carries one draft.
-    arity="set",
+    arity=NodeArity.SET.value,
     plan=plan,
 )

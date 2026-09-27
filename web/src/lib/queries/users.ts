@@ -3,7 +3,7 @@
 import type { DirectoryChoice as PeopleChoice } from "@radd/plugin-sdk";
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
-import { Entity, entityMeta } from "../cache";
+import { Entity, entityMeta } from "@radd/plugin-sdk";
 import {
   ApiPath,
   apiGroupReachPath,

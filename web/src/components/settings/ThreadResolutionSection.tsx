@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { apiProjectThreadResolutionPath } from "../../lib/constants";
 import { issueTypesQuery, queryKeys, threadResolutionQuery } from "../../lib/queries";
 import { ThreadResolvers, type ThreadResolutionPolicy, type ThreadResolversValue } from "../../lib/types";

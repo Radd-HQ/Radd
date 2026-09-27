@@ -63,3 +63,6 @@ class ApprovalEntity(StrEnum):
 
 # Note length caps (request note + vote note).
 NOTE_MAX_CHARS = 2000
+#: What `approvers_summary` shows for an entry with neither a name nor an id — a
+#: malformed rule, never a real approver; stable because the summary is an event payload.
+UNKNOWN_APPROVER_LABEL = "?"

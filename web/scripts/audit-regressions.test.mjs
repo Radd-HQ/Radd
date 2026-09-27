@@ -8,13 +8,15 @@ const ownerKeys = Object.assign({}, ...['projects','cycles'].map(owner => {
   const name=owner==='projects'?'projectQueryKeys':'cycleDirectoryKeys';
   return evaluate(readFileSync(new URL('../../server/src/radd/modules/'+owner+'/ui/src/query-keys.ts',import.meta.url),'utf8'),{},[name]);
 }));
+// The cache-tag vocabulary is the SDK's (RADD-1467): the host and every plugin UI import it.
+const { Entity, entityMeta, invalidateEntities } = evaluate(readFileSync(new URL("../packages/plugin-sdk/src/cache.ts", import.meta.url), "utf8"), {}, ["Entity", "entityMeta", "invalidateEntities"]);
 // The wiki's queries are the pages plugin's (RADD-1392); its endpoints and links carry no imports.
 const pagesSource = file => readFileSync(new URL(`../../server/src/radd/modules/pages/ui/src/${file}`, import.meta.url), "utf8");
 const pageEndpoints = evaluate(pagesSource("endpoints.ts"), {}, ["PageApi", "itemPagesPath", "pageBacklinksPath",
   "pageItemsPath", "pagePath", "pageVersionPath", "pageVersionsPath", "pageWatchPath", "pagesByLabelPath", "spacePagesPath"]);
 const { encodePath } = evaluate(pagesSource("links.ts"), {}, ["encodePath"]);
 const pageQueries = evaluate(pagesSource("queries.ts"), {
-  ...pageEndpoints, encodePath, queryOptions: x => x, api: {}, ApiError: Error, keepPreviousData: undefined,
+  ...pageEndpoints, encodePath, queryOptions: x => x, api: {}, ApiError: Error, keepPreviousData: undefined, Entity, entityMeta,
 }, ["pageSearchQuery", "pageSpaceSummaryQuery", "pageSpacesPageQuery", "pageSpaceByIdentityQuery"]);
 let factories = source("queries/shared.ts");
 for (const [file, names] of [
@@ -27,8 +29,6 @@ for (const [file, names] of [
     factories += "\n" + code.slice(start, code.indexOf("\n  });", start) + 7);
   }
 }
-const { Entity, entityMeta } = evaluate(source("cache.ts"), {}, ["Entity", "entityMeta"]);
-const { invalidateEntities } = evaluate(readFileSync(new URL("../packages/plugin-sdk/src/cache.ts", import.meta.url), "utf8"), {}, ["invalidateEntities"]);
 const names = ["linkSearchQuery", "searchQuery", "queryKeys"];
 // Similar issues for a text seed are the ai plugin's own read (RADD-1395).
 const aiQueries = evaluate(readFileSync(new URL("../../server/src/radd/modules/ai/ui/src/queries.ts", import.meta.url), "utf8"),
@@ -125,7 +125,7 @@ assert.deepEqual(calls, {A: 2, B: 1}, "project A's event must not refetch projec
 stop();
 unobserve.forEach(fn => fn());
 client.clear();
-const { CYCLES_PAGE_SIZE } = evaluate(readFileSync(new URL('../../server/src/radd/modules/cycles/ui/src/directory-queries.ts',import.meta.url),'utf8'),{},['CYCLES_PAGE_SIZE']);
+const { CYCLES_PAGE_SIZE } = evaluate(readFileSync(new URL('../../server/src/radd/modules/cycles/ui/src/directory-queries.ts',import.meta.url),'utf8'),{ Entity },['CYCLES_PAGE_SIZE']);
 const cycleFactories = evaluate(source("queries/shared.ts") + "\n" + source("queries/cycles.ts"), {
   ...ownerKeys, CYCLES_PAGE_SIZE, queryOptions: x => x, api: {}, ApiPath: {}, Entity, entityMeta, keepPreviousData: undefined,
 }, ["cycleSeriesPageQuery"]);

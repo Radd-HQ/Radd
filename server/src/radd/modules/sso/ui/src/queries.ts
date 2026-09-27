@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { api } from "@radd/plugin-sdk";
+import { api, Entity } from "@radd/plugin-sdk";
 import type { ProvisioningReferences, SsoKindInfo, SsoProviderRead } from "./types";
 
 /** The provider registry's admin endpoints (spec 110) — instance admins only. */
@@ -37,7 +37,7 @@ export const provisioningReferencesQuery = (roleIds: string[], projectIds: strin
   };
   return queryOptions({
     queryKey: ["sso", "provisioning-references", body] as const,
-    meta: { entities: ["role", "project", "team"] },
+    meta: { entities: [Entity.role, Entity.project, Entity.team] },
     queryFn: ({ signal }) => api.post<ProvisioningReferences>(REFERENCES_PATH, body, { signal }),
     enabled: Boolean(body.role_ids.length + body.project_ids.length + body.team_ids.length),
   });

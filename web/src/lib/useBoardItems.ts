@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import { entityMeta, Entity } from "./cache";
+import { entityMeta, Entity } from "@radd/plugin-sdk";
 import { groupItemsForView, type ViewGroup } from "./view-utils";
 import { CATEGORY_META } from "./meta";
 import type { State } from "./types";

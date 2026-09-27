@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.snapshot import Snapshot
@@ -192,8 +193,8 @@ async def update_host(
             setattr(host, column, fields[column])
     if "access_key" in fields:
         host.access_key = fields["access_key"]
-    # Empty secret = keep the stored one (the read shape is redacted).
-    if fields.get("secret_key"):
+    # `KEEP_SECRET` (the read shape is redacted) leaves the stored one alone.
+    if not secretbox.keeps_secret(fields.get("secret_key")):
         host.secret_key = fields["secret_key"]
     if "secure" in fields:
         host.secure = fields["secure"]

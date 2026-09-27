@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { invalidateEntities } from "@radd/plugin-sdk";
-import { Entity, type EntityTag } from "./cache";
+import { Entity, type EntityTag } from "@radd/plugin-sdk";
 import { itemInterests } from "./item-interests";
 import type { Item } from "./types";
 import {

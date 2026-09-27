@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
-import { api, ErrorText, ItemKeyLink, ItemPeek, shortDate } from "@radd/plugin-sdk";
+import { api, ErrorText, ItemKeyLink, ItemPeek, shortDate, Entity } from "@radd/plugin-sdk";
 
 /** The My Work widget key — `ApprovalWidget.AWAITING` on the manifest's `WidgetTypeSpec`. */
 export const AWAITING_WIDGET = "approvals";
@@ -20,7 +20,7 @@ interface PendingApproval {
 /** Tagged `item`: a vote or a move changes the queue, and both are item events. */
 const pendingApprovalsQuery = {
   queryKey: ["approvals", "pending"] as const,
-  meta: { entities: ["item"] },
+  meta: { entities: [Entity.item] },
   queryFn: ({ signal }: { signal: AbortSignal }) => api.get<PendingApproval[]>("/approvals/pending", { signal }),
 };
 

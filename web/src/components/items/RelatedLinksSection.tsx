@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Link2, Plus, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { apiItemWebLinksPath, apiWebLinkPath } from "../../lib/constants";
 import { usePermissions } from "../../lib/hooks";
 import { WEBLINK_CATEGORY_META, WEBLINK_CATEGORY_ORDER } from "../../lib/meta";

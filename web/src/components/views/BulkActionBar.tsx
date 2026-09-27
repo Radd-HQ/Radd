@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArrowRightLeft, Flag, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { useCurrentUser, useItemWritability, usePermissions } from "../../lib/hooks";
 import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import { issueTypesQuery, releasesQuery, statesQuery, usersQuery } from "../../lib/queries";

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2, User, Users } from "lucide-react";
 import { api } from "../../lib/api";
 import { apiFormSharingPath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { queryKeys, formSharingQuery, formShareCandidatesQuery, FORM_SHARING_PAGE_SIZE, FormShareKind, type FormShareKindValue } from "../../lib/queries";
 import { useDirectory } from "../../lib/useDirectory";
 import { Button } from "../Button";

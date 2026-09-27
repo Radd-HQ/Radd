@@ -1,8 +1,8 @@
-import { api, definePlugin, SlotId, ChangeLine, type HistoryChange, type QuerySource } from "@radd/plugin-sdk";
+import { api, definePlugin, SlotId, ChangeLine, type HistoryChange, type QuerySource, Entity } from "@radd/plugin-sdk";
 import { itemChange } from "./change-format";
 import type { ItemChoice } from "./lookup-contract";
 import { HISTORY_FIELD_LABELS } from "./metadata";
-const searchSource: QuerySource<ItemChoice[]> = {key: "items.link-search", meta: {entities: ["item", "project", "role", "accessGrant", "member"]},
+const searchSource: QuerySource<ItemChoice[]> = {key: "items.link-search", meta: {entities: [Entity.item, Entity.project, Entity.role, Entity.accessGrant, Entity.member]},
   fetch: (args, signal) => api.get<ItemChoice[]>("/items/link-search", {signal, query: {project_id: String(args.projectId ?? ""), q: String(args.q ?? "")}}),
 };
 function ItemChangeLine({ change }: { change: HistoryChange }) {

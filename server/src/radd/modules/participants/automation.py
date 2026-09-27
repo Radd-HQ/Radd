@@ -13,7 +13,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from radd.kernel import AutomationNodeSpec
+from radd.kernel import AutomationNodeKind, AutomationNodeSpec, NodeArity, NodePort
 
 from . import service
 from .schemas import ParticipantAdd
@@ -62,7 +62,7 @@ def check(params: dict[str, Any]) -> None:
 
 ADD_PARTICIPANT_NODE = AutomationNodeSpec(
     key=NODE_KEY,
-    kind="action",
+    kind=AutomationNodeKind.ACTION.value,
     label="Add participant",
     description="Share the issue with a person — by email, or its reporter or assignee — who then follows it.",
     group="Actions",
@@ -74,9 +74,9 @@ ADD_PARTICIPANT_NODE = AutomationNodeSpec(
         },
     },
     default_params={"user": ""},
-    ports=("out",),
+    ports=(NodePort.OUT.value,),
     # Fixed per item: sharing is a property of one issue.
-    arity="item",
+    arity=NodeArity.ITEM.value,
     needs_items=False,
     plan=plan_add,
     apply=apply_add,

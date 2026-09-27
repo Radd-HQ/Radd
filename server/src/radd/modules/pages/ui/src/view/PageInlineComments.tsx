@@ -4,10 +4,8 @@ import { MessageSquarePlus } from "lucide-react";
 import {
   Button, CommentHistory, CommentSection, RichEditor, api, errorMessage, invalidateEntities, locateAnchor,
   rangeForOffsets, renderedText, revealTextOffset, scrollRangeIntoView, useCommentFeed, useConfirm,
-  useLandOnComment, useLinkedComment, useThreadExpansion, type CommentRow, type TextAnchor,
-} from "@radd/plugin-sdk";
+  useLandOnComment, useLinkedComment, useThreadExpansion, type CommentRow, type TextAnchor, Entity } from "@radd/plugin-sdk";
 import { commentPath, pageCommentsPath } from "../endpoints";
-import { Tag } from "../queries";
 import { PageCommentThread as Thread } from "./PageCommentThread";
 import { PageCommentPopover } from "./PageCommentPopover";
 import { useCommentPointer } from "./useCommentPointer";
@@ -43,7 +41,7 @@ export function PageInlineComments({
   const navigation = useRef(0);
   const [showResolved, setShowResolved] = useState(false);
   const railRef = useRef<HTMLElement>(null);
-  const invalidate = () => void invalidateEntities(queryClient, Tag.comment);
+  const invalidate = () => void invalidateEntities(queryClient, Entity.comment);
   const post = useMutation({
     mutationFn: (payload: { body: string; anchor: TextAnchor }) =>
       api.post(pageCommentsPath(pageId), payload),

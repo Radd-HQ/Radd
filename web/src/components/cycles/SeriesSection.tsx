@@ -4,7 +4,7 @@ import { CalendarRange, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiCycleSeriesPath } from "../../lib/constants";
 import { WEEKDAY_LABELS } from "../../lib/cycle-series";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { cycleSeriesPageQuery } from "../../lib/queries/cycles";
 import { useDirectory } from "../../lib/useDirectory";
 import type { CycleSeries, CycleSeriesUpdate } from "../../lib/types";

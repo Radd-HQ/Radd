@@ -17,7 +17,8 @@ import {
 import { allowedTransitionsQuery, authStateQuery, fieldWritabilityQuery, effectiveScreenQuery, statesQuery, instanceConfigQuery, itemByKeyQuery, resolvedSettingQuery, slqValidateQuery } from "./queries";
 import { DEFAULT_DURATION_CONFIG, type DurationConfig } from "./duration";
 import { AuthStatus, type AuthState, currentPath } from "./auth";
-import { InstanceRole, Permission, SettingKey, type Item, type Me, type PermissionValue } from "./types";
+import { InstanceRole } from "@radd/plugin-sdk";
+import { Permission, SettingKey, type Item, type Me, type PermissionValue } from "./types";
 import { pageSpaceSummaryQuery } from "@radd-plugin-ui/pages/queries";
 import type { PageSpace } from "@radd-plugin-ui/pages/types";
 import { useDebounced, positionedErrorOf } from "@radd/plugin-sdk";

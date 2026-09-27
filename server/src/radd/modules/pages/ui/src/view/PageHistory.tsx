@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArchiveRestore, ChevronLeft, GitCompare } from "lucide-react";
-import { api, errorMessage, invalidateEntities, relativeTime, useIsAuthenticated, Button, ErrorText, Markdown } from "@radd/plugin-sdk";
+import { api, errorMessage, invalidateEntities, relativeTime, useIsAuthenticated, Button, ErrorText, Markdown, Entity } from "@radd/plugin-sdk";
 import { pageRestorePath } from "../endpoints";
-import { Tag, pageVersionQuery, pageVersionsQuery } from "../queries";
+import { pageVersionQuery, pageVersionsQuery } from "../queries";
 import type { Page } from "../types";
 import { Loading } from "./Loading";
 import { PageVersionDiff } from "./PageVersionDiff";
@@ -111,7 +111,7 @@ function VersionViewer({
   const restore = useMutation({
     mutationFn: () => api.post<Page>(pageRestorePath(page.id), { version }),
     onSuccess: onBack,
-    onSettled: () => void invalidateEntities(queryClient, Tag.page, Tag.space),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
 
   return (

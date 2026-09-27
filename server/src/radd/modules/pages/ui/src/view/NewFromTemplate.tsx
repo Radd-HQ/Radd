@@ -2,10 +2,9 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { FilePlus } from "lucide-react";
-import { api, invalidateEntities, Button, ExtensionCard, TextField, usePageExtensionContext } from "@radd/plugin-sdk";
+import { api, invalidateEntities, Button, ExtensionCard, TextField, usePageExtensionContext, Entity } from "@radd/plugin-sdk";
 import { PageApi } from "../endpoints";
 import { pageLink } from "../links";
-import { Tag } from "../queries";
 import type { Page } from "../types";
 
 /** `radd:new-from-template` — creates a CHILD of this page from a named template (RADD-712). */
@@ -32,7 +31,7 @@ export function NewFromTemplate({ params }: { params: Record<string, unknown> })
     onSuccess: (page) => {
       setAsking(false);
       setTitle("");
-      void invalidateEntities(queryClient, Tag.page);
+      void invalidateEntities(queryClient, Entity.page);
       void navigate(pageLink(page.space.slug, page.path));
     },
   });

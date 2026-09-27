@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from radd.kernel import OutputField
-from radd.sdk import AutomationNodeSpec
+from radd.sdk import AutomationNodeKind, AutomationNodeSpec, NodeArity
 
 PUBLISH_NODE_KEY = "release.publish"
 
@@ -121,7 +121,7 @@ async def apply_publish(ctx: Any, plan: _PublishPlan) -> None:
 
 PUBLISH_NODE = AutomationNodeSpec(
     key=PUBLISH_NODE_KEY,
-    kind="action",
+    kind=AutomationNodeKind.ACTION.value,
     label="Publish version and sweep",
     description=(
         "Record the version as released in the project and move everything waiting for release "
@@ -131,7 +131,7 @@ PUBLISH_NODE = AutomationNodeSpec(
     group="Releases",
     params_schema=PUBLISH_SCHEMA,
     subject="project",
-    arity="set",
+    arity=NodeArity.SET.value,
     needs_items=False,  # it needs a PROJECT, not an item — see `subject`
     permission="release.create",
     outputs=(

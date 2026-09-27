@@ -34,7 +34,8 @@ import {
   ItemVisibility,
   type ItemVisibilityValue,
 } from "./types";
-import { InstanceRole, ItemKind, ItemLinkType, Priority, ReleaseStatus, ReportInterval, StateCategory, ViewAxis, type BuiltinRuleField, type InstanceRoleValue, type ItemKindValue, type ItemLinkTypeValue, type PriorityValue, type ReleaseStatusValue, type ReportIntervalValue, type StateCategoryValue, type ViewAxisValue } from "./types";
+import { InstanceRole, type InstanceRoleValue } from "@radd/plugin-sdk";
+import { ItemKind, ItemLinkType, Priority, ReleaseStatus, ReportInterval, StateCategory, ViewAxis, type BuiltinRuleField, type ItemKindValue, type ItemLinkTypeValue, type PriorityValue, type ReleaseStatusValue, type ReportIntervalValue, type StateCategoryValue, type ViewAxisValue } from "./types";
 import { CycleStatus } from "@radd-plugin-ui/cycles/types";
 import { FieldType } from "@radd-plugin-ui/fields/types";
 import type { CycleStatusValue } from "@radd-plugin-ui/cycles/types";

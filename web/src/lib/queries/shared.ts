@@ -5,6 +5,7 @@ import type { CycleStatusValue } from "@radd-plugin-ui/cycles/types";
 /** Query keys — the single source of truth; never inline key arrays elsewhere. */
 export const queryKeys = {
   authState: ["auth", "me"] as const,
+  pluginProcesses: ["plugin-processes"] as const,
   ...projectQueryKeys,
   states: (projectId: string) => ["states", { projectId }] as const,
   stateCategories: ["state-categories"] as const,

@@ -37,6 +37,7 @@ from .types import (
     AutomationTrigger,
     NodeArity,
     NodePort,
+    ValidationMode,
 )
 
 logger = logging.getLogger(__name__)
@@ -698,7 +699,7 @@ class _NodeContext:
         text = str(message or "").strip()
         if self.findings is None or not text:
             return
-        mode = "required" if blocking else "advisory"
+        mode = (ValidationMode.REQUIRED if blocking else ValidationMode.ADVISORY).value
         # A RELAYED finding names the check that produced it (RADD-1329), so the
         # report still says which check spoke — the verdict node only decided.
         self.findings.append(

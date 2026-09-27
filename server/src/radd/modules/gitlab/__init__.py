@@ -5,7 +5,7 @@ from radd.modules.vcs.connector_kit.admin import admin_router
 from .models import GitlabConnection, GitlabRepo  # noqa: F401 — Alembic autogenerate
 from .router import router
 from .service import CONNECTOR, store
-from .types import GitlabTrigger
+from .types import GitlabDeploymentOutcome, GitlabTrigger
 
 plugin = RaddPlugin(
     name="gitlab",
@@ -27,7 +27,7 @@ plugin = RaddPlugin(
             item_scoped=True, subjects=("item", "user"),
             payload_schema={"type": "object", "properties": {
                 "environment": {"type": "string", "description": "e.g. staging, production"},
-                "status": {"type": "string", "enum": ["success", "failed", "canceled"]},
+                "status": {"type": "string", "enum": [o.value for o in GitlabDeploymentOutcome]},
                 "url": {"type": "string", "description": "The environment's URL (or the deploy job's)"},
                 "ref": {"type": "object"},
                 "sha": {"type": "string"},

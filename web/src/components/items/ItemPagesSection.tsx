@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Plus, X } from "lucide-react";
 import { api } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import {
   PALETTE_SEARCH_LIMIT,
   SEARCH_DEBOUNCE_MS,

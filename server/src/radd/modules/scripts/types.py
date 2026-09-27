@@ -68,3 +68,8 @@ def main(ctx):
         ctx.log(f"saw {item['key']}: {item['title']}")
     return {"count": len(ctx.items)}
 '''
+
+
+#: `AutomationCause.source` on the key a script run is handed: every request the
+#: script makes carries its cause, and the token row says a script minted it.
+RUN_KEY_CAUSE_SOURCE = "script"

@@ -15,6 +15,11 @@ export interface UserRef {
   avatar_emoji?: string | null;
 }
 
+/** An account's `instance_role` (GET /auth/me, the Users page); `global_role` answers in the same
+ *  vocabulary for the credential in use. */
+export const InstanceRole = { admin: "admin", member: "member" } as const;
+export type InstanceRoleValue = (typeof InstanceRole)[keyof typeof InstanceRole];
+
 /** The signed-in user (GET /auth/me). */
 export interface Me extends UserRef {
   instance_role: string;

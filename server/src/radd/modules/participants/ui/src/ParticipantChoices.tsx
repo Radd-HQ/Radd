@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api, Button, TextField, tokens } from "@radd/plugin-sdk";
+import { api, Button, TextField, tokens, Entity } from "@radd/plugin-sdk";
 
 const PAGE_SIZE = 50;
 const SEARCH_DELAY_MS = 250;
@@ -24,7 +24,7 @@ export function ParticipantChoices({ projectId, userIds, teamIds, onLeaveIds, bu
   }, [search, query.q]);
   const choices = useQuery({
     queryKey: ["radd-remote", "participant-choices", projectId, kind, query.q, query.page],
-    meta: { entities: ["member", "team", "group", "role", "project"] },
+    meta: { entities: [Entity.member, Entity.team, Entity.group, Entity.role, Entity.project] },
     queryFn: async ({ signal }): Promise<Choice[]> => {
       const params = { q: query.q, limit: String(PAGE_SIZE + 1), offset: String(query.page * PAGE_SIZE) };
       if (kind === Kind.user) return api.get<Choice[]>("/users/directory", { signal, query: { ...params, project_id: projectId } });

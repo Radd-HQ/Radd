@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "@radd/plugin-sdk";
+import { api, Entity } from "@radd/plugin-sdk";
 import type { AuditEntry, AuditCatalog, AuditSourceValue } from "./types";
 interface AuditParams {
   /** Constrains the read to one project — REQUIRED for anyone but an instance admin. */
@@ -39,10 +39,10 @@ const auditWire = (params: AuditParams): Record<string, string | undefined> => (
 /** Access and rows refresh when anything that decides who may read them changes. A failed read
  * hides what it had (a revoked scope must not keep showing rows); otherwise these are ordinary
  * shared queries (RADD-1373 — they carried a per-mount identity and never cached). */
-const ACCESS_META = {entities: ["project", "role", "team", "group", "member", "accessGrant"]};
+const ACCESS_META = {entities: [Entity.project, Entity.role, Entity.team, Entity.group, Entity.member, Entity.accessGrant]};
 export function useAudit(params: AuditParams, revision: string, enabled = true) {
   return useQuery({queryKey: ["audit", "rows", revision, auditWire(params), enabled], enabled,
-    meta: {...ACCESS_META, entities: [...ACCESS_META.entities, "field"]},
+    meta: {...ACCESS_META, entities: [...ACCESS_META.entities, Entity.field]},
     queryFn: ({signal}) => api.get<AuditEntry[]>("/audit", {signal, query: auditWire(params)}),
   });
 }

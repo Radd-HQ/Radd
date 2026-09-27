@@ -1,8 +1,17 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode, type PointerEvent } from "react";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { ChartHeightContext, useCapabilities } from "@radd/plugin-sdk";
-import type { DashboardWidget } from "./types";
+import { WIDGET_LIMITS, type DashboardWidget } from "./types";
 import { CARD_LABELS } from "./widget-meta";
+
+const { minWidth, maxWidth, minHeight, maxHeight, heightStep } = WIDGET_LIMITS;
+/** The grid's column gap, so a drag converts pixels to columns the way the CSS lays them out. */
+const GRID_GAP_PX = 12;
+/** Before the grid has measured itself, a drag assumes a desktop-wide canvas. */
+const FALLBACK_GRID_WIDTH_PX = 1200;
+/** Header, padding and (when editing) the size controls — what a chart inside cannot use. */
+const WIDGET_CHROME_PX = 180;
+const WIDGET_EDITING_CHROME_PX = 210;
 
 export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse, render }: {
   widgets: DashboardWidget[]; editing: boolean;
@@ -27,7 +36,7 @@ export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse
     if (!editing || event.button !== 0) return;
     event.preventDefault();
     const startX = event.clientX, startY = event.clientY;
-    const column = ((root.current?.clientWidth ?? 1200) + 12) / 12;
+    const column = ((root.current?.clientWidth ?? FALLBACK_GRID_WIDTH_PX) + GRID_GAP_PX) / maxWidth;
     let next = widgets;
     const motion = (e: globalThis.PointerEvent) => {
       if (mode === "move") {
@@ -37,8 +46,8 @@ export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse
         if (to < 0 || from === to) return;
         next = [...next]; next.splice(to, 0, next.splice(from, 1)[0]);
       } else {
-        const width = mode === "height" ? widget.width : Math.min(12, Math.max(2, widget.width + Math.round((e.clientX - startX) / column)));
-        const height = mode === "width" ? widget.height : Math.min(1600, Math.max(160, Math.round((widget.height + e.clientY - startY) / 20) * 20));
+        const width = mode === "height" ? widget.width : Math.min(maxWidth, Math.max(minWidth, widget.width + Math.round((e.clientX - startX) / column)));
+        const height = mode === "width" ? widget.height : Math.min(maxHeight, Math.max(minHeight, Math.round((widget.height + e.clientY - startY) / heightStep) * heightStep));
         next = widgets.map(w => w.id === widget.id ? { ...w, width, height } : w);
       }
       onChange(next);
@@ -65,11 +74,11 @@ export function WidgetGrid({ widgets, editing, onChange, onConfigure, onCollapse
           <button type="button" aria-label="Remove widget" className="p-1" onClick={() => onChange(widgets.filter(w => w.id !== widget.id))}><Trash2 size={14} /></button>
         </>}
       </header>
-      {!widget.collapsed && <div className="min-h-0 flex-1 overflow-auto p-3"><ChartHeightContext.Provider value={Math.max(160, widget.height - (editing ? 210 : 180))}>{render(widget)}</ChartHeightContext.Provider></div>}
+      {!widget.collapsed && <div className="min-h-0 flex-1 overflow-auto p-3"><ChartHeightContext.Provider value={Math.max(minHeight, widget.height - (editing ? WIDGET_EDITING_CHROME_PX : WIDGET_CHROME_PX))}>{render(widget)}</ChartHeightContext.Provider></div>}
       {editing && !widget.collapsed && <>
         <div className="flex items-center gap-2 border-t border-subtle px-3 py-1 text-xs">
-          <label>Width <input aria-label="Widget width" className="w-12 bg-base" type="number" min={2} max={12} value={widget.width} onChange={e => patch(widget.id, { width: Math.max(2, Math.min(12, Number(e.target.value))) })} /></label>
-          <label>Height <input aria-label="Widget height" className="w-16 bg-base" type="number" min={160} max={1600} step={20} value={widget.height} onChange={e => patch(widget.id, { height: Math.max(160, Math.min(1600, Number(e.target.value))) })} /></label>
+          <label>Width <input aria-label="Widget width" className="w-12 bg-base" type="number" min={minWidth} max={maxWidth} value={widget.width} onChange={e => patch(widget.id, { width: Math.max(minWidth, Math.min(maxWidth, Number(e.target.value))) })} /></label>
+          <label>Height <input aria-label="Widget height" className="w-16 bg-base" type="number" min={minHeight} max={maxHeight} step={heightStep} value={widget.height} onChange={e => patch(widget.id, { height: Math.max(minHeight, Math.min(maxHeight, Number(e.target.value))) })} /></label>
         </div>
         <div aria-hidden className="absolute right-0 top-11 bottom-6 w-2 touch-none cursor-ew-resize" onPointerDown={e => gesture(e, widget, "width")} />
         <div aria-hidden className="absolute bottom-0 left-2 right-6 h-2 touch-none cursor-ns-resize" onPointerDown={e => gesture(e, widget, "height")} />

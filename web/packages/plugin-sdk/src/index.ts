@@ -69,6 +69,7 @@ export {
   type RoleGrantsProps,
   type RoleGrantSubject,
   type ToastKindValue,
+  type CalloutKindValue,
   type HostComponents,
   type CodeEditorProps,
   type TokenListProps,
@@ -105,6 +106,7 @@ export type {
   CapabilitiesManifest,
   WidgetTypeOption,
 } from "./types";
+export { InstanceRole, type InstanceRoleValue } from "./types";
 
 export { registerDataSource, unregisterDataSources, usePluginData, invalidatePluginData, type DataSource, type DataContracts, type PersonIndicator, type TimesheetAnnotation, type StatusIndicator } from "./data";
 
@@ -164,7 +166,8 @@ export {
 export { registerCommandSource, unregisterCommandSources, useContributedCommands, invalidatePluginCommands, type Command, type CommandContext, type CommandSource, type ContributedCommand } from "./commands";
 export { positionedErrorOf, type PositionedError } from "./positioned-error";
 
-export { invalidateEntities } from "./cache";
+export { Entity, entityMeta, itemEntityMeta, projectEntityMeta, invalidateEntities, type EntityTag, type CacheTag, type EntityMeta } from "./cache";
+export { QueryKeyPrefix, capabilitiesQueryKey } from "./query-keys";
 
 export { SlqField, PageQueryFilter, ViewSelect, SharingDialog, ReportWidget, ItemKeyLink, ItemPeek, IssueSuggestion, MissingPluginType } from "./host-surfaces";
 export type { SlqFieldProps, PageQueryFilterProps, ViewSelectProps, SharingDialogProps, SharedResourceSave, ReportWidgetProps, ItemKeyLinkProps, ItemPeekProps, IssueSuggestionProps, MissingPluginTypeProps } from "./host-registry";

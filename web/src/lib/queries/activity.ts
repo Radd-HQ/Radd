@@ -2,7 +2,7 @@
 
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
-import { Entity, entityMeta } from "../cache";
+import { Entity, entityMeta } from "@radd/plugin-sdk";
 import {
   ApiPath,
   apiItemHistoryPath,

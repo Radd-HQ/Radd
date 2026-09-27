@@ -6,6 +6,7 @@ GET /items/count matching /items/ids totals under visibility. Rolled-back
 transactions on the compose DB."""
 
 import uuid
+from pathlib import Path
 
 import pydantic
 import pytest
@@ -378,3 +379,27 @@ async def test_items_count_matches_ids_total_under_visibility(db):
         db, actor=actor, filters=ItemListFilters(project_id=away_project.id)
     )
     assert away_ids.total == 0
+
+
+def test_the_ui_mirrors_the_widget_limits():
+    """RADD-1467: the dashboards UI clamps and validates widget geometry against the same
+    numbers `dashboards/limits.py` enforces. The TS mirror (`WIDGET_LIMITS`) is a wire
+    constant with no compiler behind it — this is the compiler."""
+    import re
+
+    from radd.modules.dashboards import limits
+
+    source = (
+        Path(__file__).resolve().parents[1] / "src/radd/modules/dashboards/ui/src/types.ts"
+    ).read_text()
+    match = re.search(r"export const WIDGET_LIMITS = \{([^}]*)\} as const;", source)
+    assert match, "dashboards/ui/src/types.ts no longer declares WIDGET_LIMITS"
+    mirrored = {
+        key: int(value) for key, value in re.findall(r"(\w+): (\d+)", match.group(1))
+    }
+    assert {
+        "minWidth": limits.WIDGET_MIN_WIDTH,
+        "maxWidth": limits.WIDGET_MAX_WIDTH,
+        "minHeight": limits.WIDGET_MIN_HEIGHT,
+        "maxHeight": limits.WIDGET_MAX_HEIGHT,
+    }.items() <= mirrored.items(), mirrored

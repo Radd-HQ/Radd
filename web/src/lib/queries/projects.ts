@@ -2,7 +2,7 @@
 
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
-import { Entity, entityMeta, projectEntityMeta, itemEntityMeta } from "../cache";
+import { Entity, entityMeta, projectEntityMeta, itemEntityMeta } from "@radd/plugin-sdk";
 import {
   ApiPath,
   apiItemAllowedTransitionsPath,

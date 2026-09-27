@@ -1,7 +1,7 @@
 /** Bounded saved-view catalogs; direct links never depend on a page. */
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
-import { Entity, entityMeta } from "../cache";
+import { Entity, entityMeta } from "@radd/plugin-sdk";
 import { ApiPath, apiViewPath } from "../constants";
 import { queryKeys } from "./shared";
 import type { View } from "../types";

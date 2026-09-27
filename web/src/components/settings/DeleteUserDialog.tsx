@@ -12,7 +12,7 @@ import { Modal } from "../Modal";
 import { SelectField } from "../SelectField";
 import { PersonName } from "../PersonName";
 import { Spinner } from "../Spinner";
-import { ErrorText } from "@radd/plugin-sdk";
+import { ErrorText, CalloutKind } from "@radd/plugin-sdk";
 
 /** The things that MOVE to the successor, in the order the dialog reads best.
  * Owned teams are NOT here (RADD-784): running a team is delegation, not
@@ -108,7 +108,7 @@ export function DeleteUserDialog({
               </div>
             )}
             {Number(summary?.worklogs ?? 0) > 0 && (
-              <Callout kind="warning">
+              <Callout kind={CalloutKind.warning}>
                 <strong className="font-medium">
                   {summary?.worklogs} time entries ({hours(Number(summary?.worklog_seconds ?? 0))})
                   will be deleted
@@ -150,7 +150,7 @@ export function DeleteUserDialog({
 
         {!!successor && check.isPending && <Spinner label="Checking their access…" />}
         {notViable && (
-          <Callout kind="warning">
+          <Callout kind={CalloutKind.warning}>
             <p className="font-medium">
               This person holds less access than {user.name}, so they can't inherit the work.
             </p>

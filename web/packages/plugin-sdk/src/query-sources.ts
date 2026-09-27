@@ -1,17 +1,21 @@
 import { useSyncExternalStore } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
+import type { EntityMeta } from "./cache";
+import { QueryKeyPrefix } from "./query-keys";
 
 /** A data-only contribution. The owner defines its opaque key, wire shape and transport. */
 export interface QuerySource<T = unknown> {
   key: string;
-  meta?: Record<string, unknown>;
-  /** How long a result stays fresh across consumers (default 30 s). */
+  meta?: EntityMeta;
+  /** How long a result stays fresh across consumers (default `SOURCE_STALE_MS`). */
   staleTime?: number;
   /** Re-ask while observed — for values that change with the clock (an SLA countdown). */
   refetchInterval?: number;
   fetch: (args: Record<string, unknown>, signal: AbortSignal) => Promise<T>;
 }
 interface Entry { plugin: string; generation: number; source: QuerySource }
+/** A source that names no `staleTime`: long enough that two consumers of one key share a fetch. */
+const SOURCE_STALE_MS = 30_000;
 const entries = new Map<string, Entry>();
 const listeners = new Set<() => void>();
 let generation = 0;
@@ -36,13 +40,13 @@ export function unregisterQuerySources(plugin: string): void {
 }
 
 /** ONE query identity per (owner activation, key, args) — shared by every consumer below, and the
- * `["plugin-query", owner]` prefix is what the host loader drops when the owner withdraws. */
+ * `[QueryKeyPrefix.pluginQuery, owner]` prefix is what the host loader drops when the owner withdraws. */
 function sourceQuery<T>(key: string, args: Record<string, unknown>, entry: Entry | undefined, enabled: boolean) {
   return {
-    queryKey: ["plugin-query", entry?.plugin ?? null, entry?.generation ?? 0, key, args],
+    queryKey: [QueryKeyPrefix.pluginQuery, entry?.plugin ?? null, entry?.generation ?? 0, key, args],
     meta: entry?.source.meta,
     enabled,
-    staleTime: entry?.source.staleTime ?? 30_000,
+    staleTime: entry?.source.staleTime ?? SOURCE_STALE_MS,
     refetchInterval: entry?.source.refetchInterval,
     // Consumers of one source+arguments share this query, and TanStack keeps ONE queryFn per
     // query — whichever consumer rendered last. So it must not depend on a consumer's `enabled`:

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Globe, Plus, ShieldCheck, Users, UsersRound, User as UserIcon, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { GRANTS_PAGE_SIZE, spaceGrantsPageQuery, projectGrantsPageQuery } from "../../lib/queries/roles";
 import { useDirectory } from "../../lib/useDirectory";
 import { QueryError } from "../QueryError";

@@ -19,17 +19,6 @@ class ForgejoEventKind(StrEnum):
     WORKFLOW_JOB = "workflow_job"
 
 
-class CiState(StrEnum):
-    """Latest run state for a ref (spec 111). Not a check-run history — the panel
-    answers "is this green", and a branch with two workflows shows the last to report."""
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    RUNNING = "running"
-    CANCELLED = "cancelled"
-    UNKNOWN = "unknown"
-
-
 class ForgejoTrigger(StrEnum):
     """Forgejo's own automation triggers (RADD-1309), registered by this plugin."""
 

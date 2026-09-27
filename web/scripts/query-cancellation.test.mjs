@@ -9,7 +9,7 @@ const ownerKeys = Object.assign({}, ...['projects','cycles'].map(owner => {
   return evaluate(readFileSync(new URL('../../server/src/radd/modules/'+owner+'/ui/src/query-keys.ts',import.meta.url),'utf8'),{},[name]);
 }));
 const {queryKeys}=evaluate(source('queries/shared.ts'),ownerKeys,['queryKeys']);
-const {Entity,entityMeta,projectEntityMeta}=evaluate(source('cache.ts'),{},['Entity','entityMeta','projectEntityMeta']);
+const {Entity,entityMeta,projectEntityMeta}=evaluate(readFileSync(new URL('../packages/plugin-sdk/src/cache.ts',import.meta.url),'utf8'),{},['Entity','entityMeta','projectEntityMeta']);
 globalThis.window={location:{origin:'http://test',pathname:'/projects'}};
 const pending=[];
 const oldFetch=globalThis.fetch;

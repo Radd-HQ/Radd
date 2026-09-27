@@ -5,6 +5,7 @@ import {
   ActionType,
   NodeArity,
   NodeKind,
+  TRIGGER_EVENT_TYPE,
   type AutomationCatalog,
   type AutomationNode,
   type NodeKindValue,
@@ -50,7 +51,7 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     templates.push({
       key: `trigger:${trigger.event_type}`,
       kind: NodeKind.trigger,
-      type: "trigger.event",
+      type: TRIGGER_EVENT_TYPE,
       label: trigger.label,
       group: `${TRIGGER_GROUP} · ${trigger.group}`,
       keywords: `${trigger.event_type} ${trigger.group} when on event`,
@@ -63,7 +64,7 @@ export function nodeTemplates(catalog: AutomationCatalog | undefined): NodeTempl
     templates.push({
       key: `trigger:${kind.key}`,
       kind: NodeKind.trigger,
-      type: "trigger.event",
+      type: TRIGGER_EVENT_TYPE,
       label: kind.label,
       group: `${TRIGGER_GROUP} · ${kind.group}`,
       keywords: `${kind.key} ${kind.group} ${kind.description}`,
@@ -165,7 +166,7 @@ export function seededTrigger(): AutomationNode {
   return {
     id: "trg1",
     kind: NodeKind.trigger,
-    type: "trigger.event",
+    type: TRIGGER_EVENT_TYPE,
     params: { event: "item.updated" },
     x: 0,
     y: 0,

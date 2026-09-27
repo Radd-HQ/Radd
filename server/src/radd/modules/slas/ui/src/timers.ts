@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { api, type ItemAttributeBatchArgs, type QuerySource } from "@radd/plugin-sdk";
+import { api, type ItemAttributeBatchArgs, type QuerySource, Entity } from "@radd/plugin-sdk";
 
 /** The timer endpoints this plugin serves (`slas/router.py`). */
 const SLA_BATCH_PATH = "/items/sla/batch";
@@ -10,7 +10,7 @@ const SLA_REFETCH_MS = 60_000;
 
 /** Timer reads go stale with an item change or a policy edit: `sla_policy` is the server's own
  *  entity type, declared verbatim so realtime policy events reach it (RADD-1396). */
-const TIMER_META = { entities: ["item", "sla_policy"] };
+const TIMER_META = { entities: [Entity.item, "sla_policy"] };
 
 /** Mirror of `slas.types.SlaKind`. */
 export const SlaKind = { response: "response", resolution: "resolution" } as const;

@@ -2,6 +2,8 @@
 
 from enum import StrEnum
 
+from radd.modules.vcs.types import CiState
+
 
 class GitlabEventKind(StrEnum):
     """Values of `object_kind` (and the `X-Gitlab-Event` header, normalised) this
@@ -76,19 +78,28 @@ GITLAB_COM = "https://gitlab.com"
 #: RADD-1255: GitLab pipeline `status` → the ref's CI state (the vocabulary the
 #: GitHub/Forgejo badges use). `manual`/`scheduled` wait on a person or a clock.
 PIPELINE_STATES: dict[str, str] = {
-    "success": "success",
-    "failed": "failure",
-    "canceled": "cancelled",
-    "skipped": "cancelled",
-    "running": "running",
-    "pending": "running",
-    "created": "running",
-    "preparing": "running",
-    "waiting_for_resource": "running",
-    "manual": "unknown",
-    "scheduled": "unknown",
+    "success": CiState.SUCCESS.value,
+    "failed": CiState.FAILURE.value,
+    "canceled": CiState.CANCELLED.value,
+    "skipped": CiState.CANCELLED.value,
+    "running": CiState.RUNNING.value,
+    "pending": CiState.RUNNING.value,
+    "created": CiState.RUNNING.value,
+    "preparing": CiState.RUNNING.value,
+    "waiting_for_resource": CiState.RUNNING.value,
+    "manual": CiState.UNKNOWN.value,
+    "scheduled": CiState.UNKNOWN.value,
 }
 
-#: A deployment `status` that is an OUTCOME — the ones that fire the trigger.
-DEPLOYMENT_OUTCOMES: frozenset[str] = frozenset({"success", "failed", "canceled"})
+
+class GitlabDeploymentOutcome(StrEnum):
+    """A deployment `status` that is an OUTCOME — the ones that fire the trigger.
+    GitLab's own words (`failed`, `canceled`), carried into the event payload verbatim."""
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    CANCELED = "canceled"
+
+
+DEPLOYMENT_OUTCOMES: frozenset[str] = frozenset(GitlabDeploymentOutcome)
 

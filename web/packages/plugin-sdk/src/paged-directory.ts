@@ -10,6 +10,9 @@ export interface PagedDirectoryQuery<T> {
   /** Hold the directory back (a folded sidebar section). */
   enabled?: boolean;
 }
+/** Directory rows change rarely; a remount within this window reuses them. */
+const DIRECTORY_STALE_MS = 30_000;
+
 /** Search + bounded paging over a provider's directory; the provider owns data and scope. Pages
  * are shared across consumers and the previous page stays up while the next loads (RADD-1373).
  * A new `scope` or search starts again at page 0. */
@@ -22,7 +25,7 @@ export function usePagedDirectory<T>(scope: string, query: (q: string, page: num
   const page = position.identity === identity ? position.page : 0;
   const definition = query(q, page, pageSize);
   // `enabled`: a caller may hold the directory back (a visitor has no dashboards).
-  const result = useQuery({ ...definition, enabled, staleTime: 30_000, placeholderData: keepPreviousData });
+  const result = useQuery({ ...definition, enabled, staleTime: DIRECTORY_STALE_MS, placeholderData: keepPreviousData });
   return { ...result, filter, setFilter, q, page, pageSize, rows: result.data?.rows ?? [], total: result.data?.total ?? 0,
     busy: result.isFetching || q !== filter.trim(), setPage: (next: number) => setPosition({ identity, page: Math.max(0, next) }) };
 }

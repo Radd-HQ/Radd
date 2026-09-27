@@ -12,7 +12,7 @@ from radd.kernel.registry import registries
 from radd.kernel.specs import AutomationTemplateSpec
 
 from .catalog import triggers
-from .types import AutomationNodeKind
+from .types import TYPE_TRIGGER_EVENT, AutomationNodeKind
 
 
 def available(template: AutomationTemplateSpec) -> bool:
@@ -40,12 +40,12 @@ POST_TO_CHAT = AutomationTemplateSpec(
     ),
     group="Chat",
     nodes=(
-        {"id": "created", "kind": "trigger", "type": "trigger.event", "params": {"event": "item.created"}},
-        {"id": "breached", "kind": "trigger", "type": "trigger.event", "params": {"event": "sla.breached"}},
-        {"id": "post_new", "kind": "action", "type": "action.post_chat",
+        {"id": "created", "kind": AutomationNodeKind.TRIGGER.value, "type": TYPE_TRIGGER_EVENT, "params": {"event": "item.created"}},
+        {"id": "breached", "kind": AutomationNodeKind.TRIGGER.value, "type": TYPE_TRIGGER_EVENT, "params": {"event": "sla.breached"}},
+        {"id": "post_new", "kind": AutomationNodeKind.ACTION.value, "type": "action.post_chat",
          "params": {"webhook_url": "https://chat.googleapis.com/v1/spaces/…",
                     "message": "New issue {{item.key}}: {{item.title}}\n{{item.url}}"}},
-        {"id": "post_sla", "kind": "action", "type": "action.post_chat",
+        {"id": "post_sla", "kind": AutomationNodeKind.ACTION.value, "type": "action.post_chat",
          "params": {"webhook_url": "https://chat.googleapis.com/v1/spaces/…",
                     "message": "SLA breached ({{payload.kind}}) on {{item.key}} — {{payload.policy_name}}\n{{item.url}}"}},
     ),

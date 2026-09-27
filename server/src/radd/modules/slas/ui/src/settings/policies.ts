@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { api } from "@radd/plugin-sdk";
+import { api, Entity } from "@radd/plugin-sdk";
 import type { PRIORITY_ORDER } from "@radd-plugin-ui/items/metadata";
 
 /** The policy endpoints this plugin serves (`slas/router.py`). */
@@ -94,6 +94,6 @@ export const statesQuery = (projectId: string) =>
   queryOptions({
     queryKey: ["slas", "states", projectId] as const,
     queryFn: ({ signal }) => api.get<StateChoice[]>("/states", { signal, query: { project_id: projectId } }),
-    meta: { entities: ["project"], projectId },
+    meta: { entities: [Entity.project], projectId },
     staleTime: 60_000,
   });

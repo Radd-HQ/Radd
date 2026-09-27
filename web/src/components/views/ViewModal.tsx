@@ -18,7 +18,7 @@ import { SlqEditor } from "./SlqEditor";
 import { ViewSharingEditor, SERVER_PRIVATE, type LocalShare } from "./ViewSharingEditor";
 import { useKeyedRows } from "@radd/plugin-sdk";
 import { emptySharingDraft, sharingEdits, type SharedSave } from "../../lib/sharing-draft";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
 import type { Project } from "@radd-plugin-ui/projects/types";
 

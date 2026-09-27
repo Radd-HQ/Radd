@@ -275,10 +275,13 @@ ViewTypeSpec(key="slas.queue", label="Queue (triage list)", icon="list-ordered",
 - With the plugin disabled the type is unknown: a saved view shows `MissingPluginType`, fetches no
   rows, and is listed among the ordinary views again so it stays reachable.
 
-**Realtime for a plugin's own entities.** Tag a query with the SERVER's entity type verbatim —
-`meta: { entities: ["sla_policy"] }` — and invalidate with the SDK's `invalidateEntities(queryClient,
-"sla_policy")`. The host's realtime subscribes every tag it does not map itself as that exact server
-string, so a plugin needs no host table row for its entities to go live.
+**Cache tags.** A shared entity (an item, a project, a role…) is tagged with the SDK's `Entity`
+member — `meta: entityMeta(Entity.item, Entity.project)` — the one vocabulary the host's realtime
+map and every plugin UI spell (RADD-1467). **Realtime for a plugin's own entities.** Tag a query
+with the SERVER's entity type verbatim — `meta: { entities: ["sla_policy"] }` — and invalidate with
+the SDK's `invalidateEntities(queryClient, "sla_policy")`. The host's realtime subscribes every tag
+it does not map itself as that exact server string, so a plugin needs no host table row for its
+entities to go live.
 
 ## The editor's extension points (SDK 1.16)
 

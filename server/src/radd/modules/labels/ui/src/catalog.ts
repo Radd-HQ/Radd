@@ -1,6 +1,6 @@
-import { api, type QuerySource } from "@radd/plugin-sdk";
+import { api, type QuerySource, Entity } from "@radd/plugin-sdk";
 import type { Label } from "./types";
-const meta = { entities: ["label", "role", "member"] };
+const meta = { entities: [Entity.label, Entity.role, Entity.member] };
 /** The catalog as a plain query (host pages); plugins read it through the query source below. */
 export const labelsQuery = () => ({
   queryKey: ["labels"] as const, meta, staleTime: 60_000,

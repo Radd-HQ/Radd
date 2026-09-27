@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from radd.sdk import AutomationNodeSpec
+from radd.sdk import AutomationNodeKind, AutomationNodeSpec, NodeArity
 
 from .models import Milestone
 
@@ -89,7 +89,7 @@ async def apply(ctx: Any, plan: _Plan) -> None:
 
 SPEC = AutomationNodeSpec(
     key=NODE_KEY,
-    kind="action",
+    kind=AutomationNodeKind.ACTION.value,
     label="Set milestone status",
     description=(
         "Set the status of the milestone this event is about. Contributed by the "
@@ -100,7 +100,7 @@ SPEC = AutomationNodeSpec(
     subject="milestone",
     # Per milestone: the packet names one, and a set-arity reading would have to
     # pick one of several arbitrarily.
-    arity="item",
+    arity=NodeArity.ITEM.value,
     needs_items=False,  # it needs a MILESTONE, not an item — see `subject`
     permission="milestone.update",
     plan=plan,

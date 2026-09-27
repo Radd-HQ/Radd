@@ -3,7 +3,7 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { allRelationRows } from "../pagination";
 import { api } from "../api";
-import { Entity, entityMeta, projectEntityMeta } from "../cache";
+import { Entity, entityMeta, projectEntityMeta } from "@radd/plugin-sdk";
 import {
   ApiPath,
   ITEMS_PAGE_LIMIT,

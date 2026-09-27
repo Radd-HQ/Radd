@@ -1,6 +1,6 @@
 /** Auth, profile, users + admin, and personal access tokens (specs 01/34/48/84/86/89). */
 import type { PermissionValue } from "./permissions";
-import type { InstanceRoleValue } from "./settings";
+import type { InstanceRoleValue } from "@radd/plugin-sdk";
 /** GET /auth/me: `global_role` plus the caller's GLOBAL permission union, top-level. */
 export interface Me {
   /** Spec 121: the request carried no credential — this is the Anyone

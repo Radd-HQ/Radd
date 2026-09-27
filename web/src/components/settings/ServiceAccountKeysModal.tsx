@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Trash2 } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { apiServiceAccountKeyPath, apiServiceAccountKeysPath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { serviceAccountQuery, serviceKeyDirectoryQuery, SERVICE_ACCOUNT_PAGE_SIZE } from "../../lib/queries/integrations";
 import { useDirectory } from "../../lib/useDirectory";
 import type { ServiceAccount, ServiceAccountKeyCreated, TokenScopes } from "../../lib/types";

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { api, Button, ErrorText, shiftIsoDay } from "@radd/plugin-sdk";
+import { api, Button, ErrorText, shiftIsoDay, Entity } from "@radd/plugin-sdk";
 import { ProjectSelect } from "./controls";
 import { MY_WORK_PATH, dashboardKeys } from "./queries";
 import type { ActivityPage } from "./types";
@@ -10,7 +10,7 @@ export function ActivityWidget({ config = {} }: { config?: { project_id?: string
   const [project, setProject] = useState(config.project_id ?? "");
   const [start, setStart] = useState(config.start ?? "");
   const [end, setEnd] = useState(config.end ?? "");
-  const query = useInfiniteQuery({ queryKey: dashboardKeys.activity(project, start, end), meta: { entities: ["item", "comment", "worklog"] }, initialPageParam: null as number | null,
+  const query = useInfiniteQuery({ queryKey: dashboardKeys.activity(project, start, end), meta: { entities: [Entity.item, Entity.comment, Entity.worklog] }, initialPageParam: null as number | null,
     queryFn: ({ signal, pageParam }) => api.get<ActivityPage>(`${MY_WORK_PATH}/activity`, { signal, query: { project_id: project || undefined, start: start ? `${start}T00:00:00Z` : undefined, end: end ? `${shiftIsoDay(end, 1)}T00:00:00Z` : undefined, before: pageParam ? String(pageParam) : undefined } }),
     getNextPageParam: page => page.next ?? undefined });
   let day = "";

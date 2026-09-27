@@ -5,10 +5,8 @@ import {
   Avatar, CommentComposer, CommentComposerMode, CommentHistory, CommentReplies, CommentSection, CopyCommentLink,
   IconButton, ResolveThreadButton, RichEditor, RichViewer, ThreadBadge, ThreadFilter, api, commentHref, errorMessage,
   invalidateEntities, relativeTime, threadRuleClass, useCommentFeed, useConfirm, useCurrentUser, useIsAuthenticated,
-  useLandOnComment, useLinkedComment, useThreadExpansion, type CommentComposerModeValue,
-} from "@radd/plugin-sdk";
+  useLandOnComment, useLinkedComment, useThreadExpansion, type CommentComposerModeValue, Entity } from "@radd/plugin-sdk";
 import { commentPath, pageCommentsPath } from "../endpoints";
-import { Tag } from "../queries";
 import { ownTaskToggle } from "./PageCommentThread";
 import { usePeople } from "./people";
 
@@ -41,7 +39,7 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   useLandOnComment(linkedDiscussion?.id);
 
-  const invalidate = () => void invalidateEntities(queryClient, Tag.comment);
+  const invalidate = () => void invalidateEntities(queryClient, Entity.comment);
 
   const post = useMutation({
     mutationFn: (isThread: boolean) => api.post(pageCommentsPath(pageId), { body, is_thread: isThread }),

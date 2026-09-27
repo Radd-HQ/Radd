@@ -15,6 +15,8 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterable, Mapping
 
+from radd.kernel.specs import ITEM_SUBJECT as KERNEL_ITEM_SUBJECT
+
 from .types import (
     MAX_GRAPH_EDGES,
     MAX_GRAPH_NODES,
@@ -67,9 +69,9 @@ class Edge:
     target: str
 
 
-#: The subject every built-in node acts on. Named rather than inlined because
+#: The subject every built-in node acts on — the kernel's, because
 #: `packet.item_ids` and `AutomationNodeSpec.subject`'s default have to agree.
-ITEM_SUBJECT = "item"
+ITEM_SUBJECT = KERNEL_ITEM_SUBJECT
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,7 @@ from typing import Any
 
 from radd.config import settings
 from radd.kernel.specs import OutputField
-from radd.sdk import AutomationNodeSpec
+from radd.sdk import AutomationNodeKind, AutomationNodeSpec, NodeArity
 
 from . import runner, service
 from .types import NODE_DECIDE, NODE_RUN, PERM_MANAGE, STARTER_SCRIPT, UNAVAILABLE_PORT
@@ -213,7 +213,7 @@ async def plan_decide(ctx: Any) -> str:
 
 RUN_NODE = AutomationNodeSpec(
     key=NODE_RUN,
-    kind="action",
+    kind=AutomationNodeKind.ACTION.value,
     label="Run a script",
     description=(
         "Run the Python on this node in the managed interpreter, with the items, "
@@ -225,7 +225,7 @@ RUN_NODE = AutomationNodeSpec(
     outputs_for=outputs_for,
     shape_params=("outputs",),
     subject="item",
-    arity="set",
+    arity=NodeArity.SET.value,
     arity_options=("set", "item"),
     needs_items=False,
     permission=PERM_MANAGE,
@@ -236,7 +236,7 @@ RUN_NODE = AutomationNodeSpec(
 
 DECIDE_NODE = AutomationNodeSpec(
     key=NODE_DECIDE,
-    kind="gate",
+    kind=AutomationNodeKind.GATE.value,
     preview_safe=False,
     label="Decide with a script",
     description=(
@@ -249,7 +249,7 @@ DECIDE_NODE = AutomationNodeSpec(
     ports_for=ports_for,
     shape_params=("ports",),
     subject="item",
-    arity="set",
+    arity=NodeArity.SET.value,
     needs_items=False,
     permission=PERM_MANAGE,
     plan=plan_decide,

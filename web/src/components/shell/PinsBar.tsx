@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { ContextMenu } from "../ContextMenu";
 import { api } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { RoutePath } from "../../lib/constants";
 import { PageRoute, pageLink } from "@radd-plugin-ui/pages/links";
 import { PageApi } from "@radd-plugin-ui/pages/endpoints";

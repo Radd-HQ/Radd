@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Globe, X } from "lucide-react";
 import { api } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { ApiPath } from "../../lib/constants";
 import { grantResourcesQuery, resourceGrantsPageQuery, RESOURCE_GRANTS_PAGE_SIZE } from "../../lib/queries";
 import { useDirectory } from "../../lib/useDirectory";

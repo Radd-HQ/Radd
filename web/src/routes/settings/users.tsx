@@ -7,11 +7,10 @@ import { ApiPath, SEARCH_DEBOUNCE_MS, apiUserPath, apiUserTotpPath } from "../..
 import { useCurrentUser, usePermissions } from "../../lib/hooks";
 import { INSTANCE_ROLE_LABELS } from "../../lib/meta";
 import { USERS_PAGE_SIZE, capabilitiesQuery, queryKeys, usersAdminPageQuery, usersAdminQuery } from "../../lib/queries";
+import { InstanceRole, type InstanceRoleValue } from "@radd/plugin-sdk";
 import {
-  InstanceRole,
   Permission,
   UserSource,
-  type InstanceRoleValue,
   type User,
   type UserAdminUpdate,
 } from "../../lib/types";

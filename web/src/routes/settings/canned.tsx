@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MessageSquareQuote, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiCannedResponsePath } from "../../lib/constants";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { usePermissions } from "../../lib/hooks";
 import { useListFilter, EmptyState, TableSkeleton } from "@radd/plugin-sdk";
 import { cannedResponsesQuery } from "../../lib/queries";

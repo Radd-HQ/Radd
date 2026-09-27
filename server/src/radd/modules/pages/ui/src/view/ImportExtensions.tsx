@@ -2,10 +2,9 @@ import { useState } from "react";
 import { useQuery, queryOptions } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, OctagonAlert, Play, Puzzle } from "lucide-react";
-import { api, ExtensionCard, Markdown, type Item } from "@radd/plugin-sdk";
+import { api, ExtensionCard, Markdown, type Item, Entity } from "@radd/plugin-sdk";
 import { ISSUE_ROUTE } from "../endpoints";
 import type { ExtensionRenderers } from "../extension-registry";
-import { Tag } from "../queries";
 
 /** A `radd:items` table shows at most this many issues. */
 const ITEMS_TABLE_LIMIT = 50;
@@ -92,7 +91,7 @@ function Expand({ params }: { params: Record<string, unknown> }) {
 const slqItemsQuery = (q: string) =>
   queryOptions({
     queryKey: ["page-extension-items", q],
-    meta: { entities: [Tag.item] },
+    meta: { entities: [Entity.item] },
     enabled: Boolean(q),
     queryFn: ({ signal }) =>
       api.get<Item[]>("/items", {

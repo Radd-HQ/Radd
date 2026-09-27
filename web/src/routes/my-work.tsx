@@ -4,7 +4,7 @@ import { ErrorText, shiftIsoDay, shortDate, todayIso } from "@radd/plugin-sdk";
 import { QuickStar } from "../components/items/QuickStar";
 import type { LucideIcon } from "lucide-react";
 import { api, type CursorPage } from "../lib/api";
-import { Entity, entityMeta } from "../lib/cache";
+import { Entity, entityMeta } from "@radd/plugin-sdk";
 import { Link } from "@tanstack/react-router";
 import { MyForms } from "../components/forms/MyForms";
 import { ListSection } from "../components/requests/ListSection";

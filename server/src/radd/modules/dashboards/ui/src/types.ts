@@ -113,6 +113,10 @@ export interface DashboardWidgetUpdate {
   config?: WidgetConfig;
 }
 
+/** The widget geometry the server validates (`dashboards/limits.py`) — mirrored here and held equal
+ *  by `server/tests/test_dashboards.py`. `heightStep` is the UI's own resize grain. */
+export const WIDGET_LIMITS = { minWidth: 2, maxWidth: 12, minHeight: 160, maxHeight: 1600, heightStep: 20 } as const;
+
 /** One entry of GET /dashboards/my-work/activity. */
 export interface ActivityPage {
   entries: { id: number; at: string; action: string; item_key: string; comment_id: string | null }[];

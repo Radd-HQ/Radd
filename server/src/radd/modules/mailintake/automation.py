@@ -3,7 +3,7 @@ and wording, minus the setting — for a rule that wants it on its own condition
 from dataclasses import dataclass
 from typing import Any
 
-from radd.kernel import AutomationNodeSpec
+from radd.kernel import ITEM_SUBJECT, AutomationNodeKind, AutomationNodeSpec, NodeArity
 from radd.modules.items import service as items
 
 from . import resolved, service
@@ -46,8 +46,8 @@ async def apply_resolution(ctx: Any, plan: ResolutionPlan) -> None:
 
 
 RESOLUTION_NODE = AutomationNodeSpec(
-    key="mailintake.notify_resolution", kind="action", label="Notify contacts of resolution",
-    group="Email", subject="item", arity="item", reads_event=True,
+    key="mailintake.notify_resolution", kind=AutomationNodeKind.ACTION.value, label="Notify contacts of resolution",
+    group="Email", subject=ITEM_SUBJECT, arity=NodeArity.ITEM.value, reads_event=True,
     permission="item.read", params_schema={"type": "object", "properties": {}},
     description="Email all external thread contacts when an issue enters Done. Skips done-to-done changes and projects whose satisfaction survey announces resolution.",
     plan=plan_resolution, apply=apply_resolution,

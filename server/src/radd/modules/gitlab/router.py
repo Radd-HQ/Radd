@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd.db import get_session
 from radd.modules.automations.types import SYSTEM_ACTOR_ID
 from radd.modules.vcs import receiving, service as vcs, triggers
-from radd.modules.vcs.types import VcsProvider
+from radd.modules.vcs.types import CiState, VcsProvider
 
 from . import parsing, service, timelogs
 from .types import (
@@ -101,7 +101,7 @@ async def _handle_pipeline(session: AsyncSession, payload: dict, connection, rep
     update = parsing.plan_pipeline(payload)
     if update is None:
         return receiving.nothing()
-    state = PIPELINE_STATES.get(update.status, "unknown")
+    state = PIPELINE_STATES.get(update.status, CiState.UNKNOWN.value)
     attributes = payload.get("object_attributes") or {}
     stamped = await vcs.set_ci_state(
         session, connection_id=connection.id if connection else None, repo=repo, provider=VcsProvider.GITLAB,
@@ -114,7 +114,7 @@ async def _handle_pipeline(session: AsyncSession, payload: dict, connection, rep
         fired = await receiving.fire_ci(
             session, GitlabTrigger.CI_COMPLETED, stamped,
             provider=VcsProvider.GITLAB, repo=update.repo, state=state, url=update.url,
-            name="pipeline", sha=update.sha, run_id=update.run_id,
+            name=GitlabEventKind.PIPELINE.value, sha=update.sha, run_id=update.run_id,
             actor_id=SYSTEM_ACTOR_ID,
         )
     return {"linked": len(stamped), "triggered": fired}

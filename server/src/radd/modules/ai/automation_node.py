@@ -16,7 +16,7 @@ import uuid
 from typing import Any, Mapping
 
 from radd.config import settings
-from radd.kernel import AutomationNodeSpec, OutputField, OutputKind
+from radd.kernel import AutomationNodeKind, AutomationNodeSpec, NodeArity, OutputField, OutputKind
 
 from .automation_context import include_schema
 
@@ -190,7 +190,7 @@ async def _ask(ctx: Any, context: str, answers: list[str]) -> str:
 
 SPEC = AutomationNodeSpec(
     key=NODE_KEY,
-    kind="gate",  # routes the packet without changing the item set
+    kind=AutomationNodeKind.GATE.value,  # routes the packet without changing the item set
     label="Ask the AI",
     description=(
         "Ask a question about the items and route them by the answer. Answers are "
@@ -209,7 +209,7 @@ SPEC = AutomationNodeSpec(
     # Default SET: it is the cheap mode, and defaulting to one model call per
     # item would make dropping this node on a scheduled run over a broad query
     # an expensive accident.
-    arity="set",
+    arity=NodeArity.SET.value,
     arity_options=("set", "item"),
     plan=plan,
     plan_items=plan_items,

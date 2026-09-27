@@ -1,8 +1,8 @@
 /** What the builtin SLQ and saved-view widgets read — the owners' public endpoints, under this
  *  plugin's keys, tagged with the owners' entities so live updates refresh them. */
-import { api, type Item } from "@radd/plugin-sdk";
+import { api, type Item, Entity } from "@radd/plugin-sdk";
 
-const itemMeta = (projectId?: string) => ({ entities: ["item"], projectId: projectId || undefined });
+const itemMeta = (projectId?: string) => ({ entities: [Entity.item], projectId: projectId || undefined });
 /** How often a saved-view count re-polls (the sidebar's queue badges use the same minute). */
 const VIEW_COUNT_REFETCH_MS = 60_000;
 
@@ -29,7 +29,7 @@ export const itemsListQuery = (scope: Record<string, string>, q: string, limit: 
 /** One saved view's membership count; the server OMITS a view the reader cannot see. */
 export const viewCountQuery = (viewId: string, extraQ?: string) => ({
   queryKey: ["dashboards", "widget", "view-count", viewId, extraQ ?? ""] as const,
-  meta: { entities: ["item", "view"] },
+  meta: { entities: [Entity.item, Entity.view] },
   enabled: viewId !== "",
   refetchInterval: VIEW_COUNT_REFETCH_MS,
   queryFn: ({ signal }: { signal: AbortSignal }) =>
@@ -44,7 +44,7 @@ interface ViewRef {
 
 export const viewQuery = (viewId: string) => ({
   queryKey: ["dashboards", "widget", "view", viewId] as const,
-  meta: { entities: ["view", "project", "role", "team", "member", "group", "accessGrant"] },
+  meta: { entities: [Entity.view, Entity.project, Entity.role, Entity.team, Entity.member, Entity.group, Entity.accessGrant] },
   enabled: viewId !== "",
   retry: false,
   queryFn: ({ signal }: { signal: AbortSignal }) =>
@@ -54,7 +54,7 @@ export const viewQuery = (viewId: string) => ({
 /** The key a project view's link needs. */
 export const projectKeyQuery = (projectId: string) => ({
   queryKey: ["dashboards", "widget", "project", projectId] as const,
-  meta: { entities: ["project"] },
+  meta: { entities: [Entity.project] },
   enabled: projectId !== "",
   retry: false,
   queryFn: ({ signal }: { signal: AbortSignal }) => api.get<{ id: string; key: string }>(`/projects/${projectId}`, { signal }),

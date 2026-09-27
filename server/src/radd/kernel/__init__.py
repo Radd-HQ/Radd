@@ -15,8 +15,13 @@ from .registry import (
 from .hosts import EntityHost, entity_host, set_entity_host
 from . import changes
 from .specs import (
+    ITEM_SUBJECT,
     OUTPUT_NAME_RE,
+    AutomationNodeKind,
     AutomationNodeSpec,
+    NodeArity,
+    NodePort,
+    NotificationChannel,
     TriggerKindSpec,
     TokenProviderSpec,
     AutomationTemplateSpec,
@@ -87,6 +92,11 @@ __all__ = [
     "TaskSpec",
     "IntegrationSpec",
     "AutomationNodeSpec",
+    "AutomationNodeKind",
+    "NodeArity",
+    "NodePort",
+    "ITEM_SUBJECT",
+    "NotificationChannel",
     "TriggerKindSpec",
     "TokenProviderSpec",
     "AutomationTemplateSpec",

@@ -40,6 +40,7 @@ from .schemas import (
     VoteResult,
 )
 from .types import (
+    UNKNOWN_APPROVER_LABEL,
     LIVE_STATUSES,
     ApprovalCheck,
     ApprovalEntity,
@@ -189,7 +190,7 @@ def approvers_summary(entries: Sequence[dict]) -> str:
     payloads, notifications and the gate's failure message."""
     parts: list[str] = []
     for entry in entries:
-        name = entry.get("name") or entry.get("id") or "?"
+        name = entry.get("name") or entry.get("id") or UNKNOWN_APPROVER_LABEL
         if entry.get("kind") == ApproverKind.TEAM.value:
             parts.append(f"{_entry_required(entry)} of {name}")
         else:

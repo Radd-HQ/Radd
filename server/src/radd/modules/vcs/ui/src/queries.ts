@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { api, useCapabilities } from "@radd/plugin-sdk";
+import { api, useCapabilities, type CacheTag } from "@radd/plugin-sdk";
 import type { VcsConnector } from "./types";
 
 /** The connector plugins loaded now, one tab each (`GET /vcs/connectors`). Keyed on
@@ -42,7 +42,7 @@ export const historyEntities = (provider: string) => [`${provider}_connection`, 
 /** A read about one connector, fetched only while that connector is loaded.
  * A failed refresh (a revoked permission answers 403) hides the rows it had:
  * credentials and identities are not something to keep showing after a denial. */
-export function useVcsList<T>(provider: string, key: string[], path: string, entities: string[]) {
+export function useVcsList<T>(provider: string, key: string[], path: string, entities: CacheTag[]) {
   const caps = useCapabilities();
   const result = useQuery<T>({
     queryKey: ["vcs", provider, ...key],

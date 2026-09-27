@@ -1,6 +1,6 @@
-import { api, type QuerySource } from "@radd/plugin-sdk";
+import { api, type QuerySource, Entity } from "@radd/plugin-sdk";
 import type { FieldDef } from "./types";
-const meta = { entities: ["field", "project", "role", "team", "group", "member", "accessGrant"] };
+const meta = { entities: [Entity.field, Entity.project, Entity.role, Entity.team, Entity.group, Entity.member, Entity.accessGrant] };
 /** The catalog as a plain query (host pages); plugins read it through the query source below. */
 export const fieldsQuery = () => ({
   queryKey: ["fields"] as const, meta, staleTime: 60_000,

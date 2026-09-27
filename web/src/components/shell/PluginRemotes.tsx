@@ -5,10 +5,13 @@ import { useIsAuthenticated } from "../../lib/hooks";
 import { capabilitiesQuery } from "../../lib/queries";
 import { syncPluginRemotes, syncStaticPlugins } from "../../lib/plugin-loader";
 
+/** How often the shell re-reads the manifest, so a plugin toggled elsewhere shows up without a reload. */
+const MANIFEST_POLL_MS = 15_000;
+
 /** Drives the plugin UI loader: reconciles loaded remotes and bundled core plugins with the
  *  manifest's enabled set (so enable/disable is live) and loads the user's contribution prefs. */
 export function PluginRemotes() {
-  const { data } = useQuery({...capabilitiesQuery, refetchInterval: 15000});
+  const { data } = useQuery({...capabilitiesQuery, refetchInterval: MANIFEST_POLL_MS});
   const remotes = data?.remotes;
   const plugins = data?.plugins;
   const authenticated = useIsAuthenticated();

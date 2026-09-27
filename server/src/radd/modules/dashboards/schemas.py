@@ -10,16 +10,22 @@ from radd.modules.items.enums import ItemKind
 from radd.modules.reporting.types import VELOCITY_MAX_LAST, ReportInterval, ReportMeasure
 from radd.modules.views.schemas import ShareGroupRef, ShareTeamRef, ShareUserRef
 
+from .limits import (
+    WIDGET_DEFAULT_HEIGHT,
+    WIDGET_DEFAULT_WIDTH,
+    WIDGET_MAX_HEIGHT,
+    WIDGET_MAX_WIDTH,
+    WIDGET_MIN_HEIGHT,
+    WIDGET_MIN_WIDTH,
+)
 from .types import ShareLevel, WidgetType
 
-# Twelve-column layout, with a two-column minimum for legibility.
-WIDGET_MIN_WIDTH = 2
-WIDGET_MAX_WIDTH = 12
 # slq_list renders a compact card — hard row cap (spec 75).
 SLQ_LIST_MAX_LIMIT = 20
 DASHBOARD_MAX_SHARES = 50
 
-_width_field = Field(default=4, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
+_width_field = Field(default=WIDGET_DEFAULT_WIDTH, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
+_height_field = Field(default=WIDGET_DEFAULT_HEIGHT, ge=WIDGET_MIN_HEIGHT, le=WIDGET_MAX_HEIGHT)
 
 
 # --- per-type widget configs (the JSONB payloads, shape-validated here; the
@@ -102,7 +108,7 @@ class _WidgetBase(BaseModel):
 
     title: str | None = Field(default=None, max_length=200)
     width: int = _width_field
-    height: int = Field(default=360, ge=160, le=1600)
+    height: int = _height_field
     collapsed: bool = False
     position: int = Field(default=0, ge=0)
 
@@ -179,7 +185,7 @@ class WidgetUpdate(BaseModel):
 
     title: str | None = Field(default=None, max_length=200)
     width: int | None = Field(default=None, ge=WIDGET_MIN_WIDTH, le=WIDGET_MAX_WIDTH)
-    height: int | None = Field(default=None, ge=160, le=1600)
+    height: int | None = Field(default=None, ge=WIDGET_MIN_HEIGHT, le=WIDGET_MAX_HEIGHT)
     collapsed: bool | None = None
     position: int | None = Field(default=None, ge=0)
     config: dict[str, Any] | None = None

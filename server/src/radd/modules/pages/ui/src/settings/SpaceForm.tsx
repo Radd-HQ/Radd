@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy, Plus, X } from "lucide-react";
-import { api, invalidateEntities, Button, ErrorText, TextField } from "@radd/plugin-sdk";
+import { api, invalidateEntities, Button, ErrorText, TextField, Entity } from "@radd/plugin-sdk";
 import { PageApi, spacePath, spacePublicAccessPath, spacePublicUrl } from "../endpoints";
-import { Tag } from "../queries";
 import type { PageSpace, PageSpaceCreate, PageSpaceUpdate, SpacePublicAccessUpdate } from "../types";
 
 /** The shareable wiki URL + a copy button (the spec-62 PublicLinkRow idiom). */
@@ -70,7 +69,7 @@ export function SpaceForm({
       }
       onDone?.();
     },
-    onSettled: () => invalidateEntities(queryClient, Tag.space),
+    onSettled: () => invalidateEntities(queryClient, Entity.docSpace),
   });
 
   const onSubmit = (event: FormEvent) => {

@@ -13,10 +13,10 @@ from radd.modules.vcs import receiving, triggers
 from radd.modules.vcs import service as vcs
 from radd.modules.vcs.connector_kit import github_shape
 from radd.modules.vcs.ids import branch_external_id, commit_external_id
-from radd.modules.vcs.types import VcsProvider
+from radd.modules.vcs.types import CiState, VcsProvider
 
 from . import parsing, service, timelogs
-from .types import CiState, ForgejoEventKind, ForgejoTrigger
+from .types import ForgejoEventKind, ForgejoTrigger
 
 logger = logging.getLogger(__name__)
 

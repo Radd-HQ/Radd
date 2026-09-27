@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useCapabilities } from "@radd/plugin-sdk";
+import { Entity, useCapabilities } from "@radd/plugin-sdk";
 
 /** Keyed by the loaded plugin set (catalog, shapes and samples depend on it). A failed refresh hides its
  * data: a revoked permission must not keep showing rules. This UI is bundled with the host and registered
@@ -20,7 +20,7 @@ export function useAutomationQuery<T>(options: {
     queryKey: [...options.queryKey, plugins],
     enabled,
     ...(typeof options.staleTime === "number" ? {staleTime: options.staleTime} : {}),
-    meta: {entities: ["automation", "role"]},
+    meta: {entities: [Entity.automation, Entity.role]},
     ...(typeof options.refetchInterval === "number" ? {refetchInterval: options.refetchInterval} : {}),
     queryFn: context => {
       if (!enabled || typeof options.queryFn !== "function") throw new Error("Automations is unavailable");

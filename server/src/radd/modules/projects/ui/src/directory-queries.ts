@@ -1,8 +1,8 @@
-import { api, ApiError } from "@radd/plugin-sdk";
+import { api, ApiError, Entity } from "@radd/plugin-sdk";
 import type { Project, ProjectSummary } from "./types";
 import { projectQueryKeys as queryKeys } from "./query-keys";
 
-const PROJECT_META = { entities: ["project", "role", "team", "group", "member", "accessGrant"] };
+const PROJECT_META = { entities: [Entity.project, Entity.role, Entity.team, Entity.group, Entity.member, Entity.accessGrant] };
 
 export const projectsQuery = () =>
   ({

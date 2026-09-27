@@ -1,6 +1,7 @@
 /** Auth state + the caller's preferences, instance status/config, capabilities, plugins, and scoped settings. */
 
 import { queryOptions } from "@tanstack/react-query";
+import { capabilitiesQueryKey } from "@radd/plugin-sdk";
 import { api } from "../api";
 import { fetchAuthState } from "../auth";
 import {
@@ -29,7 +30,7 @@ export const authStateQuery = queryOptions({
 /** The backend-assembled UI manifest (spec 93 / A7): capability flags + plugin
  * nav. Drives the sidebar's plugin-contributed nav — chokepoint 3. */
 export const capabilitiesQuery = queryOptions({
-  queryKey: ["capabilities"] as const,
+  queryKey: capabilitiesQueryKey,
   queryFn: ({ signal }) => api.get<CapabilitiesManifest>(ApiPath.capabilities, { signal }),
   staleTime: 60_000,
 });

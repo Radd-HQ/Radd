@@ -2,6 +2,11 @@ import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 
+from radd.kernel.specs import (  # the spec's own vocabulary (RADD-1467); re-exported for the module's callers
+    AutomationNodeKind as AutomationNodeKind,
+    NodeArity as NodeArity,
+    NodePort as NodePort,
+)
 from radd.schedule import ScheduleKind
 
 # A rule's trigger is an EVENT TYPE from the catalog, or one of these sentinels —
@@ -124,21 +129,6 @@ class PersonRole(StrEnum):
     ASSIGNEE = "assignee"
 
 
-class NodeArity(StrEnum):
-    """How a node reads its input packet (RADD-918). There is no loop construct:
-    "for each" is how a node reads its input, not control flow.
-
-    * SET — runs once over the whole packet; a router sends it down ONE port.
-    * ITEM — runs once per item; a router PARTITIONS the set across its ports.
-
-    An action passes its input through either way, so arity changes how many
-    side effects happen, never the graph's shape.
-    """
-
-    SET = "set"
-    ITEM = "item"
-
-
 #: Node param carrying the author's choice. Absent = the type's default, which
 #: is what keeps every graph stored before this behaving exactly as it did.
 ARITY_PARAM = "arity"
@@ -215,36 +205,6 @@ ACTION_ARITY_CONFIGURABLE = frozenset(
 
 
 
-class AutomationNodeKind(StrEnum):
-    """Node kinds (spec 116). FILTER answers per ITEM with a subset; GATE answers
-    ONCE for the packet ("changed by someone in QA" is not a property of an item).
-    SOURCE (RADD-919) PRODUCES items; every other kind can only narrow them.
-    """
-
-    TRIGGER = "trigger"
-    SOURCE = "source"
-    FILTER = "filter"
-    GATE = "gate"
-    ACTION = "action"
-
-
-class NodePort(StrEnum):
-    """Named outputs. A node's kind fixes which of these it has by default
-    (PORTS_BY_KIND); a TYPE names its own through its spec's `ports` or
-    `ports_for` (RADD-1322: built-ins included). An edge naming a port the source cannot emit is
-    rejected on write."""
-
-    OUT = "out"
-    MATCHED = "matched"
-    UNMATCHED = "unmatched"
-    TRUE = "true"
-    FALSE = "false"
-    #: What `create_item` MADE, as opposed to what it was given. Without it the
-    #: new issue was unreachable — the action emitted its input, so nothing
-    #: downstream could assign, label or comment on what had just been created.
-    CREATED = "created"
-
-
 #: Which ports each kind emits by default. FILTER splits the item set; GATE
 #: routes by a boolean; TRIGGER, SOURCE and ACTION pass one way — an action
 #: returns its input unchanged so chains continue past it.
@@ -274,8 +234,13 @@ TYPE_GATE_PROJECT = "gate.project"
 TYPE_GATE_FIELD_CHANGED = "gate.field_changed"
 TYPE_GATE_CHANGED_BY = "gate.changed_by"
 TYPE_GATE_STATE_CATEGORY = "gate.state_category"
+#: RADD-1322: "Entered state category" — reads the transition off the event.
+TYPE_GATE_ENTERED_STATE_CATEGORY = "gate.entered_state_category"
 TYPE_FILTER_SLQ = "filter.slq"
 TYPE_SEARCH_SLQ = "search.slq"
+#: The one trigger node type; its `event` param names the trigger (an event type or a
+#: trigger kind). Every stored graph starts with one, and templates spell it too.
+TYPE_TRIGGER_EVENT = "trigger.event"
 ACTION_TYPE_PREFIX = "action."
 
 #: RADD-1329: the two TERMINAL verdict nodes of a validation graph. A submission

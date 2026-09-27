@@ -1,10 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, FilePlus, FileText, Plus } from "lucide-react";
-import { api, invalidateEntities, DropdownMenu } from "@radd/plugin-sdk";
+import { api, invalidateEntities, DropdownMenu, Entity } from "@radd/plugin-sdk";
 import { PageApi } from "../endpoints";
 import { pageLink } from "../links";
-import { Tag } from "../queries";
 import type { Page, PageCreate, PageTemplate } from "../types";
 
 /** Creates an untitled page (at root or under a node) and navigates to it.
@@ -42,7 +41,7 @@ export function NewPageButton({
       } satisfies PageCreate),
     onSuccess: (page) =>
       void navigate(pageLink(spaceSlug, page.path)),
-    onSettled: () => void invalidateEntities(queryClient, Tag.page, Tag.space),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
 
   if (iconOnly) {

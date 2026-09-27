@@ -12,6 +12,9 @@ from . import gates
 from .conditions import EventFacts
 from .types import (
     TYPE_FILTER_SLQ,
+    TYPE_GATE_ENTERED_STATE_CATEGORY,
+    TYPE_TRIGGER_EVENT,
+    AutomationNodeKind,
     TYPE_GATE_CHANGED_BY,
     TYPE_GATE_FIELD_CHANGED,
     TYPE_GATE_PAYLOAD,
@@ -70,7 +73,7 @@ def _gate(
 
     return AutomationNodeSpec(
         key=key,
-        kind="gate",
+        kind=AutomationNodeKind.GATE.value,
         label=label,
         group="Gates",
         keywords=keywords,
@@ -89,7 +92,7 @@ def _gate(
 
 GATE_NODES: tuple[AutomationNodeSpec, ...] = (
     AutomationNodeSpec(
-        key="gate.entered_state_category", kind="gate", label="Entered state category", group="Gates",
+        key=TYPE_GATE_ENTERED_STATE_CATEGORY, kind=AutomationNodeKind.GATE.value, label="Entered state category", group="Gates",
         description="The triggering change moved into a category from outside it. Moving between two Done states does not count as entering Done again.",
         default_params={"categories": ["done"]},
         params_schema={"type": "object", "required": ["categories"], "properties": {
@@ -125,7 +128,7 @@ GATE_NODES: tuple[AutomationNodeSpec, ...] = (
     # Not event-reading: a draft being validated has a state, and asking about
     # its category is a real question.
     AutomationNodeSpec(
-        key=TYPE_GATE_STATE_CATEGORY, kind="gate", label="State category is", group="Gates",
+        key=TYPE_GATE_STATE_CATEGORY, kind=AutomationNodeKind.GATE.value, label="State category is", group="Gates",
         keywords="category done canceled progress todo backlog triage finished closed",
         default_params={"categories": []},
         reads_event=False,
@@ -175,7 +178,7 @@ async def _check_slq(session, params: Mapping[str, Any]) -> None:
 
 FILTER_NODE = AutomationNodeSpec(
     key=TYPE_FILTER_SLQ,
-    kind="filter",
+    kind=AutomationNodeKind.FILTER.value,
     label="Filter issues (SLQ)",
     group="Filters",
     keywords="slq query where narrow matched unmatched branch condition if",
@@ -233,8 +236,8 @@ SEARCH_NODE = AutomationNodeSpec(
 
 #: The trigger node — registered so every stored node TYPE has a spec.
 TRIGGER_NODE = AutomationNodeSpec(
-    key="trigger.event",
-    kind="trigger",
+    key=TYPE_TRIGGER_EVENT,
+    kind=AutomationNodeKind.TRIGGER.value,
     label="Trigger",
     group="Triggers",
     ports=(NodePort.OUT.value,),

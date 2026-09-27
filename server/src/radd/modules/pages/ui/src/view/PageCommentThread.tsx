@@ -2,10 +2,8 @@ import { Check, RotateCcw, Unlink } from "lucide-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   Button, CommentReplies, CopyCommentLink, RichViewer, commentHref, invalidateEntities, relativeTime, sendTaskToggle,
-  useCurrentUser, type CommentRow, type TaskToggle, type ThreadExpansion,
-} from "@radd/plugin-sdk";
+  useCurrentUser, type CommentRow, type TaskToggle, type ThreadExpansion, Entity } from "@radd/plugin-sdk";
 import { commentTasksPath } from "../endpoints";
-import { Tag } from "../queries";
 
 /** Why a comment no longer points at the page (RADD-1276): its passage was
  *  edited away, or now appears more than once and the context cannot choose. */
@@ -21,7 +19,7 @@ export function ownTaskToggle(row: CommentRow, meId: string | undefined, queryCl
   if (!row.author || row.author.id !== meId) return undefined;
   return async (toggle: TaskToggle) => {
     await sendTaskToggle(commentTasksPath(row.id), toggle, row.body);
-    await invalidateEntities(queryClient, Tag.comment);
+    await invalidateEntities(queryClient, Entity.comment);
   };
 }
 

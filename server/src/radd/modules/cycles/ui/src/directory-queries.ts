@@ -1,8 +1,8 @@
-import { api } from "@radd/plugin-sdk";
+import { api, Entity } from "@radd/plugin-sdk";
 import type { Cycle, CycleStatusValue } from "./types";
 import { cycleDirectoryKeys as queryKeys } from "./query-keys";
 
-const CYCLE_META = { entities: ["cycle", "team", "role", "project", "group", "member", "accessGrant"] };
+const CYCLE_META = { entities: [Entity.cycle, Entity.team, Entity.role, Entity.project, Entity.group, Entity.member, Entity.accessGrant] };
 
 export const CYCLES_PAGE_SIZE = 50;
 export const cyclesPageQuery = (

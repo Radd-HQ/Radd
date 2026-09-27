@@ -184,9 +184,9 @@ async def update_connection(
         connection.auth_mode = ConfluenceAuthMode(fields["auth_mode"]).value
     if "username" in fields:
         connection.username = fields["username"]
-    # Empty means "keep the stored one": the read shape is redacted, so a form that
+    # `KEEP_SECRET` means "keep the stored one": the read shape is redacted, so a form that
     # saves an untouched connection sends nothing back and must not blank the token.
-    if fields.get("credential"):
+    if not secretbox.keeps_secret(fields.get("credential")):
         connection.credential = secretbox.seal(fields["credential"])
     if "verify_ssl" in fields:
         connection.verify_ssl = fields["verify_ssl"]

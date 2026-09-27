@@ -20,7 +20,7 @@ from radd import mailrender
 from radd.config import settings
 from radd.kernel import AutomationNodeSpec, AutomationTemplateSpec
 from radd.modules.auth import service as auth_service
-from radd.modules.automations.types import ACTION_TYPE_PREFIX, ARITY_PARAM, NodeArity, NodePort
+from radd.modules.automations.types import ACTION_TYPE_PREFIX, ARITY_PARAM, AutomationNodeKind, NodeArity, NodePort
 from radd.modules.items.models import WorkItem
 from radd.modules.projects.models import Project
 
@@ -177,7 +177,7 @@ def check(params: dict[str, Any]) -> None:
 
 SEND_EMAIL_NODE = AutomationNodeSpec(
     key=NODE_KEY,
-    kind="action",
+    kind=AutomationNodeKind.ACTION.value,
     label="Send email",
     description="Email an address, or the issue's reporter, assignee or requester, through the outgoing mail sender.",
     group="Actions",

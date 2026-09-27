@@ -2,7 +2,7 @@ import { useId, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FolderKanban } from "lucide-react";
 import { api } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { apiProjectPath } from "../../lib/constants";
 import { pushToast, ToastKind } from "../../lib/toast";
 import type { ProjectUpdate } from "../../lib/types";

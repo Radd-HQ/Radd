@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Plus, TriangleAlert, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath, apiTokenPath } from "../../lib/constants";
-import { formatDateOrNever, EmptyState, ErrorText, TableSkeleton } from "@radd/plugin-sdk";
+import { formatDateOrNever, EmptyState, ErrorText, TableSkeleton, CalloutKind } from "@radd/plugin-sdk";
 import { usePermissions } from "../../lib/hooks";
 import { queryKeys, tokensQuery } from "../../lib/queries";
 import type { ApiToken, ApiTokenCreate, ApiTokenCreated, TokenScopes } from "../../lib/types";
@@ -86,7 +86,7 @@ function CreatedTokenPanel({
   onDismiss: () => void;
 }) {
   return (
-    <Callout kind="warning" icon={null} className="mb-5 rounded-lg p-4">
+    <Callout kind={CalloutKind.warning} icon={null} className="mb-5 rounded-lg p-4">
       <div className="mb-2 flex items-center gap-2 text-[13px] font-medium">
         <TriangleAlert size={15} aria-hidden />
         Copy “{created.name}” now — this token won't be shown again.

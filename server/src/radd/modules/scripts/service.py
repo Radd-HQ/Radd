@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 import uuid
@@ -23,7 +24,7 @@ from radd.modules.items import service as items
 from . import interpreter, runner
 from .models import ScriptInterpreter, ScriptPackage
 from .schemas import InterpreterRead, InterpreterSettings, PackageCreate, RunRequest
-from .types import InterpreterStatus, PackageStatus, ScriptEntity, ScriptEvent
+from .types import RUN_KEY_CAUSE_SOURCE, InterpreterStatus, PackageStatus, ScriptEntity, ScriptEvent
 
 logger = logging.getLogger(__name__)
 
@@ -84,10 +85,9 @@ async def run_body(
             raise RuntimeError("The script's execution account is unavailable")
         token, raw = await service_tokens.mint_ephemeral_token(
             credentials, persisted_actor, name=f"script run ({label})", ttl_seconds=int(timeout) + 60,
-            automation_cause={
-                **(events.current_cause() or events.AutomationCause()).as_json(),
-                "source": "script",
-            },
+            automation_cause=dataclasses.replace(
+                events.current_cause() or events.AutomationCause(), source=RUN_KEY_CAUSE_SOURCE
+            ).as_json(),
         )
         await credentials.commit()
     try:

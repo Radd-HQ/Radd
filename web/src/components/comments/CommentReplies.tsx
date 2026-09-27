@@ -6,7 +6,7 @@ import { apiCommentPath, apiCommentTasksPath } from "../../lib/constants";
 import { useCurrentUser } from "../../lib/hooks";
 import { sendTaskToggle } from "../../lib/task-toggle";
 import { CopyCommentLink } from "./CopyCommentLink";
-import { Entity, entityMeta, invalidateEntities } from "../../lib/cache";
+import { Entity, entityMeta, invalidateEntities } from "@radd/plugin-sdk";
 import { chronologicalComments, type CommentPage } from "../../lib/queries/comment-feed";
 import { relativeTime } from "@radd/plugin-sdk";
 import { type Comment } from "../../lib/types";

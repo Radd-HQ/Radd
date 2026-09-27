@@ -1,4 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
+import type { EntityMeta } from "./cache";
+import { QueryKeyPrefix } from "./query-keys";
 import { useQueries, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 /** Nonvisual commands for contextual menus. The provider owns discovery and execution. */
@@ -7,7 +9,7 @@ export interface Command { id: string; label: string; hint?: string; keywords?: 
 export interface CommandSource {
   id: string;
   entityType: string;
-  meta?: Record<string, unknown>;
+  meta?: EntityMeta;
   list: (context: CommandContext, signal: AbortSignal) => Promise<Command[]>;
   execute: (commandId: string, context: CommandContext, signal: AbortSignal) => Promise<void>;
 }
@@ -39,7 +41,7 @@ export function useContributedCommands(context: CommandContext, enabled = true):
   const sources = all.filter(entry => entry.source.entityType === context.entityType);
   const client = useQueryClient();
   const results = useQueries({queries: sources.map(entry => ({
-    queryKey: ["plugin-commands", entry.plugin, entry.generation, entry.source.id, context, enabled],
+    queryKey: [QueryKeyPrefix.pluginCommands, entry.plugin, entry.generation, entry.source.id, context, enabled],
     queryFn: ({signal}: {signal: AbortSignal}) => {
       if (!enabled || !entries.includes(entry)) throw new Error("Command discovery is unavailable");
       return entry.source.list(context, signal);
@@ -52,5 +54,5 @@ export function useContributedCommands(context: CommandContext, enabled = true):
 }
 
 export function invalidatePluginCommands(client: QueryClient, plugin: string): Promise<void> {
-  return client.invalidateQueries({queryKey: ["plugin-commands", plugin]});
+  return client.invalidateQueries({queryKey: [QueryKeyPrefix.pluginCommands, plugin]});
 }

@@ -1,13 +1,6 @@
 import type { ComponentType, HTMLAttributes, ReactNode } from "react";
 import { CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from "lucide-react";
-
-export const CalloutKind = {
-  info: "info",
-  success: "success",
-  warning: "warning",
-  danger: "danger",
-} as const;
-type CalloutKindValue = (typeof CalloutKind)[keyof typeof CalloutKind];
+import { CalloutKind, type CalloutKindValue } from "@radd/plugin-sdk";
 
 /* Full class strings per kind — Tailwind only compiles classes it can SEE, so
    no template-built names. The `--callout-*` tokens are the computed per-theme

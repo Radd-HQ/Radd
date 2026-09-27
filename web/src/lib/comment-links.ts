@@ -5,6 +5,12 @@ import { api } from "./api";
 import { On401 } from "./constants";
 import { apiCommentPath } from "./constants";
 
+/** The linked comment stays marked this long once found, then reads like its neighbours. */
+const COMMENT_HIGHLIGHT_MS = 10_000;
+/** The row may still be loading (a reply thread expands, a page paginates): poll for it, briefly. */
+const LAND_POLL_MS = 250;
+const LAND_MAX_POLLS = 120;
+
 /**
  * RADD-1297 — links to one comment.
  *
@@ -73,12 +79,12 @@ export function useLandOnComment(target: string | null | undefined): boolean {
         window.clearInterval(timer);
         row.scrollIntoView({ block: "center" });
         row.setAttribute("data-comment-linked", "");
-        highlightTimer = window.setTimeout(() => row?.removeAttribute("data-comment-linked"), 10_000);
+        highlightTimer = window.setTimeout(() => row?.removeAttribute("data-comment-linked"), COMMENT_HIGHLIGHT_MS);
         setLanded(target);
-      } else if (++tries > 120) {
+      } else if (++tries > LAND_MAX_POLLS) {
         window.clearInterval(timer);
       }
-    }, 250);
+    }, LAND_POLL_MS);
     return () => {
       window.clearInterval(timer);
       window.clearTimeout(highlightTimer);

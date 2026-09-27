@@ -2,8 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Archive, ArchiveRestore, Download, History, Link2, Lock, Printer, Trash2 } from "lucide-react";
 import {
-  API_BASE, Callout, DropdownMenu, IconButton, relativeTime, type AvatarUser,
-} from "@radd/plugin-sdk";
+  API_BASE, Callout, DropdownMenu, IconButton, relativeTime, type AvatarUser, CalloutKind } from "@radd/plugin-sdk";
 import { pageExportPath } from "../endpoints";
 import { PageRoute, pagePermalink, pagePrintHref } from "../links";
 import type { Page } from "../types";
@@ -17,7 +16,7 @@ export function ArchivedBanner({ spaceSlug, canManage, onRestore }: {
   spaceSlug: string; canManage: boolean; onRestore: () => void;
 }) {
   return (
-    <Callout kind="warning" icon={Archive} className="mb-3" data-archived-banner>
+    <Callout kind={CalloutKind.warning} icon={Archive} className="mb-3" data-archived-banner>
       <div className="flex flex-wrap items-center gap-2">
         <span>This page is archived — read-only and hidden from the tree until restored.</span>
         {canManage && (

@@ -2,9 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
-import { api, errorMessage, invalidateEntities, Button, IconButton, StateCategoryDot } from "@radd/plugin-sdk";
+import { api, errorMessage, invalidateEntities, Button, IconButton, StateCategoryDot, Entity } from "@radd/plugin-sdk";
 import { ISSUE_ROUTE, pageItemPath, pageItemsPath } from "../endpoints";
-import { Tag, pageItemsQuery } from "../queries";
+import { pageItemsQuery } from "../queries";
 import type { PageLinkedItem } from "../types";
 
 /**
@@ -21,7 +21,7 @@ export function PageLinkedItems({ pageId, canWrite }: { pageId: string; canWrite
 
   const list = items.data ?? [];
 
-  const invalidate = () => void invalidateEntities(queryClient, Tag.page, Tag.item);
+  const invalidate = () => void invalidateEntities(queryClient, Entity.page, Entity.item);
   const add = useMutation({
     mutationFn: (itemKey: string) =>
       api.post<PageLinkedItem>(pageItemsPath(pageId), { item_key: itemKey }),

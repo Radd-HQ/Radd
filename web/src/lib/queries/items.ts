@@ -3,7 +3,7 @@
 import { commentFeedQuery, CommentSection } from "./comment-feed";
 import { queryOptions } from "@tanstack/react-query";
 import { api, type CursorPage } from "../api";
-import { Entity, entityMeta } from "../cache";
+import { Entity, entityMeta } from "@radd/plugin-sdk";
 import {
   ApiPath,
   apiAttachmentsPath,

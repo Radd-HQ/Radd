@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CornerLeftUp } from "lucide-react";
-import { api, invalidateEntities, Button, ErrorText, ListSearchInput, Modal } from "@radd/plugin-sdk";
+import { api, invalidateEntities, Button, ErrorText, ListSearchInput, Modal, Entity } from "@radd/plugin-sdk";
 import { pagePath } from "../endpoints";
-import { Tag } from "../queries";
 import type { Page, PageUpdate } from "../types";
 import { comparePagesNaturally, subtreeIds } from "./page-tree";
 
@@ -50,7 +49,7 @@ export function MovePageModal({
     mutationFn: (parent_id: string | null) =>
       api.patch<Page>(pagePath(page.id), { parent_id } satisfies PageUpdate),
     onSuccess: async () => {
-      await invalidateEntities(queryClient, Tag.page, Tag.space);
+      await invalidateEntities(queryClient, Entity.page, Entity.docSpace);
       onClose();
     },
   });

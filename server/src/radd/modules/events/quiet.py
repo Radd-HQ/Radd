@@ -54,9 +54,15 @@ class AutomationCause:
 
     rule_id: uuid.UUID | None = None
     depth: int = 1
+    #: Who minted the key that carries this cause, when it was not the engine itself
+    #: (a script run's key says so — RADD-1467); "" for the engine's own.
+    source: str = ""
 
     def as_json(self) -> dict[str, Any]:
-        return {"rule_id": str(self.rule_id) if self.rule_id else None, "depth": self.depth}
+        cause: dict[str, Any] = {"rule_id": str(self.rule_id) if self.rule_id else None, "depth": self.depth}
+        if self.source:
+            cause["source"] = self.source
+        return cause
 
     @classmethod
     def from_json(cls, raw: Mapping[str, Any] | None) -> "AutomationCause":
@@ -66,7 +72,7 @@ class AutomationCause:
             depth = max(1, int(raw.get("depth") or 1))
         except (TypeError, ValueError):
             depth = 1
-        return cls(rule_id=uuid.UUID(str(rule)) if rule else None, depth=depth)
+        return cls(rule_id=uuid.UUID(str(rule)) if rule else None, depth=depth, source=str(raw.get("source") or ""))
 
 
 #: The cause of whatever is being emitted RIGHT NOW (inside `automated()`).

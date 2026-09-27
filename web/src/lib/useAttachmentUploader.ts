@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStorageChoice } from "../components/attachments/StorageChoiceProvider";
 import { uploadAttachment } from "./attachments";
-import { Entity, invalidateEntities } from "./cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { attachmentUrl } from "./constants";
 import { uploadContextQuery } from "./queries";
 import type { Attachment, AttachmentTarget, UploadContext } from "./types";

@@ -12,7 +12,9 @@ from typing import Any
 from radd.config import settings
 from radd.kernel.specs import AutomationNodeSpec, OutputField
 
+from .graph import ITEM_SUBJECT
 from .types import (
+    AutomationNodeKind,
     ACTION_ARITY_CONFIGURABLE,
     ACTION_ARITY_DEFAULT,
     ACTION_TYPE_PREFIX,
@@ -149,7 +151,7 @@ async def apply_action(ctx: Any, plan) -> None:
     made_id: uuid.UUID | None = getattr(made, "id", None)
     if made_id is None:
         return
-    ctx.add_created("item", made_id)
+    ctx.add_created(ITEM_SUBJECT, made_id)
     key = str(getattr(made, "key", "") or "")
     ctx.set_output("id", made_id)
     ctx.set_output("key", key)
@@ -195,7 +197,7 @@ def _spec(action: ActionType) -> AutomationNodeSpec:
     creates = action is ActionType.CREATE_ITEM
     return AutomationNodeSpec(
         key=f"{ACTION_TYPE_PREFIX}{action.value}",
-        kind="action",
+        kind=AutomationNodeKind.ACTION.value,
         label=LABELS[action],
         group="Actions",
         keywords=f"{action.value} do apply",

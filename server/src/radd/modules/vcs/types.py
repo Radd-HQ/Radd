@@ -74,3 +74,42 @@ class ConnectorSetting(StrEnum):
     HTTP_TIMEOUT = "http_timeout_seconds"
     PAGE_SIZE = "api_page_size"
     MAX_COMMITS = "backfill_max_commits"
+
+
+class CiOutcome(StrEnum):
+    """The terminal CI states — the ones that fire `ci.completed`. A queued or
+    running report updates the link's badge and fires nothing."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    CANCELLED = "cancelled"
+
+
+class CiState(StrEnum):
+    """Every state a ref's CI badge shows (spec 111): the three outcomes plus the
+    two that fire nothing. Each connector maps its host's vocabulary onto this one,
+    and `ItemVcsLink.ci_state` stores a member ("" = never reported)."""
+
+    SUCCESS = CiOutcome.SUCCESS.value
+    FAILURE = CiOutcome.FAILURE.value
+    CANCELLED = CiOutcome.CANCELLED.value
+    RUNNING = "running"
+    UNKNOWN = "unknown"
+
+
+#: A report for the SAME run cannot leave one of these for a non-terminal state.
+CI_TERMINAL: frozenset[str] = frozenset(CiOutcome)
+
+#: How several reported streams summarise into one badge: the first of these that
+#: any stream is in wins, so one red workflow outranks nine green ones.
+CI_SUMMARY_ORDER: tuple[CiState, ...] = (
+    CiState.FAILURE, CiState.RUNNING, CiState.CANCELLED, CiState.UNKNOWN, CiState.SUCCESS
+)
+
+
+class CiReportKind(StrEnum):
+    """The stream a CI report is keyed under in `ItemVcsLink.ci_reports`. PIPELINE
+    is the one-stream default (GitLab); GitHub and Forgejo compose `<event>:<workflow>`
+    keys so each workflow is ordered on its own."""
+
+    PIPELINE = "pipeline"

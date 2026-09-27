@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import { Entity, invalidateEntities } from "./cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import {
   apiItemWatchPath,
   apiNotificationsReadAllPath,

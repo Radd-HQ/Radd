@@ -2,7 +2,7 @@
  *  palette, an issue's Pages row and the editor's insert menu — through this package's export. */
 
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
-import { api, ApiError } from "@radd/plugin-sdk";
+import { api, ApiError, Entity, entityMeta } from "@radd/plugin-sdk";
 import { encodePath } from "./links";
 import {
   PageApi, itemPagesPath, pageBacklinksPath, pageItemsPath, pagePath, pageVersionPath, pageVersionsPath,
@@ -13,9 +13,6 @@ import type {
   PageSpace, PageSummary, PageTemplate, DocVersion, PageVersionMeta,
 } from "./types";
 
-/** The cache tags queries carry and mutations invalidate by (the shared `Entity` vocabulary). */
-export const Tag = { page: "page", space: "docSpace", comment: "comment", item: "item", role: "role" } as const;
-const tags = (...entities: string[]) => ({ entities });
 
 export const pageKeys = {
   spaces: ["pageSpaces"] as const,
@@ -41,14 +38,14 @@ export const PAGE_SPACES_PAGE_SIZE = 50;
 /** How many spaces there are, and the caller's permission union across them (any member). */
 export const pageSpaceSummaryQuery = () => queryOptions({
   queryKey: [...pageKeys.spaces, "summary"] as const,
-  meta: tags(Tag.space, Tag.role, "team", "group", "member", "accessGrant"),
+  meta: entityMeta(Entity.docSpace, Entity.role, "team", "group", "member", "accessGrant"),
   staleTime: 30_000,
   queryFn: ({ signal }) => api.get<PageSpaceSummary>(`${PageApi.spaces}/summary`, { signal }),
 });
 
 export const pageSpacesPageQuery = (q = "", page = 0) => ({
   queryKey: [...pageKeys.spaces, "directory", q.trim(), page] as const,
-  meta: tags(Tag.space, Tag.role),
+  meta: entityMeta(Entity.docSpace, Entity.role),
   queryFn: ({ signal }: { signal: AbortSignal }) => api.getPaged<PageSpace>(PageApi.spaces, { signal, query: {
     q: q.trim(), limit: String(PAGE_SPACES_PAGE_SIZE), offset: String(page * PAGE_SPACES_PAGE_SIZE),
   } }),
@@ -57,7 +54,7 @@ export const pageSpacesPageQuery = (q = "", page = 0) => ({
 /** A space by slug or id; null when there is none (a 404 is an answer, not an error). */
 export const pageSpaceByIdentityQuery = (identifier: string) => queryOptions({
   queryKey: [...pageKeys.spaces, "identity", identifier] as const,
-  meta: tags(Tag.space, Tag.role),
+  meta: entityMeta(Entity.docSpace, Entity.role),
   queryFn: async ({ signal }): Promise<PageSpace | null> => {
     try { return await api.get<PageSpace>(`${PageApi.spaces}/by-identity/${encodeURIComponent(identifier)}`, { signal }); }
     catch (error) { if (error instanceof ApiError && error.status === 404) return null; throw error; }
@@ -76,14 +73,14 @@ export const pageExtensionsQuery = queryOptions({
 /** What links to this page (RADD-713) — an indexed lookup, not a corpus scan. */
 export const pageBacklinksQuery = (pageId: string) => queryOptions({
   queryKey: pageKeys.backlinks(pageId),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<PageBacklink[]>(pageBacklinksPath(pageId), { signal }),
 });
 
 /** Every page carrying a label (RADD-718) — optionally scoped to one space. */
 export const pagesByLabelQuery = (name: string, space = "") => queryOptions({
   queryKey: pageKeys.byLabel(name, space),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<PageLabelled[]>(pagesByLabelPath(name), { ...(space ? { query: { space } } : undefined), signal }),
 });
 
@@ -96,7 +93,7 @@ export const pageWatchQuery = (pageId: string) => queryOptions({
 /** A space's flat page rows — the tree component assembles the hierarchy. */
 export const pagesQuery = (spaceId: string) => queryOptions({
   queryKey: pageKeys.pages(spaceId),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<PageSummary[]>(spacePagesPath(spaceId), { signal }),
 });
 
@@ -104,14 +101,14 @@ export const pagesQuery = (spaceId: string) => queryOptions({
  *  `page.manage` on the server; only ask when the actor holds it. */
 export const archivedPagesQuery = (spaceId: string) => queryOptions({
   queryKey: pageKeys.archived(spaceId),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<PageSummary[]>(spacePagesPath(spaceId), { signal, query: { include_archived: "true" } }),
 });
 
 /** Full page: body + space + breadcrumb (the canonical page view). */
 export const pageQuery = (pageId: string) => queryOptions({
   queryKey: pageKeys.page(pageId),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<Page>(pagePath(pageId), { signal }),
   retry: false,
 });
@@ -119,7 +116,7 @@ export const pageQuery = (pageId: string) => queryOptions({
 /** A page by its URL address (`<space>/<path>`); the answer's `path` is canonical and the view redirects to it. */
 export const pageByPathQuery = (spaceSlug: string, path: string) => queryOptions({
   queryKey: pageKeys.byPath(spaceSlug, path),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) =>
     api.get<Page>(`${PageApi.pages}/by-path/${encodeURIComponent(spaceSlug)}/${encodePath(path)}`, { signal }),
   retry: false,
@@ -129,7 +126,7 @@ export const pageByPathQuery = (spaceSlug: string, path: string) => queryOptions
  *  were numbered. */
 export const pageByKeyQuery = (key: string) => queryOptions({
   queryKey: pageKeys.byKey(key),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) =>
     /^\d+$/.test(key)
       ? api.get<Page>(`${PageApi.pages}/by-number/${key}`, { signal })
@@ -140,7 +137,7 @@ export const pageByKeyQuery = (key: string) => queryOptions({
 /** Version history metadata (newest first). */
 export const pageVersionsQuery = (pageId: string) => queryOptions({
   queryKey: pageKeys.versions(pageId),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<PageVersionMeta[]>(pageVersionsPath(pageId), { signal }),
 });
 
@@ -154,14 +151,14 @@ export const pageVersionQuery = (pageId: string, version: number) => queryOption
 /** Issues linked to a page, hydrated (key/title/state), RBAC-filtered. */
 export const pageItemsQuery = (pageId: string) => queryOptions({
   queryKey: pageKeys.items(pageId),
-  meta: tags(Tag.page, Tag.item),
+  meta: entityMeta(Entity.page, Entity.item),
   queryFn: ({ signal }) => api.get<PageLinkedItem[]>(pageItemsPath(pageId), { signal }),
 });
 
 /** Pages linked to an issue — the issue page's Pages row. */
 export const itemPagesQuery = (itemId: string) => queryOptions({
   queryKey: pageKeys.itemPages(itemId),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<ItemPageRef[]>(itemPagesPath(itemId), { signal }),
   retry: false,
 });
@@ -169,7 +166,7 @@ export const itemPagesQuery = (itemId: string) => queryOptions({
 /** Page FTS for the palette's "Pages" section and any search box. */
 export const pageSearchQuery = (q: string, limit: number) => queryOptions({
   queryKey: pageKeys.search(q, limit),
-  meta: tags(Tag.page),
+  meta: entityMeta(Entity.page),
   queryFn: ({ signal }) => api.get<PageSearchResponse>(PageApi.search, { signal, query: { q, limit: String(limit) } }),
   placeholderData: keepPreviousData,
   enabled: q.trim().length > 0,
@@ -179,14 +176,14 @@ export type PageTemplateSummary = Omit<PageTemplate, "body"> & { space_name: str
 export const PAGE_TEMPLATES_PAGE_SIZE = 50;
 export const pageTemplatesPageQuery = (q: string, page: number) => ({
   queryKey: ["page-templates", "directory", q.trim(), page] as const,
-  meta: tags(Tag.space, Tag.role),
+  meta: entityMeta(Entity.docSpace, Entity.role),
   queryFn: ({ signal }: { signal: AbortSignal }) => api.getPaged<PageTemplateSummary>(`${PageApi.templates}/directory`, { signal, query: {
     q: q.trim(), limit: String(PAGE_TEMPLATES_PAGE_SIZE), offset: String(page * PAGE_TEMPLATES_PAGE_SIZE),
   } }),
 });
 export const pageTemplateByIdQuery = (id: string) => queryOptions({
   queryKey: ["page-templates", "detail", id] as const,
-  meta: tags(Tag.space, Tag.role),
+  meta: entityMeta(Entity.docSpace, Entity.role),
   queryFn: ({ signal }) => api.get<PageTemplate>(`${PageApi.templates}/${encodeURIComponent(id)}`, { signal }),
   enabled: Boolean(id),
 });

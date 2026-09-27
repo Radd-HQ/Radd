@@ -12,6 +12,7 @@ import { layout, NODE_HEIGHT, NODE_WIDTH, reachable } from "./automation-layout"
 import {
   NodeKind,
   VALIDATE_TRIGGER,
+  VERDICT_BLOCK_TYPE,
   type AutomationEdge,
   type AutomationNode,
   type Orientation,
@@ -182,7 +183,7 @@ export function GraphEditor({
     for (const trigger of triggers) {
       if (String(trigger.params.event ?? "") !== VALIDATE_TRIGGER) continue;
       const reached = reachable(edges, [trigger.id], "downstream");
-      chips[trigger.id] = [...reached].some((id) => types.get(id) === "verdict.block") ? "blocks" : "advises";
+      chips[trigger.id] = [...reached].some((id) => types.get(id) === VERDICT_BLOCK_TYPE) ? "blocks" : "advises";
     }
     return chips;
   }, [triggers, nodes, edges]);

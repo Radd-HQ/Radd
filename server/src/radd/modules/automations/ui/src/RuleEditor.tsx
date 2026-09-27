@@ -9,6 +9,8 @@ import { ApiPath, apiAutomationPath } from "./constants";
 import { automationCatalogQuery, invalidateAutomations } from "./queries";
 import { positionedErrorOf as slqErrorOf } from "@radd/plugin-sdk";
 import {
+  MANUAL_TRIGGER,
+  NodeKind,
   type AutomationEdge,
   type AutomationNode,
   type Orientation,
@@ -208,7 +210,7 @@ export function RuleEditor({ rule, draft = null, onDone }: RuleEditorProps) {
             ruleId={persistedId}
             name={name}
             edges={graph.edges}
-            triggers={graph.nodes.filter(node => node.kind === "trigger").map(node => ({ node_id: node.id, event_type: String(node.params.event ?? "manual") }))}
+            triggers={graph.nodes.filter(node => node.kind === NodeKind.trigger).map(node => ({ node_id: node.id, event_type: String(node.params.event ?? MANUAL_TRIGGER) }))}
             nodes={graph.nodes}
             onResult={setRun}
           />

@@ -43,8 +43,10 @@ export interface SelectFieldProps {
 export type ButtonVariantValue = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { variant?: ButtonVariantValue; size?: "sm" | "md" }
 interface FieldProps extends InputHTMLAttributes<HTMLInputElement> { label?: string; hint?: string; error?: string }
+export const CalloutKind = { info: "info", success: "success", warning: "warning", danger: "danger" } as const;
+export type CalloutKindValue = (typeof CalloutKind)[keyof typeof CalloutKind];
 export interface CalloutProps extends HTMLAttributes<HTMLDivElement> {
-  kind: "info" | "success" | "warning" | "danger"; children: ReactNode;
+  kind: CalloutKindValue; children: ReactNode;
   /** Replaces the kind's icon; null shows none. */
   icon?: ComponentType<{ size?: number; className?: string; "aria-hidden"?: boolean }> | null;
 }

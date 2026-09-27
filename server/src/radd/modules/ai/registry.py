@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from radd import secretbox
 from radd.config import settings
 from radd.db import SessionLocal
 from radd.snapshot import Snapshot
@@ -43,11 +44,6 @@ from .types import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Update payloads leave the credential alone when this is what came in — a form
-# that round-trips a redacted read must not blank the stored key.
-UNCHANGED_CREDENTIAL = ""
-
 
 @dataclass(frozen=True)
 class ResolvedModel:
@@ -165,8 +161,8 @@ async def update_provider(
         provider.wire_shape = new_shape.value
     if "base_url" in fields:
         provider.base_url = fields["base_url"].rstrip("/")
-    # An empty key means "keep the stored one" — the read shape is redacted.
-    if fields.get("api_key"):
+    # `secretbox.KEEP_SECRET` means "keep the stored one" — the read shape is redacted.
+    if not secretbox.keeps_secret(fields.get("api_key")):
         provider.api_key = fields["api_key"]
     if "default_model" in fields:
         provider.default_model = fields["default_model"]

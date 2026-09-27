@@ -129,7 +129,7 @@ async def set_value(
             "scoped_setting", reason="instance scope takes no id; project scope requires one"
         )
     coerced = _coerce(spec, value)
-    if spec.secret and coerced == "":
+    if spec.secret and coerced == secretbox.KEEP_SECRET:
         # RADD-1454: the editor never reads a secret back, so it cannot restate one — an
         # empty write means "keep what is stored" (the mail dialogs' convention); removing
         # a secret is `clear_value`. Nothing is written, so nothing is audited.

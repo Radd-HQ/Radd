@@ -60,9 +60,3 @@ export interface ResolvedSetting {
   key: string;
   value: unknown;
 }
-
-export const InstanceRole = {
-  admin: "admin",
-  member: "member",
-} as const;
-export type InstanceRoleValue = (typeof InstanceRole)[keyof typeof InstanceRole];

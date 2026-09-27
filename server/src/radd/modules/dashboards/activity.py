@@ -6,19 +6,23 @@ from datetime import UTC
 from radd.modules.events import service as events_service
 from radd.modules.events.types import EventSource
 from radd.kernel import registries
+from radd.modules.comments.types import CommentEvent
+from radd.modules.items.enums import ItemEntity, ItemEvent
 from radd.modules.items.service import require_readable_item
+from radd.modules.timelogging.types import WorklogEvent
 
-ACTIONS = {
-    "item.created": "Created issue",
-    "item.updated": "Updated issue",
-    "item.transitioned": "Changed state",
-    "comment.created": "Commented",
-    "comment.updated": "Edited comment",
-    "comment.resolved": "Resolved thread",
-    "comment.reopened": "Reopened thread",
-    "worklog.created": "Logged work",
-    "worklog.updated": "Updated work log",
+#: The event types the feed shows, and the verb each is shown as. A state change is
+#: an `item.updated` whose diff touches `state` (see `read`); nothing emits a
+#: transition or thread-resolution event of its own.
+ACTIONS: dict[str, str] = {
+    ItemEvent.CREATED.value: "Created issue",
+    ItemEvent.UPDATED.value: "Updated issue",
+    CommentEvent.CREATED.value: "Commented",
+    CommentEvent.UPDATED.value: "Edited comment",
+    WorklogEvent.CREATED.value: "Logged work",
+    WorklogEvent.UPDATED.value: "Updated work log",
 }
+STATE_CHANGE_ACTION = "Changed state"
 
 
 async def read(session, user, *, before=None, project_id=None, start=None, end=None, limit=10):
@@ -41,12 +45,12 @@ async def read(session, user, *, before=None, project_id=None, start=None, end=N
         try:
             item_ref = (event.payload or {}).get("item") or {}
             item_id = uuid.UUID(
-                event.entity_id if event.entity_type == "item" else item_ref.get("id", "")
+                event.entity_id if event.entity_type == ItemEntity.ITEM else item_ref.get("id", "")
             )
             if item_id not in readable:
                 readable[item_id] = await require_readable_item(session, item_id, user)
             item, project, _ = readable[item_id]
-            if event.event_type == "item.updated" and not (event.payload or {}).get("changes"):
+            if event.event_type == ItemEvent.UPDATED and not (event.payload or {}).get("changes"):
                 continue
             comment_id = None
             if event.event_type.startswith("comment."):
@@ -55,7 +59,7 @@ async def read(session, user, *, before=None, project_id=None, start=None, end=N
                 from radd.modules.comments import service as comments
 
                 location = await comments.locate(session, uuid.UUID(event.entity_id), user)
-                if location.entity_type != "item" or location.entity_id != item.id:
+                if location.entity_type != ItemEntity.ITEM or location.entity_id != item.id:
                     continue
                 comment_id = event.entity_id
             # Deliberately omit historical titles, field values and comment text: current field restrictions may differ.
@@ -64,8 +68,8 @@ async def read(session, user, *, before=None, project_id=None, start=None, end=N
                     id=event.id,
                     at=event.created_at.isoformat() + "Z",
                     action=(
-                        "Changed state"
-                        if event.event_type == "item.updated"
+                        STATE_CHANGE_ACTION
+                        if event.event_type == ItemEvent.UPDATED
                         and any(
                             c.get("field") == "state"
                             for c in (event.payload or {}).get("changes", [])

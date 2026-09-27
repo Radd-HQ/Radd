@@ -1,6 +1,6 @@
 import { ContentBody } from "../components/editor/ContentBody";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Slot, SlotId, CollapsibleCard, ReadingPaneContext, useConfirm, type EditorTransform } from "@radd/plugin-sdk";
+import { Slot, SlotId, CollapsibleCard, ReadingPaneContext, useConfirm, type EditorTransform, CalloutKind } from "@radd/plugin-sdk";
 import { Archive, ArchiveRestore, CopyPlus, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -335,7 +335,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           <div className="@3xl:mr-[19.5rem]">
             <div className="mx-auto w-full max-w-[64rem]">
               {archived && (
-                <Callout kind="warning" icon={Archive} className="mb-3">
+                <Callout kind={CalloutKind.warning} icon={Archive} className="mb-3">
                   This issue is archived — it's hidden from boards and lists until restored.
                 </Callout>
               )}

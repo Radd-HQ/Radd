@@ -12,6 +12,7 @@ import { api, errorMessage } from "@radd/plugin-sdk";
 import { ApiPath, apiAutomationTestPath } from "./constants";
 import { automationCatalogQuery } from "./queries";
 import { isSentinelTrigger } from "./meta";
+import { MANUAL_TRIGGER } from "./types";
 import type {
   ActionPreview,
   AutomationNode,
@@ -56,7 +57,7 @@ export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers =
   // which is what makes a page automation checkable before it runs.
   const catalog = useQuery(automationCatalogQuery);
   const pageSeedable = Boolean(
-    catalog.data?.trigger_kinds.find((kind) => kind.key === "manual")?.seeds.includes("page"),
+    catalog.data?.trigger_kinds.find((kind) => kind.key === MANUAL_TRIGGER)?.seeds.includes("page"),
   );
   const [subject, setSubject] = useState<"item" | "page">("item");
   const [pageSearch, setPageSearch] = useState("");
@@ -66,7 +67,7 @@ export function RuleTestPanel({ ruleId, name = "Preview", edges = [], triggers =
   const items = useContributedQuery<ItemChoice[]>("items.link-search", {projectId: effectiveProjectId, q: search}, {enabled: subject === "item" && Boolean(effectiveProjectId)});
 
   const selectedTrigger = triggers.find(trigger => trigger.node_id === triggerId) ?? triggers[0];
-  const eventType = selectedTrigger?.event_type ?? "manual";
+  const eventType = selectedTrigger?.event_type ?? MANUAL_TRIGGER;
   const usesEvent = !isSentinelTrigger(eventType);
   const [eventId, setEventId] = useState("");
   const [payload, setPayload] = useState("{}");

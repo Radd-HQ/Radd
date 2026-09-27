@@ -2,7 +2,7 @@
  *  report cards, issue links and peek). Each falls back to something plain, never a broken page. */
 import { useEffect } from "react";
 import { TextArea } from "./primitives";
-import { Callout } from "./host";
+import { Callout, CalloutKind } from "./host";
 import { bridged } from "./bridge";
 import { useProvided, type SlqFieldProps } from "./host-registry";
 
@@ -47,7 +47,7 @@ export const IssueSuggestion = bridged("IssueSuggestion", (props) => (
 ));
 
 export const MissingPluginType = bridged("MissingPluginType", (props) => (
-  <Callout kind="warning" data-plugin-missing={props.disabled ? undefined : props.kind}>
+  <Callout kind={CalloutKind.warning} data-plugin-missing={props.disabled ? undefined : props.kind}>
     {props.disabled ? `This ${props.kind} has been turned off.` : `The “${props.typeKey}” ${props.kind} type is no longer available.`}
   </Callout>
 ));

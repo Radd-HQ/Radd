@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Globe, UserRoundPlus } from "lucide-react";
 import { api } from "../../lib/api";
-import { Entity, invalidateEntities } from "../../lib/cache";
+import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { apiProjectPublicAccessPath } from "../../lib/constants";
 import { pushToast } from "../../lib/toast";
 import type { PublicAccessUpdate } from "../../lib/types";

@@ -12,7 +12,16 @@ from radd.modules.events import service as events
 
 from .models import ItemVcsLink
 from .schemas import VcsLinkCreate
-from .types import VcsEntity, VcsEvent, VcsProvider, VcsRefType
+from .types import (
+    CI_SUMMARY_ORDER,
+    CI_TERMINAL,
+    CiReportKind,
+    CiState,
+    VcsEntity,
+    VcsEvent,
+    VcsProvider,
+    VcsRefType,
+)
 from radd.clock import utcnow
 
 
@@ -208,7 +217,7 @@ async def set_ci_state(
     session: AsyncSession, *, provider: str, external_ids: Sequence[str],
     ci_state: str, ci_url: str = "", run_id: int | None = None,
     source_updated_at: str = "", connection_id: uuid.UUID | None = None,
-    report_key: str = "pipeline", head_sha: str = "", source_started_at: str = "",
+    report_key: str = CiReportKind.PIPELINE.value, head_sha: str = "", source_started_at: str = "",
     attempt: int = 1, repo=None,
 ) -> list[ItemVcsLink]:
     """Order each CI stream independently and summarize all reported checks.
@@ -224,12 +233,11 @@ async def set_ci_state(
         .with_for_update(of=ItemVcsLink).execution_options(populate_existing=True))).all())
     reported_at = _source_time(source_updated_at)
     started_at = _source_time(source_started_at)
-    terminal = {"success", "failure", "cancelled"}
     changed = []
     for link in links:
         reports = dict(link.ci_reports or {})
         previous = reports.get(report_key, {})
-        if not reports and report_key == "pipeline" and link.ci_run_id is not None:
+        if not reports and report_key == CiReportKind.PIPELINE and link.ci_run_id is not None:
             previous = {"run_id": link.ci_run_id, "state": link.ci_state, "url": link.ci_url,
                 "updated_at": link.ci_source_updated_at.isoformat() if link.ci_source_updated_at else ""}
         if previous:
@@ -242,7 +250,7 @@ async def set_ci_state(
             if same_run:
                 if reported_at and old_time and reported_at < old_time:
                     continue
-                if previous.get("state") in terminal and ci_state not in terminal:
+                if previous.get("state") in CI_TERMINAL and ci_state not in CI_TERMINAL:
                     continue
                 if previous.get("state") == ci_state and previous.get("url") == ci_url and previous.get("sha", "") == head_sha:
                     continue
@@ -260,7 +268,7 @@ async def set_ci_state(
             "updated_at": reported_at.isoformat() if reported_at else ""}
         link.ci_reports = reports
         states = {report["state"] for report in reports.values()}
-        link.ci_state = next((state for state in ("failure", "running", "cancelled", "unknown", "success") if state in states), "unknown")
+        link.ci_state = next((state.value for state in CI_SUMMARY_ORDER if state in states), CiState.UNKNOWN.value)
         link.ci_url = ci_url
         link.ci_run_id = run_id
         link.ci_source_updated_at = reported_at

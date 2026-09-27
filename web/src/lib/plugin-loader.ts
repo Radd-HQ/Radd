@@ -24,6 +24,7 @@ import {
   registerQuerySource, registerCommandSource, unregisterCommandSources,
   setLiveDocumentsArriving,
   setRemotesLoading,
+  QueryKeyPrefix,
   unregisterQuerySources,
   unregisterDataSources,
   unregisterLiveDocumentSources,
@@ -33,6 +34,9 @@ import {
   type PluginRemote,
 } from "@radd/plugin-sdk";
 import { STATIC_PLUGINS } from "../plugins/static.generated";
+
+/** A remote that has not answered by now is failed, not awaited: the shell renders without it. */
+const PLUGIN_LOAD_TIMEOUT_MS = 30_000;
 
 const RemoteStatus = {
   loading: "loading",
@@ -83,7 +87,7 @@ async function bounded<T>(operation: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([operation, new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => reject(new Error("Plugin UI took too long to load")), 30_000);
+      timer = setTimeout(() => reject(new Error("Plugin UI took too long to load")), PLUGIN_LOAD_TIMEOUT_MS);
     })]);
   } finally { clearTimeout(timer); }
 }
@@ -117,11 +121,11 @@ function withdraw(name: string): void {
   unregisterLiveDocumentSources(name);
   unregisterQuerySources(name);
   unregisterCommandSources(name);
-  // Contributed query sources key on ["plugin-query", owner, …], and a plugin's own queries by
+  // Contributed query sources key on [QueryKeyPrefix.pluginQuery, owner, …], and a plugin's own queries by
   // convention on its name; both are dropped so a re-enable reads fresh. Queries keyed otherwise
   // (a core plugin sharing a host key) simply refetch when stale — and a core plugin is absent only
   // when the server was started without it, so it never returns mid-session.
-  queryClient?.removeQueries({ queryKey: ["plugin-query", name] });
+  queryClient?.removeQueries({ queryKey: [QueryKeyPrefix.pluginQuery, name] });
   queryClient?.removeQueries({ queryKey: [name] });
 }
 

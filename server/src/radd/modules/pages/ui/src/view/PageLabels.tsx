@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tags } from "lucide-react";
-import { api, invalidateEntities, useContributedQuery, TokenMultiSelect } from "@radd/plugin-sdk";
+import { api, invalidateEntities, useContributedQuery, TokenMultiSelect, Entity } from "@radd/plugin-sdk";
 import type { Label } from "@radd-plugin-ui/labels/types";
 import { pageLabelsPath } from "../endpoints";
-import { Tag } from "../queries";
 
 /** A page's labels (RADD-718), from the same vocabulary as issues. Read-only without write access. */
 export function PageLabels({
@@ -27,7 +26,7 @@ export function PageLabels({
 
   const save = useMutation({
     mutationFn: (next: string[]) => api.put<string[]>(pageLabelsPath(pageId), { labels: next }),
-    onSettled: () => void invalidateEntities(queryClient, Tag.page),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page),
   });
 
   if (!editing) {

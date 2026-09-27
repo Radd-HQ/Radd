@@ -1,5 +1,5 @@
 import { CheckCircle2 } from "lucide-react";
-import { Callout } from "@radd/plugin-sdk";
+import { Callout, CalloutKind } from "@radd/plugin-sdk";
 import { PLAN_SECTIONS, type PlanOptions, type PlanSection, type PlanValidation } from "./plan-types";
 
 /** The nine tabs, each badged with how many rows actually matter and how many problems it has. */
@@ -97,7 +97,7 @@ export function ValidationSummary({ validation }: { validation: PlanValidation |
     );
   }
   return (
-    <Callout kind="danger" className="p-3">
+    <Callout kind={CalloutKind.danger} className="p-3">
       <p className="text-[13px]">{validation.problems.length} thing(s) to fix before importing</p>
       <ul className="mt-1.5 flex flex-col gap-0.5 text-xs text-fg-secondary">
         {validation.problems.slice(0, 12).map((problem, i) => (

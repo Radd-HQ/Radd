@@ -2,10 +2,9 @@ import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, ExternalLink, Trash2 } from "lucide-react";
-import { api, formatDateTime, invalidateEntities, useConfirm, Button, EmptyState, ErrorText, TextField } from "@radd/plugin-sdk";
+import { api, formatDateTime, invalidateEntities, useConfirm, Button, EmptyState, ErrorText, TextField, Entity } from "@radd/plugin-sdk";
 import { PageApi, pageUnarchivePath } from "../endpoints";
 import { pageLink } from "../links";
-import { Tag } from "../queries";
 import type { Page, PageSummary } from "../types";
 import { archivedRows, filterArchivedRows, type ArchivedRow } from "./archived-rows";
 
@@ -52,7 +51,7 @@ export function ArchivedPagesPanel({
         return next;
       });
     },
-    onSettled: () => void invalidateEntities(queryClient, Tag.page, Tag.space),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
 
   const toggle = (id: string) =>
@@ -195,7 +194,7 @@ function ArchivedPageRow({
   const restore = useMutation({
     mutationFn: () => api.post<Page>(pageUnarchivePath(row.page.id)),
     onSuccess: () => setRestored(true),
-    onSettled: () => void invalidateEntities(queryClient, Tag.page, Tag.space),
+    onSettled: () => void invalidateEntities(queryClient, Entity.page, Entity.docSpace),
   });
   const { page, path, archivedAncestors, hiddenBelow } = row;
   const onRestore = async () => {

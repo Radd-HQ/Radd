@@ -6,6 +6,7 @@ import logging
 import regex
 from pydantic import BaseModel, Field, field_validator
 from .models import MailSignatureSettings
+from .types import SignatureMethod
 
 from radd.config import settings
 
@@ -61,11 +62,11 @@ def suffix(body, start):
 
 def detect_rules(body: str, sender: str, rules: list[SignatureRule]):
     if len(body) > MAX_BODY:
-        return None, "Message exceeds signature scan limit"
+        return None, SignatureMethod.SCAN_LIMIT.value
     try:
         domain = sender.rpartition("@")[2].lower().encode("idna").decode("ascii")
     except UnicodeError:
-        return None, "Unrecognized sender domain; message preserved"
+        return None, SignatureMethod.UNKNOWN_DOMAIN.value
     for rule in rules:
         if not rule.enabled or not (
             domain == rule.domain or rule.include_subdomains and domain.endswith("." + rule.domain)
@@ -79,11 +80,11 @@ def detect_rules(body: str, sender: str, rules: list[SignatureRule]):
                 timeout=settings.mail_signature_regex_timeout_seconds,
             )
         except TimeoutError:
-            return None, "Rule timed out; message preserved"
+            return None, SignatureMethod.RULE_TIMED_OUT.value
         if match:
             if match.start() == match.end():
-                return None, "Empty match ignored; message preserved"
-            return suffix(body, match.start()), "Domain rule"
+                return None, SignatureMethod.EMPTY_MATCH.value
+            return suffix(body, match.start()), SignatureMethod.DOMAIN_RULE.value
     # Only the final short block. A contact address or a bare 'Thanks' is never sufficient.
     lines = body.splitlines(keepends=True)
     for index in range(max(0, len(lines) - 12), len(lines)):
@@ -113,8 +114,8 @@ def detect_rules(body: str, sender: str, rules: list[SignatureRule]):
             for part in tail
         )
         if delimiter or mobile or signoff and short_block and name and (len(tail) == 1 or contact):
-            return suffix(body, start), "Built-in detection"
-    return None, "No signature detected"
+            return suffix(body, start), SignatureMethod.BUILT_IN.value
+    return None, SignatureMethod.NONE_DETECTED.value
 
 
 async def detect(session, body, sender, *, rules=None, use_ai=None):
@@ -122,7 +123,7 @@ async def detect(session, body, sender, *, rules=None, use_ai=None):
         row = await session.get(MailSignatureSettings, 1)
         rules = [SignatureRule.model_validate(rule) for rule in row.rules] if row else []
     signature, method = detect_rules(body, sender, rules)
-    if signature or method != "No signature detected":
+    if signature or method != SignatureMethod.NONE_DETECTED:
         return signature, method
     try:
         from radd.modules.ai import features, client
@@ -149,8 +150,8 @@ async def detect(session, body, sender, *, rules=None, use_ai=None):
         if isinstance(candidate, str) and candidate and body.endswith(candidate):
             result = suffix(body, len(body) - len(candidate))
             if result:
-                return result, "AI detection"
-        return None, "AI uncertain; message preserved"
+                return result, SignatureMethod.AI.value
+        return None, SignatureMethod.AI_UNCERTAIN.value
     except Exception:
         logger.warning("Signature AI unavailable; preserving email text", exc_info=False)
-        return None, "AI unavailable; message preserved"
+        return None, SignatureMethod.AI_UNAVAILABLE.value

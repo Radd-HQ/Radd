@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Star, List, LayoutGrid } from "lucide-react";
 import { api, errorMessage, type CursorPage } from "../lib/api";
-import { Entity, entityMeta } from "../lib/cache";
+import { Entity, entityMeta } from "@radd/plugin-sdk";
 import { accountStorageKey } from "../lib/account-storage";
 import { RoutePath } from "../lib/constants";
 import { useOpenIssueRef } from "../lib/hooks";
