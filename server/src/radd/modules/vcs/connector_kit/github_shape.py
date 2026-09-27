@@ -6,8 +6,9 @@ from enum import StrEnum
 
 from ..ids import pr_external_id
 from ..keys import PlannedLink, extract_keys
-from ..triggers import COMMITS_CHANGE, RefAction, diff_entries
+from ..triggers import RefAction
 from ..types import RefStatus, VcsRefType
+from .changes import UNSENT, MrChangeField, diff_entries, sent
 
 
 class PrAction(StrEnum):
@@ -87,17 +88,51 @@ def pr_action(payload: dict) -> RefAction | None:
     return None
 
 
+#: The `changes` keys an `edited` delivery may carry that fire "updated"
+#: (RADD-1451): GitHub spells the body `body` and a base-branch change `base`
+#: (`changes.base.ref.from`); Forgejo spells the latter `ref`. Labels, assignees
+#: and reviewers arrive as their own actions on these hosts, which fire nothing.
+_EDITED_FIELDS: dict[str, MrChangeField] = {
+    "title": MrChangeField.TITLE,
+    "body": MrChangeField.DESCRIPTION,
+    "base": MrChangeField.TARGET_BRANCH,
+    "ref": MrChangeField.TARGET_BRANCH,
+}
+
+
+def _previous(name: str, value: dict) -> object:
+    """The old side of an `edited` change: `{from}`, nested under `ref` for `base`."""
+    if name == "base":
+        value = value.get("ref") if isinstance(value.get("ref"), dict) else {}
+    return value["from"] if "from" in value else UNSENT
+
+
+def _current(field: MrChangeField, pull: dict) -> object:
+    """The new side, read from the pull request itself."""
+    if field is MrChangeField.TITLE:
+        return pull["title"] if "title" in pull else UNSENT
+    if field is MrChangeField.DESCRIPTION:
+        return pull["body"] if "body" in pull else UNSENT
+    base = pull.get("base") if isinstance(pull.get("base"), dict) else {}
+    return base["ref"] if "ref" in base else UNSENT
+
+
 def pr_changes(payload: dict) -> list[dict]:
-    """What an update changed (RADD-1330), as the kernel diff: an `edited`
-    delivery's `changes` gives `{from}` per field (the new value is on the pull
-    request); new commits are `before` → `after` when sent."""
+    """What an update changed (RADD-1330), as the kernel diff, for the fields in
+    `MrChangeField` only (RADD-1451): an `edited` delivery's `changes` gives the
+    old value and the pull request the new one; new commits are `before` →
+    `after` when the host sends them, else the request's head sha alone."""
     pull = payload.get("pull_request") or {}
     if str(payload.get("action") or "") in _NEW_COMMITS:
-        return diff_entries([(COMMITS_CHANGE, payload.get("before") or "old", payload.get("after") or "new")])
+        head = pull.get("head") if isinstance(pull.get("head"), dict) else {}
+        after = sent(payload.get("after"))
+        if after is UNSENT:
+            after = sent(head.get("sha"))
+        return diff_entries([(MrChangeField.COMMITS, sent(payload.get("before")), after)])
     return diff_entries(
-        (name, (value or {}).get("from"), pull.get(name))
+        (field, _previous(name, value), _current(field, pull))
         for name, value in (payload.get("changes") or {}).items()
-        if isinstance(value, dict)
+        if (field := _EDITED_FIELDS.get(name)) is not None and isinstance(value, dict)
     )
 
 

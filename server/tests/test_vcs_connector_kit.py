@@ -148,3 +148,55 @@ async def test_the_connectors_endpoint_follows_what_is_loaded(db, admin):
         assert [row.provider for row in await list_connectors(db, admin)] == ["forgejo", "gitlab"]
     finally:
         registries.register_plugin(plugin)
+
+
+# --- RADD-1451: one allowlist of merge/pull request changes, shared by every host ---
+
+
+def test_only_allowlisted_fields_report_a_change_and_only_with_the_sides_the_host_sent():
+    from radd.modules.gitlab import parsing as gitlab_parsing
+    from radd.modules.vcs.connector_kit import github_shape
+    from radd.modules.vcs.connector_kit.changes import MrChangeField
+
+    # GitLab stamps these on every `update`; none is a change to automate on.
+    bookkeeping = {
+        "head_pipeline_id": {"previous": 1, "current": 2},
+        "merge_status": {"previous": "checking", "current": "can_be_merged"},
+        "total_time_spent": {"previous": 0, "current": 600},
+        "time_change": {"previous": 0, "current": 600},
+        "updated_at": {"previous": "a", "current": "b"},
+    }
+    assert gitlab_parsing.mr_changes({"changes": bookkeeping}) == []
+    assert gitlab_parsing.mr_changes({"changes": {**bookkeeping, "title": {"previous": "x", "current": "y"}}}) == [
+        {"field": MrChangeField.TITLE.value, "from": "x", "to": "y"}
+    ]
+    assert gitlab_parsing.mr_changes({"changes": {"milestone_id": {"previous": None, "current": 7}}}) == [
+        {"field": MrChangeField.MILESTONE.value, "from": None, "to": 7}
+    ]
+    # `time_spent_changed` still reads the raw time keys the allowlist drops.
+    assert gitlab_parsing.time_spent_changed({"changes": bookkeeping})
+
+    # GitHub/Forgejo: the body is `body`, a base-branch change is `base`/`ref`.
+    edited = {"action": "edited", "pull_request": {"title": "T", "body": "B", "base": {"ref": "develop"}}}
+    assert github_shape.pr_changes({**edited, "changes": {"locked": {"from": False}}}) == []
+    assert github_shape.pr_changes({**edited, "changes": {"body": {"from": "old body"}}}) == [
+        {"field": MrChangeField.DESCRIPTION.value, "from": "old body", "to": "B"}
+    ]
+    assert github_shape.pr_changes({**edited, "changes": {"base": {"ref": {"from": "main"}, "sha": {"from": "a"}}}}) == [
+        {"field": MrChangeField.TARGET_BRANCH.value, "from": "main", "to": "develop"}
+    ]
+    assert github_shape.pr_changes({**edited, "changes": {"ref": {"from": "main"}}}) == [
+        {"field": MrChangeField.TARGET_BRANCH.value, "from": "main", "to": "develop"}
+    ]
+
+    # New commits: the sides the host sent, never an "old"/"new" placeholder.
+    assert github_shape.pr_changes({"action": "synchronize", "before": "a1", "after": "b2"}) == [
+        {"field": MrChangeField.COMMITS.value, "from": "a1", "to": "b2"}
+    ]
+    assert github_shape.pr_changes({"action": "synchronized", "pull_request": {"head": {"sha": "b2"}}}) == [
+        {"field": MrChangeField.COMMITS.value, "to": "b2"}
+    ]
+    assert github_shape.pr_changes({"action": "synchronize"}) == [{"field": MrChangeField.COMMITS.value}]
+    assert gitlab_parsing.mr_changes({"object_attributes": {"oldrev": "a1"}}) == [
+        {"field": MrChangeField.COMMITS.value, "from": "a1"}
+    ]

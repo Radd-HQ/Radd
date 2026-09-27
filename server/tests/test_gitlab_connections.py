@@ -311,6 +311,16 @@ async def test_a_merge_fires_the_trigger_and_changes_nothing_else(db):
         # "merged" again); a bookkeeping-only stamp still fires nothing.
         stamp = mr("update", "merged", changes={"updated_at": {"previous": "a", "current": "b"}})
         assert (await client.post("/integrations/gitlab", content=stamp, headers=headers)).json()["triggered"] == 0
+        # RADD-1451: a pipeline run, a merge-status recheck and time spent are
+        # bookkeeping too — GitLab sends them as `update`, and none is a change
+        # a person would automate on. Only `MrChangeField` fires.
+        pipeline = mr("update", "merged", changes={
+            "head_pipeline_id": {"previous": 1, "current": 2},
+            "merge_status": {"previous": "checking", "current": "can_be_merged"},
+            "total_time_spent": {"previous": 0, "current": 600},
+            "time_change": {"previous": 0, "current": 600},
+        })
+        assert (await client.post("/integrations/gitlab", content=pipeline, headers=headers)).json()["triggered"] == 0
         retitled = mr("update", "merged", changes={"title": {"previous": "x", "current": "y"}, "updated_at": {}})
         assert (await client.post("/integrations/gitlab", content=retitled, headers=headers)).json()["triggered"] == 1
         pushed = mr("update", "opened", oldrev="abc123")

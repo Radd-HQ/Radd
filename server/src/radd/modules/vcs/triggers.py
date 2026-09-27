@@ -13,9 +13,9 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.kernel import EventTypeSpec
-from radd.kernel import changes as kchanges
 from radd.modules.events import service as events
 
+from .connector_kit.changes import MrChangeField
 from .models import ItemVcsLink
 from .types import VcsEntity
 
@@ -27,29 +27,6 @@ class RefAction(StrEnum):
     MERGED = "merged"
     CLOSED = "closed"
     UPDATED = "updated"
-
-
-#: The `changes` entry an update carries when new commits were pushed to the
-#: request (GitLab `oldrev`, GitHub `synchronize`, Forgejo `synchronized`).
-COMMITS_CHANGE = "commits"
-
-#: Bookkeeping fields every host stamps on an update — never "what changed".
-NOISE_FIELDS: frozenset[str] = frozenset({"updated_at", "updated_by_id", "last_edited_at", "last_edited_by_id"})
-
-
-def diff_entries(pairs) -> list[dict[str, Any]]:
-    """The kernel diff (`[{field, from, to}]`, spec 123) for an update, from
-    `(field, old, new)` triples, without the hosts' bookkeeping stamps. The
-    kernel shape — not a list of names — because `changes` is what the audit
-    ledger, search text and the "field changed" gate already read."""
-    out: list[dict[str, Any]] = []
-    for field_name, old, new in pairs:
-        if str(field_name) in NOISE_FIELDS:
-            continue
-        entry = kchanges.change(str(field_name), old, new)
-        if entry is not None:
-            out.append(entry)
-    return out
 
 
 class CiOutcome(StrEnum):
@@ -143,9 +120,14 @@ class ConnectorTriggers:
                     changes={
                         "type": "array",
                         "items": {"type": "object", "properties": {
-                            "field": {"type": "string"}, "from": {}, "to": {},
+                            "field": {"type": "string", "enum": [f.value for f in MrChangeField]},
+                            "from": {}, "to": {},
                         }},
-                        "description": 'What changed: {field, from, to} per field (title, description, labels, …); field "commits" (old → new sha) when new commits were pushed',
+                        "description": (
+                            "What changed: {field, from, to} per field, only for "
+                            + ", ".join(f.value for f in MrChangeField)
+                            + ' — "commits" (old → new sha) when new commits were pushed; a side the host did not send is omitted'
+                        ),
                     },
                 ),
                 diff=True,

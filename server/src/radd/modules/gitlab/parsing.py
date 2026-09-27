@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 from radd.modules.vcs.ids import branch_external_id, commit_external_id, pr_external_id
 from radd.modules.vcs.keys import PlannedLink, extract_keys
-from radd.modules.vcs.triggers import COMMITS_CHANGE, RefAction, diff_entries
+from radd.modules.vcs.connector_kit.changes import UNSENT, MrChangeField, diff_entries, sent
+from radd.modules.vcs.triggers import RefAction
 from radd.modules.vcs.types import RefStatus, VcsRefType
 
 from .types import MrAction
@@ -103,19 +104,41 @@ _MR_ACTIONS = {
 }
 
 
+#: GitLab's `changes` keys that fire "updated" (RADD-1451), by the shared name.
+#: Everything else it stamps on an `update` — `head_pipeline_id`, `merge_status`,
+#: `total_time_spent`, `time_change`, `updated_at`, … — is bookkeeping, and
+#: `time_spent_changed` reads the time keys from the raw payload regardless.
+_UPDATE_FIELDS: dict[str, MrChangeField] = {
+    "title": MrChangeField.TITLE,
+    "description": MrChangeField.DESCRIPTION,
+    "labels": MrChangeField.LABELS,
+    "assignees": MrChangeField.ASSIGNEES,
+    "reviewers": MrChangeField.REVIEWERS,
+    "milestone_id": MrChangeField.MILESTONE,
+    "draft": MrChangeField.DRAFT,
+    "source_branch": MrChangeField.SOURCE_BRANCH,
+    "target_branch": MrChangeField.TARGET_BRANCH,
+}
+
+
 def mr_changes(payload: dict) -> list[dict]:
-    """What an `update` delivery changed (RADD-1330), as the kernel diff: GitLab's
-    `changes` object gives `{previous, current}` per field, and `oldrev` says new
-    commits were pushed (the new head is `last_commit.id`)."""
+    """What an `update` delivery changed (RADD-1330), as the kernel diff, for the
+    fields in `MrChangeField` only (RADD-1451): GitLab's `changes` object gives
+    `{previous, current}` per field, and `oldrev` says new commits were pushed
+    (the new head is `last_commit.id`, when sent)."""
     triples = [
-        (name, (value or {}).get("previous"), (value or {}).get("current"))
+        (
+            field,
+            value["previous"] if "previous" in value else UNSENT,
+            value["current"] if "current" in value else UNSENT,
+        )
         for name, value in (payload.get("changes") or {}).items()
-        if isinstance(value, dict)
+        if (field := _UPDATE_FIELDS.get(name)) is not None and isinstance(value, dict)
     ]
     attributes = payload.get("object_attributes") or {}
     if attributes.get("oldrev"):
-        head = (attributes.get("last_commit") or {}).get("id") or "new"
-        triples.append((COMMITS_CHANGE, attributes["oldrev"], head))
+        head = sent((attributes.get("last_commit") or {}).get("id"))
+        triples.append((MrChangeField.COMMITS, attributes["oldrev"], head))
     return diff_entries(triples)
 
 

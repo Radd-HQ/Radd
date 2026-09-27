@@ -152,12 +152,24 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
             },
             "repository": repository,
         }, {"linked": 1, "triggered": 1}),
+        # RADD-1451: an edit reporting only a key outside `MrChangeField` fires nothing.
+        ("pull_request", {
+            "action": "edited", "changes": {"locked": {"from": False}},
+            "pull_request": {
+                "number": 5, "title": "ship it", "state": "closed", "merged": True,
+                "merged_at": "2026-09-25T10:00:00Z", "html_url": "https://h.example.com/pr/5",
+                "head": {"ref": branch}, "base": {"ref": "main"}, "body": "",
+            },
+            "repository": repository,
+        }, {"linked": 1, "triggered": 0}),
+        # No `before`/`after` on this delivery: the new head comes from the request,
+        # and the unknown old side is omitted rather than invented (RADD-1451).
         ("pull_request", {
             "action": "synchronize" if host.name == "github" else "synchronized",
             "pull_request": {
                 "number": 5, "title": "ship it", "state": "open", "merged": False,
                 "html_url": "https://h.example.com/pr/5",
-                "head": {"ref": branch}, "base": {"ref": "main"}, "body": "",
+                "head": {"ref": branch, "sha": "feedbeef"}, "base": {"ref": "main"}, "body": "",
             },
             "repository": repository,
         }, {"linked": 1, "triggered": 1}),
@@ -195,6 +207,7 @@ async def test_a_merge_ci_run_and_release_fire_triggers_and_move_nothing(db, hos
     updates = await _events(db, head, trigger.PR_UPDATED.value)
     assert [[c["field"] for c in u.payload["changes"]] for u in updates] == [["title"], ["commits"]]
     assert updates[0].payload["changes"][0] == {"field": "title", "from": "old", "to": "ship it"}
+    assert updates[1].payload["changes"][0] == {"field": "commits", "to": "feedbeef"}
 
 
 @pytest.mark.parametrize("host", HOSTS, ids=lambda h: h.name)
