@@ -5,7 +5,6 @@ this module owns only what the CLI does not need — the schedule rows, the run
 rows that carry progress, and the events that land every action in the audit log.
 """
 
-import asyncio
 import logging
 import uuid
 from typing import Any
@@ -20,6 +19,7 @@ from radd.db import SessionLocal
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth.models import User
 from radd.kernel import changes
+from radd.kernel.runtime import spawn
 from radd.modules.events import service as events
 from radd.schedule import ScheduleKind, next_run
 
@@ -199,7 +199,7 @@ def _stage_writer(run_id: uuid.UUID):
                 )
                 await session.commit()
 
-        asyncio.create_task(persist())  # noqa: RUF006 — fire and forget progress
+        spawn(persist(), name=f"backup-stage-{run_id}")
 
     return write
 
@@ -266,7 +266,7 @@ async def start_backup(
         async with SessionLocal() as emit_session:
             await events.emit(
                 emit_session,
-                core.BackupEvent.CREATED,
+                event_type=core.BackupEvent.CREATED,
                 entity_type=core.BackupEntity.BACKUP,
                 entity_id=run_id,
                 actor_id=actor_id,
@@ -274,7 +274,7 @@ async def start_backup(
             )
             await emit_session.commit()
 
-    asyncio.create_task(execute())  # noqa: RUF006 — tracked by the run row
+    spawn(execute(), name=f"backup-{run_id}")
     return run
 
 
@@ -344,7 +344,7 @@ async def start_restore(
         async with SessionLocal() as emit_session:
             await events.emit(
                 emit_session,
-                core.BackupEvent.RESTORED,
+                event_type=core.BackupEvent.RESTORED,
                 entity_type=core.BackupEntity.BACKUP,
                 entity_id=run_id,
                 actor_id=actor_id,
@@ -352,7 +352,7 @@ async def start_restore(
             )
             await emit_session.commit()
 
-    asyncio.create_task(execute())  # noqa: RUF006
+    spawn(execute(), name=f"restore-{run_id}")
     return run
 
 

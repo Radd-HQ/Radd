@@ -133,11 +133,6 @@ async def authorize_item_subscriptions(session, actor, subscriptions):
     """
     if not subscriptions:
         return subscriptions
-    from radd.config import settings
-    if "radd.modules.items" not in settings.modules:
-        for sub in subscriptions:
-            sub["item_ids"] = None
-        return subscriptions
     from radd.modules.items import service as items
 
     ids = {uuid.UUID(value) for sub in subscriptions for value in sub.get("item_ids") or ()}

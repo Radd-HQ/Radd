@@ -8,7 +8,6 @@ from typing import Any
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.config import settings
 from radd.db import ilike_term
 from radd.kernel import changes as kchanges, registries
 
@@ -129,9 +128,8 @@ async def _with_subjects(
     subjects: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Expand `{entity_type: id}` into canonical refs on the payload (RADD-923). An
-    unregistered subject is a programming error (the loader refuses undeclared ones): raise in
-    debug, degrade to a bare id in production — the event is a side effect of someone else's
-    write, and a thin payload beats failing it."""
+    unregistered subject is a programming error (the loader refuses undeclared ones), so it
+    raises."""
     result = dict(payload or {})
     for entity_type, entity_id in (subjects or {}).items():
         if entity_id is None:
@@ -139,13 +137,10 @@ async def _with_subjects(
             continue
         spec = registries.entity_refs.get(entity_type)
         if spec is None:
-            if settings.debug:
-                raise RuntimeError(
-                    f"event subject {entity_type!r} has no registered EntityRefSpec — "
-                    f"declare one on the plugin that owns the entity"
-                )
-            result[entity_type] = {"id": str(entity_id)}
-            continue
+            raise RuntimeError(
+                f"event subject {entity_type!r} has no registered EntityRefSpec — "
+                f"declare one on the plugin that owns the entity"
+            )
         if entity_type in result:
             # The plugin's own data would be overwritten by the ref, or vice
             # versa. Either way somebody is about to read the wrong thing, so it

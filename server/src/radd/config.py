@@ -337,7 +337,6 @@ class Settings(BaseSettings):
     ai_stream_responses: bool = True
 
     # Embedded MCP server (see radd/modules/mcp) — POST {api_prefix}/mcp.
-    mcp_enabled: bool = True
     # Spec 114: above this many permitted projects, a tool's project parameter
     # degrades from an enum to a plain string — a 300-entry enum costs the agent
     # more context than the precision buys it.

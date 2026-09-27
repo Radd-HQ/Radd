@@ -28,5 +28,5 @@ MCP endpoint's default, database credentials) lives in
 TLS-terminating reverse proxy, set `RADD_SESSION_COOKIE_SECURE=true` and
 `RADD_TRUSTED_PROXIES`, change the compose stack's default database password
 (`RADD_DB_PASSWORD`), and know that `POST /api/v1/mcp` — the AI-agent
-endpoint — is **enabled by default** (`RADD_MCP_ENABLED=false` turns it off;
-it enforces the same RBAC as the REST API either way).
+endpoint — is **enabled by default** (disable the `mcp` plugin in Settings →
+Plugins to remove it; it enforces the same RBAC as the REST API either way).

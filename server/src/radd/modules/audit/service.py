@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.exceptions import ForbiddenError
@@ -150,11 +151,8 @@ async def _projects_by_id(
 ) -> dict[uuid.UUID, AuditProject]:
     if not ids:
         return {}
-    return {
-        p.id: AuditProject(id=p.id, key=p.key, name=p.name)
-        for p in await projects_service.list_projects(session)
-        if p.id in ids
-    }
+    rows = await session.scalars(select(Project).where(Project.id.in_(ids)))
+    return {p.id: AuditProject(id=p.id, key=p.key, name=p.name) for p in rows}
 
 
 def humanize(key: str) -> str:

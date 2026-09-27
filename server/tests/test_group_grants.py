@@ -251,3 +251,29 @@ async def test_expired_grant_stops_applying_at_resolution(db):
     grant.expires_at = past
     await db.flush()
     assert Permission.LABEL_CREATE not in await authz.effective_permissions(db, member)
+
+
+async def test_a_group_grant_is_audited_by_the_groups_name(db):
+    """RADD-1427: the audit label had no GROUP branch, so a group grant's row read as
+    a bare uuid where users, teams and roles read as names."""
+    from sqlalchemy import select
+
+    from radd.modules.access.types import AccessEvent
+    from radd.modules.events.models import Event
+
+    member = await _user(db, "Labeller")
+    project = await projects_service.create_project(
+        db, ProjectCreate(key="GL" + uuid.uuid4().hex[:6].upper(), name="Labelled")
+    )
+    view = await views_service.create_view(
+        db, ViewCreate(name="Labelled", view_type="list", project_id=project.id), actor=member
+    )
+    suffix = uuid.uuid4().hex[:6]
+    group = await groups_service.upsert_group(db, dn=f"CN=l{suffix},DC=t", name=f"Render {suffix}")
+    grant = await access_service.add_grant(
+        db, "view", str(view.id), subject_type=GrantSubject.GROUP, subject_id=group.id, access="viewer"
+    )
+    row = await db.scalar(
+        select(Event).where(Event.event_type == AccessEvent.GRANTED, Event.entity_id == str(grant.id))
+    )
+    assert row.payload["subject"] == f"group {group.name}"

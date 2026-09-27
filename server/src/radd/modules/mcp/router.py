@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from radd import __version__
 from radd.config import settings
 from radd.db import SessionLocal, commit_before_streaming, get_session
-from radd.exceptions import ForbiddenError, RaddError, UnauthorizedError
+from radd.exceptions import RaddError, UnauthorizedError
 from radd.kernel.mcptools import InvalidArgumentsError
 from radd.modules.auth.deps import OptionalUser
 from radd.modules.auth.models import User
@@ -53,8 +53,6 @@ _TOOL_ERROR_TYPES = (RaddError, ValueError)
 
 
 def _require_mcp_user(user: User | None) -> User:
-    if not settings.mcp_enabled:
-        raise ForbiddenError("MCP server is disabled (RADD_MCP_ENABLED=false)")
     if user is None:
         raise UnauthorizedError(
             "MCP requires a personal access token: Authorization: Bearer radd_pat_…"

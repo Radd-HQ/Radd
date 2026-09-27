@@ -349,6 +349,7 @@ async def clear_resource_types(
 async def _subject_label(session: AsyncSession, grant: AccessGrant) -> str:
     """The grant's subject as an auditor reads it (spec 123): a name, not an id."""
     from radd.modules.auth import roles as roles_service, service as users_service
+    from radd.modules.groups import service as groups_service
     from radd.modules.teams import service as teams_service
 
     try:
@@ -358,6 +359,9 @@ async def _subject_label(session: AsyncSession, grant: AccessGrant) -> str:
         if grant.subject_type == GrantSubject.TEAM:
             team = (await teams_service.teams_by_ids(session, [grant.subject_id])).get(grant.subject_id)
             return f"team {team.name}" if team else str(grant.subject_id)
+        if grant.subject_type == GrantSubject.GROUP:
+            group = (await groups_service.groups_by_ids(session, [grant.subject_id])).get(grant.subject_id)
+            return f"group {group.name}" if group else str(grant.subject_id)
         if grant.subject_type == GrantSubject.ROLE:
             return f"role {(await roles_service.get_role(session, grant.subject_id)).name}"
     except Exception:  # noqa: BLE001 — a label is decoration on an audit row, never a failed write

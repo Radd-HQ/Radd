@@ -232,3 +232,15 @@ async def test_audit_and_items_own_their_navigation_contract(admin):
     nav = next(row for row in manifest.nav if row.plugin == "audit")
     assert nav.path == "/settings/audit"
     assert nav.requires_any_project == ["project.manage"]
+
+
+async def test_an_audit_page_reads_only_its_own_projects(db, admin, project, item, monkeypatch):
+    """RADD-1427: every page loaded the whole projects table to label a handful of
+    rows. It reads the projects the page names, and nothing else."""
+
+    async def every_project(*_args, **_kwargs):
+        raise AssertionError("an audit page listed every project")
+
+    monkeypatch.setattr(projects_service, "list_projects", every_project)
+    entries = await audit.audit_log(db, actor=admin, project_id=project.id)
+    assert entries and all(entry.project.key == project.key for entry in entries if entry.project)

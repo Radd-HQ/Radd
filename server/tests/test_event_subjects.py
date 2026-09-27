@@ -192,6 +192,23 @@ async def test_a_key_collision_fails_loudly(db, world):
         await events._with_subjects(db, {"item": "mine"}, {"item": world["item_id"]})
 
 
+async def test_an_undeclared_subject_raises_the_clear_error(db):
+    """RADD-1427: this branch read `settings.debug`, which Settings never declared, so
+    an undeclared subject left `emit` as an AttributeError and the promised
+    "degrade to a bare id in production" never ran. An undeclared subject is a
+    programming error, so it is the one clear RuntimeError everywhere."""
+    from radd.modules.events import service as events
+
+    with pytest.raises(RuntimeError, match="no registered EntityRefSpec"):
+        await events.emit(
+            db,
+            event_type="fixture.happened",
+            entity_type="fixture",
+            entity_id=uuid.uuid4(),
+            subjects={"deployment": uuid.uuid4()},
+        )
+
+
 def test_the_loader_refuses_a_subject_nothing_describes():
     """Boot is the cheapest place to find this. The alternative is an automation
     that saves cleanly, enables cleanly, and does nothing at 3am."""

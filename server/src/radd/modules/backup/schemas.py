@@ -1,11 +1,11 @@
 """API shapes for backups (spec 99 §5)."""
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from radd.apitypes import UtcDatetime
 from radd.schedule import ScheduleKind, validate_config
 
 
@@ -53,8 +53,8 @@ class ScheduleRead(BaseModel):
     include_attachments: bool
     keep_last: int | None
     keep_days: int | None
-    next_run_at: datetime | None
-    last_run_at: datetime | None
+    next_run_at: UtcDatetime | None
+    last_run_at: UtcDatetime | None
     last_status: str | None
     last_error: str | None
 
@@ -65,7 +65,7 @@ class BackupRead(BaseModel):
 
     name: str
     size_bytes: int
-    created_at: datetime
+    created_at: UtcDatetime
     kind: str
     complete: bool
     encrypted: bool
@@ -87,8 +87,8 @@ class RunRead(BaseModel):
     stage: str
     artifact_name: str | None
     size_bytes: int | None
-    started_at: datetime
-    finished_at: datetime | None
+    started_at: UtcDatetime
+    finished_at: UtcDatetime | None
     error: str | None
 
 
@@ -125,4 +125,4 @@ class StatusRead(BaseModel):
     key_problem: str | None
     schema_version: int
     maintenance: bool
-    next_run_at: datetime | None
+    next_run_at: UtcDatetime | None

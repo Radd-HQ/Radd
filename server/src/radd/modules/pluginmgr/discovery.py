@@ -69,16 +69,19 @@ def core_plugins() -> dict[str, tuple[RaddPlugin, str]]:
     return out
 
 
-def installable_plugins() -> dict[str, tuple[RaddPlugin, str]]:
+def installable_plugins(
+    core: dict[str, tuple[RaddPlugin, str]] | None = None,
+) -> dict[str, tuple[RaddPlugin, str]]:
     """Non-core plugins the manager may install/enable, keyed by plugin id — in-repo optional
-    plugins (config) plus discovered third-party entry-point plugins."""
+    plugins (config) plus discovered third-party entry-point plugins. `core` is the caller's
+    `core_plugins()` when it already has one (the collision check needs it)."""
     out: dict[str, tuple[RaddPlugin, str]] = {}
     for path in settings.installable_plugins:
         plugin = _load(path)
         if plugin is not None:
             out[plugin.id] = (plugin, path)
     # Entry-point plugins layer on top; a config entry with the same id wins (in-repo is canonical).
-    builtin = {**core_plugins(), **out}
+    builtin = {**(core_plugins() if core is None else core), **out}
     names = {p.name for p, _ in builtin.values()}
     for pid, entry in entrypoint_plugins().items():
         if pid in builtin or entry[0].name in names:
@@ -89,4 +92,5 @@ def installable_plugins() -> dict[str, tuple[RaddPlugin, str]]:
 
 
 def all_known() -> dict[str, tuple[RaddPlugin, str]]:
-    return {**core_plugins(), **installable_plugins()}
+    core = core_plugins()
+    return {**core, **installable_plugins(core)}

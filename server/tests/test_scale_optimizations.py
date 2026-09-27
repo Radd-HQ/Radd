@@ -140,3 +140,21 @@ async def test_sla_batches_keep_terminal_skip_and_emit_breaches_once(db, world, 
     referenced.clear()
     assert await engine._evaluate_project(db, pid, [policy]) == 0
     assert referenced == []
+
+
+async def test_exact_interests_are_authorized_whatever_the_module_list_says(db, world, monkeypatch):
+    """RADD-1427: `items` is core, and a `settings.modules` check cannot see what is
+    actually loaded — it used to turn every exact interest coarse whenever the
+    configured list did not spell `radd.modules.items`."""
+    from radd.config import settings
+    from radd.modules.items.enums import ItemVisibility
+
+    monkeypatch.setattr(
+        settings, "modules", tuple(m for m in settings.modules if m != "radd.modules.items")
+    )
+    public = str(world["rows"][ItemVisibility.PUBLIC].id)
+    raw = [dict(id="public", entities=["item"], item_ids=[public])]
+    subscriptions = await authorize_item_subscriptions(
+        db, world["actors"]["member"], validate_subscriptions(raw, set())
+    )
+    assert subscriptions[0]["item_ids"] == [public]

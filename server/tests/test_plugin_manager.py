@@ -140,3 +140,22 @@ async def test_contribution_settings_get_or_create_preserves_default_state(db):
 async def test_contribution_settings_unknown_plugin_404(db):
     with pytest.raises(NotFoundError):
         await service.set_contribution_settings(db, "acme.nonexistent", [])
+
+
+def test_all_known_resolves_the_core_plugins_once(monkeypatch):
+    """RADD-1427: `installable_plugins` re-ran `core_plugins()` for its collision check
+    on every `all_known()` — an import walk over every configured module, twice."""
+    from radd.modules.pluginmgr import discovery
+
+    calls = []
+    original = discovery.core_plugins
+
+    def counted():
+        calls.append(1)
+        return original()
+
+    monkeypatch.setattr(discovery, "core_plugins", counted)
+    known = discovery.all_known()
+    assert len(calls) == 1
+    assert "events" in known and MILESTONES in known
+

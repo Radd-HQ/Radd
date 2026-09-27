@@ -2,7 +2,7 @@
 (-32700/-32600), routing (-32601), tools/call shaping (domain error → isError +
 rollback; a schema-rejected call → -32602 listing every violation; a handler bug →
 -32603 + rollback, never HTTP 500), catalog generation, and the doc tools leaving
-with the pages plugin. Auth gates (401/403) use an in-process ASGI client, no DB.
+with the pages plugin. The auth gate (401) uses an in-process ASGI client, no DB.
 """
 
 import json
@@ -386,9 +386,11 @@ async def test_unauthenticated_post_is_401(app):
     assert response.status_code == 401
 
 
-async def test_disabled_instance_is_403(app, monkeypatch):
-    monkeypatch.setattr(settings, "mcp_enabled", False)
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/mcp", content=request_body("initialize"))
-    assert response.status_code == 403
+def test_the_plugin_manager_is_the_only_switch():
+    """RADD-1427: `RADD_MCP_ENABLED` was a second off-switch beside the plugin
+    manager's, and the two could disagree. `mcp` is a disableable plugin; the
+    environment carries no opinion."""
+    from radd.modules.mcp import plugin
+
+    assert plugin.core is False
+    assert "mcp_enabled" not in type(settings).model_fields

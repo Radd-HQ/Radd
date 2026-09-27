@@ -66,7 +66,7 @@ def test_external_boot_dependency_order(monkeypatch):
     b = RaddPlugin(name='b', core=False, depends_on=('a',))
     monkeypatch.setattr(boot, 'plugin_states', lambda: {'a': 'enabled', 'b': 'enabled'})
     monkeypatch.setattr(discovery, 'core_plugins', lambda: {})
-    monkeypatch.setattr(discovery, 'installable_plugins', lambda: {'b': (b, 'pkg_b'), 'a': (a, 'pkg_a')})
+    monkeypatch.setattr(discovery, 'installable_plugins', lambda core=None: {'b': (b, 'pkg_b'), 'a': (a, 'pkg_a')})
     assert boot.resolve_boot_paths() == ('pkg_a', 'pkg_b')
 
 
@@ -78,7 +78,7 @@ def test_a_builtin_off_by_default_loads_only_when_enabled(monkeypatch):
     ordinary = RaddPlugin(name='ordinary', core=False)
     monkeypatch.setattr(discovery, 'core_plugins',
                         lambda: {'example': (example, 'pkg_example'), 'ordinary': (ordinary, 'pkg_ordinary')})
-    monkeypatch.setattr(discovery, 'installable_plugins', lambda: {})
+    monkeypatch.setattr(discovery, 'installable_plugins', lambda core=None: {})
     monkeypatch.setattr(boot, 'plugin_states', lambda: {})
     assert boot.resolve_boot_paths() == ('pkg_ordinary',)
     monkeypatch.setattr(boot, 'plugin_states', lambda: {'example': 'enabled'})
@@ -90,7 +90,7 @@ def test_boot_rejects_missing_dependency(monkeypatch):
     b = RaddPlugin(name='b', core=False, depends_on=('missing',))
     monkeypatch.setattr(boot, 'plugin_states', lambda: {'b': 'enabled'})
     monkeypatch.setattr(discovery, 'core_plugins', lambda: {})
-    monkeypatch.setattr(discovery, 'installable_plugins', lambda: {'b': (b, 'pkg_b')})
+    monkeypatch.setattr(discovery, 'installable_plugins', lambda core=None: {'b': (b, 'pkg_b')})
     with pytest.raises(PluginLoadError, match='missing or cyclic'):
         boot.resolve_boot_paths()
 
@@ -108,7 +108,7 @@ def test_boot_does_not_mask_schema_errors(monkeypatch):
 
 async def test_enable_rejects_incompatible_package_before_write(monkeypatch):
     plugin = RaddPlugin(name='incompatible', core=False, api_version='99.0')
-    monkeypatch.setattr(discovery, 'installable_plugins', lambda: {plugin.id: (plugin, 'fixture')})
+    monkeypatch.setattr(discovery, 'installable_plugins', lambda core=None: {plugin.id: (plugin, 'fixture')})
     session = AsyncMock()
     monkeypatch.setattr(service, '_states', AsyncMock(return_value={}))
     with pytest.raises(ConflictError, match='API'):
@@ -118,7 +118,7 @@ async def test_enable_rejects_incompatible_package_before_write(monkeypatch):
 
 async def test_enable_only_saves_desired_state(monkeypatch):
     plugin = RaddPlugin(name='restart-fixture', core=False)
-    monkeypatch.setattr(discovery, 'installable_plugins', lambda: {plugin.id: (plugin, 'fixture')})
+    monkeypatch.setattr(discovery, 'installable_plugins', lambda core=None: {plugin.id: (plugin, 'fixture')})
     monkeypatch.setattr(service, '_states', AsyncMock(return_value={}))
     save = AsyncMock(return_value=SimpleNamespace(state='enabled'))
     monkeypatch.setattr(service, '_upsert', save)
@@ -159,7 +159,7 @@ async def test_missing_package_is_visible_in_management(monkeypatch):
 
 async def test_pending_activation_reports_applying_without_restart(monkeypatch):
     plugin = RaddPlugin(name='pending-package', core=False)
-    monkeypatch.setattr(discovery, 'installable_plugins', lambda: {plugin.id: (plugin, 'fixture')})
+    monkeypatch.setattr(discovery, 'installable_plugins', lambda core=None: {plugin.id: (plugin, 'fixture')})
     monkeypatch.setattr(service, '_states', AsyncMock(return_value={
         plugin.id: SimpleNamespace(version='0.0.0', state='enabled')}))
     monkeypatch.setattr('radd.modules.pluginmgr.acks.cluster_reports', AsyncMock(return_value=[]))

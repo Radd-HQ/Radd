@@ -57,7 +57,7 @@ and every one of them fails **silently** if skipped:
 3. **Know that the MCP endpoint is ON by default.** `POST /api/v1/mcp` serves
    AI agents authenticating with the same PATs and RBAC as the REST API.
    That is a feature, not a hole — but if no agent will ever talk to this
-   instance, `RADD_MCP_ENABLED=false` removes the surface.
+   instance, disabling the `mcp` plugin (Settings → Plugins) removes the surface.
 4. **Set the backup key and move it off-box.** First boot generates
    `radd-backup.key` beside the data dir; an encrypted backup and its key on
    the same disk is one failure, not a backup (see "Backup & restore").
@@ -451,7 +451,6 @@ named Settings page owns it and editing the variable changes nothing. Highlights
 | `RADD_OIDC_*` | disabled | **seed-only** → Settings → Sign-in: the first SSO provider (spec 110) |
 | `RADD_LDAP_*` | disabled | **seed-only** → Settings → Directory: the AD connection and sync tunables (spec 42, RADD-846/848) |
 | `RADD_AI_*` | disabled | provider/base URL/key/model are **seed-only** → Settings → AI (spec 101); `_MAX_TOKENS` and the timeouts stay live |
-| `RADD_MCP_ENABLED` | `true` | MCP server at `POST /api/v1/mcp` (spec 45) |
 | `RADD_GITLAB_*` / `RADD_FORGEJO_*` / `RADD_GITHUB_*` | disabled | **seed-only** → Settings → Version control: each seeds one connection (and repository) once; `_API_TOKEN`, `_BASE_URL`, `_REPO` optional |
 | `RADD_ALERTMANAGER_*` / `RADD_MAIL_*` | disabled | seed ONE Alertmanager receiver / mail source row, once (RADD-1317, RADD-958) — both are configured in Settings after. `RADD_GOOGLECHAT_*` is gone (RADD-1319): posting to chat is an automation |
 | `RADD_WORK_WEEK_DAYS` | mon–fri | business-day SLAs + timesheet |
