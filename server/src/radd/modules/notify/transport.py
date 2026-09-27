@@ -56,6 +56,7 @@ class NotificationMail:
 
 
 def mail_transport() -> sockets.MailTransport | None:
-    """The first registered transport or None; read every tick (never cached) so
-    a disable applies at once."""
-    return next(iter(sockets.providers(sockets.Socket.MAIL_TRANSPORT).values()), None)
+    """The registered transport or None; read every tick (never cached) so a
+    disable applies at once. MAIL_TRANSPORT is a single-provider socket: two
+    transports raise (`AmbiguousProvider`) rather than one being picked."""
+    return sockets.single_provider(sockets.Socket.MAIL_TRANSPORT)

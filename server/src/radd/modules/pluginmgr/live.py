@@ -23,7 +23,7 @@ from functools import partial
 
 from radd.config import settings
 from radd.db import SessionLocal
-from radd.kernel import RaddPlugin, admission, registries
+from radd.kernel import ContributionConflict, RaddPlugin, admission, registries
 from radd.kernel.loader import plugin_problems
 
 from . import acks, discovery, store
@@ -130,6 +130,11 @@ async def _attempt(plugin_id: str, desired: bool, action) -> None:
         _fail(plugin_id, desired, f"Waiting for {exc.in_flight} running request(s) or job(s) "
                                   "of this plugin to finish; retrying")
         logger.info("Plugin %s is still draining (%s)", plugin_id, exc)
+    except ContributionConflict as exc:
+        # RADD-1456: the message names both plugins; the retry succeeds once the
+        # other is disabled, so the row says what to do rather than a type name.
+        _fail(plugin_id, desired, f"{type(exc).__name__}: {exc}")
+        logger.warning("Applying plugin %s refused: %s", plugin_id, exc)
     except Exception as exc:
         verb = "enable" if desired else "disable"
         _fail(plugin_id, desired, f"{type(exc).__name__}: {verb} failed; will retry")

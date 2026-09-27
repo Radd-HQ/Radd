@@ -19,11 +19,19 @@ from radd.kernel import sockets
 
 
 def providers() -> dict[str, Any]:
-    """check key -> TransitionCheckProvider, for every provider loaded NOW."""
-    return {
-        impl.check: impl
-        for impl in sockets.providers(sockets.Socket.TRANSITION_CHECK).values()
-    }
+    """check key -> TransitionCheckProvider, for every provider loaded NOW, in
+    registration order. A provider is registered UNDER its check key, and the
+    registry refuses two on one key (RADD-1456); a provider whose `check` names
+    another key would let one plugin answer for another's rules, so it is refused
+    here rather than re-keyed."""
+    live: dict[str, Any] = {}
+    for name, impl in sockets.providers(sockets.Socket.TRANSITION_CHECK).items():
+        if impl.check != name:
+            raise ValueError(
+                f"transition check provider registered as {name!r} answers for {impl.check!r}"
+            )
+        live[name] = impl
+    return live
 
 
 async def prepare(session: AsyncSession, item, checks: Iterable[str]) -> dict[str, Any]:

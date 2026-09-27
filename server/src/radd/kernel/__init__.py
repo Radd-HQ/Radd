@@ -3,6 +3,7 @@
 from .loader import PluginLoadError, import_models, load_plugins
 from .plugin import KERNEL_API_VERSION, ConsumerResume, RaddPlugin
 from .registry import (
+    ContributionConflict,
     KernelRegistries,
     register_capability,
     register_crud_resource,
@@ -63,6 +64,7 @@ __all__ = [
     "registries",
     "changes",
     "KernelRegistries",
+    "ContributionConflict",
     "register_event_type",
     "register_permission",
     "register_crud_resource",

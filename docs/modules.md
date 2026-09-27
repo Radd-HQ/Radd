@@ -776,22 +776,22 @@ The plugin platform's worked example, off on a fresh instance: one `EntitySpec` 
 
 ## Sockets
 
-Named interfaces one plugin provides and others read instead of importing it (`kernel/sockets.py`), so disabling a provider withdraws it. Providers come from the manifests; readers are every `Socket.X` reference in the source outside an `IntegrationSpec`.
+Named interfaces one plugin provides and others read instead of importing it (`kernel/sockets.py`), so disabling a provider withdraws it. Providers come from the manifests; readers are every `Socket.X` reference in the source outside an `IntegrationSpec`; the last column is the socket's declared `SocketPolicy` (`SOCKET_POLICIES`): what its readers do when no provider is live.
 
-| Socket | Provided by | Read by |
-|---|---|---|
-| `storage_backend` | attachments (`filesystem`, `s3`) | attachments |
-| `storage_routing_rule` | attachments (`user_choice`, `cidr`), ai (`llm`) | attachments |
-| `task_backend` | capabilities (`localloop`) | kernel |
-| `non_working_days` | leave (`leave_holidays`) | slas |
-| `person_availability` | leave (`leave_absences`) | automations |
-| `transition_check` | approvals (`require_approval`) | workflow |
-| `search_documents` | pages (`page`) | search |
-| `semantic_candidates` | ai (`ai_embeddings`) | search |
-| `notification_subject` | pages (`page`) | notify |
-| `notification_audience` | participants (`participant_teams`) | notify |
-| `mail_transport` | mailintake (`mailintake`) | notify |
-| `vcs_connector` | gitlab (`gitlab`), forgejo (`forgejo`), github (`github`) | — |
+| Socket | Provided by | Read by | Without a provider |
+|---|---|---|---|
+| `storage_backend` | attachments (`filesystem`, `s3`) | attachments | fails closed |
+| `storage_routing_rule` | attachments (`user_choice`, `cidr`), ai (`llm`) | attachments | fails open |
+| `task_backend` | capabilities (`localloop`) | kernel | fails closed |
+| `non_working_days` | leave (`leave_holidays`) | slas | fails open |
+| `person_availability` | leave (`leave_absences`) | automations | fails open |
+| `transition_check` | approvals (`require_approval`) | workflow | fails closed |
+| `search_documents` | pages (`page`) | search | fails open |
+| `semantic_candidates` | ai (`ai_embeddings`) | search | fails open |
+| `notification_subject` | pages (`page`) | notify | fails closed |
+| `notification_audience` | participants (`participant_teams`) | notify | fails open |
+| `mail_transport` | mailintake (`mailintake`) | notify | fails closed; one provider at most |
+| `vcs_connector` | gitlab (`gitlab`), forgejo (`forgejo`), github (`github`) | — | fails open |
 
 ## Connection rules
 
@@ -802,6 +802,10 @@ Named interfaces one plugin provides and others read instead of importing it (`k
 - Permission checks go through `auth.authz.require` and are never re-implemented. A module declares the atoms it enforces (`PermissionSpec`/`CrudResourceSpec`) and the scalar settings it reads (`SettingSpec`) on its own manifest, plus the typed alias (`auth.types.Permission`, `settings.types.SettingKey`); `tests/test_permission_ownership.py` and `tests/test_setting_ownership.py` fail when the two disagree.
 - Custom fields serialize inline on the entity in every representation, never through a side-channel endpoint; the `fields` registry is the one source of dynamic schema.
 - An import that would cycle at module scope moves into the function body with a `# deferred:` comment, and its target is declared in `weak_depends`.
+
+## Socket policies
+
+Every kernel socket declares a `SocketPolicy` in `kernel/sockets.py::SOCKET_POLICIES`, and the Sockets table above prints it. **Fails closed** means the reader refuses what it holds for the socket when no provider is live: a stored transition rule blocks the move, a storage host whose type has no backend cannot be opened, no periodic loop runs without a task backend, a notification subject nobody vouches for notifies nobody and its queued rows stop mailing, and queued email is recorded undeliverable. **Fails open** means the reader proceeds with the empty answer: no date is non-working, nobody is away, a stored routing rule of a withdrawn type falls through, search shows issues alone, and an item's audience is its watchers. A **single-provider** socket (`single=True`; the mail transport) admits one plugin: `registries.register_plugin` raises `ContributionConflict` naming both plugins, which the plugin manager shows on the row of the plugin being enabled, and `sockets.single_provider` raises `AmbiguousProvider` rather than taking the first of two. The same conflict is raised for two plugins on one `(socket, name)` key of any socket; the registry never overwrites a provider. A socket a plugin defines for itself (the vcs connector tabs) has no row and reads as fail-open, multi-provider.
 
 ## Relations and row guards
 

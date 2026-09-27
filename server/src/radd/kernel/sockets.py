@@ -1,10 +1,12 @@
 """Integration sockets — named interfaces one plugin PROVIDES and others consume.
 
 A provider registers `IntegrationSpec(Socket.X, name, impl=...)`; a consumer reads
-`providers(Socket.X)` / `provider(Socket.X, name)`, which answer only for plugins loaded
-NOW, so disabling a provider withdraws it."""
+`providers(Socket.X)` / `provider(Socket.X, name)` / `single_provider(Socket.X)`, which
+answer only for plugins loaded NOW, so disabling a provider withdraws it. Every socket
+declares in `SOCKET_POLICIES` what its consumer does with NO provider (RADD-1456)."""
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
@@ -26,6 +28,61 @@ class Socket(StrEnum):
     NOTIFICATION_SUBJECT = "notification_subject"  # a non-item thing notifications are about (pages)
     NOTIFICATION_AUDIENCE = "notification_audience"  # more people following an item (participants)
     MAIL_TRANSPORT = "mail_transport"  # carries a notification email (mailintake)
+
+
+@dataclass(frozen=True)
+class SocketPolicy:
+    """What a socket's consumer does when NO provider is live, and how many may be.
+
+    `fails_closed`: the consumer REFUSES what it holds for the socket — a stored
+    rule blocks the move, a stored host cannot be opened, a queued row is not
+    mailed, no tick runs. Fails open: the consumer proceeds with the empty answer —
+    no date is non-working, nobody is away, a stored routing rule of that type falls
+    through, search shows issues alone, an item's audience is its watchers.
+    `single`: at most one plugin may provide the socket; the registry refuses a
+    second (`ContributionConflict`) and `single_provider` refuses to pick between two.
+    """
+
+    fails_closed: bool
+    single: bool = False
+
+
+#: Every `Socket` member has a row here (`tests/test_sockets.py` holds it to that);
+#: the module map prints it beside the providers and readers.
+SOCKET_POLICIES: Mapping[Socket, SocketPolicy] = {
+    # `attachments.clients.client_for` raises for a host whose type has no provider.
+    Socket.STORAGE_BACKEND: SocketPolicy(fails_closed=True),
+    # `attachments.routing.engine.decide` skips a stored rule with no provider.
+    Socket.STORAGE_ROUTING_RULE: SocketPolicy(fails_closed=False),
+    # `kernel.runtime.schedule_tasks` raises: no loop runs without a backend.
+    Socket.TASK_BACKEND: SocketPolicy(fails_closed=True),
+    # `slas.calendar`: no provider, no non-working date; the clock runs every day.
+    Socket.NON_WORKING_DAYS: SocketPolicy(fails_closed=False),
+    # `automations.round_robin`: nobody is away.
+    Socket.PERSON_AVAILABILITY: SocketPolicy(fails_closed=False),
+    # `workflow.guards.unprovided_failure`: a stored rule with no provider blocks the move.
+    Socket.TRANSITION_CHECK: SocketPolicy(fails_closed=True),
+    # `search.sources`: issues alone; full text alone.
+    Socket.SEARCH_DOCUMENTS: SocketPolicy(fails_closed=False),
+    Socket.SEMANTIC_CANDIDATES: SocketPolicy(fails_closed=False),
+    # `notify.subjects`: a subject nobody vouches for notifies nobody and its queued rows stop mailing.
+    Socket.NOTIFICATION_SUBJECT: SocketPolicy(fails_closed=True),
+    # `notify.audience`: the audience is the watchers.
+    Socket.NOTIFICATION_AUDIENCE: SocketPolicy(fails_closed=False),
+    # `notify.mailer`/`emailer`: queued email rows are recorded undeliverable, not sent.
+    Socket.MAIL_TRANSPORT: SocketPolicy(fails_closed=True, single=True),
+}
+
+#: A socket a PLUGIN defines (outside `Socket`, like vcs's connector tabs) declares no
+#: policy here; it reads as fail-open and multi-provider, which is what a list of tabs is.
+PLUGIN_SOCKET_POLICY = SocketPolicy(fails_closed=False)
+
+
+def socket_policy(socket: Socket | str) -> SocketPolicy:
+    try:
+        return SOCKET_POLICIES[Socket(str(socket))]
+    except ValueError:
+        return PLUGIN_SOCKET_POLICY
 
 
 # --- interface definitions (the seam contracts) ---
@@ -208,12 +265,37 @@ class MailTransport(Protocol):
 
 
 def providers(socket: Socket | str) -> dict[str, Any]:
-    """All registered providers of a socket → {name: impl}."""
+    """All registered providers of a socket → {name: impl}, in registration order."""
     return {n: ig.impl for n, ig in registries.providers(str(socket)).items()}
 
 
 def provider(socket: Socket | str, name: str) -> Any:
     ig = registries.integration(str(socket), name)
     return ig.impl if ig else None
+
+
+class AmbiguousProvider(LookupError):
+    """More than one provider answers where the consumer needs exactly one."""
+
+
+def single_provider(
+    socket: Socket | str,
+    where: Callable[[Any], bool] | None = None,
+    *,
+    what: str = "",
+) -> Any:
+    """The ONE provider of a socket, or None — for a single-provider socket, or with
+    `where`, the one provider of a multi-provider socket that a condition picks out
+    (the subject provider claiming an event type). Two is a configuration error the
+    consumer must not paper over by taking the first: it raises, naming them. Read on
+    every call, never cached, so a disable applies at once."""
+    live = registries.providers(str(socket))
+    matches = {n: ig.impl for n, ig in live.items() if where is None or where(ig.impl)}
+    if len(matches) > 1:
+        raise AmbiguousProvider(
+            f"{len(matches)} providers of {socket}{' for ' + what if what else ''}: "
+            + ", ".join(sorted(matches))
+        )
+    return next(iter(matches.values()), None)
 
 

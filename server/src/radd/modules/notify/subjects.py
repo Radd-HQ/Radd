@@ -36,16 +36,19 @@ def provider(entity_type: str | None) -> NotificationSubjectProvider | None:
     return sockets.provider(Socket.NOTIFICATION_SUBJECT, entity_type) if entity_type else None
 
 
-def _providers() -> list[NotificationSubjectProvider]:
-    return list(sockets.providers(Socket.NOTIFICATION_SUBJECT).values())
-
-
 def provider_for_event(event_type: str) -> NotificationSubjectProvider | None:
-    return next((p for p in _providers() if event_type in p.events), None)
+    """The one provider claiming this event type, or None. Two claiming it is a
+    conflict the kernel raises on (`AmbiguousProvider`), never a first-wins pick."""
+    return sockets.single_provider(
+        Socket.NOTIFICATION_SUBJECT, lambda p: event_type in p.events, what=f"event {event_type!r}"
+    )
 
 
 def provider_for_scope(scope: RuleScope) -> NotificationSubjectProvider | None:
-    return next((p for p in _providers() if p.scope == scope.value), None)
+    """The one provider whose containers a subscription in `scope` names, or None."""
+    return sockets.single_provider(
+        Socket.NOTIFICATION_SUBJECT, lambda p: p.scope == scope.value, what=f"scope {scope.value!r}"
+    )
 
 
 def handles(event_type: str) -> bool:

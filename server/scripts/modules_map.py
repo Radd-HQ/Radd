@@ -19,7 +19,7 @@ from pathlib import Path
 
 from radd.config import Settings
 from radd.kernel import RaddPlugin
-from radd.kernel.sockets import Socket
+from radd.kernel.sockets import Socket, socket_policy
 
 REPO = Path(__file__).resolve().parents[2]
 MAP = REPO / "docs" / "modules.md"
@@ -262,10 +262,16 @@ def _sockets(modules: list[Module]) -> list[str]:
         for spec in m.plugin.integrations:
             provided.setdefault(str(spec.socket), {}).setdefault(m.name, []).append(spec.name)
     readers = socket_readers()
-    rows = ["| Socket | Provided by | Read by |", "|---|---|---|"]
+    rows = ["| Socket | Provided by | Read by | Without a provider |", "|---|---|---|---|"]
     for socket, by in provided.items():
         names = ", ".join(f"{m} ({_code(impls)})" for m, impls in by.items()) or "—"
-        rows.append(f"| `{socket}` | {names} | {', '.join(readers.get(socket, [])) or '—'} |")
+        policy = socket_policy(socket)
+        without = "fails closed" if policy.fails_closed else "fails open"
+        if policy.single:
+            without += "; one provider at most"
+        rows.append(
+            f"| `{socket}` | {names} | {', '.join(readers.get(socket, [])) or '—'} | {without} |"
+        )
     return rows
 
 
@@ -297,7 +303,8 @@ def render(modules: list[Module], notes: Notes) -> str:
             "Named interfaces one plugin provides and others read instead of importing it"
             " (`kernel/sockets.py`), so disabling a provider withdraws it. Providers come from the"
             " manifests; readers are every `Socket.X` reference in the source outside an"
-            " `IntegrationSpec`.", ""]
+            " `IntegrationSpec`; the last column is the socket's declared `SocketPolicy`"
+            " (`SOCKET_POLICIES`): what its readers do when no provider is live.", ""]
     out += [*_sockets(modules), ""]
     for title, text in notes.sections.items():
         out += [f"## {title}", "", text, ""]

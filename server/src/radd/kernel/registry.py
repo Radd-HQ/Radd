@@ -50,9 +50,17 @@ class ContributionSource:
     plugin: str
 
 
+class ContributionConflict(ValueError):
+    """Two plugins contribute one keyed thing that has exactly one owner — an
+    entity link, or an integration on a socket (RADD-1456). Raised BEFORE the
+    registry changes, naming both, so an enable fails on its row instead of one
+    plugin silently replacing the other's provider."""
+
+
 #: (manifest field, registry dict, key) for every contribution kind that is a plain
 #: keyed dict: registering overwrites the key, unregistering pops it. Kinds with any
-#: other behaviour are handled explicitly in register_plugin/unregister_plugin.
+#: other behaviour are handled explicitly in register_plugin/unregister_plugin
+#: (integrations: a duplicate key is a ContributionConflict, never an overwrite).
 _KEYED: tuple[tuple[str, str, attrgetter], ...] = (
     ("entities", "entities", attrgetter("key")),
     ("event_types", "event_types", attrgetter("event_type")),
@@ -79,8 +87,11 @@ _KEYED: tuple[tuple[str, str, attrgetter], ...] = (
     ("notification_kinds", "notification_kinds", attrgetter("key")),
     ("searchables", "searchables", attrgetter("entity_type")),
     ("page_extensions", "page_extensions", attrgetter("name")),
-    ("integrations", "integrations", attrgetter("socket", "name")),
 )
+
+
+def _integration_key(spec: IntegrationSpec) -> tuple[str, str]:
+    return (str(spec.socket), spec.name)
 
 
 @dataclass
@@ -139,6 +150,10 @@ class KernelRegistries:
     tasks: dict[str, TaskSpec] = field(default_factory=dict)
     consumer_names: set[str] = field(default_factory=set)  # RADD-1093
     integrations: dict[tuple[str, str], IntegrationSpec] = field(default_factory=dict)
+    #: (socket, name) -> the plugin id that provides it (RADD-1456): a second plugin on
+    #: the same key is a conflict, and a single-provider socket admits one plugin at all.
+    #: An import-time `register_integration` has no plugin and records no owner.
+    integration_owners: dict[tuple[str, str], str] = field(default_factory=dict)
     nav: list[NavItemSpec] = field(default_factory=list)
     # name -> absolute path of the plugin's built UI bundle dir (`<plugin_dir>/ui/dist`), for the
     # plugins that ship a federated UI (spec 94). The backend serves /plugins/<name>/* from here, so
@@ -159,7 +174,10 @@ class KernelRegistries:
         for link in links:
             previous = self.entity_link_owners.get(link.entity_type)
             if previous is not None and previous.id != plugin.id:
-                raise ValueError(f"entity link {link.entity_type!r} already belongs to {previous.name!r}")
+                raise ContributionConflict(
+                    f"entity link {link.entity_type!r} already belongs to {previous.name!r}"
+                )
+        self._check_integrations(plugin)
         for key, owner in list(self.entity_link_owners.items()):
             if owner.id == plugin.id:
                 self.entity_links.pop(key, None)
@@ -172,6 +190,9 @@ class KernelRegistries:
             target = getattr(self, registry)
             for spec in getattr(plugin, plugin_field):
                 target[key(spec)] = spec
+        for spec in plugin.integrations:
+            self.integrations[_integration_key(spec)] = spec
+            self.integration_owners[_integration_key(spec)] = plugin.id
         self.consumer_names.update(plugin.consumer_names)
         for atom, resource in plugin.relation_domains:
             self.relation_domains[atom] = resource
@@ -189,6 +210,36 @@ class KernelRegistries:
             self.nav[:] = [n for n in self.nav if n.key not in keys]  # dedupe re-registers
             self.nav.extend(plugin.ui.nav)
 
+    def _owner_name(self, key: tuple[str, str]) -> str:
+        owner = self.integration_owners.get(key)
+        if owner is None:
+            return "an import-time registration"
+        return repr(self.plugins[owner].name) if owner in self.plugins else repr(owner)
+
+    def _check_integrations(self, plugin: RaddPlugin) -> None:
+        """RADD-1456: no key is provided twice, and a single-provider socket is
+        provided by one plugin. Raises before anything is written."""
+        from .sockets import socket_policy  # deferred: sockets imports this module
+
+        for spec in plugin.integrations:
+            key = _integration_key(spec)
+            if key in self.integrations and self.integration_owners.get(key) != plugin.id:
+                raise ContributionConflict(
+                    f"integration {key[0]}:{key[1]} is provided by both "
+                    f"{self._owner_name(key)} and {plugin.name!r}"
+                )
+            if socket_policy(spec.socket).single:
+                others = {
+                    self._owner_name(k)
+                    for k in self.integrations
+                    if k[0] == key[0] and self.integration_owners.get(k) != plugin.id
+                }
+                if others:
+                    raise ContributionConflict(
+                        f"socket {key[0]} takes one provider; {', '.join(sorted(others))} "
+                        f"already provides it, so {plugin.name!r} cannot"
+                    )
+
     def unregister_plugin(self, plugin: RaddPlugin) -> None:
         """Remove a plugin's contributions (runtime disable) — its nav, event types,
         atoms, resources, capabilities, integrations, and entities stop being served."""
@@ -196,6 +247,11 @@ class KernelRegistries:
         if self.plugins.get(plugin.id) is not plugin:
             return
         self.plugins.pop(plugin.id, None)
+        for spec in plugin.integrations:
+            key = _integration_key(spec)
+            if self.integration_owners.get(key) == plugin.id:
+                self.integrations.pop(key, None)
+                self.integration_owners.pop(key, None)
         for key, owner in list(self.entity_link_owners.items()):
             if owner is plugin:
                 self.entity_links.pop(key, None)
@@ -291,6 +347,8 @@ class KernelRegistries:
         return self.integrations.get((socket, name))
 
     def providers(self, socket: str) -> dict[str, IntegrationSpec]:
+        """A socket's providers in REGISTRATION order (the dict keeps insertion order),
+        so a consumer that iterates gets the load order, never an arbitrary one."""
         return {n: ig for (s, n), ig in self.integrations.items() if s == socket}
 
 
@@ -342,5 +400,12 @@ def register_capability(spec: CapabilitySpec) -> CapabilitySpec:
 
 
 def register_integration(spec: IntegrationSpec) -> IntegrationSpec:
-    registries.integrations[(spec.socket, spec.name)] = spec
+    """Import-time registration with no owning plugin (tests, tooling). A key that
+    is already provided is a conflict here too — never a silent replacement."""
+    key = _integration_key(spec)
+    if key in registries.integrations:
+        raise ContributionConflict(
+            f"integration {key[0]}:{key[1]} is already provided by {registries._owner_name(key)}"
+        )
+    registries.integrations[key] = spec
     return spec
