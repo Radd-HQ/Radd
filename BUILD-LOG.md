@@ -16,6 +16,55 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
+### Pre-release review wave — epic RADD-1449 (2026-09-27/28), shipped as v0.49.0
+
+Before tagging the three unpushed waves below (134 commits, 2226 files, +76k/−87k), eight read-only
+reviewers read the whole diff, one per slice, and the full check suite ran first. Verdict: the cleanups
+were behaviour-preserving as claimed (every deleted symbol grepped at HEAD, zero test functions deleted),
+with two exceptions named on RADD-1406 (Jira preview REST shape and the spec-90 inference pipeline
+removed) and RADD-1403 (`live_supported` left `GET /plugins`). The real defects became the epic's 21
+children, each filed with its evidence before it was built, and were fixed by six worktree agents grouped
+by area, cherry-picked onto main, then verified as one tree (pytest 3311, ruff, one alembic head,
+build-all, 203 unit tests, 31/31 browser proofs):
+- **RADD-1339 had two logic defects**: a SKIP counted as a failure and removed the item from the rest
+  of the branch (RADD-1450); an automation with no owner raised on every run although its comment
+  promised the system actor. Neither shipped.
+- **Deploy behaviour flips became a documented list** (RADD-1453, `docs/deploy.md` "Upgrading to
+  v0.49.0"): publish-on-release, move-on-merge and mirror-time per repository, the email receipt and
+  resolution notice, and notification mail without mailintake all migrate OFF; two migrations refuse to
+  downgrade. The release notes are generated from commits and cannot say so.
+- **Secrets**: the admin settings list returned decrypted values (RADD-1454, now a set marker) and the
+  rest of the stored secrets were sealed (RADD-1446: AI keys, storage credentials, connector tokens and
+  webhook secrets, mail passwords, Alertmanager tokens, TOTP seeds).
+- **Row gate**: bulk move, link targets and parents (RADD-1455) — and qualified `@own` holders could not
+  move their own rows at all.
+- Sockets refuse duplicate providers and declare fail-open/closed (RADD-1456); undeliverable
+  notifications are recorded, not stamped emailed (RADD-1457); approval gates hear only the moves their
+  rule gates (RADD-1458); the plugin runtime's enable/resume paths (RADD-1460); collab bind failure and a
+  session arriving mid-edit (RADD-1461); the SLA widget is slas' contribution (RADD-1462); the UI API is
+  2.0.0 with a ledger of removed exports (RADD-1465); a flaky proof, a weakened test, two dropped
+  measurements and a control-byte guard (RADD-1466); one spelling per literal (RADD-1467).
+
+Traps: a worktree whose `web/node_modules` is a symlink lets `prepare-federation` rewrite the MAIN
+checkout's plugin links (copy instead); `RADD_DATABASE_URL` is not in `server/.env`, so a per-agent
+test database is derived from the app settings; `git rebase --autosquash` fails when a later commit
+touched the same lines; the loader treated a capabilities answer without a `remotes` list as never
+synced, which RADD-1461 turned into a blank page until the browser chain caught it.
+
+### Bloat-audit wave — epic RADD-1402 (2026-09-27), shipped as v0.49.0
+
+Fourteen read-only audit agents classified every module's dead, redundant and over-narrated code; ten
+fix agents in worktrees removed it, bug fixes first in their own commits (RADD-1413…1423), then one
+bloat commit per area (RADD-1403…1412): −43,185 lines across 1,681 files with no behaviour change
+except the two named above. What the audit flagged but did not do became RADD-1424…1447; the same day
+shipped the follow-ups: CLAUDE.md 74→25 KB with the narrative moved here (RADD-1441), importer/SSO/LDAP
+credentials sealed and a bind-password leak through `/scoped-settings/resolve` closed (RADD-1424),
+abandoned submission attachments reclaimed on a schedule (RADD-1426), spine defects (RADD-1427),
+`docs/modules.md` generated from the manifests (RADD-1440), contributed automation actions drawn by their
+plugin (RADD-1425), one VCS connector kit (RADD-1435), and the comments UX redesign: replies open by
+default, Reply is an action, one composer with one submit (RADD-1448). Record:
+`research/bloat-audit-2026-09-27/README.md`.
+
 ### Plugin-ownership wave — epic RADD-1343 (2026-09-25/26), not yet released when this was written
 
 Self-hosted, AI-native issue tracker + wiki, LIVE on project.radd-hq.com. **The current release is whatever the newest git tag says — this preamble is the per-wave build NARRATIVE, newest wave first, not a version claim, so it carries no version number of its own** (the spec-115 access-control wave and the RADD-8xx hardening waves followed what's described below). **Newest: the PLUGIN-OWNERSHIP wave (epic RADD-1343, 2026-09-25/26).** Codex audited and moved the first surfaces (RADD-1340–1366). A review then course-corrected, and the rest followed (RADD-1366–1401):

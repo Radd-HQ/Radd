@@ -441,7 +441,7 @@ action, and a service-desk plugin all consume the same permission-scoped SDK.
 
 ### Bundled core plugins, remote optional plugins (RADD-1373)
 
-**Decided 2026-09-26.** Every plugin's UI lives in its own module (`<module>/ui/src`) and contributes
+**Decided in the plugin-ownership wave (epic RADD-1343).** Every plugin's UI lives in its own module (`<module>/ui/src`) and contributes
 through the same `definePlugin` API — slots, query/data/command sources, `activate`. What differs is
 how it reaches the browser:
 
