@@ -88,8 +88,18 @@ export const queryKeys = {
   itemHistory: (itemId: string) => ["itemHistory", { itemId }] as const,
   itemWebLinks: (itemId: string) => ["itemWebLinks", { itemId }] as const,
   itemVcsLinks: (itemId: string) => ["itemVcsLinks", { itemId }] as const,
-  linkSearch: (projectId: string, q: string, limit?: number, excludeId?: string) =>
-    ["linkSearch", { projectId, q, limit: limit ?? null, excludeId: excludeId ?? null }] as const,
+  linkSearch: (
+    projectId: string,
+    q: string,
+    limit?: number,
+    excludeId?: string,
+    kind?: string,
+    unparented?: boolean,
+  ) =>
+    ["linkSearch", {
+      projectId, q, limit: limit ?? null, excludeId: excludeId ?? null,
+      kind: kind ?? null, unparented: unparented ?? false,
+    }] as const,
   backupStatus: () => ["backupStatus"] as const,
   backups: () => ["backups"] as const,
   backupSchedules: () => ["backupSchedules"] as const,

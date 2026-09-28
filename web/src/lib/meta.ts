@@ -35,7 +35,7 @@ import {
   type ItemVisibilityValue,
 } from "./types";
 import { InstanceRole, type InstanceRoleValue } from "@radd/plugin-sdk";
-import { ItemKind, ItemLinkType, Priority, ReleaseStatus, ReportInterval, StateCategory, ViewAxis, type BuiltinRuleField, type ItemKindValue, type ItemLinkTypeValue, type PriorityValue, type ReleaseStatusValue, type ReportIntervalValue, type StateCategoryValue, type ViewAxisValue } from "./types";
+import { BulkSkipReason, ItemKind, ItemLinkType, Priority, ReleaseStatus, ReportInterval, StateCategory, ViewAxis, type BuiltinRuleField, type BulkSkipReasonValue, type ItemKindValue, type ItemLinkTypeValue, type PriorityValue, type ReleaseStatusValue, type ReportIntervalValue, type StateCategoryValue, type ViewAxisValue } from "./types";
 import { CycleStatus } from "@radd-plugin-ui/cycles/types";
 import { FieldType } from "@radd-plugin-ui/fields/types";
 import type { CycleStatusValue } from "@radd-plugin-ui/cycles/types";
@@ -323,6 +323,16 @@ export const CYCLE_STATUS_ORDER: readonly CycleStatusValue[] = [
 export const RELEASE_STATUS_META: Record<ReleaseStatusValue, StatusMeta> = {
   [ReleaseStatus.planned]: { label: "Planned", dotClassName: "bg-amber-400" },
   [ReleaseStatus.released]: { label: "Released", dotClassName: "bg-emerald-400" },
+};
+
+/** Why a bulk operation skipped one row (spec 68), as a person reads it — the toast summary and
+ *  the per-row list in the parent-management modals (RADD-1473) share these words. */
+export const BULK_SKIP_REASON_LABELS: Record<BulkSkipReasonValue, string> = {
+  [BulkSkipReason.notFound]: "not found",
+  [BulkSkipReason.forbidden]: "no permission",
+  [BulkSkipReason.invalidTarget]: "not applicable",
+  [BulkSkipReason.transitionBlocked]: "blocked by transition rules",
+  [BulkSkipReason.error]: "failed",
 };
 
 /**

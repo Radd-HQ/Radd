@@ -38,13 +38,14 @@ function ChipSelect({ chip, children }: { chip: ReactNode; children: ReactNode }
     </div>
   );
 }
-import { ItemVisibility, ScreenPlacement, type EffectiveFieldRow, type Item, type ItemUpdate, type ItemVisibilityValue, type PriorityValue, type State } from "../../lib/types";
+import { ItemKind, ItemVisibility, ScreenPlacement, type EffectiveFieldRow, type Item, type ItemUpdate, type ItemVisibilityValue, type PriorityValue, type State } from "../../lib/types";
 import { SelectField } from "../SelectField";
 import { VisibilityChip } from "./ItemBadges";
 import { PersonName } from "../PersonName";
 import { CustomFieldControl } from "./CustomFieldsForm";
 import { LabelsEditor } from "./LabelsEditor";
-import { CyclePicker, ReleasePicker } from "./PlanningFields";
+import { CyclePicker, ParentField, ReleasePicker } from "./PlanningFields";
+import { requiredParentKind } from "./ParentPicker";
 import { TimeTrackingPanel } from "./TimeTrackingPanel";
 import type { CustomFieldValue, CustomFields, FieldDef } from "@radd-plugin-ui/fields/types";
 import type { Project } from "@radd-plugin-ui/projects/types";
@@ -338,6 +339,17 @@ export function IssueProperties({
       {/* Plugin-contributed issue-rail sections (spec 94): federated remotes register here, each
           from its own bundle — the host imports none of them and names none. */}
       <Slot id={SlotId.issuePanelSection} item={item} project={project} />
+
+      {/* RADD-1472: the item's place in the hierarchy heads the field rows. Not a screen-arranged
+          field — an epic has none and a subtask's is required — so it sits above the layout's rows,
+          gated like them by the per-field grant signal (`parent`). */}
+      {requiredParentKind(item.kind ?? ItemKind.issue) !== null && (
+        <FieldSlot
+          render={{ node: <ParentField item={item} onPatch={patch} />, selfPadded: false }}
+          locked={lockFor("parent").locked}
+          reason={lockFor("parent").reason}
+        />
+      )}
 
       {primary.map((row) => {
         const lock = lockFor(row.field);

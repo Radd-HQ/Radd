@@ -4,26 +4,30 @@ import { CycleSelect } from "../cycles/CycleSelect";
 import { useState } from "react";
 import { PersonName } from "../PersonName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ArrowRightLeft, Flag, X } from "lucide-react";
+import { Archive, ArrowRightLeft, CornerDownRight, Flag, X } from "lucide-react";
 import { api, errorMessage } from "../../lib/api";
 import { ApiPath } from "../../lib/constants";
 import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { useCurrentUser, useItemWritability, usePermissions } from "../../lib/hooks";
-import { PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
+import { BULK_SKIP_REASON_LABELS, PRIORITY_META, PRIORITY_ORDER } from "../../lib/meta";
 import { issueTypesQuery, releasesQuery, statesQuery, usersQuery } from "../../lib/queries";
 import { pushToast, ToastKind } from "../../lib/toast";
 import { Permission } from "../../lib/types";
-import type { BulkMoveResult, BulkSkipReasonValue, BulkSkipped, BulkUpdateResult, ItemBulkPatch, PriorityValue } from "../../lib/types";
+import type { BulkMoveResult, BulkSkipped, BulkUpdateResult, Item, ItemBulkPatch, PriorityValue } from "../../lib/types";
 import { Button } from "../Button";
 import { useCan } from "../../lib/can";
 import { Modal } from "../Modal";
 import { Select } from "../Select";
+import { BulkParentDialog, bulkParentAction } from "./BulkParentDialog";
 import { labelsQuery } from "@radd-plugin-ui/labels/catalog";
 import { projectSummaryQuery } from "@radd-plugin-ui/projects/directory-queries";
 import type { Project } from "@radd-plugin-ui/projects/types";
 
 interface BulkActionBarProps {
   selectedIds: Set<string>;
+  /** The rows on this surface — the bar reads the selection's KINDS from them, which is what
+   *  decides whether "Epic…" or "Parent issue…" applies (RADD-1474). */
+  items?: readonly Item[];
   /** Set when the surface is project-scoped — enables State/Type/Release
    *  pickers (those are per-project values; bulk state by id can't span). */
   project: Project | null;
@@ -35,18 +39,10 @@ interface BulkActionBarProps {
 
 const NONE = "__none__";
 
-const REASON_LABELS: Record<BulkSkipReasonValue, string> = {
-  not_found: "not found",
-  forbidden: "no permission",
-  invalid_target: "not applicable",
-  transition_blocked: "blocked by transition rules",
-  error: "failed",
-};
-
 function skippedSummary(skipped: BulkSkipped[]): string {
   const counts = new Map<string, number>();
   for (const entry of skipped) {
-    const label = REASON_LABELS[entry.reason] ?? entry.reason;
+    const label = BULK_SKIP_REASON_LABELS[entry.reason] ?? entry.reason;
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   const parts = [...counts.entries()].map(([label, count]) => `${count} ${label}`);
@@ -61,6 +57,7 @@ function skippedSummary(skipped: BulkSkipped[]): string {
  */
 export function BulkActionBar({
   selectedIds,
+  items = [],
   project,
   matching,
   onClear,
@@ -69,6 +66,10 @@ export function BulkActionBar({
   const currentUser = useCurrentUser();
   const perms = usePermissions();
   const [moving, setMoving] = useState(false);
+  const [parenting, setParenting] = useState(false);
+  // RADD-1474: "Epic…" for a selection of issues, "Parent issue…" for subtasks; anything else
+  // (an epic, a mix, rows not loaded here) disables it with the reason, like a locked field.
+  const parentAction = bulkParentAction(selectedIds, items);
   // On a single-project surface, disable field actions the user can't write (spec 92) — dimmed, with
   // a reason. Cross-project selections (project === null) can't be pre-resolved per item, so they
   // keep the server's per-item skip-and-report path.
@@ -107,6 +108,9 @@ export function BulkActionBar({
     onError: (error) => pushToast(`Bulk update failed: ${errorMessage(error)}`),
   });
   const apply = (patch: ItemBulkPatch) => bulkUpdate.mutate(patch);
+  // The parent dialog closes on the server's answer, whatever it was — refusals are in the toast.
+  const applyParent = (patch: ItemBulkPatch) =>
+    bulkUpdate.mutate(patch, { onSettled: () => setParenting(false) });
 
   const bulkMove = useMutation({
     mutationFn: (target: Project) =>
@@ -246,6 +250,16 @@ export function BulkActionBar({
 
         <Button
           variant="ghost"
+          data-bulk-parent-action
+          disabled={parentAction.parentKind === null || locked("parent") || bulkUpdate.isPending}
+          title={parentAction.reason ?? (locked("parent") ? writ.reasonFor("parent") : undefined)}
+          onClick={() => setParenting(true)}
+        >
+          <CornerDownRight size={13} aria-hidden />
+          {parentAction.label}
+        </Button>
+        <Button
+          variant="ghost"
           disabled={locked("flagged")}
           title={locked("flagged") ? writ.reasonFor("flagged") : undefined}
           onClick={() => apply({ flagged: true })}
@@ -283,6 +297,21 @@ export function BulkActionBar({
           <X size={15} />
         </button>
       </div>
+
+      {parenting && parentAction.parentKind !== null && (
+        <div className="pointer-events-auto">
+          <BulkParentDialog
+            count={selectedIds.size}
+            // A cross-project surface anchors the search on the first selected row's project:
+            // candidates span every readable project anyway, the anchor only decides which rank first.
+            projectId={project?.id ?? items.find((item) => selectedIds.has(item.id))?.project_id ?? ""}
+            action={{ ...parentAction, parentKind: parentAction.parentKind }}
+            pending={bulkUpdate.isPending}
+            onApply={applyParent}
+            onClose={() => setParenting(false)}
+          />
+        </div>
+      )}
 
       {moving && (
         <div className="pointer-events-auto">

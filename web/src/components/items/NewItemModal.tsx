@@ -2,12 +2,11 @@ import { TeamSelect } from "../teams/TeamSelect";
 import { CycleSelect } from "../cycles/CycleSelect";
 import { Fragment, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
 import { customFieldErrors, findingsByField, validationFindings } from "../../lib/api";
 import type { BucketCreatePreset } from "../../lib/axis-dnd";
 import { fieldInScope } from "../../lib/field-scope";
 import { CUSTOM_COLUMN_PREFIX } from "../../lib/columns";
-import { PARENT_SEARCH_LIMIT, RoutePath } from "../../lib/constants";
+import { RoutePath } from "../../lib/constants";
 import { pushToast, ToastKind } from "../../lib/toast";
 import { useItemWritability, usePointsEnabled } from "../../lib/hooks";
 import { useValidateItem } from "../../lib/item-mutations";
@@ -19,7 +18,7 @@ import {
   VISIBILITY_META,
   VISIBILITY_ORDER,
 } from "../../lib/meta";
-import { issueTypesQuery, linkSearchQuery, releasesQuery, statesQuery, usersQuery, validationContextQuery, effectiveScreenQuery } from "../../lib/queries";
+import { issueTypesQuery, releasesQuery, statesQuery, usersQuery, validationContextQuery, effectiveScreenQuery } from "../../lib/queries";
 import { ItemVisibility, type ItemVisibilityValue, ItemKind, ScreenPlacement, Priority, type ItemCreate, type ItemKindValue, type ItemLinkSearchResult, type PriorityValue } from "../../lib/types";
 import { Button, ButtonVariant } from "../Button";
 import { Modal } from "../Modal";
@@ -30,8 +29,9 @@ import { CustomFieldsForm } from "./CustomFieldsForm";
 import { DeflectionPanel } from "./DeflectionPanel";
 import { FindingsPanel, useIntakeVerdict } from "./FindingsPanel";
 import { LabelsEditor } from "./LabelsEditor";
+import { ParentPickerField, requiredParentKind } from "./ParentPicker";
 import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
-import { IconButton, ErrorText, CollapsibleCard, useDebounced } from "@radd/plugin-sdk";
+import { ErrorText, CollapsibleCard } from "@radd/plugin-sdk";
 import { fieldsQuery } from "@radd-plugin-ui/fields/catalog";
 import type { CustomFieldValue, CustomFields } from "@radd-plugin-ui/fields/types";
 import type { Project } from "@radd-plugin-ui/projects/types";
@@ -68,13 +68,6 @@ const BUILTIN_FIELD_LABELS: Record<string, string> = {
   estimate_points: "Points",
 };
 
-/** The kind a parent must have (spec-02 ladder): issue → epic, subtask → issue. */
-function requiredParentKind(kind: ItemKindValue): ItemKindValue | null {
-  if (kind === ItemKind.issue) return ItemKind.epic;
-  if (kind === ItemKind.subtask) return ItemKind.issue;
-  return null;
-}
-
 export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const states = useQuery(statesQuery(project.id));
   const fields = useQuery(fieldsQuery());
@@ -106,11 +99,9 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   const [visibility, setVisibility] = useState<ItemVisibilityValue | "">("");
   const [assigneeId, setAssigneeId] = useState(initial?.assignee_id ?? "");
   const [teamId, setTeamId] = useState(initial?.team_id ?? "");
-  // Parent picker (spec 80): server-wide typeahead, same-project candidates
-  // ranked first by the server; the kind ladder filters client-side.
+  // Parent picker (spec 80): the shared server-wide typeahead (`ParentPicker`),
+  // same-project candidates ranked first, the kind ladder applied by the server.
   const [parentPick, setParentPick] = useState<ItemLinkSearchResult | null>(null);
-  const [parentSearch, setParentSearch] = useState("");
-  const [parentOpen, setParentOpen] = useState(false);
   const [cycleId, setCycleId] = useState(initial?.cycle_id ?? "");
   const [releaseId, setReleaseId] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -160,16 +151,6 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
   }, [effectiveTypeId, types.data]);
 
   const parentKind = requiredParentKind(kind);
-  const parentQuery = useDebounced(parentSearch.trim(), 200);
-  const parentSearchResults = useQuery({
-    ...linkSearchQuery(project.id, parentQuery, undefined, PARENT_SEARCH_LIMIT),
-    enabled: parentKind !== null && parentOpen,
-  });
-  const parents = useMemo(
-    () =>
-      (parentSearchResults.data ?? []).filter((candidate) => candidate.kind === parentKind),
-    [parentSearchResults.data, parentKind],
-  );
   // Intake validation (spec 119). Re-queried on TYPE change: a project may
   // validate only its Bug type, and a button that kept saying "Create" after
   // someone switched to it would misdescribe what pressing it does.
@@ -328,7 +309,6 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             onChange={(event) => {
               setKind(event.target.value as ItemKindValue);
               setParentPick(null);
-              setParentSearch("");
             }}
           >
             {KIND_ORDER.map((value) => (
@@ -393,70 +373,23 @@ export function NewItemModal({ project, initial, onClose }: NewItemModalProps) {
             ))}
           </SelectField>
 
-          {kind !== ItemKind.epic && (
-            <div className="relative flex flex-col gap-1.5">
-              <label htmlFor="parent-search" className="text-xs font-medium text-fg-secondary">
-                {kind === ItemKind.subtask ? "Parent issue" : "Parent epic"}
-              </label>
-              {parentPick ? (
-                <div className="flex h-8 items-center gap-2 rounded-md border border-strong bg-surface px-2.5 text-[13px]">
-                  <span className="shrink-0 font-mono text-[11px] text-fg-muted">
-                    {parentPick.key}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-fg">{parentPick.title}</span>
-                  <IconButton
-                    onClick={() => setParentPick(null)}
-                    aria-label="Clear parent"
-                  >
-                    <X size={13} aria-hidden />
-                  </IconButton>
-                </div>
-              ) : (
-                <>
-                  <input
-                    id="parent-search"
-                    value={parentSearch}
-                    onChange={(event) => {
-                      setParentSearch(event.target.value);
-                      setParentOpen(true);
-                    }}
-                    onFocus={() => setParentOpen(true)}
-                    onBlur={() => setTimeout(() => setParentOpen(false), 120)}
-                    autoComplete="off"
-                    // Candidates span every project (spec 80) — same-project first.
-                    placeholder={
-                      kind === ItemKind.subtask
-                        ? "Search issues across all projects…"
-                        : "Search epics across all projects…"
-                    }
-                    className="h-8 rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
-                  />
-                  {parentOpen && parents.length > 0 && (
-                    <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-strong bg-surface py-1 shadow-xl">
-                      {parents.map((candidate) => (
-                        <li key={candidate.id}>
-                          <button
-                            type="button"
-                            // onMouseDown fires before the input's onBlur, so the pick lands.
-                            onMouseDown={(event) => {
-                              event.preventDefault();
-                              setParentPick(candidate);
-                              setParentOpen(false);
-                            }}
-                            className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] hover:bg-elevated cursor-pointer"
-                          >
-                            <span className="shrink-0 font-mono text-[11px] text-fg-muted">
-                              {candidate.key}
-                            </span>
-                            <span className="truncate text-fg">{candidate.title}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-            </div>
+          {parentKind && (
+            <fieldset
+              disabled={lock("parent").disabled}
+              title={lock("parent").title}
+              className="min-w-0 disabled:opacity-70"
+            >
+              <ParentPickerField
+                // Keyed on the kind: switching it remounts the search, dropping typed text
+                // along with the pick (a subtask's candidates are not an issue's).
+                key={kind}
+                label={kind === ItemKind.subtask ? "Parent issue" : "Parent epic"}
+                projectId={project.id}
+                kind={parentKind}
+                value={parentPick}
+                onChange={setParentPick}
+              />
+            </fieldset>
           )}
 
           {place("assignee", <SelectField

@@ -213,6 +213,9 @@ export interface ItemBulkPatch {
   type_id?: string | null;
   cycle_id?: string | null;
   release_id?: string | null;
+  /** RADD-1474: the epic of every selected issue (or the parent issue of every
+   *  selected subtask); null clears. The kind ladder is enforced per row. */
+  parent_id?: string | null;
   flagged?: boolean;
   archived?: boolean;
   add_labels?: string[];

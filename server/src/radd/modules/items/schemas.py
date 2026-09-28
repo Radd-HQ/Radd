@@ -202,6 +202,11 @@ class ItemBulkPatch(BaseModel):
     type_id: uuid.UUID | None = None
     cycle_id: uuid.UUID | None = None
     release_id: uuid.UUID | None = None
+    # RADD-1474: the epic of many issues (or the parent issue of many subtasks) at
+    # once. Omitted = unchanged, null = clear. Each row goes through the single-item
+    # `_resolve_parent`, so the kind ladder and the row gate apply per item and a
+    # refusal lands in `skipped` with its reason instead of failing the batch.
+    parent_id: uuid.UUID | None = None
     flagged: bool | None = None
     archived: bool | None = None
     add_labels: list[str] | None = None

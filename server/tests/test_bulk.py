@@ -8,8 +8,10 @@ import uuid
 from datetime import date
 
 
-from radd.modules.auth.models import User
-from radd.modules.auth.types import InstanceRole
+from radd.modules.auth import authz, roles as auth_roles
+from radd.modules.auth.models import GlobalRoleGrant, User
+from radd.modules.auth.schemas import RoleCreate
+from radd.modules.auth.types import BuiltinRoleKey, InstanceRole
 from radd.modules.cycles import service as cycles_service
 from radd.modules.cycles.schemas import CycleCreate
 from radd.modules.fields import service as fields_service
@@ -32,6 +34,8 @@ from radd.modules.workflow.schemas import TransitionCreate, TransitionRule
 from radd.modules.workflow.types import TransitionCheck, TransitionMode
 from radd.modules.projects import service as projects_service
 from radd.modules.projects.schemas import ProjectCreate
+
+from _factories import make_user
 
 
 async def _project_with_states(db, key_prefix="BA"):
@@ -235,3 +239,110 @@ async def test_bulk_move_subtask_moves_alone_keeping_parent(db, actor):
     assert read.parent is not None and read.parent.id == epic.id
     # The epic itself never moved.
     assert (await items.get_item(db, epic.id, actor)).key.startswith("SBA")
+
+
+async def test_bulk_update_parent_id_applies_kind_rules_and_row_gate(db, actor):
+    """RADD-1474: `parent_id` in a bulk patch sets the epic of every issue in one
+    call; each row still goes through `_resolve_parent`, so a subtask handed an
+    epic is refused with the kind reason, a subtask cannot be cleared, and a
+    parent the actor cannot read is refused — forbidden when its project is
+    closed to them, missing when only the row is (RADD-1455) — all as skipped
+    rows, never a failed batch."""
+    project, _ = await _project_with_states(db, key_prefix="BP")
+    epic = await items.create_item(
+        db, ItemCreate(project_id=project.id, title="e", kind=ItemKind.EPIC), actor
+    )
+    issues = [
+        await items.create_item(db, ItemCreate(project_id=project.id, title=f"i{n}"), actor)
+        for n in range(3)
+    ]
+    subtask = await items.create_item(
+        db,
+        ItemCreate(project_id=project.id, title="s", kind=ItemKind.SUBTASK, parent_id=issues[0].id),
+        actor,
+    )
+
+    result = await bulk.bulk_update_items(
+        db,
+        ItemBulkUpdate(
+            item_ids=[*(issue.id for issue in issues), subtask.id],
+            patch=ItemBulkPatch(parent_id=epic.id),
+        ),
+        actor,
+    )
+    assert result.updated == [issue.id for issue in issues]
+    [skipped] = result.skipped
+    assert skipped.item_id == subtask.id and skipped.reason == BulkSkipReason.INVALID_TARGET
+    assert "parent must be of kind issue" in (skipped.detail or "")
+    for issue in issues:
+        read = await items.get_item(db, issue.id, actor)
+        assert read.parent is not None and read.parent.id == epic.id
+    # The subtask's savepoint rolled back: it still hangs off its issue.
+    assert (await items.get_item(db, subtask.id, actor)).parent.id == issues[0].id
+
+    # An explicit null clears an issue's epic; a subtask has nothing to clear to.
+    result = await bulk.bulk_update_items(
+        db,
+        ItemBulkUpdate(item_ids=[issues[0].id, subtask.id], patch=ItemBulkPatch(parent_id=None)),
+        actor,
+    )
+    assert result.updated == [issues[0].id]
+    [skipped] = result.skipped
+    assert skipped.reason == BulkSkipReason.INVALID_TARGET
+    assert "requires a parent issue" in (skipped.detail or "")
+    assert (await items.get_item(db, issues[0].id, actor)).parent is None
+
+    # The TARGET is resolved through the read seam (RADD-1455). Two readers who
+    # cannot see the epic in another project: one with no access to that project
+    # at all (the project gate refuses — FORBIDDEN), one holding `item.read@own`
+    # there (the project admits them, the ROW gate hides the epic — it answers as
+    # missing, INVALID_TARGET). The Baseline is emptied first: its unqualified
+    # `item.read` would make every project readable and both checks vacuous.
+    elsewhere = await projects_service.create_project(
+        db, ProjectCreate(key=f"BQ{uuid.uuid4().hex[:4].upper()}", name="Elsewhere")
+    )
+    hidden_epic = await items.create_item(
+        db, ItemCreate(project_id=elsewhere.id, title="hidden", kind=ItemKind.EPIC), actor
+    )
+    await auth_roles.ensure_builtin_roles(db)
+    baseline = await auth_roles.role_by_key(db, BuiltinRoleKey.BASELINE)
+    baseline.permissions = []
+    await db.flush()
+    authz.forget_baseline(db)
+
+    async def grant(user, target_project, atoms):
+        role = await auth_roles.create_role(
+            db, RoleCreate(key=f"bp{uuid.uuid4().hex[:6]}", name="R", permissions=atoms)
+        )
+        db.add(GlobalRoleGrant(project_id=target_project.id, user_id=user.id, role_id=role.id))
+        await db.flush()
+
+    outsider = await make_user(db, name="Outsider")
+    await grant(outsider, project, ["item.read", "item.update"])
+    own_only = await make_user(db, name="Own only")
+    await grant(own_only, project, ["item.read", "item.update"])
+    await grant(own_only, elsewhere, ["item.read@own"])
+
+    for reader, reason in (
+        (outsider, BulkSkipReason.FORBIDDEN),
+        (own_only, BulkSkipReason.INVALID_TARGET),
+    ):
+        result = await bulk.bulk_update_items(
+            db,
+            ItemBulkUpdate(item_ids=[issues[1].id], patch=ItemBulkPatch(parent_id=hidden_epic.id)),
+            reader,
+        )
+        assert result.updated == []
+        [skipped] = result.skipped
+        assert skipped.reason == reason
+        if reason == BulkSkipReason.INVALID_TARGET:
+            assert "not found" in (skipped.detail or "")
+        assert (await items.get_item(db, issues[1].id, actor)).parent.id == epic.id
+    # The same patch by someone who CAN read the target lands — the refusal above
+    # was about the reader, not the epic.
+    result = await bulk.bulk_update_items(
+        db,
+        ItemBulkUpdate(item_ids=[issues[1].id], patch=ItemBulkPatch(parent_id=hidden_epic.id)),
+        actor,
+    )
+    assert result.updated == [issues[1].id] and result.skipped == []

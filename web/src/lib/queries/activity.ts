@@ -17,6 +17,7 @@ import type {
   BackupSchedule,
   BackupStatus,
   ItemHistory,
+  ItemKindValue,
   ItemLinkSearchResult,
   VcsLink,
   WebLink,
@@ -60,11 +61,25 @@ export const itemVcsLinksQuery = (itemId: string) =>
     queryFn: ({ signal }) => api.get<VcsLink[]>(apiItemVcsLinksPath(itemId), { signal }),
   });
 
+/** The parent picker's narrowing of the typeahead (RADD-1471): `kind` is the
+ *  kind the ladder requires (an issue picks epics, a subtask picks issues);
+ *  `unparented` keeps only items with no parent (an epic adopting issues). */
+export interface LinkSearchFilters {
+  kind?: ItemKindValue;
+  unparented?: boolean;
+}
+
 /** Dependency-link / parent-picker typeahead: items across the SERVER
  *  matching `q` (title or number/key), same-project first (spec 80). */
-export const linkSearchQuery = (projectId: string, q: string, excludeId?: string, limit?: number) =>
+export const linkSearchQuery = (
+  projectId: string,
+  q: string,
+  excludeId?: string,
+  limit?: number,
+  filters: LinkSearchFilters = {},
+) =>
   queryOptions({
-    queryKey: queryKeys.linkSearch(projectId, q, limit, excludeId),
+    queryKey: queryKeys.linkSearch(projectId, q, limit, excludeId, filters.kind, filters.unparented),
     queryFn: ({ signal }) =>
       api.get<ItemLinkSearchResult[]>(apiItemLinkSearchPath(), {
         signal,
@@ -73,6 +88,8 @@ export const linkSearchQuery = (projectId: string, q: string, excludeId?: string
           q,
           exclude_id: excludeId || undefined,
           limit: limit !== undefined ? String(limit) : undefined,
+          kind: filters.kind,
+          unparented: filters.unparented ? "true" : undefined,
         },
       }),
     staleTime: 15_000,

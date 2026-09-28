@@ -56,6 +56,9 @@ logger = logging.getLogger(__name__)
 
 # ItemBulkPatch fields forwarded 1:1 into a per-item ItemUpdate (labels/archived
 # are handled separately — deltas and a dedicated service call respectively).
+# `parent_id` rides through like the rest (RADD-1474): `update_item` runs
+# `_resolve_parent` per row, so a subtask handed an epic, or a parent the actor
+# cannot read, is one ConflictError/NotFoundError → INVALID_TARGET with the reason.
 _PASSTHROUGH_FIELDS = (
     "state_id",
     "assignee_id",
@@ -64,6 +67,7 @@ _PASSTHROUGH_FIELDS = (
     "type_id",
     "cycle_id",
     "release_id",
+    "parent_id",
     "flagged",
 )
 

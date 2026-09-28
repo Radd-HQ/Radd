@@ -11,6 +11,7 @@ import { childItemPagesQuery, statesQuery } from "../../lib/queries";
 import { ItemKind, Permission, StateCategory, type Item, type ItemRollup } from "../../lib/types";
 import { Avatar } from "../Avatar";
 import { formatPoints } from "./ItemBadges";
+import { AddExistingChildren } from "./AddExistingChildren";
 import { Spinner } from "../Spinner";
 import { ErrorText } from "@radd/plugin-sdk";
 import type { Project } from "@radd-plugin-ui/projects/types";
@@ -126,6 +127,10 @@ export function ChildrenSection({
             onClick={() => void children.fetchNextPage()}>{children.isFetchingNextPage ? "Loading…" : "Show 50 more children"}</button>}
           {children.isFetchNextPageError && <p role="alert" className="text-xs text-fg-muted">Could not load more children. Try again.</p>}
           {canCreate && <QuickAdd parent={item} project={project} childKind={childKind} />}
+          {/* RADD-1473: an epic can also adopt issues that already exist. No counterpart on an
+              issue's checklist — a subtask cannot exist unparented, so there is nothing existing
+              to add; a subtask moves through ITS rail (RADD-1472) instead. */}
+          {canWrite && !isChecklist && <AddExistingChildren epic={item} project={project} />}
         </div>
       )}
     </section>

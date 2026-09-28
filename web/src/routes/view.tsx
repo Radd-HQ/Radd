@@ -1277,6 +1277,7 @@ export function ViewPage() {
       {selectable && selected.size > 0 && (
         <BulkActionBar
           selectedIds={selected}
+          items={pageItems}
           project={project}
           matching={matching}
           onClear={() => {

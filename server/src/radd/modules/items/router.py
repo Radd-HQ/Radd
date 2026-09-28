@@ -235,11 +235,15 @@ async def link_search(
     q: str = "",
     exclude_id: uuid.UUID | None = None,
     limit: int = Query(8, ge=1, le=25),
+    kind: Annotated[ItemKind | None, Query(description="only items of this kind")] = None,
+    unparented: Annotated[bool, Query(description="only items with no parent")] = False,
 ) -> list[ItemLinkSearchResult]:
     """Typeahead candidates for the dependency add-row and parent picker (match by
-    title or number/key) — across projects, same-project matches first (spec 80)."""
+    title or number/key) — across projects, same-project matches first (spec 80).
+    `kind` + `unparented` are the parent picker's filters (RADD-1471)."""
     return await service.link_search(
-        session, project_id=project_id, q=q, actor=user, limit=limit, exclude_id=exclude_id
+        session, project_id=project_id, q=q, actor=user, limit=limit, exclude_id=exclude_id,
+        kind=kind, unparented=unparented,
     )
 
 

@@ -1,9 +1,44 @@
 import { CycleSelect } from "../cycles/CycleSelect";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RELEASE_STATUS_META } from "../../lib/meta";
 import { releasesQuery } from "../../lib/queries";
-import type { Item, ItemUpdate } from "../../lib/types";
+import { ItemKind, type Item, type ItemUpdate } from "../../lib/types";
 import { Select } from "../Select";
+import { ParentPickerField, parentLabel, requiredParentKind } from "./ParentPicker";
+
+/**
+ * RADD-1472: where the item sits in the hierarchy — an issue's epic, a subtask's parent issue (an
+ * epic has none, so this renders nothing). Search-as-you-type over the required kind; a pick
+ * PATCHes `parent_id`, Clear sends null. A subtask cannot be cleared — the server refuses an
+ * orphan — so it offers only a move, and the hint says why.
+ */
+export function ParentField({
+  item,
+  onPatch,
+}: {
+  item: Item;
+  onPatch: (patch: ItemUpdate) => void;
+}) {
+  const kind = item.kind ?? ItemKind.issue;
+  const parentKind = requiredParentKind(kind);
+  const excludeIds = useMemo(() => new Set([item.id]), [item.id]);
+  if (parentKind === null) return null;
+  const isSubtask = kind === ItemKind.subtask;
+  return (
+    <ParentPickerField
+      id="parent-picker"
+      label={parentLabel(kind)}
+      projectId={item.project_id}
+      kind={parentKind}
+      value={item.parent ?? null}
+      excludeIds={excludeIds}
+      onChange={(next) => onPatch({ parent_id: next ? next.id : null })}
+      allowClear={!isSubtask}
+      hint={isSubtask ? "A subtask always belongs to an issue — pick another one to move it." : undefined}
+    />
+  );
+}
 
 export function CyclePicker({
   item,
