@@ -51,10 +51,18 @@ def _property_schema(definition: FieldDefinition, restricted: bool = False) -> d
     return base
 
 
-def refresh(definitions: list[FieldDefinition], restricted_keys: set[str] = frozenset()) -> None:
-    schema_cache.properties = {
-        d.key: _property_schema(d, d.key in restricted_keys) for d in definitions
-    }
+def properties_for(
+    definitions: list[FieldDefinition], restricted_keys: set[str] | frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """The custom-field properties for these definitions — PURE, so a caller
+    that wants the live projection (the MCP catalog) gets a value instead of
+    writing the process-wide cache (RADD-1428: it used to refresh the cache
+    without the restricted keys and strip every `x-restricted` hint)."""
+    return {d.key: _property_schema(d, d.key in restricted_keys) for d in definitions}
+
+
+def refresh(definitions: list[FieldDefinition], restricted_keys: set[str] | frozenset[str] = frozenset()) -> None:
+    schema_cache.properties = properties_for(definitions, restricted_keys)
 
 
 def augment_openapi(schema: dict[str, Any]) -> None:

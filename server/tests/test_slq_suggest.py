@@ -2,8 +2,11 @@
 mid-token, inside quotes, inside IN lists, after ORDER BY), op-tables per field
 type, ranking, quoting of spacey values, scope narrowing, and the response cap.
 
-Detection and assembly are pure (session=None like test_slq); value sources run
-against live Postgres inside a rolled-back transaction, so nothing persists.
+Detection and assembly are pure — `respond` hands the value sources a
+`StubSession` that answers every query with no rows (RADD-1428: the sources
+used to special-case `session=None` for exactly these tests); the value-source
+tests run against live Postgres inside a rolled-back transaction, so nothing
+persists.
 """
 
 import uuid
@@ -66,6 +69,54 @@ DEFS = {
 }
 
 
+class _NoRows:
+    """What an empty SQLAlchemy result answers, whichever way it is read."""
+
+    def scalars(self):
+        return self
+
+    def unique(self):
+        return self
+
+    def mappings(self):
+        return self
+
+    def all(self):
+        return []
+
+    def first(self):
+        return None
+
+    def one_or_none(self):
+        return None
+
+    def scalar_one_or_none(self):
+        return None
+
+    def scalar(self):
+        return None
+
+    def __iter__(self):
+        return iter(())
+
+
+class StubSession:
+    """A database with nothing in it: the pure detection tests ask the value
+    sources for rows like production does and get none."""
+
+    async def execute(self, *args, **kwargs):
+        return _NoRows()
+
+    async def scalars(self, *args, **kwargs):
+        return _NoRows()
+
+    async def scalar(self, *args, **kwargs):
+        return None
+
+    async def get(self, *args, **kwargs):
+        return None
+
+
 async def respond(
     q: str,
     cursor: int | None = None,
@@ -74,7 +125,7 @@ async def respond(
     defs: dict[str, FieldDefinition] | None = None,
 ) -> SuggestResponse:
     return await suggestions_for(
-        session,
+        session if session is not None else StubSession(),
         q=q,
         cursor=cursor,
         scope=scope or SuggestScope(),

@@ -44,34 +44,6 @@ TIER_ENTITY = 1
 DATE_TEMPLATE = "YYYY-MM-DD"
 ITEM_KEY_SEPARATOR = "-"
 
-# Builtin fields whose value suggestions require a DB round-trip. Pure detection tests
-# call with session=None to check context/replace_from over a value-position query; those
-# fields no-op rather than crash (session is always real in production).
-_DB_BACKED_FIELDS = frozenset(
-    {
-        SlqField.STATE,
-        SlqField.ASSIGNEE,
-        SlqField.REPORTER,
-        SlqField.TEAM,
-        SlqField.LABEL,
-        SlqField.PROJECT,
-        SlqField.KEY,
-        SlqField.PARENT,
-        SlqField.CYCLE,
-        SlqField.PAST_CYCLE,
-        SlqField.RELEASE,
-        SlqField.BLOCKS,
-        SlqField.BLOCKED,
-        # Ancestor fields (spec 83) that reuse item-key/state/user sources.
-        SlqField.EPIC,
-        SlqField.EPIC_STATE,
-        SlqField.EPIC_ASSIGNEE,
-        SlqField.PARENT_STATE,
-        SlqField.PARENT_ASSIGNEE,
-        SlqField.TYPE,
-    }
-)
-
 
 class SuggestDetail(StrEnum):
     """Fixed `detail` strings (entity values carry their field/key name instead)."""
@@ -150,14 +122,16 @@ async def value_candidates(
     definitions_by_key: Mapping[str, FieldDefinition],
 ) -> list[Candidate]:
     """The value source for one field. Unknown fields (and free-form types) yield
-    no candidates — the context is still reported to the caller."""
+    no candidates — the context is still reported to the caller. Every source
+    that needs rows asks the session for them; a caller with no database (the
+    pure detection tests) hands in a stub that answers with none (RADD-1428
+    retired the `_DB_BACKED_FIELDS` set that existed only to let `session=None`
+    through here)."""
     try:
         builtin = SlqField(field)
     except ValueError:
         definition = definitions_by_key.get(field)
         return [] if definition is None else _cf_candidates(definition)
-    if session is None and builtin in _DB_BACKED_FIELDS:
-        return []
     match builtin:
         # Ancestor sub-fields (spec 83) reuse the item-level sources; the
         # candidate detail carries the matched field name (epic.state, …).

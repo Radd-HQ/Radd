@@ -97,21 +97,18 @@ async def rollup_items(
         ).all()
     } if state_ids else {}
 
-    # Time sums ride the timelogging module when it's installed (deferred
-    # feature-detected import, the approvals-consume idiom) — zeros otherwise.
-    estimate_by_item: dict[uuid.UUID, int] = {}
-    logged_by_item: dict[uuid.UUID, int] = {}
-    try:
-        from radd.modules.timelogging import service as timelogging_service
-    except ImportError:
-        pass
-    else:
-        estimate_by_item = await timelogging_service.estimate_seconds_by_items(
-            session, all_descendants
-        )
-        logged_by_item = await timelogging_service.logged_seconds_by_items(
-            session, all_descendants
-        )
+    # Time sums come from timelogging, a CORE module reached through its
+    # public service (a deferred import only because it depends on items —
+    # the declared `weak_depends` edge). RADD-1428: the `except ImportError`
+    # that used to wrap this guarded against a module that cannot be absent.
+    from radd.modules.timelogging import service as timelogging_service
+
+    estimate_by_item = await timelogging_service.estimate_seconds_by_items(
+        session, all_descendants
+    )
+    logged_by_item = await timelogging_service.logged_seconds_by_items(
+        session, all_descendants
+    )
 
     for root, rows in rows_by_root.items():
         rollup = result[root]

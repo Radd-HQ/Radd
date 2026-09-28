@@ -36,3 +36,13 @@ class ForbiddenError(RaddError):
 
     def __init__(self, message: str = "forbidden"):
         super().__init__(message)
+
+
+class InvalidInputError(RaddError):
+    """Well-formed but unprocessable input (422): a malformed cursor, an
+    out-of-range window, a blank body. The SERVICE layer's way to refuse a
+    value — it must not know FastAPI exists (RADD-1428: `comments/reading.py`
+    and `threads.py` raised `HTTPException` from below the router)."""
+
+    def __init__(self, message: str):
+        super().__init__(message)

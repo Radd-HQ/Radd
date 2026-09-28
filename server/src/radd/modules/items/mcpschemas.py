@@ -15,21 +15,21 @@ from typing import Any
 from radd.kernel.mcptools import limit_property, object_schema
 
 from .enums import ItemKind, Priority
+from .slq.doc import builtin_fields_doc
 
 #: Most-recent comments inlined by get_item (spec 45 result shaping).
 GET_ITEM_COMMENTS_TAIL = 10
 
+#: The grammar and the examples are prose; the FIELD surface between them is
+#: derived from the catalog (RADD-1428), so the text an agent reads is the
+#: language the compiler accepts.
 _SLQ_DOC = (
     "SLQ query text. Grammar: `field op value` clauses joined with AND/OR/NOT and "
     "parentheses, optional `ORDER BY field [ASC|DESC], ...` at the end. "
-    "Builtin fields: project (key), state (name), category, kind, priority, assignee "
-    "(email|me|none), reporter, team, label, title, key, parent, number, created, "
-    "updated, cycle, release, flagged, starred, blocks, blocked, start, target — plus "
-    "any custom field by its registry key. Operators: = != ~ (contains) > < >= <=, "
-    "IN (a, b), NOT IN, IS EMPTY, IS NOT EMPTY. Quote values with spaces "
-    "('In Progress'); `me` = the calling user; `none` = unset relation; dates are "
-    "YYYY-MM-DD. Examples: `project = TD AND state != Done ORDER BY priority DESC` · "
-    "`assignee = me AND label IN (urgent, farm)` · `title ~ render AND created >= 2026-01-01`."
+    + builtin_fields_doc()
+    + " Examples: `project = TD AND state != Done ORDER BY priority DESC` · "
+    "`assignee = me AND label IN (urgent, farm)` · `title ~ render AND created >= 2026-01-01` · "
+    "`epic.category NOT IN (done) AND target <= today+2w`."
 )
 
 _KIND_VALUES = [kind.value for kind in ItemKind]
