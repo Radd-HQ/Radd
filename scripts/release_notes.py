@@ -153,6 +153,28 @@ def publish_release(host: release_host.ReleaseHost, tag: str, markdown: str) -> 
     return host.release_html_url(release, tag)
 
 
+def previous_published_tag(tag: str, host: release_host.ReleaseHost) -> str:
+    """The tag before `tag` that the host actually RELEASED (RADD-1479). A tag whose
+    publish run failed leaves no release behind, and ranging the notes from it drops
+    every change before it: v0.49.2 said "2 changes" for a 137-issue release because
+    v0.49.0 and v0.49.1 were tagged and never published. Without a host token the
+    plain previous tag is the best answer (a wiki-only run); a host that cannot be
+    asked answers the same, so notes are never blocked on the lookup."""
+    previous = previous_tag(tag)
+    if not host.token:
+        return previous
+    for _ in range(50):  # a version tag; the first commit's sha ends the walk
+        if not previous.startswith("v"):
+            return previous
+        try:
+            if host.get_release(previous) is not None:
+                return previous
+        except (urllib.error.URLError, OSError):
+            return previous
+        previous = previous_tag(previous)
+    return previous
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", default=None)
@@ -167,7 +189,7 @@ def main() -> int:
     host = release_host.from_env()
 
     tag = args.tag or git("describe", "--tags", "--abbrev=0")
-    previous = args.from_ or previous_tag(tag)
+    previous = args.from_ or previous_published_tag(tag, host)
     log = Changelog(version=tag, previous=previous, entries=commits(previous, tag))
     enrich(log.entries, radd_base, radd_token)
     markdown = render_markdown(log, radd_base, host.repo_url)
