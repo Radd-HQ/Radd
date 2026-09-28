@@ -71,6 +71,17 @@ jobs:
       - name: Install
         working-directory: web
         run: npm ci
+      # Four mocked proofs (audit-entity-links, automation-editor, vcs-settings,
+      # second-review) derive their fixtures from the BACKEND's own contracts by
+      # spawning server/.venv/bin/python, so the frontend job carries the server
+      # venv too (RADD-1470). No database: the fixtures read registries only.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: server/uv.lock
+      - name: Install the server for the contract proofs
+        working-directory: server
+        run: uv sync --locked
       # `npm run check` = the JS regressions, the host build, every plugin
       # remote's build, then the browser smoke and autocomplete proofs. The
       # runner image ships Google Chrome at the path web/scripts/lib/chrome.mjs
