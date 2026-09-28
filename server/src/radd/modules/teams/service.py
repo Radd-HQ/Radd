@@ -322,6 +322,18 @@ async def stewards_any_team(session: AsyncSession, user_id: uuid.UUID) -> bool:
     return managed is not None
 
 
+async def stewarded_teams(session: AsyncSession, user_id: uuid.UUID) -> list[Team]:
+    """The teams this person owns or manages (RADD-1481) — what a steward-only
+    surface (a team's leave) offers them, without handing them every team."""
+    managed = select(TeamManager.team_id).where(TeamManager.user_id == user_id)
+    result = await session.execute(
+        select(Team)
+        .where(or_(Team.owner_id == user_id, Team.id.in_(managed)))
+        .order_by(Team.name)
+    )
+    return list(result.scalars())
+
+
 async def is_team_steward(session: AsyncSession, user_id: uuid.UUID, team: Team) -> bool:
     """Does this person administer THIS team in their own right — as its owner or
     one of its managers? Callers combine this with the global `team.update` atom;

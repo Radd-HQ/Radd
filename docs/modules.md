@@ -757,7 +757,7 @@ Owns no tables. `GET /monitoring/overview` (instance admins) answers database he
 
 Leave and team holidays, shown on the timesheet and beside people's names.
 
-Owns `leave_periods`: exactly one subject per row (`user_id` or `team_id`) — a person's leave, or a team HOLIDAY that expands to the team's CURRENT members at read time. Everyone records their own leave, a team steward may cover members, and only instance admins manage holidays. `GET /leave/current` feeds the app-wide away indicator and `GET /leave/calendar` the timesheet. Other modules reach leave only through its two sockets, so disabling it withdraws both. Trap: `NON_WORKING_DAYS` answers from holidays only, instance-wide (`service.holiday_dates`), because an SLA clock belongs to an item, while `PERSON_AVAILABILITY` answers per person — never answer one socket with the other's data.
+Owns `leave_periods`: one subject per row (`user_id` or `team_id`) — a person's leave, or a team HOLIDAY expanded to its CURRENT members at read time. Days are the subject's own dates; `start_time`/`end_time` narrow a boundary day in the row's `timezone`, and `service.current(now)` judges each row in its zone. Everyone records their own leave, a steward covers members (`/leave/teams/{id}`, the profile's Team leave section), only admins manage holidays, always whole days. Other modules reach leave only through its two date-granular sockets. Trap: `NON_WORKING_DAYS` answers from holidays only, instance-wide; `PERSON_AVAILABILITY` answers per person — never answer one with the other's data.
 
 - **Events:** `leave.created`, `leave.deleted`
 - **Contributes:** socket providers `non_working_days: leave_holidays`, `person_availability: leave_absences`
