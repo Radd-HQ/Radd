@@ -127,12 +127,9 @@ async def _can_manage_view(
     if grant is ShareLevel.OWNER:
         return True
     if view.owner_id is None:
-        if view.project_id is not None:
-            project = await projects_service.get_project(session, view.project_id)
-            perms = await authz.effective_permissions(session, actor, project=project)
-        else:
-            perms = await authz.effective_permissions(session, actor)
-        return Permission.VIEW_UPDATE in perms
+        return await _holds_in_scope(
+            session, actor, Permission.VIEW_UPDATE, project_id=view.project_id
+        )
     return False
 
 
@@ -179,25 +176,6 @@ _VIEW_SPEC = ResourceSpec(
 register_resource(_VIEW_SPEC)
 
 
-async def _scope_permissions(
-    session: AsyncSession,
-    actor: User,
-    view: View,
-    cache: dict[uuid.UUID | None, frozenset[Permission]],
-) -> frozenset[Permission]:
-    """Effective permissions in the view's scope, cached per project across a batch."""
-    key = view.project_id
-    if key not in cache:
-        if view.project_id is not None:
-            project = await projects_service.get_project(session, view.project_id)
-            cache[key] = await authz.effective_permissions(session, actor, project=project)
-        else:
-            cache[key] = await authz.effective_permissions(
-                session, actor
-            )
-    return cache[key]
-
-
 async def _hydrate(session: AsyncSession, actor: User, views: list[View], *, include_shares: bool = True) -> list[ViewRead]:
     """Batch-build reads: sharing state + per-ACTOR capabilities (spec 57).
     can_edit = definition writes; can_manage = sharing + delete (owner, or the
@@ -218,7 +196,8 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View], *, inc
     groups = await groups_service.groups_by_ids(session, group_ids)
     actor_teams = await teams_service.user_team_ids(session, actor.id)
     actor_groups = await groups_service.user_group_ids(session, actor.id)
-    perms_cache: dict[uuid.UUID | None, frozenset[Permission]] = {}
+    # Owner-less views: "holds view.update in this scope", once per scope per batch.
+    manage_cache: dict[uuid.UUID | None, bool] = {}
 
     reads: list[ViewRead] = []
     for view in views:
@@ -231,9 +210,11 @@ async def _hydrate(session: AsyncSession, actor: User, views: list[View], *, inc
         if view.owner_id == actor.id or grant is ShareLevel.OWNER:
             can_manage = True
         elif view.owner_id is None:
-            can_manage = Permission.VIEW_UPDATE in await _scope_permissions(
-                session, actor, view, perms_cache
-            )
+            if view.project_id not in manage_cache:
+                manage_cache[view.project_id] = await _holds_in_scope(
+                    session, actor, Permission.VIEW_UPDATE, project_id=view.project_id
+                )
+            can_manage = manage_cache[view.project_id]
         else:
             can_manage = False
         pairs: list[tuple[str, str]] = []
@@ -529,6 +510,27 @@ async def _require_scope(
         await authz.require(session, actor, permission, project=project)
     elif not await authz.require_anywhere(session, actor, permission):
         raise ForbiddenError(f"permission '{permission}' denied")
+
+
+async def _holds_in_scope(
+    session: AsyncSession,
+    actor: User,
+    permission: Permission,
+    *,
+    project_id: uuid.UUID | None,
+) -> bool:
+    """`_require_scope` as a question. ONE predicate (RADD-1428): the gate
+    (`_require_manage`/`_require_edit`) enforces it and the descriptions
+    (`_hydrate`'s `can_manage`, `_can_manage_view` for the /grants router)
+    report it, so they cannot disagree. They did: on an owner-less
+    ALL-PROJECTS view the gate asked `require_anywhere` while both descriptions
+    asked for the GLOBAL atom, so a project-scoped `view.update` holder saw no
+    Delete for a delete the API would have honoured."""
+    try:
+        await _require_scope(session, actor, permission, project_id=project_id)
+    except ForbiddenError:
+        return False
+    return True
 
 
 async def get_view(session: AsyncSession, view_id: uuid.UUID) -> View:

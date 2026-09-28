@@ -16,7 +16,7 @@ from . import resolution, service, threads
 from .schemas import (
     CommentCreate, CommentLocation, CommentPage, CommentRead, CommentReplyCreate, CommentUpdate, ThreadResolutionPolicy,
 )
-from .types import CommentSlice
+from .types import PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX, CommentSlice
 
 # No prefix: routes span two roots (/items/{id}/comments for the collection,
 # /comments/{id} for direct addressing).
@@ -27,7 +27,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 
 @router.get("/comments/{comment_id}/replies", response_model=CommentPage)
 async def comment_replies(comment_id: uuid.UUID, session: Session, user: Actor,
-    limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
+    limit: int = Query(PAGE_LIMIT_DEFAULT, ge=1, le=PAGE_LIMIT_MAX), before: str | None = Query(None, max_length=256),
 ) -> CommentPage:
     return await threads.reply_page(session, comment_id, user, limit=limit, before=before)
 
@@ -119,7 +119,7 @@ async def delete_comment(comment_id: uuid.UUID, session: Session, user: CurrentU
 @router.get("/items/{entity_id}/comments/feed", response_model=CommentPage)
 async def item_comment_page(
     entity_id: uuid.UUID, session: Session, user: Actor,
-    limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
+    limit: int = Query(PAGE_LIMIT_DEFAULT, ge=1, le=PAGE_LIMIT_MAX), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
     unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
     through: uuid.UUID | None = Query(None, description="Widen the newest window to include this comment (RADD-1297)."),
@@ -133,7 +133,7 @@ async def item_comment_page(
 @router.get("/{entity_type}/{entity_id}/comments/feed", response_model=CommentPage)
 async def parent_comment_page(
     entity_type: str, entity_id: uuid.UUID, session: Session, user: Actor,
-    limit: int = Query(50, ge=1, le=200), before: str | None = Query(None, max_length=256),
+    limit: int = Query(PAGE_LIMIT_DEFAULT, ge=1, le=PAGE_LIMIT_MAX), before: str | None = Query(None, max_length=256),
     section: CommentSlice = CommentSlice.ALL,
     unresolved: bool = Query(False, description="Only resolvable threads that are still unresolved."),
     through: uuid.UUID | None = Query(None, description="Widen the newest window to include this comment (RADD-1297)."),

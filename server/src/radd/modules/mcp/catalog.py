@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.kernel.specs import McpToolSpec
-from radd.modules.fields import openapi as fields_openapi, service as fields_service
+from radd.modules.fields import service as fields_service
 
 from .types import PAGE_TOOLS, McpTool
 
@@ -150,17 +150,18 @@ def registry_catalog(builtin_names: frozenset[str]) -> list[dict[str, Any]]:
 
 async def live_projections(session: AsyncSession) -> tuple[Mapping[str, Any], list[str]]:
     """The two live schema projections: the field registry's OpenAPI properties
-    (refreshed — the same source OpenAPI reads) and the instance's link-type
-    keys minus the auto-managed ones."""
+    (the same projection OpenAPI reads, `x-restricted` hints included — a
+    value, not a write to the fields module's cache; RADD-1428) and the
+    instance's link-type keys minus the auto-managed ones."""
     from radd.modules.linktypes import service as linktypes_service
 
-    fields_openapi.refresh(await fields_service.list_fields(session))
+    custom_field_properties = await fields_service.schema_properties(session)
     link_types = [
         definition.key
         for definition in await linktypes_service.list_types(session)
         if not definition.auto_managed
     ]
-    return fields_openapi.schema_cache.properties, link_types
+    return custom_field_properties, link_types
 
 
 async def live_schema(session: AsyncSession, spec: McpToolSpec) -> dict[str, Any]:

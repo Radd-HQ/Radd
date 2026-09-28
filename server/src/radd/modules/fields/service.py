@@ -238,6 +238,8 @@ async def extend_options(
     # A new list, not a mutation: JSONB columns only persist on reassignment.
     definition.options = [*existing, *added]
     await session.flush()
+    # RADD-1428: the enum in /openapi.json (and the MCP schemas) must grow too.
+    await _refresh_cache(session)
     await events.emit(
         session,
         event_type=FieldEvent.UPDATED,
@@ -684,11 +686,21 @@ async def readonly_field_keys(
     return sorted([*denied_builtin, *denied_custom])
 
 
-async def _refresh_cache(session: AsyncSession) -> None:
+async def _live_projection(session: AsyncSession) -> tuple[list[FieldDefinition], set[str]]:
     definitions = await list_fields(session)
     restricted_ids = await restricted_field_ids(session)
-    restricted_keys = {d.key for d in definitions if str(d.id) in restricted_ids}
-    openapi.refresh(definitions, restricted_keys)
+    return definitions, {d.key for d in definitions if str(d.id) in restricted_ids}
+
+
+async def schema_properties(session: AsyncSession) -> dict[str, Any]:
+    """The custom-field OpenAPI properties as of now — restricted hints
+    included — RETURNED, never written to the process-wide cache. The MCP
+    catalog's seam (RADD-1428); field mutations refresh the cache themselves."""
+    return openapi.properties_for(*await _live_projection(session))
+
+
+async def _refresh_cache(session: AsyncSession) -> None:
+    openapi.refresh(*await _live_projection(session))
 
 
 async def warm_schema_cache() -> None:

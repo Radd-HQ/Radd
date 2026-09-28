@@ -5,7 +5,6 @@ import binascii
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import HTTPException
 from sqlalchemy import JSON, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,10 +15,10 @@ from radd.modules.teams import service as teams
 
 from .models import Comment, CommentVisibilityTeam
 from .parents import binding_for
-from radd.exceptions import ForbiddenError, NotFoundError, UnauthorizedError
+from radd.exceptions import ForbiddenError, InvalidInputError, NotFoundError, UnauthorizedError
 
 from .schemas import CommentLocation, CommentPage, CommentRead
-from .types import CommentParentType, CommentSlice, CommentVisibility
+from .types import PAGE_LIMIT_MAX, CommentParentType, CommentSlice, CommentVisibility
 
 
 _EVERYTHING = object()  # sentinel: "compute the audience here"
@@ -31,13 +30,15 @@ THROUGH_MAX = 1000
 
 async def audience(session, entity_id, actor, entity_type):
     """The rows of this parent the actor may read, as a WHERE clause — or None
-    when they may read every row (project.manage). RADD-1246: one clause for
-    roots AND replies, so a reply carries its own audience instead of
-    borrowing its root's."""
+    when they may read every row: the PARENT's manager (`project.manage` on an
+    issue, `page.manage` in a page's space — RADD-1428; the atom was spelled
+    `project.manage` here, which a space-scoped wiki manager never holds).
+    RADD-1246: one clause for roots AND replies, so a reply carries its own
+    audience instead of borrowing its root's."""
     binding = binding_for(entity_type)
     project = await binding.project_of(session, entity_id)
     permissions = await binding.require_read(session, actor, entity_id, project)
-    if Permission.PROJECT_MANAGE in permissions:
+    if binding.manage_permission in permissions:
         return None
     allowed = [Comment.visibility != CommentVisibility.INTERNAL, Comment.author_id == actor.id]
     if Permission.COMMENT_READ_INTERNAL in permissions:
@@ -116,7 +117,7 @@ def _boundary(cursor: str):
             when = when.astimezone(UTC).replace(tzinfo=None)
         return when, uuid.UUID(identifier)
     except (ValueError, UnicodeError, binascii.Error) as error:
-        raise HTTPException(422, "Invalid comment cursor") from error
+        raise InvalidInputError("Invalid comment cursor") from error
 
 
 async def list_comments(
@@ -141,8 +142,8 @@ async def comment_page(
     Visibility is filtered in SQL before LIMIT. New comments and deletion of the
     boundary row cannot shift an older page or expose hidden rows in its cursor.
     """
-    if not 1 <= limit <= 200:
-        raise HTTPException(422, "Comment page limit must be between 1 and 200")
+    if not 1 <= limit <= PAGE_LIMIT_MAX:
+        raise InvalidInputError(f"Comment page limit must be between 1 and {PAGE_LIMIT_MAX}")
     allowed = await audience(session, entity_id, actor, entity_type)
     query = await _read_query(session, entity_id, actor, entity_type, section, allowed, unresolved=unresolved)
     if before:
@@ -178,7 +179,7 @@ async def locate(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> C
     comment = await session.get(Comment, comment_id)
     try:
         readable = comment is not None and await can_read_comment(session, comment_id, actor)
-    except (NotFoundError, ForbiddenError, UnauthorizedError, HTTPException):
+    except (NotFoundError, ForbiddenError, UnauthorizedError, InvalidInputError):
         # The parent's own refusal (a restricted issue, a private page) is a
         # "no" too — and answered the same way as a comment that never existed.
         readable = False

@@ -17,7 +17,7 @@ from radd.modules.teams import service as teams
 from radd.modules.projects.models import Project
 
 from .models import Comment, CommentVisibilityTeam
-from .parents import binding_for
+from .parents import CommentParent, binding_for
 from .schemas import CommentAnchor, CommentCreate, CommentRead, CommentUpdate
 from .types import (
     EXCERPT_MAX_CHARS,
@@ -203,7 +203,7 @@ async def _get(session: AsyncSession, comment_id: uuid.UUID) -> Comment:
 
 async def _parent_scope(
     session: AsyncSession, entity_type: str, entity_id: uuid.UUID
-) -> tuple[object, Project | None]:
+) -> tuple[CommentParent, Project | None]:
     """The binding for this parent and the project it lives in, if any.
 
     None is a legitimate answer, not a failure: a wiki page is global, so the
@@ -227,27 +227,37 @@ def _check_internal(permissions: frozenset[Permission], visibility: str) -> None
 
 async def _require_author_or(
     session: AsyncSession,
+    binding: CommentParent,
     comment: Comment,
     actor: User,
     project: Project | None,
     *,
-    others: Permission,
+    delete: bool = False,
 ) -> frozenset[Permission]:
     """EDITS: authors act on their own comments (comment.write); others need
-    `others` (spec 50: project.manage). DELETES (RADD-816/Q4) are relation-
-    aware instead: the author-own right is the Baseline's `comment.delete@own`
-    grant — explainable in the inspector and revocable, which the hardcoded
-    author check never was."""
-    if others is Permission.COMMENT_DELETE:
-        permissions = await authz.require(session, actor, Permission.COMMENT_DELETE, project=project)
+    the parent's manage permission (spec 50: project.manage on an issue;
+    page.manage on a page). DELETES (RADD-816/Q4) are relation-aware instead:
+    the author-own right is the Baseline's `comment.delete@own` grant —
+    explainable in the inspector and revocable, which the hardcoded author
+    check never was.
+
+    Every atom resolves through `binding.require_in_scope` (RADD-1428): in the
+    item's project, or in the page's SPACE — never at global scope because a
+    page has no project."""
+    if delete:
+        permissions = await binding.require_in_scope(
+            session, actor, comment.entity_id, project, Permission.COMMENT_DELETE
+        )
         relations = authz.relations_held(permissions, Permission.COMMENT_DELETE)
         if authz.RELATION_ANY not in relations:
             relation_actor = await authz.relation_actor(session, actor)
             if not authz.relation_holds_row("comment", relations, relation_actor, comment):
                 raise ForbiddenError("you may only delete your own comments here")
         return permissions
-    permission = Permission.COMMENT_WRITE if comment.author_id == actor.id else others
-    return await authz.require(session, actor, permission, project=project)
+    permission = (
+        Permission.COMMENT_WRITE if comment.author_id == actor.id else binding.manage_permission
+    )
+    return await binding.require_in_scope(session, actor, comment.entity_id, project, permission)
 
 
 async def _emit(
@@ -356,8 +366,10 @@ async def create_authorized_comment(
         from .threads import lock_thread_parent
 
         await lock_thread_parent(session, entity_type, entity_id)
-    # Import overrides (author/timestamp) are honored only for a project manager.
-    can_import = Permission.PROJECT_MANAGE in permissions
+    # Import overrides (author/timestamp) are honored only for the parent's
+    # manager — project.manage on an issue, page.manage in a page's space
+    # (RADD-1428: the Confluence importer writes page comments this way).
+    can_import = binding_for(entity_type).manage_permission in permissions
     # An IMPORT states the author explicitly; falling back to the actor there
     # credited whoever ran the import with thousands of other people's comments
     # (spec 90 follow-up). A mapped source user resolves to a real account;
@@ -393,10 +405,8 @@ async def toggle_task(
     editing it, checked before the body is compared so a 409 tells a stranger
     nothing. The write is an ordinary edit (history, events, audit)."""
     comment = await _get(session, comment_id)
-    _binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
-    permissions = await _require_author_or(
-        session, comment, actor, project, others=Permission.PROJECT_MANAGE
-    )
+    binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
+    permissions = await _require_author_or(session, binding, comment, actor, project)
     _check_internal(permissions, comment.visibility)
     try:
         body = tasklists.toggle(comment.body, data)
@@ -421,9 +431,7 @@ async def update_comment(
             )
             data = data.model_copy(update={"visible_to_teams": sorted(narrowed)})
     binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
-    permissions = await _require_author_or(
-        session, comment, actor, project, others=Permission.PROJECT_MANAGE
-    )
+    permissions = await _require_author_or(session, binding, comment, actor, project)
     _check_internal(permissions, comment.visibility)
     body_changed = comment.body != data.body
     previous_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
@@ -461,9 +469,7 @@ async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: Us
         from .threads import require_thread
         await require_thread(session, comment.parent_comment_id, actor)
     binding, project = await _parent_scope(session, comment.entity_type, comment.entity_id)
-    permissions = await _require_author_or(
-        session, comment, actor, project, others=Permission.COMMENT_DELETE
-    )
+    permissions = await _require_author_or(session, binding, comment, actor, project, delete=True)
     _check_internal(permissions, comment.visibility)
     await _emit(session, CommentEvent.DELETED, comment, actor.id)
     await session.delete(comment)

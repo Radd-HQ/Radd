@@ -20,6 +20,14 @@ A binding answers three questions:
   - **May this actor read it?** `require_read` — a comment is never more visible
     than the thing it is attached to.
   - **May this actor comment on it?** `require_write`.
+  - **Where do this parent's atoms resolve?** `require_in_scope` — "hold this
+    permission where the parent lives": a project for an item, a SPACE for a
+    page. The edit/delete paths ask it for `comment.write` (the author's own
+    comment), `comment.delete`, and the parent's `manage_permission` (someone
+    else's comment). RADD-1428: they used to call `authz.require(…,
+    project=project)`, which on a page — project None — meant the GLOBAL atom,
+    so a space-scoped author could post a page comment and not edit it, and a
+    space's `page.manage` holder could manage nothing.
 """
 
 from __future__ import annotations
@@ -45,6 +53,9 @@ from .types import CommentEntity, CommentParentType
 ProjectOf = Callable[[AsyncSession, uuid.UUID], Awaitable[Project | None]]
 #: (session, user, entity_id, project) -> the actor's effective permissions.
 Guard = Callable[..., Awaitable[frozenset[Permission]]]
+#: (session, user, entity_id, project, permission) -> the actor's effective
+#: permissions in the parent's scope; ForbiddenError unless `permission` holds there.
+ScopedRequire = Callable[..., Awaitable[frozenset[Permission]]]
 
 
 @dataclass(frozen=True)
@@ -53,8 +64,10 @@ class CommentParent:
     project_of: ProjectOf
     require_read: Guard
     require_write: Guard
-    #: Editing or deleting SOMEONE ELSE'S comment on this parent.
+    #: Editing or deleting SOMEONE ELSE'S comment on this parent — the atom;
+    #: `require_in_scope` is how it (and every other comment atom) is enforced.
     manage_permission: Permission
+    require_in_scope: ScopedRequire
     #: The event type emitted when a parent of this kind is destroyed.
     #:
     #: This is what replaces the foreign key's ON DELETE CASCADE. A polymorphic
@@ -105,6 +118,11 @@ async def _item_read(session, user: User, entity_id: uuid.UUID, project):
     return permissions
 
 
+async def _item_require(session, user: User, entity_id: uuid.UUID, project, permission: Permission):
+    """An item's atoms resolve against its project."""
+    return await authz.require(session, user, permission, project=project)
+
+
 async def _item_write(session, user: User, entity_id: uuid.UUID, project):
     permissions = await authz.require(session, user, Permission.COMMENT_WRITE, project=project)
     # RADD-844: comment.write on an ITEM may be relation-qualified, and the
@@ -129,5 +147,6 @@ register_parent(
         require_write=_item_write,
         # Spec 50's rule, unchanged: editing another's comment is project.manage.
         manage_permission=Permission.PROJECT_MANAGE,
+        require_in_scope=_item_require,
     )
 )

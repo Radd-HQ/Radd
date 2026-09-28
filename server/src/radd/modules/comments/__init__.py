@@ -41,6 +41,20 @@ _COMMENT_PAYLOAD_SCHEMA: dict = {
             "type": ["string", "null"],
             "description": "The thread root's id when this comment is a REPLY; null for a root.",
         },
+        "is_thread": {
+            "type": "boolean",
+            "description": "A resolvable thread root (an annotation, or opened as a thread).",
+        },
+        # RADD-922's person ref (`auth.service.user_ref`); null for an imported
+        # comment whose author never resolved to an account (RADD-1195).
+        "author": {
+            "type": ["object", "null"],
+            "properties": {
+                "id": {"type": "string"},
+                "name": {"type": "string"},
+                "email": {"type": "string"},
+            },
+        },
         "visibility": {"type": "string", "enum": ["public", "internal"]},
         "excerpt": {"type": "string"},
         "visible_to_teams": {"type": "array", "items": {"type": "string"}},

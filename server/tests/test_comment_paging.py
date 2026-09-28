@@ -3,11 +3,10 @@ import uuid
 from datetime import datetime, timedelta
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from radd.config import settings
-from radd.exceptions import NotFoundError
+from radd.exceptions import InvalidInputError, NotFoundError
 from radd.modules.auth.models import User
 from radd.modules.auth.scopes import parse_scope
 from radd.modules.comments import service
@@ -84,9 +83,9 @@ async def test_inline_and_discussion_windows_do_not_hide_each_other(world):
     assert [row.id for row in (await service.comment_page(db, item.id, reader, section=CommentSlice.DISCUSSION)).comments] == [plain.id]
     assert [row.id for row in (await service.comment_page(db, item.id, reader, section=CommentSlice.INLINE)).comments] == [inline.id]
     for cursor in ("not base64", "c2VjcmV0"):
-        with pytest.raises(HTTPException) as error:
+        # A domain error from the service (RADD-1428), 422 at the router.
+        with pytest.raises(InvalidInputError):
             await service.comment_page(db, item.id, reader, before=cursor)
-        assert error.value.status_code == 422
 
 
 @pytest.mark.parametrize("authority", ["reader", "internal", "manager"])

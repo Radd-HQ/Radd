@@ -570,8 +570,10 @@ async def _comments(
                 actor,
                 entity_type="page",
                 # The import-friendly door: author and timestamp are honored only
-                # for a caller holding PROJECT_MANAGE, which is what this says.
-                permissions=frozenset({Permission.PROJECT_MANAGE}),
+                # for the PARENT's manager — page.manage for a page comment
+                # (RADD-1428; it used to be project.manage for every parent,
+                # a project-shaped atom a page has no scope for).
+                permissions=frozenset({Permission.PAGE_MANAGE}),
             )
             _bump(run, "comments")
         await session.commit()

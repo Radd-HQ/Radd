@@ -13,15 +13,14 @@ Replies are one level deep: a reply to a reply is refused, as before.
 """
 import uuid
 
-from fastapi import HTTPException
 from sqlalchemy import select, tuple_
 
-from radd.exceptions import ConflictError, NotFoundError
+from radd.exceptions import ConflictError, InvalidInputError, NotFoundError
 from .models import Comment
 from .parents import binding_for
 from .reading import _boundary, _cursor, _hydrate, _read_query, audience
 from .schemas import CommentCreate, CommentPage
-from .types import CommentEntity, CommentSlice, CommentVisibility
+from .types import PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX, CommentEntity, CommentSlice, CommentVisibility
 
 
 async def lock_thread_parent(session, entity_type, entity_id):
@@ -83,10 +82,10 @@ async def require_thread(session, comment_id, actor, *, lock=False):
     return root
 
 
-async def reply_page(session, comment_id, actor, *, limit=50, before=None):
+async def reply_page(session, comment_id, actor, *, limit=PAGE_LIMIT_DEFAULT, before=None):
     root = await require_thread(session, comment_id, actor)
-    if not 1 <= limit <= 200:
-        raise HTTPException(422, "Comment page limit must be between 1 and 200")
+    if not 1 <= limit <= PAGE_LIMIT_MAX:
+        raise InvalidInputError(f"Comment page limit must be between 1 and {PAGE_LIMIT_MAX}")
     # The reader's own audience filters the replies: an internal reply under a
     # public thread is invisible to whoever may not read internal comments.
     allowed = await audience(session, root.entity_id, actor, root.entity_type)
@@ -116,7 +115,7 @@ async def create_reply(session, comment_id, data, actor):
     project = await binding.project_of(session, root.entity_id)
     permissions = await binding.require_write(session, actor, root.entity_id, project)
     if not data.body.strip():
-        raise HTTPException(422, "Reply must not be blank")
+        raise InvalidInputError("Reply must not be blank")
     root_teams = (await _team_restrictions(session, [root.id])).get(root.id, set())
     visibility, teams = reply_audience(root, root_teams, data.visibility, data.visible_to_teams)
     return await create_authorized_comment(session, root.entity_id,

@@ -9,7 +9,13 @@ from fastapi.responses import FileResponse, JSONResponse, ORJSONResponse
 from radd import __version__
 from radd.backup import postgres as backup_postgres
 from radd.config import settings
-from radd.exceptions import ConflictError, ForbiddenError, NotFoundError, UnauthorizedError
+from radd.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    InvalidInputError,
+    NotFoundError,
+    UnauthorizedError,
+)
 from radd.kernel import entities as kentities
 from radd.kernel import registries
 from radd.kernel import import_models, load_plugins
@@ -122,6 +128,10 @@ def create_app() -> FastAPI:
     @app.exception_handler(ForbiddenError)
     async def forbidden_handler(request: Request, exc: ForbiddenError) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+    @app.exception_handler(InvalidInputError)
+    async def invalid_input_handler(request: Request, exc: InvalidInputError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     for plugin in plugins:
         for exc_type, handler in plugin.exception_handlers:

@@ -3,6 +3,11 @@ from enum import StrEnum
 # Max characters of the comment body included in event payloads (webhook-friendly).
 EXCERPT_MAX_CHARS = 200
 
+#: A comment feed window: the default and the ceiling, read by the router's
+#: Query bounds AND by the service (MCP and other modules call it directly).
+PAGE_LIMIT_DEFAULT = 50
+PAGE_LIMIT_MAX = 200
+
 
 class CommentParentType(StrEnum):
     """What a comment hangs off (RADD-717). A WIRE FORMAT — it is stored in the

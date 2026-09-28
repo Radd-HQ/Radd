@@ -60,6 +60,15 @@ async def _page_write(session, user: User, page_id: uuid.UUID, project):
     return await authz.require(session, user, Permission.COMMENT_WRITE, space_id=space_id)
 
 
+async def _page_require(session, user: User, page_id: uuid.UUID, project, permission: Permission):
+    """A page's atoms resolve IN ITS SPACE (RADD-1428) — `comment.write` for
+    the author's own edit, `comment.delete`, `page.manage` for someone else's
+    comment. The comments module used to resolve these with `project=None`,
+    which is the global scope: the RADD-791 mistake, on the edit path."""
+    del project
+    return await authz.require(session, user, permission, space_id=await _space_of(session, page_id))
+
+
 register_parent(
     CommentParent(
         entity_type=CommentParentType.PAGE.value,
@@ -69,5 +78,6 @@ register_parent(
         require_write=_page_write,
         # Editing or removing someone else's page comment is a wiki-admin act.
         manage_permission=Permission.PAGE_MANAGE,
+        require_in_scope=_page_require,
     )
 )
