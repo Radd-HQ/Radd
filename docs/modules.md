@@ -307,7 +307,7 @@ Owns `comments` on any parent registered in `comments/parents.py` (issues built 
 - **Events:** `comment.created`, `comment.updated`, `comment.deleted`, `comment.resolution_policy_updated`
 - **Permissions:** `comment.write (project)`, `comment.read_internal (project)`, `comment.delete (project)`
 - **Access:** relations `comment@own`; relation domains `comment.write → item`
-- **Contributes:** automation nodes `gate.comment`; template tokens `{{comment.*}}`; SLQ fields `commented_by`
+- **Contributes:** MCP tools `update_comment`, `delete_comment`; automation nodes `gate.comment`; template tokens `{{comment.*}}`; SLQ fields `commented_by`
 - **Data:** record-local entities `comment`; cascades `comments:item`, `comments:page`
 
 ### weblinks

@@ -16,7 +16,9 @@ import type { QuickAction } from "../items/quick-actions";
 import { Button } from "../Button";
 import { CommentHistory } from "../CommentHistory";
 import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
+import { CommentEditForm } from "./CommentEditForm";
 import { escapeBelongsInside } from "./escape";
+import { ReplyActions } from "./ReplyActions";
 import { SegmentedChoice } from "./SegmentedChoice";
 import { repliesLabel } from "./ThreadResolution";
 
@@ -49,7 +51,9 @@ interface Expansion {
  *   visibility (the server inherits) and says so in one line;
  * - `canInternal` — the thread is public and this reader may write internal comments, so the form
  *   offers an Internal reply switch.
- * The composer is the same rich editor a top-level comment gets: a reply is a comment.
+ * The composer is the same rich editor a top-level comment gets: a reply is a comment — and so
+ * (RADD-1477) its author, or a manager (`canManage`), edits it in place with the comment's own
+ * editor and deletes it after a confirm; anyone else sees neither control.
  */
 export function CommentReplies({
   row,
@@ -58,6 +62,7 @@ export function CommentReplies({
   onDraft,
   canInternal = false,
   internalLocked = false,
+  canManage = false,
   onUploadImage,
   quickActions,
   canResolve = false,
@@ -73,6 +78,8 @@ export function CommentReplies({
   onDraft: (value: string) => void;
   canInternal?: boolean;
   internalLocked?: boolean;
+  /** May edit and delete ANYONE's reply (a project manager); an author always may their own. */
+  canManage?: boolean;
   /** Image paste/insert → attachment URL; omit where the parent takes none. */
   onUploadImage?: (file: File) => Promise<string>;
   /** `/` actions on the issue in context; omit on pages. */
@@ -97,6 +104,15 @@ export function CommentReplies({
   const client = useQueryClient();
   const me = useCurrentUser();
   const [internal, setInternal] = useState(false);
+  // RADD-1477: which reply is being edited, and each reply's unsaved edit (kept across Cancel).
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDrafts, setEditDrafts] = useState<Record<string, string>>({});
+  const dropEditDraft = (id: string) =>
+    setEditDrafts((drafts) => {
+      const next = { ...drafts };
+      delete next[id];
+      return next;
+    });
   const query = useInfiniteQuery(
     infiniteQueryOptions({
       queryKey: ["commentReplies", row.id],
@@ -208,43 +224,64 @@ export function CommentReplies({
               )}
               {replies.map((reply) => {
                 const isInternal = reply.visibility === CommentVisibility.internal;
+                // RADD-1477: the author, or a manager, may edit and delete it.
+                const canAct = canManage || (!!me && me.id === reply.author?.id);
+                const editing = editingId === reply.id;
                 return (
                   <div
                     key={reply.id}
                     data-comment-id={reply.id}
                     data-reply-visibility={reply.visibility}
                     className={
-                      "border-l-2 pl-2 " +
+                      "group/reply border-l-2 pl-2 " +
                       (isInternal ? "border-callout-warning-border/60 bg-callout-warning-fill py-1" : "border-subtle")
                     }
                   >
-                    <p className="text-xs">
-                      <span className="font-medium text-heading">{reply.author?.name ?? "Unknown author"}</span>{" "}
+                    <p className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="font-medium text-heading">{reply.author?.name ?? "Unknown author"}</span>
                       <span className="text-fg-faint" title={reply.created_at}>
                         {relativeTime(reply.created_at)}
                       </span>
+                      {reply.updated_at !== reply.created_at && <span className="text-fg-faint">(edited)</span>}
                       {isInternal && (
-                        <span className="ml-1.5 rounded border border-callout-warning-border/60 px-1.5 py-px text-[10px] font-medium text-callout-warning-ink">
+                        <span className="rounded border border-callout-warning-border/60 px-1.5 py-px text-[10px] font-medium text-callout-warning-ink">
                           Internal
                         </span>
                       )}
-                      {linkFor && <CopyCommentLink href={linkFor(reply.id)} className="ml-1.5 align-middle" />}
+                      {linkFor && <CopyCommentLink href={linkFor(reply.id)} className="align-middle" />}
+                      {canAct && !editing && <ReplyActions reply={reply} onEdit={() => setEditingId(reply.id)} />}
                     </p>
-                    <ContentBody
-                      record={reply}
-                      context={{ entityType: "comment", entityId: reply.id, parent: { entityType: reply.entity_type, entityId: reply.entity_id } }}
-                      canEdit={!!me && me.id === reply.author?.id}
-                      text={reply.body}
-                      // RADD-1296: a reply's author ticks its checklist in place.
-                      onToggleTask={
-                        me && reply.author?.id === me.id
-                          ? async (toggle) => {
-                              await sendTaskToggle(apiCommentTasksPath(reply.id), toggle, reply.body);
-                              await client.invalidateQueries({ queryKey: ["commentReplies", row.id] });
-                            }
-                          : undefined
-                      }
-                    />
+                    {editing ? (
+                      <CommentEditForm
+                        comment={reply}
+                        draft={editDrafts[reply.id] ?? reply.body}
+                        onDraft={(value) => setEditDrafts((drafts) => ({ ...drafts, [reply.id]: value }))}
+                        onSaved={() => {
+                          dropEditDraft(reply.id);
+                          setEditingId(null);
+                          void invalidateEntities(client, Entity.comment);
+                        }}
+                        onCancel={() => setEditingId(null)}
+                        quickActions={quickActions}
+                        onUploadImage={onUploadImage}
+                      />
+                    ) : (
+                      <ContentBody
+                        record={reply}
+                        context={{ entityType: "comment", entityId: reply.id, parent: { entityType: reply.entity_type, entityId: reply.entity_id } }}
+                        canEdit={canAct}
+                        text={reply.body}
+                        // RADD-1296: whoever may edit the reply ticks its checklist in place.
+                        onToggleTask={
+                          canAct
+                            ? async (toggle) => {
+                                await sendTaskToggle(apiCommentTasksPath(reply.id), toggle, reply.body);
+                                await client.invalidateQueries({ queryKey: ["commentReplies", row.id] });
+                              }
+                            : undefined
+                        }
+                      />
+                    )}
                   </div>
                 );
               })}

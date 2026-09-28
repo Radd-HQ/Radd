@@ -14,7 +14,7 @@ Replies are one level deep: a reply to a reply is refused, as before.
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 
 from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.items.models import WorkItem
@@ -29,6 +29,15 @@ async def lock_thread_parent(session, entity_type, entity_id):
     """Serialize thread lifecycle writes with issue state updates (parent first)."""
     if entity_type == CommentParentType.ITEM.value:
         await session.scalar(select(WorkItem.id).where(WorkItem.id == entity_id).with_for_update())
+
+
+async def reply_count(session, root_id: uuid.UUID) -> int:
+    """Every reply under a root, whatever its audience — the gate for deleting the
+    root (RADD-1477) or turning a thread back into a comment (RADD-1478) counts
+    what EXISTS, not what one reader may see."""
+    return int(await session.scalar(
+        select(func.count()).select_from(Comment).where(Comment.parent_comment_id == root_id)
+    ) or 0)
 
 
 async def has_unresolved_threads(session, item_id):

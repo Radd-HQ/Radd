@@ -80,6 +80,8 @@ export interface CommentRepliesProps {
   draft: string;
   onDraft: (value: string) => void;
   canResolve: boolean;
+  /** RADD-1477: may edit and delete ANYONE's reply (a project manager); an author always may their own. */
+  canManage?: boolean;
   linkedReplyId?: string;
   linkFor?: (commentId: string) => string;
   /**

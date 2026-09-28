@@ -12,20 +12,20 @@ import { Avatar } from "../Avatar";
 import { PersonName } from "../PersonName";
 import { itemCommentFeedQuery, queryKeys, TEAMS_PAGE_SIZE } from "../../lib/queries";
 import { AttachmentParentType, Permission, type Comment, type Item } from "../../lib/types";
-import { useIssueQuickActions, type QuickAction } from "./quick-actions";
+import { useIssueQuickActions } from "./quick-actions";
 import { CommentHistory } from "../CommentHistory";
 import { chronologicalComments } from "../../lib/queries/comment-feed";
 import { Button } from "../Button";
 import { Spinner } from "../Spinner";
 import { CommentAudienceNames, COMMENT_TEAM_PREVIEW_SIZE } from "./CommentAudienceNames";
 import { QueryError } from "../QueryError";
+import { CommentEditForm } from "../comments/CommentEditForm";
 import { CommentReplies } from "../comments/CommentReplies";
 import { CopyCommentLink } from "../comments/CopyCommentLink";
 import { IssueCommentComposer } from "../comments/IssueCommentComposer";
 import { issueCommentHref, useLandOnComment, useLinkedComment } from "../../lib/comment-links";
 import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from "../comments/ThreadResolution";
 
-import { LazyRichEditor as RichEditor } from "../editor/LazyRichEditor";
 import { formatDateTime, IconButton, Slot, SlotId, useConfirm, type EditorTransform } from "@radd/plugin-sdk";
 import { teamReferencesQuery } from "@radd-plugin-ui/teams/references";
 import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
@@ -80,6 +80,14 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
   const teamLabels = useQueries({ queries: labelBatches.map(ids => teamReferencesQuery(ids)) });
   const teamNames = new Map(teamLabels.flatMap(query => (query.data ?? []).map(row => [row.id, row.name] as const)));
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Each comment's unsaved edit: Cancel and Escape keep it, a save drops it.
+  const [editDrafts, setEditDrafts] = useState<Record<string, string>>({});
+  const dropEditDraft = (id: string) =>
+    setEditDrafts((drafts) => {
+      const next = { ...drafts };
+      delete next[id];
+      return next;
+    });
   // RADD-1246/1448: whose replies show, and each thread's unsent reply draft.
   const expansion = useThreadExpansion(linked?.root_id);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
@@ -200,10 +208,18 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                   {editingId === comment.id ? (
                     <CommentEditForm
                       comment={comment}
-                      itemId={itemId}
+                      draft={editDrafts[comment.id] ?? comment.body}
+                      onDraft={(value) => setEditDrafts((drafts) => ({ ...drafts, [comment.id]: value }))}
                       quickActions={quickActions}
+                      onUploadImage={uploadCommentImage}
                       initialTransform={pendingTransform ?? undefined}
-                      onDone={() => {
+                      onSaved={() => {
+                        void queryClient.invalidateQueries({ queryKey: queryKeys.comments(itemId) });
+                        dropEditDraft(comment.id);
+                        setPendingTransform(null);
+                        setEditingId(null);
+                      }}
+                      onCancel={() => {
                         setPendingTransform(null);
                         setEditingId(null);
                       }}
@@ -235,6 +251,7 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
                     // one may take an internal reply from someone who may write them.
                     internalLocked={internal}
                     canInternal={!internal && canReadInternal}
+                    canManage={canManageProject}
                     onUploadImage={uploadCommentImage}
                     quickActions={quickActions}
                     canResolve={thread && canResolve}
@@ -266,8 +283,9 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
 
 
 /**
- * Hover actions on a comment row: edit (author) / delete (author or admin). Delete asks first, and
- * says what else goes: a root takes its replies with it. Shown on hover, and while one has focus.
+ * Hover actions on a comment row: edit (author) / delete (author or admin). Delete asks first. A
+ * root that still has replies is refused by the server (RADD-1477) — so instead of sending it, the
+ * dialog says what to do: delete the replies first. Shown on hover, and while one has focus.
  */
 function CommentActions({
   comment,
@@ -289,11 +307,18 @@ function CommentActions({
   });
   const replies = comment.reply_count ?? 0;
   const askToDelete = async () => {
+    if (replies) {
+      await confirm({
+        title: "Delete comment",
+        message: `This comment has ${replies === 1 ? "a reply" : `${replies} replies`}. Delete them first — a discussion is removed from its end, never by taking away its first line.`,
+        confirmLabel: "OK",
+        hideCancel: true,
+      });
+      return;
+    }
     const ok = await confirm({
       title: "Delete comment",
-      message: replies
-        ? `Delete this comment and its ${replies === 1 ? "reply" : `${replies} replies`}? This cannot be undone.`
-        : "Delete this comment? This cannot be undone.",
+      message: "Delete this comment? This cannot be undone.",
       confirmLabel: "Delete",
       danger: true,
     });
@@ -313,60 +338,5 @@ function CommentActions({
       )}
       {confirmDialog}
     </span>
-  );
-}
-
-/** Inline comment editor (spec 37) — PATCH /comments/{id}, Cmd+Enter saves. */
-function CommentEditForm({
-  comment,
-  itemId,
-  quickActions,
-  initialTransform,
-  onDone,
-}: {
-  comment: Comment;
-  itemId: string;
-  quickActions: QuickAction[];
-  /** From a read action: run this transform as soon as the editor mounts. */
-  initialTransform?: EditorTransform;
-  onDone: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const [draft, setDraft] = useState(comment.body);
-  const uploadCommentImage = useImageUploader({ entityType: AttachmentParentType.item, entityId: itemId });
-  const save = useMutation({
-    mutationFn: () => api.patch<Comment>(apiCommentPath(comment.id), { body: draft }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.comments(itemId) });
-      onDone();
-    },
-  });
-  const submit = () => {
-    if (draft.trim() && draft !== comment.body) save.mutate();
-    else onDone();
-  };
-  return (
-    <div className="mt-1 flex flex-col gap-1.5">
-      <RichEditor
-        value={draft}
-        onChange={setDraft}
-        onUploadImage={uploadCommentImage}
-        autoFocus
-        onSubmitShortcut={submit}
-        quickActions={quickActions}
-        initialTransform={initialTransform}
-      />
-      <div className="flex items-center gap-2">
-        <Button size="sm" onClick={submit} disabled={save.isPending}>
-          {save.isPending ? "Saving…" : "Save"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-        {save.isError && (
-          <span role="alert" className="text-xs text-status-danger-ink">{errorMessage(save.error)}</span>
-        )}
-      </div>
-    </div>
   );
 }

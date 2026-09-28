@@ -37,7 +37,11 @@ class CommentCreate(BaseModel):
 
 
 class CommentUpdate(BaseModel):
-    body: str = Field(min_length=1)
+    """PATCH: every field is optional and an omitted one is left alone, so a
+    caller (the UI, an MCP agent) can narrow the audience without restating
+    the body (RADD-1477)."""
+
+    body: str | None = Field(default=None, min_length=1)
     # Spec 50: None = leave the team allow-list unchanged; a list replaces it.
     visible_to_teams: list[uuid.UUID] | None = None
 

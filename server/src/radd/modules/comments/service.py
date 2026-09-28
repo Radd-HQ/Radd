@@ -29,7 +29,7 @@ from .types import (
 )
 from .reading import comment_page as comment_page, list_comments as list_comments, locate as locate
 from .threads import has_unresolved_threads as has_unresolved_threads
-from .threads import lock_thread_parent, narrow_replies, reply_audience, require_thread
+from .threads import lock_thread_parent, narrow_replies, reply_audience, reply_count, require_thread
 from radd.clock import utcnow
 
 
@@ -395,9 +395,10 @@ async def update_comment(
         session, comment, actor, project, others=Permission.PROJECT_MANAGE
     )
     _check_internal(permissions, comment.visibility)
-    body_changed = comment.body != data.body
+    body_changed = data.body is not None and comment.body != data.body
     previous_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
-    comment.body = data.body
+    if data.body is not None:
+        comment.body = data.body
     await session.flush()
     if data.visible_to_teams is not None:
         stored_teams = await _set_teams(session, comment, data.visible_to_teams)
@@ -425,6 +426,10 @@ async def update_comment(
 
 
 async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> None:
+    """Delete one comment or reply. A ROOT that still has replies is refused
+    (RADD-1477): deleting the first line of a discussion would take every
+    answer with it, so the answers go first — the FK cascade stays for
+    `delete_for_parent`, where the whole parent is going anyway."""
     comment = await _get(session, comment_id)
     if comment.parent_comment_id:
         await require_thread(session, comment.parent_comment_id, actor)
@@ -433,6 +438,13 @@ async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: Us
         session, comment, actor, project, others=Permission.COMMENT_DELETE
     )
     _check_internal(permissions, comment.visibility)
+    # After the gate, so a stranger learns nothing about the thread's size.
+    replies = await reply_count(session, comment.id)
+    if replies:
+        raise ConflictError(
+            CommentEntity.COMMENT,
+            reason=f"This comment has {replies} {'reply' if replies == 1 else 'replies'}; delete them first",
+        )
     await _emit(session, CommentEvent.DELETED, comment, actor.id)
     await session.delete(comment)
 

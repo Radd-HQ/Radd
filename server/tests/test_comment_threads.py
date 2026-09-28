@@ -95,8 +95,15 @@ async def test_resolution_reopen_and_cascade_preserve_the_conversation(world):
     # public thread an empty team list is that audience, so this is allowed.
     edited = await service.update_comment(db, reply.id, CommentUpdate(body="Edited within audience", visible_to_teams=[]), reader)
     assert edited.visibility is CommentVisibility.PUBLIC and edited.visible_to_teams == []
+    # RADD-1477: the root no longer takes its replies with it — a root with
+    # replies is refused, and the conversation is deleted from the end.
+    with pytest.raises(ConflictError, match="3 replies; delete them first"):
+        await service.delete_comment(db, root.id, author)
+    for reply_id in (await db.scalars(select(Comment.id).where(Comment.parent_comment_id == root.id))).all():
+        await service.delete_comment(db, reply_id, author)
     await service.delete_comment(db, root.id, author)
     await db.flush()
+    assert await db.get(Comment, root.id) is None
     assert (await db.scalars(select(Comment.id).where(Comment.parent_comment_id == root.id))).all() == []
 
 

@@ -4,6 +4,7 @@ from .automation import COMMENT_GATE, COMMENT_TOKENS  # RADD-1322/1324: "Comment
 from .slq import commented_by_item_ids
 
 from .router import router
+from .mcptools import MCP_TOOLS  # RADD-1477: update_comment / delete_comment
 from . import subscribers  # noqa: F401 — RADD-1174: the project-teardown hooks
 from .types import CommentEntity, CommentEvent
 
@@ -77,6 +78,7 @@ plugin = RaddPlugin(
         "radd.modules.comments.gc", fromlist=["cascades"]
     ).cascades(),
     routers=(router,),
+    mcp_tools=MCP_TOOLS,
 
     event_types=(
         # RADD-1248: `page` is a declared subject — a comment on a page carries

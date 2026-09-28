@@ -99,15 +99,21 @@ export function PageComments({ pageId, canComment }: { pageId: string; canCommen
                     <IconButton
                       danger
                       onClick={() =>
-                        void confirm({
-                          title: "Delete comment",
-                          // Deleting a root removes its replies too.
-                          message: comment.reply_count
-                            ? `Delete this comment and its ${comment.reply_count === 1 ? "reply" : `${comment.reply_count} replies`}?`
-                            : "Delete this comment?",
-                          confirmLabel: "Delete",
-                          danger: true,
-                        }).then((ok) => ok && remove.mutate(comment.id))
+                        // RADD-1477: a root with replies is refused by the server — say so
+                        // here instead of sending it; the replies go first.
+                        void (comment.reply_count
+                          ? confirm({
+                              title: "Delete comment",
+                              message: `This comment has ${comment.reply_count === 1 ? "a reply" : `${comment.reply_count} replies`}. Delete them first.`,
+                              confirmLabel: "OK",
+                              hideCancel: true,
+                            })
+                          : confirm({
+                              title: "Delete comment",
+                              message: "Delete this comment?",
+                              confirmLabel: "Delete",
+                              danger: true,
+                            }).then((ok) => ok && remove.mutate(comment.id)))
                       }
                       aria-label="Delete comment"
                       title="Delete comment"
