@@ -16,7 +16,7 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
-### Pre-release review wave — epic RADD-1449 (2026-09-27/28), shipped as v0.49.1
+### Pre-release review wave — epic RADD-1449 (2026-09-27/28), shipped as the first v0.49 release
 
 Before tagging the three unpushed waves below (134 commits, 2226 files, +76k/−87k), eight read-only
 reviewers read the whole diff, one per slice, and the full check suite ran first. Verdict: the cleanups
@@ -29,8 +29,8 @@ build-all, 203 unit tests, 31/31 browser proofs):
 - **RADD-1339 had two logic defects**: a SKIP counted as a failure and removed the item from the rest
   of the branch (RADD-1450); an automation with no owner raised on every run although its comment
   promised the system actor. Neither shipped.
-- **Deploy behaviour flips became a documented list** (RADD-1453, `docs/deploy.md` "Upgrading to
-  v0.49.1"): publish-on-release, move-on-merge and mirror-time per repository, the email receipt and
+- **Deploy behaviour flips became a documented list** (RADD-1453, `docs/deploy.md` "Upgrading from
+  v0.48.0"): publish-on-release, move-on-merge and mirror-time per repository, the email receipt and
   resolution notice, and notification mail without mailintake all migrate OFF; two migrations refuse to
   downgrade. The release notes are generated from commits and cannot say so.
 - **Secrets**: the admin settings list returned decrypted values (RADD-1454, now a set marker) and the
@@ -51,7 +51,7 @@ test database is derived from the app settings; `git rebase --autosquash` fails 
 touched the same lines; the loader treated a capabilities answer without a `remotes` list as never
 synced, which RADD-1461 turned into a blank page until the browser chain caught it.
 
-### Bloat-audit wave — epic RADD-1402 (2026-09-27), shipped as v0.49.1
+### Bloat-audit wave — epic RADD-1402 (2026-09-27), shipped as the first v0.49 release
 
 Fourteen read-only audit agents classified every module's dead, redundant and over-narrated code; ten
 fix agents in worktrees removed it, bug fixes first in their own commits (RADD-1413…1423), then one

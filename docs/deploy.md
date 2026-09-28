@@ -118,9 +118,9 @@ Three rules that keep this boring:
   app` until uvicorn starts serving. The app refuses traffic until the
   schema converges, which is the correct failure mode.
 
-### Upgrading to v0.49.1
+### Upgrading from v0.48.0
 
-v0.49.1 (the first release after v0.48.0; v0.49.0 was tagged but never built) moves several built-in behaviours behind switches that migrate **off** for
+The first release after v0.48.0 (the v0.49 line) moves several built-in behaviours behind switches that migrate **off** for
 existing rows (the integration-settings decision of RADD-1367: integrations record
 data and fire triggers; a behaviour is something an admin switched on). Nothing breaks,
 but each of these stops until it is switched back on, and the release notes are
