@@ -232,5 +232,5 @@ def downgrade() -> None:
     # cannot run; refusing is the honest answer (RADD-1453).
     raise RuntimeError(
         "d1329verdict cannot be downgraded: restore the database backup taken before "
-        "this release instead (see docs/deploy.md, Upgrading to v0.49.0)"
+        "this release instead (see docs/deploy.md, Upgrading to v0.49.1)"
     )
