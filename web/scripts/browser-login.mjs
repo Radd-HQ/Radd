@@ -49,6 +49,9 @@ try {
   await until(s, () => s.eval(`!!document.querySelector('input[placeholder="123456"]')`));
   await type('input[placeholder="123456"]', "123456"); await button("Sign in");
   await until(s, () => requests.length === 3);
+  // The mock refuses the code; wait for the REFUSAL to render (the response handled, the form idle)
+  // before pressing Close — on a slow runner a click during the response is swallowed (RADD-1480).
+  await until(s, () => s.eval(`document.body.innerText.includes('Invalid email, password, or code.')`), "totp refusal rendered");
   assert.equal(requests[1].path, "/api/v1/auth/login");
   assert.equal(requests[2].path, "/api/v1/auth/login/totp");
   assert.equal(requests[2].body.code, "123456");
