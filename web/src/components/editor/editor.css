@@ -332,12 +332,14 @@
   opacity: 0.6;
   cursor: progress;
 }
-/* A done item's OWN text is struck through and quieted. Only its paragraphs:
-   text-decoration propagates and cannot be undone below, so striking the whole
-   .children would strike its still-open nested subtasks too. */
+/* A done item's OWN text stays readable (RADD-1476, GitHub #32): the filled box
+   and a quieter colour say "done"; a strikethrough said "deleted" and made the
+   text hard to read. `fg-secondary`, not `fg-muted`: body text needs 4.5:1, and
+   fg-muted measures 4.07:1 on the light page. Only its paragraphs, so a
+   still-open nested subtask keeps the full colour. */
 .radd-rich-editor .milkdown :is(milkdown-list-item-block, .milkdown-list-item-block)
   .list-item:has(> .label-wrapper > .label.checked) > .children > .content-dom > p {
-  text-decoration: line-through;
-  color: var(--color-fg-muted);
+  text-decoration: none;
+  color: var(--color-fg-secondary);
 }
 

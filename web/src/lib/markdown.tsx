@@ -182,8 +182,9 @@ const components = {
     <li
       className={
         className?.includes("task-list-item")
-          ? // RADD-1296: a done item reads as done — struck through, quieter.
-            "list-none [&:has(>input:checked)]:text-fg-muted [&:has(>input:checked)]:line-through"
+          ? // RADD-1476: a done item reads as done by its filled box and a quieter colour;
+            // its text stays readable (no strikethrough). fg-secondary holds 4.5:1 in both themes.
+            "list-none [&:has(>input:checked)]:text-fg-secondary"
           : ""
       }
     >

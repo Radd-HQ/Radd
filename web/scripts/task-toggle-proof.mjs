@@ -8,7 +8,10 @@
  *   1. a box is a real 16px box, not a 13px glyph; open vs done differ in
  *      FILL, and the open box's border clears 3:1 against the page in BOTH
  *      themes (a graphic, so 3:1, not 4.5:1);
- *   2. a done item's own text is struck through; its open nested child is not;
+ *   2. a done item's own text stays READABLE (RADD-1476, GitHub #32): no
+ *      strikethrough, a quieter colour that still clears 4.5:1 in BOTH themes,
+ *      and a box FILLED with the accent carrying a visible check mark; its open
+ *      nested child keeps the full text colour;
  *   3. ticking in a description's READ view persists, with no editor opened,
  *      and changes exactly one line of the stored text;
  *   4. the same on a comment;
@@ -50,13 +53,21 @@ const measure = (scope) => `(() => {
     return 0.2126 * f(m[0]) + 0.7152 * f(m[1]) + 0.0722 * f(m[2]); };
   const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
   const bgOf = (el) => { while (el) { const c = getComputedStyle(el).backgroundColor; if (c && !c.endsWith(", 0)") && c !== "transparent") return c; el = el.parentElement; } return "rgb(0, 0, 0)"; };
+  // The accent token, resolved by the browser in the CURRENT theme — the proof states no hex.
+  const swatch = document.body.appendChild(document.createElement("span")); swatch.style.background = "var(--accent-fill)";
+  const accent = getComputedStyle(swatch).backgroundColor; swatch.remove();
   const root = document.querySelector(${JSON.stringify(scope)});
   return [...(root?.querySelectorAll(${JSON.stringify(LABEL)}) ?? [])].map((label) => {
     const s = getComputedStyle(label); const r = label.getBoundingClientRect();
     const p = label.closest(".list-item")?.querySelector(":scope > .children > .content-dom > p");
-    return { checked: label.classList.contains("checked"), w: r.width, h: r.height, fill: s.backgroundColor,
+    const mark = getComputedStyle(label, "::after");
+    return { checked: label.classList.contains("checked"), w: r.width, h: r.height, fill: s.backgroundColor, accent,
+      fillContrast: ratio(s.backgroundColor === "rgba(0, 0, 0, 0)" ? bgOf(label.parentElement) : s.backgroundColor, bgOf(label.parentElement)),
+      // The check mark is a rotated two-sided border: visible when it has a size and an opaque colour.
+      mark: { w: parseFloat(mark.width) || 0, h: parseFloat(mark.height) || 0, color: mark.borderRightColor, contrast: ratio(mark.borderRightColor, s.backgroundColor === "rgba(0, 0, 0, 0)" ? bgOf(label.parentElement) : s.backgroundColor) },
       border: s.borderTopColor, contrast: ratio(s.borderTopColor, bgOf(label.parentElement)),
       strike: p ? getComputedStyle(p).textDecorationLine : null, text: p?.textContent ?? "",
+      color: p ? getComputedStyle(p).color : null, textContrast: p ? ratio(getComputedStyle(p).color, bgOf(p)) : 0,
       role: label.getAttribute("role"), aria: label.getAttribute("aria-checked"),
       // How far the box's centre sits from the centre of its text's FIRST line.
       offset: p ? Math.abs((r.top + r.height / 2) - (p.getBoundingClientRect().top + parseFloat(getComputedStyle(p).lineHeight) / 2)) : 99 };
@@ -92,13 +103,30 @@ async function main() {
     context.offsets = boxes.map((b) => +b.offset.toFixed(1));
     checks["1f. each box sits beside its text's first line (centres within 3px)"] = boxes.every((b) => b.offset <= 3);
     checks["1d. boxes are checkboxes to assistive tech"] = boxes.every((b) => b.role === "checkbox" && b.aria === String(b.checked));
-    checks["2. a done item is struck through; its open nested child is not"] =
-      done?.strike === "line-through" && boxes.find((b) => b.text.startsWith("Nested"))?.strike === "none";
+    // RADD-1476: done says so by fill and colour, never by striking the words out.
+    const nested = boxes.find((b) => b.text.startsWith("Nested"));
+    const doneLook = (rows) => {
+      const d = rows.find((b) => b.checked), o = rows.find((b) => !b.checked);
+      return d && o && { strike: d.strike, quieter: d.color !== o.color, textContrast: +d.textContrast.toFixed(2),
+        filled: d.fill === d.accent && d.fill !== o.fill, fillContrast: +d.fillContrast.toFixed(2),
+        mark: d.mark.w >= 3 && d.mark.h >= 6 && d.mark.color !== "rgba(0, 0, 0, 0)" && d.mark.contrast >= 3 };
+    };
+    context.doneDark = doneLook(boxes);
+    checks["2a. a done item's text is NOT struck through"] = done?.strike === "none" && !done.strike.includes("line-through");
+    checks["2b. …it is quieter than an open item's, yet clears 4.5:1 (dark)"] = !!context.doneDark?.quieter && context.doneDark.textContrast >= 4.5;
+    checks["2c. …its box is FILLED with the accent (3:1 against the page) and carries a check mark (dark)"] =
+      !!context.doneDark?.filled && context.doneDark.fillContrast >= 3 && context.doneDark.mark;
+    checks["2d. its open nested child keeps the full colour, unstruck"] = !!nested && nested.strike === "none" && nested.color === open?.color;
     await session.eval(`document.documentElement.classList.add("light")`);
     await sleep(300);
     const light = await session.eval(measure(scope));
     context.lightContrast = +(light.find((b) => !b.checked)?.contrast ?? 0).toFixed(2);
     checks["1e. the open box's border clears 3:1 (light)"] = context.lightContrast >= 3;
+    context.doneLight = doneLook(light);
+    checks["2e. …the done text clears 4.5:1 and stays unstruck (light)"] =
+      context.doneLight?.strike === "none" && context.doneLight.quieter && context.doneLight.textContrast >= 4.5;
+    checks["2f. …the box is filled with the accent and carries a check mark (light)"] =
+      !!context.doneLight?.filled && context.doneLight.fillContrast >= 3 && context.doneLight.mark;
     await session.screenshot(resolve(SHOTS, "description-light.png"));
     await session.eval(`document.documentElement.classList.remove("light")`);
     await sleep(200);
