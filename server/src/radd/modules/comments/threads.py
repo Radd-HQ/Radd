@@ -125,6 +125,39 @@ async def create_reply(session, comment_id, data, actor):
         actor, entity_type=root.entity_type, permissions=permissions, parent_comment_id=root.id)
 
 
+async def convert_thread(session, comment: Comment, wanted: bool | None) -> dict | None:
+    """RADD-1478 (GitHub #35): make an existing top-level comment a resolvable
+    thread — or an unresolved thread nobody answered a plain comment again.
+    Returns the change for the comment's UPDATED event, None when nothing
+    changes. Refuses, with the reason: a reply (a thread is its root), an inline
+    annotation (always a thread), and a thread that is resolved or has replies
+    (the record of who resolved what, or of the answers, would lose its meaning).
+    The caller has already decided who may edit the comment."""
+    if wanted is None or wanted == comment.is_thread:
+        return None
+    if comment.parent_comment_id:
+        raise ConflictError(
+            CommentEntity.COMMENT, reason="A reply cannot become a thread; start one from the comment it answers"
+        )
+    if not wanted:
+        if comment.anchor is not None:
+            raise ConflictError(CommentEntity.COMMENT, reason="An inline comment is always a resolvable thread")
+        if comment.resolved_at is not None:
+            raise ConflictError(CommentEntity.COMMENT, reason="A resolved thread stays a thread; reopen it first")
+        replies = await reply_count(session, comment.id)
+        if replies:
+            raise ConflictError(
+                CommentEntity.COMMENT,
+                reason=f"A thread with {replies} {'reply' if replies == 1 else 'replies'} stays a thread",
+            )
+    # Serialized with the workflow's resolved-threads guard, like every thread lifecycle write.
+    await lock_thread_parent(session, comment.entity_type, comment.entity_id)
+    comment.is_thread = wanted
+    comment.resolved_at = None  # a fresh thread is unresolved; a plain comment has no resolution
+    comment.resolved_by = None
+    return {"field": "is_thread", "from": not wanted, "to": wanted}
+
+
 async def narrow_replies(session, root: Comment, root_teams: set[uuid.UUID]) -> None:
     """A thread's audience is its replies' ceiling: when an internal root is
     narrowed to `root_teams`, every reply that reached wider is pulled in."""

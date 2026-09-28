@@ -2,7 +2,7 @@ import { ContentBody } from "../editor/ContentBody";
 import { useThreadExpansion } from "../comments/useThreadExpansion";
 import { useState } from "react";
 import { useMutation, useQueries, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { EyeOff, MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { EyeOff, MessageSquare, MessagesSquare, Pencil, Trash2 } from "lucide-react";
 import { ApiError, api, errorMessage } from "../../lib/api";
 import { sendTaskToggle } from "../../lib/task-toggle";
 import { useImageUploader } from "../../lib/useAttachmentUploader";
@@ -26,7 +26,7 @@ import { IssueCommentComposer } from "../comments/IssueCommentComposer";
 import { issueCommentHref, useLandOnComment, useLinkedComment } from "../../lib/comment-links";
 import { ResolveThreadButton, ThreadBadge, ThreadFilter, threadRuleClass } from "../comments/ThreadResolution";
 
-import { formatDateTime, IconButton, Slot, SlotId, useConfirm, type EditorTransform } from "@radd/plugin-sdk";
+import { Entity, formatDateTime, IconButton, invalidateEntities, Slot, SlotId, useConfirm, type EditorTransform } from "@radd/plugin-sdk";
 import { teamReferencesQuery } from "@radd-plugin-ui/teams/references";
 import { CommentVisibility } from "@radd-plugin-ui/comments/visibility";
 import type { Project } from "@radd-plugin-ui/projects/types";
@@ -285,7 +285,9 @@ export function CommentsThread({ item, project }: CommentsThreadProps) {
 /**
  * Hover actions on a comment row: edit (author) / delete (author or admin). Delete asks first. A
  * root that still has replies is refused by the server (RADD-1477) — so instead of sending it, the
- * dialog says what to do: delete the replies first. Shown on hover, and while one has focus.
+ * dialog says what to do: delete the replies first. An ordinary comment also offers "Start thread
+ * from this comment" (RADD-1478, GitHub #35): one PATCH, and it redraws as an unresolved thread with
+ * its resolve controls, no reload. Shown on hover, and while one has focus.
  */
 function CommentActions({
   comment,
@@ -304,6 +306,11 @@ function CommentActions({
       void queryClient.invalidateQueries({ queryKey: queryKeys.comments(itemId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.item(itemId) });
     },
+  });
+  const startThread = useMutation({
+    mutationFn: () => api.patch<Comment>(apiCommentPath(comment.id), { is_thread: true }),
+    // The feed, the transitions guard and every other comment surface follow.
+    onSuccess: () => invalidateEntities(queryClient, Entity.comment),
   });
   const replies = comment.reply_count ?? 0;
   const askToDelete = async () => {
@@ -326,6 +333,13 @@ function CommentActions({
   };
   return (
     <span className="flex items-center gap-1 opacity-0 transition-opacity group-hover/comment:opacity-100 focus-within:opacity-100">
+      {!comment.is_thread && !comment.parent_comment_id && (
+        <IconButton onClick={() => startThread.mutate()} disabled={startThread.isPending}
+          aria-label="Start thread from this comment" title="Start thread from this comment"
+          data-start-thread-from={comment.id}>
+          <MessagesSquare size={11} aria-hidden />
+        </IconButton>
+      )}
       <IconButton onClick={onEdit} aria-label="Edit comment" title="Edit comment">
         <Pencil size={11} aria-hidden />
       </IconButton>
@@ -335,6 +349,9 @@ function CommentActions({
       </IconButton>
       {remove.isError && (
         <span role="alert" className="text-[11px] text-status-danger-ink">{errorMessage(remove.error)}</span>
+      )}
+      {startThread.isError && (
+        <span role="alert" className="text-[11px] text-status-danger-ink">{errorMessage(startThread.error)}</span>
       )}
       {confirmDialog}
     </span>

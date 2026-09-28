@@ -1,4 +1,5 @@
-"""The comment MCP tools (RADD-1477): edit and delete a comment or a reply.
+"""The comment MCP tools (RADD-1477): edit and delete a comment or a reply, and
+(RADD-1478) turn a comment into a resolvable thread after the fact.
 
 `comment_item` (items) writes; these change what was written. Each handler goes
 through `service.update_comment` / `service.delete_comment`, so an agent may do
@@ -46,6 +47,12 @@ def update_comment_schema() -> dict[str, Any]:
                 "description": "Team ids an INTERNAL comment is narrowed to (empty = every "
                 "internal reader). A reply's teams may only narrow its thread's.",
             },
+            "is_thread": {
+                "type": "boolean",
+                "description": "true turns a top-level comment into an unresolved, resolvable "
+                "thread; false turns an unresolved thread nobody answered back into a plain "
+                "comment. Refused on a reply, and on a thread that is resolved or has replies.",
+            },
         },
         ["comment_id"],
     )
@@ -73,6 +80,7 @@ def update_from_args(args: Mapping[str, Any]) -> CommentUpdate:
     return CommentUpdate(
         body=str(args["body"]) if args.get("body") is not None else None,
         visible_to_teams=[uuid.UUID(str(team)) for team in teams] if teams is not None else None,
+        is_thread=bool(args["is_thread"]) if args.get("is_thread") is not None else None,
     )
 
 
@@ -92,7 +100,8 @@ async def _delete_comment(session: AsyncSession, actor: User, args: Mapping[str,
 UPDATE_COMMENT = McpToolSpec(
     name="update_comment",
     description="Edit a comment or a reply you wrote (a project manager may edit anyone's): "
-    "its body, or the teams an internal one is narrowed to.",
+    "its body, the teams an internal one is narrowed to, or — with is_thread — whether a "
+    "top-level comment is a resolvable thread.",
     input_schema=update_comment_schema(),
     handler=_update_comment,
     permission=Permission.COMMENT_WRITE,

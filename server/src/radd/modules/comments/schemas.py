@@ -44,6 +44,10 @@ class CommentUpdate(BaseModel):
     body: str | None = Field(default=None, min_length=1)
     # Spec 50: None = leave the team allow-list unchanged; a list replaces it.
     visible_to_teams: list[uuid.UUID] | None = None
+    #: RADD-1478: True turns a top-level comment into an unresolved, resolvable
+    #: thread after the fact; False turns an unresolved thread nobody answered
+    #: back into a plain comment. None = unchanged. A reply is refused either way.
+    is_thread: bool | None = None
 
 
 class CommentReplyCreate(BaseModel):

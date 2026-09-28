@@ -1,7 +1,10 @@
 /** RADD-1282: browser contract for issue threads and workflow rule preservation.
  * RADD-1383: the approval rule's editor is the ACTUAL approvals remote (served from its
  * ui/dist), contributed into the transitions editor's rule slot; withdrawn, the rule it
- * served stays visible as a fail-closed notice the admin can remove. */
+ * served stays visible as a fail-closed notice the admin can remove.
+ * RADD-1478: an ordinary comment offers "Start thread from this comment" (a thread and a
+ * reply do not); one PATCH redraws it as an unresolved thread with its resolve controls and
+ * no reload, and a refusal is shown on the comment. */
 import assert from "node:assert/strict";
 import {mkdtemp} from "node:fs/promises";
 import {openBrowser, until} from "./lib/cdp.mjs";
@@ -36,6 +39,7 @@ let threadPolicy = {default: "author", overrides: []};
 const issueTypes = [{id: "type-bug", project_id: "project", name: "Bug", color: "#ff0000", position: 0, is_default: true},
   {id: "type-review", project_id: "project", name: "Review", color: "#00ff00", position: 1, is_default: false}];
 let failResolve = false;
+let failConvert = false;
 const spa = await serveBuiltSpa(async (req, res, url) => {
   if (url.pathname.startsWith("/api/")) {
     const route = url.pathname.replace("/api/v1", "");
@@ -59,6 +63,16 @@ const spa = await serveBuiltSpa(async (req, res, url) => {
     else if (route.endsWith("/comments/feed")) data = {comments: url.searchParams.get("unresolved") === "true" ? comments.filter(c => c.is_thread && !c.resolved_at) : comments, older_cursor: null};
     else if (route === "/items/issue/comments" && req.method === "POST") {
       data = {...comments[0], ...body, id: `new-${comments.length}`, reply_count: 0, can_resolve: !!body.is_thread}; comments.push(data);
+    }
+    // RADD-1478: `is_thread: true` on PATCH turns a comment into an unresolved thread the caller may resolve.
+    else if (/^\/comments\/[^/]+$/.test(route) && req.method === "PATCH") {
+      if (failConvert) {status = 409; data = {detail: "comment: Thread conversion refused"};}
+      else {
+        const id = route.split("/")[2];
+        comments = comments.map(c => c.id === id ? {...c, ...body, updated_at: "2026-01-02",
+          ...(body.is_thread ? {resolved_at: null, resolved_by: null, resolver_name: null, can_resolve: true} : {})} : c);
+        data = comments.find(c => c.id === id);
+      }
     }
     else if (/^\/comments\/[^/]+\/(resolve|reopen)$/.test(route)) {
       if (failResolve) {status = 403; data = {detail: "Thread resolution refused"};}
@@ -258,6 +272,28 @@ try {
   await until(s, () => s.eval(`!(${submit})?.disabled`), "comment submit did not enable");
   await steadyClick('[data-comment-composer="open"] button[type="submit"]');
   await until(s, () => comments.some(c => c.body.includes("ordinary follow-up") && !c.is_thread), "ordinary comment was marked as a thread");
+  // RADD-1478: an ordinary comment can become a thread after the fact; a thread and a reply offer nothing.
+  const startFrom = (id) => `document.querySelector('[data-start-thread-from="${id}"]')`;
+  await until(s, () => s.eval(`!!${startFrom("quiet")}`), "an ordinary comment offers no Start thread");
+  assert.equal(await s.eval(`!!${startFrom("thread")} || !!${startFrom("locked")}`), false, "a thread offers Start thread");
+  assert.equal(await s.eval(`!!document.querySelector('[data-comment-id="reply-ordinary"] [data-start-thread-from]')
+    || !!document.querySelector('[data-comment-replies] [aria-label="Start thread from this comment"]')`), false, "a reply offers Start thread");
+  await s.eval(`window.__proofNoReload = true`);
+  await steadyClick('[data-start-thread-from="quiet"]');
+  await until(s, () => requests.some(r => r.method === "PATCH" && r.route === "/comments/quiet" && r.body.is_thread === true), "Start thread did not PATCH is_thread");
+  await until(s, () => s.eval(`(() => { const card = document.querySelector('[data-comment-id="quiet"]');
+    return card?.dataset.thread === "unresolved" && card.querySelector('[data-thread-state]')?.textContent.trim() === "Unresolved thread"
+      && !!card.querySelector('[data-thread-resolution="quiet"]') && !card.querySelector('[data-start-thread-from]'); })()`),
+    "the converted comment did not redraw as an unresolved thread with resolve controls");
+  assert.equal(await s.eval(`window.__proofNoReload === true`), true, "the conversion reloaded the page");
+  assert.deepEqual(Object.keys(requests.find(r => r.method === "PATCH" && r.route === "/comments/quiet").body), ["is_thread"], "the conversion sent more than is_thread");
+  // A refusal comes back onto the comment, and the comment stays what it was.
+  failConvert = true;
+  const follow = comments.find(c => c.body.includes("ordinary follow-up")).id;
+  await steadyClick(`[data-start-thread-from="${follow}"]`);
+  await until(s, () => s.eval(`document.querySelector('[data-comment-id="${follow}"]')?.innerText.includes("Thread conversion refused")`), "the conversion refusal was not shown on the comment");
+  assert.equal(await s.eval(`document.querySelector('[data-comment-id="${follow}"]').dataset.thread ?? null`), null, "a refused conversion redrew as a thread");
+  failConvert = false;
   await s.screenshot("/tmp/radd-resolvable-threads.png");
   await s.navigate(base + "/p/THR/settings/workflow");
   await until(s, () => s.eval(`document.body.innerText.includes('All threads must be resolved')`), "workflow rule editor missing");
@@ -312,7 +348,9 @@ try {
     "the rule hides resolve controls", "reply keeps a resolved thread resolved", "posting closes the composer onto the reply",
     "reply and unresolve reopens", "replies persist", "resolution error", "resolve/reopen", "transition refresh", "unresolved filter",
     "the composer is a Comment / Start thread row until asked", "the open composer has one submit", "the mode switch relabels the submit",
-    "Cancel keeps the draft", "composer creates explicit thread", "composer resets", "workflow preserves independent rules",
+    "Cancel keeps the draft", "composer creates explicit thread", "composer resets",
+    "an ordinary comment offers Start thread; a thread and a reply do not", "one PATCH {is_thread} redraws it as an unresolved thread with resolve controls, no reload",
+    "a refused conversion is shown on the comment", "workflow preserves independent rules",
     "approval editor is the approvals remote", "withdrawn plugin rule fails closed and can be removed"],
     screenshots: ["/tmp/radd-thread-resolved.png", "/tmp/radd-resolvable-threads.png", "/tmp/radd-thread-workflow.png"]}));
 } catch (error) {

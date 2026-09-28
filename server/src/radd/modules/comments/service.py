@@ -29,7 +29,10 @@ from .types import (
 )
 from .reading import comment_page as comment_page, list_comments as list_comments, locate as locate
 from .threads import has_unresolved_threads as has_unresolved_threads
-from .threads import lock_thread_parent, narrow_replies, reply_audience, reply_count, require_thread
+from .resolution import reach_covers, resolve_reach
+from .threads import (
+    convert_thread, lock_thread_parent, narrow_replies, reply_audience, reply_count, require_thread,
+)
 from radd.clock import utcnow
 
 
@@ -399,6 +402,9 @@ async def update_comment(
     previous_teams = (await _team_restrictions(session, [comment.id])).get(comment.id, set())
     if data.body is not None:
         comment.body = data.body
+    # RADD-1478: a comment may become a resolvable thread after the fact (and back, while
+    # nobody has answered or resolved it) — the same edit gate as its body.
+    thread_change = await convert_thread(session, comment, data.is_thread)
     await session.flush()
     if data.visible_to_teams is not None:
         stored_teams = await _set_teams(session, comment, data.visible_to_teams)
@@ -418,11 +424,19 @@ async def update_comment(
         )
         if entry is not None:
             diff.append(entry)
+    if thread_change is not None:
+        diff.append(thread_change)
     await _emit(
         session, CommentEvent.UPDATED, comment, actor.id,
         visible_to_teams=stored_teams, diff=diff,
     )
-    return _to_read(comment, await auth.get_user(session, comment.author_id) if comment.author_id else None, stored_teams)
+    read = _to_read(comment, await auth.get_user(session, comment.author_id) if comment.author_id else None, stored_teams)
+    if comment.is_thread:
+        # The server's answer to "may I resolve this?", as every read carries it — a comment
+        # just turned into a thread redraws with its resolve controls from this response.
+        reach = await resolve_reach(session, actor, comment.entity_type, comment.entity_id)
+        read = read.model_copy(update={"can_resolve": reach_covers(reach, comment, actor)})
+    return read
 
 
 async def delete_comment(session: AsyncSession, comment_id: uuid.UUID, actor: User) -> None:
