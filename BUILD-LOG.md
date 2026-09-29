@@ -16,6 +16,39 @@ Moved here from the CLAUDE.md preamble on 2026-09-27 (RADD-1441): one entry per 
 preamble narrated it at the time, so the working agreement stays rules-only. The tracker's RADD project
 and `docs/specs/` are the primary record; these entries are the per-wave summary.
 
+### Cross-project hierarchy, second pass — epic RADD-1489 (2026-09-29), shipped as v0.50.0
+
+A discussion of "a DEV epic with TD issues" found the model already allowed it (spec 80, from Hussein's own
+direction) and RADD-1471 had only just added the UI to set a parent on an existing issue — so the ask was
+really about what the feature does once used. Four issues, one decision: **epic ← issue stays
+instance-wide (it is the portfolio layer without a fourth level); issue ← subtask is same-project again**,
+because a subtask is a checklist line ticked in its parent's workflow, and "a TD subtask under a DEV issue"
+is a TD issue DEV depends on.
+- **RADD-1490**: a typed key names ITS project (`target_key` on links; `link_search` leads with the named
+  row). The tilt was in the search too — `_search_number("DEV-23")` had always discarded the prefix.
+- **RADD-1491**: a withheld parent is `parent_hidden`/`epic_hidden`, never null-and-nothing; the rail shows
+  a muted row with no picker, the board files such rows under "Epic you cannot see", and replacing what
+  you cannot read is a 409 unless you manage the child's project. Restating the current parent no longer
+  re-resolves it through the read seam (a TD-only member renaming a TD issue under a DEV epic 404'd).
+- **RADD-1492**: `_resolve_parent` takes the child's project; bulk move takes an issue's subtasks along
+  under the issue's row gate and reports a subtask selected alone as `subtask_follows_parent`; the tick in
+  `ChildrenSection` read the PARENT project's states and would have 409'd a foreign child; migration
+  `d1492subtaskhome` re-homes offenders as issues (the dev DB had none).
+- **RADD-1493**: the rollup carries `by_project` and `withheld` (counted, not walked); a `project`
+  grouping axis; `/e/KEY/board` is a synthetic all-projects board of one epic (state categories across,
+  projects down, no saved row); the board's epic group header says "N more in TD" and links there.
+  Traps: a disabled TanStack query is pending forever (guard the spinner); `boardGroups` kept the client
+  label for loaded buckets, so a project lane read "TD" until server labels won for the resolved axes.
+Verified: pytest 3335, a mocked proof (five checks, in `test:browser`) and a live walkthrough that seeds and
+deletes its own projects. Left open: a project-scoped roadmap draws only its own rows.
+
+### Leave with hours — RADD-1481 (2026-09-28), shipped as v0.50.0
+
+Leave keeps its hours: a period may be all-day or carry boundary times read in a stated zone
+(`d1481leavetime`: `start_time`/`end_time`/`timezone`, old rows read as UTC), holidays stay all-day
+because the non-working-days socket hands out calendar days, and a team steward records leave for their
+members from a Team leave section. Data sources: per-day timesheet annotations with from/until.
+
 ### Pre-release review wave — epic RADD-1449 (2026-09-27/28), shipped as the first v0.49 release
 
 Before tagging the three unpushed waves below (134 commits, 2226 files, +76k/−87k), eight read-only

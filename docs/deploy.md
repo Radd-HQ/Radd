@@ -118,6 +118,17 @@ Three rules that keep this boring:
   app` until uvicorn starts serving. The app refuses traffic until the
   schema converges, which is the correct failure mode.
 
+### Upgrading from v0.49.3
+
+Nothing switches off. Two migrations change rows you may notice:
+
+- `d1492subtaskhome` — a subtask now lives in its parent's project (RADD-1492). Any subtask whose
+  parent issue sits in another project becomes a top-level **issue** in its own project, and the
+  migrate job's log prints the keys it converted. Re-parent or link them as you see fit; nothing is
+  lost.
+- `d1481leavetime` — leave periods gain boundary times and a zone (RADD-1481). Existing rows stay
+  all-day and are read as UTC; no action needed.
+
 ### Upgrading from v0.48.0
 
 The first release after v0.48.0 (the v0.49 line) moves several built-in behaviours behind switches that migrate **off** for
