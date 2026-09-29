@@ -285,6 +285,7 @@ export const VIEW_AXIS_LABELS: Record<ViewAxisValue, string> = {
   [ViewAxis.team]: "Team",
   [ViewAxis.cycle]: "Cycle",
   [ViewAxis.epic]: "Epic",
+  [ViewAxis.project]: "Project",
 };
 
 export const VIEW_AXIS_ORDER: readonly ViewAxisValue[] = [

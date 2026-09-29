@@ -142,20 +142,20 @@ async def test_item_payload_hides_unreadable_refs(db, admin, world):
 
 
 async def test_child_counts_exclude_unreadable_children(db, admin, world):
-    # Give A's item a child in B: the member's child_count must not include it.
+    # Give an A epic a child ISSUE in B (RADD-1492: a subtask can no longer cross
+    # projects; an issue under an epic still can): the member's child_count must
+    # not include it.
+    epic_a = await items.create_item(
+        db, ItemCreate(project_id=world["a"].id, title="epic a", kind=ItemKind.EPIC), admin
+    )
     await items.create_item(
         db,
-        ItemCreate(
-            project_id=world["b"].id,
-            title="secret subtask",
-            kind=ItemKind.SUBTASK,
-            parent_id=world["item_a"].id,
-        ),
+        ItemCreate(project_id=world["b"].id, title="secret issue", parent_id=epic_a.id),
         admin,
     )
-    member_read = await items.get_item(db, world["item_a"].id, world["member"])
+    member_read = await items.get_item(db, epic_a.id, world["member"])
     assert member_read.child_count == 0
-    admin_read = await items.get_item(db, world["item_a"].id, admin)
+    admin_read = await items.get_item(db, epic_a.id, admin)
     assert admin_read.child_count == 1
 
 
@@ -163,9 +163,7 @@ async def test_child_counts_exclude_unreadable_children(db, admin, world):
 
 
 async def test_item_key_autocomplete_filters_readability(db, world):
-    response = await suggest(
-        db, actor=world["member"], project_id=None, q="key = ", cursor=None
-    )
+    response = await suggest(db, actor=world["member"], project_id=None, q="key = ", cursor=None)
     values = {s.value for s in response.suggestions}
     assert any(v.startswith(world["a"].key) for v in values)
     assert not any(v.startswith(world["b"].key) for v in values)

@@ -1,3 +1,4 @@
+import { ForeignChildrenChip } from "./ForeignChildrenChip";
 import { Select } from "../Select";
 import { BoardLoadBoundary } from "./BoardLoadBoundary";
 import type { BoardLoading } from "../../lib/useBoardItems";
@@ -52,6 +53,8 @@ interface ViewListProps {
   /** Epic-progress rollups by item id (spec 76) — set while the progress slot
    *  is on and epic-kind items are on the page. */
   rollupByItem?: RollupResponse;
+  /** RADD-1493: this surface's project key (null = all projects). */
+  projectKey?: string | null;
   /** Table columns (spec 108): rows render one typed cell per column (aligned
    * under the sticky header). FIT-TO-WIDTH: a trailing spacer absorbs the
    * slack and a handle borrows from its neighbour once that is spent, so the
@@ -119,6 +122,7 @@ export function ViewList({
   sectionStatus,
   display = defaultCardDisplay(DEFAULT_LIST_SLOTS),
   rollupByItem,
+  projectKey = null,
   listColumns,
   columnWidths,
   onColumnsApply,
@@ -283,6 +287,7 @@ export function ViewList({
                   )}
                 </button>
                 <div className="flex shrink-0 items-center gap-2 pr-3">
+                  <ForeignChildrenChip epicRef={group.epicRef} rollup={group.epicRef ? rollupByItem?.[group.epicRef.id] : undefined} projectKey={projectKey} />
                   {sectionTools?.(group)}
                   {search && <Button size="sm" variant="ghost" aria-label={`Search ${group.label}`} title={`Search ${group.label}`} aria-expanded={searching}
                     onClick={() => {

@@ -15,6 +15,7 @@ from radd.exceptions import ConflictError
 from radd.modules.items import service as items
 from radd.modules.items.enums import ItemKind
 from radd.modules.items.grouped import grouped_items
+from radd.modules.items.rollup import rollup_items
 from radd.modules.items.grouped_axes import HIDDEN_EPIC_BUCKET
 from radd.modules.items.grouped_schemas import GroupPageRequest
 from radd.modules.items.models import ItemKeyAlias
@@ -262,3 +263,59 @@ async def test_subtask_lives_in_its_parents_project(db, actor):
         same_project=True,
     )
     assert {hit.id for hit in hits} == {td_issue.id}
+
+
+async def test_rollup_counts_by_project_and_withheld(db, actor):
+    """RADD-1493: an epic's rollup says where its readable descendants live and
+    how many exist that the actor may not read — counted, never walked."""
+    dev = await make_project(db, "RD")
+    td = await make_project(db, "RT")
+    dev_epic = await items.create_item(
+        db, ItemCreate(project_id=dev.id, title="dev epic", kind=ItemKind.EPIC), actor
+    )
+    dev_issue = await items.create_item(
+        db, ItemCreate(project_id=dev.id, title="dev issue", parent_id=dev_epic.id), actor
+    )
+    await items.create_item(
+        db,
+        ItemCreate(
+            project_id=dev.id, title="dev step", kind=ItemKind.SUBTASK, parent_id=dev_issue.id
+        ),
+        actor,
+    )
+    await items.create_item(
+        db, ItemCreate(project_id=td.id, title="td issue", parent_id=dev_epic.id), actor
+    )
+    td_epic = await items.create_item(
+        db, ItemCreate(project_id=td.id, title="td epic", kind=ItemKind.EPIC), actor
+    )
+    hidden_issue = await items.create_item(
+        db,
+        ItemCreate(project_id=dev.id, title="dev issue under td epic", parent_id=td_epic.id),
+        actor,
+    )
+    await items.create_item(
+        db,
+        ItemCreate(
+            project_id=dev.id, title="its step", kind=ItemKind.SUBTASK, parent_id=hidden_issue.id
+        ),
+        actor,
+    )
+    await items.create_item(
+        db, ItemCreate(project_id=td.id, title="td own issue", parent_id=td_epic.id), actor
+    )
+
+    full = await rollup_items(db, actor, [dev_epic.id, td_epic.id])
+    assert full[dev_epic.id].total == 3 and full[dev_epic.id].withheld == 0
+    assert full[dev_epic.id].by_project == {dev.key: 2, td.key: 1}
+    assert full[td_epic.id].by_project == {dev.key: 2, td.key: 1}
+
+    person = await _member_of(db, td)
+    with pytest.raises(NotFoundError):
+        await items.get_item(db, dev_epic.id, person)
+    partial = await rollup_items(db, person, [dev_epic.id, td_epic.id])
+    assert dev_epic.id not in partial  # an unreadable root is omitted, as before
+    scoped = partial[td_epic.id]
+    assert scoped.total == 1 and scoped.by_project == {td.key: 1}
+    # The DEV issue is withheld and its subtree is NOT walked: one, not two.
+    assert scoped.withheld == 1

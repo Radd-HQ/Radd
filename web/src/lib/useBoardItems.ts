@@ -86,7 +86,10 @@ export function boardGroups(base:ViewGroup[],axis:string,summary:Page|undefined,
   if(!summary) return base;
   const totals=lane?summary.lane_totals:summary.column_totals;
   const labels=(lane?summary.lane_labels:summary.column_labels)??{};
-  const groups=new Map(base.map(g=>[g.key,{...g,total:totals[g.key]??0,totalPoints:lane?undefined:summary.column_points?.[g.key]}]));
+  // Axes whose names the server resolves (RADD-1493: a project bucket built from loaded
+  // cards knows only the key; the summary's label carries the name).
+  const named=["assignee","team","epic","project"].includes(axis);
+  const groups=new Map(base.map(g=>[g.key,{...g,label:named&&labels[g.key]?labels[g.key]:g.label,total:totals[g.key]??0,totalPoints:lane?undefined:summary.column_points?.[g.key]}]));
   for(const key of [...new Set([...Object.keys(labels),...Object.keys(totals)])].sort((a,b)=>(labels[a]??a).localeCompare(labels[b]??b))) if(!groups.has(key)) groups.set(key,{
     key,label:labels[key]??key,items:[],total:totals[key]??0,totalPoints:lane?undefined:summary.column_points?.[key],
     ...(summary.epic_refs?.[key]?{epicRef:summary.epic_refs?.[key]}:{}),

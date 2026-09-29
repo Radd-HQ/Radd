@@ -24,6 +24,9 @@ class ViewAxis(StrEnum):
     KIND = "kind"
     TEAM = "team"
     CYCLE = "cycle"  # buckets = cycles (+ a Backlog bucket)
+    # Buckets = the projects the rows live in (RADD-1493) — the lanes of an
+    # all-projects board of one epic. Keyed by project id, labelled by key.
+    PROJECT = "project"
     # Buckets = epics present in the result (+ No epic). The item's epic is the
     # server's rule (`ItemRead.epic`), so grouping never invents a second one.
     EPIC = "epic"

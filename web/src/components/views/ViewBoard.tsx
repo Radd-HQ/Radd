@@ -1,3 +1,4 @@
+import { ForeignChildrenChip } from "./ForeignChildrenChip";
 import type { BoardLoading } from "../../lib/useBoardItems";
 import { useBoardDragScroll } from "../../lib/board-scroll";
 import { BoardLoadBoundary } from "./BoardLoadBoundary";
@@ -27,6 +28,9 @@ interface ViewBoardProps {
   /** Epic-progress rollups by item id (spec 76) — set while the progress slot
    *  is on and epic-kind items are on the page. */
   rollupByItem?: RollupResponse;
+  /** RADD-1493: this surface's project key (null = all projects) — what makes a
+   *  child "foreign" in an epic group's header. */
+  projectKey?: string | null;
   /** Logged/estimate seconds by item id — set while the logged-time slot is on. */
   timelogByItem?: TimelogBatchResponse;
   /** Quick add INTO a column (header + and the dashed bottom button): opens
@@ -85,6 +89,7 @@ export function ViewBoard({
   usersById,
   cfByKey,
   rollupByItem,
+  projectKey = null,
   timelogByItem,
   onQuickAdd,
   showPoints,
@@ -183,6 +188,7 @@ export function ViewBoard({
                 )}
                 <h2 className="truncate text-[13px] font-semibold text-fg">{group.label}</h2>
                 <ColumnCount count={group.total ?? group.items.length} limit={limit} />
+                <ForeignChildrenChip epicRef={group.epicRef} rollup={group.epicRef ? rollupByItem?.[group.epicRef.id] : undefined} projectKey={projectKey} />
                 {showPoints && points > 0 && (
                   <span className="text-xs text-fg-muted" title={group.totalPoints === undefined ? "Story points in loaded cards" : "Story points in all matching column issues"}>
                     · Σ {formatPoints(points)} pts{group.totalPoints === undefined && group.total !== undefined && group.items.length < group.total ? " loaded" : ""}

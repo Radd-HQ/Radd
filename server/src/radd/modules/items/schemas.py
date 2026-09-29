@@ -297,6 +297,12 @@ class ItemRollup(BaseModel):
     in_progress: int = 0
     points_total: float = 0
     points_done: float = 0
+    #: RADD-1493: the readable descendants by the PROJECT KEY they live in, so a
+    #: surface scoped to one project can say how much of the epic lives elsewhere.
+    by_project: dict[str, int] = Field(default_factory=dict)
+    #: RADD-1493: descendants that exist but the actor may not read — a count and
+    #: nothing else (their subtrees are not walked, so this is a floor).
+    withheld: int = 0
     estimate_seconds: int = 0
     logged_seconds: int = 0
 

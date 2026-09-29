@@ -13,11 +13,12 @@ import uuid
 from collections.abc import Sequence
 from itertools import batched
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.modules.auth import authz
 from radd.modules.auth.models import User
+from radd.modules.projects import service as projects_service
 from radd.modules.workflow.models import State
 from radd.modules.workflow.types import StateCategory
 
@@ -26,6 +27,7 @@ from .enums import FINISHED_CATEGORIES
 from .models import WorkItem
 from .service.visibility import relation_read_clause
 from .schemas import ItemRollup
+
 
 async def rollup_items(
     session: AsyncSession, actor: User, item_ids: Sequence[uuid.UUID]
@@ -60,39 +62,62 @@ async def rollup_items(
     rows_by_root: dict[uuid.UUID, list[tuple[uuid.UUID, uuid.UUID, float | None]]] = {
         root: [] for root in roots
     }
+    project_by_item: dict[uuid.UUID, uuid.UUID] = {}
     frontier: dict[uuid.UUID, set[uuid.UUID]] = {root: {root} for root in roots}
+    # RADD-1493: the frontier is fetched UNFILTERED and partitioned here — a row
+    # the actor may not read is counted as withheld (and not walked: its subtree
+    # is not theirs to know), never silently dropped as if the epic ended there.
+    readable_row = WorkItem.project_id.in_(readable)
+    if relation_clause is not None:
+        readable_row = readable_row & relation_clause
     while frontier:
         children = []
         for batch in batched(frontier, 1000):
-            children.extend((await session.execute(
-                select(
-                    WorkItem.id, WorkItem.parent_id, WorkItem.state_id, WorkItem.estimate_points
-                ).where(
-                    WorkItem.parent_id.in_(batch),
-                    WorkItem.project_id.in_(readable),
-                    *(() if relation_clause is None else (relation_clause,)),
-                )
-            )).all())
+            children.extend(
+                (
+                    await session.execute(
+                        select(
+                            WorkItem.id,
+                            WorkItem.parent_id,
+                            WorkItem.state_id,
+                            WorkItem.estimate_points,
+                            WorkItem.project_id,
+                            case((readable_row, True), else_=False).label("readable"),
+                        ).where(WorkItem.parent_id.in_(batch))
+                    )
+                ).all()
+            )
         next_frontier: dict[uuid.UUID, set[uuid.UUID]] = {}
-        for child_id, parent_id, state_id, points in children:
+        for child_id, parent_id, state_id, points, project_id, is_readable in children:
             new_roots = {root for root in frontier[parent_id] if child_id not in seen[root]}
+            if not is_readable:
+                for root in new_roots:
+                    seen[root].add(child_id)
+                    result[root].withheld += 1
+                continue
+            project_by_item[child_id] = project_id
             for root in new_roots:
                 seen[root].add(child_id)
                 rows_by_root[root].append((child_id, state_id, points))
             if new_roots:
                 next_frontier.setdefault(child_id, set()).update(new_roots)
         frontier = next_frontier
+    project_keys = await projects_service.project_keys(session, set(project_by_item.values()))
 
     all_descendants = set().union(*seen.values())
     state_ids = {state_id for rows in rows_by_root.values() for _, state_id, _ in rows}
-    categories: dict[uuid.UUID, StateCategory] = {
-        state_id: StateCategory(category)
-        for state_id, category in (
-            await session.execute(
-                select(State.id, State.category).where(State.id.in_(state_ids))
-            )
-        ).all()
-    } if state_ids else {}
+    categories: dict[uuid.UUID, StateCategory] = (
+        {
+            state_id: StateCategory(category)
+            for state_id, category in (
+                await session.execute(
+                    select(State.id, State.category).where(State.id.in_(state_ids))
+                )
+            ).all()
+        }
+        if state_ids
+        else {}
+    )
 
     # Time sums ride the timelogging module when it's installed (deferred
     # feature-detected import) — zeros otherwise.
@@ -106,15 +131,15 @@ async def rollup_items(
         estimate_by_item = await timelogging_service.estimate_seconds_by_items(
             session, all_descendants
         )
-        logged_by_item = await timelogging_service.logged_seconds_by_items(
-            session, all_descendants
-        )
+        logged_by_item = await timelogging_service.logged_seconds_by_items(session, all_descendants)
 
     for root, rows in rows_by_root.items():
         rollup = result[root]
         for item_id, state_id, points in rows:
             category = categories.get(state_id)
             rollup.total += 1
+            key = project_keys[project_by_item[item_id]]
+            rollup.by_project[key] = rollup.by_project.get(key, 0) + 1
             if category in FINISHED_CATEGORIES:
                 rollup.done += 1
                 if points is not None:

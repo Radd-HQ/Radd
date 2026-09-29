@@ -29,6 +29,8 @@ export const ViewAxis = {
   team: "team",
   cycle: "cycle",
   epic: "epic",
+  /** RADD-1493: the projects the rows live in — the lanes of an all-projects board of one epic. */
+  project: "project",
 } as const;
 export type ViewAxisValue = (typeof ViewAxis)[keyof typeof ViewAxis];
 

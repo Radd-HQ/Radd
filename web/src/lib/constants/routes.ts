@@ -66,6 +66,8 @@ export const RoutePath = {
   portal: "/portal",
   portalForm: "/portal/forms/$formId",
   issue: "/issues/$itemKey",
+  /** RADD-1493: an epic as an all-projects board (a synthetic view — no saved row). */
+  epicBoard: "/e/$itemKey/board",
   projectView: `${PROJECT_SEGMENT}${VIEW_SEGMENT}`,
   /** A saved view with no project (project_id null). */
   allProjectsView: VIEW_SEGMENT,

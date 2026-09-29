@@ -126,20 +126,23 @@ function useStoredFlag(storageKey: string): [boolean, () => void] {
  * (lib/view-utils). Roadmap views (spec 79) render RoadmapSurface over the
  * same machinery, auto-fetching every page (no Load-more).
  */
-export function ViewPage() {
-  const { viewId = "" } = useParams({ strict: false });
+export function ViewPage({ synthetic }: { synthetic?: View } = {}) {
+  // RADD-1493: a synthetic view (an epic as an all-projects board) has no saved row —
+  // it is handed in whole, keyed by its own id, and never loaded or edited.
+  const params = useParams({ strict: false });
+  const viewId = synthetic?.id ?? params.viewId ?? "";
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const perms = usePermissions();
   const [newCycle, setNewCycle] = useState(false);
   const currentUser = useCurrentUser();
 
-  const views = useQuery(viewDefinitionQuery(viewId));
+  const views = useQuery({ ...viewDefinitionQuery(viewId), enabled: !synthetic });
   // Spec 121: a visitor who cannot see this view signs in instead (hook order:
   // this runs on every render, ahead of the early returns below).
   useAnonymousBounce(views.isError);
   const authenticated = useIsAuthenticated();
-  const view = views.data;
+  const view = synthetic ?? views.data;
   // A plugin-contributed view type (spec 94): rendered by the plugin's `view.type` slot instead of
   // the builtin board/list surface — or, when it declares a LIST surface (RADD-1396), by the host's
   // list over the plugin's own rows. The header/query bar apply either way.
@@ -471,14 +474,21 @@ export function ViewPage() {
   );
   // Epic progress (spec 76): one rollup batch for the page's EPIC-kind items —
   // fetched only while the progress slot/column is on and epics are visible.
+  // RADD-1493: a board grouped by epic also asks for the GROUPS' epics (the
+  // summary's refs), so each header can say how much of that epic lives in
+  // other projects — whether or not the progress slot is on.
+  const epicGrouped = columnAxis === ViewAxis.epic || laneAxis === ViewAxis.epic;
   const epicIds = useMemo(
-    () => pageItems.filter((item) => item.kind === ItemKind.epic).map((item) => item.id),
-    [pageItems],
+    () => [...new Set([
+      ...pageItems.filter((item) => item.kind === ItemKind.epic).map((item) => item.id),
+      ...(epicGrouped ? Object.keys(boardItems.first?.epic_refs ?? {}) : []),
+    ])],
+    [pageItems, epicGrouped, boardItems.first?.epic_refs],
   );
   // Roadmaps draw bars, not cards — no attribute/rollup batches over the full fetch.
   const rollupByItem = useRollupBatch(
     epicIds,
-    !isRoadmap && (hasCardAttr("progress") || hasListColumn("progress")),
+    !isRoadmap && (hasCardAttr("progress") || hasListColumn("progress") || epicGrouped),
   );
   // Logged time on cards: one chunked batch over the page's items while the
   // slot/column is on. Quiet-degrade (retry: false in the query) — cards just
@@ -746,7 +756,7 @@ export function ViewPage() {
       }
     : undefined;
 
-  if (views.isPending || (Boolean(view?.project_id) && projectLookup.isPending)) {
+  if ((!synthetic && views.isPending) || (Boolean(view?.project_id) && projectLookup.isPending)) {
     return <Spinner label="Loading view…" />;
   }
   if (views.isError) {
@@ -1186,6 +1196,7 @@ export function ViewPage() {
                 usersById={usersById}
                 cfByKey={cfByKey}
                 rollupByItem={rollupByItem}
+                projectKey={project?.key ?? null}
                 timelogByItem={timelogByItem}
                 onQuickAdd={
                   canCreate && columnAxis
@@ -1215,6 +1226,7 @@ export function ViewPage() {
               viewId={view.id}
               display={display}
               rollupByItem={rollupByItem}
+              projectKey={project?.key ?? null}
               listColumns={listColumns}
               columnWidths={colWidths.widths}
               onColumnsApply={colWidths.applyWidths}

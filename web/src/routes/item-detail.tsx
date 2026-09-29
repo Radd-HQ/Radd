@@ -1,7 +1,7 @@
 import { ContentBody } from "../components/editor/ContentBody";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Slot, SlotId, CollapsibleCard, ReadingPaneContext, useConfirm, type EditorTransform, CalloutKind } from "@radd/plugin-sdk";
-import { Archive, ArchiveRestore, CopyPlus, Flag, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
+import { Archive, ArchiveRestore, CopyPlus, Flag, LayoutGrid, Pencil, Star, Trash2, SlidersHorizontal } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { customFieldErrors, deniedCustomFieldKeys, errorMessage } from "../lib/api";
@@ -262,6 +262,17 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
           label="Issue actions"
           align="end"
           items={[
+            ...(isEpic
+              ? [
+                  {
+                    kind: "action" as const,
+                    label: "Open as board",
+                    icon: LayoutGrid,
+                    onSelect: () => void navigate({ to: RoutePath.epicBoard, params: { itemKey: item.key } }),
+                  },
+                  { kind: "separator" as const },
+                ]
+              : []),
             {
               kind: "action",
               label: archived ? "Unarchive" : "Archive",

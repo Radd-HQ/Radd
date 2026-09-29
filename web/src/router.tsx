@@ -65,6 +65,7 @@ const NotificationSettingsPage = lazyRouteComponent(() => import("./routes/setti
 const ProfileSettingsPage = lazyRouteComponent(() => import("./routes/settings/profile"), "ProfileSettingsPage");
 const InstanceSettingsPage = lazyRouteComponent(() => import("./routes/settings/instance"), "InstanceSettingsPage");
 const ViewPage = lazyRouteComponent(() => import("./routes/view"), "ViewPage");
+const EpicBoardPage = lazyRouteComponent(() => import("./routes/epic-board"), "EpicBoardPage");
 // The wiki is the pages plugin's bundled UI (RADD-1392): its routes mount here, lazily.
 const PagesIndexPage = lazyRouteComponent(() => import("@radd-plugin-ui/pages/index-page"), "PagesIndexPage");
 const PageSpacePage = lazyRouteComponent(() => import("@radd-plugin-ui/pages/space-page"), "PageSpacePage");
@@ -221,6 +222,12 @@ const issueRoute = createRoute({
   path: RoutePath.issue,
   component: ItemDetailPage,
   validateSearch: withCommentLink,
+});
+
+const epicBoardRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: RoutePath.epicBoard,
+  component: EpicBoardPage,
 });
 
 /**
@@ -625,6 +632,7 @@ const routeTree = rootRoute.addChildren([
     projectsIndexRoute,
     projectRoute,
     issueRoute,
+    epicBoardRoute,
     projectViewRoute,
     allProjectsViewRoute,
     cycleRoute,

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, Plus, Square, SquareCheckBig } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { ChevronRight, LayoutGrid, Plus, Square, SquareCheckBig } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { api, errorMessage } from "../../lib/api";
 import { Entity, invalidateEntities } from "@radd/plugin-sdk";
 import { ApiPath, RoutePath, apiItemPath } from "../../lib/constants";
@@ -10,6 +10,8 @@ import { CATEGORY_META } from "../../lib/meta";
 import { childItemPagesQuery, statesQuery } from "../../lib/queries";
 import { ItemKind, Permission, StateCategory, type Item, type ItemRollup } from "../../lib/types";
 import { Avatar } from "../Avatar";
+import { Button } from "../Button";
+import { foreignChildren, projectKeyOf } from "../../lib/view-utils";
 import { formatPoints } from "./ItemBadges";
 import { AddExistingChildren } from "./AddExistingChildren";
 import { Spinner } from "../Spinner";
@@ -55,15 +57,20 @@ export function ChildrenSection({
   const total = rollup?.total ?? item.child_count ?? 0;
   const done = rollup?.done ?? 0;
   const inProgress = rollup?.in_progress ?? 0;
+  // RADD-1493: what lives outside this epic's own project, and what the viewer may not read.
+  const elsewhere = foreignChildren(rollup, projectKeyOf(item));
+  const withheld = rollup?.withheld ?? 0;
+  const navigate = useNavigate();
   if (total === 0 && !canCreate) return null;
 
   return (
     <section className="rounded-xl border border-subtle bg-surface p-4 shadow-lift">
+      <div className="flex items-center gap-3">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 text-left cursor-pointer"
+        className="flex min-w-0 flex-1 items-center gap-2 text-left cursor-pointer"
       >
         <ChevronRight
           size={14}
@@ -81,6 +88,16 @@ export function ChildrenSection({
         {inProgress > 0 && (
           <span className="text-[11px] tabular-nums text-accent-text">
             {inProgress} in progress
+          </span>
+        )}
+        {elsewhere.count > 0 && (
+          <span className="text-[11px] tabular-nums text-fg-muted" data-foreign-children={elsewhere.count}>
+            {elsewhere.count} in {elsewhere.keys.join(", ")}
+          </span>
+        )}
+        {withheld > 0 && (
+          <span className="text-[11px] tabular-nums text-fg-muted" title="Children in projects you cannot see" data-withheld={withheld}>
+            {withheld} you cannot see
           </span>
         )}
         {showPoints && (rollup?.points_total ?? 0) > 0 && (
@@ -104,6 +121,19 @@ export function ChildrenSection({
           </span>
         )}
       </button>
+      {!isChecklist && (
+        <Button
+          size="sm"
+          variant="ghost"
+          data-open-epic-board
+          title="Every child of this epic, in every project, as a board"
+          onClick={() => void navigate({ to: RoutePath.epicBoard, params: { itemKey: item.key } })}
+        >
+          <LayoutGrid size={13} aria-hidden />
+          Open as board
+        </Button>
+      )}
+      </div>
 
       {expanded && (
         <div className="mt-3">

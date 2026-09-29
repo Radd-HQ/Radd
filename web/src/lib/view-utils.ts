@@ -1,7 +1,7 @@
 import { shortDate } from "@radd/plugin-sdk";
 import { fieldInScope } from "./field-scope";
 import { CATEGORY_META, CATEGORY_ORDER, CYCLE_STATUS_ORDER, KIND_META, KIND_ORDER, PRIORITY_META, PRIORITY_ORDER, VIEW_AXIS_LABELS, VIEW_AXIS_ORDER } from "./meta";
-import { CF_AXIS_PREFIX, ItemKind, StateCategory, ViewAxis, type AxisToken, type Item, type ItemParentRef, type State, type StateCategoryRow } from "./types";
+import { CF_AXIS_PREFIX, ItemKind, StateCategory, ViewAxis, type AxisToken, type Item, type ItemParentRef, type ItemRollup, type State, type StateCategoryRow } from "./types";
 import { CYCLE_STATUS_META } from "@radd-plugin-ui/cycles/status";
 import { CycleStatus } from "@radd-plugin-ui/cycles/types";
 import type { Cycle, CycleStatusValue } from "@radd-plugin-ui/cycles/types";
@@ -65,6 +65,32 @@ export const NO_EPIC_KEY = "__no_epic__";
 /** Work whose epic (or the rung on the way to it) the viewer may not read (RADD-1491);
  *  the server's `grouped_axes.HIDDEN_EPIC_BUCKET` and `grouped_labels.HIDDEN_EPIC_LABEL`. */
 export const HIDDEN_EPIC_KEY = "__hidden_epic__";
+/**
+ * `project` buckets (RADD-1493): one per project present, key-ordered, no unset bucket
+ * (every item has a project). The client knows only the key prefix; `boardGroups`
+ * swaps in the server's "KEY · Name" label, which is why this axis is listed there.
+ */
+function groupByProject(items: Item[]): ViewGroup[] {
+  const buckets = new Map<string, ViewGroup>();
+  for (const item of items) {
+    const bucket = buckets.get(item.project_id);
+    if (bucket) bucket.items.push(item);
+    else buckets.set(item.project_id, { key: item.project_id, label: projectKeyOf(item), items: [item] });
+  }
+  return [...buckets.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+/** `DEV-23` → `DEV`: an item's project key, which its key carries (RADD-1493). */
+export function projectKeyOf(item: Pick<Item, "key">): string {
+  return item.key.slice(0, item.key.lastIndexOf("-"));
+}
+
+/** How much of an epic lives outside `projectKey`, from its rollup (RADD-1493): the
+ *  other projects' keys (rollup order) and their descendant count together. */
+export function foreignChildren(rollup: ItemRollup | undefined, projectKey: string | null): { keys: string[]; count: number } {
+  if (!rollup) return { keys: [], count: 0 };
+  const keys = Object.keys(rollup.by_project).filter((key) => key !== projectKey);
+  return { keys, count: keys.reduce((sum, key) => sum + rollup.by_project[key], 0) };
+}
 export const HIDDEN_EPIC_LABEL = "Epic you cannot see";
 
 const UNASSIGNED_LABEL = "Unassigned";
@@ -208,6 +234,8 @@ export function groupItemsForView(
       );
     case ViewAxis.epic:
       return groupByEpic(items);
+    case ViewAxis.project:
+      return groupByProject(items);
     default:
       return [{ key: axis, label: "All issues", items }];
   }

@@ -4,7 +4,8 @@ import { formatDuration } from "../../lib/duration";
 import { useAnchoredCardPosition, type CardAnchor } from "../../lib/floating-position";
 import { useDurationConfig } from "../../lib/hooks";
 import { PRIORITY_META } from "../../lib/meta";
-import type { ItemRollup, ItemTimelogBatchEntry } from "../../lib/types";
+import type { Item, ItemRollup, ItemTimelogBatchEntry } from "../../lib/types";
+import { foreignChildren, projectKeyOf } from "../../lib/view-utils";
 import { AssigneeAvatar, PriorityIcon, StatePill, TeamBadge } from "../items/ItemBadges";
 import { RoadmapRowKind, rowWindowIso, type BarProgress, type RoadmapRow } from "./roadmap-model";
 
@@ -94,7 +95,7 @@ export function RoadmapHoverCard({ row, anchor, progress, timelog, rollup }: Roa
         <div className="mt-2 flex flex-col gap-1">
           <p className="text-[11px] tabular-nums text-fg-secondary">
             {isEpic && rollup
-              ? `${rollup.done} of ${rollup.total} children done`
+              ? `${rollup.done} of ${rollup.total} children done${elsewhereText(rollup, item)}`
               : timelog && (
                   <>
                     Estimate {formatDuration(timelog.estimate_seconds ?? 0, durationConfig)} ·
@@ -108,4 +109,13 @@ export function RoadmapHoverCard({ row, anchor, progress, timelog, rollup }: Roa
       )}
     </div>
   );
+}
+
+/** RADD-1493: " · 3 in TD, ITE · 2 you cannot see" — what this epic's bar does not draw. */
+function elsewhereText(rollup: ItemRollup, item: Pick<Item, "key">): string {
+  const foreign = foreignChildren(rollup, projectKeyOf(item));
+  const parts: string[] = [];
+  if (foreign.count > 0) parts.push(`${foreign.count} in ${foreign.keys.join(", ")}`);
+  if (rollup.withheld > 0) parts.push(`${rollup.withheld} you cannot see`);
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
 }

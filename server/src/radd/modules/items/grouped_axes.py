@@ -25,6 +25,7 @@ def axis_expression(axis, project_id, epic):
         "team": func.coalesce(cast(WorkItem.team_id, String), "__no_team__"),
         "cycle": func.coalesce(cast(WorkItem.cycle_id, String), "__backlog__"),
         "epic": func.coalesce(cast(epic, String), NO_EPIC_BUCKET),
+        "project": cast(WorkItem.project_id, String),
         None: literal("__all__"),
     }
     if axis and axis.startswith("cf."):
@@ -41,6 +42,7 @@ def bucket_filter(axis, key, expression, project_id):
         "assignee": (WorkItem.assignee_id, "__unassigned__"),
         "team": (WorkItem.team_id, "__no_team__"),
         "cycle": (WorkItem.cycle_id, "__backlog__"),
+        "project": (WorkItem.project_id, None),
     }
     if axis == SlqField.STATE and project_id:
         columns["state"] = (WorkItem.state_id, None)

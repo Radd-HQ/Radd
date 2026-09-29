@@ -44,6 +44,8 @@ export const SAMPLE_ROLLUP: ItemRollup = {
   in_progress: 2,
   points_total: 21,
   points_done: 8,
+  by_project: {},
+  withheld: 0,
   estimate_seconds: 12 * 3600,
   logged_seconds: 7 * 3600,
 };

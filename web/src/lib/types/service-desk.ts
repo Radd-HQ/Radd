@@ -71,6 +71,10 @@ export interface ItemRollup {
   in_progress: number;
   points_total: number;
   points_done: number;
+  /** RADD-1493: readable descendants by the project KEY they live in. */
+  by_project: Record<string, number>;
+  /** RADD-1493: descendants that exist but the viewer may not read — a count, a floor. */
+  withheld: number;
   estimate_seconds: number;
   logged_seconds: number;
 }

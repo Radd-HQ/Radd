@@ -26,7 +26,7 @@ async def board_labels(session, axis, totals):
     refs = {}
     ids = (
         [uuid.UUID(key) for key in totals if not key.startswith("__")]
-        if axis in ("assignee", "team", "epic")
+        if axis in ("assignee", "team", "epic", "project")
         else []
     )
     if axis in ("assignee", "team"):
@@ -35,6 +35,13 @@ async def board_labels(session, axis, totals):
             await session.execute(select(model.id, model.name).where(model.id.in_(ids)))
         ).all():
             labels[str(key)] = name
+    elif axis == SlqField.PROJECT:
+        for key, project_key, name in (
+            await session.execute(
+                select(Project.id, Project.key, Project.name).where(Project.id.in_(ids))
+            )
+        ).all():
+            labels[str(key)] = f"{project_key} · {name}"
     elif axis == SlqField.EPIC:
         if HIDDEN_EPIC_BUCKET in totals:
             labels[HIDDEN_EPIC_BUCKET] = HIDDEN_EPIC_LABEL
