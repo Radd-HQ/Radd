@@ -337,8 +337,31 @@ try {
   assert(transition.rules.some(r => r.check === "require_resolved_threads"), "field edit dropped thread guard");
   // RADD-1283: who can resolve — a default plus an issue-type rule, saved whole.
   await until(s, () => s.eval(`!!document.querySelector('[data-thread-resolution-settings]')`), "thread resolution settings missing");
-  await s.click('[data-thread-resolution-settings] [data-add-thread-rule]');
-  await until(s, () => threadPolicy.overrides.length === 1 && threadPolicy.overrides[0].issue_type_id === "type-bug", "issue-type rule not saved");
+  // RADD-1495: the control renders only once the issue types have loaded, and a toast from the
+  // preceding save can sit over it on a slow runner — wait for it to be there, uncovered and
+  // idle before the click, and say what the fixture last saw if the save never arrives.
+  const addRule = '[data-thread-resolution-settings] [data-add-thread-rule]';
+  const addRuleReady = () => s.eval(`(() => {
+    const el = document.querySelector(${JSON.stringify(addRule)});
+    if (!el || el.disabled) return false;
+    el.scrollIntoView({ block: "center" });
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return !!hit && el.contains(hit) && !document.querySelector('[role="status"] [data-toast-action]');
+  })()`);
+  await until(s, addRuleReady, "add-rule control never became clickable");
+  const ruleSaved = () => threadPolicy.overrides.length === 1 && threadPolicy.overrides[0].issue_type_id === "type-bug";
+  const lastRequests = () => requests.slice(-4).map((r) => `${r.method} ${r.route}`).join(" | ");
+  await steadyClick(addRule);
+  try {
+    await until(s, ruleSaved, "issue-type rule not saved", { timeoutMs: 8_000, describe: async () => `last requests: ${lastRequests()}` });
+  } catch (first) {
+    // One retry: a click swallowed by a repaint is a runner artefact, a second miss is a bug.
+    console.error(`add-rule click did not save on the first try (${first.message.split("\n")[0]}); retrying once`);
+    await until(s, addRuleReady, "add-rule control not clickable for the retry");
+    await steadyClick(addRule);
+    await until(s, ruleSaved, "issue-type rule not saved after a retry", { describe: async () => `last requests: ${lastRequests()}` });
+  }
   await until(s, () => s.eval(`!!document.querySelector('[data-thread-rule="type-bug"]')`), "issue-type rule row missing");
   assert.equal(threadPolicy.default, "author");
   await s.screenshot("/tmp/radd-thread-workflow.png");
