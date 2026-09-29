@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { errorMessage } from "../../lib/api";
-import { RoutePath } from "../../lib/constants";
+import { ITEM_KEY_PATTERN, RoutePath } from "../../lib/constants";
 import { useAddItemLink, useRemoveItemLink } from "../../lib/item-mutations";
 import { linkSearchQuery, linkTypesQuery } from "../../lib/queries";
 import { ItemLinkType, type Item, type ItemLink, type ItemLinkCreate, type ItemLinks } from "../../lib/types";
@@ -144,16 +144,19 @@ function AddLinkRow({
     );
   };
 
-  const submitNumber = (raw: string) => {
+  const submitTyped = (raw: string) => {
     setLocalError(null);
     const trimmed = raw.trim();
     if (!trimmed) return;
-    // Typed form: a per-project number ("23") or a same-project key ("TD-23").
-    // Cross-project targets come from the typeahead (addressed by id, spec 80).
-    const numberPart = trimmed.includes("-") ? trimmed.slice(trimmed.lastIndexOf("-") + 1) : trimmed;
-    const targetNumber = Number(numberPart);
+    // Typed form: a full key ("DEV-23") names ITS project (RADD-1490); a bare
+    // number ("23") means this item's own project. The typeahead addresses by id.
+    if (ITEM_KEY_PATTERN.test(trimmed)) {
+      submitBody({ target_key: trimmed.toUpperCase(), link_type: activeType });
+      return;
+    }
+    const targetNumber = Number(trimmed);
     if (!Number.isInteger(targetNumber) || targetNumber <= 0) {
-      setLocalError("Enter an issue number or key, e.g. 23 or TD-23.");
+      setLocalError(`Enter an issue number or key, e.g. 23 or ${project.key}-23.`);
       return;
     }
     submitBody({ target_number: targetNumber, link_type: activeType });
@@ -163,7 +166,7 @@ function AddLinkRow({
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        submitNumber(target);
+        submitTyped(target);
       }}
       className="mt-3 flex items-end gap-2"
     >

@@ -91,11 +91,15 @@ class ItemClone(BaseModel):
 
 
 class ItemLinkCreate(BaseModel):
-    """Create a link to another item — address it by id OR by per-project number.
-    `link_type` is a link-type KEY (spec 91), validated against the catalog in the
-    service so both built-in and custom types work."""
+    """Create a link to another item — address it by id, by full key, OR by
+    per-project number (exactly one). `target_key` is `KEY-123` and resolves in the
+    project the key NAMES, spec-68 aliases included (RADD-1490); `target_number`
+    is the bare-number form and means the source item's own project. `link_type`
+    is a link-type KEY (spec 91), validated against the catalog in the service so
+    both built-in and custom types work."""
 
     target_id: uuid.UUID | None = None
+    target_key: str | None = Field(default=None, min_length=3, max_length=60)
     target_number: int | None = None
     link_type: str = Field(min_length=1, max_length=30)
 

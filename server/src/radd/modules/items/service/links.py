@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from radd.db import ilike_term
@@ -19,9 +19,9 @@ from radd.modules.projects.models import Project
 from ..enums import ItemEntity, ItemEvent, ItemKind
 from .visibility import relation_read_clause
 from ..mentions import parse_issue_keys
-from ..models import ItemLink, WorkItem
+from ..models import ItemKeyAlias, ItemLink, WorkItem
 from ..schemas import ItemLinkCreate, ItemLinkSearchResult, ItemRead
-from .queries import find_item_by_key, require_item_permission, require_readable_item
+from .queries import _parse_key, find_item_by_key, require_item_permission, require_readable_item
 from .read import _finish, _hydrate_one
 from .visibility import _field_ctx
 
@@ -33,6 +33,18 @@ def _search_number(term: str) -> int | None:
     """Pull an item number from a search term: '23' or 'TD-23' -> 23, else None."""
     candidate = term.rsplit("-", 1)[1] if "-" in term else term
     return int(candidate) if candidate.isdigit() else None
+
+
+def _named_key_clause(project_key: str, number: int, term: str):
+    """The row a full key names: `number` in the project whose key is
+    `project_key`, or the item a spec-68 alias for `term` still points at."""
+    in_named_project = WorkItem.project_id.in_(
+        select(Project.id).where(Project.key == project_key.upper())
+    )
+    aliased = WorkItem.id.in_(
+        select(ItemKeyAlias.item_id).where(ItemKeyAlias.old_key == term.upper())
+    )
+    return or_(and_(in_named_project, WorkItem.number == number), aliased)
 
 
 async def link_search(
@@ -70,16 +82,23 @@ async def link_search(
     if unparented:
         query = query.where(WorkItem.parent_id.is_(None))
     term = q.strip()
+    tiers = [(WorkItem.project_id == project_id).desc(), WorkItem.number.desc()]
     if term:
         conditions = [WorkItem.title.ilike(ilike_term(term))]
         number = _search_number(term)
         if number is not None:
             conditions.append(WorkItem.number == number)
+        parsed = _parse_key(term)
+        if parsed is not None:
+            # A full key names ITS project (RADD-1490): `DEV-23` typed on a TD item
+            # means DEV-23, so that row (or the row a spec-68 alias points at)
+            # leads the list ahead of the anchor project's own 23.
+            named = _named_key_clause(parsed[0], parsed[1], term)
+            conditions.append(named)
+            tiers.insert(0, named.desc())
         query = query.where(or_(*conditions))
-    # Two-tier ordering (spec 80): the anchor project's own items first.
-    query = query.order_by(
-        (WorkItem.project_id == project_id).desc(), WorkItem.number.desc()
-    ).limit(limit)
+    # Tiered ordering (spec 80): the named key, then the anchor project's own items.
+    query = query.order_by(*tiers).limit(limit)
     items = list((await session.execute(query)).scalars())
     keys = await projects_service.project_keys(session, {item.project_id for item in items})
     return [
@@ -100,13 +119,28 @@ async def link_search(
 async def _resolve_link_target(
     session: AsyncSession, project: Project, data: ItemLinkCreate, actor: User
 ) -> WorkItem:
-    """Resolve the link target by id or by per-project number (exactly one required).
-    `target_number` means "in the SOURCE item's project" (the bare-number form);
-    addressing by `target_id` may cross projects (spec 80). Either way the target goes
-    through the read seam (RADD-1455): one the actor cannot see answers exactly as a
-    missing one, so a link is no existence oracle."""
+    """Resolve the link target by id, by full key or by per-project number
+    (exactly one required). `target_key` resolves in the project the key NAMES,
+    aliases included (RADD-1490); `target_number` means "in the SOURCE item's
+    project" (the bare-number form); `target_id` may cross projects (spec 80).
+    Either way the target goes through the read seam (RADD-1455): one the actor
+    cannot see answers exactly as a missing one, so a link is no existence oracle."""
+    given = [
+        f for f in ("target_id", "target_key", "target_number") if getattr(data, f) is not None
+    ]
+    if len(given) > 1:
+        raise ConflictError(ItemEntity.LINK, reason="address the target one way, not several")
     if data.target_id is not None:
         target, _project, _permissions = await require_readable_item(session, data.target_id, actor)
+        return target
+    if data.target_key is not None:
+        found = await find_item_by_key(session, data.target_key)
+        if found is None:
+            raise NotFoundError(ItemEntity.ITEM, data.target_key)
+        try:
+            target, _project, _permissions = await require_readable_item(session, found.id, actor)
+        except NotFoundError:
+            raise NotFoundError(ItemEntity.ITEM, data.target_key) from None
         return target
     if data.target_number is not None:
         key = f"{project.key}-{data.target_number}"
@@ -122,7 +156,9 @@ async def _resolve_link_target(
         except NotFoundError:
             raise NotFoundError(ItemEntity.ITEM, key) from None
         return target
-    raise ConflictError(ItemEntity.LINK, reason="target_id or target_number is required")
+    raise ConflictError(
+        ItemEntity.LINK, reason="target_id, target_key or target_number is required"
+    )
 
 
 async def _check_link_rules(
@@ -214,14 +250,20 @@ async def add_item_link(
     if definition is None:
         raise ConflictError(ItemEntity.LINK, reason=f"unknown link type '{data.link_type}'")
     if definition.auto_managed:
-        raise ConflictError(ItemEntity.LINK, reason=f"{data.link_type} links are managed automatically")
+        raise ConflictError(
+            ItemEntity.LINK, reason=f"{data.link_type} links are managed automatically"
+        )
     if definition.project_ids and project.id not in definition.project_ids:
         raise ConflictError(
-            ItemEntity.LINK, reason=f"the '{definition.key}' link type isn't available in this project"
+            ItemEntity.LINK,
+            reason=f"the '{definition.key}' link type isn't available in this project",
         )
     target = await _resolve_link_target(session, project, data, actor)
     await _check_link_rules(
-        session, item, target, data.link_type,
+        session,
+        item,
+        target,
+        data.link_type,
         symmetric=linktypes_service.is_symmetric(catalog, data.link_type),
     )
     before = await _hydrate_one(session, item, project, actor, permissions)
@@ -260,5 +302,13 @@ async def _finish_link(
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
     return await _finish(
-        session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions, before=before
+        session,
+        item,
+        project,
+        ItemEvent.UPDATED,
+        actor,
+        ctx,
+        definitions,
+        permissions,
+        before=before,
     )

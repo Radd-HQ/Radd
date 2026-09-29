@@ -176,9 +176,11 @@ export interface ItemLinks {
   incoming: ItemLink[];
 }
 
-/** POST /items/{id}/links — address the target by per-project number OR id. */
+/** POST /items/{id}/links — address the target by id, by full key (`DEV-23`, resolved in the
+ *  project the key names, RADD-1490) OR by per-project number (this item's own project). */
 export interface ItemLinkCreate {
   target_id?: string | null;
+  target_key?: string | null;
   target_number?: number | null;
   link_type: string;
 }

@@ -14,6 +14,7 @@ import pytest
 from radd.exceptions import ConflictError
 from radd.modules.items import service as items
 from radd.modules.items.enums import ItemKind
+from radd.modules.items.models import ItemKeyAlias
 from radd.modules.linktypes.types import ItemLinkType
 from radd.modules.items.schemas import ItemCreate, ItemLinkCreate, ItemUpdate
 
@@ -72,9 +73,7 @@ async def test_link_search_ranks_same_project_first(db, actor):
     other = await items.create_item(
         db, ItemCreate(project_id=p2.id, title=f"{marker} other"), actor
     )
-    mine = await items.create_item(
-        db, ItemCreate(project_id=p1.id, title=f"{marker} mine"), actor
-    )
+    mine = await items.create_item(db, ItemCreate(project_id=p1.id, title=f"{marker} mine"), actor)
     results = await items.link_search(db, project_id=p1.id, q=marker, actor=actor, limit=8)
     ids = [result.id for result in results]
     assert set(ids) == {mine.id, other.id}
@@ -82,3 +81,63 @@ async def test_link_search_ranks_same_project_first(db, actor):
     by_id = {result.id: result for result in results}
     assert by_id[other.id].key.startswith("SB")  # keys carry the item's OWN project
     assert by_id[mine.id].key.startswith("SA")
+
+
+async def test_typed_key_links_the_project_it_names(db, actor):
+    """RADD-1490: `DEV-23` typed on a TD item means DEV-23, never TD-23."""
+    p1 = await make_project(db, "TA")
+    p2 = await make_project(db, "TB")
+    source = await items.create_item(db, ItemCreate(project_id=p1.id, title="source"), actor)
+    own = await items.create_item(db, ItemCreate(project_id=p1.id, title="own"), actor)
+    await items.create_item(db, ItemCreate(project_id=p2.id, title="filler"), actor)
+    other = await items.create_item(db, ItemCreate(project_id=p2.id, title="other"), actor)
+    # Same number in both projects, so a bare-number resolver would pick `own`.
+    assert own.number == other.number
+    read = await items.add_item_link(
+        db,
+        source.id,
+        ItemLinkCreate(target_key=other.key.lower(), link_type=ItemLinkType.BLOCKS),
+        actor,
+    )
+    assert [link.item.id for link in read.links.outgoing] == [other.id]
+    # The bare-number form still means the source item's own project.
+    read = await items.add_item_link(
+        db,
+        source.id,
+        ItemLinkCreate(target_number=own.number, link_type=ItemLinkType.RELATES),
+        actor,
+    )
+    assert own.id in {link.item.id for link in read.links.outgoing}
+    # A spec-68 alias resolves too — an old key keeps naming its item after a move.
+    db.add(ItemKeyAlias(old_key="OLDKEY-7", item_id=other.id))
+    await db.flush()
+    read = await items.add_item_link(
+        db, own.id, ItemLinkCreate(target_key="oldkey-7", link_type=ItemLinkType.RELATES), actor
+    )
+    assert [link.item.id for link in read.links.outgoing] == [other.id]
+    # Two addresses at once is a refusal, not a silent preference.
+    with pytest.raises(ConflictError, match="one way"):
+        await items.add_item_link(
+            db,
+            own.id,
+            ItemLinkCreate(target_key=other.key, target_number=1, link_type=ItemLinkType.BLOCKS),
+            actor,
+        )
+
+
+async def test_link_search_leads_with_the_named_key(db, actor):
+    """RADD-1490: the typeahead for a full key leads with that row, ahead of the
+    anchor project's own item of the same number."""
+    p1 = await make_project(db, "NA")
+    p2 = await make_project(db, "NB")
+    own = await items.create_item(db, ItemCreate(project_id=p1.id, title="own"), actor)
+    other = await items.create_item(db, ItemCreate(project_id=p2.id, title="other"), actor)
+    assert own.number == other.number
+    results = await items.link_search(
+        db, project_id=p1.id, q=other.key.lower(), actor=actor, limit=8
+    )
+    assert results[0].id == other.id
+    assert {r.id for r in results} >= {own.id, other.id}  # the number match still lists `own`
+    # A bare number keeps the anchor project first (spec 80's tier).
+    results = await items.link_search(db, project_id=p1.id, q=str(own.number), actor=actor, limit=8)
+    assert results[0].id == own.id

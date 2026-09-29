@@ -14,6 +14,12 @@ export const PALETTE_SEARCH_LIMIT = 8;
  * server-wide and kind-filtered client-side, so ask for the full page.
  */
 export const PARENT_SEARCH_LIMIT = 25;
+/**
+ * A full item key as typed by a person (`DEV-23`, any case): the project key's own
+ * pattern (`projects/schemas.py`) plus a number. A typed key names ITS project
+ * (RADD-1490); a bare number means the current one.
+ */
+export const ITEM_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,9}-\d+$/;
 /** KB deflection (spec 66): debounce + minimum title length before querying. */
 export const DEFLECT_DEBOUNCE_MS = 400;
 export const DEFLECT_MIN_QUERY_CHARS = 3;
