@@ -1,6 +1,6 @@
 """Group before paging: one bounded slice per board cell, using authorized IDs."""
 
-from sqlalchemy import func, literal, select, case
+from sqlalchemy import String, case, cast, func, literal, select
 from sqlalchemy.orm import aliased
 
 from radd.exceptions import ForbiddenError
@@ -14,7 +14,7 @@ from .models import WorkItem
 from .service.listing import list_items
 from .service.scope import visible_ids_query
 from .service.visibility import denied_slq_fields
-from .grouped_axes import axis_expression, bucket_filter
+from .grouped_axes import HIDDEN_EPIC_BUCKET, axis_expression, bucket_filter
 from .grouped_schemas import GroupPageRequest, GroupPage, GroupCell
 
 
@@ -51,7 +51,13 @@ async def grouped_items(session, actor, data: GroupPageRequest) -> GroupPage:
         readable_ancestors, _ = await visible_ids_query(
             session, actor=actor, filters=ItemListFilters(), q=""
         )
-        epic = case((epic.in_(readable_ancestors), epic), else_=None)
+        # RADD-1491: an ancestor the actor may not read files the row under the
+        # hidden bucket, which is not the same thing as work no epic governs.
+        epic = case(
+            (epic.is_(None), None),
+            (epic.in_(readable_ancestors), cast(epic, String)),
+            else_=literal(HIDDEN_EPIC_BUCKET),
+        )
     column, lane = (
         axis_expression(data.axis, data.project_id, epic),
         axis_expression(data.lane, data.project_id, epic),

@@ -40,6 +40,7 @@ from .read import _finish, _hydrate_one, get_item
 from .relations import (
     _resolve_assignee,
     _resolve_cycle,
+    _refuse_replacing_hidden_parent,
     _resolve_parent,
     _resolve_release,
     _resolve_state,
@@ -90,9 +91,7 @@ async def _refuse_self_lockout(
 async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> ItemRead:
     project = await projects_service.get_project(session, data.project_id)
     permissions = await authz.require(session, actor, Permission.ITEM_CREATE, project=project)
-    await _check_builtin_field_rules(
-        session, actor, project, permissions, data.model_fields_set
-    )
+    await _check_builtin_field_rules(session, actor, project, permissions, data.model_fields_set)
     state = await _resolve_state(session, project, data.state_id)
     if data.type_id is not None:
         type_id = await _resolve_type(session, project, data.type_id)
@@ -119,7 +118,9 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
     fields.writable_check(definitions, data.custom_fields, ctx)
     # Seed field default_values for keys the caller omitted (admin-set, so applied after
     # the writable check — a default may land on a field the creator can't write).
-    custom_fields = validate_custom_fields(definitions, apply_defaults(definitions, data.custom_fields))
+    custom_fields = validate_custom_fields(
+        definitions, apply_defaults(definitions, data.custom_fields)
+    )
     number = await _resolve_number(session, project.id, data.number)
     next_rank = await _next_rank(session)  # append to the bottom of the manual order
 
@@ -136,9 +137,7 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
         assignee_id=data.assignee_id,
         # model_fields_set idiom (spec 62): omitted = the acting user raised it;
         # an EXPLICIT null keeps it unset (external/public submits have no user).
-        reporter_id=(
-            data.reporter_id if "reporter_id" in data.model_fields_set else actor.id
-        ),
+        reporter_id=(data.reporter_id if "reporter_id" in data.model_fields_set else actor.id),
         team_id=data.team_id,
         start_date=data.start_date,
         target_date=data.target_date,
@@ -174,7 +173,10 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
         if item.cycle_id is not None:
             # Open the first cycle stint (spec 56) — import stamps original time.
             await cycles_service.record_cycle_change(
-                session, item_id=item.id, old_cycle_id=None, new_cycle_id=item.cycle_id,
+                session,
+                item_id=item.id,
+                old_cycle_id=None,
+                new_cycle_id=item.cycle_id,
                 at=occurred_at,
             )
         await _set_labels(session, item, data.labels, actor.id)
@@ -189,8 +191,16 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
         raise
     await guard.commit()
     return await _finish(
-        session, item, project, ItemEvent.CREATED, actor, ctx, definitions, permissions,
-        occurred_at=occurred_at, event_actor_id=event_actor_id,
+        session,
+        item,
+        project,
+        ItemEvent.CREATED,
+        actor,
+        ctx,
+        definitions,
+        permissions,
+        occurred_at=occurred_at,
+        event_actor_id=event_actor_id,
     )
 
 
@@ -217,7 +227,10 @@ async def update_item(
     # Nullable relations: omitted = unchanged, explicit null = clear.
     if "type_id" in data.model_fields_set:
         item.type_id = await _resolve_type(session, project, data.type_id)
-    if "parent_id" in data.model_fields_set:
+    # Restating the current parent is not a change: it must not re-resolve a
+    # parent the actor cannot read (RADD-1491) — the rail sends the whole row.
+    if "parent_id" in data.model_fields_set and data.parent_id != item.parent_id:
+        await _refuse_replacing_hidden_parent(session, item, actor, permissions)
         await _resolve_parent(session, ItemKind(item.kind), data.parent_id, actor)
         item.parent_id = data.parent_id
     # A re-import refreshing a historical row may restate an assignee/reporter who
@@ -298,8 +311,16 @@ async def update_item(
     # from the event stream, so a restated `updated_at` that left its event
     # stamped `now()` would file the whole import under today. Mirrors create.
     return await _finish(
-        session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions,
-        before=before, occurred_at=occurred_at,
+        session,
+        item,
+        project,
+        ItemEvent.UPDATED,
+        actor,
+        ctx,
+        definitions,
+        permissions,
+        before=before,
+        occurred_at=occurred_at,
     )
 
 
@@ -326,7 +347,14 @@ async def reassign_state(
         item.state_id = to_state_id
         await session.flush()
         await _finish(
-            session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions,
+            session,
+            item,
+            project,
+            ItemEvent.UPDATED,
+            actor,
+            ctx,
+            definitions,
+            permissions,
             before=before,
         )
     return len(items)
@@ -346,7 +374,15 @@ async def set_archived(
     item.archived_at = utcnow() if archived else None
     await session.flush()
     return await _finish(
-        session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions, before=before
+        session,
+        item,
+        project,
+        ItemEvent.UPDATED,
+        actor,
+        ctx,
+        definitions,
+        permissions,
+        before=before,
     )
 
 
@@ -443,7 +479,9 @@ async def reorder_item(
     await session.flush()
     definitions = await fields.definitions_for_project(session, project)
     ctx = await _field_ctx(session, actor, project, permissions, definitions)
-    return await _finish(session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions)
+    return await _finish(
+        session, item, project, ItemEvent.UPDATED, actor, ctx, definitions, permissions
+    )
 
 
 # --- cycle seams ---
@@ -475,7 +513,9 @@ async def move_open_cycle_items(
     return len(item_ids)
 
 
-async def annotate_email_signature(session: AsyncSession, item_id: uuid.UUID, signature: str) -> None:
+async def annotate_email_signature(
+    session: AsyncSession, item_id: uuid.UUID, signature: str
+) -> None:
     """Intake-only annotation; preserve the body and all sender-authentication notes."""
     item = await require_item(session, item_id)
     if signature and signature in item.description:

@@ -338,11 +338,19 @@ class ItemRead(BaseModel):
     state: StateRef
     priority: Priority
     parent: ParentRef | None
+    # RADD-1491: `parent` is null both for no parent and for one the actor may
+    # not read (RADD-839 withholds the ref). This says which — a boolean, never
+    # the id: that a parent exists is already visible in the rollup counts,
+    # which one it is stays withheld.
+    parent_hidden: bool = False
     # The epic this item BELONGS TO — itself if it is one, else its parent, else
     # its grandparent (RADD-697; same rule as SLQ's `epic` field). Null for work
     # no epic governs. Carried on every item so a client can group by epic
     # without walking the hierarchy it cannot see.
     epic: ParentRef | None = None
+    # The walk above met an ancestor the actor may not read before finding an
+    # epic (RADD-1491): the board files the item under "Epic you cannot see".
+    epic_hidden: bool = False
     assignee: UserRef | None
     reporter: UserRef | None = None
     team: TeamRef | None

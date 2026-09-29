@@ -12,7 +12,13 @@ from sqlalchemy import select
 from radd.modules.auth.models import User
 from radd.modules.teams.models import Team
 from radd.modules.projects.models import Project
+from .grouped_axes import HIDDEN_EPIC_BUCKET
 from .models import WorkItem
+
+
+#: What the hidden-epic bucket is called (RADD-1491); the SPA's `groupByEpic`
+#: uses the same words for rows it buckets client-side.
+HIDDEN_EPIC_LABEL = "Epic you cannot see"
 
 
 async def board_labels(session, axis, totals):
@@ -30,6 +36,8 @@ async def board_labels(session, axis, totals):
         ).all():
             labels[str(key)] = name
     elif axis == SlqField.EPIC:
+        if HIDDEN_EPIC_BUCKET in totals:
+            labels[HIDDEN_EPIC_BUCKET] = HIDDEN_EPIC_LABEL
         rows = (
             await session.execute(
                 select(WorkItem.id, Project.key, WorkItem.number, WorkItem.title, WorkItem.kind)

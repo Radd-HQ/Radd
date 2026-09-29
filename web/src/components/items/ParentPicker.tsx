@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Pencil, X } from "lucide-react";
+import { EyeOff, Pencil, X } from "lucide-react";
 import { IconButton, useDebounced } from "@radd/plugin-sdk";
 import { PARENT_SEARCH_LIMIT } from "../../lib/constants";
 import { KIND_META } from "../../lib/meta";
@@ -218,6 +218,29 @@ export function ParentPickerField({
         </div>
       )}
       {hint && <p className="text-[11px] text-fg-muted">{hint}</p>}
+    </div>
+  );
+}
+
+/** The words for a parent the viewer may not read (RADD-1491), by the child's kind. */
+export function hiddenParentText(kind: ItemKindValue): string {
+  return kind === ItemKind.subtask ? "Under an issue you cannot see" : "In an epic you cannot see";
+}
+
+/**
+ * The rail row for a parent that exists but was withheld (RADD-1491): the same label as the
+ * picker, a muted line saying so, and NO picker — replacing what you cannot see is refused
+ * server-side, and offering it would read as "this issue has no epic".
+ */
+export function HiddenParentField({ kind }: { kind: ItemKindValue }) {
+  return (
+    <div className="flex flex-col gap-1.5" data-parent-field={kind} data-parent-hidden>
+      <span className="text-xs font-medium text-fg-secondary">{parentLabel(kind)}</span>
+      <div className="flex h-8 items-center gap-2 rounded-md border border-subtle bg-surface px-2.5 text-[13px] text-fg-muted">
+        <EyeOff size={13} aria-hidden />
+        <span className="min-w-0 flex-1 truncate">{hiddenParentText(kind)}</span>
+      </div>
+      <p className="text-[11px] text-fg-muted">Someone with access to that project can change it.</p>
     </div>
   );
 }

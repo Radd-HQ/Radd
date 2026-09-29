@@ -8,6 +8,13 @@ from .models import WorkItem
 from .slq.errors import SlqError
 
 
+#: The epic bucket for work whose nearest epic (or the rung on the way to it) the
+#: actor may not read (RADD-1491) — distinct from `__no_epic__`, which is work
+#: no epic governs. Both are group keys the SPA labels.
+HIDDEN_EPIC_BUCKET = "__hidden_epic__"
+NO_EPIC_BUCKET = "__no_epic__"
+
+
 def axis_expression(axis, project_id, epic):
     values = {
         "state": cast(WorkItem.state_id, String) if project_id else State.name,
@@ -17,7 +24,7 @@ def axis_expression(axis, project_id, epic):
         "assignee": func.coalesce(cast(WorkItem.assignee_id, String), "__unassigned__"),
         "team": func.coalesce(cast(WorkItem.team_id, String), "__no_team__"),
         "cycle": func.coalesce(cast(WorkItem.cycle_id, String), "__backlog__"),
-        "epic": func.coalesce(cast(epic, String), "__no_epic__"),
+        "epic": func.coalesce(cast(epic, String), NO_EPIC_BUCKET),
         None: literal("__all__"),
     }
     if axis and axis.startswith("cf."):

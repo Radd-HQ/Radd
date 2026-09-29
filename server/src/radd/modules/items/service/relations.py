@@ -5,8 +5,9 @@ from datetime import date
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from radd.exceptions import ConflictError
+from radd.exceptions import ConflictError, NotFoundError
 from radd.modules.auth import principals, service as auth
+from radd.modules.auth.authz import Permission
 from radd.modules.auth.models import User
 from radd.modules.auth.types import AuthEntity
 from radd.modules.cycles import service as cycles_service
@@ -75,6 +76,23 @@ async def _resolve_parent(
         )
 
 
+async def _refuse_replacing_hidden_parent(
+    session: AsyncSession, item: WorkItem, actor: User, permissions: frozenset[Permission]
+) -> None:
+    """RADD-1491: the rail shows a withheld parent as "hidden", never as absent,
+    and a patch must not replace what the actor cannot see — a TD-only member
+    would otherwise take a TD issue out of a DEV epic without knowing it was in
+    one. `project.manage` on the child's project may still re-home it."""
+    if item.parent_id is None or Permission.PROJECT_MANAGE in permissions:
+        return
+    try:
+        await require_readable_item(session, item.parent_id, actor)
+    except NotFoundError:
+        raise ConflictError(
+            ItemEntity.ITEM, reason="the current parent is in a project you cannot read"
+        ) from None
+
+
 async def _resolve_assignee(
     session: AsyncSession, user_id: uuid.UUID, *, allow_inactive: bool = False
 ) -> User:
@@ -102,7 +120,9 @@ async def _resolve_cycle(session: AsyncSession, project: Project, cycle_id: uuid
 async def _resolve_release(session: AsyncSession, project: Project, release_id: uuid.UUID) -> None:
     release = await releases_service.get_release(session, release_id)
     if release.project_id != project.id:
-        raise ConflictError(ReleaseEntity.RELEASE, reason=f"{release_id} belongs to another project")
+        raise ConflictError(
+            ReleaseEntity.RELEASE, reason=f"{release_id} belongs to another project"
+        )
 
 
 def _validate_dates(start: date | None, target: date | None) -> None:

@@ -15,7 +15,8 @@ import { AttachmentParentType, ItemKind, Permission, type Item } from "../lib/ty
 import { Button } from "../components/Button";
 import { useIssueQuickActions } from "../components/items/quick-actions";
 import { recordRecentItem, removeRecentItem } from "../lib/recent";
-import { ChildCount, KindBadge, ParentTag } from "../components/items/ItemBadges";
+import { ChildCount, HiddenParentTag, KindBadge, ParentTag } from "../components/items/ItemBadges";
+import { hiddenParentText } from "../components/items/ParentPicker";
 import { DropdownMenu } from "../components/DropdownMenu";
 import { WatchButton } from "../components/items/WatchButton";
 import { AttachmentsSection } from "../components/items/AttachmentsSection";
@@ -204,6 +205,7 @@ export function ItemDetailBody({ project, item }: ItemDetailBodyProps) {
             <ParentTag parent={item.parent} />
           </Link>
         )}
+        {item.parent_hidden && <HiddenParentTag text={hiddenParentText(item.kind ?? ItemKind.issue)} />}
         {/* RADD-1153: every control here is a write or an account's — a visitor gets none. */}
         {authenticated && (
           <>

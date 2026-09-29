@@ -62,6 +62,10 @@ export const NO_TEAM_KEY = "__no_team__";
 export const NO_VALUE_KEY = "__none__";
 export const BACKLOG_KEY = "__backlog__";
 export const NO_EPIC_KEY = "__no_epic__";
+/** Work whose epic (or the rung on the way to it) the viewer may not read (RADD-1491);
+ *  the server's `grouped_axes.HIDDEN_EPIC_BUCKET` and `grouped_labels.HIDDEN_EPIC_LABEL`. */
+export const HIDDEN_EPIC_KEY = "__hidden_epic__";
+export const HIDDEN_EPIC_LABEL = "Epic you cannot see";
 
 const UNASSIGNED_LABEL = "Unassigned";
 const NO_TEAM_LABEL = "No team";
@@ -283,9 +287,10 @@ function groupByEpic(items: Item[]): ViewGroup[] {
   // server's ordering (SLQ ORDER BY) and must never be re-sorted here.
   const epics = new Map<string, { epic: ItemParentRef; bucket: Item[] }>();
   const noEpic: Item[] = [];
+  const hiddenEpic: Item[] = [];
   for (const item of items) {
     if (!item.epic) {
-      noEpic.push(item);
+      (item.epic_hidden ? hiddenEpic : noEpic).push(item);
       continue;
     }
     const seen = epics.get(item.epic.id);
@@ -303,6 +308,9 @@ function groupByEpic(items: Item[]): ViewGroup[] {
       epicRef: epic,
       items: bucket,
     }));
+  if (hiddenEpic.length) {
+    groups.push({ key: HIDDEN_EPIC_KEY, label: HIDDEN_EPIC_LABEL, items: hiddenEpic });
+  }
   groups.push({
     key: NO_EPIC_KEY,
     label: NO_EPIC_LABEL,

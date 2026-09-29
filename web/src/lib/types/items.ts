@@ -115,10 +115,16 @@ export interface Item {
   kind?: ItemKindValue;
   type?: TypeRef | null; // spec 51 — issue-type classification
   parent?: ItemParentRef | null;
+  /** RADD-1491: `parent` is null both for none and for one the viewer may not read;
+   *  this says which. Never an id — which item it is stays withheld. */
+  parent_hidden?: boolean;
   /** The epic this item BELONGS TO — itself if it is one, else its parent, else
    *  its grandparent (RADD-697, server-resolved: the client cannot see two hops
    *  up). Null for work no epic governs. Drives the `epic` view axis. */
   epic?: ItemParentRef | null;
+  /** The epic walk met an ancestor the viewer may not read (RADD-1491): the board
+   *  files the item under "Epic you cannot see", not "No epic". */
+  epic_hidden?: boolean;
   assignee?: UserRef | null;
   /** Who raised the issue (service-desk requester, spec 30) — defaults to creator. */
   reporter?: UserRef | null;

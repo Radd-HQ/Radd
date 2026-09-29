@@ -5,7 +5,7 @@ import { RELEASE_STATUS_META } from "../../lib/meta";
 import { releasesQuery } from "../../lib/queries";
 import { ItemKind, type Item, type ItemUpdate } from "../../lib/types";
 import { Select } from "../Select";
-import { ParentPickerField, parentLabel, requiredParentKind } from "./ParentPicker";
+import { HiddenParentField, ParentPickerField, parentLabel, requiredParentKind } from "./ParentPicker";
 
 /**
  * RADD-1472: where the item sits in the hierarchy — an issue's epic, a subtask's parent issue (an
@@ -24,6 +24,7 @@ export function ParentField({
   const parentKind = requiredParentKind(kind);
   const excludeIds = useMemo(() => new Set([item.id]), [item.id]);
   if (parentKind === null) return null;
+  if (item.parent_hidden) return <HiddenParentField kind={kind} />;
   const isSubtask = kind === ItemKind.subtask;
   return (
     <ParentPickerField

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarClock, CornerDownRight, Flag, Globe, Rocket, RefreshCw, Star, Users } from "lucide-react";
+import { CalendarClock, CornerDownRight, EyeOff, Flag, Globe, RefreshCw, Rocket, Star, Users } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { RoutePath } from "../../lib/constants";
 import { ItemVisibility, type ItemVisibilityValue } from "../../lib/types";
@@ -345,6 +345,20 @@ export function ParentTag({ parent }: { parent: ItemParentRef }) {
     >
       <CornerDownRight size={11} aria-hidden />
       {parent.key}
+    </span>
+  );
+}
+
+/** The header's parent tag when the parent exists but is withheld (RADD-1491). */
+export function HiddenParentTag({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      data-parent-hidden-tag
+      className="inline-flex items-center gap-1 rounded border border-subtle bg-elevated px-1.5 py-px text-[11px] leading-4 text-fg-muted"
+    >
+      <EyeOff size={11} aria-hidden />
+      {text}
     </span>
   );
 }

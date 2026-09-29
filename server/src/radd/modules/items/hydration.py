@@ -273,6 +273,21 @@ async def hydrate(
             id=parent.id, key=f"{keys[parent.project_id]}-{parent.number}", title=parent.title
         )
 
+    def parent_hidden(item: WorkItem) -> bool:
+        """A parent exists and its ref was withheld (RADD-1491)."""
+        return item.parent_id is not None and item.parent_id not in parents
+
+    def epic_hidden(item: WorkItem) -> bool:
+        """The epic walk hit a withheld ancestor before reaching an epic."""
+        node: WorkItem | None = item
+        for _ in range(_EPIC_LOOKUP_RUNGS):
+            if node is None or node.kind == ItemKind.EPIC.value or node.parent_id is None:
+                return False
+            if node.parent_id not in parents:
+                return True
+            node = parents[node.parent_id]
+        return False
+
     def epic_ref(item: WorkItem) -> ParentRef | None:
         """The epic this item belongs to — ITSELF, else its parent, else its
         grandparent (RADD-697). The Python mirror of `hierarchy.nearest_epic_case`,
@@ -333,7 +348,9 @@ async def hydrate(
             priority=i.priority,
             visibility=ItemVisibility(i.visibility),
             parent=parent_ref(i.parent_id),
+            parent_hidden=parent_hidden(i),
             epic=epic_ref(i),
+            epic_hidden=epic_hidden(i),
             assignee=UserRef.model_validate(users[i.assignee_id]) if i.assignee_id else None,
             reporter=(
                 UserRef.model_validate(users[i.reporter_id])
