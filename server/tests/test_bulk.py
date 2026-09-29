@@ -72,7 +72,9 @@ async def test_bulk_update_applies_and_skips(db, actor):
             ],
         ),
     )
-    blocked = await items.create_item(db, ItemCreate(project_id=project.id, title="no assignee"), actor)
+    blocked = await items.create_item(
+        db, ItemCreate(project_id=project.id, title="no assignee"), actor
+    )
     ok = await items.create_item(
         db, ItemCreate(project_id=project.id, title="assigned", assignee_id=actor.id), actor
     )
@@ -142,16 +144,16 @@ async def test_bulk_move_rekeys_maps_and_aliases(db, actor):
     await fields_service.create_field(
         db,
         FieldDefinitionCreate(
-            project_ids=[src.id], key="flavor", name="Flavor",
+            project_ids=[src.id],
+            key="flavor",
+            name="Flavor",
             type=FieldType.TEXT,
         ),
     )
     release = await releases_service.create_release(
         db, ReleaseCreate(project_id=src.id, name="R1", version="1.0")
     )
-    cycle = await cycles_service.create_cycle(
-        db, CycleCreate(name="C1"), today=date(2026, 7, 1)
-    )
+    cycle = await cycles_service.create_cycle(db, CycleCreate(name="C1"), today=date(2026, 7, 1))
     epic = await items.create_item(
         db, ItemCreate(project_id=src.id, title="epic", kind=ItemKind.EPIC), actor
     )
@@ -202,7 +204,7 @@ async def test_bulk_move_rekeys_maps_and_aliases(db, actor):
     assert raw is not None and raw.id == child.id
 
 
-async def test_bulk_move_subtask_moves_alone_keeping_parent(db, actor):
+async def test_bulk_move_takes_subtasks_along_and_never_alone(db, actor):
     src, _ = await _project_with_states(db, key_prefix="SBA")
     dst = await projects_service.create_project(
         db,
@@ -219,26 +221,35 @@ async def test_bulk_move_subtask_moves_alone_keeping_parent(db, actor):
         ItemCreate(project_id=src.id, title="s", kind=ItemKind.SUBTASK, parent_id=issue.id),
         actor,
     )
-    # Spec 80: a subtask moves ALONE and keeps its (now cross-project) parent.
+    # RADD-1492: a subtask selected without its issue stays, and says why.
     result = await bulk.bulk_move_items(
         db, ItemBulkMove(item_ids=[subtask.id], target_project_id=dst.id), actor
     )
-    assert [m.item_id for m in result.moved] == [subtask.id]
-    assert result.skipped == []
-    read = await items.get_item(db, subtask.id, actor)
-    assert read.key.startswith("SBB")
-    assert read.parent is not None and read.parent.id == issue.id
+    assert result.moved == []
+    assert [(s.item_id, s.reason) for s in result.skipped] == [
+        (subtask.id, BulkSkipReason.SUBTASK_FOLLOWS_PARENT)
+    ]
+    assert (await items.get_item(db, subtask.id, actor)).key.startswith("SBA")
 
-    # Same for an issue moved without its epic: the parent link survives.
+    # An issue moved without its epic takes its subtasks along and keeps the
+    # (cross-project, still legal) epic link.
     result = await bulk.bulk_move_items(
         db, ItemBulkMove(item_ids=[issue.id], target_project_id=dst.id), actor
     )
-    assert [m.item_id for m in result.moved] == [issue.id]
+    assert [m.item_id for m in result.moved] == [issue.id, subtask.id]
+    assert result.skipped == []
     read = await items.get_item(db, issue.id, actor)
     assert read.key.startswith("SBB")
     assert read.parent is not None and read.parent.id == epic.id
-    # The epic itself never moved.
+    step = await items.get_item(db, subtask.id, actor)
+    assert step.key.startswith("SBB")
+    assert step.parent is not None and step.parent.id == issue.id
+    # The epic itself never moved, and moving it leaves its issues behind.
     assert (await items.get_item(db, epic.id, actor)).key.startswith("SBA")
+    result = await bulk.bulk_move_items(
+        db, ItemBulkMove(item_ids=[epic.id], target_project_id=dst.id), actor
+    )
+    assert [m.item_id for m in result.moved] == [epic.id]
 
 
 async def test_bulk_update_parent_id_applies_kind_rules_and_row_gate(db, actor):

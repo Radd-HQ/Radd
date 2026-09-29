@@ -95,10 +95,11 @@ export const queryKeys = {
     excludeId?: string,
     kind?: string,
     unparented?: boolean,
+    sameProject?: boolean,
   ) =>
     ["linkSearch", {
       projectId, q, limit: limit ?? null, excludeId: excludeId ?? null,
-      kind: kind ?? null, unparented: unparented ?? false,
+      kind: kind ?? null, unparented: unparented ?? false, sameProject: sameProject ?? false,
     }] as const,
   backupStatus: () => ["backupStatus"] as const,
   backups: () => ["backups"] as const,

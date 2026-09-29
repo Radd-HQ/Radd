@@ -57,11 +57,19 @@ async def _resolve_type(
 
 
 async def _resolve_parent(
-    session: AsyncSession, kind: ItemKind, parent_id: uuid.UUID | None, actor: User
+    session: AsyncSession,
+    kind: ItemKind,
+    parent_id: uuid.UUID | None,
+    actor: User,
+    *,
+    project_id: uuid.UUID,
 ) -> None:
-    """Enforce epic ← issue ← subtask (max depth 3); the parent may live in another project.
-    The parent resolves through the read seam (RADD-1455): one the actor cannot see
-    answers exactly as a missing id, so a parent field is no existence oracle."""
+    """Enforce epic ← issue ← subtask (max depth 3). An issue's epic may live in
+    any project (spec 80: the epic is the portfolio layer); a subtask's issue must
+    live in the subtask's own — `project_id` — because a subtask is a checklist
+    line of its parent, ticked in the parent's workflow (RADD-1492). The parent
+    resolves through the read seam (RADD-1455): one the actor cannot see answers
+    exactly as a missing id, so a parent field is no existence oracle."""
     required = REQUIRED_PARENT_KIND.get(kind)
     if parent_id is None:
         if kind == ItemKind.SUBTASK:
@@ -74,6 +82,16 @@ async def _resolve_parent(
         raise ConflictError(
             ItemEntity.ITEM, reason=f"{kind} parent must be of kind {required}, not {parent.kind}"
         )
+    if kind == ItemKind.SUBTASK and parent.project_id != project_id:
+        raise ConflictError(ItemEntity.ITEM, reason=SUBTASK_LIVES_WITH_PARENT)
+
+
+#: The 409 text for a subtask offered a parent in another project (RADD-1492);
+#: the SPA quotes the server's reason, so this is what the person reads.
+SUBTASK_LIVES_WITH_PARENT = (
+    "a subtask lives in its parent's project — for work another team owns, "
+    "file an issue there and link it, or put both under one epic"
+)
 
 
 async def _refuse_replacing_hidden_parent(

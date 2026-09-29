@@ -233,6 +233,8 @@ export const BulkSkipReason = {
   forbidden: "forbidden",
   invalidTarget: "invalid_target",
   transitionBlocked: "transition_blocked",
+  /** RADD-1492: a subtask moves with its issue, never on its own. */
+  subtaskFollowsParent: "subtask_follows_parent",
   error: "error",
 } as const;
 export type BulkSkipReasonValue = (typeof BulkSkipReason)[keyof typeof BulkSkipReason];

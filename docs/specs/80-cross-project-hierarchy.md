@@ -112,3 +112,25 @@ re-key/alias/state-mapping/field-drop assertions kept). Suite 781 green.
 **Deviations**: none from the spec text. Typed cross-project KEYS in the
 add-link input (e.g. "DEV-23" while on TD) still resolve as a same-project
 number — documented in modules.md; the typeahead is the cross-project path.
+
+## Second pass (epic RADD-1489, 2026-09-29)
+
+A year of use showed the lifted rule was right for epic ← issue and wrong for
+issue ← subtask, and that the surfaces did not keep up with the model.
+
+- **A subtask lives in its parent's project.** `_resolve_parent` takes the child's
+  `project_id` and refuses a subtask whose parent is elsewhere; a bulk move takes
+  an issue's subtasks along and reports a subtask selected without its issue as
+  `subtask_follows_parent`; the parent search for issues is same-project; the
+  checklist tick reads the CHILD's workflow. Migration `d1492subtaskhome` re-homes
+  any cross-project subtask as a top-level issue in its own project.
+- **A withheld parent is `parent_hidden`, not null-and-nothing.** `epic_hidden`
+  too; the board files such rows under `__hidden_epic__` ("Epic you cannot see"),
+  the rail shows a muted row with no picker, and replacing or clearing a parent the
+  actor cannot read is a 409 unless they hold `project.manage` on the child's
+  project.
+- **A typed key names its project.** `target_key` on a link, and `link_search`
+  leads with the named row.
+- **The whole picture.** An epic's rollup carries `by_project` and `withheld`; the
+  epic page and the board's epic group say how much lives elsewhere and link to an
+  all-projects board of that epic (`/e/KEY/board`, a synthetic view — no saved row).

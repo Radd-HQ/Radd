@@ -67,6 +67,8 @@ export const itemVcsLinksQuery = (itemId: string) =>
 export interface LinkSearchFilters {
   kind?: ItemKindValue;
   unparented?: boolean;
+  /** Only the anchor project's items — a subtask's parent issue lives there (RADD-1492). */
+  sameProject?: boolean;
 }
 
 /** Dependency-link / parent-picker typeahead: items across the SERVER
@@ -79,7 +81,7 @@ export const linkSearchQuery = (
   filters: LinkSearchFilters = {},
 ) =>
   queryOptions({
-    queryKey: queryKeys.linkSearch(projectId, q, limit, excludeId, filters.kind, filters.unparented),
+    queryKey: queryKeys.linkSearch(projectId, q, limit, excludeId, filters.kind, filters.unparented, filters.sameProject),
     queryFn: ({ signal }) =>
       api.get<ItemLinkSearchResult[]>(apiItemLinkSearchPath(), {
         signal,
@@ -90,6 +92,7 @@ export const linkSearchQuery = (
           limit: limit !== undefined ? String(limit) : undefined,
           kind: filters.kind,
           unparented: filters.unparented ? "true" : undefined,
+          same_project: filters.sameProject ? "true" : undefined,
         },
       }),
     staleTime: 15_000,

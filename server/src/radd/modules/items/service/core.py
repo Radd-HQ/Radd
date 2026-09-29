@@ -98,7 +98,7 @@ async def create_item(session: AsyncSession, data: ItemCreate, actor: User) -> I
     else:
         default = await itemtypes.default_type(session, project.id)
         type_id = default.id if default else None
-    await _resolve_parent(session, data.kind, data.parent_id, actor)
+    await _resolve_parent(session, data.kind, data.parent_id, actor, project_id=data.project_id)
     # An import (project.manage) may name someone who has since left — see
     # `_resolve_assignee`. Ordinary creation still refuses a deactivated account.
     historical = Permission.PROJECT_MANAGE in permissions and data.created_at is not None
@@ -231,7 +231,9 @@ async def update_item(
     # parent the actor cannot read (RADD-1491) — the rail sends the whole row.
     if "parent_id" in data.model_fields_set and data.parent_id != item.parent_id:
         await _refuse_replacing_hidden_parent(session, item, actor, permissions)
-        await _resolve_parent(session, ItemKind(item.kind), data.parent_id, actor)
+        await _resolve_parent(
+            session, ItemKind(item.kind), data.parent_id, actor, project_id=item.project_id
+        )
         item.parent_id = data.parent_id
     # A re-import refreshing a historical row may restate an assignee/reporter who
     # has since left, exactly as the create path does.

@@ -104,7 +104,9 @@ async def create_item(data: ItemCreate, session: Session, user: CurrentUser) -> 
 
 
 @router.get("/grouped", response_model=GroupPage)
-async def grouped_page(data: Annotated[GroupPageRequest, Query()], session: Session, user: Actor) -> GroupPage:
+async def grouped_page(
+    data: Annotated[GroupPageRequest, Query()], session: Session, user: Actor
+) -> GroupPage:
     return await grouped_items(session, user, data)
 
 
@@ -121,15 +123,22 @@ async def list_items(
     after: str | None = Query(None, max_length=16384),
 ) -> list[ItemRead]:
     from .filters import FilterParseError
+
     if after and not cursor_mode:
         raise FilterParseError("after requires cursor_mode")
     page = {} if cursor_mode else None
     rows = await service.list_items(
-        session, actor=user, filters=filters, q=q, limit=limit, offset=offset,
-        cursor_page=page, after=after,
+        session,
+        actor=user,
+        filters=filters,
+        q=q,
+        limit=limit,
+        offset=offset,
+        cursor_page=page,
+        after=after,
     )
     if page is not None:
-        response.headers["X-Next-Cursor"] = page['next'] or ""
+        response.headers["X-Next-Cursor"] = page["next"] or ""
     return rows
 
 
@@ -237,13 +246,23 @@ async def link_search(
     limit: int = Query(8, ge=1, le=25),
     kind: Annotated[ItemKind | None, Query(description="only items of this kind")] = None,
     unparented: Annotated[bool, Query(description="only items with no parent")] = False,
+    same_project: Annotated[
+        bool, Query(description="only items in project_id — a subtask's parent lives there")
+    ] = False,
 ) -> list[ItemLinkSearchResult]:
     """Typeahead candidates for the dependency add-row and parent picker (match by
     title or number/key) — across projects, same-project matches first (spec 80).
     `kind` + `unparented` are the parent picker's filters (RADD-1471)."""
     return await service.link_search(
-        session, project_id=project_id, q=q, actor=user, limit=limit, exclude_id=exclude_id,
-        kind=kind, unparented=unparented,
+        session,
+        project_id=project_id,
+        q=q,
+        actor=user,
+        limit=limit,
+        exclude_id=exclude_id,
+        kind=kind,
+        unparented=unparented,
+        same_project=same_project,
     )
 
 

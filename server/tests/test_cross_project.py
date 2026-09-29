@@ -220,3 +220,45 @@ async def test_hidden_parent_is_flagged_and_not_replaceable(db, actor):
     # A manager of the child's project may re-home it.
     moved = await items.update_item(db, issue.id, ItemUpdate(parent_id=own_epic.id), actor)
     assert moved.parent is not None and moved.parent.id == own_epic.id
+
+
+async def test_subtask_lives_in_its_parents_project(db, actor):
+    """RADD-1492: epic ← issue crosses projects; issue ← subtask does not, on
+    create, on re-parent and on convert — and the parent search for issues stays
+    in the anchor project."""
+    dev = await make_project(db, "SD")
+    td = await make_project(db, "ST")
+    dev_issue = await items.create_item(db, ItemCreate(project_id=dev.id, title="dev issue"), actor)
+    td_issue = await items.create_item(db, ItemCreate(project_id=td.id, title="td issue"), actor)
+    with pytest.raises(ConflictError, match="lives in its parent's project"):
+        await items.create_item(
+            db,
+            ItemCreate(
+                project_id=td.id, title="step", kind=ItemKind.SUBTASK, parent_id=dev_issue.id
+            ),
+            actor,
+        )
+    step = await items.create_item(
+        db,
+        ItemCreate(project_id=td.id, title="step", kind=ItemKind.SUBTASK, parent_id=td_issue.id),
+        actor,
+    )
+    with pytest.raises(ConflictError, match="lives in its parent's project"):
+        await items.update_item(db, step.id, ItemUpdate(parent_id=dev_issue.id), actor)
+    # Convert: a TD issue may not become a subtask of a DEV issue either.
+    loose = await items.create_item(db, ItemCreate(project_id=td.id, title="loose"), actor)
+    with pytest.raises(ConflictError, match="lives in its parent's project"):
+        await items.convert_item_kind(
+            db, loose.id, actor, kind=ItemKind.SUBTASK, parent_id=dev_issue.id
+        )
+    # The picker's search for a subtask's parent: issues in THIS project only.
+    hits = await items.link_search(
+        db,
+        project_id=td.id,
+        q="issue",
+        actor=actor,
+        limit=8,
+        kind=ItemKind.ISSUE,
+        same_project=True,
+    )
+    assert {hit.id for hit in hits} == {td_issue.id}

@@ -332,6 +332,7 @@ export const BULK_SKIP_REASON_LABELS: Record<BulkSkipReasonValue, string> = {
   [BulkSkipReason.forbidden]: "no permission",
   [BulkSkipReason.invalidTarget]: "not applicable",
   [BulkSkipReason.transitionBlocked]: "blocked by transition rules",
+  [BulkSkipReason.subtaskFollowsParent]: "moves with its parent issue",
   [BulkSkipReason.error]: "failed",
 };
 

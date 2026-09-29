@@ -99,7 +99,7 @@ Owns the link-type catalog `item_link_types` (outward and inward names, directed
 
 ### items
 
-Owns `work_items` (per-project keys, the `kind` hierarchy, `rank` as default order), `item_links`, `item_labels`, `item_key_aliases` and the SLQ compiler in `items/slq/`. The seam is the `items.service` barrel: `require_readable_item` gates every child surface (a hidden issue 404s), `relation_read_clause` filters lists, and `update_item` is the shared write path, running `workflow.check_transition` after the patch. A typed full key names ITS project; a bare number means the source item's own. `create_item` dispatches `ItemHook.CREATING` before `item.created`, so a handler may refuse. Trap: `items/history.py:RELATED_EVENT_TYPES` names other modules' events by wire string; events that belong in issue History must be listed there.
+Owns `work_items` (keys, the `kind` ladder, `rank`), `item_links`, `item_labels`, `item_key_aliases` and the SLQ compiler in `items/slq/`. The seam is the `items.service` barrel: `require_readable_item` gates every child surface (a hidden issue 404s), `relation_read_clause` filters lists, and `update_item` is the shared write path, then `workflow.check_transition`. An issue's epic may sit in any project; a subtask lives in its parent's. A typed full key names ITS project; a bare number means the source item's own. `create_item` dispatches `ItemHook.CREATING` before `item.created`, so a handler may refuse. Trap: `items/history.py:RELATED_EVENT_TYPES` names other modules' events by wire string; list History events there.
 
 ### comments
 

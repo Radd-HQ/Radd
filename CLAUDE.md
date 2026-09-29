@@ -34,7 +34,7 @@ a fabricated worklog makes the timesheet a lie in order to make a screenshot pre
 |---|---|---|
 | **Epic** | A spec, or a wave spanning several | A container. **Never commit against one.** |
 | **Issue** | One meaningful unit someone would want to read about | What a commit names |
-| **Subtask** | A step inside it — a checklist line | Cheap to add, ticked off, no ceremony |
+| **Subtask** | A step inside it — a checklist line, in its parent's project | Cheap to add, ticked off, no ceremony |
 
 **Prefer fewer, meaningful issues with subtasks** over many tiny issues. Splitting work
 apart just to have something to reference is bureaucracy; the subtask list is where the

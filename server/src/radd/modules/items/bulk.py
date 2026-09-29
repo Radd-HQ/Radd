@@ -28,7 +28,7 @@ from radd.modules.projects import service as projects_service
 from radd.modules.projects.models import Project
 
 from .changes import diff_item_reads, field_name_map
-from .enums import BulkSkipReason, ItemEntity, ItemEvent
+from .enums import BulkSkipReason, ItemEntity, ItemEvent, ItemKind
 from .filters import ItemListFilters
 from .hydration import label_names
 from .models import ItemKeyAlias, WorkItem
@@ -141,9 +141,15 @@ async def bulk_update_items(
             async with session.begin_nested():
                 await _apply_one(session, item, data.patch, actor)
         except Exception as exc:  # classified, unknown ones logged: _skip_for
-            result.skipped.append(_skip_for(
-                exc, item_id, key, invalid_target=(ConflictError, NotFoundError), operation="update"
-            ))
+            result.skipped.append(
+                _skip_for(
+                    exc,
+                    item_id,
+                    key,
+                    invalid_target=(ConflictError, NotFoundError),
+                    operation="update",
+                )
+            )
         else:
             result.updated.append(item_id)
     return result
@@ -165,11 +171,17 @@ async def _move_one(
     actor: User,
     permissions,
     target_permissions,
+    *,
+    follows_parent: bool = False,
 ) -> BulkMovedItem:
     # RADD-1455: a move WRITES the source row, so it passes the row gate every
     # single-item write passes (`require_item_permission`): an `item.update@own`
     # holder moves their own issues and the stranger's is reported FORBIDDEN.
-    await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
+    # A subtask brought along by its issue (RADD-1492) is part of that issue's
+    # write: the issue's row gate covered it, and gating the checklist line on
+    # its own would strand it in the source project.
+    if not follows_parent:
+        await ensure_item_relation(session, actor, item, permissions, Permission.ITEM_UPDATE)
     old_key = await _item_key(session, item)
     before = await _hydrate_one(session, item, source, actor, permissions)
     old_state_id = item.state_id
@@ -178,9 +190,7 @@ async def _move_one(
     old_state = await workflow.get_state(session, item.state_id)
     mapped_state = target_states.get(old_state.name.lower())
     if mapped_state is None:
-        same_category = [
-            s for s in target_states.values() if s.category == old_state.category
-        ]
+        same_category = [s for s in target_states.values() if s.category == old_state.category]
         mapped_state = same_category[0] if same_category else target_default_state
 
     # RADD-834: a move WRITES fields, so it runs the same checks as the
@@ -209,9 +219,7 @@ async def _move_one(
     item.release_id = None
 
     if dropped:
-        item.custom_fields = {
-            k: v for k, v in item.custom_fields.items() if k in target_field_keys
-        }
+        item.custom_fields = {k: v for k, v in item.custom_fields.items() if k in target_field_keys}
 
     item.number = await projects_service.allocate_item_number(session, target.id)
     item.project_id = target.id
@@ -256,30 +264,24 @@ async def _move_one(
     )
 
 
-async def bulk_move_items(
-    session: AsyncSession, data: ItemBulkMove, actor: User
-) -> BulkMoveResult:
+async def bulk_move_items(session: AsyncSession, data: ItemBulkMove, actor: User) -> BulkMoveResult:
     target = await projects_service.get_project(session, data.target_project_id)
-    target_permissions = await authz.require(
-        session, actor, Permission.ITEM_CREATE, project=target
-    )
+    target_permissions = await authz.require(session, actor, Permission.ITEM_CREATE, project=target)
 
     target_states = {s.name.lower(): s for s in await workflow.list_states(session, target.id)}
     target_default_state = await workflow.default_state(session, target.id)
-    target_types = {
-        t.name.lower(): t.id for t in await itemtypes.list_types(session, target.id)
-    }
+    target_types = {t.name.lower(): t.id for t in await itemtypes.list_types(session, target.id)}
     default_type = await itemtypes.default_type(session, target.id)
-    target_field_keys = {
-        d.key for d in await fields.definitions_for_project(session, target)
-    }
+    target_field_keys = {d.key for d in await fields.definitions_for_project(session, target)}
 
     projects: dict[uuid.UUID, Project] = {}
     perms: dict[uuid.UUID, frozenset[Permission]] = {}
 
     result = BulkMoveResult()
     target_id = target.id
-    for item_id in dict.fromkeys(data.item_ids):
+    ordered, selected, followers = await _with_subtasks(session, data.item_ids)
+    skipped_ids: set[uuid.UUID] = set()
+    for item_id in ordered:
         # Fetched per iteration: a previous item's savepoint rollback expires
         # every instance that savepoint touched — the item, and the target
         # project whose item-number counter it incremented — and a sync
@@ -293,6 +295,11 @@ async def bulk_move_items(
             continue
         if item.project_id == target_id:
             continue  # already home — nothing to do
+        stays = await _subtask_stays(session, item, selected, skipped_ids, target_id)
+        if stays is not None:
+            result.skipped.append(_skip(item_id, await _item_key(session, item), stays))
+            skipped_ids.add(item_id)
+            continue
         source = projects.get(item.project_id)
         if source is None:
             source = await projects_service.get_project(session, item.project_id)
@@ -319,19 +326,75 @@ async def bulk_move_items(
                     actor,
                     perms[source.id],
                     target_permissions,
+                    follows_parent=item_id in followers,
                 )
         except Exception as exc:  # classified, unknown ones logged: _skip_for
-            result.skipped.append(_skip_for(
-                exc, item_id, key, invalid_target=(ConflictError,), operation="move"
-            ))
+            result.skipped.append(
+                _skip_for(exc, item_id, key, invalid_target=(ConflictError,), operation="move")
+            )
+            skipped_ids.add(item_id)
         else:
             result.moved.append(moved)
     return result
 
 
+async def _with_subtasks(
+    session: AsyncSession, item_ids: Sequence[uuid.UUID]
+) -> tuple[list[uuid.UUID], set[uuid.UUID], set[uuid.UUID]]:
+    """The move order (RADD-1492): every non-subtask in selection order, then
+    every subtask — the ones selected and the ones their issues bring along —
+    so a subtask is always processed after its parent and can see whether that
+    move happened. Returns (order, the whole selection, the followers)."""
+    chosen = list(dict.fromkeys(item_ids))
+    selected = set(chosen)
+    followers: set[uuid.UUID] = set()
+    heads: list[uuid.UUID] = []
+    tails: list[uuid.UUID] = []
+    for item_id in chosen:
+        item = await session.get(WorkItem, item_id)
+        if item is not None and item.kind == ItemKind.SUBTASK.value:
+            tails.append(item_id)
+            continue
+        heads.append(item_id)
+        if item is None or item.kind != ItemKind.ISSUE.value:
+            continue
+        children = await session.scalars(
+            select(WorkItem.id).where(
+                WorkItem.parent_id == item_id, WorkItem.kind == ItemKind.SUBTASK.value
+            )
+        )
+        for child_id in children:
+            if child_id not in selected:
+                selected.add(child_id)
+                followers.add(child_id)
+                tails.append(child_id)
+    return heads + tails, selected, followers
+
+
+async def _subtask_stays(
+    session: AsyncSession,
+    item: WorkItem,
+    selected: set[uuid.UUID],
+    skipped_ids: set[uuid.UUID],
+    target_id: uuid.UUID,
+) -> BulkSkipReason | None:
+    """Why a subtask cannot move now, or None: its parent issue is neither in
+    the selection nor already in the target project, or the parent's own move
+    was skipped — either way moving it would leave it in another project than
+    its issue, which RADD-1492 forbids."""
+    if item.kind != ItemKind.SUBTASK.value or item.parent_id is None:
+        return None
+    if item.parent_id in skipped_ids:
+        return BulkSkipReason.SUBTASK_FOLLOWS_PARENT
+    if item.parent_id in selected:
+        return None
+    parent = await session.get(WorkItem, item.parent_id)
+    if parent is not None and parent.project_id == target_id:
+        return None  # re-homing to where its issue already is
+    return BulkSkipReason.SUBTASK_FOLLOWS_PARENT
+
+
 # --- id listing (select all matching) ---
-
-
 
 
 async def list_item_ids(
@@ -345,9 +408,7 @@ async def list_item_ids(
     'select all N matching' seam. ids capped at bulk_max_items; total is the
     true visible count."""
     query, order = await visible_ids_query(session, actor=actor, filters=filters, q=q)
-    total = await session.scalar(
-        select(func.count()).select_from(query.order_by(None).subquery())
-    )
+    total = await session.scalar(select(func.count()).select_from(query.order_by(None).subquery()))
     default_order = () if order else (WorkItem.rank.asc(),)
     ids_query = query.order_by(*order, *default_order, WorkItem.created_at.desc()).limit(
         settings.bulk_max_items
@@ -391,7 +452,5 @@ async def count_items(
     """The visible-match count alone (spec 75 — GET /items/count, the slq_count
     widget's fetch): exactly list_item_ids' total without materializing ids."""
     query, _ = await visible_ids_query(session, actor=actor, filters=filters, q=q)
-    total = await session.scalar(
-        select(func.count()).select_from(query.order_by(None).subquery())
-    )
+    total = await session.scalar(select(func.count()).select_from(query.order_by(None).subquery()))
     return total or 0

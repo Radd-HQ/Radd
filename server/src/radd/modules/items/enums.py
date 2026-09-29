@@ -54,6 +54,9 @@ class BulkSkipReason(StrEnum):
     FORBIDDEN = "forbidden"
     INVALID_TARGET = "invalid_target"  # project-scoped value not applicable to this item
     TRANSITION_BLOCKED = "transition_blocked"  # spec-61 guard failures
+    #: RADD-1492: a subtask moves with its issue, never on its own — selected
+    #: without its parent (or after the parent's move was skipped), it stays.
+    SUBTASK_FOLLOWS_PARENT = "subtask_follows_parent"
     ERROR = "error"
 
 

@@ -63,8 +63,11 @@ export function ParentSearchInput({
   const [term, setTerm] = useState("");
   const [open, setOpen] = useState(false);
   const query = useDebounced(term.trim(), PARENT_SEARCH_DEBOUNCE_MS);
+  // A subtask's parent issue lives in the subtask's own project (RADD-1492), so a
+  // search for ISSUES stays home; a search for epics spans every readable project.
+  const sameProject = kind === ItemKind.issue;
   const results = useQuery({
-    ...linkSearchQuery(projectId, query, undefined, PARENT_SEARCH_LIMIT, { kind, unparented }),
+    ...linkSearchQuery(projectId, query, undefined, PARENT_SEARCH_LIMIT, { kind, unparented, sameProject }),
     enabled: open,
   });
   const candidates = useMemo(
@@ -97,7 +100,7 @@ export function ParentSearchInput({
         onClick={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), DROPDOWN_BLUR_CLOSE_MS)}
         autoComplete="off"
-        placeholder={placeholder ?? `Search ${kindWord}s across all projects…`}
+        placeholder={placeholder ?? (sameProject ? `Search ${kindWord}s in this project…` : `Search ${kindWord}s across all projects…`)}
         className="h-8 w-full rounded-md border border-strong bg-surface px-2.5 text-[13px] text-heading placeholder:text-fg-faint focus:outline-2 focus:outline-offset-1 focus:outline-focus"
       />
       {open && candidates.length > 0 && (

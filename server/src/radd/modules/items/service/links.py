@@ -57,6 +57,7 @@ async def link_search(
     exclude_id: uuid.UUID | None = None,
     kind: ItemKind | None = None,
     unparented: bool = False,
+    same_project: bool = False,
 ) -> list[ItemLinkSearchResult]:
     """Typeahead candidates for a dependency link or parent pick: items across
     every project the actor can read (spec 80/86 — no boundary above that)
@@ -65,7 +66,8 @@ async def link_search(
     being linked from (no self-link). `kind` narrows to one kind — the parent
     picker asks for the kind the ladder requires, so the LIMIT is spent on
     candidates that can be picked (RADD-1472). `unparented` keeps only items
-    with no parent — an epic adopting existing issues (RADD-1473)."""
+    with no parent — an epic adopting existing issues (RADD-1473). `same_project`
+    keeps to the anchor project — a subtask's parent issue lives there (RADD-1492)."""
     project = await projects_service.get_project(session, project_id)
     await authz.require(session, actor, Permission.ITEM_READ, project=project)
     # The memoised member floor (holds_base-aware, so a relation-qualified
@@ -81,6 +83,8 @@ async def link_search(
         query = query.where(WorkItem.kind == kind.value)
     if unparented:
         query = query.where(WorkItem.parent_id.is_(None))
+    if same_project:
+        query = query.where(WorkItem.project_id == project_id)
     term = q.strip()
     tiers = [(WorkItem.project_id == project_id).desc(), WorkItem.number.desc()]
     if term:

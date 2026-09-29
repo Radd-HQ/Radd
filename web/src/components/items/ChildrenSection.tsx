@@ -118,7 +118,6 @@ export function ChildrenSection({
           ) : (
             <ChildList
               items={childRows}
-              project={project}
               checklist={isChecklist}
               canWrite={canWrite}
             />
@@ -139,12 +138,10 @@ export function ChildrenSection({
 
 function ChildList({
   items,
-  project,
   checklist,
   canWrite,
 }: {
   items: Item[];
-  project: Project;
   checklist: boolean;
   canWrite: boolean;
 }) {
@@ -156,7 +153,6 @@ function ChildList({
         <ChildRow
           key={child.id}
           child={child}
-          project={project}
           checklist={checklist}
           canWrite={canWrite}
         />
@@ -167,18 +163,18 @@ function ChildList({
 
 function ChildRow({
   child,
-  project,
   checklist,
   canWrite,
 }: {
   child: Item;
-  project: Project;
   checklist: boolean;
   canWrite: boolean;
 }) {
   const queryClient = useQueryClient();
   const openRef = useOpenIssueRef();
-  const states = useQuery({ ...statesQuery(project.id), enabled: checklist });
+  // The child's own workflow (RADD-1492): a subtask lives in its parent's project by
+  // rule, and looking the states up by the child keeps the tick right regardless.
+  const states = useQuery({ ...statesQuery(child.project_id), enabled: checklist });
   const isDone =
     child.state.category === StateCategory.done ||
     child.state.category === StateCategory.canceled;

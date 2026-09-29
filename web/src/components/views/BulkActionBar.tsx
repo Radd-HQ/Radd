@@ -345,8 +345,8 @@ function BulkMoveDialog({
         <p className="text-xs leading-relaxed text-fg-secondary">
           Issues are re-keyed by the target project's counter (old keys keep
           redirecting). States and types map by name, releases are cleared, and
-          custom fields the target doesn't define are dropped. Issues keep their
-          parent/child links — select subtasks too if they should move along.
+          custom fields the target doesn't define are dropped. An issue takes its
+          subtasks along and keeps its epic; an epic's issues stay unless selected.
         </p>
         <ProjectSelect label="Target project" value={target?.id ?? ""}
           onChange={(_id, project) => setTarget(project)} permission={Permission.itemCreate} disabled={pending} />
